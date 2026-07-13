@@ -1,4 +1,76 @@
-﻿## [2026-07-13] — Enterprise Organization & Workforce Management Platform v1.0 — One Person · One Identity · Unlimited Organizations
+﻿## [2026-07-13] — Enterprise Organization & Workforce Management Platform v2.0 — Device Management · Custom Roles · Guaranteed Auto-Expiry
+
+### Summary
+
+Platform v2 sprint completing the "One Person · One Identity · Unlimited Organizations" vision. Key additions: a Firestore-backed Device Management Engine tracking every browser/device per user (with platform, browser, IP, geo, trust status, login count); a Custom Roles Engine enabling unlimited org-defined roles beyond the 18 built-ins (full CRUD with permission checkboxes); automatic hourly expiry of temporary access grants and authority delegations (previously elevated permissions persisted silently past their expiry time — now a scheduled CF strips them); and `_assertAuth` in org-engine upgraded to emit `HttpsError('unauthenticated', ...)` instead of a plain `Error`, so auth failures surface correctly to clients.
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `functions/device-engine.js` | 7 Cloud Functions: register device on login, list devices, logout device, logout all, trust/untrust device, activity heartbeat |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `functions/org-engine.js` | Fix `_assertAuth` to use `HttpsError('unauthenticated')`; import `HttpsError` + `onSchedule`; append `orgGetRoles`, `orgCreateRole`, `orgUpdateRole`, `orgDeleteRole` (custom roles CRUD); append `orgExpireAccess` hourly scheduler |
+| `org-structure.html` | Add **Roles** tab (5th tab): 18 built-in roles display + custom roles CRUD with permission checkbox grid; role modal |
+| `account-centre.html` | Devices tab: register current device in `_boot()` via `deviceRegister` CF, call `deviceList` CF alongside legacy `SokoniSessions.getUserSessions()`; `_renderDeviceV2()` shows browser, platform, city, country, trust badge, login count; `acRevokeDeviceV2()`, `acTrustDevice()`, `acUntrustDevice()`, `acRevokeAll()` upgraded to call device engine CFs |
+| `functions/index.js` | 5 new `orgEng` exports (`orgGetRoles`, `orgCreateRole`, `orgUpdateRole`, `orgDeleteRole`, `orgExpireAccess`) + 7 `devEng` exports |
+
+### Cloud Functions (new — 12)
+
+| Function | Description |
+|---|---|
+| `deviceRegister` | Register/update device on login — stores platform, browser, IP, geo, deviceType; idempotent (merge on re-login) |
+| `deviceList` | Return all active devices for caller sorted by last-active |
+| `deviceLogout` | Deactivate a specific device (UID-scoped, cannot manage others' devices) |
+| `deviceLogoutAll` | Deactivate all devices except the current one |
+| `deviceTrust` | Mark a device as trusted for low-friction re-auth |
+| `deviceUntrust` | Remove trust from a device |
+| `devicePing` | Heartbeat — update lastActiveAt |
+| `orgGetRoles` | List all roles: 18 built-in + custom from `orgRoles` collection |
+| `orgCreateRole` | Create custom role; rejects name collision with built-in roles + duplicate custom names |
+| `orgUpdateRole` | Update name/description/permissions of a custom role |
+| `orgDeleteRole` | Soft-delete custom role (`isActive:false`) |
+| `orgExpireAccess` | Hourly scheduler — finds expired `orgTempAccess` and `orgDelegations`, strips elevated permissions from `workspaceMemberships`, marks records expired |
+
+### Firestore Collections (new — 2)
+
+| Collection | Purpose |
+|---|---|
+| `userDevices/{uid}_{deviceId}` | Per-device records: platform, browser, IP, city, country, isTrusted, loginCount, firstSeenAt, lastActiveAt |
+| `orgRoles/{roleId}` | Custom role definitions per business: name, description, permissions[], isBuiltIn, isActive |
+
+### Firestore Index Impact
+
+No new composite indexes added. Index count remains **199/200**.
+- `userDevices` queried by `uid` + `isActive` — composite index NOT needed; `isActive` filter applied server-side on uid-indexed collection
+- `orgRoles` queried by `businessId` + `isActive` — composite index NOT needed
+- `orgExpireAccess` queries `expiresAt` / `endDate` with range operators — single-field auto-indexes, `isActive`/`status` filtered in JavaScript
+
+### `localStorage` keys added
+
+| Key | Value |
+|---|---|
+| `sk_device_id` | Stable per-browser UUID generated once on first visit to account-centre.html |
+| `sk_device_doc` | Firestore document ID (`{uid}_{deviceId}`) for the current device |
+
+### Security
+
+- `deviceLogout`, `deviceTrust`, `deviceUntrust`: scope-checked — `snap.data().uid !== uid` throws `permission-denied`. Users cannot manage other users' devices.
+- `orgCreateRole`, `orgUpdateRole`, `orgDeleteRole`: require admin/owner role on the business
+- `orgExpireAccess`: run as scheduled service account, not user-callable
+- `_assertAuth` in `org-engine.js` now correctly returns `unauthenticated` code to clients (was returning `internal` via plain `new Error`)
+
+### Migration
+
+No schema changes. All new fields are additive. Existing device sessions from `SokoniSessions` continue to work as a fallback; the device engine enriches the display when CF data is available.
+
+---
+
+## [2026-07-13] — Enterprise Organization & Workforce Management Platform v1.0 — One Person · One Identity · Unlimited Organizations
 
 ### Summary
 

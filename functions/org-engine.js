@@ -31,8 +31,9 @@
  *   orgAuditLog:  businessId ASC + timestamp DESC
  */
 
-const { onCall }  = require('firebase-functions/v2/https');
-const admin       = require('firebase-admin');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onSchedule }        = require('firebase-functions/v2/scheduler');
+const admin                 = require('firebase-admin');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -45,7 +46,7 @@ const Timestamp  = admin.firestore.Timestamp;
    ───────────────────────────────────────────────────────────────────── */
 
 function _assertAuth(req) {
-  if (!req.auth) throw new Error('Authentication required.');
+  if (!req.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   return req.auth.uid;
 }
 
@@ -972,4 +973,232 @@ exports.orgGetDashboard = onCall(async (req) => {
       byStatus,
     },
   };
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CUSTOM ROLES ENGINE
+   ───────────────────────────────────────────────────────────────────────
+   Organizations can define unlimited custom roles beyond the 11 built-in
+   presets. Custom roles are stored in orgRoles/{roleId} and merged with
+   built-in roles when listing.
+   Collection: orgRoles/{roleId}
+   Index: single-field businessId (auto-indexed, no composite needed)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const BUILT_IN_ROLES = [
+  { roleId:'owner',             name:'Owner',             isBuiltIn:true },
+  { roleId:'manager',           name:'Manager',           isBuiltIn:true },
+  { roleId:'supervisor',        name:'Supervisor',        isBuiltIn:true },
+  { roleId:'cashier',           name:'Cashier',           isBuiltIn:true },
+  { roleId:'inventory_officer', name:'Inventory Officer', isBuiltIn:true },
+  { roleId:'accountant',        name:'Accountant',        isBuiltIn:true },
+  { roleId:'driver',            name:'Driver',            isBuiltIn:true },
+  { roleId:'receptionist',      name:'Receptionist',      isBuiltIn:true },
+  { roleId:'waiter',            name:'Waiter / Server',   isBuiltIn:true },
+  { roleId:'security',          name:'Security Officer',  isBuiltIn:true },
+  { roleId:'cleaner',           name:'Cleaner',           isBuiltIn:true },
+  { roleId:'sales_agent',       name:'Sales Agent',       isBuiltIn:true },
+  { roleId:'chef',              name:'Chef / Cook',       isBuiltIn:true },
+  { roleId:'nurse',             name:'Nurse',             isBuiltIn:true },
+  { roleId:'pharmacist',        name:'Pharmacist',        isBuiltIn:true },
+  { roleId:'support_agent',     name:'Support Agent',     isBuiltIn:true },
+  { roleId:'dispatcher',        name:'Dispatcher',        isBuiltIn:true },
+  { roleId:'property_manager',  name:'Property Manager',  isBuiltIn:true },
+];
+
+/** List all roles — built-in + custom — for a business. */
+exports.orgGetRoles = onCall(async (req) => {
+  const uid = _assertAuth(req);
+  const { businessId } = req.data;
+  if (!businessId) throw new HttpsError('invalid-argument', 'businessId required.');
+  await _assertAdmin(uid, businessId);
+
+  const snap = await db.collection('orgRoles')
+    .where('businessId', '==', businessId)
+    .where('isActive', '==', true)
+    .get();
+
+  const custom = snap.docs.map(d => ({ roleId: d.id, ...d.data() }));
+
+  return {
+    builtIn: BUILT_IN_ROLES,
+    custom,
+  };
+});
+
+/** Create a custom role. */
+exports.orgCreateRole = onCall(async (req) => {
+  const uid = _assertAuth(req);
+  const { businessId, name, description, permissions } = req.data;
+  if (!businessId) throw new HttpsError('invalid-argument', 'businessId required.');
+  if (!name || !name.trim()) throw new HttpsError('invalid-argument', 'Role name required.');
+  await _assertAdmin(uid, businessId);
+
+  const roleName = name.trim();
+
+  // Reject names that collide with built-in roles
+  const builtInNames = BUILT_IN_ROLES.map(r => r.name.toLowerCase());
+  if (builtInNames.includes(roleName.toLowerCase())) {
+    throw new HttpsError('already-exists', `"${roleName}" is a built-in role and cannot be duplicated.`);
+  }
+
+  // Check for duplicate custom role names
+  const dupSnap = await db.collection('orgRoles')
+    .where('businessId', '==', businessId)
+    .where('nameLower', '==', roleName.toLowerCase())
+    .where('isActive', '==', true)
+    .get();
+  if (!dupSnap.empty) throw new HttpsError('already-exists', `A custom role named "${roleName}" already exists.`);
+
+  const roleRef = db.collection('orgRoles').doc();
+  await roleRef.set({
+    businessId,
+    name: roleName,
+    nameLower: roleName.toLowerCase(),
+    description: (description || '').trim(),
+    permissions: Array.isArray(permissions) ? permissions : [],
+    isBuiltIn: false,
+    isActive: true,
+    createdBy: uid,
+    createdByName: _callerName(req),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  await _audit('orgCreateRole', uid, req, { businessId, roleId: roleRef.id, name: roleName });
+
+  return { roleId: roleRef.id, name: roleName };
+});
+
+/** Update a custom role's name, description, or permissions. */
+exports.orgUpdateRole = onCall(async (req) => {
+  const uid = _assertAuth(req);
+  const { businessId, roleId, name, description, permissions } = req.data;
+  if (!businessId || !roleId) throw new HttpsError('invalid-argument', 'businessId and roleId required.');
+  await _assertAdmin(uid, businessId);
+
+  const ref  = db.collection('orgRoles').doc(roleId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().businessId !== businessId) throw new HttpsError('not-found', 'Custom role not found.');
+  if (snap.data().isBuiltIn) throw new HttpsError('failed-precondition', 'Cannot edit built-in roles.');
+
+  const patch = { updatedAt: FieldValue.serverTimestamp() };
+  if (name !== undefined) {
+    patch.name      = name.trim();
+    patch.nameLower = name.trim().toLowerCase();
+  }
+  if (description !== undefined) patch.description = description.trim();
+  if (Array.isArray(permissions)) patch.permissions = permissions;
+
+  await ref.update(patch);
+  await _audit('orgUpdateRole', uid, req, { businessId, roleId });
+
+  return { ok: true };
+});
+
+/** Soft-delete a custom role. */
+exports.orgDeleteRole = onCall(async (req) => {
+  const uid = _assertAuth(req);
+  const { businessId, roleId } = req.data;
+  if (!businessId || !roleId) throw new HttpsError('invalid-argument', 'businessId and roleId required.');
+  await _assertAdmin(uid, businessId);
+
+  const ref  = db.collection('orgRoles').doc(roleId);
+  const snap = await ref.get();
+  if (!snap.exists || snap.data().businessId !== businessId) throw new HttpsError('not-found', 'Custom role not found.');
+  if (snap.data().isBuiltIn) throw new HttpsError('failed-precondition', 'Cannot delete built-in roles.');
+
+  await ref.update({ isActive: false, deletedAt: FieldValue.serverTimestamp(), deletedBy: uid });
+  await _audit('orgDeleteRole', uid, req, { businessId, roleId, name: snap.data().name });
+
+  return { ok: true };
+});
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AUTOMATIC EXPIRY — TEMP ACCESS & DELEGATIONS
+   ───────────────────────────────────────────────────────────────────────
+   Runs every hour. Finds temp access grants and delegations whose
+   expiry has passed and strips the elevated permissions from the
+   relevant workspaceMemberships documents.
+
+   Query strategy (avoids composite indexes at the 199/200 limit):
+     - Query by expiresAt / endDate alone (single-field range, auto-indexed)
+     - Filter isActive / status in JavaScript
+   ═══════════════════════════════════════════════════════════════════════ */
+exports.orgExpireAccess = onSchedule({ schedule: 'every 60 minutes', region: 'us-central1' }, async () => {
+  const now      = Timestamp.now();
+  const batch    = db.batch();
+  let   expired  = 0;
+
+  /* ── Temp Access ── */
+  const tempSnap = await db.collection('orgTempAccess')
+    .where('expiresAt', '<=', now)
+    .get();
+
+  for (const doc of tempSnap.docs) {
+    const access = doc.data();
+    if (!access.isActive) continue; // already revoked
+
+    // Strip granted permissions from membership
+    const memSnap = await db.collection('workspaceMemberships')
+      .where('businessId', '==', access.businessId)
+      .where('uid', '==', access.targetUid)
+      .limit(1)
+      .get();
+
+    if (!memSnap.empty) {
+      const mem  = memSnap.docs[0];
+      const cur  = mem.data().permissions || [];
+      const keep = cur.filter(p => !(access.grantedPermissions || []).includes(p));
+      batch.update(mem.ref, {
+        permissions:  keep,
+        tempAccessId: FieldValue.delete(),
+        tempAccessExp: FieldValue.delete(),
+        updatedAt:    FieldValue.serverTimestamp(),
+      });
+    }
+
+    batch.update(doc.ref, {
+      isActive:   false,
+      expiredAt:  FieldValue.serverTimestamp(),
+      expiredBy:  'scheduler',
+    });
+    expired++;
+  }
+
+  /* ── Delegations ── */
+  const delgSnap = await db.collection('orgDelegations')
+    .where('endDate', '<=', now)
+    .get();
+
+  for (const doc of delgSnap.docs) {
+    const delg = doc.data();
+    if (delg.status !== 'active') continue;
+
+    const memSnap = await db.collection('workspaceMemberships')
+      .where('businessId', '==', delg.businessId)
+      .where('uid', '==', delg.toUid)
+      .limit(1)
+      .get();
+
+    if (!memSnap.empty) {
+      const mem  = memSnap.docs[0];
+      const cur  = mem.data().permissions || [];
+      const keep = cur.filter(p => !(delg.delegatedPermissions || []).includes(p));
+      batch.update(mem.ref, {
+        permissions:  keep,
+        delegationId: FieldValue.delete(),
+        updatedAt:    FieldValue.serverTimestamp(),
+      });
+    }
+
+    batch.update(doc.ref, {
+      status:    'expired',
+      expiredAt: FieldValue.serverTimestamp(),
+    });
+    expired++;
+  }
+
+  if (expired > 0) await batch.commit();
+  console.log(`[orgExpireAccess] Expired ${expired} access grants / delegations.`);
 });

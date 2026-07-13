@@ -224,6 +224,7 @@
     <div class="os-tabs">
       <button class="os-tab active" onclick="osTab('depts')"    id="tab-depts"><i class="fas fa-folder-tree"></i> Departments</button>
       <button class="os-tab"        onclick="osTab('teams')"    id="tab-teams"><i class="fas fa-users"></i> Teams</button>
+      <button class="os-tab"        onclick="osTab('roles')"    id="tab-roles"><i class="fas fa-id-card"></i> Roles</button>
       <button class="os-tab"        onclick="osTab('chart')"    id="tab-chart"><i class="fas fa-sitemap"></i> Org Chart</button>
       <button class="os-tab"        onclick="osTab('reporting')" id="tab-reporting"><i class="fas fa-code-branch"></i> Reporting Lines</button>
     </div>
@@ -278,6 +279,32 @@
       </div>
     </div>
 
+    <!-- ── Roles ── -->
+    <div class="os-panel" id="panel-roles">
+      <!-- Built-in roles -->
+      <div class="os-card" style="margin-bottom:18px;">
+        <div class="os-card-hdr">
+          <div class="os-card-title"><i class="fas fa-shield-halved"></i>Built-in Roles</div>
+          <span style="font-size:12px;color:var(--sub);">Read-only · 18 roles</span>
+        </div>
+        <div class="os-card-body" id="builtInRoleList">
+          <div class="os-loader"><div class="os-spinner"></div></div>
+        </div>
+      </div>
+      <!-- Custom roles -->
+      <div class="os-card">
+        <div class="os-card-hdr">
+          <div class="os-card-title"><i class="fas fa-wand-magic-sparkles"></i>Custom Roles</div>
+          <button class="os-btn os-btn-primary os-btn-sm" onclick="osRoleModal()">
+            <i class="fas fa-plus"></i> New Role
+          </button>
+        </div>
+        <div class="os-card-body" id="customRoleList">
+          <div class="os-loader"><div class="os-spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── Reporting Lines ── -->
     <div class="os-panel" id="panel-reporting">
       <div class="os-card">
@@ -303,6 +330,29 @@
 
   </div><!-- /osContent -->
 </main>
+
+<!-- ── Role modal ── -->
+<div class="os-modal-bg" id="roleModal">
+  <div class="os-modal">
+    <div class="os-modal-hdr">
+      <span class="os-modal-title" id="roleModalTitle">New Custom Role</span>
+      <button class="os-modal-close" onclick="osRoleModalClose()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="os-modal-body">
+      <input type="hidden" id="roleEditId">
+      <label class="os-label">Role Name *</label>
+      <input class="os-input" id="roleNameInput" type="text" placeholder="e.g. Regional Director, Lab Technician">
+      <label class="os-label" style="margin-top:12px;">Description</label>
+      <input class="os-input" id="roleDescInput" type="text" placeholder="What this role does">
+      <label class="os-label" style="margin-top:12px;">Permissions</label>
+      <div id="rolePermGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px;max-height:220px;overflow-y:auto;padding:2px;"></div>
+    </div>
+    <div class="os-modal-footer">
+      <button class="os-btn os-btn-ghost" onclick="osRoleModalClose()">Cancel</button>
+      <button class="os-btn os-btn-primary" onclick="osRoleSave()">Save Role</button>
+    </div>
+  </div>
+</div>
 
 <!-- ── Department modal ── -->
 <div class="os-modal-bg" id="deptModal">
@@ -416,6 +466,10 @@ const _updateTeam    = httpsCallable(fns, 'orgUpdateTeam');
 const _archiveTeam   = httpsCallable(fns, 'orgArchiveTeam');
 const _getTree       = httpsCallable(fns, 'orgGetReportingTree');
 const _setRepLine    = httpsCallable(fns, 'orgSetReportingLine');
+const _getRoles      = httpsCallable(fns, 'orgGetRoles');
+const _createRole    = httpsCallable(fns, 'orgCreateRole');
+const _updateRole    = httpsCallable(fns, 'orgUpdateRole');
+const _deleteRole    = httpsCallable(fns, 'orgDeleteRole');
 
 let _bid = '';
 let _depts = [];
@@ -743,11 +797,160 @@ function _populateMemberSelects() {
 }
 
 /* ── Tab switching ── */
+let _rolesLoaded = false;
 window.osTab = function(id) {
   document.querySelectorAll('.os-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.os-tab').forEach(t => t.classList.remove('active'));
   document.getElementById(`panel-${id}`)?.classList.add('active');
   document.getElementById(`tab-${id}`)?.classList.add('active');
+  if (id === 'roles' && !_rolesLoaded) _loadRoles();
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   ROLES — built-in + custom
+   ═══════════════════════════════════════════════════════════════ */
+
+const ALL_PERMS = [
+  { id:'pos',           label:'POS' },
+  { id:'products',      label:'Products' },
+  { id:'inventory',     label:'Inventory' },
+  { id:'orders',        label:'Orders' },
+  { id:'refunds',       label:'Refunds' },
+  { id:'discounts',     label:'Discounts' },
+  { id:'reports',       label:'Reports' },
+  { id:'customers',     label:'Customers' },
+  { id:'bookings',      label:'Bookings' },
+  { id:'finance',       label:'Finance' },
+  { id:'payroll',       label:'Payroll' },
+  { id:'analytics',     label:'Analytics' },
+  { id:'drivers',       label:'Drivers' },
+  { id:'branches',      label:'Branches' },
+  { id:'users',         label:'Users' },
+  { id:'subscriptions', label:'Subscriptions' },
+  { id:'settings',      label:'Settings' },
+];
+
+let _roles = { builtIn:[], custom:[] };
+
+async function _loadRoles() {
+  if (!_bid) return;
+  const builtEl  = document.getElementById('builtInRoleList');
+  const customEl = document.getElementById('customRoleList');
+
+  try {
+    const res = await _getRoles({ businessId: _bid });
+    _roles = res.data;
+    _rolesLoaded = true;
+
+    /* Built-in */
+    builtEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${(_roles.builtIn || []).map(r => `
+        <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:6px 14px;font-size:13px;font-weight:700;color:var(--txt);">
+          ${_esc(r.name)}
+        </div>`).join('')}
+    </div>`;
+
+    /* Custom */
+    if (!_roles.custom || _roles.custom.length === 0) {
+      customEl.innerHTML = `<div class="os-empty">
+        <div style="font-size:28px;margin-bottom:8px;">🎭</div>
+        <div>No custom roles yet.</div>
+        <div style="font-size:12px;margin-top:4px;color:var(--sub);">Create custom roles like "Regional Director" or "Lab Technician".</div>
+      </div>`;
+    } else {
+      customEl.innerHTML = _roles.custom.map(r => _renderRole(r)).join('');
+    }
+  } catch(e) {
+    builtEl.innerHTML = customEl.innerHTML = `<div class="os-empty">⚠️ ${_esc(e.message)}</div>`;
+  }
+}
+
+function _renderRole(r) {
+  const perms = (r.permissions || []).slice(0, 6).map(p => `<span class="os-type-badge">${_esc(p)}</span>`).join('');
+  const more  = r.permissions?.length > 6 ? `<span class="os-type-badge">+${r.permissions.length - 6}</span>` : '';
+  return `
+  <div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:12px;">
+    <div style="flex:1;min-width:0;">
+      <div style="font-size:14px;font-weight:800;color:var(--txt);margin-bottom:4px;">${_esc(r.name)}</div>
+      ${r.description ? `<div style="font-size:12px;color:var(--sub);margin-bottom:8px;">${_esc(r.description)}</div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:4px;">${perms}${more}</div>
+    </div>
+    <div style="display:flex;gap:6px;flex-shrink:0;">
+      <button class="os-btn os-btn-ghost os-btn-sm" onclick="osRoleModal('${_esc(r.roleId)}')"><i class="fas fa-pen"></i></button>
+      <button class="os-btn os-btn-ghost os-btn-sm" style="color:var(--red);" onclick="osRoleDelete('${_esc(r.roleId)}','${_esc(r.name)}')"><i class="fas fa-trash"></i></button>
+    </div>
+  </div>`;
+}
+
+function _buildPermGrid(selected = []) {
+  return ALL_PERMS.map(p => `
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--txt);cursor:pointer;
+      background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:7px 10px;">
+      <input type="checkbox" name="rolePerm" value="${p.id}" ${selected.includes(p.id) ? 'checked' : ''}
+        style="accent-color:var(--g);width:14px;height:14px;">
+      ${p.label}
+    </label>`).join('');
+}
+
+window.osRoleModal = function(roleId) {
+  const modal = document.getElementById('roleModal');
+  const idEl  = document.getElementById('roleEditId');
+  const nameEl = document.getElementById('roleNameInput');
+  const descEl = document.getElementById('roleDescInput');
+  const grid   = document.getElementById('rolePermGrid');
+
+  if (roleId) {
+    const r = _roles.custom.find(x => x.roleId === roleId);
+    if (!r) return;
+    document.getElementById('roleModalTitle').textContent = 'Edit Role';
+    idEl.value   = roleId;
+    nameEl.value = r.name;
+    descEl.value = r.description || '';
+    grid.innerHTML = _buildPermGrid(r.permissions || []);
+  } else {
+    document.getElementById('roleModalTitle').textContent = 'New Custom Role';
+    idEl.value = '';
+    nameEl.value = '';
+    descEl.value = '';
+    grid.innerHTML = _buildPermGrid([]);
+  }
+
+  modal.classList.add('open');
+};
+
+window.osRoleModalClose = function() {
+  document.getElementById('roleModal').classList.remove('open');
+};
+
+window.osRoleSave = async function() {
+  const roleId = document.getElementById('roleEditId').value;
+  const name   = document.getElementById('roleNameInput').value.trim();
+  const desc   = document.getElementById('roleDescInput').value.trim();
+  const perms  = [...document.querySelectorAll('input[name="rolePerm"]:checked')].map(el => el.value);
+
+  if (!name) { alert('Role name is required.'); return; }
+
+  try {
+    if (roleId) {
+      await _updateRole({ businessId: _bid, roleId, name, description: desc, permissions: perms });
+    } else {
+      await _createRole({ businessId: _bid, name, description: desc, permissions: perms });
+    }
+    osRoleModalClose();
+    _rolesLoaded = false;
+    _loadRoles();
+    _toast(roleId ? 'Role updated.' : 'Custom role created.');
+  } catch(e) { _toast(e.message, true); }
+};
+
+window.osRoleDelete = async function(roleId, name) {
+  if (!confirm(`Delete custom role "${name}"? This cannot be undone.`)) return;
+  try {
+    await _deleteRole({ businessId: _bid, roleId });
+    _rolesLoaded = false;
+    _loadRoles();
+    _toast('Role deleted.');
+  } catch(e) { _toast(e.message, true); }
 };
 
 /* ── Helpers ── */

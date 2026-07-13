@@ -1391,9 +1391,19 @@ import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/
 import { SokoniSessions } from './session-manager.js';
 
 /* ── State ──────────────────────────────────────────────────── */
-let _u = null;         // sokoniUser from localStorage
-let _sessions = [];    // active device sessions
+let _u = null;
+let _sessions      = [];
+let _devices       = [];   // from deviceList CF
+let _currentDocId  = null; // deviceDocId of this browser
 const _fns = getFunctions();
+
+/* ── Device CF callables ────────────────────────────────────── */
+const _cfDeviceRegister  = httpsCallable(_fns, 'deviceRegister');
+const _cfDeviceList      = httpsCallable(_fns, 'deviceList');
+const _cfDeviceLogout    = httpsCallable(_fns, 'deviceLogout');
+const _cfDeviceLogoutAll = httpsCallable(_fns, 'deviceLogoutAll');
+const _cfDeviceTrust     = httpsCallable(_fns, 'deviceTrust');
+const _cfDeviceUntrust   = httpsCallable(_fns, 'deviceUntrust');
 
 /* ── Boot ───────────────────────────────────────────────────── */
 function _boot() {
@@ -1410,7 +1420,7 @@ function _boot() {
   _loadNotifPrefs();
   _loadPrivacyPrefs();
 
-  // Lazy-load sessions when devices panel is opened
+  _registerCurrentDevice();
 }
 
 /* ── Sidebar meta ───────────────────────────────────────────── */
@@ -1618,25 +1628,57 @@ window.acSavePrivacyPref = function() {
   try { localStorage.setItem(PRIV_KEY, JSON.stringify(prefs)); } catch (_) {}
 };
 
+/* ── Register this browser as a device ──────────────────────── */
+async function _registerCurrentDevice() {
+  try {
+    // Generate a stable per-browser device ID stored in localStorage
+    let deviceId = localStorage.getItem('sk_device_id');
+    if (!deviceId) {
+      deviceId = 'dev_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('sk_device_id', deviceId);
+    }
+    const res = await _cfDeviceRegister({ deviceId });
+    _currentDocId = res.data?.deviceDocId || null;
+    if (_currentDocId) localStorage.setItem('sk_device_doc', _currentDocId);
+  } catch (_) {
+    // Non-fatal — device tracking gracefully degrades
+    _currentDocId = localStorage.getItem('sk_device_doc') || null;
+  }
+}
+
 /* ── Session / device loading ───────────────────────────────── */
 async function _loadSessions() {
   const listEl = document.getElementById('acDeviceList');
   const logEl  = document.getElementById('acSessionLog');
 
   try {
-    _sessions = await SokoniSessions.getUserSessions();
+    // Load from device engine CF (rich data) + SokoniSessions (backward compat)
+    const [cfRes, legacySessions] = await Promise.allSettled([
+      _cfDeviceList(),
+      SokoniSessions.getUserSessions(),
+    ]);
+
+    _devices  = cfRes.status === 'fulfilled'  ? (cfRes.value.data?.devices  || []) : [];
+    _sessions = legacySessions.status === 'fulfilled' ? (legacySessions.value || []) : [];
+
+    // Display device engine data when available, else fall back to legacy sessions
+    const displayData = _devices.length > 0 ? _devices : _sessions;
+    const currentDoc  = _currentDocId || localStorage.getItem('sk_device_doc');
+
     const countEl = document.getElementById('secDeviceCount');
-    if (countEl) countEl.textContent = _sessions.length;
+    if (countEl) countEl.textContent = displayData.length;
 
     if (listEl) {
-      if (_sessions.length === 0) {
+      if (displayData.length === 0) {
         listEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">📱</div><div class="ac-empty-text">No active sessions found.</div></div>';
+      } else if (_devices.length > 0) {
+        listEl.innerHTML = _devices.map(d => _renderDeviceV2(d, d.docId === currentDoc)).join('');
       } else {
         listEl.innerHTML = _sessions.map(_renderDevice).join('');
       }
     }
     if (logEl) {
-      if (_sessions.length === 0) {
+      if (displayData.length === 0) {
         logEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">🕐</div><div class="ac-empty-text">No session history available.</div></div>';
       } else {
         logEl.innerHTML = _sessions.map(_renderSessionLog).join('');
@@ -1650,6 +1692,32 @@ async function _loadSessions() {
   }
 }
 
+/* ── Render device from device-engine CF (rich data) ─────────── */
+function _renderDeviceV2(d, isCurrent) {
+  const time    = d.lastActiveAt?.seconds ? _timeAgo(d.lastActiveAt.seconds * 1000) : 'Recently';
+  const icon    = d.deviceType === 'mobile' ? '📱' : d.deviceType === 'tablet' ? '📱' : '💻';
+  const geo     = [d.city, d.country].filter(Boolean).join(', ');
+  const trusted = d.isTrusted ? `<span class="ac-badge" style="background:rgba(113,255,0,.12);color:var(--g);font-size:10px;">Trusted</span>` : '';
+  return `
+    <div class="ac-device-card">
+      <div class="ac-device-icon">${icon}</div>
+      <div class="ac-device-info">
+        <div class="ac-device-name">${_esc(d.deviceName)}
+          ${isCurrent ? `<span class="ac-badge" style="font-size:10px;margin-left:6px;">This device</span>` : ''}
+          ${trusted}
+        </div>
+        <div class="ac-device-meta">${_esc(d.browser)} · ${_esc(d.platform)}${geo ? ' · ' + _esc(geo) : ''}</div>
+        <div class="ac-device-meta" style="margin-top:2px;">Last active ${time}${d.loginCount > 1 ? ' · ' + d.loginCount + ' logins' : ''}</div>
+      </div>
+      ${!isCurrent ? `
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button class="ac-row-action" onclick="window.acRevokeDeviceV2('${_esc(d.docId)}')">Log out</button>
+          ${!d.isTrusted ? `<button class="ac-row-action" style="background:rgba(113,255,0,.08);color:var(--g);border-color:rgba(113,255,0,.2);" onclick="window.acTrustDevice('${_esc(d.docId)}')">Trust</button>` : `<button class="ac-row-action" style="color:var(--sub);" onclick="window.acUntrustDevice('${_esc(d.docId)}')">Untrust</button>`}
+        </div>` : ''}
+    </div>`;
+}
+
+/* ── Legacy renderDevice (fallback when CF data unavailable) ─── */
 function _renderDevice(s) {
   const time = s.lastActive?.seconds
     ? _timeAgo(s.lastActive.seconds * 1000)
@@ -1965,20 +2033,64 @@ window.acConfirmDelete = async function() {
   }
 };
 
-/* ── Revoke all sessions ────────────────────────────────────── */
+/* ── Sign out all other devices ─────────────────────────────── */
 window.acRevokeAll = async function() {
   if (!confirm('Sign out all other devices? You will remain signed in on this device.')) return;
   try {
-    const count = await SokoniSessions.revokeOtherSessions();
-    alert(`Signed out ${count} other device${count !== 1 ? 's' : ''}.`);
+    const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
+    // Revoke from device engine
+    await _cfDeviceLogoutAll({ currentDeviceDocId: currentDoc || null });
+    // Also revoke legacy sessions
+    await SokoniSessions.revokeOtherSessions().catch(() => {});
     _sessions = [];
-    _loadSessions();
+    _devices  = [];
+    await _loadSessions();
   } catch (e) {
-    alert('Failed to revoke sessions. Please try again.');
+    alert('Failed to sign out other devices. Please try again.');
   }
 };
 
-/* ── Revoke individual device ───────────────────────────────── */
+/* ── Revoke individual device (device engine v2) ─────────────── */
+window.acRevokeDeviceV2 = async function(deviceDocId) {
+  if (!confirm('Sign out this device? It will lose access immediately.')) return;
+  try {
+    await _cfDeviceLogout({ deviceDocId });
+    _devices = _devices.filter(d => d.docId !== deviceDocId);
+    const listEl = document.getElementById('acDeviceList');
+    const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
+    if (listEl) listEl.innerHTML = _devices.map(d => _renderDeviceV2(d, d.docId === currentDoc)).join('');
+    const countEl = document.getElementById('secDeviceCount');
+    if (countEl) countEl.textContent = _devices.length;
+  } catch (e) {
+    alert('Failed to sign out device. Please try again.');
+  }
+};
+
+/* ── Trust a device ─────────────────────────────────────────── */
+window.acTrustDevice = async function(deviceDocId) {
+  try {
+    await _cfDeviceTrust({ deviceDocId });
+    const d = _devices.find(x => x.docId === deviceDocId);
+    if (d) d.isTrusted = true;
+    const listEl = document.getElementById('acDeviceList');
+    const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
+    if (listEl) listEl.innerHTML = _devices.map(d => _renderDeviceV2(d, d.docId === currentDoc)).join('');
+  } catch (e) { alert('Failed: ' + e.message); }
+};
+
+/* ── Untrust a device ───────────────────────────────────────── */
+window.acUntrustDevice = async function(deviceDocId) {
+  try {
+    await _cfDeviceUntrust({ deviceDocId });
+    const d = _devices.find(x => x.docId === deviceDocId);
+    if (d) d.isTrusted = false;
+    const listEl = document.getElementById('acDeviceList');
+    const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
+    if (listEl) listEl.innerHTML = _devices.map(d => _renderDeviceV2(d, d.docId === currentDoc)).join('');
+  } catch (e) { alert('Failed: ' + e.message); }
+};
+
+/* ── Revoke individual device (legacy sessions fallback) ─────── */
 window.acRevokeDevice = async function(sessionId) {
   if (!confirm('Revoke this device? It will be signed out immediately.')) return;
   try {

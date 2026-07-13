@@ -9387,3 +9387,18 @@ exports.orgGetDelegations             = _orgEng.orgGetDelegations;
 exports.orgUpdateEmploymentStatus     = _orgEng.orgUpdateEmploymentStatus;
 exports.orgGetAuditLog                = _orgEng.orgGetAuditLog;
 exports.orgGetDashboard               = _orgEng.orgGetDashboard;
+exports.orgGetRoles                   = _orgEng.orgGetRoles;
+exports.orgCreateRole                 = _orgEng.orgCreateRole;
+exports.orgUpdateRole                 = _orgEng.orgUpdateRole;
+exports.orgDeleteRole                 = _orgEng.orgDeleteRole;
+exports.orgExpireAccess               = _orgEng.orgExpireAccess;
+
+/* ── Device Management Engine ──────────────────────────────── */
+const _devEng = require('./device-engine');
+exports.deviceRegister                = _devEng.deviceRegister;
+exports.deviceList                    = _devEng.deviceList;
+exports.deviceLogout                  = _devEng.deviceLogout;
+exports.deviceLogoutAll               = _devEng.deviceLogoutAll;
+exports.deviceTrust                   = _devEng.deviceTrust;
+exports.deviceUntrust                 = _devEng.deviceUntrust;
+exports.devicePing                    = _devEng.devicePing;
