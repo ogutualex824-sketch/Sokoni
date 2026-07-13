@@ -480,17 +480,30 @@ exports.emailOnLegalConsultation = onDocumentCreated(
   { document: "legalConsultations/{consultId}", secrets: EMAIL_SECRETS },
   async (event) => {
     const c = event.data?.data() || {};
-    const email = c.clientEmail || await emailForUid(c.clientId || "");
+
+    /* Read the field names bookLegalConsultation ACTUALLY writes (legal-hub.js:157-166):
+       clientUid / providerName / specializations / dateTime / consultationFee.
+       This trigger used to read clientId / lawyerName / specialty / date / time / fee —
+       none of which are ever written — so emailForUid("") returned nothing and every
+       booking confirmation silently bailed at the !email guard. The legacy names are
+       still accepted as fallbacks in case an older document is replayed. */
+    const uid = c.clientUid || c.clientId || "";
+    const email = c.clientEmail || await emailForUid(uid);
     if (!email) return;
+
+    const when = c.dateTime ? new Date(c.dateTime) : null;
+    const spec = Array.isArray(c.specializations) ? c.specializations.join(", ")
+               : (c.specializations || c.specialty || "");
+
     await trigger("legal-consultation", {
       name:        c.clientName || "Client",
-      lawyerName:  c.lawyerName || "Your Lawyer",
-      specialty:   c.specialty || "",
-      date:        c.date || "",
-      time:        c.time || "",
-      fee:         c.fee || 0,
+      lawyerName:  c.providerName || c.lawyerName || "Your Lawyer",
+      specialty:   spec,
+      date:        when ? when.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi" }) : (c.date || ""),
+      time:        when ? when.toLocaleTimeString("en-KE", { timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit" }) : (c.time || ""),
+      fee:         c.consultationFee ?? c.fee ?? 0,
       email,
-    }, { uid: c.clientId || "", emailId: `legal-${event.params.consultId}` });
+    }, { uid, emailId: `legal-${event.params.consultId}` });
   }
 );
 
