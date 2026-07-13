@@ -6,6 +6,21 @@
    signup.html can call them directly.
 ================================================================ */
 
+/* ── Global diagnostic net — captures any uncaught exception / rejected promise
+   that escapes a catch block so the root cause is never silently swallowed ── */
+window.onerror = function(msg, src, line, col, err) {
+    console.error('[SOKONI AUTH] UNCAUGHT ERROR', msg, { src: src, line: line, col: col });
+    if (err) {
+        console.error('[SOKONI AUTH] UNCAUGHT stack:', err.stack);
+        console.error('[SOKONI AUTH] UNCAUGHT detail:', JSON.stringify(err, Object.getOwnPropertyNames(err)));
+    }
+};
+window.onunhandledrejection = function(e) {
+    console.error('[SOKONI AUTH] UNHANDLED PROMISE REJECTION', e.reason);
+    if (e.reason && e.reason.stack)  console.error('[SOKONI AUTH] PROMISE stack:', e.reason.stack);
+    if (e.reason) console.error('[SOKONI AUTH] PROMISE detail:', JSON.stringify(e.reason, Object.getOwnPropertyNames(e.reason)));
+};
+
 /* ── On load: capture ?next= or ?redirect= URL param into sessionStorage ── */
 (function(){
     try {
@@ -153,6 +168,7 @@ function _fbErr(code){
    LOGIN
 ══════════════════════════════════════════════════════════════ */
 async function loginUser(){
+    console.log('[AUTH STEP 1] Auth initialized — loginUser() called');
     const email    = (document.getElementById("loginEmail")?.value    || "").trim().toLowerCase();
     const password = (document.getElementById("loginPassword")?.value || "");
 
@@ -160,6 +176,8 @@ async function loginUser(){
         showAuthMsg("Please fill all fields.", "error");
         return;
     }
+
+    console.log('[AUTH STEP 2] User submitted login', { email, firebaseAuthReady: !!window.firebaseAuth, firebaseDBReady: !!window.firebaseDB });
 
     /* Persistent rate limit: max 10 attempts per minute */
     if(typeof SokoniSecurity !== 'undefined' && SokoniSecurity.persistentRateLimit){
@@ -198,7 +216,9 @@ async function loginUser(){
             throw new Error("Firebase not ready. Please refresh the page.");
         }
 
+        console.log('[AUTH STEP 3] signInWithEmailAndPassword — calling Firebase Auth');
         const cred = await signInWithEmailAndPassword(window.firebaseAuth, email, password);
+        console.log('[AUTH STEP 3] Firebase Auth returned — uid:', cred.user.uid, 'email:', cred.user.email);
 
         /* Fetch full profile from Firestore users collection */
         let profile = {
@@ -208,17 +228,20 @@ async function loginUser(){
             registeredAs: { buyer: true }
         };
 
+        console.log('[AUTH STEP 4] Loading Firestore profile for uid:', cred.user.uid);
         try {
             const { getDoc, doc } = await import(
                 "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
             );
             const snap = await getDoc(doc(window.firebaseDB, 'users', cred.user.uid));
-            if(snap.exists()) profile = snap.data();
+            if(snap.exists()) { profile = snap.data(); console.log('[AUTH STEP 4] Firestore profile loaded OK'); }
+            else { console.warn('[AUTH STEP 4] No Firestore user doc — falling back to minimal profile'); }
         } catch(fsErr){
-            /* Non-fatal — continue with basic profile if Firestore unreachable */
+            console.warn('[AUTH STEP 4] Firestore profile load failed (non-fatal):', fsErr.code, fsErr.message);
         }
 
         /* ── Sync to localStorage for backward-compat with all other pages ── */
+        console.log('[AUTH STEP 5] Writing session to localStorage — sokoniAuthReady will fire from firebase.js');
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
         localStorage.setItem("loggedIn", "true");
         localStorage.removeItem("sokoniCreds"); /* clear legacy SHA-256 creds */
@@ -334,9 +357,17 @@ async function loginUser(){
         sessionStorage.removeItem("sokoniLoginRedirect");
         /* Validate redirect — only allow same-origin relative paths, block open-redirect */
         const _safeRedir = /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(_rawRedir) && !_rawRedir.includes('//') ? _rawRedir : "index.html";
+        console.log('[AUTH STEP 6] Redirecting user to:', _safeRedir);
         setTimeout(() => window.location.href = _safeRedir, 1200);
 
     } catch(err){
+        /* ── Full diagnostic dump — identifies the exact failure ── */
+        console.error('[AUTH ERROR] Login failed at step above ↑');
+        console.error('[AUTH ERROR] error object:', err);
+        console.error('[AUTH ERROR] code:', err.code, '| message:', err.message);
+        console.error('[AUTH ERROR] stack:', err.stack);
+        try { console.error('[AUTH ERROR] serialized:', JSON.stringify(err, Object.getOwnPropertyNames(err))); } catch(_){}
+
         if(btn){ btn.disabled = false; btn.textContent = "Sign In →"; }
 
         if(typeof SokoniSecurity !== 'undefined'){
@@ -362,7 +393,9 @@ async function loginUser(){
             /* Demo / test account fallback removed — all logins require Firebase Auth */
         }
 
-        showAuthMsg(_fbErr(err.code), "error");
+        /* If err.code is absent (non-Firebase error), surface err.message instead
+           of the generic fallback so the actual failure is visible to the user */
+        showAuthMsg(err.code ? _fbErr(err.code) : (err.message || 'An error occurred. Please try again.'), "error");
     }
 }
 
@@ -927,9 +960,13 @@ async function signInWithGoogle() {
             await signInWithRedirect(window.firebaseAuth, provider);
         }
     } catch (err) {
-        console.warn('[SOKONI Auth] Google sign-in error', err.code, err.message);
+        console.error('[AUTH ERROR] Google sign-in failed');
+        console.error('[AUTH ERROR] error object:', err);
+        console.error('[AUTH ERROR] code:', err.code, '| message:', err.message);
+        console.error('[AUTH ERROR] stack:', err.stack);
+        try { console.error('[AUTH ERROR] serialized:', JSON.stringify(err, Object.getOwnPropertyNames(err))); } catch(_){}
         _resetGoogleBtn();
-        const msg = _googleAuthErr(err.code);
+        const msg = err.code ? _googleAuthErr(err.code) : (err.message || 'Google sign-in failed. Please try again.');
         if (msg) showAuthMsg(msg, 'error');
     }
 }
@@ -955,11 +992,15 @@ window.addEventListener('sokoniOAuthRedirectDone', async function(e) {
 window.addEventListener('sokoniGoogleRedirectError', function(e) {
     try { sessionStorage.removeItem('sokoniAuthRedirectPending'); } catch (_) {}
     const err = e.detail;
-    console.warn('[SOKONI Auth] Google redirect error:', err.code, err.message);
+    console.error('[AUTH ERROR] Google redirect error');
+    console.error('[AUTH ERROR] error object:', err);
+    console.error('[AUTH ERROR] code:', err.code, '| message:', err.message);
+    console.error('[AUTH ERROR] stack:', err.stack);
+    try { console.error('[AUTH ERROR] serialized:', JSON.stringify(err, Object.getOwnPropertyNames(err))); } catch(_){}
     if (err.code === 'auth/account-exists-with-different-credential') {
         _handleGoogleLinkError(err);
     } else {
-        const msg = _googleAuthErr(err.code);
+        const msg = err.code ? _googleAuthErr(err.code) : (err.message || 'Google sign-in failed. Please try again.');
         if (msg) showAuthMsg(msg, 'error');
         _resetGoogleBtn();
     }
@@ -968,13 +1009,17 @@ window.addEventListener('sokoniOAuthRedirectError', function(e) {
     try { sessionStorage.removeItem('sokoniAuthRedirectPending'); } catch (_) {}
     const err        = e.detail;
     const providerId = err.customData?._tokenResponse?.providerId || 'unknown';
-    console.warn('[SOKONI Auth] OAuth redirect error:', err.code, providerId, err.message);
+    console.error('[AUTH ERROR] OAuth redirect error');
+    console.error('[AUTH ERROR] error object:', err);
+    console.error('[AUTH ERROR] code:', err.code, '| providerId:', providerId, '| message:', err.message);
+    console.error('[AUTH ERROR] stack:', err.stack);
+    try { console.error('[AUTH ERROR] serialized:', JSON.stringify(err, Object.getOwnPropertyNames(err))); } catch(_){}
     if (err.code === 'auth/account-exists-with-different-credential' && providerId !== 'google.com') {
         _handleProviderLinkError(err, _providerLabel(providerId));
     } else if (providerId === 'google.com') {
         _handleGoogleLinkError(err);
     } else {
-        const msg = _googleAuthErr(err.code) || 'Sign-in failed. Please try again.';
+        const msg = (err.code ? _googleAuthErr(err.code) : null) || err.message || 'Sign-in failed. Please try again.';
         if (msg) showAuthMsg(msg, 'error');
     }
 });
