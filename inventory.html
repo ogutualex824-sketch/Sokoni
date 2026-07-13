@@ -109,13 +109,22 @@ img{max-width:100%;display:block}
 .badge-danger{background:rgba(255,59,59,.1);color:var(--danger);border:1px solid rgba(255,59,59,.2)}
 .badge-info  {background:rgba(0,200,255,.1);color:var(--info);border:1px solid rgba(0,200,255,.2)}
 
-/* ── QUICK ACTIONS ── */
-.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px}
-.quick-btn{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
-  padding:12px 6px;display:flex;flex-direction:column;align-items:center;gap:6px;transition:background .15s}
-.quick-btn:hover{background:var(--card-hover)}
-.quick-icon{font-size:22px}
-.quick-label{font-size:10px;font-weight:600;color:var(--muted);text-align:center;line-height:1.2}
+/* ── QUICK ACTIONS (Enterprise) ── */
+.qa-sections{display:flex;flex-direction:column;gap:18px;margin-bottom:20px}
+.qa-section-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
+.qa-section-hd-title{font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.qa-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.qa-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:13px 12px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;
+  cursor:pointer;transition:transform .15s,background .15s,border-color .15s,box-shadow .15s;
+  min-height:84px;text-align:left;width:100%}
+.qa-card:hover{background:var(--card-hover);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.35);border-color:rgba(113,255,0,.3)}
+.qa-card:active{transform:scale(.96);transition:transform .08s}
+.qa-card.qa-primary{border-color:rgba(113,255,0,.3);background:rgba(113,255,0,.05)}
+.qa-card.qa-primary:hover{border-color:rgba(113,255,0,.5);background:rgba(113,255,0,.09);box-shadow:0 6px 24px rgba(113,255,0,.12)}
+.qa-icon{font-size:24px;line-height:1;margin-bottom:2px}
+.qa-title{font-size:12px;font-weight:700;color:var(--fg);line-height:1.2}
+.qa-sub{font-size:10px;color:var(--muted);line-height:1.3}
 
 /* ── PRODUCT LIST ── */
 .product-item{display:flex;align-items:center;gap:11px;padding:11px;
@@ -357,7 +366,8 @@ tr:hover td{background:rgba(255,255,255,.02)}
 
 @media(min-width:768px){
   .kpi-strip{grid-template-columns:repeat(4,1fr)}
-  .quick-grid{grid-template-columns:repeat(8,1fr)}
+  .qa-sections{flex-direction:row;flex-wrap:wrap;gap:14px}
+  .qa-section{flex:1 1 calc(50% - 7px);min-width:240px}
   #main{padding-bottom:0}
   .bottom-nav{display:none}
   .page{padding:16px 24px 12px;max-width:900px;margin:0 auto}
@@ -431,40 +441,114 @@ tr:hover td{background:rgba(255,255,255,.02)}
   <div class="section-hd">
     <span class="section-title">Quick Actions</span>
   </div>
-  <div class="quick-grid">
-    <button class="quick-btn" onclick="openProductModal()">
-      <span class="quick-icon">&#10133;</span><span class="quick-label">Add Product</span>
-    </button>
-    <button class="quick-btn" onclick="openAdjustModal()">
-      <span class="quick-icon">&#9881;</span><span class="quick-label">Adjust Stock</span>
-    </button>
-    <button class="quick-btn" onclick="openStockCountModal()">
-      <span class="quick-icon">&#128203;</span><span class="quick-label">Stock Count</span>
-    </button>
-    <button class="quick-btn" onclick="openPOModal()">
-      <span class="quick-icon">&#128666;</span><span class="quick-label">New PO</span>
-    </button>
-    <button class="quick-btn" onclick="openTransferModal()">
-      <span class="quick-icon">&#8645;</span><span class="quick-label">Transfer</span>
-    </button>
-    <button class="quick-btn" onclick="openSupplierModal()">
-      <span class="quick-icon">&#127970;</span><span class="quick-label">Add Supplier</span>
-    </button>
-    <button class="quick-btn" onclick="openImportModal()">
-      <span class="quick-icon">&#128196;</span><span class="quick-label">Import CSV</span>
-    </button>
-    <button class="quick-btn" onclick="openReorderPanel()">
-      <span class="quick-icon">&#129302;</span><span class="quick-label">AI Reorder</span>
-    </button>
-    <button class="quick-btn" onclick="showPage('batches');openBatchModal()">
-      <span class="quick-icon">&#128230;</span><span class="quick-label">New Batch</span>
-    </button>
-    <button class="quick-btn" onclick="showPage('serials');openSerialModal()">
-      <span class="quick-icon">&#128250;</span><span class="quick-label">Register Serials</span>
-    </button>
-    <button class="quick-btn" onclick="showPage('transfers');openTransferModal()">
-      <span class="quick-icon">&#8646;</span><span class="quick-label">New Transfer</span>
-    </button>
+  <div class="qa-sections">
+
+    <!-- Product Management -->
+    <div class="qa-section">
+      <div class="qa-section-hd">
+        <span class="qa-section-hd-title">Product Management</span>
+      </div>
+      <div class="qa-grid">
+        <button class="qa-card qa-primary" onclick="openProductModal()">
+          <span class="qa-icon">&#10133;</span>
+          <span class="qa-title">Add Product</span>
+          <span class="qa-sub">Create a new listing</span>
+        </button>
+        <button class="qa-card" onclick="openImportModal()">
+          <span class="qa-icon">&#128229;</span>
+          <span class="qa-title">Import Products</span>
+          <span class="qa-sub">Bulk upload via CSV</span>
+        </button>
+        <button class="qa-card" onclick="showPage('products')">
+          <span class="qa-icon">&#128203;</span>
+          <span class="qa-title">Product Catalogue</span>
+          <span class="qa-sub">Browse all products</span>
+        </button>
+        <button class="qa-card" onclick="showPage('serials');openSerialModal()">
+          <span class="qa-icon">&#128250;</span>
+          <span class="qa-title">Register Serials</span>
+          <span class="qa-sub">Track serial numbers</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Inventory Operations -->
+    <div class="qa-section">
+      <div class="qa-section-hd">
+        <span class="qa-section-hd-title">Inventory Operations</span>
+      </div>
+      <div class="qa-grid">
+        <button class="qa-card qa-primary" onclick="openAdjustModal()">
+          <span class="qa-icon">&#9881;</span>
+          <span class="qa-title">Adjust Stock</span>
+          <span class="qa-sub">Manual correction</span>
+        </button>
+        <button class="qa-card qa-primary" onclick="openStockCountModal()">
+          <span class="qa-icon">&#128202;</span>
+          <span class="qa-title">Stock Count</span>
+          <span class="qa-sub">Physical inventory audit</span>
+        </button>
+        <button class="qa-card" onclick="showPage('transfers');openTransferModal()">
+          <span class="qa-icon">&#8645;</span>
+          <span class="qa-title">Transfer Stock</span>
+          <span class="qa-sub">Move between locations</span>
+        </button>
+        <button class="qa-card" onclick="showPage('batches');openBatchModal()">
+          <span class="qa-icon">&#128230;</span>
+          <span class="qa-title">New Batch</span>
+          <span class="qa-sub">Batch &amp; lot tracking</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Procurement -->
+    <div class="qa-section">
+      <div class="qa-section-hd">
+        <span class="qa-section-hd-title">Procurement</span>
+      </div>
+      <div class="qa-grid">
+        <button class="qa-card qa-primary" onclick="openPOModal()">
+          <span class="qa-icon">&#128666;</span>
+          <span class="qa-title">Purchase Orders</span>
+          <span class="qa-sub">Raise a new PO</span>
+        </button>
+        <button class="qa-card" onclick="openSupplierModal()">
+          <span class="qa-icon">&#127970;</span>
+          <span class="qa-title">Suppliers</span>
+          <span class="qa-sub">Manage your suppliers</span>
+        </button>
+        <button class="qa-card" onclick="showPage('grn')">
+          <span class="qa-icon">&#9989;</span>
+          <span class="qa-title">Goods Received</span>
+          <span class="qa-sub">Record deliveries</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Intelligence -->
+    <div class="qa-section">
+      <div class="qa-section-hd">
+        <span class="qa-section-hd-title">Intelligence</span>
+      </div>
+      <div class="qa-grid">
+        <button class="qa-card qa-primary" onclick="openReorderPanel()">
+          <span class="qa-icon">&#129302;</span>
+          <span class="qa-title">AI Reorder</span>
+          <span class="qa-sub">Smart reorder suggestions</span>
+        </button>
+        <button class="qa-card" onclick="showPage('analytics')">
+          <span class="qa-icon">&#128200;</span>
+          <span class="qa-title">Analytics</span>
+          <span class="qa-sub">Sales &amp; movement trends</span>
+        </button>
+        <button class="qa-card" onclick="showPage('stockcount')">
+          <span class="qa-icon">&#128196;</span>
+          <span class="qa-title">Inventory Reports</span>
+          <span class="qa-sub">Audit &amp; compliance</span>
+        </button>
+      </div>
+    </div>
+
   </div>
 
   <!-- ── HEALTH SCORE + KPI ROW ── -->
