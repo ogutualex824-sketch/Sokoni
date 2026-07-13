@@ -14,7 +14,8 @@
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://firestore.googleapis.com" crossorigin>
   <link rel="dns-prefetch" href="https://storage.googleapis.com">
-  <script src="security.js"></script><link rel="stylesheet" href="style.css">
+  <script src="security.js"></script>
+  <script src="sokoni-form-nav.js" defer></script><link rel="stylesheet" href="style.css">
   <script src="seo.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
@@ -781,7 +782,10 @@
   <div id="pane-dashboard" style="display:none;">
     <!-- Register as Provider Form -->
     <div id="providerRegSection" style="background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.15);border-radius:18px;padding:22px;margin-bottom:24px;">
-      <div style="font-size:15px;font-weight:800;color:white;margin-bottom:4px;">🏪 Register as a Service Provider</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+        <div style="font-size:15px;font-weight:800;color:white;">🏪 Register as a Service Provider</div>
+        <button onclick="SokoniFormNav.goBack()" aria-label="Close form" title="Close" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;padding:0;min-width:44px;min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:8px;flex-shrink:0;" onmouseover="this.style.color='#fff';this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.color='rgba(255,255,255,0.4)';this.style.background='none'">✕</button>
+      </div>
       <p style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">List your skills on Sokoni and get booked by thousands of clients across Kenya</p>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
         <input type="text" id="pvName" placeholder="Full Name *" style="padding:12px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:white;font-size:16px;outline:none;font-family:inherit;">
@@ -2190,6 +2194,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
   </script>
+  <script>window.addEventListener('load',function(){if(window.SokoniFormNav)SokoniFormNav.init({backUrl:'index.html',title:'Services'});});</script>
 </body>
 </html>
 
