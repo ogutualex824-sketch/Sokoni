@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-inv-sprint-v61";
+const CACHE_VERSION = "sokoni-20260713-nav-fallback-v59";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -494,6 +494,7 @@ async function networkFirst(request, cacheName) {
 
 async function networkFirstPage(request) {
   const cache = await caches.open(PAGES_CACHE);
+  const url   = new URL(request.url);   // needed by the failure path below
   try {
     /* Use redirect:'follow' so Firebase cleanUrls 301s are resolved inside the SW.
        The browser never receives an opaqueredirect for navigation requests, which
@@ -545,17 +546,51 @@ async function networkFirstPage(request) {
     /* Delete the bad cache entry so the next successful load replaces it */
     await cache.delete(request);
 
-    const root = await cache.match("/") || await cache.match("/?source=pwa");
-    if (root) return root;
+    /* ── NEVER SUBSTITUTE THE HOMEPAGE FOR A DIFFERENT PAGE ────────────────────
+       This used to be:
+
+         const root = await cache.match("/") || await cache.match("/?source=pwa");
+         if (root) return root;
+
+       …described as a "safe fallback for any page in the same SPA". SOKONI is NOT
+       an SPA — it is multi-page. So when the fetch for /marketing-hub threw (a
+       transient network blip, a cold PWA launch, a redirect hiccup), the SW handed
+       the browser the CACHED HOMEPAGE while the address bar still read
+       /marketing-hub. The user tapped Marketing Hub and landed on the homepage.
+
+       That is the "Marketing Hub redirects to homepage" bug — and it was never
+       specific to Marketing. It could silently swap ANY page for the homepage.
+
+       Serving content the user did not ask for is worse than admitting failure. The
+       homepage is only ever served when the homepage is what was requested. */
+    const isHome = url.pathname === "/" || url.pathname === "/index.html";
+    if (isHome) {
+      const root = await cache.match("/") || await cache.match("/?source=pwa");
+      if (root) return root;
+    }
 
     const offline = await caches.match("/offline") || await caches.match("/offline.html");
-    return offline || new Response(
-      `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Offline — SOKONI</title></head>
-       <body style="background:#0a0a0a;color:white;font-family:sans-serif;text-align:center;padding:80px 24px;">
-         <div style="font-size:48px;margin-bottom:16px;">&#x1F4F6;</div>
-         <h2>You're Offline</h2>
-         <p style="color:rgba(255,255,255,0.5);margin:12px 0 24px;">Check your connection and try again.</p>
-         <a href="/" style="padding:12px 24px;background:#71ff00;color:black;border-radius:12px;font-weight:800;text-decoration:none;">Go Home</a>
+    if (offline) return offline;
+
+    /* Honest error state for the page the user actually asked for, with a Retry.
+       "Go home" is offered as an EXPLICIT choice — never taken on the user's behalf. */
+    const target = url.pathname + url.search;
+    const label  = target.replace(/^\//, "").replace(/\.html$/, "").replace(/[-_]/g, " ") || "this page";
+    return new Response(
+      `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+         <meta name="viewport" content="width=device-width,initial-scale=1">
+         <title>Couldn't load — SOKONI</title></head>
+       <body style="background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                    text-align:center;padding:80px 24px;margin:0;">
+         <div style="font-size:44px;margin-bottom:14px;">&#x26A0;&#xFE0F;</div>
+         <h2 style="margin:0 0 10px;font-size:20px;">Couldn't load ${label}</h2>
+         <p style="color:rgba(255,255,255,0.5);margin:0 0 26px;font-size:14px;line-height:1.6;">
+           You may be offline, or the page failed to load.<br>Your place has been kept — try again.</p>
+         <a href="${target}" style="display:inline-block;min-height:48px;line-height:48px;padding:0 26px;
+            background:#71ff00;color:#050505;border-radius:12px;font-weight:800;text-decoration:none;">Retry</a>
+         <div style="margin-top:18px;">
+           <a href="/" style="color:rgba(255,255,255,0.45);font-size:13px;text-decoration:underline;">Go to homepage</a>
+         </div>
        </body></html>`,
       { headers: { "Content-Type": "text/html" }, status: 503 }
     );
