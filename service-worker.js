@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-form-nav-v64";
+const CACHE_VERSION = "sokoni-20260713-leaflet-local-v65";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -176,7 +176,7 @@ const PRECACHE_PAGES = [
 ];
 
 const PRECACHE_STATIC = [
-  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css", "/sokoni-form-nav.js",
+  "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css", "/sokoni-form-nav.js", "/leaflet.min.js", "/leaflet.min.css",
   "/manifest.json", "/assets/sokoni logoo.jpeg", "/assets/logosokoni.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
