@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-form-nav-v62";
+const CACHE_VERSION = "sokoni-20260713-sw-recovery-v63";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -151,6 +151,28 @@ const PRECACHE_PAGES = [
   "/inv-ai", "/tenant-portal",
   /* Messaging admin */
   "/messages-admin",
+  /* ── SW Recovery Sprint v63 — 40 routes discovered in audit 2026-07-13 ── */
+  "/404",
+  "/analytics", "/observability",
+  "/api-gateway", "/webhooks",
+  "/auction", "/auction-manager",
+  "/automation-center",
+  "/digital-store", "/rental",
+  "/email-preview",
+  "/etims-admin", "/etims-seller",
+  "/finance-budget", "/finance-expenses", "/finance-invoices",
+  "/finance-reconcile", "/settlement-dashboard",
+  "/fleet-manager", "/rider-dashboard", "/route-planner",
+  "/legal-admin", "/legal-centre",
+  "/logistics-reports",
+  "/pos-cash-manager", "/pos-completeness",
+  "/pos-kds", "/pos-live-floor", "/pos-till-manager",
+  "/status", "/trust-and-safety",
+  "/task-queue", "/warehouse",
+  "/test-accounts",
+  /* CF tooling pages */
+  "/cf-audit-report", "/cf-audit-shell", "/cf-complete-audit",
+  "/cf-migration-plan", "/cf-migration-plan-shell",
 ];
 
 const PRECACHE_STATIC = [
@@ -299,9 +321,9 @@ self.addEventListener("unhandledrejection", event => {
 });
 /* â"€â"€ INSTALL â"€â"€ */
 self.addEventListener("install", event => {
-  /* Precache silently — do NOT skipWaiting() here.
-     Active checkouts, chats and POS sessions must not be interrupted.
-     The page receives SW_UPDATE_READY and decides when it is safe to upgrade. */
+  /* SW Recovery Sprint v63: skipWaiting is now called unconditionally.
+     Session state (auth, cart, POS) lives in Firebase + localStorage — not in
+     the SW — so forced activation is safe. Old caches are wiped in activate. */
   event.waitUntil((async () => {
     try {
       const [sc, pc] = await Promise.all([
@@ -310,13 +332,12 @@ self.addEventListener("install", event => {
       ]);
       await Promise.allSettled(PRECACHE_STATIC.map(u => sc.add(u).catch(() => {})));
       await Promise.allSettled(PRECACHE_PAGES.map(u  => pc.add(u).catch(() => {})));
-      /* Notify controlled clients that an update is waiting */
       const clients = await self.clients.matchAll({ type: "window" });
       clients.forEach(c => c.postMessage({ type: "SW_UPDATE_READY", version: CACHE_VERSION }));
     } catch (err) {
-      /* Install failure is non-fatal -- log and continue so the SW activates */
       console.error("[SW] Install failed:", err);
     }
+    await self.skipWaiting();
   })());
 });
 
