@@ -16,158 +16,226 @@
   <script src="seo.js" defer></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;min-height:100vh;padding-bottom:80px;}
+    /* ═══════════════════════════════════════════════════════════
+       SOKONI HEALTHCARE HUB — Complete Mobile-First Responsive System
+       Rebuilt 2026-07-13
+    ═══════════════════════════════════════════════════════════ */
 
-    /*  Nav  */
-    .hc-nav{display:flex;align-items:center;gap:8px;padding:10px 16px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
-    .hc-nav-right{display:flex;gap:8px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none;-ms-overflow-style:none;flex:1;}
+    /* ── Reset & base ── */
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:#050505;color:#fff;min-height:100vh;-webkit-text-size-adjust:100%;padding-bottom:calc(76px + env(safe-area-inset-bottom,0));}
+    img{max-width:100%;height:auto;display:block;}
+
+    /* ── Sub-nav ── */
+    .hc-nav{display:flex;align-items:center;gap:6px;padding:9px 14px;background:rgba(10,10,10,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+    .hc-nav-right{display:flex;gap:6px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none;-ms-overflow-style:none;flex:1;min-width:0;}
     .hc-nav-right::-webkit-scrollbar{display:none;}
-    .hc-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;white-space:nowrap;flex-shrink:0;min-height:40px;display:inline-flex;align-items:center;gap:5px;}
-    .hc-nav-link:hover,.hc-nav-link:active{color:white;border-color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.05);}
+    .hc-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;padding:7px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;white-space:nowrap;flex-shrink:0;min-height:42px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;background:none;font-family:inherit;-webkit-tap-highlight-color:transparent;}
+    .hc-nav-link:hover,.hc-nav-link:active{color:#fff;border-color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.05);}
     .hc-nav-emg{background:rgba(255,60,60,0.1);border-color:rgba(255,60,60,0.3);color:#ff6b6b;}
 
-    /*  Hero  */
-    .hc-hero{background:linear-gradient(135deg,rgba(0,200,120,0.1),rgba(0,100,255,0.07));border-bottom:1px solid rgba(255,255,255,0.07);padding:48px 24px 40px;text-align:center;}
-    .hc-hero h1{font-size:clamp(24px,5vw,38px);font-weight:900;margin-bottom:10px;}
+    /* ── Hero ── */
+    .hc-hero{background:linear-gradient(135deg,rgba(0,200,120,0.1),rgba(0,100,255,0.07));border-bottom:1px solid rgba(255,255,255,0.07);padding:36px 16px 32px;text-align:center;}
+    .hc-hero h1{font-size:clamp(22px,5vw,38px);font-weight:900;margin-bottom:10px;line-height:1.2;}
     .hc-hero h1 span{color:#00c878;}
-    .hc-hero p{color:rgba(255,255,255,0.5);font-size:15px;margin-bottom:24px;}
-    .hc-search-bar{display:flex;max-width:540px;margin:0 auto;gap:8px;}
-    .hc-search-bar input{flex:1;padding:14px 18px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;}
-    .hc-search-bar input::placeholder{color:rgba(255,255,255,0.35);}
-    .hc-search-btn{padding:14px 22px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;}
+    .hc-hero p{color:rgba(255,255,255,0.5);font-size:14px;line-height:1.6;margin-bottom:20px;max-width:500px;margin-left:auto;margin-right:auto;}
+    .hc-search-bar{display:flex;flex-wrap:wrap;gap:8px;max-width:560px;margin:0 auto;}
+    .hc-search-bar input{flex:1;min-width:120px;padding:13px 16px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:12px;color:#fff;font-size:16px;outline:none;font-family:inherit;}
+    .hc-search-bar input:focus{border-color:rgba(0,200,120,0.45);background:rgba(255,255,255,0.09);}
+    .hc-search-bar input::placeholder{color:rgba(255,255,255,0.32);}
+    .hc-search-btn{padding:13px 20px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:#fff;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;white-space:nowrap;min-height:48px;}
 
-    /*  Emergency banner  */
-    .emg-banner{background:linear-gradient(135deg,rgba(255,30,30,0.12),rgba(255,80,0,0.08));border:1px solid rgba(255,60,60,0.25);border-radius:18px;padding:18px 22px;margin:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
-    .emg-icon{font-size:36px;flex-shrink:0;}
-    .emg-info{flex:1;}
-    .emg-info h3{font-size:16px;font-weight:900;color:#ff6b6b;margin-bottom:4px;}
+    /* ── Emergency banner ── */
+    .emg-banner{background:linear-gradient(135deg,rgba(255,30,30,0.12),rgba(255,80,0,0.08));border:1px solid rgba(255,60,60,0.25);border-radius:16px;padding:14px 16px;margin:12px 16px;display:flex;align-items:flex-start;gap:12px;}
+    .emg-icon{font-size:28px;flex-shrink:0;line-height:1;margin-top:2px;}
+    .emg-info{flex:1;min-width:0;}
+    .emg-info h3{font-size:14px;font-weight:900;color:#ff6b6b;margin-bottom:4px;}
     .emg-info p{font-size:12px;color:rgba(255,255,255,0.45);line-height:1.5;}
-    .emg-numbers{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
-    .emg-num-btn{padding:8px 16px;border-radius:10px;font-size:13px;font-weight:800;border:none;cursor:pointer;text-decoration:none;display:inline-block;}
+    .emg-numbers{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;}
+    .emg-num-btn{padding:7px 13px;border-radius:9px;font-size:12px;font-weight:800;border:none;cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:4px;white-space:nowrap;}
     .emg-red{background:rgba(255,60,60,0.2);color:#ff6b6b;border:1px solid rgba(255,60,60,0.3);}
     .emg-blue{background:rgba(0,120,255,0.15);color:#60aaff;border:1px solid rgba(0,120,255,0.25);}
     .emg-green{background:rgba(0,200,120,0.12);color:#00c878;border:1px solid rgba(0,200,120,0.25);}
 
-    /*  Body  */
-    .hc-body{max-width:1200px;margin:0 auto;padding:0 24px 60px;}
+    /* ── Page body ── */
+    .hc-body{max-width:1200px;margin:0 auto;padding:0 14px 48px;}
 
-    /*  Category tiles  */
-    .hc-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;margin:24px 0;}
-    .hc-cat-tile{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 12px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;display:block;}
+    /* ── Stats strip ── */
+    .hc-stats-strip{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0;background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:14px;padding:12px 14px;}
+
+    /* ── Category tiles ── */
+    .hc-cats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0;}
+    .hc-cat-tile{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:12px 8px;text-align:center;cursor:pointer;transition:all .2s;text-decoration:none;display:block;-webkit-tap-highlight-color:transparent;}
     .hc-cat-tile:hover,.hc-cat-tile.active{border-color:rgba(0,200,120,0.35);background:rgba(0,200,120,0.08);}
-    .hc-cat-tile .ct-icon{font-size:28px;margin-bottom:8px;}
-    .hc-cat-tile .ct-label{font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);}
+    .hc-cat-tile .ct-icon{font-size:22px;margin-bottom:5px;}
+    .hc-cat-tile .ct-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.7);line-height:1.3;}
     .hc-cat-tile.active .ct-label{color:#00c878;}
 
-    /*  Section heading  */
-    .hc-section-h{font-size:15px;font-weight:800;color:white;margin:28px 0 16px;display:flex;align-items:center;gap:8px;}
+    /* ── Section heading ── */
+    .hc-section-h{font-size:14px;font-weight:800;color:#fff;margin:22px 0 12px;display:flex;align-items:center;gap:8px;}
     .hc-section-h::after{content:'';flex:1;height:1px;background:rgba(255,255,255,0.07);}
 
-    /*  Provider cards  */
-    .hc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;}
-    .hc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;overflow:hidden;transition:transform .2s,border-color .2s;}
-    .hc-card:hover{transform:translateY(-3px);border-color:rgba(0,200,120,0.25);}
-    .hc-card-head{padding:18px 18px 0;display:flex;align-items:flex-start;gap:14px;}
-    .hc-card-emoji{width:54px;height:54px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;}
+    /* ── Provider grid ── */
+    .hc-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+
+    /* ── Provider card ── */
+    .hc-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);border-radius:18px;overflow:hidden;transition:transform .2s,border-color .2s,box-shadow .2s;display:flex;flex-direction:column;}
+    .hc-card:hover{transform:translateY(-2px);border-color:rgba(0,200,120,0.28);box-shadow:0 8px 28px rgba(0,0,0,0.35);}
+
+    /* Card head */
+    .hc-card-head{padding:14px 14px 0;display:flex;align-items:flex-start;gap:12px;}
+    .hc-card-emoji{width:50px;height:50px;min-width:50px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
     .bg-hospital{background:rgba(255,60,60,0.1);border:1px solid rgba(255,60,60,0.2);}
     .bg-clinic{background:rgba(0,180,255,0.1);border:1px solid rgba(0,180,255,0.2);}
     .bg-pharmacy{background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);}
     .bg-lab{background:rgba(180,100,255,0.1);border:1px solid rgba(180,100,255,0.2);}
     .bg-dispensary{background:rgba(255,180,0,0.1);border:1px solid rgba(255,180,0,0.2);}
     .bg-ambulance{background:rgba(255,80,0,0.1);border:1px solid rgba(255,80,0,0.2);}
-    .hc-card-meta{flex:1;}
-    .hc-card-name{font-size:15px;font-weight:800;color:white;margin-bottom:4px;}
-    .hc-card-type{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;display:inline-block;margin-bottom:6px;}
+
+    /* Card meta — right of emoji */
+    .hc-card-meta{flex:1;min-width:0;}
+    .hc-card-name{font-size:15px;font-weight:800;color:#fff;margin-bottom:4px;overflow-wrap:break-word;word-break:break-word;line-height:1.3;}
+    .hc-card-type{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;display:inline-block;margin-bottom:4px;}
     .type-hospital{background:rgba(255,60,60,0.15);color:#ff6b6b;}
     .type-clinic{background:rgba(0,180,255,0.15);color:#60aaff;}
     .type-pharmacy{background:rgba(0,200,120,0.15);color:#00c878;}
     .type-lab{background:rgba(180,100,255,0.15);color:#c084fc;}
     .type-dispensary{background:rgba(255,180,0,0.15);color:#fbbf24;}
     .type-ambulance{background:rgba(255,80,0,0.15);color:#ff6b35;}
-    .hc-card-location{font-size:12px;color:rgba(255,255,255,0.4);}
-    .hc-card-body{padding:12px 18px 18px;}
-    .hc-card-desc{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;margin-bottom:12px;}
-    .hc-card-footer{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-    .hc-card-rating{display:flex;align-items:center;gap:4px;font-size:12px;color:rgba(255,255,255,0.5);}
+    .hc-card-location{font-size:11px;color:rgba(255,255,255,0.42);overflow-wrap:break-word;line-height:1.4;}
+
+    /* Card body */
+    .hc-card-body{padding:10px 14px 14px;flex:1;display:flex;flex-direction:column;gap:9px;}
+    .hc-card-desc{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.65;overflow-wrap:break-word;}
+
+    /* Card footer — vertical stack, rating then hours then buttons */
+    .hc-card-footer{display:flex;flex-direction:column;gap:7px;margin-top:auto;}
+    .hc-card-info-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;}
+    .hc-card-rating{display:flex;align-items:center;gap:3px;font-size:12px;color:rgba(255,255,255,0.5);flex-shrink:0;}
     .hc-card-rating .star{color:#fbbf24;}
-    .hc-card-hours{font-size:11px;color:rgba(255,255,255,0.35);}
-    .hc-book-btn{padding:9px 18px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:10px;color:white;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;transition:filter .2s;}
-    .hc-book-btn:hover{filter:brightness(1.1);}
-    .hc-open-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;}
+    .hc-open-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;}
     .open-now{background:rgba(0,200,120,0.15);color:#00c878;border:1px solid rgba(0,200,120,0.2);}
     .closed{background:rgba(255,60,60,0.1);color:#ff6b6b;border:1px solid rgba(255,60,60,0.15);}
+    .hc-card-hours{font-size:11px;color:rgba(255,255,255,0.35);}
 
-    /*  Medicine delivery CTA  */
-    .med-delivery-cta{background:linear-gradient(135deg,rgba(0,200,120,0.08),rgba(0,100,200,0.06));border:1px solid rgba(0,200,120,0.2);border-radius:20px;padding:28px 32px;margin:28px 0;display:flex;align-items:center;gap:24px;flex-wrap:wrap;}
-    .med-cta-icon{font-size:44px;flex-shrink:0;}
-    .med-cta-info h3{font-size:18px;font-weight:900;color:white;margin-bottom:5px;}
-    .med-cta-info p{font-size:13px;color:rgba(255,255,255,0.5);line-height:1.5;}
-    .med-cta-btn{padding:13px 26px;background:linear-gradient(135deg,#00c878,#009858);color:white;font-weight:800;font-size:14px;border:none;border-radius:12px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-block;}
+    /* Action buttons: 2×2 grid on mobile → 4-col on wider screens */
+    .hc-card-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    .hc-book-btn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:9px 6px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:9px;color:#fff;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;transition:filter .15s,transform .1s;white-space:nowrap;text-decoration:none;min-height:40px;-webkit-tap-highlight-color:transparent;}
+    .hc-book-btn:hover{filter:brightness(1.1);}
+    .hc-book-btn:active{transform:scale(0.96);}
 
-    /*  Appointment modal  */
-    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
-    .modal-box{background:#141414;border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;}
-    .modal-box h2{font-size:18px;font-weight:900;color:white;margin-bottom:6px;}
-    .modal-box p{color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;}
-    .modal-input{width:100%;padding:13px 15px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;margin-bottom:12px;}
+    /* ── Medicine delivery CTA ── */
+    .med-delivery-cta{background:linear-gradient(135deg,rgba(0,200,120,0.08),rgba(0,100,200,0.06));border:1px solid rgba(0,200,120,0.2);border-radius:16px;padding:18px 16px;margin:16px 0;display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;}
+    .med-cta-icon{font-size:36px;flex-shrink:0;}
+    .med-cta-info{flex:1;min-width:0;}
+    .med-cta-info h3{font-size:15px;font-weight:900;color:#fff;margin-bottom:5px;overflow-wrap:break-word;}
+    .med-cta-info p{font-size:12px;color:rgba(255,255,255,0.5);line-height:1.55;overflow-wrap:break-word;}
+    .med-cta-btn{padding:11px 20px;background:linear-gradient(135deg,#00c878,#009858);color:#fff;font-weight:800;font-size:13px;border:none;border-radius:11px;cursor:pointer;font-family:inherit;text-decoration:none;display:inline-flex;align-items:center;white-space:nowrap;}
+
+    /* ── Modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:14px;}
+    .modal-box{background:#141414;border:1px solid rgba(255,255,255,0.1);border-radius:22px;padding:22px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;}
+    .modal-box h2{font-size:17px;font-weight:900;color:#fff;margin-bottom:6px;}
+    .modal-box p{color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:16px;line-height:1.5;}
+    .modal-input{width:100%;padding:13px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:11px;color:#fff;font-size:16px;outline:none;font-family:inherit;margin-bottom:10px;}
     .modal-input::placeholder{color:rgba(255,255,255,0.3);}
-    .modal-input:focus{border-color:rgba(0,200,120,0.4);}
-    .modal-btn{width:100%;padding:13px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:white;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;}
-    .modal-close{float:right;background:none;border:none;color:rgba(255,255,255,0.4);font-size:18px;cursor:pointer;padding:0 4px;}
+    .modal-input:focus{border-color:rgba(0,200,120,0.42);}
+    .modal-btn{width:100%;padding:13px;background:linear-gradient(135deg,#00c878,#009858);border:none;border-radius:12px;color:#fff;font-weight:800;font-size:14px;cursor:pointer;font-family:inherit;margin-top:4px;}
+    .modal-close{float:right;background:none;border:none;color:rgba(255,255,255,0.4);font-size:20px;cursor:pointer;padding:0;min-height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:flex-end;}
 
-    /*  Health tips  */
-    .tips-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin:24px 0;}
-    .tip-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:16px;display:flex;gap:12px;align-items:flex-start;}
-    .tip-card .tip-icon{font-size:22px;flex-shrink:0;}
-    .tip-card h4{font-size:13px;font-weight:700;color:white;margin-bottom:3px;}
-    .tip-card p{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.5;}
+    /* ── Quick health info cards ── */
+    .tips-strip{display:grid;grid-template-columns:1fr;gap:10px;margin:16px 0;}
+    .tip-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px;display:flex;gap:11px;align-items:flex-start;}
+    .tip-card .tip-icon{font-size:20px;flex-shrink:0;line-height:1;margin-top:1px;}
+    .tip-card .tip-text{flex:1;min-width:0;}
+    .tip-card h4{font-size:13px;font-weight:700;color:#fff;margin-bottom:3px;overflow-wrap:break-word;line-height:1.35;}
+    .tip-card p{font-size:11px;color:rgba(255,255,255,0.45);line-height:1.55;overflow-wrap:break-word;}
 
-    @media(max-width:600px){
-      .emg-banner{margin:16px;padding:14px;}
-      .hc-cats{grid-template-columns:repeat(3,1fr);}
-      .hc-grid{grid-template-columns:1fr;}
-      .med-delivery-cta{flex-direction:column;text-align:center;}
-    }
+    /* ── Form 2-col grid — collapses to 1 col on mobile ── */
+    .hc-form-grid-2{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:12px;}
+
     /* ── Tab system ── */
-    .hc-tab-nav{display:flex;gap:4px;padding:10px 24px;overflow-x:auto;scrollbar-width:none;background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(0,200,120,0.1);position:sticky;top:62px;z-index:100;backdrop-filter:blur(14px);}
+    .hc-tab-nav{display:flex;gap:4px;padding:8px 14px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:rgba(5,5,5,0.95);border-bottom:1px solid rgba(0,200,120,0.1);position:sticky;top:120px;z-index:99;backdrop-filter:blur(14px);}
     .hc-tab-nav::-webkit-scrollbar{display:none;}
-    .hc-tab-btn{flex-shrink:0;padding:7px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
+    .hc-tab-btn{flex-shrink:0;padding:7px 13px;border-radius:9px;border:1px solid rgba(255,255,255,0.09);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.5);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;min-height:38px;display:inline-flex;align-items:center;gap:4px;-webkit-tap-highlight-color:transparent;}
     .hc-tab-btn.active{background:rgba(0,200,120,0.12);border-color:rgba(0,200,120,0.3);color:#00c878;}
     .hc-tab-panel{display:none;}
     .hc-tab-panel.active{display:block;}
+
     /* ── Specialist cards ── */
-    .spec-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;}
-    .spec-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:18px;overflow:hidden;transition:all .2s;}
-    .spec-card:hover{transform:translateY(-3px);border-color:rgba(0,200,120,0.28);}
-    .spec-avatar{width:52px;height:52px;border-radius:13px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);display:flex;align-items:center;justify-content:center;font-size:24px;flex-shrink:0;}
-    .spec-name{font-size:14px;font-weight:900;color:white;margin-bottom:2px;}
+    .spec-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+    .spec-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;transition:all .2s;display:flex;flex-direction:column;}
+    .spec-card:hover{transform:translateY(-2px);border-color:rgba(0,200,120,0.28);box-shadow:0 6px 22px rgba(0,0,0,0.28);}
+    .spec-avatar{width:48px;height:48px;min-width:48px;border-radius:12px;background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.2);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+    .spec-name{font-size:14px;font-weight:900;color:#fff;margin-bottom:2px;overflow-wrap:break-word;}
     .spec-title{font-size:11px;color:#00c878;font-weight:700;}
-    .spec-loc{font-size:11px;color:rgba(255,255,255,0.38);}
-    .spec-tags{display:flex;gap:4px;flex-wrap:wrap;margin:8px 0;}
-    .spec-tag{font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(0,200,120,0.06);border:1px solid rgba(0,200,120,0.15);color:rgba(0,200,120,0.8);}
-    .spec-btn{flex:1;padding:9px;border:none;border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;}
-    .spec-btn-book{background:linear-gradient(135deg,#00c878,#009858);color:white;}
+    .spec-loc{font-size:11px;color:rgba(255,255,255,0.38);line-height:1.5;overflow-wrap:break-word;}
+    .spec-tags{display:flex;gap:4px;flex-wrap:wrap;margin:7px 0;}
+    .spec-tag{font-size:9px;padding:2px 6px;border-radius:4px;background:rgba(0,200,120,0.06);border:1px solid rgba(0,200,120,0.15);color:rgba(0,200,120,0.8);}
+    .spec-btn{flex:1;padding:9px 6px;border:none;border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:inherit;min-height:38px;display:inline-flex;align-items:center;justify-content:center;gap:3px;-webkit-tap-highlight-color:transparent;}
+    .spec-btn-book{background:linear-gradient(135deg,#00c878,#009858);color:#fff;}
     .spec-btn-call{background:rgba(0,200,120,0.1);border:1px solid rgba(0,200,120,0.25);color:#00c878;}
+
     /* ── Lab cards ── */
-    .lab-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:16px 18px;transition:all .2s;}
+    .lab-grid{display:grid;grid-template-columns:1fr;gap:12px;}
+    .lab-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:15px;padding:14px 16px;transition:all .2s;display:flex;flex-direction:column;}
     .lab-card:hover{border-color:rgba(0,200,120,0.25);transform:translateY(-2px);}
+
     /* ── Dashboard stats ── */
-    .hc-dash-stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
-    .hc-dash-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:16px;text-align:center;}
+    .hc-dash-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+    .hc-dash-stat{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:13px;padding:14px;text-align:center;}
     .hc-dash-val{font-size:22px;font-weight:900;color:#00c878;margin-bottom:4px;}
     .hc-dash-lbl{font-size:9px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.04em;}
-    .hc-record-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:13px;padding:13px 15px;margin-bottom:8px;}
-    @media(max-width:600px){.spec-grid{grid-template-columns:1fr;}.hc-dash-stats{grid-template-columns:repeat(2,1fr);}}
-    /* ── Bottom nav base (style.css not linked on this page) ── */
-    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:center;background:rgba(8,8,8,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.1);height:66px;}
-    .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:rgba(255,255,255,0.85);text-decoration:none;font-size:10px;font-weight:700;transition:0.2s ease;height:100%;border:none;background:none;cursor:pointer;padding:10px 0;}
-    .bnav-item i{font-size:21px;color:white;}
+    .hc-record-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;margin-bottom:8px;}
+
+    /* ── Bottom nav ── */
+    .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:center;background:rgba(8,8,8,0.97);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border-top:1px solid rgba(255,255,255,0.1);height:calc(62px + env(safe-area-inset-bottom,0));padding-bottom:env(safe-area-inset-bottom,0);}
+    .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:rgba(255,255,255,0.85);text-decoration:none;font-size:10px;font-weight:700;transition:.2s;height:100%;border:none;background:none;cursor:pointer;padding:8px 0;-webkit-tap-highlight-color:transparent;}
+    .bnav-item i{font-size:20px;color:#fff;}
     .bnav-item span{color:rgba(255,255,255,0.85);}
     .bnav-item:hover,.active-bnav{color:#71ff00;}
     .bnav-item:hover i,.active-bnav i{color:#71ff00;}
     .bnav-item:hover span,.active-bnav span{color:#71ff00;}
-    body{padding-bottom:70px;}
+
+    /* ── Floating controls: sit above bottom nav ── */
+    [class*="kass"],[id*="kass"],[class*="chat-fab"],[id*="chatFab"]{bottom:calc(62px + env(safe-area-inset-bottom,0) + 10px) !important;}
+    [class*="scroll-top"],[id*="scrollTop"],[id*="backTop"]{bottom:calc(62px + env(safe-area-inset-bottom,0) + 64px) !important;}
+
+    /* ═══════════════════════════════════════════════════════════
+       RESPONSIVE BREAKPOINTS — mobile-first progressive
+    ═══════════════════════════════════════════════════════════ */
+
+    /* ≥ 480px — large phones / small tablets */
+    @media(min-width:480px){
+      .hc-body{padding:0 18px 48px;}
+      .hc-cats{grid-template-columns:repeat(4,1fr);}
+      .hc-stats-strip{grid-template-columns:repeat(5,1fr);}
+      .hc-card-actions{grid-template-columns:repeat(4,1fr);}
+      .tips-strip{grid-template-columns:1fr 1fr;}
+      .spec-grid{grid-template-columns:1fr 1fr;}
+      .lab-grid{grid-template-columns:1fr 1fr;}
+      .hc-form-grid-2{grid-template-columns:1fr 1fr;}
+    }
+
+    /* ≥ 768px — tablets */
+    @media(min-width:768px){
+      .hc-body{padding:0 24px 60px;}
+      .hc-hero{padding:48px 24px 40px;}
+      .emg-banner{margin:20px 24px;padding:16px 20px;}
+      .hc-grid{grid-template-columns:repeat(2,1fr);}
+      .tips-strip{grid-template-columns:repeat(4,1fr);}
+      .spec-grid{grid-template-columns:repeat(2,1fr);}
+      .lab-grid{grid-template-columns:repeat(3,1fr);}
+      .hc-dash-stats{grid-template-columns:repeat(4,1fr);}
+      .med-delivery-cta{flex-wrap:nowrap;align-items:center;}
+    }
+
+    /* ≥ 1024px — desktop */
+    @media(min-width:1024px){
+      .hc-grid{grid-template-columns:repeat(3,1fr);}
+      .spec-grid{grid-template-columns:repeat(3,1fr);}
+      .lab-grid{grid-template-columns:repeat(4,1fr);}
+    }
   </style>
 <link rel="manifest" href="manifest.json"><meta name="theme-color" content="#00c878">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -257,7 +325,7 @@
 <div class="hc-body">
 
   <!--  Stats Strip  -->
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin:20px 0;background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.12);border-radius:16px;padding:16px 18px;">
+  <div class="hc-stats-strip">
     <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#00c878;">28</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Verified Providers</div></div>
     <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#60aaff;">3 Cities</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Nairobi, Mombasa, Kisumu</div></div>
     <div style="text-align:center;"><div style="font-size:20px;font-weight:900;color:#fbbf24;">4.7 ⭐</div><div style="font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;">Avg. Rating</div></div>
@@ -323,10 +391,10 @@
   <!--  Health Tips Strip  -->
   <div class="hc-section-h">💡 Quick Health Info</div>
   <div class="tips-strip">
-    <div class="tip-card"><div class="tip-icon">🏥</div><div><h4>🏥 NHIF Coverage</h4><p>Check if your provider is NHIF-registered and save on consultation fees.</p></div></div>
-    <div class="tip-card"><div class="tip-icon">💊</div><div><h4>💊 Generic Medicines</h4><p>Ask your pharmacist for the generic — same ingredient, much cheaper.</p></div></div>
-    <div class="tip-card"><div class="tip-icon">🔬</div><div><h4>🔬 Home Lab Tests</h4><p>Blood tests, malaria, COVID &amp; sugar levels done at your home. Book below.</p></div></div>
-    <div class="tip-card"><div class="tip-icon">📅</div><div><h4>📅 Book in Advance</h4><p>Use Sokoni to book specialist appointments and skip the long queue.</p></div></div>
+    <div class="tip-card"><div class="tip-icon">🏥</div><div class="tip-text"><h4>NHIF Coverage</h4><p>Check if your provider is NHIF-registered and save on consultation fees.</p></div></div>
+    <div class="tip-card"><div class="tip-icon">💊</div><div class="tip-text"><h4>Generic Medicines</h4><p>Ask your pharmacist for the generic — same ingredient, much cheaper.</p></div></div>
+    <div class="tip-card"><div class="tip-icon">🔬</div><div class="tip-text"><h4>Home Lab Tests</h4><p>Blood tests, malaria, COVID &amp; sugar levels done at your home. Book below.</p></div></div>
+    <div class="tip-card"><div class="tip-icon">📅</div><div class="tip-text"><h4>Book in Advance</h4><p>Use Sokoni to book specialist appointments and skip the long queue.</p></div></div>
   </div>
 
   <!--  Providers grid  -->
@@ -403,7 +471,7 @@
     <!-- Booking form -->
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:24px;">
       <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:16px;">📅 Book Teleconsultation</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div class="hc-form-grid-2">
         <div>
           <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Your Name *</label>
           <input type="text" id="tcName" class="modal-input" placeholder="Full name" style="margin:0;">
@@ -471,12 +539,12 @@
       <button type="button" class="hc-tab-btn" onclick="filterLabTests('covid',this)">😷 COVID</button>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;" id="labTestGrid"></div>
+    <div class="lab-grid" id="labTestGrid"></div>
 
     <!-- Lab booking form -->
     <div class="hc-section-h" style="margin-top:28px;">📋 Book a Lab Test</div>
     <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:22px;">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="hc-form-grid-2">
         <div>
           <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Your Name *</label>
           <input type="text" id="labName" class="modal-input" placeholder="Full name" style="margin:0;">
@@ -577,7 +645,7 @@
     <div style="background:rgba(0,200,120,0.04);border:1px solid rgba(0,200,120,0.14);border-radius:20px;padding:24px;margin-bottom:24px;">
       <div style="font-size:16px;font-weight:900;color:#00c878;margin-bottom:4px;">➕ Register Your Facility</div>
       <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:18px;">Free listing · Verified badge · More patients</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div class="hc-form-grid-2">
         <div>
           <label class="hc-section-h" style="font-size:11px;margin:0 0 4px;">Facility Name *</label>
           <input type="text" id="pvFacName" class="modal-input" placeholder="Hospital / Clinic / Pharmacy name" style="margin:0;">
@@ -818,20 +886,17 @@ function renderProviders(){
       <div class="hc-card-body">
         <div class="hc-card-desc">${p.desc}${p.delivery?'<br><span style="color:#00c878;font-size:11px;font-weight:700;">✓ Delivery available</span>':""}</div>
         <div class="hc-card-footer">
-          <div>
+          <div class="hc-card-info-row">
             <div class="hc-card-rating"><span class="star">⭐</span> ${p.rating} <span>(${p.reviews} reviews)</span></div>
-            <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
+            <span class="hc-open-badge ${p.open?'open-now':'closed'}">${p.open?'Open Now':'Closed'}</span>
           </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
-            <div data-avail-provider="hc_${p.id}"></div>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              ${p.phone?`<a href="tel:${p.phone}" class="hc-book-btn" style="background:rgba(0,200,120,0.15);border:1px solid rgba(0,200,120,0.25);text-decoration:none;">📞 Call</a>`:""}
-              <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_'+p.id,name:p.name,category:p.type,tagline:p.desc,rating:p.rating,type:'service'})">📣 Share</button>
-              <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
-              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/sokoni logoo.jpeg',category:p.type,source:'healthcare',sellerName:p.name}):""}
-            </div>
+          <div class="hc-card-hours"><i class="fas fa-clock" style="margin-right:4px;"></i>${p.hours}</div>
+          <div data-avail-provider="hc_${p.id}"></div>
+          <div class="hc-card-actions">
+            <button type="button" class="hc-book-btn" onclick="openAppt('${p.id}','${p.name.replace(/'/g,"\\'")}')">📅 Book</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_${p.id}',name:'${p.name.replace(/'/g,"\\'")}',category:'${p.type}',tagline:'${p.desc.replace(/'/g,"\\'").replace(/\n/g,' ')}',rating:${p.rating},type:'service'})">📣 Share</button>
+            <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
           </div>
         </div>
       </div>
