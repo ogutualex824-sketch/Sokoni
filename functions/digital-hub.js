@@ -183,9 +183,23 @@ exports.purchaseDigitalProduct = onCall(CF_OPTS, async (req) => {
     .where('buyerUid', '==', uid).where('productId', '==', productId).limit(1).get();
   if (!existing.empty) return { purchaseId: existing.docs[0].id, alreadyOwned: true };
 
-  /* Rate from the single config (digital_products). Was a bare 0.10 literal here. */
-  const platformFeeRate = require('./commission-config').resolveRate('digital_products').pct / 100;
-  const platformFee = product.price === 0 ? 0 : Math.round(product.price * platformFeeRate * 100) / 100;
+  /* Digital product purchase — priced by the ONE Commission Engine.
+   *
+   * This computed the fee itself. The RATE was already correct (it came from the single config),
+   * but the calculation bypassed calculateCommission, so this flow ignored commissionRules,
+   * revenueConfig overrides, commission holidays and the audit trail.
+   *
+   * PRICING IS UNCHANGED: same category (digital_products), same arithmetic. skipMinimum:true because this
+   * flow never applied the KES 10 platform floor, and introducing one here would be a repricing
+   * of small purchases, not a refactor. */
+  const _comm = product.price === 0 ? null : await require('./finos-utils').calculateCommission(db(), {
+    orderAmountCents: Math.round(product.price * 100),
+    category:         'digital_products',
+    sellerId:         product.sellerUid || null,   /* the digitalProducts doc field — verified */
+    hubId:            'digital',
+    skipMinimum:      true,
+  });
+  const platformFee = _comm ? _comm.commissionCents / 100 : 0;
   const sellerAmount = product.price - platformFee;
   const licenseKey = product.price === 0 ? null : crypto.randomBytes(12).toString('hex').toUpperCase();
 

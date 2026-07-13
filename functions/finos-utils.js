@@ -358,7 +358,20 @@ async function calculateCommission(db, opts) {
            * commissionRules and revenueConfig still take precedence, so platform governance now
            * reaches provider bookings for the first time; previously nothing could override them.
            */
-          subscriptionRole } = opts || {};
+          subscriptionRole,
+
+          /* ── COMPATIBILITY: suppress the platform minimum ────────────────────────────────
+           * MIN_COMMISSION_KES (KES 10) exists so a tiny marketplace sale does not cost more to
+           * process than it earns. Several hub flows never had it, and introducing one during a
+           * migration is a repricing:
+           *
+           *     a KES 50 event ticket at 3%  = KES 1.50  ->  KES 10   (a 567% increase)
+           *     a KES 20 provider booking at 20% = KES 4  ->  KES 10   (a 150% increase)
+           *
+           * A call site that never applied a floor passes skipMinimum:true so the migration
+           * changes the CALLER, not the PRICE. Removing the flag later is a deliberate business
+           * decision, not a side effect of centralising the maths. */
+          skipMinimum } = opts || {};
 
   /* Fetch rules; small collection — fetch all and pick best match */
   const rulesSnap = await db.collection('commissionRules').where('isActive', '==', true).get().catch(() => null);
@@ -526,7 +539,7 @@ async function calculateCommission(db, opts) {
        KES 4. Introducing the floor here would silently raise it to KES 10 — a 150% increase on
        small bookings, and exactly the kind of unapproved repricing this migration must avoid.
        Compatibility mode means compatible, including at the edges. */
-    if (effectiveRate > 0 && !usingSubRate) {
+    if (effectiveRate > 0 && !usingSubRate && !skipMinimum) {
       commissionCents = Math.max(commissionCents, CC.MIN_COMMISSION_KES * 100);
     }
     if (fixedKES) commissionCents += fixedKES * 100;

@@ -651,6 +651,15 @@ async function executeTool(name, input) {
           byStatus[data.status] = (byStatus[data.status] || 0) + 1;
         });
 
+        /* @commission-safe: analytics ESTIMATE — moves no money.
+           This is a tax REPORT, not a charge. It aggregates gross across many orders and applies
+           the platform default from the single config; it never debits anyone. Calling
+           calculateCommission per order would mean one Firestore read per order for a figure
+           nobody is billed. The rate cannot drift (it comes from commission-config), but it
+           cannot reflect a per-seller rule or a plan benefit either.
+
+           It is knowingly an approximation, and the right fix is to SUM the commission actually
+           recorded on each order — which, after this sprint, every hub now writes. Tracked. */
         const commission   = Math.round(gross * COMMISSION);
         const sellerPayout = Math.round(gross - commission);
         const vatOwed      = Math.round(commission * 16 / 116);   // VAT portion of commission
@@ -2592,9 +2601,21 @@ exports.onOrderStatusChange = onDocumentUpdated(
     /* ── Delivery platform fee on order completion ── */
     if (toStatus === "delivered" && after.sellerUid) {
       const deliveryFee = Number(after.deliveryFee || 0);
-      /* Rate from the single config (hub). Was a bare 0.08 literal. */
-      const _delPct = COMMISSION_CONFIG.resolveRate('hub').pct;
-      const platformFee = Math.round(deliveryFee * (_delPct / 100) * 100) / 100;
+      /* Delivery-fee split — priced by the ONE Commission Engine (category: hub).
+         The rate was already correct (it came from the single config), but the calculation
+         bypassed calculateCommission, so this flow ignored commissionRules, revenueConfig,
+         commission holidays and the audit trail. Same rate, same arithmetic.
+         skipMinimum:true because a delivery split never had the KES 10 platform floor, and a
+         floor here would swallow a small delivery fee whole — a repricing, not a refactor. */
+      const { calculateCommission: _calcDel } = require('./finos-utils');
+      const _delComm = deliveryFee > 0 ? await _calcDel(db, {
+        orderAmountCents: Math.round(deliveryFee * 100),
+        category:         'hub',
+        sellerId:         after.riderId || after.sellerUid || null,
+        hubId:            'delivery',
+        skipMinimum:      true,
+      }) : null;
+      const platformFee = _delComm ? _delComm.commissionCents / 100 : 0;
       const riderFee    = Math.round((deliveryFee - platformFee) * 100) / 100;
       db.collection("deliveryFees").add({
         orderId,
@@ -8510,7 +8531,7 @@ exports.getSellerDisputes       = disputes.getSellerDisputes;
 exports.adminGetAllDisputes     = disputes.adminGetAllDisputes;
 exports.adminResolveDispute     = disputes.adminResolveDispute;
 
-/* ── Commerce Dispatcher — mkt-ext + merchant-success + foundation + marketing-engine ── */
+/* ── Commerce Dispatcher — mkt-ext + merchant-success + marketing-engine ── */
 /* DISPATCH CONSOLIDATION: 75 onCall CFs → 1 commerceDispatch */
 const commerceDispatcher = require('./commerce-dispatch');
 exports.commerceDispatch = commerceDispatcher.commerceDispatch;
@@ -8597,10 +8618,6 @@ const superAdmin = require('./super-admin');
 exports.setUserRole            = superAdmin.setUserRole;
 exports.suspendUser            = superAdmin.suspendUser;
 exports.sendPlatformBroadcast  = superAdmin.sendPlatformBroadcast;
-
-/* ── Foundation — consolidated into commerceDispatch above ── */
-const foundation = require('./foundation');
-exports.foundationScheduledRecurring = foundation.foundationScheduledRecurring; /* scheduled */
 
 /* ── SOKONI Impact Enterprise Platform v1.0 ────────────────────── */
 const impact = require('./impact');

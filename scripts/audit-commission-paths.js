@@ -42,7 +42,10 @@ const NOT_COMMISSION = {
 };
 
 const files = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
-  .split('\n').filter(f => f.startsWith('functions/') && f.endsWith('.js'));
+  .split('\n')
+  .filter(f => f.startsWith('functions/') && f.endsWith('.js'))
+  /* git may still list a file that has been deleted from the working tree */
+  .filter(f => fs.existsSync(path.join(ROOT, f)));
 
 const strip = s => s
   .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '))
@@ -56,10 +59,22 @@ const COMPUTE = [
   /(?:commission|platformFee)[^\n]{0,40}\*\s*0\.(?:0[1-9]|[12]\d)\b/i,
 ];
 
-const usesEngine = [], independent = [], exempt = [];
+const usesEngine = [], independent = [], exempt = [], annotated = [];
+
+/* An `@commission-safe: <reason>` annotation on the preceding lines is an EXPLICIT, justified,
+   VISIBLE exception — the same device docs/FINANCIAL_TRANSACTION_STANDARD.md uses for guards a
+   static tool cannot infer. It is listed in the report, never hidden. */
+function annotation(rawLines, i) {
+  for (let k = Math.max(0, i - 12); k <= i; k++) {
+    const m = (rawLines[k] || '').match(/@commission-safe:\s*(.+)/);
+    if (m) return m[1].trim().replace(/\*\/\s*$/, '').trim();
+  }
+  return null;
+}
 
 for (const f of files) {
   const raw = fs.readFileSync(path.join(ROOT, f), 'utf8');
+  const rawLines = raw.split('\n');
   const src = strip(raw);
   const engine = /calculateCommission\s*\(\s*\w/.test(src);
 
@@ -71,7 +86,9 @@ for (const f of files) {
     if (/calculateCommission|resolveRate|COMMISSION_CONFIG/.test(l)) return;
     if (/\bvat|\bwht|\bdst|\btax/i.test(l)) return;
     if (COMPUTE.some(re => re.test(l))) {
-      independent.push({ f, line: i + 1, code: l.trim().slice(0, 62) });
+      const why = annotation(rawLines, i);
+      if (why) annotated.push({ f, line: i + 1, why });
+      else independent.push({ f, line: i + 1, code: l.trim().slice(0, 62) });
     }
   });
 }
@@ -82,6 +99,9 @@ usesEngine.forEach(f => console.log('    OK   ' + f));
 
 console.log('\n  NOT PLATFORM COMMISSION  (' + exempt.length + ') — each with its reason');
 exempt.forEach(([f, why]) => console.log('    --   ' + f.padEnd(36) + why));
+
+console.log('\n  ANNOTATED EXCEPTION  (' + annotated.length + ') — explicit, justified, visible');
+annotated.forEach(a => console.log('    ANN  ' + a.f + ':' + a.line + '  ' + a.why));
 
 console.log('\n  INDEPENDENT CALCULATION  (' + independent.length + ')');
 if (!independent.length) {

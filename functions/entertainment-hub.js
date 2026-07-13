@@ -212,9 +212,23 @@ exports.purchaseEntertainment = onCall(CF_OPTS, async (req) => {
     .where('status', '==', 'completed').limit(1).get();
   if (!existing.empty) return { purchaseId: existing.docs[0].id, alreadyOwned: true };
 
-  /* Rate from the single config (ppv). Was a bare 0.15 literal here, in no table anywhere. */
-  const _ppvPct = require('./commission-config').resolveRate('ppv').pct;
-  const platformFee = Math.round(listing.price * (_ppvPct / 100) * 100) / 100;
+  /* Pay-per-view purchase — priced by the ONE Commission Engine.
+   *
+   * This computed the fee itself. The RATE was already correct (it came from the single config),
+   * but the calculation bypassed calculateCommission, so this flow ignored commissionRules,
+   * revenueConfig overrides, commission holidays and the audit trail.
+   *
+   * PRICING IS UNCHANGED: same category (ppv), same arithmetic. skipMinimum:true because this
+   * flow never applied the KES 10 platform floor, and introducing one here would be a repricing
+   * of small purchases, not a refactor. */
+  const _comm = await require('./finos-utils').calculateCommission(db(), {
+    orderAmountCents: Math.round(listing.price * 100),
+    category:         'ppv',
+    sellerId:         listing.creatorUid || null,   /* the entertainmentListings doc field — verified */
+    hubId:            'entertainment',
+    skipMinimum:      true,
+  });
+  const platformFee = _comm.commissionCents / 100;
   const ref = db().collection('entertainmentPurchases').doc();
   await db().runTransaction(async t => {
     t.set(ref, {

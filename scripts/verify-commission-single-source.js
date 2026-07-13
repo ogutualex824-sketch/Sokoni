@@ -52,7 +52,11 @@ const warnings = [];
 
 function repoFiles() {
   const out = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' });
-  return out.split('\n').filter(f => /\.(js|html)$/.test(f) && !f.startsWith('node_modules'));
+  return out.split('\n')
+    .filter(f => /\.(js|html)$/.test(f) && !f.startsWith('node_modules'))
+    /* git can still list a file that has been deleted from the working tree — reading it
+       throws ENOENT and takes the whole guard down, which fails OPEN. Skip it instead. */
+    .filter(f => fs.existsSync(path.join(ROOT, f)));
 }
 
 /* Blank out comments before scanning, preserving line numbers.

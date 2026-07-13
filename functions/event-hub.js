@@ -490,9 +490,24 @@ exports.purchaseTickets = onCall(CF_OPTS, async (req) => {
   }
 
   const subtotal = tier.price * qty;
-  /* Rate from the single config (event_tickets). Was a bare 0.03 literal here. */
-  const platformFeeRate = require('./commission-config').resolveRate('event_tickets').pct / 100;
-  const platformFee = tier.price === 0 ? 0 : Math.round((subtotal - discountAmount) * platformFeeRate * 100) / 100;
+  /* Event ticket purchase — priced by the ONE Commission Engine.
+   *
+   * This computed the fee itself. The RATE was already correct (it came from the single config),
+   * but the calculation bypassed calculateCommission, so this flow ignored commissionRules,
+   * revenueConfig overrides, commission holidays and the audit trail.
+   *
+   * PRICING IS UNCHANGED: same category (event_tickets), same arithmetic. skipMinimum:true because this
+   * flow never applied the KES 10 platform floor, and introducing one here would be a repricing
+   * of small purchases, not a refactor. */
+  const _payable = Math.max(0, subtotal - discountAmount);
+  const _comm = tier.price === 0 ? null : await require('./finos-utils').calculateCommission(db(), {
+    orderAmountCents: Math.round(_payable * 100),
+    category:         'event_tickets',
+    sellerId:         ev.organizerUid || null,   /* the events doc field — verified */
+    hubId:            'events',
+    skipMinimum:      true,
+  });
+  const platformFee = _comm ? _comm.commissionCents / 100 : 0;
   const totalAmount = Math.max(0, subtotal - discountAmount);
   const organizerAmount = totalAmount - platformFee;
 
