@@ -1,17 +1,669 @@
 <!DOCTYPE html>
-<html lang="en" data-no-header="true">
+<html lang="en" data-theme="dark">
 <head>
-<script src="security.js"></script>
 <script src="shared-header.js"></script>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="robots" content="noindex">
-  <title>Inventory AI Assistant — SOKONI</title>
-  <meta http-equiv="refresh" content="0;url=seller.html#ai-tab">
-  <script>
-    /* Redirect to seller dashboard AI tab; preserve any query params */
-    window.location.replace('seller.html' + (window.location.search || '') + '#ai-tab');
-  </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Inventory Assistant — SOKONI</title>
+<link rel="stylesheet" href="mobile.css">
+<link rel="stylesheet" href="sokoni-inv-shell.css">
+<style>
+/* ── AI Assistant specific styles ── */
+.ai-hero{background:linear-gradient(135deg,rgba(113,255,0,.06),rgba(0,200,255,.04));border:1px solid rgba(113,255,0,.14);border-radius:14px;padding:20px 22px;margin-bottom:16px;display:flex;align-items:center;gap:16px}
+.ai-hero-icon{font-size:36px;flex-shrink:0;filter:drop-shadow(0 0 14px rgba(113,255,0,.4))}
+.ai-hero-body h1{font-size:19px;font-weight:800;color:var(--text);margin:0 0 4px}
+.ai-hero-body p{font-size:12px;color:var(--muted);margin:0;line-height:1.6}
+/* Chat container */
+.chat-container{display:flex;flex-direction:column;height:calc(100vh - 280px);min-height:340px}
+.chat-messages{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 0 12px;scroll-behavior:smooth}
+.chat-msg{display:flex;gap:10px;align-items:flex-start}
+.chat-msg.user{flex-direction:row-reverse}
+.chat-avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:15px;flex-shrink:0}
+.chat-bubble{max-width:82%;padding:11px 14px;border-radius:14px;font-size:13px;line-height:1.6;word-break:break-word}
+.chat-msg.bot  .chat-bubble{background:var(--bg2);border:1px solid var(--border);border-bottom-left-radius:4px}
+.chat-msg.user .chat-bubble{background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.22);border-bottom-right-radius:4px}
+.chat-bubble p{margin:0 0 6px}
+.chat-bubble p:last-child{margin:0}
+.chat-meta{font-size:10px;color:var(--muted);margin-top:4px}
+/* Typing indicator */
+.typing-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);animation:blink .9s infinite}
+.typing-dot:nth-child(2){animation-delay:.2s}
+.typing-dot:nth-child(3){animation-delay:.4s}
+@keyframes blink{0%,80%,100%{opacity:.2}40%{opacity:1}}
+/* Chat input */
+.chat-input-wrap{position:relative;margin-top:10px;border-top:1px solid var(--border);padding-top:12px}
+.chat-input{width:100%;background:var(--bg2);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:14px;padding:11px 52px 11px 14px;resize:none;font-family:inherit;line-height:1.5;min-height:46px;max-height:130px;transition:border-color .15s}
+.chat-input:focus{outline:none;border-color:rgba(113,255,0,.4)}
+.chat-send{position:absolute;right:10px;bottom:10px;width:34px;height:34px;border:none;border-radius:9px;background:var(--accent);color:#000;cursor:pointer;font-size:17px;display:grid;place-items:center;transition:background .15s;font-weight:800}
+.chat-send:disabled{background:var(--bg3);color:var(--muted);cursor:default}
+/* Quick prompts */
+.quick-prompts{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+.qp-btn{padding:5px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-size:11.5px;cursor:pointer;transition:all .15s;font-family:inherit}
+.qp-btn:hover{border-color:rgba(113,255,0,.4);color:var(--accent);background:rgba(113,255,0,.05)}
+/* Forecast section */
+.forecast-form{display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:flex-end;margin-bottom:14px}
+@media(max-width:600px){.forecast-form{grid-template-columns:1fr;}}
+.forecast-result{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px;font-size:13px;line-height:1.7;color:var(--text);white-space:pre-wrap;min-height:80px}
+.forecast-meta{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px}
+.forecast-stat{text-align:center;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:10px 16px}
+.forecast-stat-val{font-size:20px;font-weight:800;color:var(--accent)}
+.forecast-stat-lbl{font-size:10px;color:var(--muted);font-weight:600;margin-top:2px}
+/* Reorder suggestions */
+.reorder-item{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:11px 14px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;margin-bottom:7px;transition:border-color .15s}
+.reorder-item:hover{border-color:rgba(113,255,0,.25)}
+.reorder-priority{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.reorder-priority.high{background:var(--danger)}
+.reorder-priority.medium{background:var(--warn)}
+.reorder-priority.low{background:var(--success)}
+.reorder-name{font-size:13px;font-weight:600;color:var(--text)}
+.reorder-reason{font-size:11px;color:var(--muted);margin-top:2px}
+.reorder-qty{font-size:16px;font-weight:800;color:var(--accent);text-align:right;white-space:nowrap}
+.reorder-supplier{font-size:10px;color:var(--muted);text-align:right;margin-top:2px}
+.reorder-po-btn{padding:5px 10px;font-size:11px;background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);border-radius:7px;color:var(--accent);cursor:pointer;font-weight:700;white-space:nowrap;transition:all .15s}
+.reorder-po-btn:hover{background:rgba(113,255,0,.18)}
+.reorder-summary-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.rsum-pill{padding:5px 12px;background:var(--bg2);border:1px solid var(--border);border-radius:20px;font-size:11.5px;color:var(--muted)}
+.rsum-pill strong{color:var(--text)}
+/* Context bar */
+.ctx-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.ctx-chip{padding:4px 10px;background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.14);border-radius:16px;font-size:11px;color:var(--accent);font-weight:700}
+/* Insights grid */
+.insights-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-bottom:14px}
+.insight-card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px}
+.insight-card-icon{font-size:22px;margin-bottom:6px}
+.insight-card-title{font-size:12px;font-weight:700;color:var(--text);margin-bottom:3px}
+.insight-card-body{font-size:11.5px;color:var(--muted);line-height:1.5}
+</style>
 </head>
-<body></body>
+<body>
+
+<!-- COMMAND PALETTE -->
+<div class="inv-cmd-overlay" id="cmdOverlay" onclick="closeCmdPalette(event)">
+  <div class="inv-cmd-box">
+    <div class="inv-cmd-input-wrap">
+      <span style="color:var(--muted);font-size:16px">⌕</span>
+      <input class="inv-cmd-input" id="cmdInput" placeholder="Search products, commands…" oninput="filterCmdResults()" autocomplete="off">
+      <kbd style="font-size:11px;color:var(--muted);background:var(--bg3);padding:2px 6px;border-radius:4px;border:1px solid var(--border)">ESC</kbd>
+    </div>
+    <div class="inv-cmd-results" id="cmdResults"></div>
+    <div class="inv-cmd-footer"><span>↑↓ navigate</span><span>↵ select</span><span>ESC close</span></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="inv-toast-container" id="toastContainer"></div>
+
+<!-- SIDEBAR OVERLAY (mobile) -->
+<div class="inv-sidebar-overlay" id="sidebarOverlay" onclick="closeMobileSidebar()"></div>
+
+<!-- SHELL -->
+<div class="inv-shell">
+
+  <!-- SIDEBAR -->
+  <nav class="inv-sidebar" id="invSidebar">
+    <div class="inv-sidebar-header">
+      <div class="inv-sidebar-logo">S</div>
+      <div class="inv-sidebar-title">Inventory</div>
+      <div class="inv-collapse-btn" onclick="toggleSidebar()">◀</div>
+    </div>
+    <div class="inv-sidebar-nav">
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Overview</div>
+        <a class="inv-nav-item" href="inv-dashboard.html"><span class="inv-nav-icon">📦</span><span class="inv-nav-label">Dashboard</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Catalogue</div>
+        <a class="inv-nav-item" href="inv-products.html"><span class="inv-nav-icon">📋</span><span class="inv-nav-label">Products</span></a>
+        <a class="inv-nav-item" href="inv-products.html?view=categories"><span class="inv-nav-icon">🏷</span><span class="inv-nav-label">Categories</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Stock</div>
+        <a class="inv-nav-item" href="inventory.html#warehouse"><span class="inv-nav-icon">🏗</span><span class="inv-nav-label">Warehouses</span></a>
+        <a class="inv-nav-item" href="inventory.html#transfers"><span class="inv-nav-icon">🚚</span><span class="inv-nav-label">Transfers</span></a>
+        <a class="inv-nav-item" href="inventory.html#stock"><span class="inv-nav-icon">⚡</span><span class="inv-nav-label">Adjustments</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Procurement</div>
+        <a class="inv-nav-item" href="inventory.html#purchases"><span class="inv-nav-icon">📑</span><span class="inv-nav-label">Purchase Orders</span></a>
+        <a class="inv-nav-item" href="inventory.html#suppliers"><span class="inv-nav-icon">🚛</span><span class="inv-nav-label">Suppliers</span></a>
+      </div>
+      <div class="inv-nav-section">
+        <div class="inv-nav-section-label">Insights</div>
+        <a class="inv-nav-item" href="inventory.html#analytics"><span class="inv-nav-icon">📈</span><span class="inv-nav-label">Analytics</span></a>
+        <a class="inv-nav-item" href="inventory.html#audit"><span class="inv-nav-icon">🔍</span><span class="inv-nav-label">Audit Log</span></a>
+        <a class="inv-nav-item active" href="inv-ai.html"><span class="inv-nav-icon">🤖</span><span class="inv-nav-label">AI Assistant</span></a>
+      </div>
+    </div>
+    <div class="inv-sidebar-footer">
+      <a class="inv-nav-item" href="seller.html"><span class="inv-nav-icon">←</span><span class="inv-nav-label">Back to Seller</span></a>
+      <a class="inv-nav-item" href="inventory.html#settings"><span class="inv-nav-icon">⚙</span><span class="inv-nav-label">Settings</span></a>
+    </div>
+  </nav>
+
+  <!-- MAIN -->
+  <div class="inv-main">
+
+    <!-- HEADER -->
+    <header class="inv-header">
+      <button class="inv-mobile-menu-btn" onclick="openMobileSidebar()">☰</button>
+      <nav class="inv-breadcrumb">
+        <a href="seller.html">Seller</a>
+        <span class="inv-breadcrumb-sep">/</span>
+        <a href="inv-dashboard.html">Inventory</a>
+        <span class="inv-breadcrumb-sep">/</span>
+        <span class="inv-breadcrumb-current">AI Assistant</span>
+      </nav>
+      <div class="inv-search-wrap">
+        <div class="inv-search" onclick="openCmdPalette()">
+          <span class="inv-search-icon">⌕</span>
+          <input type="text" placeholder="Search inventory… (⌘K)" style="pointer-events:none" readonly>
+          <kbd class="inv-search-kbd">⌘K</kbd>
+        </div>
+      </div>
+      <div class="inv-header-actions">
+        <div class="inv-header-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">☀</div>
+        <div class="inv-header-btn" onclick="toggleNotifications()" title="Notifications">
+          🔔<div class="inv-notif-dot" id="notifDot" style="display:none"></div>
+        </div>
+      </div>
+    </header>
+
+    <!-- CONTENT -->
+    <div class="inv-content">
+
+      <!-- Hero -->
+      <div class="ai-hero">
+        <div class="ai-hero-icon">🤖</div>
+        <div class="ai-hero-body">
+          <h1>AI Inventory Assistant</h1>
+          <p>Ask questions in plain English — get smart inventory insights, demand forecasts, and reorder recommendations powered by Claude AI.</p>
+        </div>
+        <div class="ctx-bar" id="ctxBar" style="margin:0;flex-direction:column;align-items:flex-end;gap:4px">
+          <div class="ctx-chip" id="ctxSkus">— SKUs</div>
+          <div class="ctx-chip" id="ctxLow" style="background:rgba(255,165,0,.08);border-color:rgba(255,165,0,.2);color:#ffa500">— low stock</div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="inv-tabs" style="margin-bottom:16px">
+        <button class="inv-tab active" onclick="switchAiTab('chat',this)" id="tab-chat-btn">💬 Chat</button>
+        <button class="inv-tab" onclick="switchAiTab('forecast',this)" id="tab-forecast-btn">📈 Demand Forecast</button>
+        <button class="inv-tab" onclick="switchAiTab('reorder',this)" id="tab-reorder-btn">🔄 Reorder Suggestions</button>
+        <button class="inv-tab" onclick="switchAiTab('insights',this)" id="tab-insights-btn">💡 Insights</button>
+      </div>
+
+      <!-- ── TAB: CHAT ── -->
+      <div id="tab-chat" class="inv-tab-panel active">
+        <div class="quick-prompts" id="quickPrompts">
+          <button class="qp-btn" onclick="sendQuickPrompt('Which products are running low on stock?')">Low stock</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('What are my top-selling products this month?')">Top sellers</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('Which products have been sitting unsold for over 60 days (dead stock)?')">Dead stock</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('What is my total inventory value and how can I optimise it?')">Inventory value</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('Which products should I reorder urgently this week?')">Urgent reorders</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('Give me a summary of today\'s inventory movements.')">Today\'s movements</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('Which product categories generate the highest profit margin?')">Margin analysis</button>
+          <button class="qp-btn" onclick="sendQuickPrompt('Which suppliers have the longest lead times?')">Supplier lead times</button>
+        </div>
+
+        <div class="chat-container">
+          <div class="chat-messages" id="chatMessages">
+            <div class="chat-msg bot">
+              <div class="chat-avatar" style="background:rgba(113,255,0,.15)">🤖</div>
+              <div>
+                <div class="chat-bubble">
+                  <p>Hello! I'm your AI Inventory Assistant. I can help you:</p>
+                  <p>• Analyse stock levels and identify issues<br>
+                  • Forecast demand for any product<br>
+                  • Generate smart reorder recommendations<br>
+                  • Answer questions about suppliers, margins, and trends</p>
+                  <p>Type a question or tap a quick prompt above to get started.</p>
+                </div>
+                <div class="chat-meta">AI Assistant · Ready</div>
+              </div>
+            </div>
+          </div>
+          <div class="chat-input-wrap">
+            <textarea class="chat-input" id="chatInput" placeholder="Ask anything about your inventory…" rows="1"
+              onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
+            <button class="chat-send" id="chatSend" onclick="sendChat()" title="Send (Enter)">↑</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: DEMAND FORECAST ── -->
+      <div id="tab-forecast" class="inv-tab-panel" style="display:none">
+        <div class="inv-panel" style="margin-bottom:14px">
+          <div class="inv-panel-header">
+            <span class="inv-panel-title">Product Demand Forecast</span>
+          </div>
+          <div class="inv-panel-body">
+            <div class="forecast-form">
+              <div class="inv-form-group" style="margin:0">
+                <label class="inv-label">Product</label>
+                <select class="inv-select" id="forecastProduct">
+                  <option value="">— Select a product —</option>
+                </select>
+              </div>
+              <div class="inv-form-group" style="margin:0">
+                <label class="inv-label">Forecast Period</label>
+                <select class="inv-select" id="forecastDays">
+                  <option value="7">7 days</option>
+                  <option value="14">14 days</option>
+                  <option value="30" selected>30 days</option>
+                  <option value="60">60 days</option>
+                  <option value="90">90 days</option>
+                </select>
+              </div>
+              <button class="inv-btn inv-btn-primary" id="forecastBtn" onclick="runForecast()">Run Forecast</button>
+            </div>
+
+            <div id="forecastStats" style="display:none">
+              <div class="forecast-meta" id="forecastMeta"></div>
+              <div class="inv-form-group" style="margin-bottom:0">
+                <label class="inv-label">AI Forecast Analysis</label>
+                <div class="forecast-result" id="forecastResult"></div>
+              </div>
+            </div>
+
+            <div id="forecastEmpty" style="padding:24px;text-align:center;color:var(--muted);font-size:13px">
+              Select a product and period, then click Run Forecast to get an AI-powered demand analysis.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TAB: REORDER SUGGESTIONS ── -->
+      <div id="tab-reorder" class="inv-tab-panel" style="display:none">
+        <div class="inv-page-header" style="margin-bottom:12px">
+          <div>
+            <div class="inv-page-title" style="font-size:15px">AI Reorder Suggestions</div>
+            <div class="inv-page-subtitle" id="reorderSubtitle">Analysing your stock levels…</div>
+          </div>
+          <div class="inv-page-actions">
+            <button class="inv-btn inv-btn-secondary inv-btn-sm" onclick="createAllPOs()">Create All POs</button>
+            <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="loadReorderSuggestions()">↻ Refresh</button>
+          </div>
+        </div>
+
+        <div class="reorder-summary-bar" id="reorderSummaryBar">
+          <div class="rsum-pill"><strong id="rsum-high">0</strong> urgent</div>
+          <div class="rsum-pill"><strong id="rsum-medium">0</strong> medium priority</div>
+          <div class="rsum-pill"><strong id="rsum-low">0</strong> low priority</div>
+          <div class="rsum-pill">Est. cost: <strong id="rsum-cost">KES —</strong></div>
+        </div>
+
+        <div id="reorderList">
+          <div class="inv-skeleton" style="height:60px;border-radius:10px;margin-bottom:7px"></div>
+          <div class="inv-skeleton" style="height:60px;border-radius:10px;margin-bottom:7px"></div>
+          <div class="inv-skeleton" style="height:60px;border-radius:10px"></div>
+        </div>
+      </div>
+
+      <!-- ── TAB: INSIGHTS ── -->
+      <div id="tab-insights" class="inv-tab-panel" style="display:none">
+        <div class="inv-page-header" style="margin-bottom:12px">
+          <div>
+            <div class="inv-page-title" style="font-size:15px">AI-Generated Insights</div>
+            <div class="inv-page-subtitle">Smart observations about your inventory</div>
+          </div>
+          <button class="inv-btn inv-btn-ghost inv-btn-sm" onclick="generateInsights()">↻ Refresh</button>
+        </div>
+        <div class="insights-grid" id="insightsGrid">
+          <div class="inv-skeleton" style="height:100px;border-radius:12px"></div>
+          <div class="inv-skeleton" style="height:100px;border-radius:12px"></div>
+          <div class="inv-skeleton" style="height:100px;border-radius:12px"></div>
+          <div class="inv-skeleton" style="height:100px;border-radius:12px"></div>
+        </div>
+      </div>
+
+    </div><!-- /inv-content -->
+  </div><!-- /inv-main -->
+</div><!-- /inv-shell -->
+
+<!-- Notifications -->
+<div class="inv-notif-panel" id="notifPanel">
+  <div class="inv-notif-header">🔔 Notifications
+    <button class="inv-btn inv-btn-ghost inv-btn-sm" style="margin-left:auto" onclick="markAllRead()">Mark all read</button>
+  </div>
+  <div id="notifList"></div>
+</div>
+
+<!-- Scripts -->
+<script type="module" src="firebase.js"></script>
+<script src="auth.js"></script>
+<script src="sokoni-inventory.js"></script>
+<script src="sokoni-inventory-v2.js"></script>
+<script src="sw-register.js"></script>
+<script src="sokoni-inv-shell.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const $ = id => document.getElementById(id);
+  function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmt(n)  { return 'KES ' + Number(n||0).toLocaleString('en-KE', {minimumFractionDigits:0,maximumFractionDigits:2}); }
+
+  let _tenantId  = null;
+  let _products  = [];
+  let _analytics = {};
+  let _chatBusy  = false;
+
+  /* ── TAB SWITCHER ── */
+  function switchAiTab(tab, btn) {
+    document.querySelectorAll('.inv-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.inv-tab-panel').forEach(p => { p.style.display = 'none'; p.classList.remove('active'); });
+    btn.classList.add('active');
+    const panel = $('tab-' + tab);
+    if (panel) { panel.style.display = ''; panel.classList.add('active'); }
+
+    if (tab === 'reorder' && _tenantId) loadReorderSuggestions();
+    if (tab === 'insights' && _tenantId) generateInsights();
+    if (tab === 'forecast' && _products.length) populateForecastDropdown();
+  }
+  window.switchAiTab = switchAiTab;
+
+  /* ── CHAT ── */
+  function addMessage(role, html, meta) {
+    const el = $('chatMessages');
+    const avatar = role === 'user' ? '👤' : '🤖';
+    const avatarBg = role === 'user' ? 'rgba(113,255,0,.12)' : 'rgba(113,255,0,.15)';
+    const div = document.createElement('div');
+    div.className = 'chat-msg ' + role;
+    div.innerHTML = `
+      <div class="chat-avatar" style="background:${avatarBg}">${avatar}</div>
+      <div>
+        <div class="chat-bubble">${html}</div>
+        ${meta ? `<div class="chat-meta">${esc(meta)}</div>` : ''}
+      </div>`;
+    el.appendChild(div);
+    el.scrollTop = el.scrollHeight;
+    return div;
+  }
+
+  function addTypingIndicator() {
+    return addMessage('bot',
+      '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>');
+  }
+
+  function escapeMarkdown(text) {
+    return text
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g,'<em>$1</em>')
+      .replace(/\n/g,'<br>');
+  }
+
+  async function sendChat() {
+    if (_chatBusy) return;
+    const input = $('chatInput');
+    const question = input.value.trim();
+    if (!question) return;
+    if (!_tenantId) { showToast('Not authenticated', 'error'); return; }
+
+    input.value = '';
+    autoResize(input);
+    addMessage('user', esc(question));
+    const typingEl = addTypingIndicator();
+    _chatBusy = true;
+    $('chatSend').disabled = true;
+
+    try {
+      const fn = firebase.functions().httpsCallable('inventoryAiQuery');
+      const { data } = await fn({ tenantId: _tenantId, question });
+      typingEl.remove();
+      const now = new Date().toLocaleTimeString('en-KE', { hour:'2-digit', minute:'2-digit' });
+      addMessage('bot', escapeMarkdown(data.answer || 'No response'), 'AI Assistant · ' + now);
+    } catch (err) {
+      typingEl.remove();
+      addMessage('bot', 'Sorry, I encountered an error: ' + esc(err.message), 'Error');
+    } finally {
+      _chatBusy = false;
+      $('chatSend').disabled = false;
+    }
+  }
+  window.sendChat = sendChat;
+
+  function sendQuickPrompt(prompt) {
+    $('chatInput').value = prompt;
+    autoResize($('chatInput'));
+    sendChat();
+  }
+  window.sendQuickPrompt = sendQuickPrompt;
+
+  function handleChatKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+  }
+  window.handleChatKey = handleChatKey;
+
+  function autoResize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(130, el.scrollHeight) + 'px';
+  }
+  window.autoResize = autoResize;
+
+  /* ── DEMAND FORECAST ── */
+  function populateForecastDropdown() {
+    const sel = $('forecastProduct');
+    if (!sel || !_products.length) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— Select a product —</option>' +
+      _products.map(p => `<option value="${esc(p.id)}">${esc(p.name)} (${esc(p.sku||'no sku')})</option>`).join('');
+    if (prev) sel.value = prev;
+  }
+
+  async function runForecast() {
+    const productId = $('forecastProduct').value;
+    const days      = parseInt($('forecastDays').value) || 30;
+    if (!productId) { showToast('Select a product first', 'warn'); return; }
+    if (!_tenantId) { showToast('Not authenticated', 'error'); return; }
+
+    const btn = $('forecastBtn');
+    btn.textContent = 'Forecasting…';
+    btn.disabled = true;
+    $('forecastEmpty').style.display = 'none';
+    $('forecastStats').style.display = 'none';
+    $('forecastResult').textContent = '';
+
+    try {
+      const fn = firebase.functions().httpsCallable('inventoryAiForecast');
+      const { data } = await fn({ tenantId: _tenantId, productId, days });
+
+      $('forecastMeta').innerHTML = `
+        <div class="forecast-stat"><div class="forecast-stat-val">${(data.currentQty||0).toLocaleString()}</div><div class="forecast-stat-lbl">Current Stock</div></div>
+        <div class="forecast-stat"><div class="forecast-stat-val">${(data.avgDailySales||0).toFixed(1)}</div><div class="forecast-stat-lbl">Avg Daily Sales</div></div>
+        <div class="forecast-stat"><div class="forecast-stat-val">${data.daysOfStock !== null ? data.daysOfStock + ' days' : '∞'}</div><div class="forecast-stat-lbl">Stock Days Left</div></div>
+        <div class="forecast-stat"><div class="forecast-stat-val">${days}</div><div class="forecast-stat-lbl">Forecast Period</div></div>`;
+      $('forecastResult').textContent = data.forecastText || 'No forecast generated.';
+      $('forecastStats').style.display = '';
+    } catch (err) {
+      showToast('Forecast failed: ' + err.message, 'error');
+      $('forecastEmpty').style.display = '';
+      $('forecastEmpty').textContent = 'Forecast failed. Please try again.';
+    } finally {
+      btn.textContent = 'Run Forecast';
+      btn.disabled = false;
+    }
+  }
+  window.runForecast = runForecast;
+
+  /* ── REORDER SUGGESTIONS ── */
+  let _reorderItems = [];
+
+  async function loadReorderSuggestions() {
+    if (!_tenantId) return;
+    $('reorderSubtitle').textContent = 'Analysing with AI…';
+    $('reorderList').innerHTML = '<div class="inv-skeleton" style="height:60px;border-radius:10px;margin-bottom:7px"></div>'.repeat(3);
+
+    try {
+      const fn = firebase.functions().httpsCallable('inventoryAiReorderSuggestions');
+      const { data } = await fn({ tenantId: _tenantId });
+      _reorderItems = data.items || [];
+      renderReorderList();
+    } catch (err) {
+      $('reorderList').innerHTML = `<div class="inv-empty"><div class="inv-empty-icon">⚠</div><div class="inv-empty-title">Could not load suggestions</div><div class="inv-empty-desc">${esc(err.message)}</div></div>`;
+    }
+  }
+  window.loadReorderSuggestions = loadReorderSuggestions;
+
+  function renderReorderList() {
+    const high   = _reorderItems.filter(i => i.priority === 'high').length;
+    const medium = _reorderItems.filter(i => i.priority === 'medium').length;
+    const low    = _reorderItems.filter(i => i.priority === 'low').length;
+    const totalCost = _reorderItems.reduce((s, i) => s + (i.estimatedCost || 0), 0);
+    $('rsum-high').textContent   = high;
+    $('rsum-medium').textContent = medium;
+    $('rsum-low').textContent    = low;
+    $('rsum-cost').textContent   = fmt(totalCost);
+    $('reorderSubtitle').textContent = `${_reorderItems.length} item${_reorderItems.length !== 1 ? 's' : ''} need attention`;
+
+    if (!_reorderItems.length) {
+      $('reorderList').innerHTML = '<div class="inv-empty"><div class="inv-empty-icon">✅</div><div class="inv-empty-title">All stock levels are healthy</div><div class="inv-empty-desc">No reorders needed right now.</div></div>';
+      return;
+    }
+
+    const sorted = [..._reorderItems].sort((a, b) => {
+      const rank = { high: 0, medium: 1, low: 2 };
+      return (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3);
+    });
+
+    $('reorderList').innerHTML = sorted.map((item, idx) => `
+      <div class="reorder-item">
+        <div class="reorder-priority ${esc(item.priority)}"></div>
+        <div>
+          <div class="reorder-name">${esc(item.productName)}</div>
+          <div class="reorder-reason">${esc(item.reason || '')}${item.supplierName ? ' · ' + item.supplierName : ''}</div>
+        </div>
+        <div>
+          <div class="reorder-qty">${(item.suggestedQty||0).toLocaleString()} units</div>
+          <div class="reorder-supplier">${item.estimatedCost ? fmt(item.estimatedCost) : '—'}</div>
+        </div>
+        <button class="reorder-po-btn" onclick="createPOForItem(${idx})">+ Create PO</button>
+      </div>`).join('');
+  }
+
+  async function createPOForItem(idx) {
+    const item = _reorderItems[idx];
+    if (!item) return;
+    try {
+      await SokoniInventory.savePurchaseOrder({
+        status:       'draft',
+        supplierName: item.supplierName || 'TBC',
+        items: [{ productId: item.productId, productName: item.productName, qty: item.suggestedQty, unitCost: 0 }],
+        totalAmount:  item.estimatedCost || 0,
+        notes:        'Auto-generated from AI reorder suggestions',
+      });
+      showToast(`PO created for ${item.productName}`, 'success');
+    } catch (err) {
+      showToast('Failed to create PO: ' + err.message, 'error');
+    }
+  }
+  window.createPOForItem = createPOForItem;
+
+  async function createAllPOs() {
+    if (!_reorderItems.length) { showToast('No reorder items', 'warn'); return; }
+    let created = 0;
+    for (const item of _reorderItems) {
+      try {
+        await SokoniInventory.savePurchaseOrder({
+          status:       'draft',
+          supplierName: item.supplierName || 'TBC',
+          items: [{ productId: item.productId, productName: item.productName, qty: item.suggestedQty, unitCost: 0 }],
+          totalAmount:  item.estimatedCost || 0,
+          notes:        'Auto-generated from AI reorder suggestions',
+        });
+        created++;
+      } catch (_) {}
+    }
+    showToast(`${created} purchase order${created !== 1 ? 's' : ''} created`, 'success');
+    window.location.href = 'inventory.html#purchases';
+  }
+  window.createAllPOs = createAllPOs;
+
+  /* ── INSIGHTS ── */
+  async function generateInsights() {
+    if (!_tenantId) return;
+    $('insightsGrid').innerHTML = '<div class="inv-skeleton" style="height:100px;border-radius:12px"></div>'.repeat(4);
+
+    const a = _analytics;
+    const products = _products;
+
+    const oos      = a.outOfStockCount  || 0;
+    const low      = a.lowStockCount    || 0;
+    const expiring = a.expiringSoonCount || 0;
+    const turnover = a.turnoverRate     || 0;
+    const value    = a.inventoryValue   || 0;
+
+    const staticInsights = [
+      { icon: oos > 0 ? '🔴' : '🟢', title: oos > 0 ? `${oos} Out of Stock` : 'All Products In Stock',
+        body: oos > 0 ? `${oos} SKU${oos>1?'s are':' is'} unavailable to customers. Create POs urgently to avoid lost sales.` : 'All tracked products have available stock. Keep monitoring reorder points.' },
+      { icon: low > 0 ? '⚠️' : '✅', title: low > 0 ? `${low} Low Stock Items` : 'Stock Levels Healthy',
+        body: low > 0 ? `${low} product${low>1?'s are':' is'} below their reorder point. Run the reorder engine to auto-generate purchase orders.` : 'No items are below their reorder points.' },
+      { icon: expiring > 0 ? '⌛' : '📦', title: expiring > 0 ? `${expiring} Expiring Soon` : 'No Expiry Alerts',
+        body: expiring > 0 ? `${expiring} batch${expiring>1?'es':''} expiring within 30 days. Consider discounts or promotions to clear stock.` : 'No products are expiring within the next 30 days.' },
+      { icon: turnover < 2 ? '🐌' : '⚡', title: turnover < 2 ? 'Low Inventory Turnover' : 'Good Turnover Rate',
+        body: turnover < 2 ? `Turnover rate of ${turnover.toFixed(1)}× is low. Review dead stock and consider price reductions or promotions.` : `Healthy turnover at ${turnover.toFixed(1)}×. Stock is moving well.` },
+      { icon: '💰', title: 'Inventory Value',
+        body: `Total stock value is KES ${value.toLocaleString('en-KE')}. Regularly review high-value slow movers to free up capital.` },
+      { icon: '🏆', title: 'Best Category',
+        body: (a.categoryBreakdown?.length) ? `"${a.categoryBreakdown[0].category}" is your highest-value category at KES ${(a.categoryBreakdown[0].value||0).toLocaleString('en-KE')}.` : 'Add products to see category performance.' },
+    ];
+
+    $('insightsGrid').innerHTML = staticInsights.map(ins => `
+      <div class="insight-card">
+        <div class="insight-card-icon">${ins.icon}</div>
+        <div class="insight-card-title">${esc(ins.title)}</div>
+        <div class="insight-card-body">${esc(ins.body)}</div>
+      </div>`).join('');
+
+    /* Try to get a live AI insight for the first urgent issue */
+    const issue = oos > 0 ? `${oos} products are out of stock` : low > 0 ? `${low} products are below reorder point` : null;
+    if (issue && _tenantId) {
+      try {
+        const fn = firebase.functions().httpsCallable('inventoryAiQuery');
+        const { data } = await fn({ tenantId: _tenantId, question: `I have ${issue}. What are the top 3 actions I should take right now? Keep it to 2–3 short sentences.` });
+        if (data?.answer) {
+          const aiCard = document.createElement('div');
+          aiCard.className = 'insight-card';
+          aiCard.style.border = '1px solid rgba(113,255,0,.28)';
+          aiCard.innerHTML = `<div class="insight-card-icon">🤖</div><div class="insight-card-title" style="color:var(--accent)">AI Top Priority</div><div class="insight-card-body">${escapeMarkdown(data.answer)}</div>`;
+          $('insightsGrid').prepend(aiCard);
+        }
+      } catch (_) {}
+    }
+  }
+  window.generateInsights = generateInsights;
+
+  function escapeMarkdown(text) {
+    return String(text||'')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')
+      .replace(/\n/g,'<br>');
+  }
+
+  /* ── INIT ── */
+  async function init(user) {
+    _tenantId = user.uid;
+    try {
+      const [products, analytics] = await Promise.all([
+        SokoniInventory.getProducts({ active: true }).catch(() => []),
+        SokoniInventory.getAnalytics().catch(() => ({})),
+      ]);
+      _products  = products;
+      _analytics = analytics;
+      $('ctxSkus').textContent = products.length + ' SKUs';
+      $('ctxLow').textContent  = (analytics.lowStockCount||0) + ' low stock';
+      populateForecastDropdown();
+    } catch (_) {}
+  }
+
+  if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged(user => {
+      if (!user) { window.location.href = 'login.html'; return; }
+      SokoniInventory.init?.().then(() => init(user)).catch(() => init(user));
+    });
+  }
+
+})();
+</script>
+</body>
 </html>

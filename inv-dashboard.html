@@ -171,14 +171,24 @@
         </div>
       </div>
 
-      <!-- ── KPI ROW ── -->
+      <!-- ── KPI ROW 1 — Stock status ── -->
       <div class="inv-kpi-grid" id="kpiGrid">
-        <div class="inv-kpi accent inv-skeleton inv-skeleton-kpi" id="kpi-value"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">INVENTORY VALUE</div><div class="inv-kpi-value" id="kv-value">—</div><div class="inv-kpi-delta flat" id="kv-delta">—</div></div>
-        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-sales"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TODAY'S SALES</div><div class="inv-kpi-value" id="kv-sales">—</div><div class="inv-kpi-delta flat" id="kv-sales-d">—</div></div>
-        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-skus"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TOTAL SKUs</div><div class="inv-kpi-value" id="kv-skus">—</div><div class="inv-kpi-delta flat" id="kv-skus-d">—</div></div>
-        <div class="inv-kpi warn" id="kpi-low"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">LOW STOCK</div><div class="inv-kpi-value" id="kv-low">—</div><div class="inv-kpi-delta" id="kv-low-d">items need reorder</div></div>
-        <div class="inv-kpi danger" id="kpi-oos"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">OUT OF STOCK</div><div class="inv-kpi-value" id="kv-oos">—</div><div class="inv-kpi-delta" id="kv-oos-d">items unavailable</div></div>
+        <div class="inv-kpi accent inv-skeleton inv-skeleton-kpi" id="kpi-value"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">INVENTORY VALUE</div><div class="inv-kpi-value" id="kv-value">—</div><div class="inv-kpi-delta flat" id="kv-delta">total stock value</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-skus"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TOTAL SKUs</div><div class="inv-kpi-value" id="kv-skus">—</div><div class="inv-kpi-delta flat" id="kv-skus-d">active products</div></div>
+        <div class="inv-kpi warn" id="kpi-low"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">LOW STOCK</div><div class="inv-kpi-value" id="kv-low">—</div><div class="inv-kpi-delta" id="kv-low-d">need reorder</div></div>
+        <div class="inv-kpi danger" id="kpi-oos"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">OUT OF STOCK</div><div class="inv-kpi-value" id="kv-oos">—</div><div class="inv-kpi-delta" id="kv-oos-d">unavailable</div></div>
+        <div class="inv-kpi warn" id="kpi-overstock"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">OVERSTOCKED</div><div class="inv-kpi-value" id="kv-overstock">—</div><div class="inv-kpi-delta flat">above max stock</div></div>
         <div class="inv-kpi" id="kpi-expiry"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">EXPIRING SOON</div><div class="inv-kpi-value" id="kv-expiry">—</div><div class="inv-kpi-delta flat">within 30 days</div></div>
+      </div>
+
+      <!-- ── KPI ROW 2 — Sales & movement ── -->
+      <div class="inv-kpi-grid" id="kpiGrid2" style="margin-top:-4px">
+        <div class="inv-kpi success inv-skeleton inv-skeleton-kpi" id="kpi-today"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TODAY'S SALES</div><div class="inv-kpi-value" id="kv-today">—</div><div class="inv-kpi-delta flat">revenue today</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-weekly"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">WEEKLY SALES</div><div class="inv-kpi-value" id="kv-weekly">—</div><div class="inv-kpi-delta flat">last 7 days</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-monthly"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">MONTHLY SALES</div><div class="inv-kpi-value" id="kv-monthly">—</div><div class="inv-kpi-delta flat">last 30 days</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-moves"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">TODAY'S MOVEMENTS</div><div class="inv-kpi-value" id="kv-moves">—</div><div class="inv-kpi-delta flat">stock events</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-po"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">INCOMING POs</div><div class="inv-kpi-value" id="kv-po">—</div><div class="inv-kpi-delta flat">pending receipt</div></div>
+        <div class="inv-kpi inv-skeleton inv-skeleton-kpi" id="kpi-transfers"><div class="inv-kpi-glow"></div><div class="inv-kpi-label">PENDING TRANSFERS</div><div class="inv-kpi-value" id="kv-transfers">—</div><div class="inv-kpi-delta flat">awaiting action</div></div>
       </div>
 
       <!-- ── ROW 1: HEALTH + STOCK VALUE TREND + SUPPLIERS ── -->
@@ -570,20 +580,30 @@
       _allProducts = products;
       _analytics   = analytics;
 
-      // KPIs
-      const inv_val  = analytics.inventoryValue  || 0;
-      const low      = analytics.lowStockCount   || 0;
-      const oos      = analytics.outOfStockCount || 0;
+      // KPIs — row 1 (stock status)
+      const inv_val     = analytics.inventoryValue   || 0;
+      const low         = analytics.lowStockCount    || 0;
+      const oos         = analytics.outOfStockCount  || 0;
+      const overstock   = analytics.overstockedCount || products.filter(p => p.maxStock && (p.stockLevel||0) > p.maxStock).length;
 
-      $('kv-value').textContent   = fmt(inv_val);
-      $('kv-sales').textContent   = fmt(analytics.todaySales || 0);
-      $('kv-skus').textContent    = products.length;
-      $('kv-low').textContent     = low;
-      $('kv-oos').textContent     = oos;
-      $('kv-expiry').textContent  = analytics.expiringSoonCount || 0;
+      $('kv-value').textContent     = fmt(inv_val);
+      $('kv-skus').textContent      = products.length;
+      $('kv-low').textContent       = low;
+      $('kv-oos').textContent       = oos;
+      $('kv-overstock').textContent = overstock;
+      $('kv-expiry').textContent    = analytics.expiringSoonCount || 0;
+
+      // KPIs — row 2 (sales & movement)
+      $('kv-today').textContent     = fmt(analytics.todaySales     || 0);
+      $('kv-weekly').textContent    = fmt(analytics.weeklySales    || analytics.todaySales * 7 || 0);
+      $('kv-monthly').textContent   = fmt(analytics.monthlySales   || analytics.todaySales * 30 || 0);
+      $('kv-moves').textContent     = (analytics.movementsToday    || 0).toLocaleString();
+      $('kv-po').textContent        = orders.length;
+      $('kv-transfers').textContent = (analytics.pendingTransfers  || 0).toLocaleString();
+
       $('tvTotal').textContent    = fmt(inv_val);
 
-      // Remove skeleton classes
+      // Remove skeleton classes from ALL kpi grids
       document.querySelectorAll('.inv-kpi').forEach(el => el.classList.remove('inv-skeleton','inv-skeleton-kpi'));
 
       // Health score
@@ -649,7 +669,39 @@
   }
 
   function exportDashboard() {
-    showToast('Dashboard exported to CSV', 'success');
+    try {
+      const a = _analytics;
+      const rows = [
+        ['Metric', 'Value', 'Exported At'],
+        ['Inventory Value', fmtCurrency(a.inventoryValue||0), new Date().toISOString()],
+        ['Total SKUs', _allProducts.length, ''],
+        ["Today's Sales", fmtCurrency(a.todaySales||0), ''],
+        ['Weekly Sales', fmtCurrency(a.weeklySales||0), ''],
+        ['Monthly Sales', fmtCurrency(a.monthlySales||0), ''],
+        ['Low Stock Items', a.lowStockCount||0, ''],
+        ['Out of Stock Items', a.outOfStockCount||0, ''],
+        ['Expiring Soon', a.expiringSoonCount||0, ''],
+        ["Today's Movements", a.movementsToday||0, ''],
+        ['Turnover Rate', (a.turnoverRate||0).toFixed(2) + 'x', ''],
+        ['Fill Rate', (a.fillRate||100).toFixed(1) + '%', ''],
+        ['Shrinkage Rate', ((a.shrinkageRate||0)*100).toFixed(2) + '%', ''],
+        ['', '', ''],
+        ['— PRODUCTS —', '', ''],
+        ['Name', 'SKU', 'Stock', 'Reorder Pt', 'Buy Price', 'Sell Price', 'Category'],
+        ..._allProducts.map(p => [p.name||'', p.sku||'', p.stockLevel||0, p.reorderPoint||0, p.buyingPrice||0, p.sellingPrice||0, p.category||'']),
+      ];
+      const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+      const url  = URL.createObjectURL(blob);
+      const a2   = document.createElement('a');
+      a2.href = url;
+      a2.download = `sokoni-inventory-dashboard-${new Date().toISOString().slice(0,10)}.csv`;
+      a2.click();
+      URL.revokeObjectURL(url);
+      showToast('Dashboard exported to CSV', 'success');
+    } catch (err) {
+      showToast('Export failed: ' + err.message, 'error');
+    }
   }
 
   function refreshDashboard() {

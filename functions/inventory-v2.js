@@ -783,7 +783,7 @@ exports.inventoryScoreSupplier = onCall({ timeoutSeconds: 30 }, async (req) => {
   // Fetch last 90 days of POs for this supplier
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 90);
-  const posSnap = await col(tenantId, 'inventory_purchase_orders')
+  const posSnap = await col(tenantId, 'inventory_purchaseOrders')
     .where('supplierId', '==', supId)
     .where('status', 'in', ['received', 'partial'])
     .where('createdAt', '>=', cutoff.toISOString())
@@ -824,7 +824,7 @@ exports.inventoryScoreSupplier = onCall({ timeoutSeconds: 30 }, async (req) => {
   const metrics = { onTimePct, fillRate, invAccuracy, qualityAvg, totalPOs: total, score };
 
   // Update supplier record
-  await col(tenantId, 'suppliers').doc(supId).set({
+  await col(tenantId, 'inventory_suppliers').doc(supId).set({
     performanceScore:  score,
     performanceMetrics:metrics,
     scoreUpdatedAt:    nowISO(),

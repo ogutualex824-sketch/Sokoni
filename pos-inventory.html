@@ -776,7 +776,57 @@ async function exportCSV() {
   a.click();
 }
 
-function importCSV() { toast('📤 Use the import template — feature coming soon'); }
+/* ── CSV IMPORT ── */
+let _posImportRows = [], _posImportJobId = null;
+
+function importCSV() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.csv,.txt';
+  inp.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const lines   = ev.target.result.split(/\r?\n/).filter(l => l.trim());
+      if (lines.length < 2) { toast('CSV is empty or unreadable'); return; }
+      const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+      _posImportRows = lines.slice(1).map(line => {
+        const vals = line.match(/("(?:[^"]|"")*"|[^,]*)/g) || [];
+        const row = {};
+        headers.forEach((h, i) => { row[h] = (vals[i]||'').replace(/^"|"$/g,'').trim(); });
+        return row;
+      }).filter(r => Object.values(r).some(v => v));
+      if (!_posImportRows.length) { toast('No valid rows found'); return; }
+      toast(`📤 ${_posImportRows.length} rows detected — mapping with AI…`);
+      posRunImport(headers);
+    };
+    reader.readAsText(file, 'UTF-8');
+  };
+  inp.click();
+}
+
+async function posRunImport(headers) {
+  try {
+    const mapFn  = firebase.functions().httpsCallable('inventoryImportAiMap');
+    const { data: mapResult } = await mapFn({ headers, sampleRows: _posImportRows.slice(0,3) })
+      .catch(() => ({ data: { mappings: {}, confidence: 0 } }));
+
+    const uid    = firebase.auth().currentUser?.uid;
+    const prevFn = firebase.functions().httpsCallable('inventoryImportPreview');
+    const { data } = await prevFn({ tenantId: uid, rows: _posImportRows, mappings: mapResult.mappings||{}, filename: 'pos-import.csv' });
+    _posImportJobId = data.jobId;
+
+    const ok = confirm(`Import preview:\n✅ ${data.valid||0} valid rows\n⚠ ${data.duplicates||0} duplicates (will be skipped)\n❌ ${data.invalid||0} invalid\n\nProceed with import?`);
+    if (!ok) return;
+
+    const commitFn = firebase.functions().httpsCallable('inventoryImportCommit');
+    const { data: result } = await commitFn({ jobId: _posImportJobId, tenantId: uid });
+    toast(`✅ ${result.imported} products imported${result.errors > 0 ? ', ' + result.errors + ' errors' : ''}`);
+    loadProducts();
+  } catch (err) {
+    toast('Import failed: ' + err.message);
+  }
+}
 
 /* ── Init ── */
 PosInventory.init('default').then(() => {

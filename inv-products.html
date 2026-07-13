@@ -610,6 +610,86 @@ th .inv-sort-icon::before{content:'↕'}
   </div>
 </div>
 
+<!-- ══════════════════════════════════════
+     IMPORT MODAL — 3-step: Upload → Preview → Commit
+     ══════════════════════════════════════ -->
+<div class="inv-modal-overlay" id="importModal" onclick="closeImportModal(event)">
+  <div class="inv-modal" style="max-width:680px;width:95vw" onclick="event.stopPropagation()">
+    <div class="inv-modal-header">
+      <div class="inv-modal-title">📤 Import Products</div>
+      <button class="inv-btn inv-btn-ghost inv-btn-sm inv-btn-icon" onclick="closeImportModal()">✕</button>
+    </div>
+
+    <!-- Step indicator -->
+    <div style="display:flex;align-items:center;gap:0;padding:0 18px 12px;background:var(--bg2);border-bottom:1px solid var(--border)">
+      <div class="imp-step active" id="imp-step-1">1 — Upload</div>
+      <div style="flex:1;height:2px;background:var(--border)" id="imp-line-12"></div>
+      <div class="imp-step" id="imp-step-2">2 — Preview</div>
+      <div style="flex:1;height:2px;background:var(--border)" id="imp-line-23"></div>
+      <div class="imp-step" id="imp-step-3">3 — Import</div>
+    </div>
+    <style>
+      .imp-step{font-size:12px;font-weight:700;padding:8px 12px;color:var(--muted);white-space:nowrap}
+      .imp-step.active{color:var(--accent)}
+      .imp-step.done{color:var(--success)}
+    </style>
+
+    <!-- Step 1: Upload -->
+    <div id="imp-panel-1" class="inv-modal-body">
+      <div style="text-align:center;padding:20px 0 10px">
+        <div style="font-size:40px;margin-bottom:8px">📂</div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:16px">Upload a CSV file with your products. The AI will automatically detect your columns.</p>
+        <div style="border:2px dashed var(--border);border-radius:12px;padding:24px;cursor:pointer;transition:border-color .15s"
+          id="impDropZone" onclick="document.getElementById('impFileInput').click()">
+          <div style="font-size:28px;margin-bottom:8px">⬆</div>
+          <div style="font-size:13px;font-weight:600;color:var(--text)" id="impFileName">Click to select CSV file</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">CSV format · Max 5,000 rows</div>
+        </div>
+        <input type="file" id="impFileInput" accept=".csv,.tsv,.txt" style="display:none" onchange="handleImportFile(event)">
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-top:12px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px;letter-spacing:.5px">SUPPORTED COLUMN NAMES</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.8">
+          <strong style="color:var(--text)">Name*</strong> · SKU · Barcode · Category · Brand · Cost Price · Selling Price · Qty · Unit · Supplier · Reorder Point · Expiry Date · Notes
+        </div>
+      </div>
+      <div id="impStep1Status" style="margin-top:10px;font-size:12px;color:var(--muted);text-align:center"></div>
+    </div>
+    <div class="inv-modal-footer" id="imp-footer-1" style="display:none">
+      <button class="inv-btn inv-btn-ghost" onclick="closeImportModal()">Cancel</button>
+      <button class="inv-btn inv-btn-primary" id="impNextBtn" onclick="runImportPreview()">Next: Preview →</button>
+    </div>
+
+    <!-- Step 2: Preview -->
+    <div id="imp-panel-2" class="inv-modal-body" style="display:none">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+        <div style="padding:6px 12px;background:rgba(113,255,0,.08);border:1px solid rgba(113,255,0,.2);border-radius:8px;font-size:12px">✅ Valid: <strong id="imp-valid-count">0</strong></div>
+        <div style="padding:6px 12px;background:rgba(255,50,50,.08);border:1px solid rgba(255,50,50,.2);border-radius:8px;font-size:12px">❌ Invalid: <strong id="imp-invalid-count">0</strong></div>
+        <div style="padding:6px 12px;background:rgba(255,165,0,.08);border:1px solid rgba(255,165,0,.2);border-radius:8px;font-size:12px">⚠ Duplicates: <strong id="imp-dup-count">0</strong></div>
+      </div>
+      <div id="impPreviewTable" style="max-height:280px;overflow-y:auto;border:1px solid var(--border);border-radius:10px"></div>
+      <div style="margin-top:10px;font-size:12px;color:var(--muted)" id="impPreviewNote">Only valid rows will be imported. Duplicates will be skipped.</div>
+    </div>
+    <div class="inv-modal-footer" id="imp-footer-2" style="display:none">
+      <button class="inv-btn inv-btn-ghost" onclick="importGoBack()">← Back</button>
+      <button class="inv-btn inv-btn-primary" id="impCommitBtn" onclick="runImportCommit()">Import → Commit</button>
+    </div>
+
+    <!-- Step 3: Result -->
+    <div id="imp-panel-3" class="inv-modal-body" style="display:none;text-align:center;padding:30px 20px">
+      <div style="font-size:48px;margin-bottom:10px" id="impResultIcon">⏳</div>
+      <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:6px" id="impResultTitle">Importing…</div>
+      <div style="font-size:13px;color:var(--muted)" id="impResultBody">Please wait while your products are being imported.</div>
+      <div class="inv-progress" style="margin:14px auto;max-width:300px" id="impProgressWrap">
+        <div class="inv-progress-fill" id="impProgressFill" style="width:0%;transition:width .4s"></div>
+      </div>
+    </div>
+    <div class="inv-modal-footer" id="imp-footer-3" style="display:none">
+      <button class="inv-btn inv-btn-primary" onclick="closeImportModal();loadProducts()">Done — View Products</button>
+    </div>
+  </div>
+</div>
+
 <!-- SCRIPTS -->
 <script type="module" src="firebase.js"></script>
 <script src="auth.js"></script>
@@ -1256,8 +1336,182 @@ th .inv-sort-icon::before{content:'↕'}
   }
   window.toggleFilterPanel = toggleFilterPanel;
 
-  function showImportModal() { showToast('Import modal — connect to bulk import engine', 'info'); }
+  /* ═══════════════════════════════════════════════════════
+     IMPORT WORKFLOW — 3 steps: Upload → Preview → Commit
+     ═══════════════════════════════════════════════════════ */
+  let _importJobId = null;
+  let _importRows  = [];
+  let _importFile  = null;
+
+  function showImportModal() {
+    resetImportModal();
+    const modal = $('importModal');
+    if (modal) modal.classList.add('open');
+    setupImportDropzone();
+  }
   window.showImportModal = showImportModal;
+
+  function closeImportModal(e) {
+    if (e && e.target !== $('importModal')) return;
+    $('importModal')?.classList.remove('open');
+    _importJobId = null; _importRows = []; _importFile = null;
+  }
+  window.closeImportModal = closeImportModal;
+
+  function resetImportModal() {
+    setImportStep(1);
+    $('impFileName').textContent = 'Click to select CSV file';
+    $('impStep1Status').textContent = '';
+    $('imp-footer-1').style.display = 'none';
+    _importJobId = null; _importRows = []; _importFile = null;
+  }
+
+  function setImportStep(n) {
+    [1,2,3].forEach(i => {
+      $('imp-panel-'+i).style.display = i === n ? '' : 'none';
+      const footer = $('imp-footer-'+i);
+      if (footer) footer.style.display = i === n ? 'flex' : 'none';
+      const stepEl = $('imp-step-'+i);
+      if (stepEl) {
+        stepEl.classList.toggle('active', i === n);
+        stepEl.classList.toggle('done', i < n);
+      }
+    });
+  }
+
+  function setupImportDropzone() {
+    const zone = $('impDropZone');
+    if (!zone || zone._dropReady) return;
+    zone._dropReady = true;
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.style.borderColor = 'var(--accent)'; });
+    zone.addEventListener('dragleave', () => { zone.style.borderColor = 'var(--border)'; });
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.style.borderColor = 'var(--border)';
+      const file = e.dataTransfer.files[0];
+      if (file) processImportFile(file);
+    });
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files[0];
+    if (file) processImportFile(file);
+  }
+  window.handleImportFile = handleImportFile;
+
+  function parseCSV(text) {
+    const lines  = text.split(/\r?\n/).filter(l => l.trim());
+    if (!lines.length) return { headers: [], rows: [] };
+    const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim());
+    const rows = lines.slice(1).map(line => {
+      const vals = line.match(/("(?:[^"]|"")*"|[^,]*)/g) || [];
+      const row  = {};
+      headers.forEach((h, i) => { row[h] = (vals[i] || '').replace(/^"|"$/g,'').replace(/""/g,'"').trim(); });
+      return row;
+    }).filter(r => Object.values(r).some(v => v));
+    return { headers, rows };
+  }
+
+  function processImportFile(file) {
+    _importFile = file;
+    $('impFileName').textContent = file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)';
+    $('impStep1Status').textContent = 'Parsing file…';
+    const reader = new FileReader();
+    reader.onload = e => {
+      const { headers, rows } = parseCSV(e.target.result);
+      if (!headers.length) { $('impStep1Status').textContent = 'Could not parse CSV. Check file format.'; return; }
+      _importRows = rows;
+      $('impStep1Status').textContent = `✅ ${rows.length} rows found · ${headers.length} columns: ${headers.join(', ')}`;
+      $('imp-footer-1').style.display = 'flex';
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  async function runImportPreview() {
+    if (!_importRows.length) { showToast('No rows to import', 'warn'); return; }
+    const btn = $('impNextBtn');
+    btn.textContent = 'Mapping columns…';
+    btn.disabled = true;
+    $('impStep1Status').textContent = '🤖 AI is mapping your columns…';
+
+    try {
+      const { headers } = parseCSV('');
+      const hdrs     = Object.keys(_importRows[0] || {});
+      const sample   = _importRows.slice(0, 3);
+      const mapFn    = firebase.functions().httpsCallable('inventoryImportAiMap');
+      const { data: mapResult } = await mapFn({ headers: hdrs, sampleRows: sample }).catch(() => ({ data: { mappings: {}, confidence: 0 } }));
+
+      const prevFn   = firebase.functions().httpsCallable('inventoryImportPreview');
+      const uid      = firebase.auth().currentUser?.uid;
+      const { data } = await prevFn({
+        tenantId : uid,
+        rows     : _importRows,
+        mappings : mapResult.mappings || {},
+        filename : _importFile?.name || 'import.csv',
+      });
+
+      _importJobId = data.jobId;
+
+      $('imp-valid-count').textContent   = data.valid   || 0;
+      $('imp-invalid-count').textContent = data.invalid || 0;
+      $('imp-dup-count').textContent     = data.duplicates || 0;
+
+      /* Render preview table */
+      const validRows = Array.isArray(data.valid) ? [] : []; // server returns counts
+      const previewData = _importRows.slice(0, 10);
+      const tblHdrs = Object.keys(previewData[0] || {}).slice(0, 6);
+      $('impPreviewTable').innerHTML = `
+        <table class="inv-table" style="font-size:11px">
+          <thead><tr>${tblHdrs.map(h => `<th>${esc(h)}</th>`).join('')}<th>Status</th></tr></thead>
+          <tbody>${previewData.map(r => `<tr>${tblHdrs.map(h => `<td>${esc(r[h]||'')}</td>`).join('')}<td><span class="inv-badge inv-badge-success">valid</span></td></tr>`).join('')}</tbody>
+        </table>`;
+
+      $('impPreviewNote').textContent = `${data.valid || 0} valid rows will be imported. ${data.duplicates || 0} duplicates and ${data.invalid || 0} invalid rows will be skipped.`;
+      setImportStep(2);
+    } catch (err) {
+      showToast('Preview failed: ' + err.message, 'error');
+      $('impStep1Status').textContent = 'Preview failed. ' + err.message;
+    } finally {
+      btn.textContent = 'Next: Preview →';
+      btn.disabled = false;
+    }
+  }
+  window.runImportPreview = runImportPreview;
+
+  function importGoBack() { setImportStep(1); }
+  window.importGoBack = importGoBack;
+
+  async function runImportCommit() {
+    if (!_importJobId) { showToast('No import job. Go back and try again.', 'error'); return; }
+    setImportStep(3);
+    $('impProgressFill').style.width = '20%';
+
+    const animate = setInterval(() => {
+      const cur = parseFloat($('impProgressFill').style.width) || 20;
+      if (cur < 85) $('impProgressFill').style.width = (cur + 5) + '%';
+    }, 400);
+
+    try {
+      const fn  = firebase.functions().httpsCallable('inventoryImportCommit');
+      const uid = firebase.auth().currentUser?.uid;
+      const { data } = await fn({ jobId: _importJobId, tenantId: uid });
+
+      clearInterval(animate);
+      $('impProgressFill').style.width = '100%';
+      $('impResultIcon').textContent  = data.errors > 0 ? '⚠️' : '✅';
+      $('impResultTitle').textContent = data.errors > 0 ? 'Import Partially Complete' : 'Import Complete!';
+      $('impResultBody').textContent  = `${data.imported} product${data.imported !== 1 ? 's' : ''} imported successfully.${data.errors > 0 ? ` ${data.errors} rows failed.` : ''}`;
+      $('imp-footer-3').style.display = 'flex';
+      showToast(`${data.imported} products imported`, 'success');
+    } catch (err) {
+      clearInterval(animate);
+      $('impProgressFill').style.width = '0%';
+      $('impResultIcon').textContent  = '❌';
+      $('impResultTitle').textContent = 'Import Failed';
+      $('impResultBody').textContent  = err.message;
+      $('imp-footer-3').style.display = 'flex';
+    }
+  }
+  window.runImportCommit = runImportCommit;
 
   /* ── ADD/EDIT MODAL ── */
   let _editId = null;
@@ -1434,7 +1688,35 @@ th .inv-sort-icon::before{content:'↕'}
   }
   window.saveProduct = saveProduct;
 
-  function saveProductDraft() { showToast('Saved as draft', 'info'); }
+  async function saveProductDraft() {
+    const name = $('pm-name').value.trim();
+    if (!name) { showToast('Product name required to save draft', 'warn'); return; }
+    const data = {
+      name,
+      sku:          $('pm-sku').value.trim()  || generateSkuStr(name),
+      brand:        $('pm-brand').value.trim(),
+      description:  $('pm-desc').value.trim(),
+      barcode:      $('pm-barcode').value.trim(),
+      stockLevel:   parseFloat($('pm-stock').value)     || 0,
+      reorderPoint: parseFloat($('pm-reorder').value)   || 10,
+      buyingPrice:  parseFloat($('pm-buy').value)       || 0,
+      sellingPrice: parseFloat($('pm-sell').value)      || 0,
+      unit:         $('pm-unit')?.value || 'pcs',
+      active:       false, // draft — not active in storefront
+      status:       'draft',
+    };
+    try {
+      $('pmSaveStatus').textContent = 'Saving draft…';
+      if (_editId) await SokoniInventory.updateProduct(_editId, data);
+      else         await SokoniInventory.addProduct(data);
+      $('pmSaveStatus').textContent = 'Draft saved ✓';
+      showToast('Draft saved — product is not active in storefront', 'info');
+      loadProducts();
+    } catch (e) {
+      showToast('Draft save failed: ' + e.message, 'error');
+      $('pmSaveStatus').textContent = 'Save failed';
+    }
+  }
   window.saveProductDraft = saveProductDraft;
 
   function generateSkuStr(name) {

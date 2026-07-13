@@ -347,7 +347,7 @@ exports.inventoryProcessStockCount = onCall({ timeoutSeconds: 120, memory: '512M
 
   validate(data, ['auditId']);
 
-  const auditRef  = tenantCol(tenantId, 'inventory_audits').doc(data.auditId);
+  const auditRef  = tenantCol(tenantId, 'inventory_audit').doc(data.auditId);
   const auditSnap = await auditRef.get();
   if (!auditSnap.exists) throw new HttpsError('not-found', 'Audit session not found');
   const audit = auditSnap.data();
@@ -568,6 +568,119 @@ exports.inventoryOnMovement = onDocumentCreated(
   }
 );
 
+/* ─── DASHBOARD STATS (single-call aggregate for overview KPIs) ── */
+exports.inventoryGetDashboardStats = onCall({ timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
+  assertAuth(req);
+  const tenantId = assertTenant(req.data);
+
+  const now   = new Date();
+  const todayISO  = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const weekISO   = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).toISOString();
+  const monthISO  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const cutoff30  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).toISOString();
+  const cutoff90  = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 90).toISOString();
+  const expiring7 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7).toISOString();
+
+  const col = (path) => db.collection(`tenants/${tenantId}/${path}`);
+
+  const [
+    productsSnap, levelsSnap, poSnap, transferSnap,
+    todayMvSnap, weekMvSnap, monthMvSnap, expiringSnap,
+  ] = await Promise.all([
+    col('inventory_products').where('active', '==', true).select(['name','sellingPrice','costPrice','category']).get(),
+    col('inventory_levels').get(),
+    col('inventory_purchaseOrders').where('status', 'in', ['draft','approved','ordered','partial']).get(),
+    col('inventory_transfers').where('status', 'in', ['pending','approved','in_transit']).get(),
+    col('inventory_movements').where('ts', '>=', todayISO).get(),
+    col('inventory_movements').where('type', '==', 'sale').where('ts', '>=', weekISO).get(),
+    col('inventory_movements').where('type', '==', 'sale').where('ts', '>=', monthISO).get(),
+    col('inventory_batches').where('expiryDate', '<=', expiring7).where('remaining', '>', 0).get(),
+  ]);
+
+  const products  = productsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const levels    = levelsSnap.docs.map(d => d.data());
+
+  // Build product map for value calculations
+  const prodMap = {};
+  products.forEach(p => { prodMap[p.id] = p; });
+
+  // SKU counts and value
+  let totalValue = 0, lowStock = 0, outOfStock = 0, overstocked = 0;
+  const mvmtByProduct = {}; // productId → total qty sold in 30 days
+
+  levels.forEach(l => {
+    const p = prodMap[l.productId];
+    if (!p) return;
+    const onHand     = (l.available || 0) + (l.reserved || 0);
+    const cost       = p.costPrice || p.sellingPrice || 0;
+    const reorder    = l.reorderPoint || 10;
+    const max        = l.maxStock || reorder * 5;
+
+    totalValue += onHand * cost;
+    if (onHand <= 0)               outOfStock++;
+    else if (onHand <= reorder)    lowStock++;
+    else if (max > 0 && onHand > max) overstocked++;
+  });
+
+  // Sales calculations
+  let dailySales = 0, weeklySales = 0, monthlySales = 0;
+  todayMvSnap.docs.forEach(d => {
+    const mv = d.data();
+    if (mv.type === 'sale') dailySales += (mv.qty || 0) * (mv.unitPrice || 0);
+  });
+  weekMvSnap.docs.forEach(d => {
+    const mv = d.data();
+    weeklySales += (mv.qty || 0) * (mv.unitPrice || 0);
+  });
+  monthMvSnap.docs.forEach(d => {
+    const mv = d.data();
+    monthlySales += (mv.qty || 0) * (mv.unitPrice || 0);
+    mvmtByProduct[mv.productId] = (mvmtByProduct[mv.productId] || 0) + (mv.qty || 0);
+  });
+
+  // Margin analysis
+  const withMargin = products
+    .filter(p => p.sellingPrice > 0 && p.costPrice > 0)
+    .map(p => ({ id: p.id, name: p.name, margin: ((p.sellingPrice - p.costPrice) / p.sellingPrice) * 100 }))
+    .sort((a, b) => b.margin - a.margin);
+
+  const highMargin = withMargin.slice(0, 5);
+  const lowMargin  = withMargin.slice(-5).reverse();
+
+  // Fast / slow / dead stock (by 30-day movement)
+  const sorted = products
+    .map(p => ({ id: p.id, name: p.name, sold: mvmtByProduct[p.id] || 0 }))
+    .sort((a, b) => b.sold - a.sold);
+  const fastMoving = sorted.slice(0, 5);
+  const slowMoving = sorted.filter(p => p.sold > 0 && p.sold < 3).slice(0, 5);
+  const deadStock  = sorted.filter(p => p.sold === 0).slice(0, 10);
+
+  // PO breakdown
+  const incomingPOs      = poSnap.docs.length;
+  const awaitingReceipt  = poSnap.docs.filter(d => ['ordered','partial'].includes(d.data().status)).length;
+
+  return {
+    totalSKUs       : products.length,
+    totalValue,
+    lowStock,
+    outOfStock,
+    overstocked,
+    incomingPOs,
+    awaitingReceipt,
+    pendingTransfers: transferSnap.docs.length,
+    todayMovements  : todayMvSnap.docs.length,
+    dailySales,
+    weeklySales,
+    monthlySales,
+    expiringBatches : expiringSnap.docs.length,
+    fastMoving,
+    slowMoving,
+    deadStock,
+    highMargin,
+    lowMargin,
+  };
+});
+
 /* ─── CLEANUP OLD MOVEMENTS (monthly) ──────────────────────────── */
 exports.inventoryCleanupOldMovements = onSchedule(
   { schedule: 'every monday 02:00', timeZone: 'Africa/Nairobi', memory: '256MiB', timeoutSeconds: 300 },
@@ -588,5 +701,122 @@ exports.inventoryCleanupOldMovements = onSchedule(
         console.log(`Cleaned ${snap.size} old movements for tenant ${tenantId}`);
       }
     }
+  }
+);
+
+/* ─── getPOSInventoryIntelligence ────────────────────────────────────
+   Required by pos-inventory-intelligence.html.
+   Returns aggregated intelligence data: low stock, expiry, fast movers,
+   slow movers, dead stock, overstock, and pending reorders.
+   Uses the POS seller path: sellers/{sellerId}/...
+   ─────────────────────────────────────────────────────────────────── */
+exports.getPOSInventoryIntelligence = onCall(
+  { region: 'us-central1', memory: '512MiB', timeoutSeconds: 60 },
+  async (req) => {
+    const uid = assertAuth(req);
+    const sellerId  = req.data?.sellerId || uid;
+    const branchId  = req.data?.branchId || 'default';
+    const DAYS_SLOW = 30; // no sales in 30 days = slow mover
+
+    const productsSnap  = await db.collection(`sellers/${sellerId}/products`)
+      .where('active','==',true).limit(500).get();
+    const inventorySnap = await db.collection(`sellers/${sellerId}/inventory`)
+      .where('branchId','==',branchId).get();
+    const batchesSnap   = await db.collection(`sellers/${sellerId}/batches`)
+      .orderBy('expiryDate','asc').limit(200).get();
+    const movementsSnap = await db.collection(`sellers/${sellerId}/movements`)
+      .orderBy('createdAt','desc').limit(1000).get();
+
+    const products  = {};
+    productsSnap.docs.forEach(d => { products[d.id] = { id: d.id, ...d.data() }; });
+
+    const inventory = {};
+    inventorySnap.docs.forEach(d => { inventory[d.data().productId] = d.data(); });
+
+    const now    = new Date();
+    const alert  = new Date(now.getTime() + 7  * 86400000);
+    const warn   = new Date(now.getTime() + 30 * 86400000);
+    const slowCutoff = new Date(now.getTime() - DAYS_SLOW * 86400000);
+
+    /* Build per-product sales counts in last 30 days */
+    const salesCount = {};
+    movementsSnap.docs.forEach(d => {
+      const mv = d.data();
+      if (mv.type === 'sale' && mv.createdAt?.toDate() >= slowCutoff) {
+        salesCount[mv.productId] = (salesCount[mv.productId] || 0) + (mv.qty || 0);
+      }
+    });
+
+    /* Last sale date per product */
+    const lastSaleDate = {};
+    movementsSnap.docs.forEach(d => {
+      const mv = d.data();
+      if (mv.type === 'sale' && mv.productId) {
+        if (!lastSaleDate[mv.productId]) lastSaleDate[mv.productId] = mv.createdAt;
+      }
+    });
+
+    const result = {
+      lowStock:     [],
+      expiry:       [],
+      fastMovers:   [],
+      slowMovers:   [],
+      deadStock:    [],
+      overstock:    [],
+      reorderQueue: [],
+    };
+
+    for (const [id, prod] of Object.entries(products)) {
+      const inv  = inventory[id] || { qty: 0 };
+      const qty  = inv.qty || 0;
+      const rp   = prod.reorderPoint || 5;
+      const max  = prod.maxStock || 0;
+      const sold = salesCount[id] || 0;
+      const last = lastSaleDate[id]?.toDate();
+      const daysSinceLastSale = last ? Math.round((now - last) / 86400000) : 999;
+
+      const base = { id, name: prod.name, sku: prod.sku||'', category: prod.category||'', qty, reorderPoint: rp, maxStock: max, unitPrice: prod.sellingPrice||0, supplierId: prod.supplierId||null };
+
+      if (qty === 0 || (qty > 0 && qty <= rp))     result.lowStock.push({ ...base, urgency: qty === 0 ? 'critical' : 'warning' });
+      if (qty > 0 && max > 0 && qty > max * 1.5)   result.overstock.push({ ...base, excess: qty - max });
+      if (qty <= rp)                                result.reorderQueue.push({ ...base, suggestedQty: Math.max(rp * 2, max || rp * 3) });
+      if (sold >= 10)                               result.fastMovers.push({ ...base, soldLast30: sold });
+      if (sold === 0 && daysSinceLastSale > 90)     result.deadStock.push({ ...base, daysSinceLastSale });
+      else if (sold < 3 && daysSinceLastSale > 30)  result.slowMovers.push({ ...base, soldLast30: sold, daysSinceLastSale });
+    }
+
+    /* Expiry from batches */
+    batchesSnap.docs.forEach(d => {
+      const b   = d.data();
+      const exp = b.expiryDate?.toDate();
+      if (!exp) return;
+      const daysLeft = Math.round((exp - now) / 86400000);
+      if (daysLeft <= 30) {
+        const prod = products[b.productId] || {};
+        result.expiry.push({
+          id: b.productId, batchId: d.id, name: prod.name||b.productId,
+          sku: prod.sku||'', qty: b.qty||0, expiryDate: b.expiryDate, daysLeft,
+          urgency: daysLeft <= 0 ? 'expired' : daysLeft <= 7 ? 'critical' : 'warning',
+        });
+      }
+    });
+
+    /* Sort results */
+    result.fastMovers.sort((a,b) => b.soldLast30 - a.soldLast30);
+    result.slowMovers.sort((a,b) => a.soldLast30 - b.soldLast30);
+    result.deadStock.sort((a,b) => b.daysSinceLastSale - a.daysSinceLastSale);
+    result.expiry.sort((a,b) => a.daysLeft - b.daysLeft);
+
+    const summary = {
+      criticalLowStock:    result.lowStock.filter(i => i.urgency === 'critical').length,
+      expiringWithin7Days: result.expiry.filter(i => i.daysLeft <= 7 && i.daysLeft >= 0).length,
+      fastMovers:          result.fastMovers.length,
+      deadStock:           result.deadStock.length,
+      overstocked:         result.overstock.length,
+      pendingReorders:     result.reorderQueue.length,
+      sellingProducts:     Object.values(salesCount).filter(v => v > 0).length,
+    };
+
+    return { summary, ...result, generatedAt: nowISO() };
   }
 );
