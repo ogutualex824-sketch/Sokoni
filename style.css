@@ -40,8 +40,8 @@ html:not(.sk-no-header) body {
   display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
 }
 #sk-nav-logo img {
-  height: 36px; width: auto; object-fit: contain; display: block;
-  filter: drop-shadow(0 0 10px rgba(113,255,0,0.22));
+  height: 52px; width: auto; object-fit: contain; display: block;
+  filter: drop-shadow(0 0 12px rgba(113,255,0,0.28));
 }
 #sk-nav-logo-text {
   font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;
@@ -5336,10 +5336,7 @@ body{
 
 /* ── GLOBAL LOGO SIZE FLOOR ──
    Every hub/page-specific *-nav-logo gets a minimum visible size.
-   More-specific page rules can still increase; they cannot go below this.
-   brightness(2) acts as a safety net for any remaining sokoni-logo-dark.png
-   references whose letterforms have sub-100% alpha: doubling rendered pixel
-   brightness pushes faded grey marks toward white on dark backgrounds. */
+   More-specific page rules can still increase; they cannot go below this. */
 [class*="-nav-logo"],
 [class*="-nav-logo"] img,
 .nav-logo img {
@@ -5348,7 +5345,7 @@ body{
   max-width: 200px !important;
   display: block !important;
   object-fit: contain !important;
-  filter: brightness(2) drop-shadow(0 0 10px rgba(113,255,0,0.2)) !important;
+  filter: drop-shadow(0 0 10px rgba(113,255,0,0.2)) !important;
 }
 img.footer-logo, .footer-logo img {
   height: 52px !important;

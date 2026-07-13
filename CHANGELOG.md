@@ -1,4 +1,4 @@
-﻿## [2026-07-13] — Platform-Wide Service Worker Recovery Sprint (SW v63)
+﻿﻿## [2026-07-13] — Platform-Wide Service Worker Recovery Sprint (SW v63)
 
 ### Summary
 
@@ -33,48 +33,6 @@ None. The SW fallback fix closes a user-experience (not security) vulnerability 
 
 ### Breaking changes
 None. The `sokoni-tiles-v1` persistent cache is preserved across this version bump — offline map tiles are not evicted.
-
----
-
-## [2026-07-13] — Brand Visibility & Logo Polish Sprint
-
-### Summary
-
-Complete elimination of the faded wordmark across the entire platform. Root cause: `sokoni-logo-dark.png` was derived from an original `Sokoni Logo.png` where the "SOKO" letters carry only ~12% alpha opacity — CSS `brightness()` cannot recover alpha-composited pixels on a dark canvas. Solution: new `assets/sokoni-wordmark.svg` replaces the PNG everywhere in runtime files. SVG `<text fill="#ffffff">` is always 100% opaque regardless of background.
-
-**New assets:**
-- `assets/sokoni-wordmark.svg` — canonical dark-background wordmark: bag icon + "SOKONI" text, viewBox 170×56, pure SVG
-- `assets/sokoni-wordmark-light.svg` — same geometry but `fill="#050505"` for light backgrounds
-
-**Replacement strategy:**
-- Wide/horizontal contexts (nav, splash, promo toast, welcome popup, payment modal) → `sokoni-wordmark.svg`
-- Square/icon contexts (auth card, drawer header, auth-gate overlay, age-gate, adult-gate, security modal, PWA install prompt, seller avatar fallback) → `sokoni-icon.svg` (existing square bag SVG)
-
-**Files updated:**
-- `assets/sokoni-wordmark.svg` (new)
-- `assets/sokoni-wordmark-light.svg` (new)
-- `shared-header.js` — splash, nav, and drawer logo all updated
-- `splash.js` — splash screen wordmark
-- `auth-guard.js` — inline auth overlay icon
-- `adult-gate.js`, `age-gate.js` — gate overlay icons
-- `security.js` — privacy modal icon
-- `sokoni-pay.js` — payment modal wordmark
-- `sw-register.js` — PWA install prompt icon
-- `sokoni-spotlight.js` — seller avatar placeholder/fallback
-- `script.js` — promo toast logo, welcome popup logo
-- `login.html`, `signup.html` — auth brand icon
-- `style.css` — `brightness(2)` safety filter on `[class*="-nav-logo"] img` as net for any page-specific nav PNGs; `.pcard-btn` touch-target and wishlist-state styles
-- `auth.css` — green glow on square bag icon
-- 108 HTML files — bulk `sokoni-logo-dark.png` → `sokoni-wordmark.svg` replacement via PowerShell
-
-### Performance implications
-Zero network overhead — SVG files are smaller than the PNG they replace (~1 KB vs ~8 KB). Inline SVG avoids an extra image request in JS-built overlays.
-
-### Security changes
-None.
-
-### Breaking changes
-`sokoni-logo-dark.png` remains on disk (backward-compatibility for any external references) but is no longer referenced by any runtime file.
 
 ---
 
@@ -14198,7 +14156,8 @@ None — new module, no existing code modified.
   - 8 panels: Dashboard, Users, Sellers, Orders, Payments, Moderation, Admin Roles, Config, Audit Log, System Health
   - Platform config (feature flags, commission rates, limits) saved to platformConfig/v1 Firestore doc
   - setUserRole CF integration for granting/revoking admin/moderator claims
-  - Moderation: resolve/action content reports from eports collection
+  - Moderation: resolve/action content reports from 
+eports collection
 - **sokoni-qr.js** — QR code generation module (lazy-loads qrcode@1.5.3)
   - URL builders for product/order/seller/venue/profile/table/pickup
   - showModal, renderInto, renderBatch, toDataURL APIs

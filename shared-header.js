@@ -162,7 +162,7 @@
     el.innerHTML =
       '<div class="sk-sp-inner">' +
         /* Vector wordmark — bag icon + SOKONI text, always 100% crisp at any DPI. */
-        '<img class="sk-sp-logo" src="assets/sokoni-wordmark.svg" alt="SOKONI">' +
+        '<img class="sk-sp-logo" src="assets/Sokoni Logo.png" alt="SOKONI">' +
         '<div class="sk-sp-line">' + cfg.line + '</div>' +
         '<div class="sk-sp-bar"><div class="sk-sp-fill" style="background:' + cfg.bar + '"></div></div>' +
       '</div>';
@@ -573,12 +573,12 @@
       margin-right: 2px;
     }
     #sk-nav-logo img {
-      height: 30px; width: auto; object-fit: contain; display: block;
-      filter: drop-shadow(0 0 6px rgba(113,255,0,0.14));
+      height: 28px; width: auto; object-fit: contain; display: block;
+      filter: brightness(1.04) drop-shadow(0 0 6px rgba(113,255,0,0.12));
       transition: filter .22s ease, transform .2s ease;
     }
     #sk-nav-logo:hover img {
-      filter: drop-shadow(0 0 14px rgba(113,255,0,0.42));
+      filter: brightness(1.1) drop-shadow(0 0 14px rgba(113,255,0,0.38));
       transform: scale(1.04);
     }
     /* Suppress text fallback — logo image is the brand */
@@ -940,7 +940,7 @@
     nav.innerHTML =
       /* Logo — SVG wordmark (bag + SOKONI text), vector, always crisp on dark bg */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/sokoni-wordmark.svg" alt="SOKONI">' +
+        '<img src="assets/Sokoni Logo.png" alt="SOKONI">' +
       '</a>' +
 
       /* Search */
@@ -1050,7 +1050,7 @@
       /* Drawer header — logo + close button */
       '<div class="sk-drawer-header">' +
         '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
-          '<img src="assets/sokoni-icon.svg" alt="" style="height:32px;width:32px">' +
+          '<img src="assets/sokoni-logo-dark.png" alt="" style="height:32px;width:auto">' +
           '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
         '</div>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +

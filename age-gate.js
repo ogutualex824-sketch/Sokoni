@@ -85,7 +85,7 @@
 
         /* ── Verify screen ── */
         '<div id="sk-verify">',
-          '<img id="sk-age-logo" src="assets/sokoni-icon.svg" alt="SOKONI">',
+          '<img id="sk-age-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">',
           '<div id="sk-age-badge">🔒 Age Verification</div>',
           '<div id="sk-age-title">You must be<br><span style="background:linear-gradient(135deg,#71ff00,#4fc800);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">18 or older</span><br>to use SOKONI</div>',
           '<div id="sk-age-sub">SOKONI connects buyers, sellers, service providers and financial institutions across Kenya. This platform is for adults only.</div>',
