@@ -217,10 +217,13 @@
      rather than growing a second toast. Moments are keyed by the SAME names the
      server notification engine uses, so one event has one name end to end. */
   _injectAsset('script', { src: 'sokoni-delight.js', defer: true }, 'sk-delight-script');
-  /* Universal footer — ONE footer for the whole platform. Loading it here means
-     every page with the SOKONI header gets the SOKONI footer, with no
-     page-specific markup. It removes any legacy <footer class="footer"> it finds. */
-  _injectAsset('script', { src: 'sokoni-footer.js', defer: true }, 'sk-footer-script');
+  /* NO footer component is injected here.
+     The premium footer is PAGE MARKUP (<footer class="footer">) styled by style.css —
+     including .footer::before, which layers the dark gradient over
+     assets/sokoni footer.png. That is the production footer and it is not generated.
+     sokoni-footer.js (the card-based rewrite) was a regression and has been removed;
+     it also deleted any <footer class="footer"> it found at runtime, so leaving it
+     loaded here would silently wipe the restored footer. Rolled back to 911a042. */
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
   _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
   /* Notification engine — real-time engine, preferences, grouping */
@@ -1597,16 +1600,11 @@
     _inject();
   }
 
-  /* ── GLOBAL FOOTER — auto-injected on every page that loads shared-header.js ─
-     sokoni-footer.js is idempotent (window.__SOKONI_FOOTER__ guard) and
-     excludes POS/kiosk pages via its own EXCLUDE regex. No per-page markup needed.
-     Use <body data-no-footer> to opt a page out. */
-  (function _footer() {
-    if (window.__SOKONI_FOOTER__) return;
-    var s = document.createElement('script');
-    s.src = 'sokoni-footer.js';
-    s.async = true;
-    (document.head || document.documentElement).appendChild(s);
-  }());
+  /* ── NO GLOBAL FOOTER INJECTION ──────────────────────────────────────────────
+     There was a SECOND injector here as well as the _injectAsset one above. Both
+     are removed. The premium footer is page markup (<footer class="footer">)
+     styled by style.css — .footer::before layers the dark gradient over
+     assets/sokoni footer.png. It is not generated, and nothing should generate it.
+     Rolled back to 911a042. */
 
 })();
