@@ -1,4 +1,101 @@
-﻿## [2026-07-13] — Commission Engine: plan discounts ship as CAPABILITY, not POLICY
+﻿## [2026-07-13] — KASS Widget v3.0 — Premium AI Chat Polish Sprint
+
+### Summary
+
+Full UX polish of the KASS AI concierge widget. No new Cloud Functions, no schema changes, no new pages. All improvements are client-side within `kass-widget.js`. The widget now handles auth state reactively, the mobile keyboard correctly, and delivers an experience comparable to commercial AI chat interfaces.
+
+### Auth State (fix)
+
+Previously the panel allowed interaction and only showed an error after the user tried to send. Now:
+- Auth is checked on open via `window.firebaseAuth.currentUser` and subscribed to via `window.firebaseSDK.onAuthStateChanged`
+- **Guest**: Input disabled (`cursor:not-allowed`), send button disabled, auth wall card shown with "Sign in to continue →" CTA linking to `login.html?redirect=<current-page>`
+- **Authed**: Auth wall hidden, input enabled, greeting fires automatically if first open
+- Reactive: if a user signs in while the panel is already open, the wall disappears and the greeting fires — no refresh required
+
+### Overlay Behaviour
+
+| Trigger | Result |
+|---|---|
+| Close button | Close |
+| Backdrop click | Close |
+| `Escape` key | Close |
+| Browser back | Close (pushState on open, popstate closes) |
+| Swipe-down on header | Close (60px threshold, passive listener, header-only — no conflict with message scroll) |
+| FAB click when open | Close |
+
+### Composer
+
+- `<textarea>` replaces `<input>` — auto-grows from 44px to 120px max via `scrollHeight`
+- `font-size: 16px` — prevents iOS Safari zoom on focus
+- `enterkeyhint="send"`, `inputmode="text"` — correct mobile keyboard type
+- Send button disabled until text exists AND user is authenticated
+- Loading state: spinning icon (`k-spin` animation), `aria-label="Sending…"`, `cursor:wait`
+- Shift+Enter inserts newline; plain Enter sends
+- Safe-area inset on bottom padding: `env(safe-area-inset-bottom, 0px)`
+
+### Mobile Keyboard
+
+`window.visualViewport` resize/scroll listeners lift the modal above the keyboard:
+- `bottom` recalculated as `keyboardHeight + 8px`
+- `max-height` clamped to `visualViewport.height - 72px`
+- Both restored to CSS defaults when keyboard closes
+
+### Accessibility
+
+- `aria-modal="true"` on the dialog
+- `role="log"`, `aria-live="polite"` on messages area
+- `role="alert"` on error messages
+- `role="status"` + `aria-live="polite"` on auth wall
+- `role="button"`, `tabindex="0"` on suggestion chips; keyboard-activated (Enter/Space)
+- Close button: 44×44px minimum tap target
+- Send button: 44×44px minimum tap target
+- Focus trap: Tab cycles within the open modal; Shift+Tab reverses
+- Focus returns to the FAB on close
+- `focus-visible` outlines on FAB and close button
+
+### Typing Indicator
+
+Replaced blinking single-dot with bouncing three-dot wave (`k-bounce` keyframe) plus a `"KASS is thinking…"` text label for screen readers.
+
+### Chat Bubbles
+
+| Property | Before | After |
+|---|---|---|
+| Padding | `9px 12px` | `11px 14px` |
+| Line height | `1.55` | `1.65` |
+| Border radius | `14px` | `16px` |
+| `max-width` | `90%` | `88%` |
+| `p` elements | Default margins | `margin:0`, `p+p margin-top:6px` |
+
+### Animation
+
+Modal entrance: `translateY(10px) scale(0.98) → none` in 220ms cubic-bezier(0.22,1,0.36,1). Exit: reverse. Two-frame rAF ensures transition fires after `display:flex` is set.
+
+### Performance
+
+Conversation history (`_history[]`) persists in-memory for the session. Auth listener subscribed once. `_initAuth()` runs 200ms after script load to allow `firebase.js` to finish initialising `window.firebaseAuth`.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `kass-widget.js` | Complete v3.0 rewrite — all changes above |
+| `CHANGELOG.md` | This entry |
+
+### Security
+
+- All user text goes through `_esc()` before insertion into any `innerHTML`
+- Markdown renderer escapes first, then replaces safe patterns — no raw user HTML
+- Auth token fetched from Firebase at send time (never cached in the widget)
+- Sign-in CTA links to `login.html` with `redirect` param — no open redirect risk (stays on same origin)
+
+### Rollback
+
+Replace `kass-widget.js` with the previous version (`git checkout HEAD~1 -- kass-widget.js`). Zero backend changes to revert.
+
+---
+
+## [2026-07-13] — Commission Engine: plan discounts ship as CAPABILITY, not POLICY
 
 Governed by `docs/PLATFORM_CONSTITUTION.md`, `docs/COMMISSION_ENGINE.md` (new),
 `docs/FINANCIAL_TRANSACTION_STANDARD.md`. No engine redesign; no second pricing system.
