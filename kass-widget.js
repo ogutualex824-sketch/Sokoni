@@ -11,6 +11,19 @@
 
   var ENDPOINT = '/api/chat';
 
+  /* Auth instrumentation. OFF in production; it costs nothing and prints nothing unless asked.
+     Turn on with ?kassdebug=1 in the URL, or window.KASS_DEBUG = true before this loads, or
+     localStorage.setItem('kassDebug','1') — so a failure can be diagnosed on a real device,
+     in the field, without shipping a debug build. */
+  var _KASS_DEBUG = (function () {
+    try {
+      if (window.KASS_DEBUG === true) return true;
+      if (/[?&]kassdebug=1/.test(location.search)) return true;
+      if (localStorage.getItem('kassDebug') === '1') return true;
+    } catch (_) {}
+    return false;
+  })();
+
   /* ── Session state ───────────────────────────────────────────── */
   var _history     = [];
   var _greeted     = false;
@@ -39,51 +52,176 @@
   ].join('');
 
   /* ── Auth helpers ────────────────────────────────────────────── */
+  /* ══════════════════════════════════════════════════════════════════════════════════════
+     AUTH GATE
+     ══════════════════════════════════════════════════════════════════════════════════════
+     KASS must NEVER decide a user is a guest before authentication has settled.
+
+     The old gate did exactly that, and then made it permanent:
+
+         var auth = _getAuthInstance();
+         _onAuthChange(auth ? auth.currentUser : null);   // synchronous -> almost always null
+         if (!sub && auth && auth.onAuthStateChanged) { sub = ... }
+         if (sub) sub(_onAuthChange);                     // auth null => NEVER SUBSCRIBES
+
+     Firebase restores a session asynchronously (IndexedDB), and firebase.js is a
+     type="module" script, so at widget-init time window.firebaseAuth frequently does not
+     exist yet. When it did not, `sub` stayed null and the widget latched 'guest' forever —
+     nothing was listening, so signing in could not fix it. 75 of the 104 pages carrying this
+     widget never load firebase.js at all, so on those it could never authenticate anyone.
+
+     THE GATE IS NOT WEAKENED. Unauthenticated users are still blocked, still see the sign-in
+     wall, and the server still rejects a request with no ID token. What changes is that the
+     widget now WAITS for the answer instead of assuming it.
+
+         pending  -> composer disabled, "Checking your session…", no sign-in wall
+         authed   -> composer enabled, wall hidden
+         guest    -> composer disabled, wall shown, "Sign in to continue"
+
+     'pending' is the important addition: an un-settled session is not a guest.
+  ═══════════════════════════════════════════════════════════════════════════════════════ */
+
+  var _authSettled  = false;
+  var _authReadyP   = null;
+  var KASS_AUTH_TIMEOUT_MS = 8000;   /* after this, an unresolved session IS treated as guest */
+
+  /* Uses console.warn, NOT console.log. sokoni-ui.js:23 replaces console.log and console.debug
+     with no-ops on every non-localhost host, so a log-based diagnostic is invisible in exactly
+     the environment where you need it. console.warn survives, and this only speaks when the
+     debug flag is explicitly set. */
+  function _dbg() {
+    if (!_KASS_DEBUG) return;
+    var a = ['[KASS auth]'].concat([].slice.call(arguments));
+    try { console.warn.apply(console, a); } catch (_) {}
+  }
+
   function _getAuthInstance() {
     try {
-      if (window.firebaseAuth) return window.firebaseAuth;
-      if (window.firebase && window.firebase.auth) return window.firebase.auth();
+      if (window.firebaseAuth) return window.firebaseAuth;                     /* modular (canonical) */
+      if (window.firebase && window.firebase.auth) return window.firebase.auth(); /* compat shim */
     } catch (_) {}
     return null;
   }
 
-  function _getAuthToken() {
-    return new Promise(function (resolve) {
-      try {
+  /* The Auth Engine is canonical — KASS consumes it, never reimplements it. On a page that
+     forgot to load it, load it rather than silently treating every visitor as a guest.
+     firebase.js is idempotent (it guards on getApps()), so this is safe if it is already in
+     flight. This is what heals the 75 pages without editing 75 files. */
+  function _ensureAuthLoaded() {
+    if (_getAuthInstance()) return;
+    if (document.querySelector('script[data-kass-firebase]')) return;
+    if (document.querySelector('script[src="firebase.js"], script[src$="/firebase.js"]')) return;
+    _dbg('firebase.js absent on this page — loading the canonical Auth Engine');
+    var s = document.createElement('script');
+    s.type = 'module';
+    s.src  = 'firebase.js';
+    s.setAttribute('data-kass-firebase', '1');
+    s.onerror = function () { _dbg('firebase.js FAILED to load — KASS will remain gated'); };
+    document.head.appendChild(s);
+  }
+
+  /* Resolves ONCE, when authentication has genuinely settled. Never before. */
+  function _authReady() {
+    if (_authReadyP) return _authReadyP;
+
+    _authReadyP = new Promise(function (resolve) {
+      var done = false;
+      function settle(user, why) {
+        if (done) return;
+        done = true;
+        _authSettled = true;
+        _dbg('settled:', why, '| uid:', user ? user.uid : 'none');
+        resolve(user || null);
+      }
+
+      _ensureAuthLoaded();
+
+      /* 1. firebase.js dispatches sokoniAuthReady AFTER session restore, getRedirectResult,
+            profile and role load — including the path where Firestore is unreachable, so a
+            Firestore outage cannot strand the gate. This is the authoritative signal. */
+      document.addEventListener('sokoniAuthReady', function (e) {
+        var u = (e && e.detail && e.detail.user) || (_getAuthInstance() || {}).currentUser || null;
+        settle(u, 'sokoniAuthReady');
+      }, { once: true });
+
+      /* 2. Subscribe to the auth stream as soon as an instance EXISTS — polling, because
+            firebase.js is a module and may execute after this widget. The old code checked
+            once and gave up; that single missing retry is the whole bug. */
+      var waited = 0;
+      var iv = setInterval(function () {
+        if (done) { clearInterval(iv); return; }
         var auth = _getAuthInstance();
-        if (!auth) { resolve(null); return; }
-        var user = auth.currentUser;
-        if (!user) { resolve(null); return; }
-        user.getIdToken(false).then(resolve).catch(function () { resolve(null); });
-      } catch (_) { resolve(null); }
+        if (auth) {
+          clearInterval(iv);
+          _dbg('auth instance acquired after', waited, 'ms');
+          try {
+            auth.onAuthStateChanged(function (user) {
+              /* The FIRST callback means the session is restored (user or genuinely none). */
+              settle(user, 'onAuthStateChanged');
+              /* Later callbacks are live updates — sign-in / sign-out without a reload. */
+              _onAuthChange(user);
+            });
+          } catch (err) {
+            _dbg('onAuthStateChanged threw:', err && err.message);
+            settle(null, 'subscribe-failed');
+          }
+          return;
+        }
+        waited += 60;
+        if (waited >= KASS_AUTH_TIMEOUT_MS) {
+          clearInterval(iv);
+          /* Fail CLOSED. No auth engine after 8s => treat as guest and show the sign-in wall.
+             We do not fabricate a session, and the server would reject one anyway. */
+          _dbg('no auth engine after', KASS_AUTH_TIMEOUT_MS, 'ms — gating as guest');
+          settle(null, 'timeout');
+        }
+      }, 60);
+    });
+
+    return _authReadyP;
+  }
+
+  /* Sends the caller's Firebase ID token. Waits for auth to settle first — the old version
+     read currentUser synchronously, so a click before session restore sent no token and the
+     server answered "Authentication required to use KASS AI." even though the user was
+     signed in. */
+  function _getAuthToken() {
+    return _authReady().then(function (user) {
+      if (!user) { _dbg('token: none (guest)'); return null; }
+      /* forceRefresh=false: Firebase refreshes automatically when the token is near expiry. */
+      return user.getIdToken(false).then(function (t) {
+        _dbg('token: acquired (' + (t ? t.length : 0) + ' chars)');
+        return t;
+      }).catch(function (e) {
+        _dbg('token: getIdToken FAILED —', e && e.code);
+        return null;
+      });
     });
   }
 
   function _onAuthChange(user) {
     var prev = _authState;
     _authState = user ? 'authed' : 'guest';
+    if (prev !== _authState) _dbg('state:', prev, '->', _authState);
     _syncAuthUI();
-    /* If the user just signed in while the panel is open, show the greeting */
+    /* Signed in while the panel was open — greet without requiring a reload. */
     if (prev !== 'authed' && _authState === 'authed' && _isOpen() && !_greeted) {
       _showGreeting();
     }
   }
 
   function _initAuth() {
-    /* Immediate check */
-    var auth = _getAuthInstance();
-    _onAuthChange(auth ? auth.currentUser : null);
+    /* No synchronous guest verdict. KASS starts PENDING and asks the Auth Engine.
+       The old code decided here, with currentUser almost always still null, and then failed
+       to subscribe when the auth instance did not exist yet — latching 'guest' forever. */
+    _authState = 'pending';
+    _syncAuthUI();
+    _dbg('init — waiting for authentication to settle');
 
-    /* Reactive subscription */
-    try {
-      var sub = (window.firebaseSDK && window.firebaseSDK.onAuthStateChanged)
-        ? window.firebaseSDK.onAuthStateChanged
-        : null;
-      if (!sub && auth && auth.onAuthStateChanged) {
-        sub = function (cb) { return auth.onAuthStateChanged(cb); };
-      }
-      if (sub) sub(_onAuthChange);
-    } catch (_) {}
+    _authReady().then(function (user) {
+      _onAuthChange(user);
+      _dbg('gate', user ? 'OPENED for ' + user.uid : 'BLOCKED (no session)');
+    });
   }
 
   function _syncAuthUI() {
@@ -97,6 +235,13 @@
       field.disabled    = false;
       field.placeholder = 'Ask KASS anything…';
       send.disabled     = !field.value.trim();
+    } else if (_authState === 'pending') {
+      /* Session not yet restored. Do NOT accuse the user of being signed out — showing the
+         sign-in wall here is what made a logged-in user believe the gate was broken. */
+      wall.classList.add('k-hidden');
+      field.disabled    = true;
+      field.placeholder = 'Checking your session…';
+      send.disabled     = true;
     } else {
       wall.classList.remove('k-hidden');
       field.disabled    = true;
