@@ -288,9 +288,15 @@ exports.previewCommission = onCall(
        * may render these numbers; it may never compute them. */
       baseRate:            comm.baseRate,
       planId:              comm.planId,
+      planName:            comm.planName,
       planStatus:          comm.planStatus,
       planAdjustment:      comm.planAdjustment,
+      adjustmentType:      comm.adjustmentType,
       planApplied:         comm.planApplied,
+      /* Why no plan benefit was applied. While the rollout is off this is 'rollout_disabled',
+         which lets a seller-facing screen say "not yet available" rather than implying the
+         seller's plan carries no benefit at all. */
+      planSkipped:         comm.planSkipped,
       planLabel:           comm.planLabel,
       reason:              comm.reason,
       calculatedAt:        comm.calculatedAt,

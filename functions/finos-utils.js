@@ -408,23 +408,38 @@ async function calculateCommission(db, opts) {
    * A `fixed` rule has no percentage to discount, so the plan does not apply to it. */
   const baseRate = effectiveRate;
   let planId = null, planStatus = null, planDeltaPct = 0, planLabel = null;
-  let planApplied = false, planSource = 'none';
+  let planApplied = false, planSource = 'none', planType = null, planSkipped = null;
 
-  if (sellerId && !(rule && rule.type === 'fixed')) {
+  /* The rollout switch is read FIRST, and it is the cheap check. While plan discounts are off
+     — which is how this ships — the engine never even looks up the seller's subscription, so
+     Phase 1 costs one cached config read and nothing else. */
+  const planCfg = await _planAdjustmentOverrides(db);
+
+  if (!CC.planRolloutEnabled(planCfg)) {
+    planSkipped = 'rollout_disabled';
+  } else if (sellerId && !(rule && rule.type === 'fixed')) {
     const sub = await _resolveSellerPlan(sellerId);
-    if (sub && sub.tier) {
+    if (!sub || !sub.tier) {
+      planSkipped = 'no_plan';
+    } else {
       planId = sub.tier;
       planStatus = sub.status;
-      /* An expired or cancelled plan must not keep discounting. */
-      if (sub.active) {
-        const overrides = await _planAdjustmentOverrides(db);
-        const adj = CC.applyPlanAdjustment(sub.tier, overrides, sub.discountPct, effectiveRate);
+      /* SAFETY: an expired or cancelled subscription must not keep discounting. Status is
+         recomputed from dates by the Subscription Engine, so a stale stored status cannot
+         leak a benefit. */
+      if (!sub.active) {
+        planSkipped = 'plan_inactive';
+      } else {
+        const adj = CC.applyPlanAdjustment(sub.tier, planCfg, sub.discountPct, effectiveRate);
         if (adj.applied) {
           effectiveRate = adj.rate;
           planDeltaPct  = adj.deltaPct;
           planLabel     = adj.label;
           planSource    = adj.source;
+          planType      = adj.type;
           planApplied   = true;
+        } else {
+          planSkipped = adj.skipped;
         }
       }
     }
@@ -502,10 +517,15 @@ async function calculateCommission(db, opts) {
      * it — which is precisely why the clamp is recorded rather than implied. */
     baseRate,                                   /* before the plan touched it */
     planId,                                     /* the tier, or null if the seller has none */
-    planStatus,                                 /* ACTIVE / TRIALING / EXPIRED ... */
+    planName: planLabel || planId || null,      /* the human name of the plan */
+    planStatus,                                 /* active / trialing / grace / expired ... */
     planAdjustment: planApplied ? planDeltaPct : 0,
+    adjustmentType: planType,                   /* 'relative' | 'points' | null */
     planApplied,
     planSource,
+    /* Why no adjustment was made. 'rollout_disabled' is the Phase 1 answer, and recording it
+       means a settlement can prove the discount was OFF at the time — not merely absent. */
+    planSkipped,
     planLabel,                                  /* the human reason: "Business Plan Discount" */
     reason: planApplied
       ? (planLabel || ('Plan: ' + planId))

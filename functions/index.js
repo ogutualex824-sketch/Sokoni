@@ -3424,9 +3424,12 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
     audit: {
       baseRate:       r.baseRate,
       planId:         r.planId,
+      planName:       r.planName,
       planStatus:     r.planStatus,
       planAdjustment: r.planAdjustment,
+      adjustmentType: r.adjustmentType,
       planApplied:    r.planApplied,
+      planSkipped:    r.planSkipped,
       planLabel:      r.planLabel,
       planSource:     r.planSource,
       effectiveRate:  r.effectiveRate,
@@ -3488,6 +3491,28 @@ exports.onSellerPaymentCreated = onDocumentCreated(
         fixedFee:   fixedKES,
         commissionKES,
         totalOwed,
+
+        /* ── AUDIT: every financial record must explain the rate it charged ────────────────
+         * Base rate, plan, adjustment, final rate, reason, rule, timestamp, engine version.
+         * FINANCIAL_TRANSACTION_STANDARD.md Invariant 6: every movement leaves an immutable
+         * record. A settlement must stay reproducible years later — including the ability to
+         * prove that plan discounts were switched OFF at the time (planSkipped:
+         * 'rollout_disabled'), rather than merely absent from the data. */
+        baseRate:        audit.baseRate,
+        planId:          audit.planId,
+        planName:        audit.planName,
+        planStatus:      audit.planStatus,
+        planAdjustment:  audit.planAdjustment,
+        adjustmentType:  audit.adjustmentType,
+        planApplied:     audit.planApplied,
+        planSkipped:     audit.planSkipped,
+        planSource:      audit.planSource,
+        ruleId:          audit.ruleId,
+        ruleSource:      audit.ruleSource,
+        reason:          audit.reason,
+        calculatedAt:    audit.calculatedAt,
+        engineVersion:   audit.engineVersion,
+
         status: "pending",
         invoiceId: null,
         period,

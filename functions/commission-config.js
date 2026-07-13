@@ -103,134 +103,159 @@ const ALIASES = {
 const MIN_COMMISSION_KES = 10;
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
-   SUBSCRIPTION PLAN ADJUSTMENTS
+   SUBSCRIPTION PLAN ADJUSTMENTS — CAPABILITY SHIPPED, POLICY OFF
    ══════════════════════════════════════════════════════════════════════════════════════════
-   A plan adjusts the BASE rate. It does not replace it.
+   Engineering delivers capability. Business decides when capability becomes policy.
 
-   That distinction is load-bearing. sokoni-pay.js PLANS advertised ABSOLUTE plan rates
-   (free 15%, starter 10%, pro 7%, business 4%) which the server never enforced — they are
-   left over from an older pricing model where the base was ~10-15%. The consolidated base for
-   marketplace is 3%. Enforcing those absolute numbers as written would RAISE commission for
-   every seller on the platform: a free seller would jump 3% -> 15%, and even a Business seller
-   would go 3% -> 4%. The "discount" was a penalty.
+   The engine CAN apply subscription commission discounts. Whether it DOES is an operator
+   decision, and the default is NO. A discount that activates itself because the code shipped
+   is a pricing change nobody approved — and FINANCIAL_TRANSACTION_STANDARD.md is emphatic
+   about what self-activating financial behaviour costs (see F6/P0-7: a fallback path that
+   fired on a blank config value gave stock away in production).
 
-   So a plan is modelled as a DELTA on whatever base survives rules/revenueConfig/category —
-   which is also exactly what the sprint brief describes: "Marketplace, Base 3%, Business Plan
-   Discount, Final 2%".
+   THE SWITCH IS OFF WHEN THE DOCUMENT IS ABSENT. Fail closed. Deleting the config, a failed
+   read, an empty database, a fresh environment — every one of them means "no discounts",
+   never "all discounts".
 
-   DEFAULTS ARE ZERO, DELIBERATELY. The brief says "do not change existing commission
-   percentages unless required by configuration". Shipping a non-zero default would silently
-   reprice every seller on the platform the moment this deploys. The mechanism ships enabled;
-   the discounts ship OFF, and an operator turns them on by writing:
+   A plan ADJUSTS the base rate; it never replaces it. That distinction is load-bearing: the
+   legacy PLANS table advertised ABSOLUTE rates (free 15%, business 4%) from an era when the
+   base was ~15%. Against today's 3% marketplace base, enforcing them would RAISE commission
+   for every seller. The "discount" was a penalty.
 
-     revenueConfig/plan_adjustments = {
-       business: { deltaPct: -1, label: "Business Plan Discount" },
-       pro:      { deltaPct: -0.5, label: "Pro Plan Discount" },
+   ── OPERATOR CONFIGURATION ───────────────────────────────────────────────────────────────
+   revenueConfig/plan_adjustments:
+
+     {
+       "enabled": false,              // MASTER SWITCH. Absent or false => no adjustments, ever.
+       "maxDiscountPct": 50,          // safety cap: no plan may discount more than this (%)
+       "minEffectivePct": 0.5,        // safety floor: commission never falls below this (%)
+       "allowZero": false,            // a plan may NOT drive commission to 0 unless this is true
+       "plans": {
+         "seller_pro":        { "enabled": true, "label": "Pro Plan Discount" },
+         "seller_enterprise": { "enabled": true, "discountPct": 10 },
+         "business":          { "enabled": true, "deltaPct": -1, "label": "Business Plan Discount" }
+       }
      }
 
-   ...which requires no code change, and supports plans that do not exist yet (an unknown tier
-   simply has no adjustment). Firestore wins over this file; this file is the safe default.
+   PHASE 1 (now)  enabled:false            -> zero pricing change. Identical to today.
+   PHASE 2 (dev)  enabled:true in staging  -> validate the whole money path.
+   PHASE 3 (some) enabled:true + only the intended tiers listed in "plans".
+   PHASE 4 (all)  every intended tier listed.
 
-   deltaPct  — percentage POINTS added to the base. Negative = discount. -1 turns 3% into 2%.
-   minPct    — floor for this plan, so a discount can never drive commission below it.
-   label     — the human reason shown to the seller ("Business Plan Discount").
+   Enabling, disabling, increasing, decreasing or suspending a discount requires NO deployment.
+
+   ── PER-PLAN ADJUSTMENT, in precedence order ─────────────────────────────────────────────
+     1. plans[tier].deltaPct     — explicit POINTS off the base (-1 turns 3% into 2%)
+     2. plans[tier].discountPct  — explicit RELATIVE discount (10 turns 3% into 2.7%)
+     3. the Subscription Engine's own features.commission_discount_pct, applied RELATIVELY
+
+   (3) is the reason the discount is not defined here at all: sub-billing.js's plan catalog
+   already carries commission_discount_pct (basic 2, pro 5, enterprise 10) and subscription-core
+   surfaces it. Defining a second plan table would be the duplication the constitution forbids.
+
+   RELATIVE, not points. Taken as points, a pro seller (5) on a 3% base would pay 3 - 5 = 0%,
+   and enterprise (10) would go negative. The UI labels the field "Commission discount (%)".
    ══════════════════════════════════════════════════════════════════════════════════════════ */
-const PLAN_ADJUSTMENTS = {
-  free:     { deltaPct: 0, minPct: 0, label: 'Free Plan' },
-  starter:  { deltaPct: 0, minPct: 0, label: 'Starter Plan' },
-  pro:      { deltaPct: 0, minPct: 0, label: 'Pro Plan' },
-  business: { deltaPct: 0, minPct: 0, label: 'Business Plan' },
-};
 
-/* Floor for any plan-discounted rate. A plan may reduce commission; it may never make the
-   platform pay to process a sale. Overridable per-plan via minPct. */
-const PLAN_MIN_PCT = 0.5;
+/* Safety limits. These are FLOORS on safety, not policy: an operator may tighten them via
+   config, never loosen them past what is coded here. */
+const PLAN_MIN_PCT      = 0.5;   /* commission never falls below this unless allowZero */
+const PLAN_MAX_DISCOUNT = 50;    /* no plan may take more than half the commission */
 
-/* The Firestore document that overrides the table above. One doc, not one per plan, so the
-   engine costs ONE cached read rather than a read per plan. */
+/* The Firestore document that carries the whole policy. ONE doc, cached — not a read per plan,
+   and not a read per payment. */
 const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustments */
+
+/** Is the plan-discount rollout switched on at all? Absent config => NO. Fail closed. */
+function planRolloutEnabled(cfg) {
+  return !!(cfg && cfg.enabled === true);
+}
 
 /**
  * Apply a seller's plan to a resolved base rate.
  *
- * THE DISCOUNT IS NOT DEFINED HERE. It comes from the canonical Subscription Engine — the plan
- * catalog in sub-billing.js already carries `features.commission_discount_pct` (seller_basic 2,
- * seller_pro 5, seller_enterprise 10, enterprise 15) and subscription-core surfaces it in the
- * canonical `features` map. Nothing has ever read it. Defining a second plan table here would
- * be exactly the duplication the constitution forbids, so this function CONSUMES that value.
- *
- * SEMANTICS: commission_discount_pct is RELATIVE — "15% off your commission", which is how the
- * UI labels it ("Commission discount (%)", plans.html:204).
- *
- * It is not points off. That reading is a trap, and the same trap the absolute plan rates were:
- * the values were authored when the base was ~15%. Taken as points against today's consolidated
- * 3% marketplace base, a `pro` seller would pay 3 - 5 = 0%, and enterprise would go negative.
- * A plan must never be able to zero out commission by arithmetic accident, so:
- *
- *     effective = base * (1 - discountPct/100)      floored at minPct
- *
- *     Marketplace base 3%, enterprise plan (15% off) -> 2.55%
- *
- * An operator who genuinely wants points-off can say so explicitly with `deltaPct` in
- * revenueConfig/plan_adjustments, which overrides the plan catalog. Both forms are supported;
- * only one is the default, and it is the safe one.
- *
- * @param {string}  tier        the plan tier from the Subscription Engine
- * @param {object}  overrides   revenueConfig/plan_adjustments payload (or null)
- * @param {number}  planDiscountPct  features.commission_discount_pct from the subscription
- * @param {number}  baseRate    the rate that survived rules -> revenueConfig -> category
- * @returns {{rate:number, deltaPct:number, label:string|null, source:string, applied:boolean}}
+ * @param {string} tier             plan tier, from the canonical Subscription Engine
+ * @param {object} cfg              revenueConfig/plan_adjustments (or null)
+ * @param {number} planDiscountPct  features.commission_discount_pct from the subscription
+ * @param {number} baseRate         the rate that survived rules -> revenueConfig -> category
+ * @returns {{rate, deltaPct, label, source, type, applied, skipped}}
  */
-function applyPlanAdjustment(tier, overrides, planDiscountPct, baseRate) {
-  const none = { rate: baseRate, deltaPct: 0, label: null, source: 'none', applied: false };
+function applyPlanAdjustment(tier, cfg, planDiscountPct, baseRate) {
+  const none = (skipped) => ({
+    rate: baseRate, deltaPct: 0, label: null, source: 'none', type: null,
+    applied: false, skipped: skipped || null,
+  });
+
+  /* SAFETY: the rollout switch. Off, absent, or unreadable => no adjustment. */
+  if (!planRolloutEnabled(cfg)) return none('rollout_disabled');
+
   const t = String(tier || '').trim().toLowerCase();
-  if (!t || !(baseRate > 0)) return none;
+  if (!t) return none('no_plan');
+  if (!(baseRate > 0)) return none('no_base_rate');   /* nothing to discount */
 
-  const ov = (overrides && overrides[t]) || null;
-  const file = PLAN_ADJUSTMENTS[t] || null;
-  /* Careful: Number(null) is 0, which IS finite — so `Number.isFinite(ov && ov.minPct)` would
-     wave a null `ov` straight through and then dereference it. Read each source explicitly. */
-  const ovMin   = ov   && Number(ov.minPct);
-  const fileMin = file && Number(file.minPct);
-  const floor = Number.isFinite(ovMin) && ovMin > 0 ? ovMin
-              : Number.isFinite(fileMin) && fileMin > 0 ? fileMin
-              : PLAN_MIN_PCT;
-  const label = (ov && ov.label) || (file && file.label) || null;
+  /* SAFETY: only tiers the operator has explicitly listed AND enabled. An unknown or
+     unlisted plan gets nothing — that is what makes Phase 3 a limited rollout rather than
+     an accidental general availability. */
+  const plans = (cfg && cfg.plans) || {};
+  const p = plans[t];
+  if (!p || p.enabled !== true) return none('plan_not_enabled');
 
-  let rate = baseRate, deltaPct = 0, source = 'none';
+  const maxDiscount = Math.min(
+    Number.isFinite(Number(cfg.maxDiscountPct)) ? Number(cfg.maxDiscountPct) : PLAN_MAX_DISCOUNT,
+    PLAN_MAX_DISCOUNT);
+  const floor = Number.isFinite(Number(cfg.minEffectivePct))
+    ? Math.max(Number(cfg.minEffectivePct), 0)
+    : PLAN_MIN_PCT;
+  const allowZero = cfg.allowZero === true;
+  const label = p.label || null;
 
-  /* 1. An explicit operator override wins over everything. Points off, by request. */
-  const ovDelta = ov && Number(ov.deltaPct);
-  if (Number.isFinite(ovDelta) && ovDelta !== 0) {
-    rate = baseRate + ovDelta;
-    deltaPct = ovDelta;
-    source = 'revenue_config_plan';
+  let rate = baseRate, type = null, source = null;
+
+  const deltaPct = Number(p.deltaPct);
+  const discountPct = Number(p.discountPct);
+  const catalogPct = Number(planDiscountPct);
+
+  if (Number.isFinite(deltaPct) && deltaPct !== 0) {
+    /* 1. explicit POINTS off, by operator request */
+    rate = baseRate + deltaPct;
+    type = 'points';
+    source = 'operator_delta';
+  } else if (Number.isFinite(discountPct) && discountPct > 0) {
+    /* 2. explicit RELATIVE discount, by operator request */
+    rate = baseRate * (1 - Math.min(discountPct, maxDiscount) / 100);
+    type = 'relative';
+    source = 'operator_discount';
+  } else if (Number.isFinite(catalogPct) && catalogPct > 0) {
+    /* 3. the Subscription Engine's own plan catalog value, applied RELATIVELY */
+    rate = baseRate * (1 - Math.min(catalogPct, maxDiscount) / 100);
+    type = 'relative';
+    source = 'subscription_plan';
   } else {
-    /* 2. Otherwise the plan catalog's own discount, applied RELATIVELY. */
-    const disc = Number(planDiscountPct);
-    if (Number.isFinite(disc) && disc > 0) {
-      rate = baseRate * (1 - disc / 100);
-      deltaPct = rate - baseRate;              /* record the actual points moved, for audit */
-      source = 'subscription_plan';
-    }
+    return none('no_adjustment_configured');
   }
 
-  if (source === 'none') return none;
-
-  /* Validate. A plan discounts; it never inverts. */
-  if (rate < floor) rate = floor;
-  if (rate < 0) rate = 0;
+  /* ── SAFETY CLAMPS ──────────────────────────────────────────────────────────────────────
+     A plan discounts. It never inverts commission, never exceeds the cap, and never reaches
+     zero unless an operator has explicitly said zero is acceptable. */
+  if (rate > baseRate) rate = baseRate;             /* a "discount" may not raise commission */
+  const capFloor = baseRate * (1 - maxDiscount / 100);
+  if (rate < capFloor) rate = capFloor;             /* cap: never discount more than maxDiscountPct */
+  if (!allowZero && rate < floor) rate = floor;     /* floor: never zero unless configured */
+  if (rate < 0) rate = 0;                           /* never negative, under any configuration */
   if (rate > 100) rate = 100;
-  rate = Math.round(rate * 1000) / 1000;       /* 3dp — keeps 2.55% exact, avoids float dust */
+  rate = Math.round(rate * 1000) / 1000;            /* 3dp — keeps 2.55% exact, no float dust */
 
   return {
     rate,
     deltaPct: Math.round((rate - baseRate) * 1000) / 1000,
     label,
     source,
+    type,
     applied: rate !== baseRate,
+    skipped: rate !== baseRate ? null : 'clamped_to_base',
   };
 }
+
 
 /**
  * Resolve the effective default rate for a hub OR a category name.
@@ -266,8 +291,9 @@ module.exports = {
   MIN_COMMISSION_KES,
   PLAN_ADJUSTMENTS_DOC,
   applyPlanAdjustment,
+  planRolloutEnabled,
   PLAN_MIN_PCT,
-  PLAN_ADJUSTMENTS: Object.freeze(PLAN_ADJUSTMENTS),
+  PLAN_MAX_DISCOUNT,
   /* Exposed READ-ONLY for admin dashboards and the client rate endpoint. Never mutate. */
   RATES: Object.freeze(RATES),
   ALIASES: Object.freeze(ALIASES),
