@@ -34,7 +34,7 @@ function requireAgeVerification(){
                 <div class="age-gate-box">
 
                     <div class="age-gate-logo">
-                        <img src="assets/sokoni-icon.svg" alt="Sokoni">
+                        <img src="assets/sokoni-logo-dark.png" alt="Sokoni">
                     </div>
 
                     <div class="age-gate-warning">⚠️ 18+ Content</div>

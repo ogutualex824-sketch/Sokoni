@@ -383,7 +383,7 @@
           _showLocalNotification(
             "✅ Order Confirmed!",
             `Order ${latest.id} · KES ${Number(latest.total).toLocaleString()} — processing now`,
-            "/assets/sokoni-icon.svg",
+            "/assets/Sokoni Logo.png",
             "/track.html"
           );
         }
@@ -400,7 +400,7 @@
           _showLocalNotification(
             "💬 New Message",
             `${latest?.sellerName || "Someone"}: new message on Sokoni`,
-            "/assets/sokoni-icon.svg",
+            "/assets/Sokoni Logo.png",
             "/messages.html"
           );
         }
@@ -416,7 +416,7 @@
           _showLocalNotification(
             "⚡ Flash Sale Started!",
             `${active.length} product(s) on sale — grab them before they're gone!`,
-            "/assets/sokoni-icon.svg",
+            "/assets/Sokoni Logo.png",
             "/flashsale.html"
           );
         }
@@ -432,7 +432,7 @@
           _showLocalNotification(
             "🏷️ New Offer Received",
             `Offer of KES ${Number(latest.offerPrice).toLocaleString()} on "${latest.productName}"`,
-            "/assets/sokoni-icon.svg",
+            "/assets/Sokoni Logo.png",
             "/seller.html"
           );
         }
@@ -576,7 +576,7 @@
     b.innerHTML = `
       <!-- Header -->
       <div style="display:flex;align-items:center;gap:12px;padding:14px 14px 12px;border-bottom:1px solid rgba(255,255,255,0.07);">
-        <img src="assets/sokoni-icon.svg" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
+        <img src="assets/sokoni-logo-dark.png" style="width:42px;height:42px;object-fit:contain;flex-shrink:0;" onerror="this.style.display='none'">
         <div style="flex:1;min-width:0;">
           <div style="font-size:14px;font-weight:900;color:#fff;">Install SOKONI</div>
           <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:1px;">Free · Fast · Works offline</div>

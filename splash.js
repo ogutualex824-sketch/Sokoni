@@ -218,17 +218,17 @@
     '#sk-spl.spl-out{opacity:0!important;transform:scale(1.04)!important;' +
     'transition:opacity .55s cubic-bezier(.4,0,.2,1),transform .55s cubic-bezier(.4,0,.2,1)!important;' +
     'pointer-events:none}' +
-    '.spl-inner{display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center}' +
-    /* Icon: spring-bounce entry + breathing glow pulse */
-    '.spl-icon{width:clamp(64px,18vw,84px);height:clamp(64px,18vw,84px);display:block;' +
+    '.spl-inner{display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center}' +
+    /* THE LOGO, ON ITS OWN.
+       No card, no frame, no background, no border, no wordmark beside it — the PNG is
+       already the brand. Generous size and breathing room instead of decoration; that
+       is what makes it read as premium.
+       height + width:auto preserves the 3:2 aspect of assets/sokoni-logo-dark.png (480x320).
+       Forcing a square box would squash it — the exact defect the old footer logo had. */
+    '.spl-logo{height:clamp(72px,20vw,104px);width:auto;max-width:72vw;display:block;' +
+    'object-fit:contain;background:none;border:0;' +
     'animation:splIn .72s cubic-bezier(.22,1.6,.36,1) both,' +
     'splGlow 3.2s ease-in-out .9s infinite}' +
-    '.spl-icon svg{width:100%;height:100%;display:block}' +
-    /* Wordmark typography */
-    '.spl-word{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
-    'font-size:clamp(26px,7.5vw,38px);font-weight:900;letter-spacing:.03em;color:#fff;line-height:1;' +
-    'animation:splIn .72s cubic-bezier(.22,1.6,.36,1) .06s both}' +
-    '.spl-word em{font-style:normal;color:#71ff00}' +
     /* Per-page tagline */
     '.spl-line{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;' +
     'font-size:clamp(9px,2.4vw,11px);font-weight:700;letter-spacing:.16em;' +
@@ -261,10 +261,12 @@
   var _el = document.createElement('div');
   _el.id = 'sk-spl';
   _el.setAttribute('aria-hidden', 'true');
+  /* The SOKONI logo PNG on its own. No card, no frame, no background box, and no
+     "SOKO NI" wordmark beside it — the logo already carries the brand, and pairing it
+     with a text wordmark said the name twice. */
   _el.innerHTML =
     '<div class="spl-inner">' +
-    '<div class="spl-icon">' + ICON + '</div>' +
-    '<div class="spl-word">SOKO<em>NI</em></div>' +
+    '<img class="spl-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
     '<div class="spl-line">' + _line + '</div>' +
     '<div class="spl-dots"><span></span><span></span><span></span></div>' +
     '</div>';

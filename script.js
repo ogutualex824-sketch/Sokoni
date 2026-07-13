@@ -2644,7 +2644,7 @@ function showPromoToast(msg){
     toast.className = "sokoni-promo-toast";
     toast.innerHTML = `
         <div class="spt-inner">
-            <img src="assets/sokoni-icon.svg" class="spt-logo">
+            <img src="assets/sokoni-logo-dark.png" class="spt-logo">
             <span>${msg}</span>
             <button onclick="this.parentElement.parentElement.remove()">✕</button>
         </div>
@@ -2689,7 +2689,7 @@ function showWelcomePopup(){
     pop.innerHTML = `
         <div class="mkt-popup-box">
             <button class="mkt-close" onclick="document.getElementById('welcomePopup').remove()">✕</button>
-            <img src="assets/sokoni-icon.svg" class="mkt-popup-logo">
+            <img src="assets/sokoni-logo-dark.png" class="mkt-popup-logo">
             <h2>Welcome to SOKONI! 🎉</h2>
             <p>Kenya's global marketplace — buy, sell, rent, book and more.</p>
             <div class="mkt-popup-perks">

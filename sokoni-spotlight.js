@@ -8,18 +8,18 @@ window.SokoniSpotlight = (function(){
 
   /* ── STATIC SELLER POOL (merged with Firestore featured sellers) ── */
   var SELLER_POOL = [
-    { id:'kaspa',        name:'Kaspa Prints',       loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.9 · 320 Sales',  tags:['🖨️ Printing','🎨 Branding'],      cat:'printing',    img:'assets/sokoni-icon.svg', boosted:true  },
-    { id:'kenshop',      name:'KenShop',             loc:'Mombasa',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 210 Sales',  tags:['👗 Fashion','👟 Shoes'],           cat:'fashion',     img:'assets/sokoni-icon.svg', boosted:true  },
-    { id:'sokoni_elec',  name:'Sokoni Electronics',  loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.7 · 185 Sales',  tags:['📱 Phones','💻 Laptops'],          cat:'electronics', img:'assets/sokoni-icon.svg', boosted:false },
-    { id:'freshfarm',    name:'FreshFarm Kenya',     loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 420 Sales',  tags:['🥦 Produce','🍗 Meat'],            cat:'grocery',     img:'assets/sokoni-icon.svg', boosted:true  },
-    { id:'beautyke',     name:'BeautyKE',            loc:'Kisumu',   stars:'⭐⭐⭐⭐⭐', rating:'4.9 · 290 Sales',  tags:['💄 Makeup','💅 Skincare'],         cat:'beauty',      img:'assets/sokoni-icon.svg', boosted:false },
-    { id:'homesdecor',   name:'Homes & Decor KE',    loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.7 · 145 Sales',  tags:['🛋️ Furniture','🏠 Decor'],        cat:'home-decor',  img:'assets/sokoni-icon.svg', boosted:false },
-    { id:'autoparts',    name:'AutoParts Kenya',     loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 310 Sales',  tags:['🔧 Car Parts','🚗 Accessories'],   cat:'auto',        img:'assets/sokoni-icon.svg', boosted:true  },
-    { id:'sportzone',    name:'SportZone KE',        loc:'Mombasa',  stars:'⭐⭐⭐⭐',  rating:'4.6 · 180 Sales',  tags:['⚽ Sports','🏋️ Fitness'],          cat:'sports',      img:'assets/sokoni-icon.svg', boosted:false },
-    { id:'techke',       name:'TechKE Store',        loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 250 Sales',  tags:['💻 Laptops','🔌 Accessories'],     cat:'electronics', img:'assets/sokoni-icon.svg', boosted:false },
-    { id:'babyworld',    name:'BabyWorld Kenya',     loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.9 · 190 Sales',  tags:['🍼 Baby Gear','🧸 Toys'],          cat:'baby',        img:'assets/sokoni-icon.svg', boosted:true  },
-    { id:'bookshop',     name:'Sokoni Bookshop',     loc:'Nairobi',  stars:'⭐⭐⭐⭐',  rating:'4.5 · 95 Sales',   tags:['📚 Books','🎓 Education'],         cat:'books',       img:'assets/sokoni-icon.svg', boosted:false },
-    { id:'petshop',      name:'PetCare Kenya',       loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.7 · 130 Sales',  tags:['🐾 Pet Food','🏠 Pet Supplies'],   cat:'pets',        img:'assets/sokoni-icon.svg', boosted:false },
+    { id:'kaspa',        name:'Kaspa Prints',       loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.9 · 320 Sales',  tags:['🖨️ Printing','🎨 Branding'],      cat:'printing',    img:'assets/sokoni-logo-dark.png', boosted:true  },
+    { id:'kenshop',      name:'KenShop',             loc:'Mombasa',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 210 Sales',  tags:['👗 Fashion','👟 Shoes'],           cat:'fashion',     img:'assets/sokoni-logo-dark.png', boosted:true  },
+    { id:'sokoni_elec',  name:'Sokoni Electronics',  loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.7 · 185 Sales',  tags:['📱 Phones','💻 Laptops'],          cat:'electronics', img:'assets/sokoni-logo-dark.png', boosted:false },
+    { id:'freshfarm',    name:'FreshFarm Kenya',     loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 420 Sales',  tags:['🥦 Produce','🍗 Meat'],            cat:'grocery',     img:'assets/sokoni-logo-dark.png', boosted:true  },
+    { id:'beautyke',     name:'BeautyKE',            loc:'Kisumu',   stars:'⭐⭐⭐⭐⭐', rating:'4.9 · 290 Sales',  tags:['💄 Makeup','💅 Skincare'],         cat:'beauty',      img:'assets/sokoni-logo-dark.png', boosted:false },
+    { id:'homesdecor',   name:'Homes & Decor KE',    loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.7 · 145 Sales',  tags:['🛋️ Furniture','🏠 Decor'],        cat:'home-decor',  img:'assets/sokoni-logo-dark.png', boosted:false },
+    { id:'autoparts',    name:'AutoParts Kenya',     loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 310 Sales',  tags:['🔧 Car Parts','🚗 Accessories'],   cat:'auto',        img:'assets/sokoni-logo-dark.png', boosted:true  },
+    { id:'sportzone',    name:'SportZone KE',        loc:'Mombasa',  stars:'⭐⭐⭐⭐',  rating:'4.6 · 180 Sales',  tags:['⚽ Sports','🏋️ Fitness'],          cat:'sports',      img:'assets/sokoni-logo-dark.png', boosted:false },
+    { id:'techke',       name:'TechKE Store',        loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.8 · 250 Sales',  tags:['💻 Laptops','🔌 Accessories'],     cat:'electronics', img:'assets/sokoni-logo-dark.png', boosted:false },
+    { id:'babyworld',    name:'BabyWorld Kenya',     loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.9 · 190 Sales',  tags:['🍼 Baby Gear','🧸 Toys'],          cat:'baby',        img:'assets/sokoni-logo-dark.png', boosted:true  },
+    { id:'bookshop',     name:'Sokoni Bookshop',     loc:'Nairobi',  stars:'⭐⭐⭐⭐',  rating:'4.5 · 95 Sales',   tags:['📚 Books','🎓 Education'],         cat:'books',       img:'assets/sokoni-logo-dark.png', boosted:false },
+    { id:'petshop',      name:'PetCare Kenya',       loc:'Nairobi',  stars:'⭐⭐⭐⭐⭐', rating:'4.7 · 130 Sales',  tags:['🐾 Pet Food','🏠 Pet Supplies'],   cat:'pets',        img:'assets/sokoni-logo-dark.png', boosted:false },
   ];
 
   var _productPool  = [];
@@ -55,7 +55,7 @@ window.SokoniSpotlight = (function(){
       : '<div class="seller-badge verified-badge">✓ SOKONI VERIFIED</div>';
     return '<div class="seller-card seller-card-verified">'
       + badge
-      + '<div class="seller-avatar"><img loading="lazy" src="' + s.img + '" alt="' + s.name + '" onerror="this.src=\'assets/sokoni-icon.svg\'"></div>'
+      + '<div class="seller-avatar"><img loading="lazy" src="' + s.img + '" alt="' + s.name + '" onerror="this.src=\'assets/sokoni-logo-dark.png\'"></div>'
       + '<h3>' + s.name + '</h3>'
       + '<div class="seller-location-tag">📍 ' + s.loc + '</div>'
       + '<div class="seller-stars">' + s.stars + '</div>'
@@ -147,7 +147,7 @@ window.SokoniSpotlight = (function(){
               rating: (r.rating||4.8) + ' · ' + (r.totalSales||0) + ' Sales',
               tags: [r.category||'🏪 General'],
               cat: r.category || 'all',
-              img: r.logoUrl || 'assets/sokoni-icon.svg',
+              img: r.logoUrl || 'assets/sokoni-logo-dark.png',
               boosted: true
             });
           }

@@ -128,15 +128,15 @@
         'transition:opacity .55s cubic-bezier(.4,0,.2,1);will-change:opacity}',
       '#sk-splash.out{opacity:0;pointer-events:none}',
       '.sk-sp-inner{text-align:center;display:flex;flex-direction:column;align-items:center;gap:20px}',
-      '.sk-sp-logo-frame{display:flex;align-items:center;gap:13px}',
-      '.sk-sp-logo{width:min(58px,16vw);height:auto;object-fit:contain;display:block;flex-shrink:0;',
+      /* THE LOGO, ON ITS OWN. No frame, no card, no background, no wordmark beside it.
+         height + width:auto preserves the 3:2 aspect of assets/sokoni-logo-dark.png
+         (480x320) — a square box would squash it. Size and breathing room carry the
+         premium feel; decoration around it does not. */
+      '.sk-sp-logo{height:clamp(64px,17vw,92px);width:auto;max-width:72vw;object-fit:contain;',
+        'display:block;background:none;border:0;',
         'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) both,',
           'skLogoBreathe 3.8s ease-in-out .9s infinite,',
           'skLogoGlow 2.8s ease-in-out .9s infinite}',
-      '.sk-sp-wm{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;',
-        'font-size:clamp(24px,7vw,36px);font-weight:900;letter-spacing:.04em;color:#fff;line-height:1;',
-        'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) .06s both}',
-      '.sk-sp-wm em{font-style:normal;color:#71ff00}',
       '@keyframes skLogoBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.022)}}',
       '@keyframes skLogoGlow{',
         '0%,100%{filter:drop-shadow(0 0 10px rgba(113,255,0,.28)) drop-shadow(0 0 22px rgba(113,255,0,.18))}',
@@ -161,10 +161,8 @@
     el.setAttribute('aria-hidden', 'true');
     el.innerHTML =
       '<div class="sk-sp-inner">' +
-        '<div class="sk-sp-logo-frame">' +
-          '<img class="sk-sp-logo" src="assets/sokoni-icon.svg" alt="">' +
-          '<div class="sk-sp-wm">SOKO<em>NI</em></div>' +
-        '</div>' +
+        /* Logo only — no frame, no wordmark. The logo already says SOKONI. */
+        '<img class="sk-sp-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
         '<div class="sk-sp-line">' + cfg.line + '</div>' +
         '<div class="sk-sp-bar"><div class="sk-sp-fill" style="background:' + cfg.bar + '"></div></div>' +
       '</div>';
@@ -897,7 +895,7 @@
     nav.innerHTML =
       /* Logo — transparent SVG icon; no card, no dark rectangle background */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/sokoni-icon.svg" alt="SOKONI">' +
+        '<img src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
       '</a>' +
 
       /* Search */
@@ -1007,7 +1005,7 @@
       /* Drawer header — logo + close button */
       '<div class="sk-drawer-header">' +
         '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
-          '<img src="assets/sokoni-icon.svg" alt="" style="height:32px;width:auto">' +
+          '<img src="assets/sokoni-logo-dark.png" alt="" style="height:32px;width:auto">' +
           '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
         '</div>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +
