@@ -132,7 +132,7 @@
          height + width:auto preserves the 3:2 aspect of assets/sokoni-logo-dark.png
          (480x320) — a square box would squash it. Size and breathing room carry the
          premium feel; decoration around it does not. */
-      '.sk-sp-logo{height:clamp(112px,38vw,190px);width:auto;max-width:86vw;object-fit:contain;',
+      '.sk-sp-logo{width:min(78vw,340px);height:auto;max-width:none!important;',
         'display:block;background:none;border:0;',
         'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) both,',
           'skLogoBreathe 3.8s ease-in-out .9s infinite,',

@@ -227,8 +227,15 @@
        because on a splash the logo IS the content. Everything else is quiet.
        height + width:auto preserves the 3:2 aspect (480x320); a square box would
        squash it. */
-    '.spl-logo{height:clamp(120px,42vw,208px);width:auto;max-width:86vw;display:block;' +
-    'object-fit:contain;background:none;border:0;position:relative;z-index:2;' +
+    /* Sized by WIDTH, with height:auto — NOT the other way round.
+       A global rule (img,video,canvas{max-width:100% !important}) clamps the image's
+       WIDTH. With a fixed height and width:auto, that clamp squashed the logo: on a
+       412px Android it rendered 234x173 (1.35) instead of 3:2. Driving width and
+       letting height follow means the aspect ratio can never break, whatever any
+       max-width rule does. max-width:none defeats the !important clamp; the width is
+       already capped by 78vw, so nothing can overflow. */
+    '.spl-logo{width:min(78vw,340px);height:auto;max-width:none!important;display:block;' +
+    'background:none;border:0;position:relative;z-index:2;' +
     'animation:splIn .9s cubic-bezier(.19,1.32,.34,1) both}' +
 
     /* The mark carries its own soft green light — a lift, not a neon sign.
