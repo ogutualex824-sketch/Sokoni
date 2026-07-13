@@ -9413,3 +9413,5 @@ exports.profileGenerateCard           = _profEng.profileGenerateCard;
 exports.profileGetEmployment          = _profEng.profileGetEmployment;
 exports.profileUpdatePersonalization  = _profEng.profileUpdatePersonalization;
 exports.profileGetDocumentVault       = _profEng.profileGetDocumentVault;
+exports.profileGetProfessional        = _profEng.profileGetProfessional;
+exports.profileSaveProfessional       = _profEng.profileSaveProfessional;

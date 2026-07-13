@@ -1,4 +1,82 @@
-﻿## [2026-07-13] — Next-Generation Profile & Identity Center v1.0 — One Person · One Identity · One SOKONI Life
+﻿## [2026-07-13] — Identity Command Center v1.0 — Integration Sprint · Professional Profile · Document Vault
+
+### Summary
+
+Sprint 4 converts the SOKONI profile from a collection of tabs into a unified personal command center. The Overview tab becomes an executive dashboard — live Trust Score + Completion + Business + Workspace command summary, context-aware Quick Actions grid (switches tabs inline; shows seller/POS actions for eligible users), wallet snapshot, and a KASS action-item strip from `profileGetCompletion`. Two new tabs added: **Career** (full editable professional profile — headline, bio, skills, languages, certifications, licenses, education, memberships, portfolio) and **Vault** (document upload/preview/delete with Firebase Storage + category filtering + search). All data moves through existing CFs + two new ones (`profileGetProfessional`, `profileSaveProfessional`). Zero breaking changes. Index count unchanged at 199/200.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `profile.html` | Overview: Command Summary 2×2 grid, Quick Actions (8 + role-specific extras), Wallet Snapshot, KASS strip; 2 new tab buttons (Career, Vault); Career panel (7 editable sections); Vault panel (upload zone, category pills, document grid); ~350 lines new CSS; Sprint-4 IIFE (dashboard, career, vault JS) |
+| `functions/profile-engine.js` | Append `profileGetProfessional` + `profileSaveProfessional` CFs |
+| `functions/index.js` | Append 2 new exports |
+
+### Cloud Functions (new — 2)
+
+| Function | Description |
+|---|---|
+| `profileGetProfessional` | Full professional profile from `professionalProfiles/{uid}`: headline, summary, skills, specializations, languages, availability, yearsExperience, industry, certifications, licenses, education, memberships, portfolio, projects |
+| `profileSaveProfessional` | Merge patch into `professionalProfiles/{uid}`; validates string/number/array field types; caller-scoped (UID from auth token, never from client input) |
+
+### Reused CFs (no new calls, no new indexes)
+
+`profileGetOverview`, `profileGetCompletion`, `profileGetEmployment`, `profileGetAchievements`, `profileGetActivityTimeline`, `profileGenerateCard`, `profileGetDocumentVault` — all reused through the tab lazy-load chain.
+
+### Career Professional Profile — Editable Sections
+
+| Section | Fields |
+|---|---|
+| Professional Profile | Headline, biography, industry, years of experience, availability |
+| Skills & Specializations | Skills (comma list), specializations (comma list) |
+| Languages | Name + proficiency (one per line) |
+| Certifications | Name, issuer, year, credential ID, verification URL |
+| Licenses | Name, issuing authority, license number, expiry |
+| Education | Institution, degree, field of study, start/end year |
+| Professional Memberships | Organisation, role/status, member-since year |
+| Portfolio | Title, description, URL |
+
+### Document Vault Capabilities
+
+- **Upload**: Firebase Storage (`userDocuments/{uid}/{docId}/{filename}`) + metadata to `userDocuments/{uid}/docs` Firestore subcollection — no new CF required
+- **Categories**: Identity, Business, Tax, Licenses, Certificates, Insurance, Contracts, Receipts, Invoices, Medical, Employment
+- **Search**: Client-side filter on name + type
+- **Delete**: Firestore doc delete + best-effort Storage delete
+- **Verified badge**: Shown on documents where `isVerified: true`
+
+### Overview Dashboard — New Elements
+
+| Element | Data Source |
+|---|---|
+| Trust Score + Level | `_piOverview.trust` (Sprint-3 cache) |
+| Profile Completion % | `_piOverview.profileCompletion` |
+| Business Count | `_piOverview.businessCount` |
+| Workspace Count | `_piOverview.workspaceCount` |
+| Wallet Snapshot | `_piOverview.wallet` |
+| KASS Action Items | `profileGetCompletion().recommendations` |
+| Role-specific Quick Actions | `_piOverview.roles` + `businessCount` |
+
+### Performance
+
+- Overview dashboard fires 900 ms after auth (after Sprint-3 hero loads), using the already-cached `_piOverview` object — zero extra CF call in most cases
+- Career and Vault panels are lazy-loaded on first tab open only
+- KASS strip is fetched once per session and cached in closure state
+
+### Security
+
+- `profileSaveProfessional`: UID from `req.auth.uid`, never from request body; all string fields truncated at 2 000 chars; all array fields fully replaced (no merge injection)
+- Vault upload: Storage path is server-generated (`userDocuments/{uid}/...`) using auth UID; metadata doc written to Firestore under caller's UID only
+- Vault delete: Firestore delete requires auth UID match (Firestore security rules already restrict `userDocuments/{uid}` to the owner)
+
+### Firestore Index Impact
+
+No new composite indexes. Count remains **199/200**.
+- `professionalProfiles/{uid}` — direct document read/write by UID, no index
+- `userDocuments/{uid}/docs` — subcollection write directly from client; `profileGetDocumentVault` full subcollection scan (no where clause, no index)
+
+---
+
+## [2026-07-13] — Next-Generation Profile & Identity Center v1.0 — One Person · One Identity · One SOKONI Life
 
 ### Summary
 

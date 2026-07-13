@@ -531,3 +531,77 @@ exports.profileGetDocumentVault = onCall({ region: 'us-central1' }, async (req) 
 
   return { documents };
 });
+
+/* ═══════════════════════════════════════════════════════════════
+   PROFESSIONAL PROFILE — READ
+   Returns the full professionalProfiles/{uid} document.
+   Covers Sprint 4: Career tab (headline, bio, skills, certs,
+   licenses, education, memberships, portfolio, projects, languages).
+   ═══════════════════════════════════════════════════════════════ */
+exports.profileGetProfessional = onCall({ region: 'us-central1' }, async (req) => {
+  const callerId = _assertAuth(req);
+  const { targetUid } = req.data || {};
+  const uid = targetUid || callerId;
+
+  const snap = await db.collection('professionalProfiles').doc(uid).get().catch(() => null);
+  if (!snap || !snap.exists) {
+    return {
+      headline: '', summary: '', skills: [], specializations: [], languages: [],
+      availability: '', yearsExperience: null, industry: '',
+      certifications: [], licenses: [], education: [],
+      memberships: [], portfolio: [], projects: [],
+    };
+  }
+
+  const d = snap.data();
+  return {
+    headline:        d.headline        || '',
+    summary:         d.summary         || '',
+    skills:          d.skills          || [],
+    specializations: d.specializations || [],
+    languages:       d.languages       || [],
+    availability:    d.availability    || '',
+    yearsExperience: d.yearsExperience ?? null,
+    industry:        d.industry        || '',
+    certifications:  d.certifications  || [],
+    licenses:        d.licenses        || [],
+    education:       d.education       || [],
+    memberships:     d.memberships     || [],
+    portfolio:       d.portfolio       || [],
+    projects:        d.projects        || [],
+    updatedAt:       d.updatedAt       || null,
+  };
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   PROFESSIONAL PROFILE — WRITE
+   Merges supplied fields into professionalProfiles/{uid}.
+   Array fields are completely replaced (not appended) so the
+   client sends the full updated array each time.
+   ═══════════════════════════════════════════════════════════════ */
+exports.profileSaveProfessional = onCall({ region: 'us-central1' }, async (req) => {
+  const uid = _assertAuth(req);
+
+  const ARRAY_FIELDS   = ['skills','specializations','languages','certifications','licenses','education','memberships','portfolio','projects'];
+  const STRING_FIELDS  = ['headline','summary','availability','industry'];
+  const NUMBER_FIELDS  = ['yearsExperience'];
+
+  const patch = { updatedAt: FieldValue.serverTimestamp(), uid };
+
+  STRING_FIELDS.forEach(f => {
+    if (req.data[f] !== undefined) patch[f] = String(req.data[f] || '').slice(0, 2000);
+  });
+  NUMBER_FIELDS.forEach(f => {
+    if (req.data[f] !== undefined) patch[f] = Number(req.data[f]) || null;
+  });
+  ARRAY_FIELDS.forEach(f => {
+    if (Array.isArray(req.data[f])) patch[f] = req.data[f];
+  });
+
+  if (Object.keys(patch).length === 2) { // only updatedAt + uid
+    throw new HttpsError('invalid-argument', 'No professional profile fields provided.');
+  }
+
+  await db.collection('professionalProfiles').doc(uid).set(patch, { merge: true });
+  return { ok: true };
+});

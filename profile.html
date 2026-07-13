@@ -817,6 +817,248 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
   background-size:400% 100%;border-radius:8px;animation:piSkele 1.4s ease infinite;
 }
 @keyframes piSkele{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 4 — Identity Command Center, Career & Vault
+══════════════════════════════════════════════════════════════ */
+
+/* ── Command Summary grid (top of Overview) ── */
+.pi-cmd-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin:0 0 4px;}
+.pi-cmd-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;padding:16px 14px;
+}
+.pi-cmd-card.accent{
+  background:rgba(113,255,0,0.05);border-color:rgba(113,255,0,0.18);
+}
+.pi-cmd-val{font-size:26px;font-weight:900;color:#fff;line-height:1;}
+.pi-cmd-card.accent .pi-cmd-val{color:#71ff00;}
+.pi-cmd-lbl{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);margin-top:5px;letter-spacing:.04em;text-transform:uppercase;}
+.pi-cmd-sub{font-size:11px;color:rgba(255,255,255,0.25);margin-top:2px;}
+
+/* ── Quick Actions grid ── */
+.pi-qa-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.pi-qa-item{
+  display:flex;flex-direction:column;align-items:center;gap:5px;
+  padding:12px 6px;border-radius:14px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+  text-decoration:none;cursor:pointer;font-family:inherit;
+  border:none;background:rgba(255,255,255,0.03);
+  border:1px solid rgba(255,255,255,0.06);
+  transition:background .15s,border-color .15s;
+}
+.pi-qa-item:hover,.pi-qa-item:focus{
+  background:rgba(113,255,0,0.06);border-color:rgba(113,255,0,0.2);outline:none;
+}
+.pi-qa-item:hover .pi-qa-lbl{color:#71ff00;}
+.pi-qa-icon{font-size:20px;display:block;}
+.pi-qa-lbl{
+  font-size:10px;font-weight:800;color:rgba(255,255,255,0.55);
+  text-align:center;line-height:1.3;
+}
+
+/* KASS insight strip */
+.pi-kass-strip{margin:0;padding:0;}
+.pi-kass-item{
+  display:flex;align-items:flex-start;gap:10px;padding:11px 14px;
+  border-radius:13px;background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.06);margin-bottom:7px;
+}
+.pi-kass-emoji{font-size:18px;flex-shrink:0;margin-top:1px;}
+.pi-kass-body{flex:1;}
+.pi-kass-action{font-size:13px;font-weight:800;color:#fff;}
+.pi-kass-impact{font-size:11px;color:#71ff00;margin-top:2px;}
+.pi-kass-go{
+  padding:5px 11px;border-radius:8px;background:rgba(113,255,0,0.08);
+  border:1px solid rgba(113,255,0,0.2);color:#71ff00;font-size:11px;
+  font-weight:800;text-decoration:none;white-space:nowrap;flex-shrink:0;
+  align-self:center;
+}
+.pi-kass-go:hover{background:rgba(113,255,0,0.15);}
+
+/* Wallet snapshot in Overview */
+.pi-wallet-snap{
+  display:flex;align-items:center;gap:14px;padding:16px;
+  background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);
+  border-radius:16px;margin-bottom:0;
+}
+.pi-wallet-snap-val{font-size:22px;font-weight:900;color:#71ff00;}
+.pi-wallet-snap-lbl{font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);margin-bottom:3px;}
+.pi-wallet-snap-pending{font-size:11px;color:rgba(255,255,255,0.3);margin-top:3px;}
+
+/* ── CAREER / PROFESSIONAL PROFILE ── */
+.pi-career-section-hd{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:12px;
+}
+.pi-career-section-hd .up-card-title{margin:0;}
+.pi-section-edit-btn{
+  padding:5px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);
+  font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;
+}
+.pi-section-edit-btn:hover{color:#71ff00;border-color:rgba(113,255,0,0.3);}
+
+.pi-career-hl{font-size:17px;font-weight:900;color:#fff;margin-bottom:6px;}
+.pi-career-bio{
+  font-size:13px;color:rgba(255,255,255,0.6);line-height:1.75;
+}
+.pi-career-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;}
+.pi-career-chip{
+  display:inline-flex;align-items:center;gap:5px;
+  padding:5px 12px;border-radius:20px;font-size:11px;font-weight:700;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.65);
+}
+.pi-career-chip.avail{
+  background:rgba(113,255,0,0.07);border-color:rgba(113,255,0,0.2);color:#71ff00;
+}
+
+.pi-skill-wrap{display:flex;flex-wrap:wrap;gap:7px;}
+.pi-skill-tag{
+  padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;
+  background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.18);color:#71ff00;
+}
+.pi-spec-tag{
+  padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.65);
+}
+
+.pi-lang-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.pi-lang-row:last-child{border-bottom:none;}
+.pi-lang-name{flex:1;font-size:13px;font-weight:800;color:#fff;}
+.pi-lang-level{
+  padding:3px 9px;border-radius:20px;font-size:10px;font-weight:900;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.5);
+}
+
+.pi-cert-item,.pi-edu-item,.pi-lic-item,.pi-mem-item{
+  padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);
+  display:flex;align-items:flex-start;gap:12px;
+}
+.pi-cert-item:last-child,.pi-edu-item:last-child,.pi-lic-item:last-child,.pi-mem-item:last-child{border-bottom:none;}
+.pi-cert-icon{
+  width:38px;height:38px;border-radius:10px;display:flex;align-items:center;
+  justify-content:center;font-size:18px;background:rgba(113,255,0,0.08);flex-shrink:0;
+}
+.pi-cert-meta{flex:1;}
+.pi-cert-name{font-size:13px;font-weight:900;color:#fff;}
+.pi-cert-sub{font-size:11px;color:rgba(255,255,255,0.45);margin-top:3px;}
+.pi-cert-url{
+  display:inline-block;margin-top:5px;font-size:11px;font-weight:800;color:#71ff00;
+  text-decoration:none;
+}
+.pi-cert-url:hover{text-decoration:underline;}
+
+.pi-port-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px;}
+.pi-port-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 12px;
+}
+.pi-port-title{font-size:13px;font-weight:800;color:#fff;}
+.pi-port-desc{font-size:11px;color:rgba(255,255,255,0.45);margin-top:4px;line-height:1.5;}
+.pi-port-link{display:block;margin-top:8px;font-size:11px;font-weight:800;color:#71ff00;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+/* Inline edit fields */
+.pi-edit-field{
+  width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);border-radius:10px;
+  color:#fff;font-size:13px;font-family:inherit;margin-bottom:8px;
+  box-sizing:border-box;outline:none;
+}
+.pi-edit-field:focus{border-color:rgba(113,255,0,0.4);}
+textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
+.pi-edit-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);margin-bottom:4px;display:block;}
+.pi-edit-2col{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.pi-save-mini{
+  padding:9px 18px;border-radius:10px;border:none;background:#71ff00;
+  color:#000;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;
+}
+.pi-save-mini:hover{background:#5de600;}
+.pi-cancel-mini{
+  padding:9px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.5);
+  font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;
+}
+.pi-add-item-btn{
+  width:100%;padding:10px;border-radius:10px;border:1px dashed rgba(113,255,0,0.25);
+  background:rgba(113,255,0,0.04);color:rgba(113,255,0,0.7);
+  font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;margin-top:8px;
+}
+.pi-add-item-btn:hover{background:rgba(113,255,0,0.09);}
+
+/* ── DOCUMENT VAULT ── */
+.pi-vault-header{display:flex;gap:10px;margin-bottom:14px;align-items:center;}
+.pi-vault-search{
+  flex:1;padding:10px 14px;background:rgba(255,255,255,0.04);
+  border:1px solid rgba(255,255,255,0.1);border-radius:12px;
+  color:#fff;font-size:13px;font-family:inherit;outline:none;
+}
+.pi-vault-search:focus{border-color:rgba(113,255,0,0.35);}
+.pi-vault-search::placeholder{color:rgba(255,255,255,0.25);}
+.pi-vault-upload-btn{
+  padding:10px 16px;background:#71ff00;border:none;border-radius:12px;
+  color:#000;font-size:13px;font-weight:900;cursor:pointer;
+  font-family:inherit;white-space:nowrap;flex-shrink:0;
+}
+.pi-vault-upload-btn:hover{background:#5de600;}
+.pi-cat-pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none;margin-bottom:14px;}
+.pi-cat-pills::-webkit-scrollbar{display:none;}
+.pi-cat-pill{
+  padding:6px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.55);
+  font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;
+  font-family:inherit;transition:all .12s;
+}
+.pi-cat-pill.active{
+  background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;
+}
+
+.pi-upload-zone{
+  border:2px dashed rgba(113,255,0,0.2);border-radius:16px;padding:28px 20px;
+  text-align:center;cursor:pointer;margin-bottom:16px;transition:all .15s;
+}
+.pi-upload-zone:hover{border-color:rgba(113,255,0,0.4);background:rgba(113,255,0,0.03);}
+.pi-upload-zone-icon{font-size:32px;margin-bottom:8px;display:block;}
+.pi-upload-zone-lbl{font-size:13px;font-weight:800;color:rgba(255,255,255,0.6);}
+.pi-upload-zone-sub{font-size:11px;color:rgba(255,255,255,0.3);margin-top:4px;}
+.pi-upload-progress{height:4px;border-radius:4px;background:rgba(255,255,255,0.07);margin-top:10px;overflow:hidden;display:none;}
+.pi-upload-progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#71ff00,#4fc800);width:0%;transition:width .3s;}
+
+.pi-doc-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;}
+@media(min-width:540px){.pi-doc-grid{grid-template-columns:repeat(3,1fr);}}
+.pi-doc-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 12px;
+}
+.pi-doc-card.verified{border-color:rgba(113,255,0,0.2);background:rgba(113,255,0,0.03);}
+.pi-doc-icon{font-size:28px;margin-bottom:8px;display:block;}
+.pi-doc-name{font-size:12px;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pi-doc-type{
+  font-size:10px;color:rgba(255,255,255,0.4);margin-top:2px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.06em;
+}
+.pi-doc-date{font-size:10px;color:rgba(255,255,255,0.25);margin-top:4px;}
+.pi-doc-verif{display:inline-block;margin-top:4px;font-size:10px;font-weight:900;color:#71ff00;}
+.pi-doc-actions{display:flex;gap:5px;margin-top:10px;}
+.pi-doc-btn{
+  flex:1;padding:6px 4px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.55);
+  font-size:10px;font-weight:800;cursor:pointer;font-family:inherit;
+  text-align:center;text-decoration:none;display:block;transition:all .12s;
+}
+.pi-doc-btn:hover{background:rgba(255,255,255,0.08);color:#fff;}
+.pi-doc-btn.del{border-color:rgba(255,77,77,0.2);color:rgba(255,100,100,0.7);}
+.pi-doc-btn.del:hover{background:rgba(255,77,77,0.1);color:#ff6b6b;}
+
+/* Upload type selector */
+.pi-doc-type-sel{
+  width:100%;padding:10px 12px;background:rgba(255,255,255,0.05);
+  border:1px solid rgba(255,255,255,0.12);border-radius:10px;
+  color:#fff;font-size:13px;font-family:inherit;outline:none;
+  margin-bottom:10px;
+}
+.pi-doc-type-sel option{background:#111;color:#fff;}
 </style>
 </head>
 
@@ -992,10 +1234,103 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
     <button type="button" class="up-tab" data-tab="achievements" onclick="switchTab('achievements')" role="tab">Achievements</button>
     <button type="button" class="up-tab" data-tab="security" onclick="switchTab('security')" role="tab">Security</button>
     <button type="button" class="up-tab" data-tab="card" onclick="switchTab('card')" role="tab">ID Card</button>
+    <button type="button" class="up-tab" data-tab="career" onclick="switchTab('career')" role="tab">Career</button>
+    <button type="button" class="up-tab" data-tab="vault" onclick="switchTab('vault')" role="tab">Vault</button>
   </div>
 
   <!-- OVERVIEW panel -->
   <div id="panel-overview" class="up-panel active">
+
+    <!-- ── Command Summary (populated by Sprint-4 IIFE on first open) ── -->
+    <div class="pi-cmd-grid" id="piCmdGrid">
+      <div class="pi-cmd-card accent">
+        <div class="pi-cmd-val" id="cmdTrustScore">&#8212;</div>
+        <div class="pi-cmd-lbl">Trust Score</div>
+        <div class="pi-cmd-sub" id="cmdTrustLevel"></div>
+      </div>
+      <div class="pi-cmd-card">
+        <div class="pi-cmd-val" id="cmdCompletion">&#8212;</div>
+        <div class="pi-cmd-lbl">Profile Complete</div>
+        <div class="pi-cmd-sub" id="cmdComplSub"></div>
+      </div>
+      <div class="pi-cmd-card">
+        <div class="pi-cmd-val" id="cmdBusinesses">&#8212;</div>
+        <div class="pi-cmd-lbl">Businesses</div>
+        <div class="pi-cmd-sub">Registered</div>
+      </div>
+      <div class="pi-cmd-card">
+        <div class="pi-cmd-val" id="cmdWorkspaces">&#8212;</div>
+        <div class="pi-cmd-lbl">Workspaces</div>
+        <div class="pi-cmd-sub">Active</div>
+      </div>
+    </div>
+
+    <!-- ── Quick Actions ── -->
+    <div class="up-card" style="padding:16px;">
+      <div class="up-card-title">Quick Actions</div>
+      <div class="pi-qa-grid">
+        <button type="button" class="pi-qa-item" onclick="switchTab('orders')">
+          <span class="pi-qa-icon">&#128230;</span><span class="pi-qa-lbl">My Orders</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('wallet')">
+          <span class="pi-qa-icon">&#128181;</span><span class="pi-qa-lbl">Wallet</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('identity')">
+          <span class="pi-qa-icon">&#128273;</span><span class="pi-qa-lbl">My Identity</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('vault')">
+          <span class="pi-qa-icon">&#128193;</span><span class="pi-qa-lbl">Documents</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('career')">
+          <span class="pi-qa-icon">&#128188;</span><span class="pi-qa-lbl">Career</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('achievements')">
+          <span class="pi-qa-icon">&#127942;</span><span class="pi-qa-lbl">Achievements</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('card')">
+          <span class="pi-qa-icon">&#128203;</span><span class="pi-qa-lbl">ID Card</span>
+        </button>
+        <button type="button" class="pi-qa-item" onclick="switchTab('security')">
+          <span class="pi-qa-icon">&#128274;</span><span class="pi-qa-lbl">Security</span>
+        </button>
+      </div>
+      <!-- Seller / Business Owner actions (shown after auth) -->
+      <div class="pi-qa-grid" id="piQaRoleActions" style="display:none;margin-top:8px;">
+        <a class="pi-qa-item" href="seller.html">
+          <span class="pi-qa-icon">&#43;</span><span class="pi-qa-lbl">Add Product</span>
+        </a>
+        <a class="pi-qa-item" href="pos.html">
+          <span class="pi-qa-icon">&#128083;</span><span class="pi-qa-lbl">Open POS</span>
+        </a>
+        <a class="pi-qa-item" href="staff-management.html">
+          <span class="pi-qa-icon">&#128101;</span><span class="pi-qa-lbl">Invite Staff</span>
+        </a>
+        <a class="pi-qa-item" href="my-businesses.html">
+          <span class="pi-qa-icon">&#127970;</span><span class="pi-qa-lbl">Businesses</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Wallet Snapshot (populated after auth) ── -->
+    <div class="up-card" id="piWalletSnap" style="display:none;padding:16px;">
+      <div class="up-card-title">Wallet <a href="wallet.html" class="up-card-link">Open</a></div>
+      <div class="pi-wallet-snap">
+        <span style="font-size:28px;">&#128181;</span>
+        <div>
+          <div class="pi-wallet-snap-lbl">Available Balance</div>
+          <div class="pi-wallet-snap-val" id="cmdWalletBal">KES 0.00</div>
+          <div class="pi-wallet-snap-pending" id="cmdWalletPending"></div>
+        </div>
+        <a href="wallet.html" style="margin-left:auto;padding:10px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">Withdraw</a>
+      </div>
+    </div>
+
+    <!-- ── KASS Recommendations ── -->
+    <div class="up-card" id="piKassCard" style="display:none;padding:16px;">
+      <div class="up-card-title">&#129504; KASS — Action Items</div>
+      <div class="pi-kass-strip" id="piKassStrip"></div>
+    </div>
+
     <div class="up-stats" id="upOverviewStats">
       <div class="up-stat"><div class="up-stat-val" id="statOrders">0</div><div class="up-stat-lbl">Orders</div></div>
       <div class="up-stat"><div class="up-stat-val" id="statSpent">0</div><div class="up-stat-lbl">Spent (K)</div></div>
@@ -1358,6 +1693,293 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
         Your Digital Business Card &mdash; powered by SOKONI Identity
       </div>
     </div>
+  </div>
+
+  <!-- ══ CAREER / PROFESSIONAL PROFILE PANEL ══ -->
+  <div id="panel-career" class="up-panel">
+
+    <!-- Headline & Bio -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Professional Profile</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerEdit('bio')">&#9998; Edit</button>
+      </div>
+      <div id="piCareerBioView">
+        <div class="pi-career-hl" id="piCareerHl">Add your professional headline&hellip;</div>
+        <div class="pi-career-bio" id="piCareerBio" style="margin-top:8px;color:rgba(255,255,255,0.4);">Add a short biography to help people understand who you are and what you do.</div>
+        <div class="pi-career-meta" id="piCareerMeta"></div>
+      </div>
+      <div id="piCareerBioEdit" style="display:none;">
+        <label class="pi-edit-label">Professional Headline</label>
+        <input id="piIeHl" class="pi-edit-field" type="text" placeholder="e.g. Senior Software Engineer · Nairobi" maxlength="120">
+        <label class="pi-edit-label">Biography</label>
+        <textarea id="piIeBio" class="pi-edit-field" placeholder="Tell people about yourself, your experience and what you do..." maxlength="2000" rows="5"></textarea>
+        <div class="pi-edit-2col">
+          <div>
+            <label class="pi-edit-label">Industry</label>
+            <input id="piIeIndustry" class="pi-edit-field" type="text" placeholder="e.g. Technology" maxlength="100">
+          </div>
+          <div>
+            <label class="pi-edit-label">Years of Experience</label>
+            <input id="piIeYrs" class="pi-edit-field" type="number" placeholder="e.g. 5" min="0" max="60">
+          </div>
+        </div>
+        <label class="pi-edit-label">Availability</label>
+        <select id="piIeAvail" class="pi-edit-field">
+          <option value="">Not specified</option>
+          <option value="available">Open to Work — actively looking</option>
+          <option value="open_to_offers">Open to Offers</option>
+          <option value="not_looking">Not Currently Looking</option>
+        </select>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerSave('bio')">Save</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerEdit('bio')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Skills & Specializations -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Skills &amp; Specializations</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerEdit('skills')">&#9998; Edit</button>
+      </div>
+      <div id="piCareerSkillsView">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);margin-bottom:7px;">SKILLS</div>
+          <div class="pi-skill-wrap" id="piSkillTags">
+            <span style="color:rgba(255,255,255,0.25);font-size:12px;">No skills added yet.</span>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.4);margin-bottom:7px;margin-top:12px;">SPECIALIZATIONS</div>
+          <div class="pi-skill-wrap" id="piSpecTags">
+            <span style="color:rgba(255,255,255,0.25);font-size:12px;">No specializations added.</span>
+          </div>
+        </div>
+      </div>
+      <div id="piCareerSkillsEdit" style="display:none;">
+        <label class="pi-edit-label">Skills (comma-separated)</label>
+        <input id="piIeSkills" class="pi-edit-field" type="text" placeholder="e.g. JavaScript, Firebase, Product Management">
+        <label class="pi-edit-label">Specializations (comma-separated)</label>
+        <input id="piIeSpecs" class="pi-edit-field" type="text" placeholder="e.g. E-commerce, Mobile Apps, B2B SaaS">
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerSave('skills')">Save</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerEdit('skills')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Languages -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Languages</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerEdit('languages')">&#9998; Edit</button>
+      </div>
+      <div id="piCareerLangsView">
+        <div id="piLangList"><span style="color:rgba(255,255,255,0.25);font-size:12px;">No languages added.</span></div>
+      </div>
+      <div id="piCareerLangsEdit" style="display:none;">
+        <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:8px;">Enter one language per line: <em>English · Fluent</em></div>
+        <textarea id="piIeLangs" class="pi-edit-field" rows="5" placeholder="English · Native&#10;Swahili · Fluent&#10;French · Basic"></textarea>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerSave('languages')">Save</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerEdit('languages')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Certifications -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Certifications</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerAddItem('cert')">&#43; Add</button>
+      </div>
+      <div id="piCertList">
+        <div class="up-empty"><div class="up-empty-icon">&#127942;</div>Add your certificates and professional credentials.</div>
+      </div>
+      <div id="piCertForm" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;margin-top:10px;">
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">Certificate Name</label><input id="piCfName" class="pi-edit-field" type="text" placeholder="e.g. AWS Solutions Architect"></div>
+          <div><label class="pi-edit-label">Issuing Organisation</label><input id="piCfIssuer" class="pi-edit-field" type="text" placeholder="e.g. Amazon Web Services"></div>
+        </div>
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">Year</label><input id="piCfYear" class="pi-edit-field" type="number" placeholder="2024" min="1950" max="2099"></div>
+          <div><label class="pi-edit-label">Credential ID (optional)</label><input id="piCfCid" class="pi-edit-field" type="text" placeholder="ABC-12345"></div>
+        </div>
+        <label class="pi-edit-label">Verification URL (optional)</label>
+        <input id="piCfUrl" class="pi-edit-field" type="url" placeholder="https://...">
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerAddSave('cert')">Add Certificate</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerAddItem('cert')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Licenses -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Licenses</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerAddItem('lic')">&#43; Add</button>
+      </div>
+      <div id="piLicList">
+        <div class="up-empty"><div class="up-empty-icon">&#128196;</div>Professional licenses will appear here.</div>
+      </div>
+      <div id="piLicForm" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;margin-top:10px;">
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">License Name</label><input id="piLfName" class="pi-edit-field" type="text" placeholder="e.g. Practising Certificate"></div>
+          <div><label class="pi-edit-label">Issuing Authority</label><input id="piLfAuth" class="pi-edit-field" type="text" placeholder="e.g. LSK"></div>
+        </div>
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">License Number</label><input id="piLfNum" class="pi-edit-field" type="text" placeholder="LSK/2024/001"></div>
+          <div><label class="pi-edit-label">Expires (year)</label><input id="piLfExp" class="pi-edit-field" type="number" placeholder="2027"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerAddSave('lic')">Add License</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerAddItem('lic')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Education -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Education</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerAddItem('edu')">&#43; Add</button>
+      </div>
+      <div id="piEduList">
+        <div class="up-empty"><div class="up-empty-icon">&#127979;</div>Add your academic background.</div>
+      </div>
+      <div id="piEduForm" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;margin-top:10px;">
+        <label class="pi-edit-label">Institution</label>
+        <input id="piEfInst" class="pi-edit-field" type="text" placeholder="e.g. University of Nairobi">
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">Degree / Qualification</label><input id="piEfDeg" class="pi-edit-field" type="text" placeholder="e.g. Bachelor of Science"></div>
+          <div><label class="pi-edit-label">Field of Study</label><input id="piEfField" class="pi-edit-field" type="text" placeholder="e.g. Computer Science"></div>
+        </div>
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">Start Year</label><input id="piEfStart" class="pi-edit-field" type="number" placeholder="2018" min="1950" max="2099"></div>
+          <div><label class="pi-edit-label">End Year</label><input id="piEfEnd" class="pi-edit-field" type="number" placeholder="2022" min="1950" max="2099"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerAddSave('edu')">Add Education</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerAddItem('edu')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Professional Memberships -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Professional Memberships</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerAddItem('mem')">&#43; Add</button>
+      </div>
+      <div id="piMemList">
+        <div class="up-empty"><div class="up-empty-icon">&#127970;</div>Add professional associations and memberships.</div>
+      </div>
+      <div id="piMemForm" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;margin-top:10px;">
+        <div class="pi-edit-2col">
+          <div><label class="pi-edit-label">Organisation</label><input id="piMfOrg" class="pi-edit-field" type="text" placeholder="e.g. Kenya ICT Board"></div>
+          <div><label class="pi-edit-label">Role / Status</label><input id="piMfRole" class="pi-edit-field" type="text" placeholder="e.g. Member"></div>
+        </div>
+        <label class="pi-edit-label">Member Since (year)</label>
+        <input id="piMfSince" class="pi-edit-field" type="number" placeholder="2020" min="1950" max="2099">
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerAddSave('mem')">Add Membership</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerAddItem('mem')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Portfolio -->
+    <div class="up-card">
+      <div class="pi-career-section-hd">
+        <div class="up-card-title">Portfolio</div>
+        <button type="button" class="pi-section-edit-btn" onclick="piCareerAddItem('port')">&#43; Add</button>
+      </div>
+      <div id="piPortGrid" class="pi-port-grid" style="display:none;"></div>
+      <div id="piPortEmpty" class="up-empty"><div class="up-empty-icon">&#128247;</div>Showcase your work, projects and achievements.</div>
+      <div id="piPortForm" style="display:none;border-top:1px solid rgba(255,255,255,0.07);padding-top:14px;margin-top:10px;">
+        <label class="pi-edit-label">Title</label>
+        <input id="piPfTitle" class="pi-edit-field" type="text" placeholder="e.g. SOKONI Marketplace App">
+        <label class="pi-edit-label">Description (optional)</label>
+        <textarea id="piPfDesc" class="pi-edit-field" rows="3" placeholder="What did you build or contribute to?"></textarea>
+        <label class="pi-edit-label">URL</label>
+        <input id="piPfUrl" class="pi-edit-field" type="url" placeholder="https://...">
+        <div style="display:flex;gap:8px;margin-top:4px;">
+          <button type="button" class="pi-save-mini" onclick="piCareerAddSave('port')">Add to Portfolio</button>
+          <button type="button" class="pi-cancel-mini" onclick="piCareerAddItem('port')">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ DOCUMENT VAULT PANEL ══ -->
+  <div id="panel-vault" class="up-panel">
+
+    <div class="up-card" style="padding:16px;">
+      <!-- Upload zone -->
+      <div class="pi-upload-zone" onclick="document.getElementById('piVaultFileInput').click()">
+        <span class="pi-upload-zone-icon">&#128193;</span>
+        <div class="pi-upload-zone-lbl">Tap to upload a document</div>
+        <div class="pi-upload-zone-sub">PDF, JPG, PNG &mdash; max 20 MB</div>
+        <div class="pi-upload-progress" id="piUploadProgress">
+          <div class="pi-upload-progress-fill" id="piUploadFill"></div>
+        </div>
+      </div>
+      <input type="file" id="piVaultFileInput" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" style="display:none;" onchange="piVaultUploadFile(event)">
+
+      <!-- Document type selector (shown before upload) -->
+      <div id="piUploadMeta" style="display:none;margin-bottom:12px;">
+        <label class="pi-edit-label">Document Category</label>
+        <select id="piUploadType" class="pi-doc-type-sel">
+          <option value="identity">Identity (ID / Passport)</option>
+          <option value="business">Business Registration</option>
+          <option value="tax">Tax (KRA / VAT)</option>
+          <option value="license">License</option>
+          <option value="certificate">Certificate</option>
+          <option value="insurance">Insurance</option>
+          <option value="contract">Contract</option>
+          <option value="receipt">Receipt</option>
+          <option value="invoice">Invoice</option>
+          <option value="medical">Medical</option>
+          <option value="employment">Employment</option>
+          <option value="other">Other</option>
+        </select>
+        <label class="pi-edit-label">Document Name (optional)</label>
+        <input id="piUploadName" class="pi-edit-field" type="text" placeholder="e.g. National ID Front">
+        <button type="button" class="pi-save-mini" style="width:100%;" onclick="piVaultConfirmUpload()">&#8657; Upload Document</button>
+      </div>
+
+      <!-- Search + filter -->
+      <div class="pi-vault-header">
+        <input type="search" id="piVaultSearch" class="pi-vault-search" placeholder="&#128269; Search documents&hellip;" oninput="piVaultFilter()">
+      </div>
+      <div class="pi-cat-pills" id="piCatPills">
+        <button type="button" class="pi-cat-pill active" data-cat="all" onclick="piVaultCat(this)">All</button>
+        <button type="button" class="pi-cat-pill" data-cat="identity" onclick="piVaultCat(this)">Identity</button>
+        <button type="button" class="pi-cat-pill" data-cat="business" onclick="piVaultCat(this)">Business</button>
+        <button type="button" class="pi-cat-pill" data-cat="tax" onclick="piVaultCat(this)">Tax</button>
+        <button type="button" class="pi-cat-pill" data-cat="license" onclick="piVaultCat(this)">Licenses</button>
+        <button type="button" class="pi-cat-pill" data-cat="certificate" onclick="piVaultCat(this)">Certificates</button>
+        <button type="button" class="pi-cat-pill" data-cat="insurance" onclick="piVaultCat(this)">Insurance</button>
+        <button type="button" class="pi-cat-pill" data-cat="contract" onclick="piVaultCat(this)">Contracts</button>
+        <button type="button" class="pi-cat-pill" data-cat="employment" onclick="piVaultCat(this)">Employment</button>
+        <button type="button" class="pi-cat-pill" data-cat="medical" onclick="piVaultCat(this)">Medical</button>
+      </div>
+
+      <!-- Document grid -->
+      <div id="piDocGrid" class="pi-doc-grid"></div>
+      <div id="piVaultEmpty" class="up-empty" style="display:none;">
+        <div class="up-empty-icon">&#128193;</div>
+        No documents yet. Tap the upload zone above to add your first document.
+      </div>
+      <div id="piVaultLoading" style="text-align:center;padding:30px;color:rgba(255,255,255,0.3);font-size:13px;">
+        Loading vault&hellip;
+      </div>
+    </div>
+
   </div>
 
   <!-- Legal entity footer -->
@@ -3026,6 +3648,571 @@ window.logoutUser = logoutUser;
     document.addEventListener('DOMContentLoaded', _bootIdentityRow);
   } else {
     _bootIdentityRow();
+  }
+
+})();
+
+/* ══════════════════════════════════════════════════════════════
+   SPRINT 4 — Identity Command Center, Career & Document Vault
+   Extends the Sprint-3 switchTab chain:
+   overview → command dashboard; career → professional profile;
+   vault → document vault with Firebase Storage upload.
+══════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── Shared helpers (mirrors Sprint 3 pattern) ── */
+  function _fns() { return window.firebase && firebase.app ? firebase.app().functions('us-central1') : null; }
+  function _call(name, data) {
+    var f = _fns(); if (!f) return Promise.reject(new Error('Firebase not ready'));
+    return f.httpsCallable(name)(data || {}).then(function(r){ return r.data; });
+  }
+  function _esc(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _toast(msg){
+    var el=document.getElementById('upToast'); if(!el) return;
+    el.textContent=msg; el.style.opacity='1'; el.style.transform='translateX(-50%) translateY(0)';
+    clearTimeout(el._t); el._t=setTimeout(function(){ el.style.opacity='0'; el.style.transform='translateX(-50%) translateY(30px)'; },2500);
+  }
+  function _fmt(n){ return typeof n==='number' ? (n>=1000 ? (n/1000).toFixed(1)+'k' : String(n)) : '—'; }
+
+  /* ── State ── */
+  var _s4Loaded     = {};
+  var _careerData   = null;
+  var _vaultDocs    = [];
+  var _vaultCat     = 'all';
+  var _uploadFile   = null;
+
+  /* ── Reference to the Sprint-3 overview (already fetched) ── */
+  function _getOv() { return window._piOverview || null; }
+
+  /* ══════════════════════════════════════════════════════════════
+     OVERVIEW DASHBOARD
+     Fills Command Summary, Wallet Snapshot, and KASS strip.
+     Uses already-cached _piOverview (set in Sprint-3 boot).
+  ══════════════════════════════════════════════════════════════ */
+  function _loadOverviewDashboard() {
+    function _render(ov) {
+      /* Trust Score */
+      var ts = ov.trust ? ov.trust.score : null;
+      var tl = ov.trust ? ov.trust.level : 'Bronze';
+      var tsEl = document.getElementById('cmdTrustScore');
+      var tlEl = document.getElementById('cmdTrustLevel');
+      if (tsEl) tsEl.textContent = ts !== null ? ts : '—';
+      if (tlEl) { tlEl.textContent = tl; tlEl.style.color = tl==='Platinum'?'#71ff00':tl==='Gold'?'#ffd700':tl==='Silver'?'#c0c0c0':'#cd7f32'; }
+
+      /* Profile completion */
+      var pc = ov.profileCompletion;
+      var pEl = document.getElementById('cmdCompletion');
+      var psEl = document.getElementById('cmdComplSub');
+      if (pEl) pEl.textContent = pc ? pc.percent + '%' : '—';
+      if (psEl && pc) psEl.textContent = pc.done + ' of ' + pc.total + ' steps';
+
+      /* Businesses & Workspaces */
+      var bEl = document.getElementById('cmdBusinesses');
+      var wEl = document.getElementById('cmdWorkspaces');
+      if (bEl) bEl.textContent = ov.businessCount !== undefined ? ov.businessCount : '—';
+      if (wEl) wEl.textContent = ov.workspaceCount !== undefined ? ov.workspaceCount : '—';
+
+      /* Wallet snapshot */
+      if (ov.wallet) {
+        var balEl  = document.getElementById('cmdWalletBal');
+        var pendEl = document.getElementById('cmdWalletPending');
+        var snap   = document.getElementById('piWalletSnap');
+        if (balEl)  balEl.textContent  = 'KES ' + Number(ov.wallet.available || 0).toLocaleString('en-KE', {minimumFractionDigits:2,maximumFractionDigits:2});
+        if (pendEl && ov.wallet.pending > 0) pendEl.textContent = 'KES ' + Number(ov.wallet.pending).toLocaleString('en-KE',{minimumFractionDigits:2}) + ' pending';
+        if (snap)   snap.style.display = '';
+      }
+
+      /* Role-specific actions */
+      var roles = ov.roles || [];
+      var isSeller = roles.includes('seller') || roles.includes('vendor');
+      var isBiz    = roles.includes('business_owner') || ov.businessCount > 0;
+      var actGrid  = document.getElementById('piQaRoleActions');
+      if (actGrid && (isSeller || isBiz)) actGrid.style.display = '';
+    }
+
+    var ov = _getOv();
+    if (ov) {
+      _render(ov);
+    } else {
+      /* Overview not yet fetched — fetch now and also set the global cache */
+      _call('profileGetOverview').then(function(data) {
+        window._piOverview = data; _render(data);
+      }).catch(function(){});
+    }
+
+    /* KASS — load once per session */
+    if (!_s4Loaded._kass) {
+      _s4Loaded._kass = true;
+      _call('profileGetCompletion').then(function(data) {
+        var recos = (data && data.recommendations) || [];
+        if (!recos.length) return;
+        var strip = document.getElementById('piKassStrip');
+        var card  = document.getElementById('piKassCard');
+        var ICONS = {photo:'📷',bio:'✍️',email:'✉️',phone:'📱',identity:'🪪',address:'📍',skills:'🎯',cert:'📄',bank:'💳',kra:'📑'};
+        if (strip) {
+          strip.innerHTML = recos.slice(0,4).map(function(r){
+            return '<div class="pi-kass-item">'
+                 + '<span class="pi-kass-emoji">' + (ICONS[r.id]||'⚡') + '</span>'
+                 + '<div class="pi-kass-body">'
+                 + '<div class="pi-kass-action">' + _esc(r.action) + '</div>'
+                 + '<div class="pi-kass-impact">' + _esc(r.impact) + '</div>'
+                 + '</div>'
+                 + (r.href ? '<a href="' + _esc(r.href) + '" class="pi-kass-go">Fix ›</a>' : '')
+                 + '</div>';
+          }).join('');
+        }
+        if (card) card.style.display = '';
+      }).catch(function(){});
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     CAREER / PROFESSIONAL PROFILE
+  ══════════════════════════════════════════════════════════════ */
+  function _loadCareer() {
+    _call('profileGetProfessional').then(function(data) {
+      _careerData = data;
+      _renderCareer(data);
+    }).catch(function(e){ console.warn('[S4] career load error', e); });
+  }
+
+  var AVAIL_MAP = {
+    available:'🟢 Open to Work', open_to_offers:'🟡 Open to Offers', not_looking:'⛔ Not Looking'
+  };
+
+  function _renderCareer(d) {
+    /* Bio section */
+    var hlEl  = document.getElementById('piCareerHl');
+    var bioEl = document.getElementById('piCareerBio');
+    var metaEl= document.getElementById('piCareerMeta');
+    if (hlEl)   hlEl.textContent  = d.headline || 'Add your professional headline…';
+    if (bioEl)  {
+      bioEl.textContent = d.summary || 'Add a short biography to help people understand who you are.';
+      bioEl.style.color = d.summary ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)';
+    }
+    if (metaEl) {
+      var chips = [];
+      if (d.industry)        chips.push('🏭 ' + d.industry);
+      if (d.yearsExperience) chips.push('⏱ ' + d.yearsExperience + ' yrs exp');
+      if (d.availability)    chips.push(AVAIL_MAP[d.availability] || d.availability);
+      metaEl.innerHTML = chips.map(function(c){
+        var isAvail = c.startsWith('🟢')||c.startsWith('🟡');
+        return '<span class="pi-career-chip' + (isAvail?' avail':'') + '">' + _esc(c) + '</span>';
+      }).join('');
+    }
+
+    /* Skills */
+    var skEl = document.getElementById('piSkillTags');
+    var spEl = document.getElementById('piSpecTags');
+    if (skEl) skEl.innerHTML = (d.skills||[]).length
+      ? d.skills.map(function(s){ return '<span class="pi-skill-tag">' + _esc(s) + '</span>'; }).join('')
+      : '<span style="color:rgba(255,255,255,0.25);font-size:12px;">No skills added yet.</span>';
+    if (spEl) spEl.innerHTML = (d.specializations||[]).length
+      ? d.specializations.map(function(s){ return '<span class="pi-spec-tag">' + _esc(s) + '</span>'; }).join('')
+      : '<span style="color:rgba(255,255,255,0.25);font-size:12px;">No specializations added.</span>';
+
+    /* Languages */
+    var lgEl = document.getElementById('piLangList');
+    if (lgEl) lgEl.innerHTML = (d.languages||[]).length
+      ? d.languages.map(function(l){
+          return '<div class="pi-lang-row"><div class="pi-lang-name">' + _esc(l.name||l) + '</div>'
+               + '<span class="pi-lang-level">' + _esc(l.proficiency||'') + '</span></div>';
+        }).join('')
+      : '<span style="color:rgba(255,255,255,0.25);font-size:12px;">No languages added.</span>';
+
+    /* Certifications */
+    var certEl = document.getElementById('piCertList');
+    if (certEl) certEl.innerHTML = (d.certifications||[]).length
+      ? d.certifications.map(function(c){
+          return '<div class="pi-cert-item"><div class="pi-cert-icon">🎖️</div><div class="pi-cert-meta">'
+               + '<div class="pi-cert-name">' + _esc(c.name) + '</div>'
+               + '<div class="pi-cert-sub">' + _esc(c.issuer||'') + (c.year?' · '+c.year:'') + (c.credentialId?' · '+c.credentialId:'') + '</div>'
+               + (c.url ? '<a href="' + _esc(c.url) + '" target="_blank" rel="noopener" class="pi-cert-url">View certificate ↗</a>' : '')
+               + '</div></div>';
+        }).join('')
+      : '<div class="up-empty"><div class="up-empty-icon">🎖️</div>Add your certificates.</div>';
+
+    /* Licenses */
+    var licEl = document.getElementById('piLicList');
+    if (licEl) licEl.innerHTML = (d.licenses||[]).length
+      ? d.licenses.map(function(l){
+          return '<div class="pi-lic-item"><div class="pi-cert-icon">📄</div><div class="pi-cert-meta">'
+               + '<div class="pi-cert-name">' + _esc(l.name) + '</div>'
+               + '<div class="pi-cert-sub">' + _esc(l.authority||'') + (l.licenseNumber?' · '+l.licenseNumber:'') + (l.expiresAt?' · Exp '+l.expiresAt:'') + '</div>'
+               + '</div></div>';
+        }).join('')
+      : '<div class="up-empty"><div class="up-empty-icon">📄</div>Add professional licenses.</div>';
+
+    /* Education */
+    var eduEl = document.getElementById('piEduList');
+    if (eduEl) eduEl.innerHTML = (d.education||[]).length
+      ? d.education.map(function(e){
+          return '<div class="pi-edu-item"><div class="pi-cert-icon">🎓</div><div class="pi-cert-meta">'
+               + '<div class="pi-cert-name">' + _esc(e.institution) + '</div>'
+               + '<div class="pi-cert-sub">' + _esc(e.degree||'') + (e.field?' · '+e.field:'') + (e.startYear?' · '+e.startYear+(e.endYear?'–'+e.endYear:''):'') + '</div>'
+               + '</div></div>';
+        }).join('')
+      : '<div class="up-empty"><div class="up-empty-icon">🎓</div>Add your academic background.</div>';
+
+    /* Memberships */
+    var memEl = document.getElementById('piMemList');
+    if (memEl) memEl.innerHTML = (d.memberships||[]).length
+      ? d.memberships.map(function(m){
+          return '<div class="pi-mem-item"><div class="pi-cert-icon">🏛️</div><div class="pi-cert-meta">'
+               + '<div class="pi-cert-name">' + _esc(m.organization) + '</div>'
+               + '<div class="pi-cert-sub">' + _esc(m.role||'') + (m.since?' · Since '+m.since:'') + '</div>'
+               + '</div></div>';
+        }).join('')
+      : '<div class="up-empty"><div class="up-empty-icon">🏛️</div>Add professional memberships.</div>';
+
+    /* Portfolio */
+    var pgEl    = document.getElementById('piPortGrid');
+    var peEl    = document.getElementById('piPortEmpty');
+    var portArr = d.portfolio || [];
+    if (pgEl && peEl) {
+      if (portArr.length) {
+        pgEl.style.display = '';
+        peEl.style.display = 'none';
+        pgEl.innerHTML = portArr.map(function(p){
+          return '<div class="pi-port-card">'
+               + '<div class="pi-port-title">' + _esc(p.title) + '</div>'
+               + (p.description ? '<div class="pi-port-desc">' + _esc(p.description) + '</div>' : '')
+               + (p.url ? '<a href="' + _esc(p.url) + '" target="_blank" rel="noopener" class="pi-port-link">' + _esc(p.url) + '</a>' : '')
+               + '</div>';
+        }).join('');
+      } else { pgEl.style.display='none'; peEl.style.display=''; }
+    }
+  }
+
+  /* ── Career section inline edit toggles ── */
+  window.piCareerEdit = function(section) {
+    var view = document.getElementById('piCareer' + _cap(section) + 'View');
+    var form = document.getElementById('piCareer' + _cap(section) + 'Edit');
+    if (!view || !form) return;
+    var editing = form.style.display !== 'none';
+    view.style.display = editing ? '' : 'none';
+    form.style.display = editing ? 'none' : '';
+
+    /* Pre-fill on open */
+    if (!editing && _careerData) {
+      var d = _careerData;
+      if (section === 'bio') {
+        var f = function(id,val){ var e=document.getElementById(id); if(e) e.value=val||''; };
+        f('piIeHl',      d.headline);
+        f('piIeBio',     d.summary);
+        f('piIeIndustry',d.industry);
+        f('piIeYrs',     d.yearsExperience||'');
+        f('piIeAvail',   d.availability||'');
+      } else if (section === 'skills') {
+        var s=document.getElementById('piIeSkills'); if(s) s.value=(d.skills||[]).join(', ');
+        var p=document.getElementById('piIeSpecs');  if(p) p.value=(d.specializations||[]).join(', ');
+      } else if (section === 'languages') {
+        var l=document.getElementById('piIeLangs');
+        if(l) l.value=(d.languages||[]).map(function(x){ return (x.name||x) + (x.proficiency?' · '+x.proficiency:''); }).join('\n');
+      }
+    }
+  };
+
+  function _cap(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+  window.piCareerSave = function(section) {
+    var patch = {};
+    if (section === 'bio') {
+      patch.headline       = (document.getElementById('piIeHl')||{}).value||'';
+      patch.summary        = (document.getElementById('piIeBio')||{}).value||'';
+      patch.industry       = (document.getElementById('piIeIndustry')||{}).value||'';
+      patch.yearsExperience= parseInt((document.getElementById('piIeYrs')||{}).value)||null;
+      patch.availability   = (document.getElementById('piIeAvail')||{}).value||'';
+    } else if (section === 'skills') {
+      var raw = ((document.getElementById('piIeSkills')||{}).value||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+      var sp  = ((document.getElementById('piIeSpecs') ||{}).value||'').split(',').map(function(x){return x.trim();}).filter(Boolean);
+      patch.skills = raw; patch.specializations = sp;
+    } else if (section === 'languages') {
+      var lines = ((document.getElementById('piIeLangs')||{}).value||'').split('\n').filter(Boolean);
+      patch.languages = lines.map(function(l){
+        var parts = l.split('·').map(function(p){ return p.trim(); });
+        return { name: parts[0]||l, proficiency: parts[1]||'' };
+      });
+    }
+
+    _call('profileSaveProfessional', patch).then(function() {
+      _toast('Profile updated!');
+      if (_careerData) Object.assign(_careerData, patch);
+      _renderCareer(_careerData || {});
+      piCareerEdit(section); /* close form */
+    }).catch(function(e){ _toast('Error saving: ' + (e.message||'Please try again.')); });
+  };
+
+  /* ── Career: add list items (cert, lic, edu, mem, port) ── */
+  window.piCareerAddItem = function(type) {
+    var formEl = document.getElementById('pi' + _TYPE_CAP[type] + 'Form');
+    if (!formEl) return;
+    formEl.style.display = formEl.style.display === 'none' ? '' : 'none';
+  };
+
+  var _TYPE_CAP = { cert:'Cert', lic:'Lic', edu:'Edu', mem:'Mem', port:'Port' };
+  var _TYPE_FIELD = {
+    cert:'certifications', lic:'licenses', edu:'education', mem:'memberships', port:'portfolio'
+  };
+
+  window.piCareerAddSave = function(type) {
+    var item = {};
+    if (type === 'cert') {
+      item = {
+        name:         (document.getElementById('piCfName')||{}).value||'',
+        issuer:       (document.getElementById('piCfIssuer')||{}).value||'',
+        year:         parseInt((document.getElementById('piCfYear')||{}).value)||null,
+        credentialId: (document.getElementById('piCfCid')||{}).value||'',
+        url:          (document.getElementById('piCfUrl')||{}).value||'',
+      };
+      if (!item.name) { _toast('Certificate name is required.'); return; }
+    } else if (type === 'lic') {
+      item = {
+        name:          (document.getElementById('piLfName')||{}).value||'',
+        authority:     (document.getElementById('piLfAuth')||{}).value||'',
+        licenseNumber: (document.getElementById('piLfNum')||{}).value||'',
+        expiresAt:     (document.getElementById('piLfExp')||{}).value||'',
+      };
+      if (!item.name) { _toast('License name is required.'); return; }
+    } else if (type === 'edu') {
+      item = {
+        institution: (document.getElementById('piEfInst')||{}).value||'',
+        degree:      (document.getElementById('piEfDeg') ||{}).value||'',
+        field:       (document.getElementById('piEfField')||{}).value||'',
+        startYear:   parseInt((document.getElementById('piEfStart')||{}).value)||null,
+        endYear:     parseInt((document.getElementById('piEfEnd')  ||{}).value)||null,
+      };
+      if (!item.institution) { _toast('Institution is required.'); return; }
+    } else if (type === 'mem') {
+      item = {
+        organization: (document.getElementById('piMfOrg')||{}).value||'',
+        role:         (document.getElementById('piMfRole')||{}).value||'',
+        since:        parseInt((document.getElementById('piMfSince')||{}).value)||null,
+      };
+      if (!item.organization) { _toast('Organisation is required.'); return; }
+    } else if (type === 'port') {
+      item = {
+        title:       (document.getElementById('piPfTitle')||{}).value||'',
+        description: (document.getElementById('piPfDesc') ||{}).value||'',
+        url:         (document.getElementById('piPfUrl')  ||{}).value||'',
+      };
+      if (!item.title) { _toast('Title is required.'); return; }
+    }
+
+    /* Append to local array + save full updated array */
+    item.id = 'pi_' + Date.now();
+    var arr = (_careerData && _careerData[_TYPE_FIELD[type]]) ? _careerData[_TYPE_FIELD[type]].slice() : [];
+    arr.push(item);
+    var patch = {}; patch[_TYPE_FIELD[type]] = arr;
+
+    _call('profileSaveProfessional', patch).then(function() {
+      _toast('Added!');
+      if (_careerData) _careerData[_TYPE_FIELD[type]] = arr;
+      _renderCareer(_careerData || {});
+      piCareerAddItem(type); /* close form */
+    }).catch(function(e){ _toast('Error: ' + (e.message||'Try again.')); });
+  };
+
+  /* ══════════════════════════════════════════════════════════════
+     DOCUMENT VAULT
+  ══════════════════════════════════════════════════════════════ */
+  var DOC_ICONS = {
+    identity:'🪪', business:'🏢', tax:'📑', license:'📜', certificate:'🎖️',
+    insurance:'🛡️', contract:'📃', receipt:'🧾', invoice:'💳',
+    medical:'🏥', employment:'👔', other:'📄'
+  };
+
+  function _loadVault() {
+    _call('profileGetDocumentVault').then(function(data) {
+      _vaultDocs = data.documents || [];
+      _renderVault();
+    }).catch(function(e){ console.warn('[S4] vault error', e); _renderVault(); });
+  }
+
+  function _renderVault() {
+    var loading = document.getElementById('piVaultLoading');
+    var grid    = document.getElementById('piDocGrid');
+    var empty   = document.getElementById('piVaultEmpty');
+    if (loading) loading.style.display = 'none';
+
+    var q   = ((document.getElementById('piVaultSearch')||{}).value||'').toLowerCase();
+    var docs = _vaultDocs.filter(function(d){
+      var matchCat = _vaultCat === 'all' || d.type === _vaultCat;
+      var matchQ   = !q || (d.name||'').toLowerCase().includes(q) || (d.type||'').includes(q);
+      return matchCat && matchQ;
+    });
+
+    if (!grid) return;
+    if (!docs.length) {
+      grid.innerHTML = '';
+      if (empty) empty.style.display = '';
+    } else {
+      if (empty) empty.style.display = 'none';
+      grid.innerHTML = docs.map(function(d) {
+        var icon = DOC_ICONS[d.type] || '📄';
+        var dateStr = '';
+        if (d.uploadedAt && d.uploadedAt.seconds) {
+          var dt = new Date(d.uploadedAt.seconds * 1000);
+          dateStr = dt.toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'});
+        }
+        return '<div class="pi-doc-card' + (d.isVerified?' verified':'') + '">'
+             + '<span class="pi-doc-icon">' + icon + '</span>'
+             + '<div class="pi-doc-name">' + _esc(d.name) + '</div>'
+             + '<div class="pi-doc-type">' + _esc(d.type||'document') + '</div>'
+             + (dateStr ? '<div class="pi-doc-date">' + _esc(dateStr) + '</div>' : '')
+             + (d.isVerified ? '<span class="pi-doc-verif">✓ Verified</span>' : '')
+             + '<div class="pi-doc-actions">'
+             + (d.downloadUrl ? '<a href="' + _esc(d.downloadUrl) + '" target="_blank" rel="noopener" class="pi-doc-btn">View</a>' : '<span class="pi-doc-btn" style="opacity:.3;">View</span>')
+             + (d.downloadUrl ? '<a href="' + _esc(d.downloadUrl) + '" download class="pi-doc-btn">Save</a>' : '')
+             + '<button type="button" class="pi-doc-btn del" onclick="piVaultDelete(\'' + _esc(d.id) + '\',\'' + _esc(d.storagePath||'') + '\')">Delete</button>'
+             + '</div></div>';
+      }).join('');
+    }
+  }
+
+  window.piVaultFilter = function() { _renderVault(); };
+  window.piVaultCat    = function(btn) {
+    _vaultCat = btn.getAttribute('data-cat') || 'all';
+    document.querySelectorAll('.pi-cat-pill').forEach(function(p){ p.classList.remove('active'); });
+    btn.classList.add('active');
+    _renderVault();
+  };
+
+  /* Upload flow: file picked → show meta form → confirm → upload */
+  window.piVaultUploadFile = function(ev) {
+    var file = ev.target.files[0]; if (!file) return;
+    _uploadFile = file;
+    var nameEl = document.getElementById('piUploadName');
+    if (nameEl) nameEl.value = file.name.replace(/\.[^.]+$/, '');
+    var meta = document.getElementById('piUploadMeta');
+    if (meta) meta.style.display = '';
+  };
+
+  window.piVaultConfirmUpload = function() {
+    if (!_uploadFile) { _toast('No file selected.'); return; }
+
+    var typeSel  = document.getElementById('piUploadType');
+    var nameInp  = document.getElementById('piUploadName');
+    var docType  = (typeSel  && typeSel.value)  || 'other';
+    var docName  = (nameInp  && nameInp.value.trim()) || _uploadFile.name;
+
+    /* Need Firebase auth + storage */
+    if (!window.firebase || !firebase.auth || !firebase.auth().currentUser) {
+      _toast('Please wait — loading session…'); return;
+    }
+    var user = firebase.auth().currentUser;
+
+    if (!window.firebase.storage) {
+      _toast('Storage not available.'); return;
+    }
+
+    var docId   = 'doc_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    var path    = 'userDocuments/' + user.uid + '/' + docId + '/' + _uploadFile.name;
+    var ref     = firebase.storage().ref(path);
+    var prog    = document.getElementById('piUploadProgress');
+    var fill    = document.getElementById('piUploadFill');
+    if (prog) prog.style.display = '';
+
+    var task = ref.put(_uploadFile);
+    task.on('state_changed',
+      function(snap) {
+        var pct = (snap.bytesTransferred / snap.totalBytes * 100).toFixed(0);
+        if (fill) fill.style.width = pct + '%';
+      },
+      function(err) {
+        _toast('Upload failed: ' + (err.message || 'Storage error'));
+        if (prog) prog.style.display = 'none';
+      },
+      function() {
+        task.snapshot.ref.getDownloadURL().then(function(url) {
+          /* Write metadata to Firestore */
+          var db = firebase.firestore();
+          return db.collection('userDocuments').doc(user.uid).collection('docs').add({
+            name:        docName,
+            type:        docType,
+            downloadUrl: url,
+            storagePath: path,
+            uploadedAt:  firebase.firestore.FieldValue.serverTimestamp(),
+            isVerified:  false,
+            size:        _uploadFile.size,
+          });
+        }).then(function(ref) {
+          _toast('Document uploaded!');
+          if (prog) prog.style.display = 'none';
+          if (fill) fill.style.width = '0%';
+          var meta = document.getElementById('piUploadMeta');
+          if (meta) meta.style.display = 'none';
+          var finp = document.getElementById('piVaultFileInput');
+          if (finp) finp.value = '';
+          _uploadFile = null;
+          /* Reload vault list */
+          _call('profileGetDocumentVault').then(function(data) {
+            _vaultDocs = data.documents || [];
+            _renderVault();
+          });
+        }).catch(function(e) {
+          _toast('Metadata save failed: ' + (e.message || 'Error'));
+        });
+      }
+    );
+  };
+
+  window.piVaultDelete = function(docId, storagePath) {
+    if (!docId) return;
+    if (!confirm('Delete this document? This cannot be undone.')) return;
+
+    var user = firebase.auth && firebase.auth().currentUser;
+    if (!user) { _toast('Not authenticated.'); return; }
+
+    var db = firebase.firestore();
+    db.collection('userDocuments').doc(user.uid).collection('docs').doc(docId)
+      .delete()
+      .then(function() {
+        /* Best-effort Storage delete */
+        if (storagePath && window.firebase && firebase.storage) {
+          firebase.storage().ref(storagePath).delete().catch(function(){});
+        }
+        _vaultDocs = _vaultDocs.filter(function(d){ return d.id !== docId; });
+        _renderVault();
+        _toast('Document deleted.');
+      })
+      .catch(function(e){ _toast('Delete failed: ' + (e.message||'Error')); });
+  };
+
+  /* ══════════════════════════════════════════════════════════════
+     EXTEND switchTab
+  ══════════════════════════════════════════════════════════════ */
+  var _s3Switch = window.switchTab;
+  window.switchTab = function(id) {
+    if (_s3Switch) _s3Switch(id);
+    if (id === 'overview' && !_s4Loaded.overview) {
+      _s4Loaded.overview = true;
+      _loadOverviewDashboard();
+    }
+    if (id === 'career' && !_s4Loaded.career) {
+      _s4Loaded.career = true;
+      _loadCareer();
+    }
+    if (id === 'vault' && !_s4Loaded.vault) {
+      _s4Loaded.vault = true;
+      _loadVault();
+    }
+  };
+
+  /* Boot: fire overview dashboard immediately (default tab) */
+  function _boot() {
+    if (!window.firebase || !firebase.auth) { setTimeout(_boot, 600); return; }
+    firebase.auth().onAuthStateChanged(function(user) {
+      if (!user) return;
+      /* Slight delay — let Sprint-3 _bootIdentityRow run first */
+      setTimeout(_loadOverviewDashboard, 900);
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _boot);
+  } else {
+    _boot();
   }
 
 })();
