@@ -123,7 +123,11 @@ for (const f of files) {
 /* A plausible commission rate is 1%–30%. Restricting the range keeps the guard off Math.random()
    seeds, score weightings, and percentile maths, which are full of harmless 0.5s and 0.25s. */
 const RATE = '0\\.(?:0[1-9]|[12]\\d)\\b';
-const BARE_RATE = new RegExp('\\b(?:platformFee(?:Rate)?|commission(?:Rate|Pct)?|takeRate|serviceFee)\\s*=\\s*' + RATE, 'i');
+/* `_?` and `_?` around the words: a hardcoded 10% escrow fee hid for months as
+   `const _PLATFORM_FEE = 0.10;` — the old pattern required "platformFee", and PLATFORM_FEE has
+   an underscore in the middle, so the guard walked straight past a live money path. */
+const BARE_RATE = new RegExp(
+  '\\b_?(?:platform_?fee(?:_?rate)?|commission_?(?:rate|pct)?|take_?rate|service_?fee)\\s*=\\s*' + RATE, 'i');
 const BARE_MULT = new RegExp('\\*\\s*' + RATE + '[^\\n]{0,40}(?:commission|platform\\s*fee)', 'i');
 const COMMISSION_MULT = new RegExp('(?:commission|platformFee)[^\\n]{0,40}\\*\\s*' + RATE, 'i');
 for (const f of files) {

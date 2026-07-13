@@ -25,7 +25,8 @@ function _genRef(prefix) {
 }
 
 const _TAX = { VAT: 0.16, WHT: 0.05, DST: 0.015, WHT_THRESHOLD: 24000 };
-const _PLATFORM_FEE = 0.10;
+/* _PLATFORM_FEE is gone. Escrow release does not charge commission: finos-router already
+   charged it, through the Commission Engine, at payment time. */
 
 /* ─────────────────────────────────────────────────────────────
    HMAC Verification
@@ -123,50 +124,59 @@ describe("Kenyan Tax Constants", () => {
     expect(_TAX.WHT_THRESHOLD).toBe(24000);
   });
 
-  test("Platform fee is 10%", () => {
-    expect(_PLATFORM_FEE).toBe(0.10);
+  test("no hardcoded platform fee survives in the tax constants", () => {
+    expect(typeof _TAX.VAT).toBe("number");
+    expect(_TAX).not.toHaveProperty("PLATFORM_FEE");
   });
 });
 
 /* ─────────────────────────────────────────────────────────────
    Commission & WHT Calculation Logic
 ───────────────────────────────────────────────────────────── */
-describe("Commission and WHT calculation", () => {
-  function calculateRelease(gross) {
-    const commission = Math.round(gross * _PLATFORM_FEE * 100) / 100;
-    const preWht     = gross - commission;
-    const wht        = preWht > _TAX.WHT_THRESHOLD
-      ? Math.round(preWht * _TAX.WHT * 100) / 100
-      : 0;
-    const sellerNet  = Math.round((preWht - wht) * 100) / 100;
-    return { commission, wht, sellerNet };
+describe("Escrow release does not charge commission twice", () => {
+  /* The old test asserted a 10% commission ON RELEASE. That was the defect, written down as a
+     requirement. Escrows are created by finos-router routePayment, which runs the Commission
+     Engine and credits the platform its commission AT PAYMENT TIME; the escrow then holds only
+     sellerNetCents. Charging again on release bills the seller twice for one sale. */
+
+  /* The migrated logic, in the shape index.js releaseEscrow now uses. */
+  function release(escrow) {
+    const isEngineEscrow = Number.isFinite(escrow.grossCents);
+    if (isEngineEscrow) {
+      return {
+        gross: escrow.grossCents / 100,
+        commissionAlreadyCharged: (escrow.commissionCents || 0) / 100,
+        commission: 0,                                   /* nothing more is owed */
+        sellerNet: escrow.sellerNetCents / 100,
+      };
+    }
+    if (!Number.isFinite(Number(escrow.amount))) {
+      throw new Error("no usable amount — refusing to release");
+    }
+    return null; /* legacy path is priced by the engine; covered in the engine's own suite */
   }
 
-  test("KES 5,000 order: 10% commission, no WHT", () => {
-    const { commission, wht, sellerNet } = calculateRelease(5000);
-    expect(commission).toBe(500);
-    expect(wht).toBe(0);          // 4,500 < 24,000 threshold
-    expect(sellerNet).toBe(4500);
+  test("an engine escrow is released without charging commission again", () => {
+    const r = release({ grossCents: 1000000, commissionCents: 30000, sellerNetCents: 970000 });
+    expect(r.commission).toBe(0);
+    expect(r.commissionAlreadyCharged).toBe(300);
+    expect(r.sellerNet).toBe(9700);
   });
 
-  test("KES 30,000 order: 10% commission, 5% WHT on net", () => {
-    const { commission, wht, sellerNet } = calculateRelease(30000);
-    expect(commission).toBe(3000);
-    expect(wht).toBe(1350);       // 27,000 * 5%
-    expect(sellerNet).toBe(25650);
+  test("the seller receives exactly what the engine computed", () => {
+    [[500000, 15000, 485000], [1000000, 30000, 970000], [2500000, 75000, 2425000]]
+      .forEach(([gross, comm, net]) => {
+        const r = release({ grossCents: gross, commissionCents: comm, sellerNetCents: net });
+        expect(r.sellerNet).toBeCloseTo(net / 100, 2);
+        expect(r.commissionAlreadyCharged + r.sellerNet).toBeCloseTo(gross / 100, 2);
+      });
   });
 
-  test("Gross always equals commission + wht + sellerNet", () => {
-    [1000, 5000, 25000, 50000, 200000].forEach(gross => {
-      const { commission, wht, sellerNet } = calculateRelease(gross);
-      expect(commission + wht + sellerNet).toBeCloseTo(gross, 1);
-    });
-  });
-
-  test("Seller always receives positive amount", () => {
-    [100, 500, 5000].forEach(gross => {
-      const { sellerNet } = calculateRelease(gross);
-      expect(sellerNet).toBeGreaterThan(0);
-    });
+  test("an unpriceable escrow FAILS CLOSED rather than writing NaN", () => {
+    /* The old code read escrow.amount, which finos-router never writes. On a real escrow that is
+       undefined, and Math.round(undefined * 0.10) is NaN — which went into sellerNet, the ledger
+       and a wallet. */
+    expect(Math.round(undefined * 0.10 * 100) / 100).toBeNaN();      /* the old behaviour */
+    expect(() => release({ sellerId: "s1" })).toThrow(/refusing to release/);
   });
 });

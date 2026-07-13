@@ -64,8 +64,20 @@ const SokoniPaymentEngine = (function () {
     WHT_THRESHOLD: 24000,
   });
 
-  /* Platform split: what SOKONI takes from each order */
-  const PLATFORM_FEE_RATE = 0.10;  // 10% default (overridden per category by sokoni-pay.js)
+  /* Platform split — DISPLAY DEFAULT ONLY. The client never prices a settlement.
+   *
+   * This was a hardcoded 0.10. No hub charges 10%: marketplace is 3%, legal 5%, property 2%.
+   * It was the default `commissionRate` for this file's escrow-release and settlement helpers,
+   * so any caller that omitted the rate silently computed money at a figure the server would
+   * never charge.
+   *
+   * The rate now comes from the one config, via SokoniCommission (generated from
+   * functions/commission-config.js). It remains a DISPLAY figure only: the authoritative number
+   * for a real order comes from previewCommission / calculateCommission on the server, which
+   * also applies commissionRules, revenueConfig and any plan benefit this table cannot know. */
+  const PLATFORM_FEE_RATE = (typeof window !== 'undefined' && window.SokoniCommission)
+    ? window.SokoniCommission.pct('marketplace') / 100
+    : 0.03;   /* the marketplace base — never an invented 10% */
 
   /* Minimum escrow period in milliseconds */
   const ESCROW_MIN_MS = 30 * 60 * 1000;   // 30 minutes

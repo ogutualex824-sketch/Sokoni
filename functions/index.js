@@ -5030,8 +5030,9 @@ exports.intasendWebhook = onRequest(
     /* Verify HMAC-SHA256 signature */
     const privateKey = INTASEND_PRIVATE_KEY.value();
     const sig        = req.headers["x-intasend-signature"] || "";
+    const rawBody    = req.rawBody || Buffer.from(JSON.stringify(req.body));
     const expected   = crypto.createHmac("sha256", privateKey)
-                             .update(JSON.stringify(req.body)).digest("hex");
+                             .update(rawBody).digest("hex");
     const sigBuf = Buffer.from(sig.length === expected.length ? sig : "0".repeat(expected.length), "hex");
     if (!crypto.timingSafeEqual(sigBuf, Buffer.from(expected, "hex"))) { res.status(401).send("Unauthorized"); return; }
 
@@ -5106,9 +5107,17 @@ exports.intasendWebhook = onRequest(
         sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
         commissionPct = commResult.effectiveRate ?? 0;
       } catch (commErr) {
-        console.error('[webhook] Commission calc failed, applying 10% fallback', commErr.message);
-        commissionPct = 10;
-        sokoniCut = Math.round(amount * 0.10);
+        /* Do not apply a hardcoded fallback rate — this would over-charge marketplace
+           sellers (3%) by 7 percentage points. Instead, flag the entry for manual review
+           so the settlement team can apply the correct rate. */
+        console.error('[webhook] Commission calc failed — flagging for manual review', commErr.message);
+        commissionPct = null;
+        sokoniCut = 0;
+        await db.collection("commissionReviewQueue").add({
+          ref: apiRef, amount, category, uid: payData.uid,
+          reason: commErr.message,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
       }
       /* Deterministic doc id — ONE commission entry per payment reference.
          .set() (not .add()) so a replay/re-run overwrites rather than duplicating. */
@@ -5617,7 +5626,9 @@ function _genRef(prefix) {
 
 /* â”€â”€ Tax rates (kept in sync with sokoni-payment-engine.js) â”€â”€ */
 const _TAX = { VAT: 0.16, WHT: 0.05, DST: 0.015, WHT_THRESHOLD: 24000 };
-const _PLATFORM_FEE = 0.10;
+/* _PLATFORM_FEE (a hardcoded 10%) is GONE. Its only consumer was releaseEscrow, which would
+   have double-charged commission that finos-router had already taken at payment time, using a
+   rate that matched no hub. Commission is the Commission Engine's job. */
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    SHARED WEBHOOK PROCESSOR
@@ -5947,20 +5958,90 @@ exports.releaseEscrow = onCall({ timeoutSeconds: 30 }, async (request) => {
     throw new HttpsError("permission-denied", "Not authorised to release this escrow.");
   }
 
-  const gross      = escrow.amount;
-  const currency   = escrow.currency || "KES";
-  const commission = Math.round(gross * _PLATFORM_FEE * 100) / 100;
-  const wht        = gross >= _TAX.WHT_THRESHOLD ? Math.round(gross * _TAX.WHT * 100) / 100 : 0;
-  const sellerNet  = Math.round((gross - commission - wht) * 100) / 100;
+  const currency = escrow.currency || "KES";
+
+  /* ── ESCROW RELEASE MUST NOT CHARGE COMMISSION ────────────────────────────────────────────
+   * This used to do:
+   *     const commission = Math.round(gross * _PLATFORM_FEE * 100) / 100;   // a flat 10%
+   *
+   * Three separate defects in one line:
+   *
+   * 1. IT WOULD HAVE DOUBLE-CHARGED. Escrows are created by finos-router routePayment, which
+   *    ALREADY runs calculateCommission and credits the platform its commission at payment
+   *    time (finos-router.js:256). The escrow holds sellerNetCents — commission is gone. Taking
+   *    another 10% on release charges the seller twice for one sale.
+   *
+   * 2. IT READ A FIELD NOTHING WRITES. finos-router stores `grossCents`; this read
+   *    `escrow.amount`. On a real escrow that is undefined, so Math.round(undefined * 0.1) is
+   *    NaN — and NaN was being written straight into sellerNet, the ledger and the wallet.
+   *
+   * 3. THE 10% MATCHED NO HUB. Marketplace is 3%. The rate was hardcoded and bypassed the
+   *    Commission Engine entirely: no commissionRules, no revenueConfig, no audit trail.
+   *
+   * The escrows collection is empty in production, so nothing has been mis-charged. This is a
+   * landmine defused before it fired: escrow is on by default in the settlement rules, so these
+   * documents are about to start existing.
+   *
+   * Release now pays out exactly what the engine computed at payment time. */
+  const isEngineEscrow = Number.isFinite(escrow.grossCents);
+  let gross, commission, sellerNet, commissionAlreadyCharged, audit = null;
+
+  if (isEngineEscrow) {
+    gross                    = escrow.grossCents / 100;
+    commissionAlreadyCharged = (escrow.commissionCents || 0) / 100;
+    commission               = 0;   /* already taken at payment — nothing more is owed */
+    sellerNet                = (escrow.sellerNetCents != null)
+                                 ? escrow.sellerNetCents / 100
+                                 : gross - commissionAlreadyCharged;
+  } else if (Number.isFinite(Number(escrow.amount))) {
+    /* Legacy shape. No writer produces it and production holds none, but if one ever appears it
+       is priced by the ONE engine — never by a hardcoded rate. */
+    gross = Number(escrow.amount);
+    const { calculateCommission } = require('./finos-utils');
+    const comm = await calculateCommission(db, {
+      orderAmountCents: Math.round(gross * 100),
+      category:         escrow.category || escrow.hubType || "marketplace",
+      sellerId:         escrow.sellerId,
+      hubId:            escrow.hubType || null,
+    });
+    commission               = comm.commissionCents / 100;
+    commissionAlreadyCharged = 0;
+    sellerNet                = comm.sellerNetCents / 100;
+    audit = {
+      commissionPct: comm.effectiveRate, baseRate: comm.baseRate,
+      pricingSource: comm.pricingSource, ruleId: comm.ruleId, ruleSource: comm.ruleSource,
+      reason: comm.reason, calculatedAt: comm.calculatedAt, engineVersion: comm.engineVersion,
+    };
+  } else {
+    /* FAIL CLOSED. An escrow we cannot price is an escrow we must not release — the old code
+       would have written NaN through the ledger and into a wallet. */
+    throw new HttpsError("failed-precondition",
+      "Escrow " + escrowRef + " has no usable amount (neither grossCents nor amount). Refusing to release.");
+  }
+
+  /* WHT is withheld at PAYOUT by the settlement engine, not here. Deducting it again on release
+     would tax the seller twice on one sale. Only the legacy path, which has no payout pipeline
+     behind it, still applies it. */
+  const wht = (!isEngineEscrow && gross >= _TAX.WHT_THRESHOLD)
+    ? Math.round(gross * _TAX.WHT * 100) / 100
+    : 0;
+  if (wht > 0) sellerNet = Math.round((sellerNet - wht) * 100) / 100;
   const ref        = _genRef("REL");
   const ts         = admin.firestore.FieldValue.serverTimestamp();
 
   const batch = db.batch();
 
-  batch.update(db.collection("escrows").doc(escrowRef), {
+  batch.update(db.collection("escrows").doc(escrowRef), Object.assign({
     status: "released", releasedAt: ts,
     releasedBy: request.auth.uid, sellerNet, commission, wht, note,
-  });
+    /* What was actually taken, and when — so a release is explainable years later. On an
+       engine escrow `commission` is 0 because it was charged at payment; this records what
+       that charge was, rather than leaving a reader to conclude the sale was free. */
+    commissionAlreadyCharged,
+    commissionChargedAtRelease: commission,
+    pricingSource: isEngineEscrow ? 'charged_at_payment (finos-router)' : 'commission_engine',
+    releaseEngineVersion: 2,
+  }, audit || {}));
 
   const ledger = db.collection("paymentLedger");
   batch.set(ledger.doc(ref + ":release"), {
