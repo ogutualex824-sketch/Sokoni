@@ -4194,9 +4194,16 @@ img { max-width: 100%; height: auto; }
     flex-shrink: 0 !important;
   }
 
-  /* Every hub logo — consistent size on mobile */
+  /* Every hub NAV logo — consistent size on mobile.
+
+     `[class*="-logo"] img` was removed. It matched ANY element whose class merely
+     CONTAINED "-logo" and then forced every <img> inside it to height:40px with
+     !important. That is why the splash logo rendered 62x41 instead of 307x204: the
+     wrapper was called ".spl-logo-wrap", and the substring matched.
+     Verified before removing: on index, services, seller, legal and cart it matched
+     NOTHING — it was dead weight that could only do damage. The two selectors below
+     target actual nav logos and are kept. */
   [class*="-nav-logo"],
-  [class*="-logo"] img,
   .nav-logo img {
     height: 40px !important;
     width: auto !important;

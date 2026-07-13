@@ -281,10 +281,21 @@
     if (_forceOffline) {
       window.__sokoniForceOffline = true;
       if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', _loadMock); } else { _loadMock(); }
-    } else {
+    } else if (_isDevHost()) {
+      /* Only auto-load the mock on a DEV host.
+         sokoni-mock-data.js and sokoni-dev-mock.js are in firebase.json's `ignore`
+         list — they are deliberately NEVER deployed. So this fallback could never
+         work in production; all it did there was fire a guaranteed 404 on every page
+         that had not set window.firebaseDB within 2.5s (legal-centre was one).
+         An offline mock that is not deployed cannot rescue an offline user. */
       window.addEventListener('load', function () {
         setTimeout(function () { if (!window.firebaseDB) _loadMock(); }, 2500);
       }, { once: true });
+    }
+
+    function _isDevHost() {
+      var h = location.hostname;
+      return h === 'localhost' || h === '127.0.0.1' || h === '' || /^192\.168\./.test(h);
     }
   }());
 
