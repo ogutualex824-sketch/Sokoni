@@ -1,4 +1,32 @@
-﻿## [2026-07-13] — Identity Command Center v1.0 — Integration Sprint · Professional Profile · Document Vault
+﻿## [2026-07-13] — Identity Command Center Sprint 5 — Executive Intelligence & Adaptive Workspace
+
+### Summary
+
+Sprint 5 transforms the Profile into an executive intelligence layer without adding any new tabs, pages, or Cloud Functions. The Overview tab now opens with a **Unified Search bar** (instant results across 13+ profile sections, marketplace pages, and role-specific hubs), a personalised **greeting** (Good morning/afternoon/evening + first name), a **Smart Insights strip** of up to 6 contextual chips (trust delta since last visit, missing verifications, profile completion alerts, role-specific shortcuts), and a **My Day panel** showing up to 4 prioritised action items personalised per role. The existing timeline is enhanced with **rich event cards** showing type icons, formatted timestamps, amounts, and colour-coded status badges. **Document Intelligence** runs as a non-blocking side effect, scanning the Vault for expired or near-expiry documents and injecting `urgent`/`warn` chips into the insights strip. Quick Links are replaced with **adaptive hub chips** that surface seller, driver, employer, or provider-specific hubs first based on detected roles. All logic is client-side and rule-based. No new CFs deployed. Index count unchanged at 199/200.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `profile.html` | Sprint 5 CSS (search, insights, My Day, hub chips, enhanced timeline); HTML (search bar + greeting card, insights strip, My Day card in Overview); Sprint 5 IIFE (search index builder, `piSearchInput`/`piSearchClear`, `_renderGreeting`, `_renderInsights`, `_renderMyDay`, `_enhanceTimeline`, `_loadDocIntel`, `_renderAdaptiveHubs`, `_s5Boot`, chained `switchTab`, auth boot) |
+
+### Security
+- Unified search operates on client-side index built from already-loaded overview data; no additional CF exposure
+- Document Intelligence reads Vault data through existing `profileGetDocumentVault` (auth-gated on the server)
+- Trust Score delta persisted only to `localStorage` (non-sensitive integer)
+
+### Performance
+- Sprint 5 boot fires at 1400ms after auth — after Sprint 3 (0ms) and Sprint 4 (900ms); no startup regression
+- Timeline enhancement fires at 1800ms; doc intel at 3000ms — both non-blocking
+- `_piOverview` shared cache reused; polling guard prevents re-entrancy
+- All search results are instant (client-side array filter; no network call)
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-13] — Identity Command Center v1.0 — Integration Sprint · Professional Profile · Document Vault
 
 ### Summary
 
