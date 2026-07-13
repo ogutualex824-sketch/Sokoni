@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-notify-v46";
+const CACHE_VERSION = "sokoni-20260713-authfix-v47";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -401,7 +401,11 @@ self.addEventListener("fetch", event => {
   const ALWAYS_FRESH = ["scroll-top.js","contact-guard.js","script.js","style.css","mobile.css","premium.css","seller.css","adult-gate.js",
     "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js",
     "sokoni-payment-engine.js","sokoni-payment-trust.js","sokoni-fraud-engine.js","sokoni-webhook-engine.js",
-    "sokoni-offline.js","sokoni-ui.js","shared-header.js","sw-register.js"];
+    "sokoni-offline.js","sokoni-ui.js","shared-header.js","sw-register.js",
+    /* Auth-critical scripts: a stale version of any of these can silently
+       break sign-in, getRedirectResult, or session persistence. Always
+       fetch from network when reachable so fixes deploy immediately. */
+    "firebase.js","auth.js","session-manager.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;

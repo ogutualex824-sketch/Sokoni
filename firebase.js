@@ -398,6 +398,16 @@ onAuthStateChanged(auth, async (user) => {
         const existing = snap.data();
         localStorage.setItem("sokoniUser", JSON.stringify(existing));
 
+        /* Notify all modules that auth state is confirmed with real profile data.
+           shared-header.js, auth.js, and realtime modules all listen for this. */
+        document.dispatchEvent(new CustomEvent("sokoniAuthReady", {
+          detail: {
+            uid:   user.uid,
+            roles: existing.roles || ["buyer"],
+            role:  existing.role  || (existing.roles && existing.roles[0]) || "buyer",
+          }
+        }));
+
         if (isGoogle) {
           const safeUpdates = { lastLogin: serverTimestamp() };
           if (!existing.photoURL && user.photoURL) {
@@ -493,6 +503,11 @@ onAuthStateChanged(auth, async (user) => {
           lastLogin: serverTimestamp(),
         });
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
+
+        /* Notify all modules that auth state is confirmed — new user path */
+        document.dispatchEvent(new CustomEvent("sokoniAuthReady", {
+          detail: { uid: user.uid, roles: ["buyer"], role: "buyer" }
+        }));
 
         /* ── First-login initialisation: wallet + notification prefs ──
            These are fire-and-forget; failure is non-fatal.            */

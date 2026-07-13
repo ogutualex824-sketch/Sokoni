@@ -159,9 +159,19 @@
     if (!document.hidden) _sync();
   });
 
-  /* Initial state: never show from the flag alone. Probe first; the banner
-     appears only if the probe actually fails. */
-  _sync();
+  /* Initial state: delay 3.5 s before the first probe.
+     Rationale: on PWA launch and mobile wakeup, navigator.onLine is
+     frequently false for the first few seconds even with a healthy network.
+     If we probe immediately and the result is a timeout + onLine=false,
+     the banner appears falsely. Delaying to 3.5 s lets:
+       1. The network interface fully initialise after app/tab launch.
+       2. sokoni-ui.js's own #sk-offline-bar to be created (it delays to
+          3 s); _show() guards against double banners by checking that
+          element's presence — but it must exist first.
+     sokoni-ui.js already runs its first probe at 3 s with a 4 s grace
+     period and handles fast `offline` events independently, so genuine
+     outages are still detected before this module's first probe fires. */
+  setTimeout(_sync, 3500);
 
   /* hide is exposed so sokoni-ui.js can cross-clear this banner when its
      own probe confirms connectivity — avoids double-banner race conditions. */

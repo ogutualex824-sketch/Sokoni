@@ -1,4 +1,49 @@
-﻿## [2026-07-13] — 🚨 HOTFIX P0-7: Checkout fabricated payment confirmations
+﻿## [2026-07-13] — 🚨 HOTFIX P0-8: Google Sign-In fails after redirect + False offline banner
+
+### Summary
+
+Two production defects fixed under code freeze:
+
+**ISSUE 1 — Google Sign-In lost after redirect** (auth/redirect lifecycle race + iOS ITP)
+
+Root causes:
+1. `_isPopupSupported()` in `auth.js` blocked **popup on all iOS devices** (`/iPad|iPhone|iPod/` check). iOS Safari supports popup (opens in a new tab). Only standalone PWA and in-app browsers (CriOS/FxiOS) need redirect. With redirect on iOS, `getRedirectResult()` returns null silently because Safari's ITP blocks the `sokoni-aeb26.firebaseapp.com` iframe from accessing its own storage when embedded in `mysokoni.co.ke` — a cross-site (third-party) context.
+2. **No already-logged-in guard on login.html.** When a Service Worker `controllerchange` event fired mid-auth (during the 900ms + 1200ms timers in `_handleGoogleResult`), `page.reload()` landed the user back on login.html while Firebase had already written the authenticated session. Nothing redirected them to the dashboard.
+3. `navigator.onLine` gate in `signInWithGoogle()` rejected sign-in when iOS/PWA incorrectly reported offline — a device that is fully connected but hasn't yet refreshed its connectivity flag.
+4. `firebase.js` was cached `cacheFirst` by the service worker, meaning stale SDK persisted across deployments.
+5. `sokoniAuthReady` event was never dispatched by `firebase.js`'s `onAuthStateChanged`, even though `shared-header.js`, auth.js, and multiple modules depended on it.
+
+**ISSUE 2 — False "No internet connection" banner during normal browsing** (probe race on PWA launch)
+
+`sokoni-offline.js` called its first `_sync()` (network probe) immediately on script load. On mobile/PWA launch, `navigator.onLine` is frequently false for 1–3 s during startup. If the probe timed out during that window AND `navigator.onLine === false`, the banner appeared with a working internet connection and no way to dismiss automatically.
+
+### Fix
+
+| Change | File | Effect |
+|---|---|---|
+| `_isPopupSupported()` — removed `/iPad\|iPhone\|iPod/` block; only blocks standalone PWA and CriOS/FxiOS | `auth.js` | iOS Safari users use popup (no ITP issue); popup works correctly on regular iOS |
+| Already-logged-in guard — `_alreadyLoggedInGuard()` IIFE added at startup; fast-path from localStorage, slow-path via `sokoniAuthReady` | `auth.js` | SW controllerchange reload no longer strands user on login page |
+| `navigator.onLine` gate removed from `signInWithGoogle()` | `auth.js` | Sign-in no longer blocked when iOS/PWA incorrectly reports offline |
+| `setPersistence(browserLocalPersistence)` added before every `signInWithRedirect()` call | `auth.js` | Auth state survives redirect round-trip regardless of previously set persistence |
+| 900ms fixed delay replaced with 150ms polling loop (max 3 s) for localStorage in `_handleGoogleResult` | `auth.js` | Adapts to actual Firestore latency instead of racing against a fixed timeout |
+| Structured `console.info` logging at every stage of Google sign-in | `auth.js` | Diagnosable in DevTools; errors surface with code + message |
+| `sokoniAuthReady` event dispatched from `onAuthStateChanged` on both existing-user and new-user paths | `firebase.js` | All dependent modules receive live auth identity instead of relying on localStorage polling |
+| `firebase.js`, `auth.js`, `session-manager.js` added to `ALWAYS_FRESH` | `service-worker.js` | Stale auth SDK version can no longer persist across deployments |
+| `CACHE_VERSION` bumped to `authfix-v47` | `service-worker.js` | Forces SW update and cache invalidation across all active clients |
+| Initial `_sync()` replaced with `setTimeout(_sync, 3500)` | `sokoni-offline.js` | Probe runs after network is established; false banner eliminated on PWA launch |
+
+### Files affected
+`auth.js` · `firebase.js` · `service-worker.js` · `sokoni-offline.js`
+
+### Security changes
+None — all changes are within the client-side auth flow.
+
+### Breaking changes
+None — the popup flow on iOS is a transparent change; the user sees an identical experience (OAuth in a tab vs. full-page redirect).
+
+---
+
+## [2026-07-13] — 🚨 HOTFIX P0-7: Checkout fabricated payment confirmations
 
 ### Summary
 
@@ -104,6 +149,34 @@ None.
 ### Not verified
 Push delivery has **never been proven on a real device**. The plumbing is now correct and
 tested; "correct" and "arrived" are different claims. Requires a human with a phone.
+
+---
+
+## [2026-07-13] — Loyalty Push Fix + Delight Layer
+
+### Summary
+Production defect fix: loyalty point notifications silently reached nobody since launch.
+
+**Root cause:** `loyalty.js` queried `collection('fcmTokens')` — a top-level collection that nothing in the codebase has ever written. The client writes `users/{uid}.fcmToken` (a field on the user document). Every query returned empty; every loyalty push was silently dropped.
+
+**Fix:** Routes through the Communication Engine (`notify.js`), which knows where tokens actually live, writes an in-app notification row regardless of push permission, and deduplicates by `orderId` so retried awards don't re-congratulate.
+
+**Delight layer:** `sokoni-delight.js` loaded via `shared-header.js` — provides platform-wide celebration moments (points earned, tier upgrade, reward redeemed) keyed to the same event names the notification engine uses.
+
+### Files Affected
+| File | Change |
+|------|--------|
+| `functions/loyalty.js` | `_notify()` rewritten — routes through Communication Engine; removes dead `collection('fcmTokens')` query; adds in-app channel; adds `dedupeKey` |
+| `sokoni-delight.js` | NEW — delight layer for celebration moments |
+| `shared-header.js` | Injects `sokoni-delight.js` after `sokoni-ui.js` on all pages |
+| `ROADMAP.md` | Enterprise Authentication 2.0 logged to v1.1 backlog |
+
+### Security
+- No auth changes
+- Notification routing unchanged — tokens still sourced from Communication Engine
+
+### Performance
+- Eliminates silent Firestore query against an empty collection on every loyalty award
 
 ---
 

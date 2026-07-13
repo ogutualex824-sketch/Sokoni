@@ -17,6 +17,44 @@
     } catch(e) {}
 })();
 
+/* ── Already-authenticated guard ──────────────────────────────────────────
+   If the user is already signed in (localStorage written by firebase.js's
+   onAuthStateChanged), skip the login/signup form entirely.
+
+   This fixes two failure modes:
+   1. Service Worker `controllerchange` → page.reload() fires mid-auth (during
+      the 900ms + 1200ms timers in _handleGoogleResult), landing the user back
+      on login.html while Firebase already has the session — nothing redirected.
+   2. User navigates back to login page while still signed in.
+
+   Fast path: check localStorage immediately (synchronous, no network).
+   Slow path: listen for sokoniAuthReady dispatched by firebase.js's
+   onAuthStateChanged in case localStorage hasn't been written yet
+   (first load after hard-refresh, token refresh, etc.).
+───────────────────────────────────────────────────────────────────────────── */
+(function _alreadyLoggedInGuard() {
+    function _redir() {
+        var dest = sessionStorage.getItem('sokoniLoginRedirect') || 'index.html';
+        sessionStorage.removeItem('sokoniLoginRedirect');
+        /* Allowlist: relative paths only, no protocol-relative URLs */
+        var safe = /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(dest) && !dest.includes('//')
+            ? dest : 'index.html';
+        window.location.replace(safe);
+    }
+
+    /* Fast path — localStorage already reflects active session */
+    if (localStorage.getItem('loggedIn') === 'true') {
+        document.addEventListener('DOMContentLoaded', _redir);
+        return;
+    }
+
+    /* Slow path — wait for firebase.js to confirm auth state */
+    document.addEventListener('sokoniAuthReady', function _onReady(e) {
+        document.removeEventListener('sokoniAuthReady', _onReady);
+        if (e.detail && e.detail.uid) _redir();
+    });
+}());
+
 /* ── Session inactivity auto-logout ───────────────────────────────────────
    Regular users: 60 min idle → auto sign-out.
    Admin / SuperAdmin: 20 min idle → auto sign-out (tighter window for
@@ -62,9 +100,9 @@
         document.addEventListener(ev, _resetIdleTimer, { passive: true });
     });
 
-    /* Only start timer once user is actually logged in */
+    /* Start idle timer only if the user stays on the page (not logged in already) */
     document.addEventListener('DOMContentLoaded', function(){
-        if(localStorage.getItem('loggedIn') === 'true') _resetIdleTimer();
+        if(localStorage.getItem('loggedIn') !== 'true') _resetIdleTimer();
     });
 
     /* Re-arm when user logs in (SokoniSecurity.setSession calls this) */
@@ -654,15 +692,26 @@ async function completePasswordReset(){
 ══════════════════════════════════════════════════════════════ */
 
 /* Detect whether popup-based OAuth is reliable.
-   Installed PWAs (standalone display-mode) open auth popups in the
-   system browser — the result never returns to the app context.
-   iOS Safari (any mode) also has popup reliability issues. */
+
+   Popup is preferred over redirect because it does not rely on the
+   firebase authDomain iframe postMessage mechanism, which is blocked by
+   Safari ITP (Intelligent Tracking Prevention) on any iOS device.
+   With redirect, getRedirectResult() silently returns null on iOS because
+   the sokoni-aeb26.firebaseapp.com iframe cannot access its own storage
+   from inside mysokoni.co.ke — a third-party context under ITP.
+
+   Only two cases must use redirect:
+   1. Standalone PWA — window.open() exits the PWA into full Safari; the
+      popup result never comes back to the app context.
+   2. In-app browsers (CriOS/FxiOS) — popups are suppressed by the host app. */
 function _isPopupSupported() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                       || window.navigator.standalone === true;
     if (isStandalone) return false;
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    return !isIOS;
+    if (/CriOS|FxiOS/.test(navigator.userAgent)) return false;
+    /* Regular iOS Safari, Android Chrome, and all desktop browsers support
+       popups. Firebase signInWithPopup works correctly on all of these. */
+    return true;
 }
 
 /* Safely update the text span inside the Google button */
@@ -709,12 +758,21 @@ function _googleAuthErr(code) {
    localStorage sync, analytics, and redirect here. */
 async function _handleGoogleResult(result) {
     const user = result.user;
+    console.info('[SOKONI Auth] Handling Google result', { uid: user?.uid });
 
-    /* Small delay so firebase.js's onAuthStateChanged can populate localStorage */
-    await new Promise(resolve => setTimeout(resolve, 900));
+    /* Wait for firebase.js's onAuthStateChanged to populate localStorage.
+       onAuthStateChanged fires a Firestore getDoc (async) before writing,
+       so we poll rather than using a fixed delay. Max wait: 3 s. */
+    const _startWait = Date.now();
+    while (!localStorage.getItem('sokoniUser') && (Date.now() - _startWait) < 3000) {
+        await new Promise(resolve => setTimeout(resolve, 150));
+    }
 
-    /* Fallback: write minimal profile if onAuthStateChanged was too slow */
+    /* Fallback: write minimal profile if onAuthStateChanged was too slow
+       (e.g., Firestore cold start > 3 s). The real profile is written on
+       next page load when onAuthStateChanged fires again. */
     if (!localStorage.getItem('sokoniUser')) {
+        console.warn('[SOKONI Auth] onAuthStateChanged timeout — writing fallback profile');
         const parts = (user.displayName || '').split(' ');
         const fallback = {
             uid:          user.uid,
@@ -760,7 +818,8 @@ async function _handleGoogleResult(result) {
     const _raw  = sessionStorage.getItem('sokoniLoginRedirect') || 'index.html';
     sessionStorage.removeItem('sokoniLoginRedirect');
     const _safe = /^[a-zA-Z0-9_\-\.\/\?=&%#]+$/.test(_raw) && !_raw.includes('//') ? _raw : 'index.html';
-    setTimeout(() => { window.location.href = _safe; }, 1200);
+    console.info('[SOKONI Auth] Redirecting to', _safe);
+    setTimeout(() => { window.location.href = _safe; }, 800);
 }
 
 /* Handle auth/account-exists-with-different-credential.
@@ -785,11 +844,9 @@ function _handleGoogleLinkError(err) {
 
 /* Main entry point — called by onclick="signInWithGoogle()" */
 async function signInWithGoogle() {
-    /* Offline guard */
-    if (!navigator.onLine) {
-        showAuthMsg('Google Sign-In requires an internet connection.', 'error');
-        return;
-    }
+    /* Do NOT gate on navigator.onLine — it is unreliable on iOS Safari and
+       installed PWAs (frequently reports false even with working internet).
+       Firebase will surface auth/network-request-failed if genuinely offline. */
     if (!window.firebaseAuth) {
         showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
         return;
@@ -798,11 +855,19 @@ async function signInWithGoogle() {
     const btn = document.getElementById('googleSignInBtn');
     if (btn) { btn.disabled = true; _googleBtnLabel(btn, 'Connecting to Google…'); }
 
+    console.info('[SOKONI Auth] Google sign-in started', {
+        popupSupported: _isPopupSupported(),
+        standalone: !!(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone),
+        ua: navigator.userAgent.slice(0, 80),
+    });
+
     try {
         const {
             GoogleAuthProvider,
             signInWithPopup,
             signInWithRedirect,
+            setPersistence,
+            browserLocalPersistence,
         } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
 
         const provider = new GoogleAuthProvider();
@@ -811,29 +876,40 @@ async function signInWithGoogle() {
         provider.setCustomParameters({ prompt: 'select_account' });
 
         if (_isPopupSupported()) {
+            console.info('[SOKONI Auth] Using popup flow');
             try {
                 const result = await signInWithPopup(window.firebaseAuth, provider);
+                console.info('[SOKONI Auth] Popup success', { uid: result.user?.uid });
                 await _handleGoogleResult(result);
             } catch (popupErr) {
                 if (popupErr.code === 'auth/popup-blocked') {
                     /* Transparent fallback to redirect */
+                    console.info('[SOKONI Auth] Popup blocked — falling back to redirect');
                     _googleBtnLabel(btn, 'Redirecting to Google…');
+                    /* Ensure session survives the redirect round-trip */
+                    await setPersistence(window.firebaseAuth, browserLocalPersistence).catch(() => {});
                     await signInWithRedirect(window.firebaseAuth, provider);
                 } else if (popupErr.code === 'auth/account-exists-with-different-credential') {
                     _handleGoogleLinkError(popupErr);
                 } else if (popupErr.code === 'auth/popup-closed-by-user' ||
                            popupErr.code === 'auth/cancelled-popup-request') {
-                    _resetGoogleBtn(); /* silent */
+                    _resetGoogleBtn(); /* silent — user dismissed intentionally */
                 } else {
                     throw popupErr;
                 }
             }
         } else {
-            /* PWA / iOS — redirect flow */
+            /* Standalone PWA / CriOS / FxiOS — must use redirect */
+            console.info('[SOKONI Auth] Using redirect flow');
             _googleBtnLabel(btn, 'Redirecting to Google…');
+            /* browserLocalPersistence ensures the auth state survives the
+               redirect round-trip — without this the session defaults to
+               whatever persistence was last set, which may be sessionStorage. */
+            await setPersistence(window.firebaseAuth, browserLocalPersistence).catch(() => {});
             await signInWithRedirect(window.firebaseAuth, provider);
         }
     } catch (err) {
+        console.warn('[SOKONI Auth] Google sign-in error', err.code, err.message);
         _resetGoogleBtn();
         const msg = _googleAuthErr(err.code);
         if (msg) showAuthMsg(msg, 'error');
@@ -844,6 +920,7 @@ async function signInWithGoogle() {
    NOTE: firebase.js dispatches sokoniOAuthRedirectDone for ALL providers.
    The Google-specific name is kept for any legacy listeners. */
 window.addEventListener('sokoniGoogleRedirectDone', async function(e) {
+    console.info('[SOKONI Auth] Redirect result received (Google)', { uid: e.detail?.user?.uid });
     await _handleGoogleResult(e.detail);
 });
 window.addEventListener('sokoniOAuthRedirectDone', async function(e) {
