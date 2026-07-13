@@ -1,0 +1,986 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<meta charset="utf-8">
+<title>SOKONI — P58E Hardware Print Test</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+:root {
+  --bg:#050505; --bg2:#0f0f0f; --bg3:#1a1a1a;
+  --acc:#71ff00; --acc2:#57cc00;
+  --txt:#e8e8e8; --txt2:#888; --txt3:#555;
+  --pass:#71ff00; --fail:#ff3b30; --warn:#ffcc00; --info:#0af;
+  --border:#222; --radius:8px;
+  font-family: 'SF Mono','Fira Code','Consolas',monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);min-height:100vh;padding:0 0 60px}
+header{background:var(--bg2);border-bottom:1px solid var(--border);padding:20px 24px;display:flex;align-items:center;gap:16px}
+header h1{font-size:18px;font-weight:700;letter-spacing:.05em;color:var(--acc)}
+header .sub{font-size:12px;color:var(--txt2);margin-top:2px}
+.badge{background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:11px;color:var(--txt2);white-space:nowrap}
+main{max-width:860px;margin:0 auto;padding:24px 16px}
+
+/* Status bar */
+#statusBar{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:24px;display:flex;align-items:center;gap:12px;font-size:13px}
+#statusDot{width:10px;height:10px;border-radius:50%;background:var(--txt3);flex-shrink:0;transition:background .3s}
+#statusDot.pass{background:var(--pass)}
+#statusDot.fail{background:var(--fail)}
+#statusDot.warn{background:var(--warn)}
+#statusDot.blink{animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+#statusMsg{flex:1;color:var(--txt)}
+#printerName{font-size:11px;color:var(--txt2);font-style:italic}
+
+/* Step cards */
+.step{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+.step-header{padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+.step-num{width:28px;height:28px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--txt2);flex-shrink:0}
+.step-num.pass{background:var(--pass);border-color:var(--pass);color:#000}
+.step-num.fail{background:var(--fail);border-color:var(--fail);color:#fff}
+.step-num.warn{background:var(--warn);border-color:var(--warn);color:#000}
+.step-num.run{background:var(--info);border-color:var(--info);color:#000;animation:blink 1s infinite}
+.step-title{flex:1;font-size:14px;font-weight:600}
+.step-result{font-size:12px;color:var(--txt2)}
+.step-result.pass{color:var(--pass)}
+.step-result.fail{color:var(--fail)}
+.step-result.warn{color:var(--warn)}
+.step-body{padding:0 16px 16px;border-top:1px solid var(--border)}
+
+/* Logs */
+.log{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px;margin-top:10px;font-size:12px;line-height:1.7;max-height:240px;overflow-y:auto}
+.log .ok{color:var(--pass)}
+.log .er{color:var(--fail)}
+.log .wn{color:var(--warn)}
+.log .in{color:var(--info)}
+.log .dm{color:var(--txt2)}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:var(--radius);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;border:none;transition:opacity .15s}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn-acc{background:var(--acc);color:#000}
+.btn-acc:hover:not(:disabled){background:var(--acc2)}
+.btn-ghost{background:var(--bg3);color:var(--txt);border:1px solid var(--border)}
+.btn-ghost:hover:not(:disabled){border-color:var(--acc);color:var(--acc)}
+.btn-danger{background:#ff3b30;color:#fff}
+.btn-danger:hover:not(:disabled){background:#cc2e26}
+.btn-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}
+
+/* Metric grid */
+.metric-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-top:12px}
+.metric{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:10px 12px}
+.metric .label{font-size:11px;color:var(--txt2);margin-bottom:4px}
+.metric .val{font-size:18px;font-weight:700}
+.metric .val.pass{color:var(--pass)}
+.metric .val.fail{color:var(--fail)}
+.metric .val.warn{color:var(--warn)}
+
+/* Report */
+#report{display:none;background:var(--bg2);border:1px solid var(--acc);border-radius:var(--radius);padding:24px;margin-top:24px}
+#report h2{font-size:16px;color:var(--acc);margin-bottom:16px}
+.report-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px}
+.report-row:last-child{border:none}
+.verdict{margin-top:16px;padding:16px;border-radius:var(--radius);font-size:15px;font-weight:700;text-align:center}
+.verdict.go{background:rgba(113,255,0,.1);border:1px solid var(--pass);color:var(--pass)}
+.verdict.nogo{background:rgba(255,59,48,.1);border:1px solid var(--fail);color:var(--fail)}
+.verdict.partial{background:rgba(255,204,0,.1);border:1px solid var(--warn);color:var(--warn)}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+th{text-align:left;padding:6px 8px;border-bottom:1px solid var(--border);color:var(--txt2);font-weight:600}
+td{padding:6px 8px;border-bottom:1px solid var(--border)}
+td.pass{color:var(--pass)}
+td.fail{color:var(--fail)}
+td.warn{color:var(--warn)}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>SOKONI SmartPOS — P58E Hardware Print Test</h1>
+    <div class="sub">Physical hardware test · Windows 11 · Chrome · Web Bluetooth API</div>
+  </div>
+  <div class="badge">v1.0 · 2026-07-13</div>
+</header>
+
+<main>
+
+<!-- Global status bar -->
+<div id="statusBar">
+  <div id="statusDot"></div>
+  <div id="statusMsg">Ready. Start with Step 1 to verify your environment.</div>
+  <div id="printerName"></div>
+</div>
+
+<!-- STEP 1: Environment -->
+<div class="step" id="s1">
+  <div class="step-header" onclick="toggleStep('s1')">
+    <div class="step-num" id="s1-num">1</div>
+    <div class="step-title">Environment Verification</div>
+    <div class="step-result" id="s1-res"></div>
+  </div>
+  <div class="step-body" id="s1-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Checks Web Bluetooth, Web Serial, HTTPS / localhost origin, and user agent.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" onclick="runStep1()">Run Environment Check</button>
+    </div>
+    <div class="log" id="s1-log" style="display:none"></div>
+  </div>
+</div>
+
+<!-- STEP 2: Discover -->
+<div class="step" id="s2">
+  <div class="step-header" onclick="toggleStep('s2')">
+    <div class="step-num" id="s2-num">2</div>
+    <div class="step-title">Discover Printer (BLE Scan)</div>
+    <div class="step-result" id="s2-res"></div>
+  </div>
+  <div class="step-body" id="s2-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Opens the Chrome Bluetooth picker. Select your P58E from the list. The printer must be <strong>powered on</strong> and within 2 metres.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" id="s2-btn" onclick="runStep2()">Scan for Printer</button>
+    </div>
+    <div class="log" id="s2-log" style="display:none"></div>
+  </div>
+</div>
+
+<!-- STEP 3: Connect -->
+<div class="step" id="s3">
+  <div class="step-header" onclick="toggleStep('s3')">
+    <div class="step-num" id="s3-num">3</div>
+    <div class="step-title">Connect &amp; Verify GATT Services</div>
+    <div class="step-result" id="s3-res"></div>
+  </div>
+  <div class="step-body" id="s3-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Connects to the selected device via BLE GATT, discovers the ESC/POS write characteristic, and confirms the connection is stable.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" id="s3-btn" onclick="runStep3()" disabled>Connect</button>
+      <button class="btn btn-ghost" id="s3-disconnect" onclick="disconnectPrinter()" disabled>Disconnect</button>
+    </div>
+    <div class="log" id="s3-log" style="display:none"></div>
+  </div>
+</div>
+
+<!-- STEP 4: ESC/POS Init -->
+<div class="step" id="s4">
+  <div class="step-header" onclick="toggleStep('s4')">
+    <div class="step-num" id="s4-num">4</div>
+    <div class="step-title">ESC/POS Communication Verify</div>
+    <div class="step-result" id="s4-res"></div>
+  </div>
+  <div class="step-body" id="s4-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Sends ESC @ (printer init) followed by a single line feed. The printer should advance paper by one line. Confirm you see paper movement.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" id="s4-btn" onclick="runStep4()" disabled>Send Init + Feed</button>
+    </div>
+    <div class="log" id="s4-log" style="display:none"></div>
+    <div class="btn-row" id="s4-confirm" style="display:none">
+      <p style="font-size:13px;color:var(--warn);width:100%">Did the paper advance?</p>
+      <button class="btn btn-acc" onclick="confirmStep4(true)">Yes — Paper Advanced</button>
+      <button class="btn btn-danger" onclick="confirmStep4(false)">No — No Movement</button>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 5: Production receipt -->
+<div class="step" id="s5">
+  <div class="step-header" onclick="toggleStep('s5')">
+    <div class="step-num" id="s5-num">5</div>
+    <div class="step-title">Print Production Test Receipt</div>
+    <div class="step-result" id="s5-res"></div>
+  </div>
+  <div class="step-body" id="s5-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Prints a full SOKONI receipt: store name, branch, cashier, 3 items, subtotal, VAT, total, payment method, QR code, and Code128 barcode.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" id="s5-btn" onclick="runStep5()" disabled>Print Test Receipt</button>
+    </div>
+    <div class="log" id="s5-log" style="display:none"></div>
+    <div class="btn-row" id="s5-confirm" style="display:none">
+      <p style="font-size:13px;color:var(--warn);width:100%">Inspect the physical receipt.</p>
+      <button class="btn btn-acc" onclick="confirmStep5(true)">Receipt printed correctly</button>
+      <button class="btn btn-ghost" onclick="confirmStep5('partial')">Partial / garbled</button>
+      <button class="btn btn-danger" onclick="confirmStep5(false)">Nothing printed</button>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 6: Stress test -->
+<div class="step" id="s6">
+  <div class="step-header" onclick="toggleStep('s6')">
+    <div class="step-num" id="s6-num">6</div>
+    <div class="step-title">Stress Test (5 Consecutive Receipts)</div>
+    <div class="step-result" id="s6-res"></div>
+  </div>
+  <div class="step-body" id="s6-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Prints 5 receipts back-to-back with a 600ms gap. Tests BLE stability under rapid sequential writes.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" id="s6-btn" onclick="runStep6()" disabled>Start Stress Test</button>
+    </div>
+    <div class="log" id="s6-log" style="display:none"></div>
+    <div class="metric-grid" id="s6-metrics" style="display:none">
+      <div class="metric"><div class="label">Sent</div><div class="val" id="s6-sent">0/5</div></div>
+      <div class="metric"><div class="label">Failed</div><div class="val" id="s6-fail">0</div></div>
+      <div class="metric"><div class="label">Avg Write Time</div><div class="val" id="s6-avg">—</div></div>
+      <div class="metric"><div class="label">Disconnects</div><div class="val" id="s6-disc">0</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 7: Reconnect test -->
+<div class="step" id="s7">
+  <div class="step-header" onclick="toggleStep('s7')">
+    <div class="step-num" id="s7-num">7</div>
+    <div class="step-title">Disconnect &amp; Reconnect Test</div>
+    <div class="step-result" id="s7-res"></div>
+  </div>
+  <div class="step-body" id="s7-body">
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">You will manually power the printer off, then back on. This page will detect the disconnect and attempt auto-reconnect. The auto-reconnect uses exponential backoff: 1.5s → 3s → 6s → max 30s.</p>
+    <div class="btn-row">
+      <button class="btn btn-acc" id="s7-btn" onclick="runStep7()" disabled>Start Reconnect Test</button>
+    </div>
+    <div class="log" id="s7-log" style="display:none"></div>
+  </div>
+</div>
+
+<!-- STEP 8: Diagnostics -->
+<div class="step" id="s8">
+  <div class="step-header" onclick="toggleStep('s8')">
+    <div class="step-num" id="s8-num">8</div>
+    <div class="step-title">Diagnostics Snapshot</div>
+    <div class="step-result" id="s8-res"></div>
+  </div>
+  <div class="step-body" id="s8-body">
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-acc" id="s8-btn" onclick="runStep8()">Capture Diagnostics</button>
+    </div>
+    <div id="s8-content" style="display:none">
+      <table id="s8-table">
+        <thead><tr><th>Property</th><th>Value</th></tr></thead>
+        <tbody id="s8-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 9: Failure analysis -->
+<div class="step" id="s9">
+  <div class="step-header" onclick="toggleStep('s9')">
+    <div class="step-num" id="s9-num">9</div>
+    <div class="step-title">Failure Diagnosis</div>
+    <div class="step-result" id="s9-res"></div>
+  </div>
+  <div class="step-body" id="s9-body">
+    <div class="log" id="s9-log" style="margin-top:10px;display:none"></div>
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px" id="s9-placeholder">No failures detected yet. Failures from Steps 1–8 will be diagnosed here automatically.</p>
+  </div>
+</div>
+
+<!-- STEP 10: Report -->
+<div class="step" id="s10">
+  <div class="step-header" onclick="toggleStep('s10')">
+    <div class="step-num" id="s10-num">10</div>
+    <div class="step-title">Final Certification Report</div>
+    <div class="step-result" id="s10-res"></div>
+  </div>
+  <div class="step-body" id="s10-body">
+    <div class="btn-row" style="margin-top:10px">
+      <button class="btn btn-acc" onclick="runStep10()">Generate Report</button>
+    </div>
+    <div id="report">
+      <h2>SOKONI P58E Print Certification — <span id="reportDate"></span></h2>
+      <div id="reportRows"></div>
+      <div class="verdict" id="reportVerdict"></div>
+      <p style="font-size:11px;color:var(--txt2);margin-top:12px;text-align:center">This report reflects physical hardware results only. No simulation. No mocking.</p>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<script>
+/* ─────────────────────────────────────────────────────────────
+   ESC/POS ENCODER (embedded — no external dependency)
+───────────────────────────────────────────────────────────── */
+const ESC=0x1B,GS=0x1D,LF=0x0A;
+class ESCPos {
+  constructor(){this.b=[]}
+  _a(x){if(Array.isArray(x))this.b.push(...x);else this.b.push(x);return this}
+  init(){return this._a([ESC,0x40])}
+  ac(){return this._a([ESC,0x61,0x01])}
+  al(){return this._a([ESC,0x61,0x00])}
+  ar(){return this._a([ESC,0x61,0x02])}
+  bold(on){return this._a([ESC,0x45,on?1:0])}
+  sz(s){
+    const m={normal:[GS,0x21,0x00],tall:[GS,0x21,0x01],wide:[GS,0x21,0x10],big:[GS,0x21,0x11]};
+    return this._a(m[s]||m.normal);
+  }
+  inv(on){return this._a([GS,0x42,on?1:0])}
+  text(s){
+    for(let i=0;i<s.length;i++)this.b.push(s.charCodeAt(i)&0xFF);
+    return this;
+  }
+  lf(n=1){for(let i=0;i<n;i++)this.b.push(LF);return this}
+  cut(){return this._a([GS,0x56,0x00])}
+  qr(data,size=4){
+    const n=data.length+3,pL=n&0xFF,pH=(n>>8)&0xFF;
+    this._a([GS,0x28,0x6B,0x04,0x00,0x31,0x41,0x32,0x00]);
+    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x43,size]);
+    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x45,0x31]);
+    this._a([GS,0x28,0x6B,pL,pH,0x31,0x50,0x30]);
+    for(let i=0;i<data.length;i++)this._a(data.charCodeAt(i)&0xFF);
+    this._a([GS,0x28,0x6B,0x03,0x00,0x31,0x51,0x30]);
+    return this;
+  }
+  barcode(data,type=73,h=64,w=2){
+    this._a([GS,0x68,h,GS,0x77,w,GS,0x6B,type,data.length]);
+    for(let i=0;i<data.length;i++)this._a(data.charCodeAt(i)&0xFF);
+    return this;
+  }
+  build(){return new Uint8Array(this.b)}
+}
+
+function W32(l,r){
+  const rs=String(r),w=32;
+  return String(l).slice(0,w-rs.length-1).padEnd(w-rs.length-1)+' '+rs;
+}
+function sep32(ch='-'){return ch.repeat(32)}
+
+function buildTestReceipt(receiptNum,isStress=false){
+  const e=new ESCPos().init();
+  const now=new Date();
+  const dateStr=now.toLocaleDateString('en-KE');
+  const timeStr=now.toLocaleTimeString('en-KE');
+
+  e.ac().bold(true).sz('big').text('SOKONI').lf().sz('normal').bold(false);
+  e.text('West Westlands Branch').lf();
+  e.text('Tel: +254 700 000 000').lf();
+  e.text('PIN: P051521597J').lf();
+  e.al().text(sep32()).lf();
+
+  e.text(W32('Receipt #:','RCP-'+String(receiptNum).padStart(6,'0'))).lf();
+  e.text(W32('Date:',dateStr)).lf();
+  e.text(W32('Time:',timeStr)).lf();
+  e.text(W32('Cashier:','TEST-OPERATOR')).lf();
+  if(isStress) e.text(W32('Test Run:','STRESS #'+receiptNum)).lf();
+  e.text(sep32()).lf();
+
+  e.bold(true).text('Item'.padEnd(20)+' Qty'+'Amount'.padStart(8)).lf().bold(false);
+  e.text(sep32()).lf();
+
+  const items=[
+    {n:'Maziwa Mala 500ml',q:2,p:65},
+    {n:'Unga wa Ngano 2kg',q:1,p:180},
+    {n:'Sukari Kilo 1kg',q:3,p:130},
+  ];
+  const subtotal=items.reduce((s,i)=>s+i.q*i.p,0);
+  const vat=Math.round(subtotal*0.16);
+  const total=subtotal+vat;
+
+  for(const it of items){
+    const nm=it.n.slice(0,20).padEnd(20);
+    const qty=String(it.q).padStart(4);
+    const amt=String(it.q*it.p).padStart(8);
+    e.text(nm+qty+amt).lf();
+  }
+
+  e.text(sep32()).lf();
+  e.text(W32('Subtotal:','KES '+subtotal)).lf();
+  e.text(W32('VAT 16%:','KES '+vat)).lf();
+  e.text(sep32()).lf();
+  e.bold(true).sz('tall').text(W32('TOTAL:','KES '+total)).lf().sz('normal').bold(false);
+  e.text(sep32()).lf();
+  e.text(W32('Payment:','M-PESA')).lf();
+  e.text(W32('Tendered:','KES '+total)).lf();
+  e.text(W32('Change:','KES 0')).lf();
+  e.text(sep32()).lf();
+
+  e.lf().ac().text('Scan for digital receipt').lf();
+  e.qr('https://mysokoni.co.ke/r/RCP-'+String(receiptNum).padStart(6,'0'),4);
+  e.lf();
+  e.barcode('RCP'+String(receiptNum).padStart(6,'0'),73,48,2);
+  e.lf(2).ac().text('Thank you! Asante sana!').lf();
+  e.text('Returns within 7 days with receipt').lf();
+  e.lf(3).cut();
+  return e.build();
+}
+
+/* ─────────────────────────────────────────────────────────────
+   BLE STATE
+───────────────────────────────────────────────────────────── */
+const BLE_SERVICE  ='0000ff00-0000-1000-8000-00805f9b34fb';
+const BLE_WRITE    ='0000ff02-0000-1000-8000-00805f9b34fb';
+const BLE_FALLBACK_SERVICES=['000018f0-0000-1000-8000-00805f9b34fb','e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+const BLE_FALLBACK_CHARS   =['00002af1-0000-1000-8000-00805f9b34fb','bef8d6c9-9c21-4c9e-b632-bd58c1009f9f'];
+
+const state={
+  device:null,server:null,char:null,
+  connected:false,
+  reconnectTimer:null,reconnectAttempts:0,
+  disconnectExpected:false,
+  failures:[],
+  stepResults:{},
+  stressStats:{sent:0,failed:0,times:[],disconnects:0},
+  s7Phase:null,s7ResolveFunc:null,
+};
+
+/* ─────────────────────────────────────────────────────────────
+   UI HELPERS
+───────────────────────────────────────────────────────────── */
+function setStatus(msg,cls=''){
+  document.getElementById('statusMsg').textContent=msg;
+  const dot=document.getElementById('statusDot');
+  dot.className=cls;
+}
+function setPrinterName(n){
+  document.getElementById('printerName').textContent=n?'Connected: '+n:'';
+}
+function setStep(id,cls,res=''){
+  document.getElementById(id+'-num').className='step-num '+cls;
+  const r=document.getElementById(id+'-res');
+  r.className='step-result '+cls;
+  r.textContent=res;
+  state.stepResults[id]=cls;
+}
+function log(id,msg,cls='dm'){
+  const el=document.getElementById(id+'-log');
+  if(!el)return;
+  el.style.display='block';
+  const line=document.createElement('div');
+  line.className=cls;
+  line.textContent='['+new Date().toLocaleTimeString('en-KE',{hour12:false})+'] '+msg;
+  el.appendChild(line);
+  el.scrollTop=el.scrollHeight;
+}
+function toggleStep(id){
+  const body=document.getElementById(id+'-body');
+  body.style.display=body.style.display==='none'?'block':'none';
+}
+function addFailure(step,msg,fix){
+  state.failures.push({step,msg,fix});
+  updateStep9();
+}
+function updateStep9(){
+  const logEl=document.getElementById('s9-log');
+  const ph=document.getElementById('s9-placeholder');
+  if(!state.failures.length){ph.style.display='block';logEl.style.display='none';return;}
+  ph.style.display='none';
+  logEl.style.display='block';
+  logEl.innerHTML='';
+  for(const f of state.failures){
+    const d=document.createElement('div');d.className='er';
+    d.innerHTML='[Step '+f.step+'] '+escHtml(f.msg);
+    logEl.appendChild(d);
+    const fix=document.createElement('div');fix.className='wn';
+    fix.innerHTML='  Fix: '+escHtml(f.fix);
+    logEl.appendChild(fix);
+  }
+  setStep('s9',state.failures.length?'warn':'pass',state.failures.length+' issue(s)');
+}
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   WRITE HELPER — chunk at 512 bytes, wait between chunks
+───────────────────────────────────────────────────────────── */
+async function writeChunked(char,data){
+  const CHUNK=512;
+  for(let i=0;i<data.length;i+=CHUNK){
+    await char.writeValueWithoutResponse(data.slice(i,i+CHUNK));
+    await new Promise(r=>setTimeout(r,20));
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 1 — Environment
+───────────────────────────────────────────────────────────── */
+async function runStep1(){
+  setStep('s1','run','Checking…');
+  log('s1','Starting environment check…','in');
+  let pass=true;
+
+  const origin=location.origin;
+  const isSecure=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1'||location.protocol==='file:';
+  log('s1','Origin: '+origin+' — '+(isSecure?'OK (secure context)':'FAIL — must be HTTPS or localhost'),isSecure?'ok':'er');
+  if(!isSecure){pass=false;addFailure(1,'Not a secure context ('+origin+')','Open this file over HTTPS or use localhost');}
+
+  const hasBT=!!navigator.bluetooth;
+  log('s1','Web Bluetooth API: '+(hasBT?'AVAILABLE':'NOT AVAILABLE'),hasBT?'ok':'er');
+  if(!hasBT){pass=false;addFailure(1,'Web Bluetooth not available','Use Chrome 85+ on Windows/Mac/Linux. Ensure chrome://flags/#enable-web-bluetooth is enabled.');}
+
+  const hasSer=!!navigator.serial;
+  log('s1','Web Serial API: '+(hasSer?'AVAILABLE':'not available (optional)'),hasSer?'ok':'wn');
+
+  const isChrome=navigator.userAgent.includes('Chrome');
+  const chromeVer=isChrome?(navigator.userAgent.match(/Chrome\/([\d]+)/)||[])[1]:'?';
+  log('s1','Browser: '+(isChrome?'Chrome '+chromeVer:'Non-Chrome — Web BT may not work'),isChrome?'ok':'wn');
+  if(!isChrome){pass=false;addFailure(1,'Browser is not Chrome','Web Bluetooth requires Chrome 85+ on desktop');}
+
+  const isWin=navigator.platform.startsWith('Win')||navigator.userAgent.includes('Windows');
+  log('s1','Platform: '+(isWin?'Windows — OK':'Non-Windows'),isWin?'ok':'dm');
+
+  const isMobile=window.matchMedia('(pointer:coarse)').matches;
+  log('s1','Input: '+(isMobile?'Touch (mobile/tablet)':'Pointer (desktop) — recommended'),'dm');
+
+  log('s1','Secure context: '+window.isSecureContext,'dm');
+
+  if(pass){
+    setStep('s1','pass','PASS');
+    setStatus('Environment OK. Proceed to Step 2.','pass');
+    log('s1','All required APIs available. Bluetooth must be enabled in OS settings.','ok');
+    document.getElementById('s2-btn').disabled=false;
+  } else {
+    setStep('s1','fail','FAIL');
+    setStatus('Environment check failed — see Step 1 log.','fail');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 2 — Discover
+───────────────────────────────────────────────────────────── */
+async function runStep2(){
+  setStep('s2','run','Scanning…');
+  setStatus('Opening Bluetooth picker — select your P58E printer…','blink');
+  log('s2','Calling navigator.bluetooth.requestDevice()…','in');
+  log('s2','A browser popup will appear. Select your P58E printer.','wn');
+
+  try{
+    const device=await navigator.bluetooth.requestDevice({
+      filters:[
+        {namePrefix:'P58'},{namePrefix:'P80'},{namePrefix:'PT-'},
+        {namePrefix:'BTP'},{namePrefix:'HOP'},{namePrefix:'POS'},
+        {namePrefix:'Printer'},{namePrefix:'RPP'},{namePrefix:'BTPT'},
+        {name:'P58E'},{name:'P58-E'}
+      ],
+      optionalServices:[BLE_SERVICE,...BLE_FALLBACK_SERVICES]
+    });
+    state.device=device;
+    log('s2','Device selected: '+device.name+' ('+device.id+')','ok');
+    setStep('s2','pass',device.name||'Unknown');
+    setStatus('Printer found: '+device.name+'. Proceed to Step 3.','pass');
+    document.getElementById('s3-btn').disabled=false;
+
+    device.addEventListener('gattserverdisconnected',onDisconnect);
+  } catch(e){
+    log('s2','Picker cancelled or error: '+e.message,'er');
+    setStep('s2','fail','FAIL');
+    setStatus('Printer not selected. Try again.','fail');
+    addFailure(2,e.message,'Power on the printer, ensure Bluetooth is on in Windows, and try again');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 3 — Connect
+───────────────────────────────────────────────────────────── */
+async function runStep3(){
+  if(!state.device){log('s3','No device selected. Run Step 2 first.','er');return;}
+  setStep('s3','run','Connecting…');
+  setStatus('Connecting to '+state.device.name+'…','blink');
+  log('s3','Connecting to GATT server…','in');
+  document.getElementById('s3-btn').disabled=true;
+
+  try{
+    const server=await state.device.gatt.connect();
+    state.server=server;
+    log('s3','GATT connected','ok');
+
+    let service=null,char=null;
+    const serviceUUIDs=[BLE_SERVICE,...BLE_FALLBACK_SERVICES];
+    const charUUIDs=[BLE_WRITE,...BLE_FALLBACK_CHARS];
+
+    for(const svcUUID of serviceUUIDs){
+      try{
+        service=await server.getPrimaryService(svcUUID);
+        log('s3','Service found: '+svcUUID,'ok');
+        break;
+      } catch(_){
+        log('s3','Service '+svcUUID+' not found, trying next…','dm');
+      }
+    }
+    if(!service){throw new Error('No compatible ESC/POS service found on this device');}
+
+    for(const charUUID of charUUIDs){
+      try{
+        char=await service.getCharacteristic(charUUID);
+        log('s3','Write characteristic found: '+charUUID,'ok');
+        break;
+      } catch(_){
+        log('s3','Char '+charUUID+' not found, trying next…','dm');
+      }
+    }
+    if(!char){throw new Error('No writable ESC/POS characteristic found');}
+
+    state.char=char;
+    state.connected=true;
+    state.reconnectAttempts=0;
+
+    const props=[];
+    if(char.properties.write)props.push('write');
+    if(char.properties.writeWithoutResponse)props.push('writeWithoutResponse');
+    log('s3','Characteristic properties: '+props.join(', '),'ok');
+
+    setStep('s3','pass','Connected');
+    setStatus('Connected to '+state.device.name,'pass');
+    setPrinterName(state.device.name);
+    document.getElementById('s3-disconnect').disabled=false;
+    document.getElementById('s4-btn').disabled=false;
+  } catch(e){
+    log('s3','Connection failed: '+e.message,'er');
+    setStep('s3','fail','FAIL');
+    setStatus('Connection failed: '+e.message,'fail');
+    document.getElementById('s3-btn').disabled=false;
+    addFailure(3,'GATT connect failed: '+e.message,'Ensure printer is on and within range. Try restarting printer and browser.');
+  }
+}
+
+async function disconnectPrinter(){
+  state.disconnectExpected=true;
+  if(state.server&&state.server.connected){
+    state.server.disconnect();
+    log('s3','Manual disconnect sent','wn');
+  }
+  state.connected=false;
+  state.char=null;
+  document.getElementById('s3-disconnect').disabled=true;
+  document.getElementById('s3-btn').disabled=false;
+  setPrinterName('');
+  setStatus('Disconnected','warn');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DISCONNECT HANDLER + RECONNECT
+───────────────────────────────────────────────────────────── */
+function onDisconnect(){
+  state.connected=false;
+  state.char=null;
+  if(state.disconnectExpected){state.disconnectExpected=false;return;}
+  setStatus('Printer disconnected unexpectedly — attempting reconnect…','blink');
+  log('s3','Unexpected disconnect. Scheduling reconnect.','wn');
+  if(state.s7Phase==='waiting'){
+    log('s7','Disconnect detected! Starting reconnect loop…','in');
+    setStep('s7','run','Reconnecting…');
+  }
+  scheduleReconnect();
+}
+
+function scheduleReconnect(){
+  if(state.reconnectAttempts>=8){
+    log('s3','Max reconnect attempts reached (8). Give up.','er');
+    setStatus('Reconnect failed after 8 attempts','fail');
+    if(state.s7Phase==='waiting'){
+      setStep('s7','fail','FAIL — timeout');
+      if(state.s7ResolveFunc)state.s7ResolveFunc(false);
+    }
+    return;
+  }
+  const delay=Math.min(1500*Math.pow(2,state.reconnectAttempts),30000);
+  state.reconnectAttempts++;
+  log('s3','Reconnect attempt '+state.reconnectAttempts+' in '+(delay/1000).toFixed(1)+'s…','wn');
+  state.reconnectTimer=setTimeout(doReconnect,delay);
+}
+
+async function doReconnect(){
+  if(!state.device)return;
+  log('s3','Attempting reconnect…','in');
+  try{
+    const server=await state.device.gatt.connect();
+    state.server=server;
+    let service=null,char=null;
+    for(const svcUUID of[BLE_SERVICE,...BLE_FALLBACK_SERVICES]){
+      try{service=await server.getPrimaryService(svcUUID);break;}catch(_){}
+    }
+    for(const charUUID of[BLE_WRITE,...BLE_FALLBACK_CHARS]){
+      try{char=await service.getCharacteristic(charUUID);break;}catch(_){}
+    }
+    if(!char)throw new Error('Characteristic not found after reconnect');
+    state.char=char;
+    state.connected=true;
+    state.reconnectAttempts=0;
+    log('s3','Reconnected successfully','ok');
+    setStatus('Reconnected to '+state.device.name,'pass');
+    setPrinterName(state.device.name);
+    if(state.s7Phase==='waiting'){
+      setStep('s7','pass','Reconnected');
+      if(state.s7ResolveFunc)state.s7ResolveFunc(true);
+    }
+  } catch(e){
+    log('s3','Reconnect attempt failed: '+e.message,'er');
+    scheduleReconnect();
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 4 — ESC/POS init
+───────────────────────────────────────────────────────────── */
+async function runStep4(){
+  if(!state.char){log('s4','Not connected','er');return;}
+  setStep('s4','run','Sending…');
+  log('s4','Sending ESC @ (init) + 1 LF…','in');
+  document.getElementById('s4-btn').disabled=true;
+  try{
+    const data=new ESCPos().init().lf().build();
+    await writeChunked(state.char,data);
+    log('s4',data.length+' bytes written without error','ok');
+    document.getElementById('s4-confirm').style.display='flex';
+    setStatus('ESC/POS init sent. Did the paper advance?','warn');
+  } catch(e){
+    log('s4','Write failed: '+e.message,'er');
+    setStep('s4','fail','FAIL');
+    addFailure(4,'ESC/POS init write failed: '+e.message,'Check printer is powered on and BLE connection is still active');
+    document.getElementById('s4-btn').disabled=false;
+  }
+}
+function confirmStep4(yes){
+  document.getElementById('s4-confirm').style.display='none';
+  if(yes){
+    setStep('s4','pass','Paper advanced');
+    setStatus('ESC/POS communication confirmed. Proceed to Step 5.','pass');
+    document.getElementById('s5-btn').disabled=false;
+    log('s4','Operator confirmed paper movement — ESC/POS verified','ok');
+  } else {
+    setStep('s4','fail','No paper movement');
+    setStatus('ESC/POS write succeeded but printer did not move paper.','fail');
+    addFailure(4,'Bytes written but no paper movement','Check paper roll is loaded, printer mode is not paused, and correct BLE characteristic was used');
+    document.getElementById('s4-btn').disabled=false;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 5 — Full test receipt
+───────────────────────────────────────────────────────────── */
+async function runStep5(){
+  if(!state.char){log('s5','Not connected','er');return;}
+  setStep('s5','run','Printing…');
+  document.getElementById('s5-btn').disabled=true;
+  const t0=Date.now();
+  try{
+    const data=buildTestReceipt(1);
+    log('s5','Receipt payload: '+data.length+' bytes','in');
+    await writeChunked(state.char,data);
+    const elapsed=Date.now()-t0;
+    log('s5','All chunks written in '+elapsed+'ms','ok');
+    document.getElementById('s5-confirm').style.display='flex';
+    setStatus('Receipt sent. Inspect the physical printout.','warn');
+  } catch(e){
+    log('s5','Write error: '+e.message,'er');
+    setStep('s5','fail','FAIL');
+    addFailure(5,'Receipt write failed: '+e.message,'Check connection stability; retry after reconnect');
+    document.getElementById('s5-btn').disabled=false;
+  }
+}
+function confirmStep5(result){
+  document.getElementById('s5-confirm').style.display='none';
+  if(result===true){
+    setStep('s5','pass','Printed correctly');
+    log('s5','Operator confirmed correct receipt printout','ok');
+    setStatus('Receipt verified. Proceed to Step 6.','pass');
+    document.getElementById('s6-btn').disabled=false;
+  } else if(result==='partial'){
+    setStep('s5','warn','Partial/garbled');
+    log('s5','Operator reported partial or garbled receipt','wn');
+    addFailure(5,'Receipt printed but garbled','58mm paper = 32 char width. Check ESCPos encoder W32() alignment. Verify paper roll is 58mm not 80mm.');
+    document.getElementById('s6-btn').disabled=false;
+  } else {
+    setStep('s5','fail','Nothing printed');
+    log('s5','Operator confirmed nothing printed','er');
+    addFailure(5,'No printout despite bytes sent','Paper may be loaded backwards (thermal side faces inward). Check paper roll orientation.');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 6 — Stress test
+───────────────────────────────────────────────────────────── */
+async function runStep6(){
+  if(!state.char){log('s6','Not connected','er');return;}
+  setStep('s6','run','Running…');
+  document.getElementById('s6-btn').disabled=true;
+  document.getElementById('s6-metrics').style.display='grid';
+  state.stressStats={sent:0,failed:0,times:[],disconnects:0};
+  log('s6','Starting 5-receipt stress test…','in');
+
+  const origDisc=state.device?state.device.ongattserverdisconnected:null;
+  const discCount={n:0};
+
+  for(let i=1;i<=5;i++){
+    log('s6','Printing receipt '+i+'/5…','dm');
+    const t0=Date.now();
+    try{
+      await writeChunked(state.char,buildTestReceipt(100+i,true));
+      const ms=Date.now()-t0;
+      state.stressStats.times.push(ms);
+      state.stressStats.sent++;
+      document.getElementById('s6-sent').textContent=state.stressStats.sent+'/5';
+      log('s6','Receipt '+i+' OK in '+ms+'ms','ok');
+    } catch(e){
+      state.stressStats.failed++;
+      document.getElementById('s6-fail').textContent=state.stressStats.failed;
+      document.getElementById('s6-fail').className='val fail';
+      log('s6','Receipt '+i+' FAILED: '+e.message,'er');
+      addFailure(6,'Stress test receipt '+i+' failed: '+e.message,'BLE buffer overflow; increase chunk delay or reduce print payload');
+    }
+    if(i<5)await new Promise(r=>setTimeout(r,600));
+  }
+
+  const avg=state.stressStats.times.length?Math.round(state.stressStats.times.reduce((a,b)=>a+b,0)/state.stressStats.times.length):0;
+  document.getElementById('s6-avg').textContent=avg+'ms';
+  document.getElementById('s6-disc').textContent=state.stressStats.disconnects;
+
+  if(state.stressStats.failed===0){
+    setStep('s6','pass','5/5 pass');
+    log('s6','Stress test complete. All 5 receipts sent without error.','ok');
+    setStatus('Stress test passed. Proceed to Step 7.','pass');
+    document.getElementById('s7-btn').disabled=false;
+  } else {
+    setStep('s6','warn',state.stressStats.sent+'/5 pass');
+    log('s6','Stress test complete with '+state.stressStats.failed+' failure(s).','wn');
+    document.getElementById('s7-btn').disabled=false;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 7 — Reconnect test
+───────────────────────────────────────────────────────────── */
+async function runStep7(){
+  setStep('s7','run','Waiting for disconnect…');
+  log('s7','Waiting for you to POWER OFF the printer now.','wn');
+  log('s7','Once disconnected, the page will auto-reconnect. Then power the printer back on.','dm');
+  document.getElementById('s7-btn').disabled=true;
+  state.s7Phase='waiting';
+
+  const result=await new Promise(resolve=>{
+    state.s7ResolveFunc=resolve;
+    setTimeout(()=>{
+      if(state.s7Phase==='waiting'){
+        log('s7','60-second timeout. The printer was not powered off or did not reconnect.','wn');
+        state.s7Phase=null;
+        resolve(null);
+      }
+    },60000);
+  });
+  state.s7Phase=null;
+  state.s7ResolveFunc=null;
+
+  if(result===true){
+    setStep('s7','pass','Reconnected OK');
+    log('s7','Auto-reconnect succeeded','ok');
+    setStatus('Reconnect test passed. Proceed to Step 8.','pass');
+  } else if(result===false){
+    setStep('s7','fail','Reconnect failed');
+    addFailure(7,'Auto-reconnect exhausted 8 attempts','Increase max attempts or shorten backoff. Ensure printer powers back on within 30s.');
+  } else {
+    setStep('s7','warn','Skipped (timeout)');
+    log('s7','Timed out waiting for power-cycle. Marking as skipped.','wn');
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 8 — Diagnostics
+───────────────────────────────────────────────────────────── */
+async function runStep8(){
+  document.getElementById('s8-content').style.display='block';
+  const tbody=document.getElementById('s8-tbody');
+  tbody.innerHTML='';
+  const rows=[
+    ['Device Name',state.device?state.device.name:'—'],
+    ['Device ID',state.device?state.device.id:'—'],
+    ['GATT Connected',state.server?String(state.server.connected):'false'],
+    ['Char UUID',state.char?state.char.uuid:'—'],
+    ['Write w/o Response',state.char?String(!!state.char.properties.writeWithoutResponse):'—'],
+    ['Write (standard)',state.char?String(!!state.char.properties.write):'—'],
+    ['Reconnect Attempts',String(state.reconnectAttempts)],
+    ['Stress: Sent',String(state.stressStats.sent)],
+    ['Stress: Failed',String(state.stressStats.failed)],
+    ['Stress: Avg Write',state.stressStats.times.length?Math.round(state.stressStats.times.reduce((a,b)=>a+b,0)/state.stressStats.times.length)+'ms':'—'],
+    ['Failures Logged',String(state.failures.length)],
+    ['Web Bluetooth',navigator.bluetooth?'Available':'Not available'],
+    ['Web Serial',navigator.serial?'Available':'Not available'],
+    ['User Agent',navigator.userAgent.slice(0,80)+'…'],
+    ['Origin',location.origin],
+    ['Secure Context',String(window.isSecureContext)],
+  ];
+  for(const [k,v] of rows){
+    const tr=document.createElement('tr');
+    const td1=document.createElement('td');td1.style.color='var(--txt2)';td1.textContent=k;
+    const td2=document.createElement('td');
+    td2.textContent=v;
+    if(v==='true'||v.includes('Available'))td2.className='pass';
+    else if(v==='false'||v==='Not available')td2.className='fail';
+    tr.appendChild(td1);tr.appendChild(td2);
+    tbody.appendChild(tr);
+  }
+  setStep('s8','pass','Captured');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   STEP 10 — Report
+───────────────────────────────────────────────────────────── */
+function runStep10(){
+  const report=document.getElementById('report');
+  report.style.display='block';
+  document.getElementById('reportDate').textContent=new Date().toLocaleString('en-KE');
+
+  const checks=[
+    {label:'Environment (Step 1)',id:'s1'},
+    {label:'Printer Discovery (Step 2)',id:'s2'},
+    {label:'BLE Connection (Step 3)',id:'s3'},
+    {label:'ESC/POS Init (Step 4)',id:'s4'},
+    {label:'Test Receipt Print (Step 5)',id:'s5'},
+    {label:'Stress Test 5x (Step 6)',id:'s6'},
+    {label:'Reconnect Test (Step 7)',id:'s7'},
+    {label:'Diagnostics (Step 8)',id:'s8'},
+  ];
+
+  const rows=document.getElementById('reportRows');
+  rows.innerHTML='';
+  let passes=0,fails=0,warns=0;
+  for(const c of checks){
+    const res=state.stepResults[c.id]||'not run';
+    const row=document.createElement('div');row.className='report-row';
+    const label=document.createElement('span');label.textContent=c.label;
+    const status=document.createElement('span');
+    status.textContent=res==='pass'?'PASS':res==='fail'?'FAIL':res==='warn'?'WARN':'NOT RUN';
+    if(res==='pass'){status.style.color='var(--pass)';passes++;}
+    else if(res==='fail'){status.style.color='var(--fail)';fails++;}
+    else if(res==='warn'){status.style.color='var(--warn)';warns++;}
+    else{status.style.color='var(--txt2)';}
+    row.appendChild(label);row.appendChild(status);
+    rows.appendChild(row);
+  }
+
+  if(state.failures.length){
+    const fhead=document.createElement('div');fhead.className='report-row';
+    const fl=document.createElement('span');fl.style.color='var(--txt2)';fl.textContent='Failures logged';
+    const fv=document.createElement('span');fv.style.color='var(--fail)';fv.textContent=state.failures.length;
+    fhead.appendChild(fl);fhead.appendChild(fv);rows.appendChild(fhead);
+  }
+
+  const verdict=document.getElementById('reportVerdict');
+  if(fails>0){
+    verdict.className='verdict nogo';
+    verdict.textContent='NO-GO — '+fails+' critical failure(s) must be resolved';
+    setStep('s10','fail','NO-GO');
+  } else if(warns>0||state.failures.length>0){
+    verdict.className='verdict partial';
+    verdict.textContent='CONDITIONAL — '+warns+' warning(s); investigate before production use';
+    setStep('s10','warn','CONDITIONAL');
+  } else if(passes>=5){
+    verdict.className='verdict go';
+    verdict.textContent='GO — P58E verified for production SmartPOS use';
+    setStep('s10','pass','GO');
+  } else {
+    verdict.className='verdict partial';
+    verdict.textContent='INCOMPLETE — not all steps were run';
+    setStep('s10','warn','INCOMPLETE');
+  }
+}
+
+/* Open all step bodies by default so operator sees everything */
+document.querySelectorAll('.step-body').forEach(b=>b.style.display='block');
+</script>
+</body>
+</html>

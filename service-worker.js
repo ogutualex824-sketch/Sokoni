@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-menu-fix-v67";
+const CACHE_VERSION = "sokoni-20260713-icon-standardization-v69";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -178,6 +178,10 @@ const PRECACHE_PAGES = [
 const PRECACHE_STATIC = [
   "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css", "/sokoni-form-nav.js", "/leaflet.min.js", "/leaflet.min.css",
   "/manifest.json", "/assets/sokoni logoo.jpeg", "/assets/logosokoni.png",
+  /* Notification artwork. The push handler runs when the tab is closed and often when the
+     device is on a poor connection — if the icon isn't already cached, the notification
+     renders with the browser's generic bell instead of the SOKONI logo. */
+  "/assets/icons/icon-192.png", "/assets/icons/icon-96.png", "/favicon.ico",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
   "/landlord.css", "/compact-grid.css", "/sokoni-premium-v2.css",
@@ -685,7 +689,7 @@ async function cacheFirstImage(request) {
 /* â"€â"€ PUSH NOTIFICATIONS â"€â"€ */
 self.addEventListener("push", event => {
   if (!event.data) return;
-  let data = { title: "SOKONI", body: "You have a new notification!", icon: "/assets/logosokoni.png" };
+  let data = { title: "SOKONI", body: "You have a new notification!", icon: '/assets/icons/icon-192.png' };
   try { data = { ...data, ...event.data.json() }; } catch {}
 
   /* The notification engine nests its payload under `data` and names the target
@@ -699,8 +703,8 @@ self.addEventListener("push", event => {
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
-      icon: data.icon || "/assets/logosokoni.png",
-      badge: "/assets/logosokoni.png",
+      icon: data.icon || '/assets/icons/icon-192.png',
+      badge: '/assets/icons/icon-96.png',
       ...(img ? { image: img } : {}),
       ...(tag ? { tag, renotify: true } : {}),   /* one thread per order, not eleven */
       vibrate: [200, 100, 200],
@@ -756,21 +760,21 @@ async function _checkScheduledNotifications() {
         title: "⚡ Daily Deals on SOKONI",
         body:  "New products & flash sales added today - check what's new!",
         url:   "/flashsale",
-        icon:  "/assets/logosokoni.png",
+        icon:  '/assets/icons/icon-192.png',
       },
       {
         id:    "sell-reminder",
         title: "🏪 Got something to sell?",
         body:  "List it on SOKONI for FREE and reach thousands of Kenyan buyers today.",
         url:   "/seller",
-        icon:  "/assets/logosokoni.png",
+        icon:  '/assets/icons/icon-192.png',
       },
       {
         id:    "cart-reminder",
         title: "🛒 Items waiting in your cart!",
         body:  "Complete your purchase before items sell out.",
         url:   "/cart",
-        icon:  "/assets/logosokoni.png",
+        icon:  '/assets/icons/icon-192.png',
       },
     ];
 
@@ -780,7 +784,7 @@ async function _checkScheduledNotifications() {
     await self.registration.showNotification(n.title, {
       body:    n.body,
       icon:    n.icon,
-      badge:   "/assets/logosokoni.png",
+      badge:   '/assets/icons/icon-96.png',
       vibrate: [100, 50, 100],
       tag:     "sokoni-" + n.id,
       data:    { url: n.url },

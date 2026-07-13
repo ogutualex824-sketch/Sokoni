@@ -50,6 +50,8 @@ const admin  = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const sms    = require('./sms-service');
 const sokoniAt = require('./sokoni-at');
+const emailSvc = require('./email-service');
+const emailTpl = require('./email-templates');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = () => admin.firestore();
@@ -136,7 +138,7 @@ const DEDUPE_WINDOW_MS = 60 * 1000;
    here: the worst case is one duplicate notification suppressed, never a wrong one
    sent, because the key also carries the type and the uid. */
 function _contentHash(title, body) {
-  const s = String(title || '') + ' ' + String(body || '');
+  const s = String(title || '') + '\u0000' + String(body || '');
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i++) {
     h ^= s.charCodeAt(i);
@@ -265,7 +267,7 @@ async function sendPush(uid, payload) {
     android: {
       priority: payload.priority === 'critical' ? 'high' : 'normal',
       notification: {
-        channelId: payload.priority === 'critical' ? 'sokoni_critical' : 'sokoni_default',
+        channelId: payload.priority === 'critical' ? 'sokoni_critical' : `sokoni_${payload.category || 'default'}`,
         ...(payload.group ? { tag: payload.group } : {}),   /* grouping/collapse */
         color: '#71ff00',
         ...(payload.image ? { imageUrl: payload.image } : {}),
@@ -282,8 +284,11 @@ async function sendPush(uid, payload) {
     },
     webpush: {
       notification: {
-        icon: '/assets/sokoni%20logoo.jpeg',
-        badge: '/assets/sokoni%20logoo.jpeg',
+        /* The official icon set, generated from assets/logosokoni.png. The badge is the
+           monochrome-able silhouette Android draws in the status bar — it must be small and
+           square, so it is NOT the same file as the icon. */
+        icon: '/assets/icons/icon-192.png',
+        badge: '/assets/icons/icon-96.png',
         ...(payload.image ? { image: payload.image } : {}),
         /* tag collapses successive updates for the same order into ONE notification
            instead of stacking eleven. renotify still alerts on each change. */
@@ -320,7 +325,7 @@ async function sendPush(uid, payload) {
 /* ══════════════════════════════════════════════════════════════════════════
    notify() — the ONE entry point
 ═════════════════════════════════════════════════════════════════════════ */
-async function notify({ uid, type, title, body, vars = {}, phone, image, deepLink, group, dedupeKey, data }) {
+async function notify({ uid, type, title, body, vars = {}, phone, email, image, deepLink, group, dedupeKey, data }) {
   const t = TYPES[type];
   if (!t) throw new HttpsError('invalid-argument', `Unknown notification type "${type}".`);
   if (!uid) throw new HttpsError('invalid-argument', 'uid is required.');
@@ -398,7 +403,7 @@ async function notify({ uid, type, title, body, vars = {}, phone, image, deepLin
   if (ch.push) {
     const r = await sendPush(uid, {
       title, body, image, deepLink, group, type,
-      priority: t.priority, data,
+      priority: t.priority, category: t.category, data,
     });
     pushOk = r.ok;
     result.channels.push = r.ok ? 'sent' : `failed:${r.reason || 'unknown'}`;
@@ -420,6 +425,54 @@ async function notify({ uid, type, title, body, vars = {}, phone, image, deepLin
                         : 'queued';
   } else if (ch.smsFallback && pushOk) {
     result.channels.sms = 'not_needed_push_delivered';
+  }
+
+  /* EMAIL — queued asynchronously so a slow SendGrid call never blocks the CF.
+     Requires either a caller-supplied `email` address or a Firebase Auth lookup.
+     Never sent for critical types (OTP etc.) — those use SMS for immediate delivery.
+     Respects ch.email which is already preference-checked via resolveChannels(). */
+  if (ch.email) {
+    try {
+      let toEmail = email;
+      if (!toEmail) {
+        const authUser = await admin.auth().getUser(uid).catch(() => null);
+        toEmail = authUser && authUser.email ? authUser.email : null;
+      }
+      if (toEmail) {
+        const catSender = {
+          payments: emailSvc.FROM.payments,
+          orders:   emailSvc.FROM.notifications,
+          delivery: emailSvc.FROM.notifications,
+          loyalty:  emailSvc.FROM.notifications,
+          marketplace: emailSvc.FROM.marketplace,
+        };
+        const from = catSender[t.category] || emailSvc.FROM.notifications;
+        const ctaUrl = deepLink ? `https://mysokoni.co.ke${deepLink.startsWith('/') ? '' : '/'}${deepLink}` : 'https://mysokoni.co.ke';
+        const html = emailTpl.base({
+          title,
+          preheader: body,
+          cta: 'Open SOKONI',
+          ctaUrl,
+          body: `<p style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#374151;line-height:1.6;">${body}</p>`,
+        });
+        await emailSvc.queue({
+          to:       toEmail,
+          from,
+          subject:  title,
+          html,
+          text:     emailTpl.toPlainText(html),
+          uid,
+          category: t.category,
+          emailId:  `email:${key}`,
+        });
+        result.channels.email = 'queued';
+      } else {
+        result.channels.email = 'no_address';
+      }
+    } catch (err) {
+      result.channels.email = 'failed';
+      logger.error('[notify] email queue failed', { error: err.message, uid: uid.slice(0, 8) });
+    }
   }
 
   await logRef.update({

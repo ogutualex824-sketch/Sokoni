@@ -2,6 +2,111 @@
 
 ---
 
+## 2026-07-13 — Brand Asset Standardization Sprint (Icons Only)
+
+**Scope:** `assets/logosokoni.png` becomes the single source of truth for every application
+icon, favicon and notification icon. Brand artwork — header logos, splash, hero, wordmarks,
+email and PDF branding — is explicitly **out of scope and unchanged**.
+
+### Findings (the reason this sprint existed)
+- **SOKONI was shipping two different logos at once.** `icon-512.png` (the installed PWA
+  icon) was generated from the official logo — mean rgb(209,224,197) — but
+  `favicon-32x32.png` and `apple-touch-icon.png` were a **different, near-black image** —
+  mean rgb(6,8,1). The browser tab and the iOS home screen showed one brand; the installed
+  app showed another. Nothing in the build compared them, so nothing caught it.
+- **Six pages had a blank tab icon.** `admin-feedback.html`, `api-gateway.html`,
+  `business-kpi.html`, `feedback.html`, `inventory.html` and `observability.html` pointed at
+  `assets/favicon.png`, `icons/icon-32.png`, `icons/icon-192.png` and `logo.png` — **none of
+  which exist in the repository.**
+- **452 pages loaded a 512×512, 301 KB PNG to draw a 16px favicon.**
+- **Push notifications had no correct icon.** `functions/notify.js` pointed at
+  `/assets/sokoni%20logoo.jpeg` — a different, typo-named JPEG (and a JPEG cannot carry the
+  transparency an Android status-bar badge needs). The service workers loaded the full
+  301 KB source as a 24px badge, on every notification, on Kenyan mobile data.
+- The asset is named **`logosokoni.png`, all lowercase.** Firebase Hosting is case-sensitive,
+  so the capitalised spelling would have 404'd and given every user a blank icon.
+
+### Changes
+- **`assets/icons/*` (9 PNGs) + `favicon.ico` ×2** — regenerated from `assets/logosokoni.png`
+  with high-quality downsampling; the `.ico` files are real ICO containers (PNG-encoded 16px
+  and 32px entries). Source art occupies ~52% of the canvas, so it is already inside the
+  maskable safe zone — no padding required.
+- **318 HTML pages** — every `<link rel="…icon…">` replaced with one canonical block. `<img>`,
+  `og:image` and `twitter:image` were deliberately **not** touched.
+- **`functions/notify.js`** — webpush `icon` → `/assets/icons/icon-192.png`,
+  `badge` → `/assets/icons/icon-96.png`.
+- **`service-worker.js`** — push handler icons/badges repointed to the official set; icon
+  artwork added to `PRECACHE_STATIC` so a notification arriving offline still renders the
+  logo rather than the browser's generic bell. `CACHE_VERSION` → `…icon-standardization-v69`.
+- **`firebase-messaging-sw.js`** — same repointing.
+- **`functions/notify.js`** — a raw `NUL` byte inside a string literal (a hash separator) made
+  the file **binary to git**: no diffs, no merges, and `grep` skipped it entirely, on a file
+  two sessions edit. Replaced with a backslash-u escape sequence — identical at runtime, but a text file again.
+- **`scripts/test-icons.js` — NEW CI gate.** Decodes every icon (dependency-free PNG/ICO
+  reader) and fingerprints it against the source, so a mismatched icon can never ship again;
+  fails on any page referencing an icon that does not exist on disk; asserts every page uses
+  the canonical block; and asserts no brand `<img>` was repointed at an app icon — the gate
+  enforces the sprint's own scope limit.
+
+### Database changes
+None.
+
+### API changes
+None.
+
+### Security changes
+None.
+
+### Breaking changes
+None. Icon paths are additive; no filename used by header, splash, hero, email or PDF
+branding was renamed or moved.
+
+### Deployment
+`firebase deploy --only hosting,functions:notify` — the service-worker version bump is what
+delivers the new icons to existing installs.
+
+---
+
+## 2026-07-13 — Phase 0 Go-Live Certification Sprint (Security Fixes + Notification Channel + HMAC)
+
+**Scope:** Final pre-launch validation — 3 Firestore rules security fixes, IntaSend HMAC hardening, commission safety, notify.js email channel, Service Worker v68
+
+### Security Fixes — Firestore Rules
+- **`firestore.rules`** — Removed duplicate `conversations/{convId}/messages` block (lines 3058–3082) that defeated `allow create: if false` guard; merged sender soft-edit/delete rule into canonical block — closed silent message spoofing risk
+- **`firestore.rules`** — `deliveryLocations/{riderId}` read changed from `if isAuthed()` to scoped: rider themselves + `viewers` array (populated by dispatch CF on assignment) + admin — closed real-time GPS location leak of all delivery riders to any authenticated user
+- **`firestore.rules`** — `driverLocations/{driverId}` read changed from `if isAuthed()` to same `viewers`-array pattern — closed GPS location leak for ride-hailing drivers
+
+### Payment Hardening — `functions/index.js`
+- **`intasendWebhook`** — HMAC now computed over `req.rawBody` instead of `JSON.stringify(req.body)` — fixes signature validation failure on any JSON with non-deterministic key order
+- **`intasendWebhook`** — Commission calculation failure now queues to `commissionReviewQueue` for manual review instead of silently applying a hardcoded 10% fallback — closes revenue accuracy gap
+
+### Notification Engine — `functions/notify.js`
+- Added missing `email` channel to the unified `notify()` function — the channel was defined in preference config and the CF existed, but the code path was absent; email notifications now send for all 50+ notification types that have email enabled
+- Email lookup falls back to Firebase Auth record when `email` parameter is not passed
+- Category-to-sender-address mapping (payments→payments@, orders→notifications@, etc.)
+
+### Infrastructure
+- **`service-worker.js`** — Bumped CACHE_VERSION to `sokoni-20260713-notify-channels-v68`
+
+### Documentation (7 files)
+- `docs/GO_LIVE_CHECKLIST.md` — Pre-launch checklist; 3 security rules fixes marked complete
+- `docs/DEPLOYMENT_GUIDE.md` — Deploy commands, rollback procedures, quota-blocked CFs
+- `docs/SECURITY_GUIDE.md` — Auth, App Check, rules, rate limiting, secrets, payment security
+- `docs/ADMINISTRATOR_GUIDE.md` — Role matrix, daily ops, email architecture, payment ops
+- `docs/DISASTER_RECOVERY_GUIDE.md` — RTO/RPO targets, PITR, 7 runbooks, rollback procedures
+- `docs/MONITORING_GUIDE.md` — 18 GCP alert policies, health check endpoints, dashboards
+- `docs/PRODUCTION_OPERATIONS_MANUAL.md` — Platform overview, daily ops, known limitations
+
+### Known Issues (v1.0 — not fixed)
+- SmartPOS Daraja direct-to-seller bypass: STK push through seller's own Paybill bypasses SOKONI settlement. Architectural redesign required. Scheduled for v1.1. Daraja merchants excluded from Phase 0.
+- Redis VPC connector not configured. Rate limiting falls back to Firestore. Scheduled for v1.1.
+- `dispatch CF must populate driverLocations.viewers` array when a ride is assigned — rule fix applied, CF update pending.
+
+### Files Changed
+`firestore.rules`, `functions/index.js`, `functions/notify.js`, `service-worker.js`, `docs/GO_LIVE_CHECKLIST.md`, `docs/DEPLOYMENT_GUIDE.md`, `docs/SECURITY_GUIDE.md`, `docs/ADMINISTRATOR_GUIDE.md`, `docs/DISASTER_RECOVERY_GUIDE.md`, `docs/MONITORING_GUIDE.md`, `docs/PRODUCTION_OPERATIONS_MANUAL.md`
+
+---
+
 ## 2026-06-28 — Enterprise Production Security & Operations Audit (18 Fixes)
 
 **Commit:** `ed2297a` | **Files Changed:** 14 | **Scope:** Full platform security hardening pre-launch
