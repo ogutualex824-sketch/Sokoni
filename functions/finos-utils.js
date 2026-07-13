@@ -294,7 +294,21 @@ function settleHoldTxn(txn, db, entityId, amountCents, { description }) {
 /* ─────────────────────────────────────────────────────────────
    COMMISSION ENGINE  (server-side only)
 ──────────────────────────────────────────────────────────────*/
-async function calculateCommission(db, { orderAmountCents, category, sellerId, hubId }) {
+async function calculateCommission(db, opts) {
+  /* Two call sites forgot the `db` argument and called calculateCommission({...}). `db` then
+     bound to the options object, `opts` was undefined, and destructuring it threw a TypeError
+     that BOTH call sites caught and treated as "commission = 0" (financial-os.js) or "charge
+     a flat 10%" (index.js). The platform silently earned nothing on every FinOS payment.
+     A misuse this expensive must not be catchable as a generic error, so it is named. */
+  if (!db || typeof db.collection !== 'function') {
+    throw new TypeError(
+      'calculateCommission(db, opts): first argument must be a Firestore instance. ' +
+      'Called as calculateCommission(opts) — commission cannot be computed and MUST NOT ' +
+      'be defaulted to zero or to a flat rate. Fix the call site.'
+    );
+  }
+  const { orderAmountCents, category, sellerId, hubId } = opts || {};
+
   /* Fetch rules; small collection — fetch all and pick best match */
   const rulesSnap = await db.collection('commissionRules').where('isActive', '==', true).get().catch(() => null);
   const rules = rulesSnap ? rulesSnap.docs.map(d => ({ id: d.id, ...d.data() })) : [];

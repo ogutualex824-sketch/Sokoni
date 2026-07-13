@@ -5069,13 +5069,22 @@ exports.intasendWebhook = onRequest(
       let sokoniCut = 0, commissionPct = 0;
       try {
         const { calculateCommission } = require('./finos-utils');
-        const commResult = await calculateCommission({
+        /* `db` is the required first argument. It was omitted, so calculateCommission bound
+           `db` to the options object, `opts` was undefined, destructuring threw, and this
+           landed in the catch below — meaning EVERY payment through this webhook was charged
+           the hardcoded 10% fallback instead of its category's real rate. Legal should be 12%,
+           marketplace 3%, digital 10%... all of them were 10%.
+
+           The second bug is in the success path itself: the function returns `effectiveRate`,
+           not `commissionPct`. So even when it worked, `commissionPct` recorded as 0 and the
+           commissionLedger entry claimed a 0% rate against a non-zero cut. */
+        const commResult = await calculateCommission(db, {
           orderAmountCents: amount * 100,
           category,
           sellerId: payData.uid,
         });
         sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
-        commissionPct = commResult.commissionPct || 0;
+        commissionPct = commResult.effectiveRate ?? 0;
       } catch (commErr) {
         console.error('[webhook] Commission calc failed, applying 10% fallback', commErr.message);
         commissionPct = 10;
