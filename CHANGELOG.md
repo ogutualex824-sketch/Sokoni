@@ -1,4 +1,112 @@
-﻿## [2026-07-13] — SOKONI Design System v1.0
+﻿## [2026-07-13] — Commission Engine: subscription-plan discounts (server-enforced)
+
+Constitution: `docs/PLATFORM_CONSTITUTION.md`. No new engine — the existing Commission Engine and
+the canonical Subscription Engine were extended, not rebuilt.
+
+### The mismatch
+
+PLANS advertised commission rates the server never charged. `checkout.html` applied
+`SokoniPay.PLANS[plan].commissionPct` client-side; no server rail ever did.
+
+### Why the obvious fix was wrong
+
+The advertised plan rates are **absolute** (free 15%, starter 10%, pro 7%, business 4%) and date
+from a pricing model where the base was ~15%. The consolidated marketplace base is **3%**.
+Enforcing them as written would have *raised* commission for every seller — free 3% → 15%, and
+even Business 3% → 4%. The "discount" was a penalty.
+
+A plan is therefore an **adjustment to the base**, never a replacement — which is also what the
+brief describes: "Marketplace, Base 3%, Business Discount, Final 2%".
+
+### No new plan table
+
+The Subscription Engine already carried the discount: `sub-billing.js` defines
+`features.commission_discount_pct` (basic 2, pro 5, enterprise 10, enterprise-tier 15) and
+`subscription-core` surfaces it in the canonical `features` map. **Nothing had ever read it.**
+Defining a second plan table would be the duplication the constitution forbids, so the engine
+consumes that value via `subscription-core.resolveSubscription()` — the canonical read seam over
+all five subscription stores. No second lookup, no second table.
+
+The same points-vs-relative trap applies to those values: taken as *points*, a `pro` seller on a
+3% base would pay 3 − 5 = 0%, and enterprise would go negative. The field is labelled
+"Commission discount (%)", so it is **relative**:
+
+    effective = base * (1 - discount/100), floored
+    marketplace 3%, enterprise (15% off) -> 2.55%
+
+Points-off remains available explicitly via `deltaPct` in `revenueConfig/plan_adjustments`, which
+overrides the catalog. Both forms are supported; only the safe one is the default.
+
+### Resolution order
+
+commissionRules -> revenueConfig(seller -> hub -> global) -> category default -> **plan
+adjustment** -> validate.
+
+A `fixed` rule has no percentage to discount, so plans do not apply to it. An expired or cancelled
+plan does not keep discounting — status is recomputed from dates by the Subscription Engine, so a
+stale stored status cannot leak a benefit.
+
+### Validation
+
+Floored at `PLAN_MIN_PCT` (0.5%) and clamped to [0, 100]. A misconfigured `deltaPct: -99` lands on
+the floor rather than paying the seller to sell. A plan discounts; it never inverts.
+
+### Audit
+
+`commissionLedger` now retains `baseRate`, `planId`, `planStatus`, `planAdjustment`, `planSource`,
+`ruleId`, `ruleSource`, `reason`, `calculatedAt`, `engineVersion`. The rate that was charged can
+always be explained years later — no historical settlement is ambiguous.
+
+### Transparency
+
+`previewCommission` returns `{ baseRate, planAdjustment, effectiveRate, reason, breakdown }` —
+Base Rate / Plan Benefit / Final Commission / Reason, ready to render. It is the **only** sanctioned
+source of a commission figure for a client.
+
+### Security
+
+`commissionPct` removed from `sokoni-pay.js` and `sokoni-subscriptions.js` PLANS. `checkout.html`
+no longer computes a rate; it renders the server's. The drift guard fails the deploy if a
+client-side plan rate reappears (proven: exit 1).
+
+### Billing efficiency
+
+Plan-adjustment config is ONE Firestore document, memoised for 60s per container — not a read per
+plan, and not a read per payment.
+
+### Files
+
+`functions/commission-config.js`, `functions/finos-utils.js`, `functions/index.js`,
+`functions/commission.js`, `scripts/verify-commission-single-source.js`, `checkout.html`,
+`sokoni-pay.js`, `sokoni-subscriptions.js`
+
+### Database
+
+No schema change, no migration. New optional document `revenueConfig/plan_adjustments`. New audit
+fields appended to `commissionLedger` records going forward; existing records are untouched.
+
+### Deployment / rollback
+
+Deployed: `previewCommission`, `onSellerPaymentCreated`, `fosSecureWebhook`, `intasendWebhook`,
+`getCommissionConfig`, plus hosting. Rollback: revert the commit and redeploy those five
+functions — plan adjustments simply stop applying. No data migration.
+
+### Operator action
+
+Plan discounts are live from the plan catalog's existing `commission_discount_pct`. To change or
+disable them **without a deploy**, write `revenueConfig/plan_adjustments`, e.g.
+`{ "business": { "deltaPct": -1, "label": "Business Plan Discount" } }`.
+
+### Testing
+
+11 assertions: the zeroing trap (enterprise -> 2.55%, not 0%), the brief's own example (3% -> 2%),
+plan-change-changes-commission, expired-plan-does-not-discount, the misconfiguration clamp, and
+audit completeness. Regressions green: no hub repriced; `_resolveCommission` still reproduces the
+old arithmetic exactly.
+
+---
+
+## [2026-07-13] — SOKONI Design System v1.0
 
 ### Summary
 
