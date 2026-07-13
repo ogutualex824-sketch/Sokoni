@@ -1,4 +1,61 @@
-﻿﻿## [2026-07-13] — Platform-Wide Service Worker Recovery Sprint (SW v63)
+﻿﻿## [2026-07-13] — Legal Hub Layout Recovery & Whitespace Fix Sprint
+
+### Summary
+
+The large blank gap on `/legal-hub` was **not a layout bug**. It was a JavaScript
+load-order defect that left a lazy-load placeholder permanently on screen.
+
+`#lawyersGrid` stayed stuck on its "Loading advocates…" skeleton forever. The page
+printed "12 advocates found" but rendered zero advocate cards — the dead skeleton
+plus the collapsed grid *was* the empty space. No CSS rule was at fault: no fixed
+heights, no `100vh`, no margin collapse, no absolute positioning.
+
+### Root cause
+
+`lawyerCard()` at `legal-hub.html:1725` calls `_esc()`, but `_esc` was declared at
+line **4369 — inside a later `<script>` block**. Function declarations hoist *within*
+a script block, not *across* blocks, so at render time the identifier did not exist.
+It threw `ReferenceError: _esc is not defined`, the render aborted, and nothing ever
+replaced the skeleton.
+
+### Files affected
+
+- `legal-hub.html` — escaper declared in the **first** inline block, above its first
+  use. Renamed to `lhEsc` (page-local) because `sokoni-pay.js` already owns a global
+  `const _esc`; re-declaring that name across blocks risks a redeclaration
+  `SyntaxError` that would kill the payments SDK on this page. 41 call sites updated.
+- `legal-centre.html` — the signed-out branch of `onAuthStateChanged` blanked
+  `#lc-certloading`'s text but left it displayed; an emptied `.lc-empty` still renders
+  its padding as a ~96px dead box. Now hidden rather than emptied.
+
+### Verification (production, cold loads)
+
+| | before | after |
+|---|---|---|
+| advocate cards | 0 | 12 |
+| "Loading advocates…" | stuck forever | gone |
+| page height | 1,268px | 4,783px |
+| gaps > 80px | yes | none |
+| JS errors | `_esc is not defined` | none |
+
+All **12 legal-hub tab panes** audited (Find a Lawyer, Legal Documents, Court Help,
+Know Your Rights, Register as Lawyer, Log Case, Appointments, Property Legal, Vehicle
+Legal, Business Legal, My Dashboard, Pro Dashboard): no stuck loaders, no empty
+containers, no gap > 80px. `/legal` and `/legal-centre` clean. Demand Letter sits
+directly beneath the Legal Documents content, as intended.
+
+Tested: iPhone/WebKit 393px, Android/Chrome 412px, Desktop/Chrome 1440px. Physical
+device and installed-PWA testing was **not** performed — no such hardware available
+in this environment.
+
+### API / schema / security
+
+No API changes. No schema changes. No Cloud Function changes. Escaping behaviour is
+unchanged (same HTML-entity escaping, now simply defined before it is used).
+
+---
+
+## [2026-07-13] — Platform-Wide Service Worker Recovery Sprint (SW v63)
 
 ### Summary
 
