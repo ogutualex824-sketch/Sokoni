@@ -5607,6 +5607,7 @@ window.logoutUser = logoutUser;
 
     /* Health + Goals — need completion data */
     _c6('profileGetCompletion').then(function(comp) {
+      window._piCompletionData = comp; /* cache for later sprints — avoids duplicate CF calls */
       var ov2 = _ov6();   /* re-read in case it loaded after _s6Loaded set */
       _renderProfileHealth(ov2, comp);
       _renderGoals(ov2, comp);
@@ -6550,15 +6551,18 @@ window.logoutUser = logoutUser;
     setTimeout(_renderTimelineFilters,1400); /* timeline renders at ~1800ms (S5) → check at 4000ms total */
     setTimeout(_initWidgetCollapse,900);     /* after all dynamic cards settle */
 
-    /* Health explanations + evening summary */
+    /* Health explanations + evening summary — cache-first to avoid duplicate CF call */
     function _withComp(comp){
       var ov2=_ov8();
       _enhanceHealthExplain(ov2,comp);
       _renderEveningSummary(ov2,comp);
     }
-    if(window.firebase&&firebase.functions){
+    if(window._piCompletionData){
+      /* Sprint 6 already fetched and cached this data — reuse it */
+      _withComp(window._piCompletionData);
+    } else if(window.firebase&&firebase.functions){
       firebase.functions().httpsCallable('profileGetCompletion')({})
-        .then(function(r){_withComp(r.data);})
+        .then(function(r){window._piCompletionData=r.data;_withComp(r.data);})
         .catch(function(){_withComp(null);});
     } else {
       _withComp(null);
