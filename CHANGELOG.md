@@ -1,4 +1,100 @@
-﻿﻿## [2026-07-13] — Legal Hub Layout Recovery & Whitespace Fix Sprint
+﻿﻿## [2026-07-13] — Legal Hub Recovery Sprint (defect half; feature half deferred to v1.1)
+
+### Scope note
+
+The Legal Hub brief covered 18 areas. Under the v1.0.0 code freeze, only the defect,
+security and correctness half was executed. Everything requiring new Cloud Functions,
+new collections or new user-facing capability is inventoried below and deferred to v1.1.
+Nothing in this entry changes an API, a schema, or the canonical legal engine.
+
+### Defects fixed (all verified in production)
+
+**1. 8 of 21 legal ops were unreachable.** `legal-dispatch.js` kept a hand-written `ROUTES`
+allowlist duplicating the handler map in `legal-agreements.js`. It drifted — map grew to 21,
+allowlist stayed at 13. Five of the missing 8 are called by shipped UI, so these were dead in
+production: `legalMyCertificates` + `legalGetCertificate` (Legal Centre certificate view) and
+`legalPreviewAgreements` + `legalScheduleVersion` + `legalRollbackVersion` (3 admin panels).
+Routes are now **derived** from the handler map, so the drift class is gone. Because the
+dispatcher is a router and *not* an authorization boundary, `scripts/verify-legal-dispatch.js`
+now enforces the invariant that every handler authenticates itself (21/21 do: 15× `_assertAdmin`,
+6× `_uid`) and fails CI if anyone adds an unguarded handler.
+
+**2. Legal booking confirmation emails never sent.** `emailOnLegalConsultation` read
+`clientId` / `lawyerName` / `specialty` / `date` / `time` / `fee`. `bookLegalConsultation`
+writes `clientUid` / `providerName` / `specializations` / `dateTime` / `consultationFee`.
+Not one name matched, so `emailForUid(undefined)` returned nothing and the trigger bailed at
+its `if (!email) return;` guard — silently, every time. Same silent field-name class as the
+three push bugs from the Communication Engine sprint.
+
+**3. Lawyer cards were starved to 165px.** `compact-grid.css:1284` forces `.lawyers-grid` to
+2 columns under 600px and was beating the page's own single-column rule. At 393px that left
+~165px per card, which collapsed the card's internal flex layout: `.lc-info` computed to
+**0px wide** (practice-area labels spilling out of a zero-width box) and the Message/Follow
+buttons clipped their own labels (63px of text in a 42px button).
+
+**4. Three dead controls.** "Follow" and "Share" on every lawyer card called
+`window.SokoniSocial`, but `sokoni-social.js` was never loaded on this page — both guarded by
+`&&`, so they failed silently. The "Open Now" filter bailed on `if (!window.db) return;`;
+nothing in the repo ever assigns `window.db`, and it used the compat API on a modular-Firebase
+page, so it toggled its own colour and filtered nothing.
+
+**5. Quick-nav scrolled away.** `.law-tabs` was `position:static` on a 4,700px page.
+Now sticky beneath the global header, with `scroll-margin-top` so a tab click never parks a
+heading under the bar.
+
+**6. Tap targets.** Court-directory phone numbers rendered ~16px tall; the Share button was
+30×30; four external resource links were 42px. All now ≥44px. Links inside prose sentences
+were deliberately left alone (WCAG 2.5.8 exempts them).
+
+### Files affected
+
+`functions/legal-dispatch.js`, `functions/email-triggers.js`, `legal-hub.html`,
+`legal-centre.html`, `scripts/verify-legal-dispatch.js` (new).
+Cloud Functions redeployed: `legalDispatch`, `emailOnLegalConsultation`.
+
+### Verification
+
+| | before | after |
+|---|---|---|
+| routable legal ops | 13 / 21 | 21 / 21 |
+| `.lc-info` width (393px) | 0px | 128px |
+| clipped text nodes | 34 | 0 |
+| tap targets < 44px | 6 | 0 |
+| lawyer grid @393 / 768 / 1440 | 2 / — / — cols | 1 / 2 / 3 cols |
+| quick-nav on scroll | scrolls away | sticky |
+| "Open Now" filter | silent no-op | queries `availabilityStatus` |
+
+Tested on WebKit 393px, Chrome 412px, Chrome 1440px. Horizontal scroll: none. Uneven card
+heights: none. Bottom-nav overlap: none (80px reserved for a 64px bar). **Physical devices and
+the installed iOS PWA were not tested — no such hardware in this environment.**
+
+### Deferred to v1.1 (require freeze lift — new CFs / collections / capability)
+
+- **Consultation payments** — `bookLegalConsultation` only *copies* the fee onto the doc. No
+  payment intent, escrow, wallet debit or settlement. The 5% `legal` commission rate exists at
+  `index.js:3381` but nothing wires `legalConsultations` to it. Consultations are created
+  `status:'pending'` with no payment gate.
+- **Real PDF output** — the 16 document generators emit **plain text** (`.txt` blob); "Print /
+  PDF" is the browser print dialog. No jsPDF, no server-side renderer.
+- **Document drafts** — generated documents are lost on modal close. No collection, no op.
+- **Two unreconciled lawyer data models** — CF-backed `legalProviders`/`legalConsultations`
+  vs. the legacy client-written `lawyers`/`legalBookings`/`legalAppointments` (which is what
+  the UI and Typesense actually use). The 12 advocates are a hardcoded `DEMO_LAWYERS` array.
+- **Missing lawyer profile fields** — no photo, languages, or response time.
+- **Compliance reminders** — checking exists; nothing *pushes*. No scheduled function.
+- **Company registration** — no backend at all. `company-identity.js` is SOKONI's own corporate
+  metadata, not a user-company registrar.
+- **Acceptance-framework Firestore rules** — `legalAcceptances`, `legalAgreements`,
+  `legalAuditLog`, `legalCertificates`, `legalConfig`, `legalRegistry` have **zero** rules
+  entries. Safe today only because Firestore default-denies and there is no `{document=**}`
+  catch-all — an implicit, undocumented protection for what the docs call court-grade evidence.
+  Recommend explicit `allow read, write: if false;` blocks to make the intent enforceable.
+- **Orphaned code** — `legalGlobalSearch()` / `heroSearchLawyers()` target `#legalGlobalSearch`
+  and `#heroLawyerSearch`, elements that do not exist.
+
+---
+
+## [2026-07-13] — Legal Hub Layout Recovery & Whitespace Fix Sprint
 
 ### Summary
 
