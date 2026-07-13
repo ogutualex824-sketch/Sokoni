@@ -128,10 +128,10 @@
         'transition:opacity .55s cubic-bezier(.4,0,.2,1);will-change:opacity}',
       '#sk-splash.out{opacity:0;pointer-events:none}',
       '.sk-sp-inner{text-align:center;display:flex;flex-direction:column;align-items:center;gap:20px}',
-      /* THE LOGO, ON ITS OWN. No frame, no card, no background, no wordmark beside it.
-         height + width:auto preserves the 3:2 aspect of assets/sokoni-logo-dark.png
-         (480x320) — a square box would squash it. Size and breathing room carry the
-         premium feel; decoration around it does not. */
+      /* THE LOGO, ON ITS OWN. No frame, no card, no background.
+         sokoni-wordmark.svg is a pure SVG (vector) — it never fades or blurs
+         at any resolution. viewBox 0 0 170 56 → preserving that aspect ratio
+         (170:56 ≈ 3:1) gives the right premium-wordmark proportions. */
       '.sk-sp-logo{width:min(78vw,340px);height:auto;max-width:none!important;',
         'display:block;background:none;border:0;',
         'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) both,',
@@ -161,8 +161,8 @@
     el.setAttribute('aria-hidden', 'true');
     el.innerHTML =
       '<div class="sk-sp-inner">' +
-        /* Logo only — no frame, no wordmark. The logo already says SOKONI. */
-        '<img class="sk-sp-logo" src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
+        /* Vector wordmark — bag icon + SOKONI text, always 100% crisp at any DPI. */
+        '<img class="sk-sp-logo" src="assets/sokoni-wordmark.svg" alt="SOKONI">' +
         '<div class="sk-sp-line">' + cfg.line + '</div>' +
         '<div class="sk-sp-bar"><div class="sk-sp-fill" style="background:' + cfg.bar + '"></div></div>' +
       '</div>';
@@ -526,6 +526,35 @@
       position: sticky !important;
       top: 58px !important;
       z-index: 100 !important;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.28), 0 1px 0 rgba(113,255,0,0.05) !important;
+    }
+    /* ── Hub logos inside sub-navs: suppressed — branding lives in sk-top-nav ── */
+    body > .sk-sub-nav [class*="-nav-logo"],
+    body > .sk-sub-nav .hc-nav-logo,
+    body > .sk-sub-nav .sv-nav-logo,
+    body > .sk-sub-nav .ch-nav-logo,
+    body > .sk-sub-nav .th-nav-logo,
+    body > .sk-sub-nav .en-nav-logo {
+      display: none !important;
+    }
+    /* ── Hub nav inner rows: horizontal scroll, no wrap, 44px touch targets ── */
+    body > .sk-sub-nav [class*="-nav-right"],
+    body > .sk-sub-nav [class*="-nav-tabs"] {
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      overscroll-behavior-x: contain !important;
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+    body > .sk-sub-nav [class*="-nav-right"]::-webkit-scrollbar,
+    body > .sk-sub-nav [class*="-nav-tabs"]::-webkit-scrollbar { display: none !important; }
+    /* ── Hub nav link items: no squeeze, no wrap, proper touch targets ── */
+    body > .sk-sub-nav [class*="-nav-link"],
+    body > .sk-sub-nav [class*="-nav-tab"],
+    body > .sk-sub-nav [class*="-nav-btn"] {
+      flex-shrink: 0 !important;
+      white-space: nowrap !important;
+      min-height: 40px !important;
     }
 
     /* ── Hide home-page orphaned floating elements (hamburger + bell) ──
@@ -909,9 +938,9 @@
     const themeIcon = themeMode === 'light' ? '☀️' : themeMode === 'auto' ? '⚙️' : '🌙';
 
     nav.innerHTML =
-      /* Logo — transparent SVG icon; no card, no dark rectangle background */
+      /* Logo — SVG wordmark (bag + SOKONI text), vector, always crisp on dark bg */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/sokoni-logo-dark.png" alt="SOKONI">' +
+        '<img src="assets/sokoni-wordmark.svg" alt="SOKONI">' +
       '</a>' +
 
       /* Search */

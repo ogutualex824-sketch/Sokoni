@@ -20,11 +20,11 @@
     body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;min-height:100vh;padding-bottom:80px;}
 
     /*  Nav  */
-    .hc-nav{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
-    .hc-nav-logo{height:34px;}
-    .hc-nav-right{display:flex;gap:10px;align-items:center;}
-    .hc-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;}
-    .hc-nav-link:hover{color:white;border-color:rgba(255,255,255,0.25);}
+    .hc-nav{display:flex;align-items:center;gap:8px;padding:10px 16px;background:rgba(10,10,10,0.96);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);}
+    .hc-nav-right{display:flex;gap:8px;align-items:center;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;scrollbar-width:none;-ms-overflow-style:none;flex:1;}
+    .hc-nav-right::-webkit-scrollbar{display:none;}
+    .hc-nav-link{color:rgba(255,255,255,0.6);text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;transition:all .2s;white-space:nowrap;flex-shrink:0;min-height:40px;display:inline-flex;align-items:center;gap:5px;}
+    .hc-nav-link:hover,.hc-nav-link:active{color:white;border-color:rgba(255,255,255,0.25);background:rgba(255,255,255,0.05);}
     .hc-nav-emg{background:rgba(255,60,60,0.1);border-color:rgba(255,60,60,0.3);color:#ff6b6b;}
 
     /*  Hero  */
@@ -191,8 +191,8 @@
 
 
 <!--  Navbar  -->
-<div role="navigation" class="hc-nav sk-sub-nav">
-  <a href="index.html"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="hc-nav-logo" alt="Sokoni"></a>
+<nav class="hc-nav sk-sub-nav" role="navigation" aria-label="Healthcare Hub navigation">
+  <!-- Logo removed: SOKONI branding is in the main header and hero section -->
   <div class="hc-nav-right">
     <a href="javascript:history.back()" class="hc-nav-link">← Back</a>
     <a href="index.html" class="hc-nav-link">🏠 Home</a>
@@ -202,7 +202,7 @@
     <a href="tel:999" class="hc-nav-link hc-nav-emg"><i class="fas fa-ambulance"></i> Emergency</a>
     <a href="notifications.html" class="hc-nav-link" style="position:relative;" title="Notifications">🔔<span id="hcNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
   </div>
-</div>
+</nav>
 <script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('hcNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
 
 <!--  Hero  -->

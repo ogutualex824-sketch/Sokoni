@@ -28,7 +28,7 @@
 body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;min-height:100vh;}
 /* NAV */
 .ch-nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(8,8,8,0.97);border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;z-index:500;backdrop-filter:blur(24px);}
-.ch-nav-logo{height:30px;}
+.ch-nav-logo{display:none;} /* Logo suppressed — branding lives in shared header */
 .ch-nav-tabs{display:flex;gap:3px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:4px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;margin:0 12px;}
 .ch-nav-tabs::-webkit-scrollbar{display:none;}
 .ch-nav-tab{padding:7px 14px;border-radius:9px;border:none;background:transparent;color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .2s;white-space:nowrap;}
@@ -341,9 +341,7 @@ input:checked+.ch-toggle-slider::before{transform:translateX(18px);background:#0
   .ch-nav{padding:10px 12px;}
   .ch-nav-tabs{display:none;}
   .ch-nav-right .ch-nav-btn:not(.green){display:none;}
-  /* Prevent the "List My Car" button from pushing into the logo */
   .ch-nav-right{flex-shrink:0;}
-  .ch-nav-logo{max-width:130px;}
   /* Sticky mobile tab bar — stays pinned below the nav while scrolling */
   .ch-mobile-tab-bar{display:flex;position:sticky;top:50px;z-index:490;}
   .ch-hero{padding:22px 14px 18px;}
