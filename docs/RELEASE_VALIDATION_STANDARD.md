@@ -168,8 +168,8 @@ A SOKONI release must be defensible **months later**. Anyone reading the report 
 
 > ## 🔴 NO-GO
 >
-> **0 of 12 critical gates VERIFIED.**
-> 11 × 🟡 ENGINEERING COMPLETE · 1 × ⚪ NOT EXERCISED (payments — **zero orders have ever
+> **0 of 10 critical gates VERIFIED.**
+> 9 × 🟡 ENGINEERING COMPLETE · 1 × ⚪ NOT EXERCISED (payments — **zero orders have ever
 > existed; the money path has never taken a shilling**).
 
 The engineering is done. **The evidence is not.** Those are different words, and this
