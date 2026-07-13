@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SOKONI — Validation Dashboard</title>
+<meta name="robots" content="noindex, nofollow">
+<script src="sokoni-validate.js"></script>
+<style>
+  :root{--bg:#050505;--sur:#0d0d0d;--bor:#1e1e1e;--txt:#e8e8e8;--sub:#8a8a8a;--g:#71ff00;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       padding:max(16px,env(safe-area-inset-top)) 14px calc(70px + env(safe-area-inset-bottom));}
+  h1{font-size:20px;font-weight:900;margin-bottom:2px}
+  .sub{font-size:12px;color:var(--sub);margin-bottom:14px}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .warn-card{background:rgba(255,152,0,.08);border:1px solid rgba(255,152,0,.3);
+             border-radius:12px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.6}
+  .mod{background:var(--sur);border:1px solid var(--bor);border-radius:12px;margin-bottom:8px;overflow:hidden}
+  .mod-h{display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;min-height:52px}
+  .mod-h:hover{background:rgba(255,255,255,.03)}
+  .dot{font-size:15px;flex-shrink:0}
+  .mod-n{flex:1;font-size:14px;font-weight:700}
+  .mod-c{font-size:11px;color:var(--sub)}
+  .logs{display:none;border-top:1px solid var(--bor);padding:8px 12px;background:#080808}
+  .mod.open .logs{display:block}
+  .ev{padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05);font-size:12px}
+  .ev:last-child{border-bottom:none}
+  .ev-h{display:flex;gap:8px;align-items:baseline}
+  .ev-s{font-size:11px;flex-shrink:0}
+  .ev-t{flex:1;min-width:0;word-break:break-word}
+  .ev-ms{font-size:10px;color:var(--sub);flex-shrink:0;font-variant-numeric:tabular-nums}
+  pre{margin-top:5px;padding:7px;background:#000;border:1px solid var(--bor);border-radius:6px;
+      font-size:10px;color:#9ad;overflow-x:auto;white-space:pre-wrap;word-break:break-all;max-height:220px}
+  .empty{padding:16px;text-align:center;color:var(--sub);font-size:12px}
+  .bar{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+  .btn{min-height:44px;padding:0 14px;display:inline-flex;align-items:center;border-radius:10px;
+       border:1px solid var(--bor);background:transparent;color:var(--txt);font-size:13px;
+       font-weight:700;cursor:pointer;font-family:inherit;text-decoration:none}
+  .btn.p{border-color:rgba(113,255,0,.35);color:var(--g)}
+</style>
+</head>
+<body>
+
+<h1>Validation Dashboard</h1>
+<div class="sub">Trace <code id="tid">—</code> · <span id="cnt">0</span> events</div>
+
+<div class="warn-card">
+  <strong>🟡 “Queued” is not “delivered.”</strong><br>
+  A push that the server accepted, an email that entered the queue, an SMS the provider
+  returned 200 for — none of those are evidence that anything <em>arrived</em>. They stay
+  <strong>🟡</strong> here until <em>you</em> confirm on the device. That distinction is
+  exactly what hid a months-long push outage behind a green dashboard.
+</div>
+
+<div class="bar">
+  <a class="btn p" href="/?validate=1">Start a run →</a>
+  <button class="btn" id="copy">Copy trace JSON</button>
+  <button class="btn" id="clear">Clear</button>
+  <a class="btn" href="/?validate=0">Turn validation OFF</a>
+</div>
+
+<div id="mods"></div>
+
+<script>
+'use strict';
+
+/* The release gate, as data. Each module is 🔴 if anything failed, 🟡 if anything is only
+   queued/warned or if it has NOT been exercised at all, 🟢 only when something actually
+   succeeded and nothing failed.
+
+   Unexercised is deliberately NOT green. A module nobody touched has proved nothing, and
+   showing it green is precisely how a platform gets declared ready on the strength of
+   tests that never ran. */
+var MODULES = [
+  ['auth',           'Authentication',   'Sign in, claims, Firestore profile'],
+  ['payment',        'Payments',         'IntaSend / M-Pesa — provider must confirm'],
+  ['order',          'Orders',           'Order created, status, lifecycle'],
+  ['push',           'Push',             'Lock-screen delivery — NOT queue insertion'],
+  ['email',          'Email',            'SendGrid — receipt delivered'],
+  ['purchaseOrder',  'Purchase Order',   'PDF attached, supplier received'],
+  ['maps',           'Maps',             'Leaflet tiles load'],
+  ['serviceWorker',  'Service Worker',   'Registered, no stale build waiting'],
+  ['cloudFunctions', 'Cloud Functions',  'Every CF call, result and duration'],
+  ['network',        'Network',          'Failed requests, 4xx/5xx'],
+  ['performance',    'Performance',      'FCP · LCP · CLS · INP (real device)'],
+  ['mobile',         'Mobile diagnostics','Viewport, safe-area, overflow'],
+  ['errors',         'Errors',           'Uncaught exceptions, rejections'],
+  ['session',        'Session',          'Device, route, environment'],
+];
+
+function esc(s){ return String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function load(){
+  try {
+    var raw = sessionStorage.getItem('sokoni_validate_trace');
+    if (raw) return JSON.parse(raw);
+  } catch(e){}
+  return { traceId: null, events: [] };
+}
+
+function statusOf(evts){
+  if (!evts.length) return { dot:'⚪', label:'not exercised' };
+  if (evts.some(function(e){ return e.status === 'fail'; }))  return { dot:'🔴', label:'FAILED' };
+  if (evts.some(function(e){ return e.status === 'warn' || e.status === 'queued'; }))
+    return { dot:'🟡', label:'needs confirming' };
+  if (evts.some(function(e){ return e.status === 'ok'; }))    return { dot:'🟢', label:'pass' };
+  return { dot:'⚪', label:'info only' };
+}
+
+function render(){
+  var trace = load();
+  document.getElementById('tid').textContent = trace.traceId || '(no run yet)';
+  document.getElementById('cnt').textContent = (trace.events || []).length;
+
+  var host = document.getElementById('mods');
+  host.innerHTML = '';
+
+  MODULES.forEach(function(m){
+    var key = m[0], name = m[1], hint = m[2];
+    var evts = (trace.events || []).filter(function(e){ return e.module === key; });
+    var st = statusOf(evts);
+
+    var card = document.createElement('div');
+    card.className = 'mod';
+    card.innerHTML =
+      '<div class="mod-h">' +
+        '<span class="dot">' + st.dot + '</span>' +
+        '<span class="mod-n">' + esc(name) + '<div class="mod-c">' + esc(hint) + '</div></span>' +
+        '<span class="mod-c">' + st.label + (evts.length ? ' · ' + evts.length : '') + '</span>' +
+      '</div>' +
+      '<div class="logs">' + (evts.length
+        ? evts.map(function(e){
+            var d = e.status === 'fail' ? '🔴' : (e.status === 'warn' || e.status === 'queued') ? '🟡'
+                  : e.status === 'ok' ? '🟢' : '·';
+            return '<div class="ev"><div class="ev-h">' +
+              '<span class="ev-s">' + d + '</span>' +
+              '<span class="ev-t">' + esc(e.step) + '</span>' +
+              '<span class="ev-ms">+' + e.elapsed + 'ms</span></div>' +
+              (e.data ? '<pre>' + esc(JSON.stringify(e.data, null, 1)) + '</pre>' : '') +
+            '</div>';
+          }).join('')
+        : '<div class="empty">Nothing recorded. This workflow has <strong>not been exercised</strong> — that is not a pass.</div>')
+      + '</div>';
+
+    card.querySelector('.mod-h').addEventListener('click', function(){
+      card.classList.toggle('open');
+    });
+    host.appendChild(card);
+  });
+}
+
+document.getElementById('copy').addEventListener('click', function(){
+  var t = load();
+  var txt = JSON.stringify(t, null, 2);
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function(){ alert('Trace copied — paste it back to the engineer.'); });
+  else prompt('Copy the trace:', txt);
+});
+
+document.getElementById('clear').addEventListener('click', function(){
+  try { sessionStorage.removeItem('sokoni_validate_trace'); } catch(e){}
+  render();
+});
+
+/* Live-update while a run is in progress in this tab. */
+window.addEventListener('sokoni-validate', render);
+window.addEventListener('storage', render);
+setInterval(render, 2000);
+render();
+</script>
+</body>
+</html>

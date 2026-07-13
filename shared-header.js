@@ -241,6 +241,11 @@
      than hand-rolling a panel and picking the wrong z-index tier, which is exactly how
      Notifications became impossible to close. */
   _injectAsset('script', { src: 'sokoni-sheet.js', defer: true }, 'sk-sheet-script');
+  /* Production Validation Mode — OFF unless ?validate=1. When off it defines a handful of
+     no-ops and returns: it patches nothing, listens to nothing, writes nothing, and cannot
+     affect a real customer. When on, it traces every Cloud Function call, the auth chain,
+     push/email/PO delivery, performance and mobile diagnostics for ONE real-device session. */
+  _injectAsset('script', { src: 'sokoni-validate.js', defer: true }, 'sk-validate-script');
   _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
   /* Zero Trust client SDK — device fingerprint, risk cache, step-up auth guard */
   _injectAsset('script', { src: 'sokoni-zero-trust.js', defer: true }, 'sk-zero-trust-script');
