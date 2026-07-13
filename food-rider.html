@@ -403,6 +403,10 @@ function renderActiveDelivery() {
 
 function initNavMap() {
   const el = document.getElementById('riderMap'); if (!el) return;
+  if (typeof L === 'undefined') {
+    el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:rgba(255,255,255,0.45);font-size:13px;text-align:center;padding:20px;background:rgba(8,8,8,0.7)"><span style="font-size:32px">🗺️</span><div>Map could not load.<br><small style="color:rgba(255,255,255,0.25)">Check your connection and retry.</small></div><button onclick="location.reload()" style="margin-top:6px;padding:9px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">Retry</button></div>';
+    return;
+  }
   if (_map) { _map.remove(); _map = null; _routeLine = null; }
   _destLat = _activeOrder?.deliveryLat  || -1.2921;
   _destLng = _activeOrder?.deliveryLng || 36.8219;

@@ -881,6 +881,11 @@ function _closeCampModal() { _$('campOverlay').classList.remove('open'); }
 
 function _initMap() {
   if (_mapInited) return; _mapInited=true;
+  const _fnEl = document.getElementById('fn-map');
+  if (typeof L === 'undefined') {
+    if (_fnEl) _fnEl.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;flex-direction:column;gap:10px;color:rgba(255,255,255,0.45);font-size:13px;text-align:center;padding:20px;background:rgba(8,8,8,0.7)"><span style="font-size:32px">🗺️</span><div>Map could not load.<br><small style="color:rgba(255,255,255,0.25)">Check your connection and retry.</small></div><button onclick="location.reload()" style="margin-top:6px;padding:9px 22px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);border-radius:10px;color:#71ff00;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit">Retry</button></div>';
+    return;
+  }
   const map = L.map('fn-map',{center:[0.02,37.9],zoom:6});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'Â© OpenStreetMap',maxZoom:18}).addTo(map);
   [[-1.286,36.817,'Nairobi School Desks','education','completed'],[-4.043,39.668,'Mombasa Water Project','health','active'],[0.520,35.270,'Eldoret Food Bank','food','active'],[-0.091,34.768,'Kisumu Tree Planting','environment','completed'],[0.465,39.870,'Garissa Emergency Relief','emergency','active'],[-1.049,37.049,'Thika Youth Centre','youth','active'],[-0.366,36.944,'Nakuru Medical Clinic','health','completed']].forEach(([lat,lng,title,cat,status])=>{
