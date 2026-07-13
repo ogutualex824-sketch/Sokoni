@@ -1,4 +1,57 @@
-﻿## [2026-07-13] — Identity Command Center Sprint 7 — Platform Integration & Executive Workspace
+﻿## [2026-07-13] — Identity Command Center Sprint 8 — Workspace Intelligence
+
+### Summary
+
+Sprint 8 refines and integrates everything built in Sprints 3-7. Six precision enhancements — no new pages, no new Cloud Functions, no new collections. Every addition extends an existing widget or the existing Overview panel.
+
+**Workspace Accent Themes** — Six role-specific palettes (healthcare: blue, property: orange, driver: yellow, restaurant: red, hotel: purple, employer: teal) injected as a `<style>` tag at runtime. Merchant/buyer/admin keep the SOKONI brand green `#71ff00`. Accent shifts: brief header highlight, KASS card border/fill, business health bars, goal bars, filter chip active state. One `CSS custom property` override: `--pi8-ws-accent` / `--pi8-ws-accent2`. Platform brand unchanged.
+
+**Activity Feed Filter Chips** (`#pi8TimelineFilters`) — Injected below the Recent Activity card title at runtime. Eight filter categories: All / Orders / Payments / Bookings / Deliveries / Sales / Reviews / Achievements. Filters by text-content of existing `.pi-tl-label` + `.pi-tl-icon` elements rendered by Sprint 5's `_enhanceTimeline`. No new CF calls. Active filter persists across tab switches.
+
+**Mobile Command Palette FAB** (`#pi8Fab`) — Fixed `position:fixed` button at `bottom:76px; right:14px` (above bottom nav). Desktop: `display:none`. Mobile (≤768px): `display:flex` circle in `#71ff00`. On tap calls `piCmdPalette('search')` (Sprint 7 Command Palette). Injected into `document.body` — one guard prevents double injection.
+
+**Business Health Explanations** (`#pi8HealthExplain`) — Appended to the existing Sprint 7 `#pi7BizHealth` widget. Two columns: "Why this score" (what's done well, with green checkmarks) + "To improve" (what's missing, with actionable `switchTab()` links and point values). Derived from `ov.verifications`, `ov.trustScore`, `comp.percent`. Shown only when `#pi7BizHealth` has rendered content.
+
+**Executive Evening Summary** (`#pi8EveningSummary`) — Appended to the existing Sprint 7 `#pi7Brief` card when `new Date().getHours() >= 17`. Shows "Today's Summary" (revenue, orders, deliveries, bookings, trust score, profile %) and "Tomorrow's priorities" (pending orders, unverified items). Uses `ov.*` fields already present in `window._piOverview` — zero additional CF reads.
+
+**Widget Collapse** — Collapse/expand toggle button injected into each static `.up-card` title in the Overview panel. Dynamic cards (S6/S7 cards with known IDs) are skipped to prevent innerHTML conflicts. Collapsed state stored in `localStorage._pi8collapse` keyed by card index. Persists across sessions and page reloads.
+
+### Boot Sequence
+
+```
+S3: 0ms   — profileGetOverview → window._piOverview
+S4: 900ms — wallet, KASS, identity dashboard
+S5: 1400ms — search, greeting, insights, my day, timeline
+S6: 1800ms — adaptive role cards, profile health, goals, exec commands
+S7: 2200ms — morning brief, biz health, notif summary, pins, module cards, command palette
+S8: 2600ms — theme, FAB, [+1400ms filters], [+900ms collapse], profileGetCompletion → explanations + evening
+```
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `profile.html` | Sprint 8 CSS (~75 lines: filter chips, FAB, health explain, evening, widget collapse, CSS vars); Sprint 8 IIFE (~230 lines: 6 features + switchTab chain + boot at 2600ms) |
+| `CHANGELOG.md` | This entry |
+
+### Architecture Compliance (Platform Constitution)
+- **No new Cloud Functions** — reuses `profileGetCompletion` (already existed; Sprint 6 also calls it)
+- **No duplicate engines** — extends existing Trust Engine, Profile Engine, Business Health Widget
+- **No new collections** — theme, collapse, filter state all in `localStorage`
+- **No duplicate UI** — injects into existing cards, no new panels or tabs
+- **Zero breaking changes** — all new DOM is appended; existing markup untouched
+
+### Security
+- No new secrets, no new auth flows
+- Theme CSS is injected by trusted client code; no user-controlled CSS injection risk
+- `localStorage` keys are app-namespaced (`_pi8*`)
+
+### Rollback
+Remove the Sprint 8 CSS block (`/* Sprint 8 — Workspace Intelligence */`) and the Sprint 8 IIFE block (guarded by `/* SPRINT 8 — WORKSPACE INTELLIGENCE */` comment) from `profile.html`. Zero backend changes to revert.
+
+---
+
+## [2026-07-13] — Identity Command Center Sprint 7 — Platform Integration & Executive Workspace
 
 ### Summary
 

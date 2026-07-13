@@ -1467,6 +1467,65 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 .pi7-cmd-hint{font-size:10px;font-weight:700;color:rgba(255,255,255,0.2);display:flex;align-items:center;gap:4px;}
 .pi7-cmd-hint kbd{background:rgba(255,255,255,0.05);border-radius:3px;padding:1px 5px;font-family:inherit;}
 .pi7-cmd-mode-label{font-size:10px;font-weight:900;color:rgba(113,255,0,0.7);margin-left:auto;}
+
+/* ══ Sprint 8 — Workspace Intelligence ══════════════════════ */
+
+/* Activity Feed Filter Chips */
+.pi8-filter-chips{display:flex;gap:6px;overflow-x:auto;padding:8px 0 10px;scrollbar-width:none;}
+.pi8-filter-chips::-webkit-scrollbar{display:none;}
+.pi8-filter-chip{
+  display:inline-flex;align-items:center;gap:4px;padding:5px 12px;
+  border-radius:20px;font-size:11px;font-weight:800;white-space:nowrap;flex-shrink:0;
+  cursor:pointer;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+  color:rgba(255,255,255,0.45);transition:all .12s;font-family:inherit;
+}
+.pi8-filter-chip.active,.pi8-filter-chip:hover{
+  background:rgba(113,255,0,0.09);border-color:rgba(113,255,0,0.25);color:#71ff00;
+}
+
+/* Mobile Command Palette FAB */
+.pi8-fab{display:none;}
+@media(max-width:768px){
+  .pi8-fab{
+    display:flex;position:fixed;bottom:76px;right:14px;width:46px;height:46px;
+    border-radius:50%;background:#71ff00;color:#050505;font-size:20px;font-weight:900;
+    border:none;cursor:pointer;z-index:500;align-items:center;justify-content:center;
+    box-shadow:0 4px 20px rgba(113,255,0,0.35);transition:transform .12s;line-height:1;
+  }
+  .pi8-fab:active{transform:scale(0.92);}
+}
+
+/* Business Health Explanations */
+.pi8-health-explain{
+  margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);
+  display:flex;gap:16px;flex-wrap:wrap;
+}
+.pi8-he-section{flex:1;min-width:130px;}
+.pi8-he-label{font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;}
+.pi8-he-item{font-size:11px;font-weight:700;padding:3px 0;line-height:1.4;}
+.pi8-he-item.good{color:#71ff00;}
+.pi8-he-item.action{color:rgba(255,255,255,0.55);}
+.pi8-he-item.action:hover{color:#fff;}
+
+/* Evening Summary */
+.pi8-evening-wrap{margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.06);}
+.pi8-evening-label{font-size:9px;font-weight:900;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;}
+.pi8-evening-items{display:flex;flex-direction:column;gap:6px;}
+.pi8-ev-item{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;color:rgba(255,255,255,0.7);}
+.pi8-ev-icon{font-size:14px;flex-shrink:0;}
+.pi8-ev-val{font-weight:900;color:#fff;margin-left:auto;}
+
+/* Widget Collapse */
+.pi8-collapse-btn{
+  background:none;border:none;color:rgba(255,255,255,0.2);font-size:12px;
+  cursor:pointer;padding:0 4px;line-height:1;float:right;font-family:inherit;
+  transition:color .1s;vertical-align:middle;margin-top:1px;
+}
+.pi8-collapse-btn:hover{color:rgba(255,255,255,0.55);}
+.pi8-collapsed>*:not(.up-card-title){display:none!important;}
+
+/* Workspace Accent Variables — default green; role themes override via injected <style> */
+:root{--pi8-ws-accent:#71ff00;--pi8-ws-accent2:rgba(113,255,0,0.09);}
 </style>
 </head>
 
@@ -6216,6 +6275,315 @@ window.logoutUser = logoutUser;
     document.addEventListener('DOMContentLoaded', _boot7);
   } else {
     _boot7();
+  }
+
+})();
+
+/* ════════════════════════════════════════════════════════════════
+   SPRINT 8 — WORKSPACE INTELLIGENCE
+   Zero new CFs. Six enhancements to the existing Command Center:
+   (1) Workspace accent themes per role
+   (2) Activity feed filter chips
+   (3) Mobile command palette FAB
+   (4) Business health explanations (why this score / how to improve)
+   (5) Executive evening summary (shown after 17:00)
+   (6) Widget collapse (persist to localStorage)
+   Boot: 2600ms after auth. Uses window._piOverview cache (S3).
+   ═══════════════════════════════════════════════════════════════ */
+(function(){
+  'use strict';
+
+  function _el8(id){return document.getElementById(id);}
+  function _ov8(){return window._piOverview||null;}
+
+  /* Role detection — local copy, independent of other IIFEs */
+  function _role8(ov){
+    var r=(ov&&ov.roles)||[];
+    if(r.indexOf('superAdmin')!==-1||r.indexOf('admin')!==-1)          return 'admin';
+    if(r.indexOf('doctor')!==-1||r.indexOf('healthcare')!==-1)         return 'healthcare';
+    if(r.indexOf('hotel')!==-1)                                         return 'hotel';
+    if(r.indexOf('restaurant')!==-1||r.indexOf('restaurantOwner')!==-1)return 'restaurant';
+    if(r.indexOf('propertyOwner')!==-1||r.indexOf('landlord')!==-1)    return 'property';
+    if(r.indexOf('employer')!==-1)                                      return 'employer';
+    if(r.indexOf('driver')!==-1)                                        return 'driver';
+    if(r.indexOf('provider')!==-1)                                      return 'provider';
+    if(r.indexOf('seller')!==-1||r.indexOf('vendor')!==-1||r.indexOf('merchant')!==-1)return 'merchant';
+    return 'buyer';
+  }
+
+  /* ── 1. WORKSPACE ACCENT THEME ──────────────────────────── */
+  var _THEMES={
+    healthcare:{accent:'#0ea5e9',accent2:'rgba(14,165,233,0.09)'},
+    property:  {accent:'#f97316',accent2:'rgba(249,115,22,0.09)'},
+    driver:    {accent:'#eab308',accent2:'rgba(234,179,8,0.09)'},
+    restaurant:{accent:'#ef4444',accent2:'rgba(239,68,68,0.09)'},
+    hotel:     {accent:'#a855f7',accent2:'rgba(168,85,247,0.09)'},
+    employer:  {accent:'#14b8a6',accent2:'rgba(20,184,166,0.09)'},
+  };
+
+  function _applyTheme(role){
+    var t=_THEMES[role];
+    if(!t)return; /* merchant/buyer/admin keep brand green */
+    var id='pi8WsTheme';
+    var old=document.getElementById(id);
+    if(old)old.remove();
+    var s=document.createElement('style');
+    s.id=id;
+    s.textContent=[
+      ':root{--pi8-ws-accent:'+t.accent+';--pi8-ws-accent2:'+t.accent2+';}',
+      '.pi7-brief-salute strong{color:var(--pi8-ws-accent);}',
+      '.pi7-brief-kass{background:var(--pi8-ws-accent2);border-color:var(--pi8-ws-accent);}',
+      '.pi7-brief-kass-btn{background:var(--pi8-ws-accent2);border-color:var(--pi8-ws-accent);color:var(--pi8-ws-accent);}',
+      '.pi7-biz-fill,.pi6-goal-fill{background:var(--pi8-ws-accent);}',
+      '.pi8-filter-chip.active{background:var(--pi8-ws-accent2);border-color:var(--pi8-ws-accent);color:var(--pi8-ws-accent);}',
+      '.pi6-hc-dot.done{color:var(--pi8-ws-accent);}',
+      '.pi8-fab{background:var(--pi8-ws-accent);}',
+      '.pi8-he-item.good{color:var(--pi8-ws-accent);}',
+      '.pi7-biz-grade.excellent{color:var(--pi8-ws-accent);}',
+    ].join('');
+    document.head.appendChild(s);
+  }
+
+  /* ── 2. ACTIVITY FEED FILTER CHIPS ─────────────────────── */
+  var _FILTERS=[
+    {key:'all',      label:'All'},
+    {key:'order',    label:'📦 Orders'},
+    {key:'payment',  label:'💳 Payments'},
+    {key:'booking',  label:'📅 Bookings'},
+    {key:'delivery', label:'🚗 Deliveries'},
+    {key:'sale',     label:'💰 Sales'},
+    {key:'review',   label:'⭐ Reviews'},
+    {key:'achieve',  label:'🏅 Achievements'},
+  ];
+
+  function _renderTimelineFilters(){
+    var tl=_el8('upTimeline');
+    if(!tl||_el8('pi8TimelineFilters'))return;
+    var card=tl.parentElement;
+    if(!card)return;
+    var ttl=card.querySelector('.up-card-title');
+    if(!ttl)return;
+    var strip=document.createElement('div');
+    strip.id='pi8TimelineFilters';
+    strip.className='pi8-filter-chips';
+    strip.innerHTML=_FILTERS.map(function(f){
+      return'<button type="button" class="pi8-filter-chip'+(f.key==='all'?' active':'')+'"'+
+            ' data-filter="'+f.key+'" onclick="pi8FilterFeed(\''+f.key+'\')">'+(f.label)+'</button>';
+    }).join('');
+    ttl.insertAdjacentElement('afterend',strip);
+  }
+
+  window.pi8FilterFeed=function(key){
+    document.querySelectorAll('.pi8-filter-chip').forEach(function(c){
+      c.classList.toggle('active',c.dataset.filter===key);
+    });
+    var events=document.querySelectorAll('#upTimeline .pi-tl-event');
+    events.forEach(function(ev){
+      if(key==='all'){ev.style.display='';return;}
+      var lbl=ev.querySelector('.pi-tl-label');
+      var ico=ev.querySelector('.pi-tl-icon');
+      var txt=((lbl?lbl.textContent:'')+(ico?ico.textContent:'')).toLowerCase();
+      ev.style.display=(txt.indexOf(key)!==-1)?'':'none';
+    });
+  };
+
+  /* ── 3. MOBILE COMMAND PALETTE FAB ─────────────────────── */
+  function _renderFAB(){
+    if(_el8('pi8Fab'))return;
+    var btn=document.createElement('button');
+    btn.id='pi8Fab';
+    btn.type='button';
+    btn.className='pi8-fab';
+    btn.setAttribute('aria-label','Command palette');
+    btn.title='Command Palette (Ctrl+K)';
+    btn.textContent='⌘';
+    btn.onclick=function(){if(window.piCmdPalette)piCmdPalette('search');};
+    document.body.appendChild(btn);
+  }
+
+  /* ── 4. BUSINESS HEALTH EXPLANATIONS ───────────────────── */
+  function _enhanceHealthExplain(ov,comp){
+    var wrap=_el8('pi7BizHealth');
+    if(!wrap||!wrap.innerHTML.trim()||_el8('pi8HealthExplain'))return;
+    var v=(ov&&ov.verifications)||{};
+    var ts=(ov&&ov.trustScore)||0;
+    var pct=(comp&&comp.percent)||0;
+
+    var reasons=[];
+    if(ts>=70)                              reasons.push('Trust Score strong — '+ts+'/100');
+    if(v.identity||v.identityVerified)      reasons.push('Identity verified');
+    if(v.kra)                               reasons.push('KRA PIN registered');
+    if(v.legal)                             reasons.push('Legal compliance active');
+    if(v.bank||v.bankAccount)              reasons.push('Bank account linked');
+    if(ov&&ov.businessCount>0)              reasons.push(ov.businessCount+' business'+(ov.businessCount>1?'es':''));
+    if(pct>=80)                             reasons.push('Profile '+pct+'% complete');
+
+    var recs=[];
+    if(!v.phone)                             recs.push({t:'Verify phone number',tab:'security',pts:10});
+    if(!v.identity&&!v.identityVerified)     recs.push({t:'Complete identity verification',tab:'identity',pts:15});
+    if(!v.kra)                               recs.push({t:'Register KRA PIN',tab:'identity',pts:15});
+    if(!v.bank&&!v.bankAccount)              recs.push({t:'Link bank account',tab:'identity',pts:10});
+    if(!v.legal)                             recs.push({t:'Accept legal agreements',tab:'legal',pts:10});
+
+    if(!reasons.length&&!recs.length)return;
+    var div=document.createElement('div');
+    div.id='pi8HealthExplain';
+    div.className='pi8-health-explain';
+    var html='';
+    if(reasons.length){
+      html+='<div class="pi8-he-section"><div class="pi8-he-label">Why this score</div>'+
+            reasons.map(function(r){return'<div class="pi8-he-item good">✓ '+r+'</div>';}).join('')+
+            '</div>';
+    }
+    if(recs.length){
+      html+='<div class="pi8-he-section"><div class="pi8-he-label">To improve</div>'+
+            recs.slice(0,4).map(function(r){
+              return'<div class="pi8-he-item action" onclick="switchTab(\''+r.tab+'\')" style="cursor:pointer;">'+
+                    '→ '+r.t+' <span style="color:rgba(113,255,0,.6);font-size:10px;">+'+r.pts+' pts</span></div>';
+            }).join('')+'</div>';
+    }
+    div.innerHTML=html;
+    wrap.appendChild(div);
+  }
+
+  /* ── 5. EVENING SUMMARY ─────────────────────────────────── */
+  function _renderEveningSummary(ov,comp){
+    var brief=_el8('pi7Brief');
+    if(!brief||!brief.innerHTML.trim()||_el8('pi8EveningSummary'))return;
+    if(new Date().getHours()<17)return;
+    var v=(ov&&ov.verifications)||{};
+    var ts=(ov&&ov.trustScore)||0;
+    var pct=(comp&&comp.percent)||0;
+
+    var items=[];
+    if(ov&&ov.todayRevenue>0)    items.push({i:'&#x1F4B0;',l:'Revenue today',    v:'KES '+Number(ov.todayRevenue).toLocaleString()});
+    if(ov&&ov.ordersToday>0)     items.push({i:'&#x1F4E6;',l:'Orders processed', v:ov.ordersToday});
+    if(ov&&ov.completedToday>0)  items.push({i:'&#x1F697;',l:'Deliveries done',  v:ov.completedToday});
+    if(ov&&ov.bookingsToday>0)   items.push({i:'&#x1F4C5;',l:'Bookings today',   v:ov.bookingsToday});
+    if(ts>0)                     items.push({i:'&#x1F6E1;',l:'Trust Score',       v:ts+'/100'});
+    if(pct>0)                    items.push({i:'&#x1F4DD;',l:'Profile complete',  v:pct+'%'});
+
+    var tomorrow=[];
+    if(ov&&ov.pendingOrders>0)           tomorrow.push('&#x1F4E6; '+ov.pendingOrders+' pending order'+(ov.pendingOrders>1?'s':''));
+    if(!v.phone)                          tomorrow.push('&#x1F4F1; Verify phone number');
+    if(!v.identity&&!v.identityVerified)  tomorrow.push('&#x1FA96; Complete identity verification');
+
+    if(!items.length&&!tomorrow.length)return;
+    var div=document.createElement('div');
+    div.id='pi8EveningSummary';
+    div.className='pi8-evening-wrap';
+    var html='';
+    if(items.length){
+      html+='<div class="pi8-evening-label">&#x1F319; Today\'s Summary</div>'+
+            '<div class="pi8-evening-items">'+
+            items.slice(0,5).map(function(it){
+              return'<div class="pi8-ev-item"><span class="pi8-ev-icon">'+it.i+'</span>'+
+                    it.l+'<span class="pi8-ev-val">'+it.v+'</span></div>';
+            }).join('')+'</div>';
+    }
+    if(tomorrow.length){
+      html+='<div class="pi8-evening-label" style="margin-top:10px;">&#x1F4CB; Tomorrow\'s priorities</div>'+
+            '<div class="pi8-evening-items">'+
+            tomorrow.slice(0,3).map(function(t){
+              return'<div class="pi8-ev-item" style="color:rgba(255,255,255,.5);">'+t+'</div>';
+            }).join('')+'</div>';
+    }
+    div.innerHTML=html;
+    brief.appendChild(div);
+  }
+
+  /* ── 6. WIDGET COLLAPSE ─────────────────────────────────── */
+  var _CK='_pi8collapse';
+  function _getCol(){try{return JSON.parse(localStorage.getItem(_CK)||'{}');}catch(e){return{};}}
+  function _saveCol(o){try{localStorage.setItem(_CK,JSON.stringify(o));}catch(e){}}
+
+  /* Dynamic cards rendered via innerHTML — skip collapse wrapping */
+  var _SKIP=['pi7Brief','pi7BizHealth','pi7NotifSummary','piMyDayCard',
+             'pi6ProfileHealth','pi6Goals','pi6ExecCmdsWrap','pi7PinsWrap',
+             'pi7ModuleCards','pi6RoleCardWrap','piCmdGrid','pi6ResumeBar',
+             'piInsightsStrip','piKassCard','piWalletSnap'];
+
+  function _initWidgetCollapse(){
+    var panel=_el8('panel-overview');
+    if(!panel)return;
+    var cards=panel.querySelectorAll('.up-card');
+    var col=_getCol();
+    var idx=0;
+    cards.forEach(function(card){
+      var ttl=card.querySelector('.up-card-title');
+      if(!ttl||ttl.querySelector('.pi8-collapse-btn')){idx++;return;}
+      if(_SKIP.indexOf(card.id)!==-1){idx++;return;}
+      var key='c'+idx; idx++;
+      var btn=document.createElement('button');
+      btn.type='button';
+      btn.className='pi8-collapse-btn';
+      btn.dataset.key=key;
+      btn.textContent=col[key]?'▼':'▲';
+      btn.setAttribute('aria-label','Toggle section');
+      (function(k,b,c){
+        b.onclick=function(){
+          var now=!c.classList.contains('pi8-collapsed');
+          c.classList.toggle('pi8-collapsed',now);
+          b.textContent=now?'▼':'▲';
+          var s=_getCol();
+          if(now)s[k]=true; else delete s[k];
+          _saveCol(s);
+        };
+      })(key,btn,card);
+      ttl.appendChild(btn);
+      if(col[key])card.classList.add('pi8-collapsed');
+    });
+  }
+
+  /* ── BOOT ────────────────────────────────────────────────── */
+  var _s8Done=false;
+
+  function _s8Boot(){
+    if(_s8Done)return;
+    _s8Done=true;
+
+    var ov=_ov8();
+    var role=_role8(ov);
+
+    _applyTheme(role);
+    _renderFAB();
+    setTimeout(_renderTimelineFilters,1400); /* timeline renders at ~1800ms (S5) → check at 4000ms total */
+    setTimeout(_initWidgetCollapse,900);     /* after all dynamic cards settle */
+
+    /* Health explanations + evening summary */
+    function _withComp(comp){
+      var ov2=_ov8();
+      _enhanceHealthExplain(ov2,comp);
+      _renderEveningSummary(ov2,comp);
+    }
+    if(window.firebase&&firebase.functions){
+      firebase.functions().httpsCallable('profileGetCompletion')({})
+        .then(function(r){_withComp(r.data);})
+        .catch(function(){_withComp(null);});
+    } else {
+      _withComp(null);
+    }
+  }
+
+  /* switchTab chain — re-inject filters when returning to overview */
+  var _s7Switch=window.switchTab;
+  window.switchTab=function(id){
+    if(_s7Switch)_s7Switch(id);
+    if(id==='overview')setTimeout(_renderTimelineFilters,600);
+  };
+
+  function _boot8(){
+    if(!window.firebase||!firebase.auth){setTimeout(_boot8,500);return;}
+    firebase.auth().onAuthStateChanged(function(user){
+      if(!user)return;
+      setTimeout(_s8Boot,2600);
+    });
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',_boot8);
+  } else {
+    _boot8();
   }
 
 })();
