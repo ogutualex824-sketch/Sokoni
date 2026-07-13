@@ -40,8 +40,8 @@ html:not(.sk-no-header) body {
   display: flex; align-items: center; flex-shrink: 0; text-decoration: none;
 }
 #sk-nav-logo img {
-  height: 52px; width: auto; object-fit: contain; display: block;
-  filter: drop-shadow(0 0 12px rgba(113,255,0,0.28));
+  height: 68px; width: auto; object-fit: contain; display: block;
+  filter: drop-shadow(0 0 18px rgba(113,255,0,0.45)) drop-shadow(0 0 8px rgba(113,255,0,0.25));
 }
 #sk-nav-logo-text {
   font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;
@@ -99,7 +99,7 @@ html:not(.sk-no-header) body {
     height: auto; flex-wrap: wrap; padding: 8px 12px; gap: 6px;
   }
   #sk-nav-logo { order: 0; }
-  #sk-nav-logo img { height: 46px; }
+  #sk-nav-logo img { height: 56px; }
   #sk-nav-actions { order: 1; margin-left: auto; gap: 1px; }
   #sk-nav-search-wrap { order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; }
   #sk-msg-btn { display: none !important; }

@@ -383,7 +383,7 @@
           _showLocalNotification(
             "✅ Order Confirmed!",
             `Order ${latest.id} · KES ${Number(latest.total).toLocaleString()} — processing now`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni logoo.jpeg",
             "/track.html"
           );
         }
@@ -400,7 +400,7 @@
           _showLocalNotification(
             "💬 New Message",
             `${latest?.sellerName || "Someone"}: new message on Sokoni`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni logoo.jpeg",
             "/messages.html"
           );
         }
@@ -416,7 +416,7 @@
           _showLocalNotification(
             "⚡ Flash Sale Started!",
             `${active.length} product(s) on sale — grab them before they're gone!`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni logoo.jpeg",
             "/flashsale.html"
           );
         }
@@ -432,7 +432,7 @@
           _showLocalNotification(
             "🏷️ New Offer Received",
             `Offer of KES ${Number(latest.offerPrice).toLocaleString()} on "${latest.productName}"`,
-            "/assets/Sokoni Logo.png",
+            "/assets/sokoni logoo.jpeg",
             "/seller.html"
           );
         }

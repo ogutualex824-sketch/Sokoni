@@ -314,7 +314,7 @@
         /* HEADER */
         +'<div class="inv-header">'
           +'<div class="inv-logo-wrap">'
-            +'<img src="assets/Sokoni Logo.png" class="inv-logo" onerror="this.style.display=\'none\'">'
+            +'<img src="assets/sokoni logoo.jpeg" class="inv-logo" onerror="this.style.display=\'none\'">'
             +'<span class="inv-logo-text">SOKONI</span>'
           +'</div>'
           +'<div class="inv-header-right">'

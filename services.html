@@ -1273,7 +1273,7 @@ function submitBooking(){
     window.sokoniNotify(
       `📩 New Booking — ${p.name}`,
       `${name} wants to book ${CAT_LABEL[p.category]||p.category} on ${date}`,
-      "/assets/Sokoni Logo.png",
+      "/assets/sokoni logoo.jpeg",
       "/services.html"
     );
   }
@@ -1394,7 +1394,7 @@ function confirmJob(id){
   saveBookings(all);
   renderProviderJobs();
   /* Notify client */
-  if(window.sokoniNotify) window.sokoniNotify("✅ Booking Confirmed!", `${bk.providerName} confirmed your booking for ${bk.scheduledDate}${quote > 0 ? ` — KES ${quote.toLocaleString()}` : ""}`, "/assets/Sokoni Logo.png", "/services.html");
+  if(window.sokoniNotify) window.sokoniNotify("✅ Booking Confirmed!", `${bk.providerName} confirmed your booking for ${bk.scheduledDate}${quote > 0 ? ` — KES ${quote.toLocaleString()}` : ""}`, "/assets/sokoni logoo.jpeg", "/services.html");
 }
 
 function declineJob(id){
@@ -1444,7 +1444,7 @@ function updateJobStatus(id, status){
   saveBookings(all);
   renderProviderJobs();
   if(window.sokoniNotify && status==="completed")
-    window.sokoniNotify("🎉 Job Completed!", `${bk.jobDesc.substring(0,40)} — marked complete.`, "/assets/Sokoni Logo.png", "/services.html");
+    window.sokoniNotify("🎉 Job Completed!", `${bk.jobDesc.substring(0,40)} — marked complete.`, "/assets/sokoni logoo.jpeg", "/services.html");
 }
 
 /* ════════════════════════════════════════════════════════════

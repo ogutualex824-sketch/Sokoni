@@ -830,7 +830,7 @@ function renderProviders(){
               <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'hc_${p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'Healthcare: ${p.name.replace(/'/g,"\\'")}'}):window.location.href='messages.html'">💬 Message</button>
               <button type="button" class="hc-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniSocial&&window.SokoniSocial.openShareModal({id:'hc_'+p.id,name:p.name,category:p.type,tagline:p.desc,rating:p.rating,type:'service'})">📣 Share</button>
               <button type="button" class="hc-book-btn" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.14);color:rgba(255,255,255,0.55);" id="_fhc${p.id}" onclick="window.SokoniSocial&&window.SokoniSocial.toggleFollow('hc_${p.id}','${p.name.replace(/'/g,"\\'")}',this,'hospital')">❤ Follow</button>
-              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/Sokoni Logo.png',category:p.type,source:'healthcare',sellerName:p.name}):""}
+              ${typeof SokoniMarket!=="undefined"?SokoniMarket.btnHTML({id:p.id,name:p.name,price:0,image:'assets/sokoni logoo.jpeg',category:p.type,source:'healthcare',sellerName:p.name}):""}
             </div>
           </div>
         </div>

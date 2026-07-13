@@ -5,7 +5,7 @@
 
    ROOT CAUSE this fixes
    ---------------------
-   The email template served assets/Sokoni Logo.png at its native 480x320 but
+   The email template served assets/sokoni logoo.jpeg at its native 480x320 but
    displayed it at 180x120 — forcing every email client to downscale to 37.5%.
 
    The mark is 94.2% transparent with thin, anti-aliased strokes. When an RGBA
@@ -31,7 +31,7 @@ const fs = require('fs');
 const zlib = require('zlib');
 const path = require('path');
 
-const SRC = path.join(__dirname, '..', 'assets', 'Sokoni Logo.png');
+const SRC = path.join(__dirname, '..', 'assets', 'sokoni logoo.jpeg');
 const OUT = path.join(__dirname, '..', 'assets', 'sokoni-email-logo.png');
 
 /* Render box in the email is 180x120 → serve 2x for HiDPI (retina phones). */
@@ -189,7 +189,7 @@ const png = encodePNG(outData, TARGET_W, TARGET_H);
 fs.writeFileSync(OUT, png);
 
 console.log('SOKONI — email logo build\n');
-console.log('SOURCE  assets/Sokoni Logo.png');
+console.log('SOURCE  assets/sokoni logoo.jpeg');
 console.log(`  ${src.w}x${src.h}  ${srcBuf.length} bytes`);
 console.log(`  transparent ${before.transparentPct}%  visible px ${before.visible}  mean luminance ${before.meanLuminance}`);
 console.log('\nOUTPUT  assets/sokoni-email-logo.png');

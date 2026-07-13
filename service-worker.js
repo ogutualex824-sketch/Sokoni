@@ -177,7 +177,7 @@ const PRECACHE_PAGES = [
 
 const PRECACHE_STATIC = [
   "/style.css", "/mobile.css", "/script.js", "/sokoni-inv-shell.css", "/sokoni-inv-shell.js", "/sokoni-quality.css", "/sokoni-form-nav.js",
-  "/manifest.json", "/assets/Sokoni Logo.png", "/assets/logosokoni.png",
+  "/manifest.json", "/assets/sokoni logoo.jpeg", "/assets/logosokoni.png",
   "/auth.css", "/checkout.css", "/premium.css",
   "/product.css", "/profile.css", "/seller.css",
   "/landlord.css", "/compact-grid.css", "/sokoni-premium-v2.css",

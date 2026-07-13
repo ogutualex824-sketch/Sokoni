@@ -63,7 +63,7 @@
 
     var name  = data.name        || 'Check this out';
     var price = data.price       ? 'KES ' + Number(data.price).toLocaleString() : '';
-    var image = data.image       || 'assets/Sokoni Logo.png';
+    var image = data.image       || 'assets/sokoni logoo.jpeg';
     var url   = data.url         || window.location.href;
     var desc  = data.description || (name + ' — on SOKONI Kenya\'s Marketplace');
     var waMsg = 'Check out "' + name + '"' + (price ? ' at ' + price : '') + ' on SOKONI: ' + url;
@@ -75,7 +75,7 @@
       '<div id="sokoni-share-sheet">'
       + '<div class="ss-handle"></div>'
       + '<div class="ss-preview">'
-      + '<img class="ss-thumb" src="' + image + '" alt="' + name + '" onerror="this.src=\'assets/Sokoni Logo.png\'">'
+      + '<img class="ss-thumb" src="' + image + '" alt="' + name + '" onerror="this.src=\'assets/sokoni logoo.jpeg\'">'
       + '<div><p class="ss-name">' + name + '</p>' + (price ? '<p class="ss-price">' + price + '</p>' : '') + '</div>'
       + '</div>'
       + '<div class="ss-grid">'

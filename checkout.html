@@ -2096,7 +2096,7 @@ async function sendStkPush(){
         btn.style.background = "linear-gradient(135deg,#71ff00,#4fc800)";
         btn.style.color = "black";
         showPushToast("✅ Payment Verified", "KES " + orderTotal.toLocaleString() + " confirmed by server.", "green");
-        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/Sokoni Logo.png"});
+        if(Notification.permission === "granted") new Notification("✅ SOKONI — Payment Confirmed", {body:"KES "+orderTotal.toLocaleString()+" received via M-PESA!", icon:"assets/sokoni logoo.jpeg"});
         saveAndRedirect(result.tracking_id || phone, "mpesa", verifyData.orderId, verifyData.verificationToken);
       } else {
         showPushToast("❌ Verification Failed", (verifyData.error || "Payment could not be verified.") + " Support ref: " + apiRef, "orange");

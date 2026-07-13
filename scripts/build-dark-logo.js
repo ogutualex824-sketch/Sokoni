@@ -5,7 +5,7 @@
 
    THE PROBLEM (measured, not assumed)
    -----------------------------------
-   assets/Sokoni Logo.png is a LIGHT-BACKGROUND logo. Its wordmark "SOKO" is
+   assets/sokoni logoo.jpeg is a LIGHT-BACKGROUND logo. Its wordmark "SOKO" is
    near-black, while "NI" is bright green. On the SOKONI UI — which is #050505 —
    the dark letters disappear and the brand reads as:  [bag]  ...NI
 
@@ -36,7 +36,7 @@ const fs = require('fs');
 const zlib = require('zlib');
 const path = require('path');
 
-const SRC = path.join(__dirname, '..', 'assets', 'Sokoni Logo.png');
+const SRC = path.join(__dirname, '..', 'assets', 'sokoni logoo.jpeg');
 const OUT = path.join(__dirname, '..', 'assets', 'sokoni-logo-dark.png');
 
 /* ── Decode 8-bit RGBA PNG ──────────────────────────────────────────────── */
@@ -172,7 +172,7 @@ function stats(data) {
 const a = stats(src.data), b2 = stats(out);
 
 console.log('SOKONI — dark-surface logo\n');
-console.log('SOURCE  assets/Sokoni Logo.png            (light-background original)');
+console.log('SOURCE  assets/sokoni logoo.jpeg            (light-background original)');
 console.log(`  ${w}x${h}   visible px ${visible}`);
 console.log(`  mean luminance ${a.mean}   unreadable-on-dark ${a.darkPct}%`);
 console.log('');

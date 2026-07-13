@@ -132,7 +132,7 @@
          sokoni-wordmark.svg is a pure SVG (vector) — it never fades or blurs
          at any resolution. viewBox 0 0 170 56 → preserving that aspect ratio
          (170:56 ≈ 3:1) gives the right premium-wordmark proportions. */
-      '.sk-sp-logo{width:min(78vw,340px);height:auto;max-width:none!important;',
+      '.sk-sp-logo{width:min(88vw,460px);height:auto;max-width:none!important;',
         'display:block;background:none;border:0;',
         'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) both,',
           'skLogoBreathe 3.8s ease-in-out .9s infinite,',
@@ -162,7 +162,7 @@
     el.innerHTML =
       '<div class="sk-sp-inner">' +
         /* Vector wordmark — bag icon + SOKONI text, always 100% crisp at any DPI. */
-        '<img class="sk-sp-logo" src="assets/Sokoni Logo.png" alt="SOKONI">' +
+        '<img class="sk-sp-logo" src="assets/sokoni logoo.jpeg" alt="SOKONI">' +
         '<div class="sk-sp-line">' + cfg.line + '</div>' +
         '<div class="sk-sp-bar"><div class="sk-sp-fill" style="background:' + cfg.bar + '"></div></div>' +
       '</div>';
@@ -940,7 +940,7 @@
     nav.innerHTML =
       /* Logo — SVG wordmark (bag + SOKONI text), vector, always crisp on dark bg */
       '<a href="/" id="sk-nav-logo" aria-label="SOKONI Home">' +
-        '<img src="assets/Sokoni Logo.png" alt="SOKONI">' +
+        '<img src="assets/sokoni logoo.jpeg" alt="SOKONI">' +
       '</a>' +
 
       /* Search */
@@ -1050,7 +1050,7 @@
       /* Drawer header — logo + close button */
       '<div class="sk-drawer-header">' +
         '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
-          '<img src="assets/sokoni-logo-dark.png" alt="" style="height:32px;width:auto">' +
+          '<img src="assets/sokoni logoo.jpeg" alt="SOKONI" style="height:40px;width:auto;object-fit:contain">' +
           '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
         '</div>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +

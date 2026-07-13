@@ -767,9 +767,9 @@ function _showSokoniPushToast(title, body, icon, url) {
   style.textContent = "@keyframes sokoniToastIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:translateX(0)}}";
 
   const img = document.createElement("img");
-  img.src    = "assets/Sokoni Logo.png"; /* safe default */
+  img.src    = "assets/sokoni logoo.jpeg"; /* safe default */
   img.style.cssText = "width:40px;height:40px;object-fit:contain;flex-shrink:0;";
-  img.onerror = () => { img.src = "assets/Sokoni Logo.png"; };
+  img.onerror = () => { img.src = "assets/sokoni logoo.jpeg"; };
   /* Only set src from icon if it is a same-origin or HTTPS URL */
   if (icon && /^https:\/\//.test(icon)) img.src = icon;
 

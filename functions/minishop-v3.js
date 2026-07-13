@@ -295,8 +295,8 @@ function _buildShellHtml({ shopName, description, coverUrl, shopUrl, schemaStr, 
   <meta name="twitter:title" content="${eName} — SOKONI">
   <meta name="twitter:description" content="${eDesc}">
   <meta name="twitter:image" content="${eCover}">
-  <link rel="icon" type="image/png" href="/assets/Sokoni Logo.png">
-  <link rel="apple-touch-icon" href="/assets/Sokoni Logo.png">
+  <link rel="icon" type="image/png" href="/assets/sokoni logoo.jpeg">
+  <link rel="apple-touch-icon" href="/assets/sokoni logoo.jpeg">
   <meta name="theme-color" content="#00bcd4">
   <script type="application/ld+json">${schemaStr}</script>
   <link rel="stylesheet" href="/minishop.css">

@@ -39,7 +39,7 @@ function fmt(n) { return "KES " + Number(n || 0).toLocaleString("en-KE"); }
    PNG, not SVG: Gmail and Outlook do not render SVG in email, so an SVG here
    would silently show nothing. PNG is the only reliable format.
 
-   Filename has no spaces on purpose. The source wordmark is "Sokoni Logo.png";
+   Filename has no spaces on purpose. The source wordmark is "sokoni logoo.jpeg";
    a space must be %20-encoded in a URL and is mishandled by some clients and
    proxies, so it is published under a clean name.
 
@@ -51,7 +51,7 @@ function fmt(n) { return "KES " + Number(n || 0).toLocaleString("en-KE"); }
    Verified: HTTP 200 · image/png · no auth · 0 redirects.
    Source 512x512 (1:1, square), displayed at 120x120 → 4.3x, sharp on Retina.
 ═══════════════════════════════════════════════════════════ */
-const LOGO_URL = "https://mysokoni.co.ke/assets/sokoni-email-logo.png";
+const LOGO_URL = "https://mysokoni.co.ke/assets/sokoni%20logoo.jpeg";
 
 /* ═══════════════════════════════════════════════════════════
    BASE LAYOUT — v3.0
@@ -160,8 +160,8 @@ ${hidden}
   <tr><td class="eml-hdr eml-hpad" bgcolor="#ffffff"
     style="padding:36px 40px 28px;text-align:center;border-bottom:1px solid #F1F5F9;">
     <!-- Official SOKONI logo (see LOGO_URL above for the email-client constraints) -->
-    <img class="eml-logo" src="${LOGO_URL}" alt="SOKONI" width="120" height="120"
-      style="display:block;margin:0 auto 14px;width:120px;height:120px;max-width:120px;
+    <img class="eml-logo" src="${LOGO_URL}" alt="SOKONI" width="160" height="160"
+      style="display:block;margin:0 auto 14px;width:160px;height:160px;max-width:160px;
       border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
     <!-- Brand name as typography -->
     <p class="eml-title" style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;

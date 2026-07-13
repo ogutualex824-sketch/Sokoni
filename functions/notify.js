@@ -1,4 +1,4 @@
-/* ══════════════════════════════════════════════════════════════════════════
+﻿/* ══════════════════════════════════════════════════════════════════════════
    SOKONI NOTIFICATION ENGINE  —  notify.js
 
    ONE entry point for every message SOKONI sends: push, in-app, SMS, email.
@@ -282,8 +282,8 @@ async function sendPush(uid, payload) {
     },
     webpush: {
       notification: {
-        icon: '/assets/logosokoni.png',
-        badge: '/assets/logosokoni.png',
+        icon: '/assets/sokoni%20logoo.jpeg',
+        badge: '/assets/sokoni%20logoo.jpeg',
         ...(payload.image ? { image: payload.image } : {}),
         /* tag collapses successive updates for the same order into ONE notification
            instead of stacking eleven. renotify still alerts on each change. */

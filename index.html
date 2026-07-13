@@ -3767,7 +3767,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if (Notification.permission === 'granted') {
       new Notification('💚 Payment Received — SOKONI', {
         body: 'KES ' + Number(p.amount || 0).toLocaleString() + (p.mpesaCode ? ' · ' + p.mpesaCode : ''),
-        icon: 'assets/Sokoni Logo.png',
+        icon: 'assets/sokoni logoo.jpeg',
       });
     }
 
@@ -3834,7 +3834,7 @@ document.addEventListener('DOMContentLoaded',function(){
     if (Notification.permission === 'granted') {
       new Notification('🛒 New Order — SOKONI', {
         body: (o.buyerName || 'Customer') + (o.total ? ' · KES ' + Number(o.total).toLocaleString() : ''),
-        icon: 'assets/Sokoni Logo.png',
+        icon: 'assets/sokoni logoo.jpeg',
       });
     }
 
