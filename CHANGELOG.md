@@ -1,4 +1,107 @@
-﻿## [2026-07-13] — Commission Engine: subscription-plan discounts (server-enforced)
+﻿## [2026-07-13] — Commission Engine: plan discounts ship as CAPABILITY, not POLICY
+
+Governed by `docs/PLATFORM_CONSTITUTION.md`, `docs/COMMISSION_ENGINE.md` (new),
+`docs/FINANCIAL_TRANSACTION_STANDARD.md`. No engine redesign; no second pricing system.
+
+### Summary
+
+The previous commit made the engine consume the Subscription Engine's existing
+`features.commission_discount_pct` — and thereby **activated it**. A `seller_pro` seller's
+marketplace commission moved 3% → 2.85% the moment it deployed. That is a commercial decision, and
+it had been taken by a deployment. This release takes it back and puts it under operator control.
+
+> Engineering delivers capability. Business decides when capability becomes policy.
+
+### The switch fails closed
+
+`revenueConfig/plan_adjustments` — absent, unreadable, or `enabled` not exactly `true` means **no
+seller receives an adjustment**. A deleted config, an empty database, a fresh environment all mean
+"no discounts", never "all discounts".
+
+That is deliberate. `FINANCIAL_TRANSACTION_STANDARD.md` F6/P0-7 records what self-activating
+financial behaviour costs: a fallback that fired on a blank config value gave stock away in
+production. **A capability that activates itself is a live weapon, not a convenience.**
+
+### Phase 1 is the state that ships
+
+Verified against production: the config document is absent → discounts OFF. A seller holding a
+15%-discount enterprise plan still pays **KES 300 on a KES 10,000 order** — identical to today.
+
+### Limited rollout is actually limited
+
+Only tiers the operator has explicitly **listed AND enabled** receive an adjustment. An unlisted or
+unknown plan gets nothing — that is what makes Phase 3 a controlled group rather than an accidental
+general availability. Verified: adding a plan does **not** enable the rollout; the master switch is
+separate.
+
+### Safety — a plan discounts; it never inverts
+
+| Guarantee | Enforced |
+|---|---|
+| Never negative commission | clamped ≥ 0, unconditionally |
+| Never zero unless configured | floored at `minEffectivePct` (0.5%) unless `allowZero: true` |
+| Never exceeds the cap | `maxDiscountPct`, hard ceiling 50% in code — config may tighten, never loosen |
+| Never raises commission | a "discount" that would increase the rate is clamped to the base |
+| Expired subscriptions | get nothing (status recomputed from dates) |
+| Unknown / unlisted plans | get nothing |
+
+### Audit
+
+Added `planName`, `adjustmentType` (`relative` \| `points`), `planSkipped`.
+
+`planSkipped` matters more than it looks: while the rollout is off it records `rollout_disabled`, so
+a settlement can **prove the discount was switched off at the time** rather than leaving it ambiguous
+whether the seller merely had no plan.
+
+The `commissionLedger` audit write was also **restored** — it had been lost to a merge and never
+reached HEAD, so the previous release's audit fields were not actually being persisted.
+
+### Operator control — no deployment required
+
+```bash
+node scripts/plan-discount-rollout.js status
+node scripts/plan-discount-rollout.js disable                 # instant rollback
+node scripts/plan-discount-rollout.js enable
+node scripts/plan-discount-rollout.js add-plan seller_pro --label "Pro Plan Discount"
+node scripts/plan-discount-rollout.js remove-plan seller_pro
+```
+
+Effective within 60s (the engine caches the config document for one minute). Enabling, disabling,
+increasing, decreasing or suspending a discount **never** requires a deploy.
+
+### Files
+
+`functions/commission-config.js`, `functions/finos-utils.js`, `functions/index.js`,
+`functions/commission.js`, `scripts/plan-discount-rollout.js` (new), `docs/COMMISSION_ENGINE.md` (new).
+
+### Database
+
+New optional document `revenueConfig/plan_adjustments`, seeded to the disabled state
+(`enabled: false`, no plans listed). No schema change, no migration. New audit fields are appended to
+`commissionLedger` records going forward; existing records are untouched and remain reproducible.
+
+### Deployment / rollback
+
+Deployed: `previewCommission`, `onSellerPaymentCreated`, `fosSecureWebhook`, `intasendWebhook`.
+Rollback needs no deploy — `plan-discount-rollout.js disable` returns the platform to base pricing
+within 60 seconds.
+
+### Compliance
+
+`FINANCIAL_TRANSACTION_STANDARD.md` gates: idempotency **25/25**, payment-integrity **17/17**. The
+static audit reports V2=11 / V3=5 — **exactly the residual baseline the standard itself documents**,
+and none of those findings are in the files this sprint touched. **Zero new violations.**
+
+### Testing
+
+13 rollout assertions (config-absent, `enabled:false`, listed-but-disabled, unlisted plan, expired
+plan, no plan, negative clamp, zero floor, discount cap, positive-delta clamp, audit completeness) +
+regressions: no hub repriced, `_resolveCommission` still reproduces the old arithmetic exactly,
+single-source guard passes.
+
+---
+
+## [2026-07-13] — Commission Engine: subscription-plan discounts (server-enforced)
 
 Constitution: `docs/PLATFORM_CONSTITUTION.md`. No new engine — the existing Commission Engine and
 the canonical Subscription Engine were extended, not rebuilt.
