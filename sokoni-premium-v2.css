@@ -73,8 +73,20 @@
 /* ══════════════════════════════════════════════════
    2.  PAGE ENTRANCE — every page fades in
 ══════════════════════════════════════════════════ */
+/* This entrance animation applies to EVERY direct child of <body>, and its keyframes
+   end at `transform: translateY(0)` with fill-mode `both`.
+
+   Keyframes override regular declarations, and `both` PINS the final frame. So any
+   body-child that hides itself with a transform gets dragged on screen and held
+   there. That is exactly what happened to #sk-offline-bar: it hides with
+   translateY(-100%), is inserted as body's first child, and was animated into view
+   and stuck on EVERY mobile page — the "No internet connection" banner users saw
+   while the page was plainly loading. It had nothing to do with connectivity.
+
+   Anything that hides via transform must be excluded here, not just visually
+   suppressed elsewhere. */
 @media (max-width: 768px) {
-  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support) {
+  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support):not(#sk-offline-bar):not(#sk-offline-banner):not(#sk-spl):not(#sk-splash):not(.sk-drawer):not(#sk-menu-drawer) {
     animation: sk-page-in 0.28s ease both;
   }
 }

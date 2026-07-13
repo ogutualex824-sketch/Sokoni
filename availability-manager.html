@@ -97,11 +97,19 @@
     }
     .tabs-bar::-webkit-scrollbar { display: none; }
     .tab-btn {
+      /* flex-shrink:0 is the fix. .tabs-bar is display:flex with overflow-x:auto,
+         but a flex item SHRINKS by default — so the six tabs were compressed into
+         the bar instead of overflowing it. That is why they looked crowded and the
+         labels ran together. They now keep their width and the bar scrolls. */
+      flex: 0 0 auto;
+      min-height: 48px;                     /* comfortably over the 44px tap minimum */
       padding: 14px 18px; font-size: 13px; font-weight: 600; color: var(--sub);
       border: none; background: none; cursor: pointer; white-space: nowrap;
       border-bottom: 2px solid transparent; transition: all .15s;
+      scroll-snap-align: start;
     }
     .tab-btn.active { color: var(--g); border-bottom-color: var(--g); }
+    .tab-btn:focus-visible { outline: 2px solid var(--g); outline-offset: -2px; }
 
     /* ── Panel ────────────────────────────────────────────────────────── */
     .panel { display: none; padding: 20px; max-width: 700px; margin: 0 auto; }
@@ -745,36 +753,178 @@ firebase.auth().onAuthStateChanged((user) => {
 
 /* ── Tab switching ──────────────────────────────────────────────────────── */
 function switchTab(btn) {
-  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => {
+    b.classList.remove("active");
+    b.setAttribute("aria-selected", "false");
+  });
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   btn.classList.add("active");
-  document.getElementById("panel-" + btn.dataset.panel).classList.add("active");
+  btn.setAttribute("aria-selected", "true");
+  const panel = document.getElementById("panel-" + btn.dataset.panel);
+  if (panel) panel.classList.add("active");
+
+  /* Now that the tabs actually overflow (they used to be squashed), the active one
+     can sit off-screen. Bring it into view — smoothly, unless the user has asked for
+     reduced motion. */
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  btn.scrollIntoView({ inline: "center", block: "nearest", behavior: reduce ? "auto" : "smooth" });
 }
 
-/* ── Load existing config ───────────────────────────────────────────────── */
+/* ── Load existing config ─────────────────────────────────────────────────────
+   The previous version wrapped the Firestore read, _populateUI(), _subscribeStatus()
+   AND _loadHolidays() in one try, then did `catch (e) { showToast("Failed to load
+   settings.") }` — swallowing `e` entirely. So:
+     • ANY error — a Firestore denial, a missing DOM id, a typo in the render code —
+       reported the same misleading message, and the real cause was never logged.
+     • When it threw, _subscribeStatus() never ran, so "Loading status…" stayed on
+       screen forever. That is the perpetual loading state: not a loading flag that
+       failed to clear, but a render that never happened.
+
+   Now the READ is separated from the RENDER, the real error is always logged, the
+   settings document is created on first use, and the page always reaches a terminal
+   state — loaded, or an error with a Retry. It is never left mid-load. */
+const DEFAULT_CONFIG = {
+  modes: ["fixed_hours"],
+  schedule: {}, appt: {}, cap: {}, notify: {}, vacation: {},
+  businessName: "", hubType: "",
+};
+
 async function loadConfig() {
+  _setLoading(true);
+  _clearErrorState();
+
+  let snap;
   try {
-    const snap = await db.collection("providerAvailability").doc(_uid).get();
-    if (snap.exists) {
-      _config = snap.data();
-    } else {
-      _config = { modes: ["fixed_hours"], schedule: {}, appt: {}, cap: {}, notify: {} };
-    }
-    _populateUI(_config);
-    _subscribeStatus();
-    await _loadHolidays();
+    snap = await db.collection("providerAvailability").doc(_uid).get({ source: "default" });
   } catch (e) {
-    showToast("Failed to load settings.", true);
+    console.error("[availability] settings read failed", { uid: _uid, code: e && e.code, message: e && e.message });
+    _showErrorState(
+      e && e.code === "permission-denied"
+        ? "You don't have permission to view these settings."
+        : "Couldn't load your settings.",
+      e
+    );
+    return;                                   // terminal state — Retry is offered
   }
+
+  if (snap.exists) {
+    _config = Object.assign({}, DEFAULT_CONFIG, snap.data());
+  } else {
+    /* First visit: create the document with sensible defaults rather than failing.
+       A write failure here is NOT fatal — we still render the defaults so the page
+       is usable, and the next Save will persist them. */
+    _config = Object.assign({}, DEFAULT_CONFIG);
+    try {
+      await db.collection("providerAvailability").doc(_uid).set({
+        ..._config,
+        uid: _uid,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    } catch (e) {
+      console.warn("[availability] could not create default settings doc", e && e.code, e && e.message);
+    }
+  }
+
+  /* Render. A failure here is a UI bug, not a data problem — say so, and say it in
+     the console with the real error, instead of blaming the settings. */
+  try {
+    _populateUI(_config);
+  } catch (e) {
+    console.error("[availability] render failed", e);
+    _showErrorState("Loaded your settings, but the page failed to render.", e);
+    return;
+  }
+
+  _subscribeStatus();      // never throws; has its own error handling now
+  _setLoading(false);      // the hero is no longer stuck on "Loading…"
+
+  /* Holidays are secondary — a failure must not block the page. */
+  try { await _loadHolidays(); }
+  catch (e) { console.warn("[availability] holidays failed to load", e && e.code, e && e.message); }
+}
+
+/* ── Loading / error states ─────────────────────────────────────────────────── */
+function _setLoading(on) {
+  const name = document.getElementById("bizNameHero");
+  const label = document.getElementById("statusLabel");
+  if (on) {
+    if (name && !name.textContent.trim()) name.textContent = "Loading…";
+    if (label) label.textContent = "Loading status…";
+  } else {
+    /* If nothing has set them by now, do NOT leave "Loading…" on screen. */
+    if (name && /^Loading/i.test(name.textContent.trim())) {
+      name.textContent = (_config && _config.businessName) || "Your Business";
+    }
+    if (label && /^Loading/i.test(label.textContent.trim())) {
+      label.textContent = "Status unavailable";
+    }
+  }
+}
+
+function _clearErrorState() {
+  const el = document.getElementById("availError");
+  if (el) el.remove();
+}
+
+/* Actionable failure: what happened, and a way out. Never a dead end. */
+function _showErrorState(message, err) {
+  _setLoading(false);
+  _clearErrorState();
+  const box = document.createElement("div");
+  box.id = "availError";
+  box.setAttribute("role", "alert");
+  box.style.cssText =
+    "margin:14px;padding:16px;border-radius:14px;background:rgba(239,68,68,.08);" +
+    "border:1px solid rgba(239,68,68,.28);color:#fca5a5;font-size:13.5px;line-height:1.6";
+  box.innerHTML =
+    '<div style="font-weight:800;margin-bottom:6px">' + _escStr(message) + "</div>" +
+    '<div style="opacity:.75;font-size:12px;margin-bottom:12px">' +
+      _escStr((err && (err.code || err.message)) || "Unknown error") + "</div>" +
+    '<button id="availRetry" style="min-height:44px;padding:10px 18px;border-radius:10px;' +
+    'border:1px solid rgba(239,68,68,.4);background:transparent;color:#fca5a5;' +
+    'font-weight:700;font-size:13px;cursor:pointer">Retry</button>';
+  const host = document.querySelector(".status-hero") || document.body;
+  host.parentNode.insertBefore(box, host.nextSibling);
+  const btn = document.getElementById("availRetry");
+  btn.addEventListener("click", () => {
+    btn.disabled = true; btn.textContent = "Retrying…";
+    loadConfig();
+  });
 }
 
 /* ── Subscribe real-time status ─────────────────────────────────────────── */
 function _subscribeStatus() {
-  _avail = new SokoniAvailability(_uid, { db });
-  _avail.load().then(() => _avail.loadConfig()).then(() => {
-    _renderStatusHero(_avail._status || {});
-  });
-  _avail.subscribe((s) => _renderStatusHero(s));
+  /* Guard against a duplicate listener on retry — subscribing twice leaks the old
+     onSnapshot and double-renders every status change. */
+  if (_avail && typeof _avail.unsubscribe === "function") {
+    try { _avail.unsubscribe(); } catch (_) {}
+  }
+
+  try {
+    _avail = new SokoniAvailability(_uid, { db });
+  } catch (e) {
+    console.error("[availability] status engine unavailable", e);
+    _renderStatusHero({});                    // render SOMETHING; never leave "Loading status…"
+    return;
+  }
+
+  /* These were floating promises with NO .catch. If either read rejected, the
+     rejection was unhandled, _renderStatusHero never ran, and the label stayed on
+     "Loading status…" indefinitely. That was the perpetual loading state. */
+  _avail.load()
+    .then(() => _avail.loadConfig())
+    .then(() => _renderStatusHero(_avail._status || {}))
+    .catch((e) => {
+      console.warn("[availability] live status unavailable", e && e.code, e && e.message);
+      _renderStatusHero({});                  // degrade, do not hang
+    });
+
+  try {
+    _avail.subscribe((s) => _renderStatusHero(s));
+  } catch (e) {
+    console.warn("[availability] status subscription failed", e && e.message);
+  }
 }
 
 function _renderStatusHero(s) {
@@ -805,16 +955,38 @@ function _chipColor(s) {
 }
 
 /* ── Quick status change ────────────────────────────────────────────────── */
+/* Optimistic update with rollback.
+   The UI reflects the change immediately, then persists. If the write fails, the
+   previous state is restored and the user is told why — the screen never silently
+   disagrees with the database. */
 async function quickStatus(btn) {
   const status = btn.dataset.status;
-  btn.disabled = true;
+  const chips = [...document.querySelectorAll(".status-chip")];
+  const prevActive = chips.find(c => c.classList.contains("active")) || null;
+  const prevLabel = document.getElementById("statusLabel").textContent;
+
+  chips.forEach(c => c.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("statusLabel").textContent = status.replace(/_/g, " ");
+  chips.forEach(c => { c.disabled = true; });
+
   try {
     await setLiveStatus(status);
     showToast("Status updated to " + status.replace(/_/g, " "));
   } catch (e) {
-    showToast("Failed to update status.", true);
+    console.error("[availability] status write failed", { status, code: e && e.code, message: e && e.message });
+    /* Roll back — the change did NOT persist, so the UI must not pretend it did. */
+    chips.forEach(c => c.classList.remove("active"));
+    if (prevActive) prevActive.classList.add("active");
+    document.getElementById("statusLabel").textContent = prevLabel;
+    showToast(
+      e && e.code === "permission-denied"
+        ? "You don't have permission to change this status."
+        : "Couldn't update status — reverted.",
+      true
+    );
   } finally {
-    btn.disabled = false;
+    chips.forEach(c => { c.disabled = false; });
   }
 }
 

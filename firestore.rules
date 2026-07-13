@@ -4127,9 +4127,31 @@ service cloud.firestore {
       allow write: if false; // CF-only — providerDispatch
     }
 
+    /* Provider availability — the provider owns their own settings.
+       `allow write: if false` meant NOBODY could ever save: the settings document
+       could not be created, mode changes could not persist, and nothing survived a
+       refresh. Verified against the deployed ruleset with the Rules test API —
+       create/update/delete on your OWN doc all returned DENY.
+       Reads stay open to any signed-in user: customers must be able to see whether a
+       provider is open. Writes are owner-only. */
+    /* NB: the existing isOwner() helper takes no argument and reads
+       resource.data.uid — which is NULL on create, so it cannot authorise the very
+       first write. The owner here is identified by the PATH segment, so compare
+       request.auth.uid to {uid} directly. */
     match /providerAvailability/{uid} {
-      allow read:  if isAuthed();    // customers may read to check availability
-      allow write: if false;
+      allow read:   if isAuthed();     // customers may read to check availability
+      allow create: if isAuthed() && request.auth.uid == uid;
+      allow update: if isAuthed() && request.auth.uid == uid;
+      allow delete: if false;          // availability is never hard-deleted
+
+      /* Date overrides (holidays / one-off closures) live in a subcollection.
+         A parent match does NOT cascade to subcollections, so without this block
+         every override read AND write was denied — which is why custom holidays
+         silently never loaded and never saved. */
+      match /overrides/{date} {
+        allow read:  if isAuthed();
+        allow write: if isAuthed() && request.auth.uid == uid;
+      }
     }
 
     match /providerPortfolio/{uid} {
