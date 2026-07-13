@@ -3743,6 +3743,42 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ── Legal Acceptance Framework — court-grade evidence, CF-only ────────
+       These six collections back the digital agreement engine: the signed acceptance
+       records, the signature certificates, and the append-only audit trail that the
+       legal docs describe as court-grade evidence.
+
+       They had NO rules at all. They were protected only by Firestore's implicit
+       default-deny — which held, but silently and by accident. Anyone adding a
+       /{document=**} catch-all, or a public-read rule for the policy pages, would have
+       exposed the audit trail and every user's signature without touching this block.
+
+       Deny is now explicit and reviewable. This changes nothing at runtime: no client
+       code reads or writes these collections (verified — every reference lives in
+       functions/), and the Cloud Functions use the Admin SDK, which bypasses rules.
+       All access goes through legalDispatch, where each handler authorizes itself. */
+    match /legalAgreements/{agreementId} {
+      allow read, write: if false; // CF-only — read via legalDispatch(legalGetAgreements)
+      match /versions/{version} {
+        allow read, write: if false; // CF-only — append-only version history
+      }
+    }
+    match /legalAcceptances/{acceptanceId} {
+      allow read, write: if false; // CF-only — signed acceptance records (evidence)
+    }
+    match /legalCertificates/{certificateId} {
+      allow read, write: if false; // CF-only — read via legalDispatch(legalGetCertificate)
+    }
+    match /legalAuditLog/{entryId} {
+      allow read, write: if false; // CF-only — append-only; never client-readable
+    }
+    match /legalConfig/{docId} {
+      allow read, write: if false; // CF-only — enforcement kill-switch. Client read would leak rollout state.
+    }
+    match /legalRegistry/{moduleId} {
+      allow read, write: if false; // CF-only — module agreement registry
+    }
+
     /* ── Entertainment Hub v1.0 ──────────────────────────────────────────── */
     match /entertainmentListings/{listingId} {
       allow read:  if resource.data.status == 'active'
