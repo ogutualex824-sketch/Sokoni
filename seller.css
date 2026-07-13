@@ -331,7 +331,12 @@ body{
 
 .sidebar{
     width:250px;
-    height:calc(100vh - 68px);
+    /* Subtract the consent banner's height while it is on screen. The banner is
+       position:fixed at bottom:0 with z-index 99997; this sidebar is ALSO fixed, so body
+       padding cannot move it — without this the banner sat on top of the sidebar's last
+       entries (Messages, Marketing) and silently swallowed those clicks. --sk-consent-h
+       is published by security.js and returns to 0px the moment consent is accepted. */
+    height:calc(100vh - 68px - var(--sk-consent-h, 0px));
     background:#111;
     color:white;
     padding:20px 20px 80px;

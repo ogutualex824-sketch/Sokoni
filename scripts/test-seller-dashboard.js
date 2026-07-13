@@ -152,6 +152,19 @@ console.log('\nSeller Dashboard — tile interaction\n');
   /paddingBottom\s*=\s*''/.test(sec)
     ? ok('the reserved space is released when the banner is dismissed')
     : bad('body padding is never released — a permanent gap after the banner is accepted');
+
+  /* Body padding CANNOT move a fixed element — it is out of flow. The dashboard sidebar
+     is position:fixed, so the banner sat on top of its last entries (Messages, Marketing)
+     and ate those clicks no matter how much the body was padded. This is the subtle half
+     of the bug: the obvious fix silently does nothing for fixed panels. */
+  const css = fs.readFileSync(path.resolve('seller.css'), 'utf8');
+  /--sk-consent-h/.test(sec)
+    ? ok('the banner publishes its height as --sk-consent-h, so FIXED panels can subtract it')
+    : bad('the banner does not publish its height — fixed panels cannot avoid it');
+
+  /\.sidebar\{[\s\S]{0,400}?height:\s*calc\([^)]*--sk-consent-h/.test(css.replace(/\s*\/\*[\s\S]*?\*\/\s*/g, ''))
+    ? ok('the fixed sidebar subtracts the banner height — its last entries stay clickable')
+    : bad('the fixed sidebar ignores the banner — the banner covers its last entries and swallows those taps');
 }
 
 console.log('');

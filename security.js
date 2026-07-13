@@ -551,7 +551,15 @@ const SokoniSecurity = (() => {
            A consent banner is allowed to be prominent. It is not allowed to quietly eat
            the controls underneath it. */
         var _pad = function(){
-          document.body.style.paddingBottom = (b.offsetHeight || 72) + 'px';
+          var h = (b.offsetHeight || 72);
+          /* Normal page content: push it up so the banner sits below it. */
+          document.body.style.paddingBottom = h + 'px';
+          /* FIXED panels cannot be moved by body padding — they are out of flow. The
+             seller dashboard's sidebar is `position:fixed; height:calc(100vh - 68px)`,
+             so the banner was sitting on top of its last entries (Messages, Marketing)
+             and swallowing those taps regardless of any body padding.
+             Publish the banner's height so fixed layouts can subtract it. */
+          document.documentElement.style.setProperty('--sk-consent-h', h + 'px');
         };
         _pad();
         window.addEventListener('resize', _pad);   /* it reflows/wraps on narrow screens */
@@ -561,6 +569,7 @@ const SokoniSecurity = (() => {
           b.style.cssText += ";transform:translateY(100%);transition:transform .35s ease;";
           window.removeEventListener('resize', _pad);
           document.body.style.paddingBottom = '';   /* give the space straight back */
+          document.documentElement.style.setProperty('--sk-consent-h', '0px');
           setTimeout(function(){ if(b.isConnected) b.remove(); }, 400);
         };
       };
