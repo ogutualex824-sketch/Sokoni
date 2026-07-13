@@ -4,7 +4,7 @@
 **Legal Entity:** Bravilex International Co. Limited *(corrected 2026-07-13 — this file said "Bravilex Systems Ltd", which is not the registered entity; canonical source is `CompanyIdentity` / `company-identity.js`)*  
 **Platform URL:** https://mysokoni.co.ke  
 **Release Tag:** v1.0.0  
-**Service Worker:** `sokoni-20260713-homefix-v50` (current)
+**Service Worker:** `sokoni-20260713-pos-fix-v53` (current)
 
 ---
 
@@ -259,7 +259,7 @@ v1.0.0 is the first production-ready release, covering:
 
 ---
 
-## Post-Launch Fixes (v40 → v50)
+## Post-Launch Fixes (v40 → v53)
 
 | SW Version | Change |
 |---|---|
@@ -274,6 +274,8 @@ v1.0.0 is the first production-ready release, covering:
 | v46 | **Communication Engine v1.0** — `functions/notify.js` is the single entry point for push/in-app/SMS/email; 11-stage monotonic order timeline (`orderAdvance`); `track.html` live journey. Fixed three silent production failures, all the same bug — a producer and a consumer using different names for one field, with nothing asserting they agreed: `fcmToken`/`fcmTokens` (**push from loyalty.js + redis-jobs.js had never reached a single user**), `deepLink`/`url` (**rich push would open the homepage, not the order**), `userId`/`targetUid` (**in-app notifications matched nobody's query**). Guarded by `scripts/test-notify.js` (23 checks). See [[Communication Engine]] |
 | v50 | **P0-9: Flash Deals chip overflow + UTF-8 encoding + Mobile UI polish** — Three UI defects: (1) Flash Deals category chips compressed on iPhone Safari — `flex-shrink:0` missing from `.fs-cat`; `touch-action:pan-x` missing from `.fs-cats` and `.fs-feat-scroll` scroll containers. (2) Middle dot rendered as "Â·" due to UTF-8/Latin-1 double-encoding — replaced with `&middot;` entity in `flashsale.html`. (3) Story nav arrows were 28×28 px (below 44×44 WCAG minimum) — enlarged to 44×44; `storiesRing` and hub pills row missing `touch-action:pan-x;overscroll-behavior-x:contain` on iOS. |
 | v47 | **P0-8: Google Sign-In broken + False offline banner** — Two compounding root causes: (1) `_isPopupSupported()` forced all iOS users through `signInWithRedirect`, which fails silently on iOS Safari (ITP blocks the `sokoni-aeb26.firebaseapp.com` iframe from reading cross-site storage → `getRedirectResult()` returns null). Fixed: regular iOS Safari now uses popup. (2) No already-logged-in guard on login.html — when the SW `controllerchange` reload fired during the 900ms + 1200ms auth timers, the user was stranded on the login page while Firebase had already set the session. Fixed: `_alreadyLoggedInGuard()` IIFE redirects immediately from localStorage (fast) or `sokoniAuthReady` event (slow path). Also fixed: `navigator.onLine` gate removed (unreliable on iOS/PWA); `setPersistence(browserLocalPersistence)` added before every redirect; `sokoniAuthReady` event now dispatched from `onAuthStateChanged` in `firebase.js`; `firebase.js`/`auth.js`/`session-manager.js` moved to `ALWAYS_FRESH` (no more stale auth SDK). Offline banner: `sokoni-offline.js` initial probe delayed from 0 ms to 3500 ms — eliminates false banner on PWA launch when `navigator.onLine` is transiently false during startup. |
+| v52 | **Logo dark fix** — SOKONI logo PNG (`Sokonilogo2.png`) added to all pages that were still showing the light variant or a missing image; favicon and splash updated. |
+| v53 | **Mobile Homepage Stabilization Sprint + POS/Seller emergency fixes** — (1) False offline banner on every PWA cold-start: `sokoni-ui.js` `_GRACE_MS` 4 s → 10 s; `sokoni-offline.js` boot-time grace 11 s added to all event handlers, initial probe 3.5 s → 11 s. (2) KASS FAB + Scroll-Top FAB overlapping content on iPhone: CSS vars `--sk-kass-bottom` and `--sk-scroll-bottom` = `calc(64px + env(safe-area-inset-bottom, 0px) + 20px)` in `mobile.css`; `kass-widget.js` modal bottom safe-area-aware. (3) Quick-links chips wrapping on 601–767 px: `style.css` `.qlinks-row` base changed to `flex-wrap:nowrap; overflow-x:auto`. (4) iOS Safari search zoom: `#sk-nav-search` font-size 13 px → 16 px on mobile in `shared-header.js`. (5) POS CRITICAL: SyntaxError in `pos-setup.html` killed all event listeners. (6) Seller dashboard: `sdSwitchTab` undefined above 768 px — all quick-action tiles silent on desktop. |
 
 ---
 

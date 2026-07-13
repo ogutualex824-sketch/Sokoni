@@ -1,4 +1,38 @@
-﻿## [2026-07-13] — 🩹 HOTFIX P0-9: Flash Deals chip overflow + UTF-8 encoding + Mobile UI polish
+﻿## [2026-07-13] — 🩹 HOTFIX: Mobile Homepage Stabilization Sprint (SW v53)
+
+### Summary
+
+Five production defects fixed under code freeze. All fixes are production-defect eligible (UI correctness, platform security, iOS compatibility). SW bumped to v53 to evict stale caches.
+
+**DEFECT 1 — False offline banner on every PWA cold-start**
+`sokoni-ui.js` first probe fired at 3 s with a 4 s timeout, resolving at up to 7 s. The grace period was only 4 s — so the probe timed out AFTER the grace period expired and the banner fired falsely on every slow network or PWA launch. Fix: extended `_GRACE_MS` to 10 s. `sokoni-offline.js` (fallback system) had a complementary race — its `pageshow` event fired immediately on first page load before `#sk-offline-bar` existed. Fix: boot-time guard added to all event handlers (11 s grace); initial probe delayed from 3.5 s to 11 s.
+
+**DEFECT 2 — KASS FAB and Scroll-Top FAB overlapping content on iPhone**
+Both FABs used hardcoded `bottom` values (86 px / 82 px) with no `env(safe-area-inset-bottom)`. On iPhone with 34 px home indicator: `64 + 34 = 98 px` of bottom chrome, so buttons were inside the bottom nav. Fix: CSS custom properties `--sk-kass-bottom` and `--sk-scroll-bottom` set to `calc(64px + env(safe-area-inset-bottom, 0px) + 20px)` in `mobile.css`; `kass-widget.js` modal on narrow phones updated to `calc(var(--sk-kass-bottom) + 60px)`.
+
+**DEFECT 3 — Quick-links category chips wrapping into multiple rows instead of scrolling**
+`.qlinks-row` in `style.css` had `flex-wrap: wrap` which stacked chips onto multiple lines on 601–767 px (tablet-phone range) where neither the desktop nor the mobile `!important` rule applied. Fix: global base changed to `flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; touch-action: pan-x; scrollbar-width: none`.
+
+**DEFECT 4 — iOS Safari zoom on search bar focus**
+`#sk-nav-search` font-size was 13 px on mobile — iOS auto-zooms any input below 16 px on focus, jarring UX. Fix: mobile override in `shared-header.js` changed to `font-size: 16px`.
+
+**Also in this SW bump (other process):**
+- POS setup CRITICAL: SyntaxError at `pos-setup.html:1731` killed all Get Started / Sign In POS event listeners
+- Seller dashboard: `sdSwitchTab` was only defined below 768 px — all tiles silent on desktop and tablet
+- `seller.css`: add `cursor:pointer` to `.nav-item` for iOS Safari click compat
+
+### Files affected
+`sokoni-ui.js` · `sokoni-offline.js` · `mobile.css` · `kass-widget.js` · `style.css` · `shared-header.js` · `service-worker.js` · `pos-setup.html` · `seller.html` · `seller.css` · `security.js`
+
+### Security changes
+None.
+
+### Breaking changes
+None. All changes are additive or fix-grade. Grace period extension means offline banner appears ~10 s after launch on a genuinely offline device (was ~4 s, now correctly deferred past the active probe cycle).
+
+---
+
+## [2026-07-13] — 🩹 HOTFIX P0-9: Flash Deals chip overflow + UTF-8 encoding + Mobile UI polish
 
 ### Summary
 
