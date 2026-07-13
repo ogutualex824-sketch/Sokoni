@@ -1,0 +1,196 @@
+{
+  "_comment": [
+    "THE RELEASE GATE REGISTER — the single source of truth for release state.",
+    "",
+    "Constitution: 'Never duplicate.' So this file is the ONE place a gate's state lives.",
+    "The validation dashboard reads it. The Go/No-Go report is generated from it. CI checks",
+    "it. There is no second list to drift out of step with this one.",
+    "",
+    "FOUR STATES (RVS v1.0). A gate is exactly one of them:",
+    "  not_exercised        ⚪  never run. NO evidence. NEVER report as pass.",
+    "  engineering_complete 🟡  built, reviewed, tests pass. NOT yet proven in production.",
+    "  verified             🟢  EXECUTED in the intended environment. Evidence captured.",
+    "  failed               🔴  executed, evidence captured, expected behaviour NOT observed.",
+    "",
+    "THE RULE: a gate may NOT move from not_exercised to verified without execution.",
+    "A gate may NOT be marked verified without a non-empty `evidence` block.",
+    "scripts/test-rvs.js enforces both. It fails the build, not a linter warning.",
+    "",
+    "Queued is not Delivered. Accepted is not Completed. HTTP 200 is not Business Success.",
+    "Cloud Function success is not User success. Deployment success is not Production success."
+  ],
+  "release": "v1.0.0-candidate",
+  "standard": "RVS v1.0",
+  "updated": "2026-07-13",
+  "verdict": "NO_GO",
+  "verdictReason": "0 of 10 critical gates VERIFIED. 9 are ENGINEERING COMPLETE (built, tested, unproven). 1 are NOT EXERCISED. Engineering Complete is not Production Proven.",
+  "evidenceSchema": [
+    "timestamp",
+    "traceId",
+    "operator",
+    "environment",
+    "duration",
+    "logs",
+    "screenshots",
+    "cfResult",
+    "dbChange",
+    "userVisibleResult"
+  ],
+  "gates": [
+    {
+      "id": "auth",
+      "name": "Authentication",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "App Check enforced; auth CFs live; validation mode traces init → getRedirectResult → claims → Firestore profile. Never executed on a real device.",
+      "roles": [
+        "buyer",
+        "merchant",
+        "provider",
+        "driver",
+        "employer",
+        "administrator"
+      ],
+      "rolesVerified": [],
+      "evidence": null
+    },
+    {
+      "id": "identity",
+      "name": "Identity",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "CompanyIdentity canonical across 893 files; drift guard green. Client-side identity (claims, roles) never exercised per-role on a device.",
+      "evidence": null
+    },
+    {
+      "id": "legal",
+      "name": "Legal",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "Legal engine: 45 regression checks green, mandatory digital signature enforced, three lawful forms. No agreement has ever been signed by a real user.",
+      "evidence": null
+    },
+    {
+      "id": "payments",
+      "name": "Payments (money path)",
+      "critical": true,
+      "state": "not_exercised",
+      "note": "ZERO orders have ever existed in production. The money path has never taken a shilling. 17 CI checks green and it fails closed — but that is engineering, not evidence. The next payment is SOKONI's first.",
+      "moneyPath": {
+        "customer_paid": "not_exercised",
+        "provider_confirms": "not_exercised",
+        "order_created": "not_exercised",
+        "inventory_updated": "not_exercised",
+        "ledger_updated": "not_exercised",
+        "commission_correct": "not_exercised",
+        "settlement_correct": "not_exercised",
+        "customer_notified": "not_exercised",
+        "merchant_notified": "not_exercised",
+        "refund_path": "not_exercised",
+        "dispute_path": "not_exercised"
+      },
+      "evidence": null
+    },
+    {
+      "id": "wallet",
+      "name": "Wallet",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "Top-up confirms via provider callback and toasts on credit. Never credited a real user with real money.",
+      "evidence": null
+    },
+    {
+      "id": "notifications",
+      "name": "Notifications",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "HIGHEST RISK. The fcmToken/fcmTokens defect is fixed and the engine is the one entry point. But push has NEVER been confirmed on a real device — and sendEachForMulticast() with zero tokens returns SUCCESS, which is exactly how a months-long outage hid behind a green dashboard. Queued is not Delivered.",
+      "mustValidate": [
+        "delivered",
+        "displayed",
+        "read",
+        "actioned"
+      ],
+      "evidence": null
+    },
+    {
+      "id": "email",
+      "name": "Email",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "SendGrid key is real. The PO email now carries a PDF attachment. But 202 Accepted is not Delivered — no receipt and no PO has ever landed in a real inbox.",
+      "mustValidate": [
+        "delivered",
+        "rendered",
+        "links_work",
+        "attachments_correct",
+        "branding_correct"
+      ],
+      "evidence": null
+    },
+    {
+      "id": "search",
+      "name": "Search",
+      "critical": false,
+      "state": "engineering_complete",
+      "note": "10 of 12 capabilities real (voice, barcode, QR, typo, autocomplete, trending, nearby, personalised). Image search is a stub. Never exercised on a device.",
+      "evidence": null
+    },
+    {
+      "id": "marketplace",
+      "name": "Marketplace",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "Browse/cart/checkout paths built; payment fails closed. Never driven end-to-end by a real buyer.",
+      "evidence": null
+    },
+    {
+      "id": "pos",
+      "name": "SmartPOS",
+      "critical": false,
+      "state": "not_exercised",
+      "note": "Extensive engineering. No till has ever been opened on real hardware in production.",
+      "evidence": null
+    },
+    {
+      "id": "organizations",
+      "name": "Organizations / Procurement",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "PO chain wired end to end; PDF validated by parsing its xref table. procSuppliers is EMPTY — no supplier exists, so no PO has ever been sent to anyone.",
+      "evidence": null
+    },
+    {
+      "id": "profile",
+      "name": "Profile",
+      "critical": false,
+      "state": "engineering_complete",
+      "note": "Built. Not exercised per-role on a device.",
+      "evidence": null
+    },
+    {
+      "id": "analytics",
+      "name": "Analytics",
+      "critical": false,
+      "state": "engineering_complete",
+      "note": "13 of 15 metrics real with drill-down. Every revenue figure is currently ZERO because no order has ever existed — any non-zero number on a dashboard today is seed or mock data.",
+      "evidence": null
+    },
+    {
+      "id": "pwa",
+      "name": "PWA / Service Worker",
+      "critical": true,
+      "state": "engineering_complete",
+      "note": "Live SW matches repo. Validation mode flags a WAITING worker (the session would be running stale code). Offline, install, update, recovery and multi-device never exercised.",
+      "mustValidate": [
+        "fresh_sw",
+        "offline",
+        "install",
+        "update",
+        "recovery",
+        "multi_device"
+      ],
+      "evidence": null
+    }
+  ]
+}

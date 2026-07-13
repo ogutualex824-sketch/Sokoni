@@ -53,6 +53,15 @@
   exactly what hid a months-long push outage behind a green dashboard.
 </div>
 
+<!-- RVS gate register. Read from release-gates.json — the ONE source of truth. The
+     Constitution forbids duplicating a system; this dashboard, docs/GO_NO_GO.md and
+     scripts/test-rvs.js all read the same file, so they cannot drift apart. -->
+<h1 style="font-size:16px;margin:18px 0 6px">Release Gates <span style="font-size:11px;color:var(--sub);font-weight:400">— RVS v1.0</span></h1>
+<div id="verdict" class="warn-card" style="display:none"></div>
+<div id="gates"></div>
+
+<h1 style="font-size:16px;margin:22px 0 6px">This session</h1>
+
 <div class="bar">
   <a class="btn p" href="/?validate=1">Start a run →</a>
   <button class="btn" id="copy">Copy trace JSON</button>
@@ -161,6 +170,41 @@ document.getElementById('copy').addEventListener('click', function(){
 document.getElementById('clear').addEventListener('click', function(){
   try { sessionStorage.removeItem('sokoni_validate_trace'); } catch(e){}
   render();
+});
+
+/* ── RVS gate register ─────────────────────────────────────────────────────────
+   The four states. ⚪ NOT EXERCISED never renders as a pass — that single rule is what
+   this whole standard is for. */
+var RVS = {
+  not_exercised:        { dot:'⚪', label:'NOT EXERCISED' },
+  engineering_complete: { dot:'🟡', label:'ENGINEERING COMPLETE' },
+  verified:             { dot:'🟢', label:'VERIFIED' },
+  failed:               { dot:'🔴', label:'FAILED' },
+};
+
+fetch('/release-gates.json').then(function(r){ return r.json(); }).then(function(reg){
+  var crit = (reg.gates||[]).filter(function(g){ return g.critical; });
+  var ver  = crit.filter(function(g){ return g.state === 'verified'; });
+
+  var v = document.getElementById('verdict');
+  v.style.display = 'block';
+  v.innerHTML =
+    '<strong>' + (reg.verdict === 'GO' ? '🟢 GO' : '🔴 ' + (reg.verdict || 'NO-GO')) + '</strong> — ' +
+    ver.length + ' of ' + crit.length + ' critical gates VERIFIED.<br>' +
+    esc(reg.verdictReason || '');
+
+  document.getElementById('gates').innerHTML = (reg.gates||[]).map(function(g){
+    var s = RVS[g.state] || { dot:'⚪', label: g.state };
+    return '<div class="mod"><div class="mod-h">' +
+      '<span class="dot">' + s.dot + '</span>' +
+      '<span class="mod-n">' + esc(g.name) + (g.critical ? '' : ' <span style="color:#8a8a8a;font-weight:400">(non-critical)</span>') +
+        '<div class="mod-c">' + esc(g.note || '') + '</div></span>' +
+      '<span class="mod-c">' + s.label + '</span>' +
+    '</div></div>';
+  }).join('');
+}).catch(function(){
+  document.getElementById('gates').innerHTML =
+    '<div class="empty">Could not load release-gates.json</div>';
 });
 
 /* Live-update while a run is in progress in this tab. */
