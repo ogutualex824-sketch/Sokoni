@@ -1,4 +1,46 @@
-﻿## [2026-07-13] — Identity Command Center Sprint 8 — Workspace Intelligence
+﻿## [2026-07-13] — SOKONI Design System v1.0
+
+### Summary
+
+The Design System is a **canonical engine** that every page inherits automatically. Zero redesign — this is a standardisation layer that fills gaps and prevents future duplication. Two new files fill exactly 13 confirmed component gaps. `shared-header.js` injects both automatically so no page needs manual linking.
+
+**`sokoni-ds.css`** (~500 lines) — 13 gap components absent from the three existing CSS files:
+Typography Scale (`.sk-display`, `.sk-h1`–`.sk-h5`, `.sk-body*`, `.sk-caption`, `.sk-label-text`, `.sk-mono`), Extended Card Parts (`.sk-card-header`, `.sk-card-footer`, `.sk-card-title`, `.sk-card-subtitle`, `.sk-card-elevated`, `.sk-card-bordered`, `.sk-card-ghost`), Page Header (`.sk-page-header`, `.sk-page-title`, `.sk-page-desc`, `.sk-page-actions`), Input Wrap (`.sk-input-wrap`, `.sk-input-icon`), Switch/Toggle (`.sk-switch`, `.sk-switch-track`), Removable Tags (`.sk-tag-group`, `.sk-tag`, `.sk-tag-remove`, `.sk-tag-accent`), Progress Bar (`.sk-progress`, `.sk-progress-fill`, indeterminate, sizes, semantic colours), Search Bar (`.sk-search-wrap`, `.sk-search`, `.sk-search-icon`, `.sk-search-clear`, `.sk-search-results`, `.sk-search-result`), Quick Actions (`.sk-qa-grid`, `.sk-qa-btn`, `.sk-qa-icon`, `.sk-qa-label`), Tabs (`.sk-tabs`, `.sk-tab`, `.sk-tab-count`, `.sk-tab-panels`, `.sk-tab-panel`), Tooltip (CSS-only `[data-tooltip]` + `.sk-tooltip-bottom`), Dropdown Menu (`.sk-dropdown`, `.sk-dropdown-menu`, `.sk-dropdown-item`, `.sk-dropdown-sep`), Pagination (`.sk-pagination`, `.sk-page-btn`, `.sk-page-nav`, `.sk-page-ellipsis`), Chart Wrapper (`.sk-chart-wrap`, `.sk-chart-header`, `.sk-chart-canvas`, `.sk-chart-legend*`), Animation Utilities (`.sk-anim-fade-in/slide-up/scale-in/pulse/spin` + delay modifiers `.sk-anim-d1`–`.sk-anim-d6`), Layout Utilities (`.sk-grid-2/3/4`, `.sk-flex-*`, `.sk-w-full`, `.sk-gap-*`, overflow helpers).
+
+**`sokoni-ds.js`** (~300 lines) — `window.SK` unified API. Delegates 6 features to existing `SokoniUI` (toast, dialog, loading.page, skeleton, empty, esc). Adds 8 genuinely missing features: `SK.loading.btn/btnDone`, `SK.alert`, `SK.form.validate/fieldError/fieldClear/clearAll`, `SK.search.init`, `SK.tabs.init`, `SK.dropdown.init`, `SK.badge`. Emits `sk:ready` CustomEvent on init. Guard prevents double-init.
+
+**`shared-header.js`** — Two new injection lines (ID-guarded against re-injection): `sk-ds-link` (`sokoni-ds.css`) and `sk-ds-script` (`sokoni-ds.js`). Injection order: tokens → components → quality → **ds.css** → ui.js → **ds.js**.
+
+**`docs/DESIGN_SYSTEM.md`** — Full canonical reference: token catalogue, every component with copy-paste HTML examples, `window.SK` API reference, 8 mandatory rules for page authors, process for adding new components.
+
+### Files Created / Modified
+
+| File | Change |
+|---|---|
+| `sokoni-ds.css` | NEW — 13 gap components (~500 lines) |
+| `sokoni-ds.js` | NEW — `window.SK` unified API (~300 lines) |
+| `shared-header.js` | Added `sk-ds-link` + `sk-ds-script` injection (2 lines) |
+| `docs/DESIGN_SYSTEM.md` | NEW — canonical component + API reference |
+| `CHANGELOG.md` | This entry |
+
+### Architecture Compliance
+- **Zero duplication** — no class re-defined from `sokoni-tokens.css`, `sokoni-components.css`, or `sokoni-quality.css`
+- **Zero redesign** — existing visual language unchanged; gaps only
+- **Delegation over reimplementation** — `SK.*` delegates to `SokoniUI` where it exists
+- **Auto-injection** — no page needs manual `<link>` or `<script>` tags
+- **ID-guarded** — `_injectAsset` prevents double-injection on SPA navigations
+
+### Security
+- No new backend surface; purely client-side CSS/JS
+- `SK.esc()` provided for XSS-safe rendering; all form validation client-side only (server must still validate)
+- No eval, no remote script loading, no dynamic CSS injection from user content
+
+### Rollback
+Remove the two `_injectAsset` calls for `sk-ds-link` / `sk-ds-script` from `shared-header.js`. Delete `sokoni-ds.css` and `sokoni-ds.js`. Pages using `SK.*` will need to revert to `SokoniUI.*` or inline equivalents.
+
+---
+
+## [2026-07-13] — Identity Command Center Sprint 8 — Workspace Intelligence
 
 ### Summary
 

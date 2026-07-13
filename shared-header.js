@@ -208,8 +208,17 @@
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-components.css' }, 'sk-components-link');
   /* Quality design system — --so-* tokens, focus-visible ring, WCAG touch targets, skip links */
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-quality.css' }, 'sk-quality-link');
+  /* Design System v1.0 — gap-filling components: search, tags, tabs, tooltip, dropdown,
+     pagination, chart wrapper, typography scale, switch, quick actions, progress (.sk-*),
+     animation utilities, form feedback, page headers, extended card parts. Loads after
+     sokoni-components.css so .sk-* tokens are already defined. */
+  _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-ds.css' }, 'sk-ds-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
+  /* Design System JS — window.SK unified API; delegates to SokoniUI for existing features,
+     adds SK.form.*, SK.search.init(), SK.tabs.init(), SK.dropdown.init(), SK.loading.btn*,
+     SK.alert(), SK.badge(). Loaded after sokoni-ui.js so SokoniUI is available. */
+  _injectAsset('script', { src: 'sokoni-ds.js', defer: true }, 'sk-ds-script');
   /* Sticky Quick Actions — ONE component, adopted by every hub's existing action row.
      It has to be JS, not a CSS class: 116 pages scroll an inner container, where sticky
      resolves against that container rather than the viewport, so the correct top offset
