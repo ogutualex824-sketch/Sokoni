@@ -971,7 +971,8 @@
   function _buildMenuDrawer() {
     if (document.getElementById('sk-menu-drawer')) return;
     const LINKS = [
-      { icon:'🏠', label:'Home',          href:'index.html' },
+      /* "/" — canonical, and the same target as the logo above (id="sk-nav-logo"). */
+      { icon:'🏠', label:'Home',          href:'/' },
       { icon:'🛍️', label:'Marketplace',   href:'category.html?cat=all' },
       { icon:'🛠️', label:'Services',       href:'services.html' },
       { icon:'🍔', label:'Food',           href:'food.html' },

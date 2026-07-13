@@ -174,7 +174,11 @@
 
     items.forEach(function (a) {
       a.classList.remove('active-bnav');
-      const href = (a.getAttribute('href') || '').replace(/\?.*$/, '');
+      let href = (a.getAttribute('href') || '').replace(/\?.*$/, '');
+      /* The canonical homepage is "/", but NAV_MAP keys it as "index.html". Without
+         this the Home tab stops highlighting the moment its href is canonicalised —
+         a silent regression, since nothing errors: the tab simply never lights up. */
+      if (href === '/' || href === '') href = 'index.html';
       if (href === target || href.endsWith('/' + target)) {
         a.classList.add('active-bnav');
       }

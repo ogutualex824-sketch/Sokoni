@@ -176,7 +176,10 @@
   /* ── Nav tab configs ─────────────────────────────────────── */
   var _TABS = {
     buyer: [
-      { i:'🏠',  l:'Home',       h:'index.html' },
+      /* "/" is the canonical homepage — the same target the header logo uses. It was
+         "index.html", which Firebase 301s to "/", costing a round-trip on every Home
+         tap and (until the service worker was fixed) producing ERR_FAILED outright. */
+      { i:'🏠',  l:'Home',       h:'/' },
       { i:'🛍️', l:'Categories', h:'category.html?cat=all' },
       { i:'🛠️', l:'Services',   h:'services.html' },
       { i:'📦',  l:'Orders',     h:'profile.html#orders' },
@@ -369,10 +372,18 @@
   /* ── Active tab detection ────────────────────────────────── */
   /* Normalise both sides: strip .html so Firebase cleanUrls (/page vs page.html)
      doesn't prevent active-state matching in production. */
+  /* The homepage has THREE spellings in the wild: "/", "index.html" and "index".
+     _page resolves "/" to "index" (see the fallback at the top of this file), so an
+     href of "/" would compare "/" against "index" and never match — the Home tab
+     would silently stop highlighting. Normalise every spelling to one token so the
+     canonical "/" and any legacy "index.html" link are treated as the same page. */
+  function _home(s) {
+    return (s === '/' || s === '' || s === 'index') ? 'index' : s;
+  }
   function _isActive(href) {
     if (!href || href === '#') return false;
-    var a = href.split('#')[0].split('?')[0].toLowerCase().replace(/\.html$/, '');
-    var b = _page.replace(/\.html$/, '');
+    var a = _home(href.split('#')[0].split('?')[0].toLowerCase().replace(/\.html$/, ''));
+    var b = _home(_page.replace(/\.html$/, ''));
     return a === b;
   }
 
