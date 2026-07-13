@@ -34,7 +34,7 @@ jobs:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
       - name: Setup gcloud
-        uses: google-github-actions/setup-gcloud@v2
+        uses: google-github-actions/setup-gcloud@v3
 
       - name: Export Firestore to GCS
         run: |
@@ -74,7 +74,7 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Sync media bucket to backup
         run: |
@@ -110,7 +110,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
       - run: |
           TIMESTAMP=$(date +%Y%m%d-%H%M)
           gsutil cp /tmp/typesense-snapshot.json \
@@ -129,7 +129,7 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/setup-gcloud@v3
 
       - name: Export secret names and versions (not values)
         run: |
