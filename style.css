@@ -41,7 +41,7 @@ html:not(.sk-no-header) body {
 }
 #sk-nav-logo img {
   height: 68px; width: auto; object-fit: contain; display: block;
-  filter: drop-shadow(0 0 18px rgba(113,255,0,0.45)) drop-shadow(0 0 8px rgba(113,255,0,0.25));
+  mix-blend-mode: screen;
 }
 #sk-nav-logo-text {
   font-size: 20px; font-weight: 900; color: #71ff00; letter-spacing: .03em;

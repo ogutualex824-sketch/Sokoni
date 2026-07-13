@@ -133,7 +133,7 @@
          at any resolution. viewBox 0 0 170 56 → preserving that aspect ratio
          (170:56 ≈ 3:1) gives the right premium-wordmark proportions. */
       '.sk-sp-logo{width:min(88vw,460px);height:auto;max-width:none!important;',
-        'display:block;background:none;border:0;',
+        'display:block;background:none;border:0;mix-blend-mode:screen;',
         'animation:skSplashUp .68s cubic-bezier(.22,1.4,.36,1) both,',
           'skLogoBreathe 3.8s ease-in-out .9s infinite,',
           'skLogoGlow 2.8s ease-in-out .9s infinite}',
@@ -535,14 +535,14 @@
        The offset is now MEASURED from the header itself (--sk-header-h, published below
        and re-measured on resize/rotate), so it cannot drift from reality again. A layout
        constant that describes the layout on only one class of device is not a constant. */
-    body > .sk-sub-nav {
+    .sk-sub-nav {
       position: sticky !important;
       top: var(--sk-header-h, 58px) !important;
       z-index: 100 !important;
       box-shadow: 0 2px 10px rgba(0,0,0,0.28), 0 1px 0 rgba(113,255,0,0.05) !important;
     }
     /* ── Hub logos inside sub-navs: suppressed — branding lives in sk-top-nav ── */
-    body > .sk-sub-nav [class*="-nav-logo"],
+    .sk-sub-nav [class*="-nav-logo"],
     body > .sk-sub-nav .hc-nav-logo,
     body > .sk-sub-nav .sv-nav-logo,
     body > .sk-sub-nav .ch-nav-logo,
@@ -551,16 +551,16 @@
       display: none !important;
     }
     /* ── Hub nav inner rows: horizontal scroll, no wrap, 44px touch targets ── */
-    body > .sk-sub-nav [class*="-nav-right"],
-    body > .sk-sub-nav [class*="-nav-tabs"] {
+    .sk-sub-nav [class*="-nav-right"],
+    .sk-sub-nav [class*="-nav-tabs"] {
       overflow-x: auto !important;
       -webkit-overflow-scrolling: touch !important;
       overscroll-behavior-x: contain !important;
       scrollbar-width: none !important;
       -ms-overflow-style: none !important;
     }
-    body > .sk-sub-nav [class*="-nav-right"]::-webkit-scrollbar,
-    body > .sk-sub-nav [class*="-nav-tabs"]::-webkit-scrollbar { display: none !important; }
+    .sk-sub-nav [class*="-nav-right"]::-webkit-scrollbar,
+    .sk-sub-nav [class*="-nav-tabs"]::-webkit-scrollbar { display: none !important; }
     /* ── Hub nav link items: no squeeze, no wrap, proper touch targets ──
        This said "proper touch targets" and then set 40px. 44px is the iOS floor — below
        it, a control is reliably mis-tapped, and this rule is !important so it was the
@@ -583,10 +583,10 @@
        It is not needed anyway: these items are flex children of .sv-nav-right, so
        min-height applies to them without touching display. Set the size; leave the layout
        alone. */
-    body > .sk-sub-nav [class*="-nav-link"],
-    body > .sk-sub-nav [class*="-nav-tab"],
-    body > .sk-sub-nav [class*="-nav-btn"],
-    body > .sk-sub-nav [class*="-nav-sell"] {
+    .sk-sub-nav [class*="-nav-link"],
+    .sk-sub-nav [class*="-nav-tab"],
+    .sk-sub-nav [class*="-nav-btn"],
+    .sk-sub-nav [class*="-nav-sell"] {
       flex-shrink: 0 !important;
       white-space: nowrap !important;
       min-height: 44px !important;
@@ -1094,7 +1094,7 @@
       /* Drawer header — logo + close button */
       '<div class="sk-drawer-header">' +
         '<div style="display:flex;align-items:center;gap:9px;margin-left:4px">' +
-          '<img src="assets/sokoni logoo.jpeg" alt="SOKONI" style="height:40px;width:auto;object-fit:contain">' +
+          '<img src="assets/sokoni logoo.jpeg" alt="SOKONI" style="height:40px;width:auto;object-fit:contain;mix-blend-mode:screen">' +
           '<span style="font-size:19px;font-weight:900;letter-spacing:.04em;color:#fff;line-height:1">SOKO<em style="font-style:normal;color:#71ff00">NI</em></span>' +
         '</div>' +
         '<button class="sk-drawer-close" type="button" aria-label="Close menu">✕</button>' +
