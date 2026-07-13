@@ -638,6 +638,9 @@
     <button class="ac-nav-item" onclick="acShow('businesses')" data-panel="businesses">
       <i class="fas fa-briefcase"></i> Businesses
     </button>
+    <button class="ac-nav-item" onclick="acShow('employment')" data-panel="employment">
+      <i class="fas fa-id-badge"></i> Employment
+    </button>
 
     <div class="ac-section-divider">Preferences</div>
     <button class="ac-nav-item" onclick="acShow('notifications')" data-panel="notifications">
@@ -678,6 +681,7 @@
     <button class="ac-tab-btn" onclick="acShow('payments')" data-panel="payments"><i class="fas fa-credit-card"></i> Payments</button>
     <button class="ac-tab-btn" onclick="acShow('wallet')" data-panel="wallet"><i class="fas fa-wallet"></i> Wallet</button>
     <button class="ac-tab-btn" onclick="acShow('businesses')" data-panel="businesses"><i class="fas fa-briefcase"></i> Businesses</button>
+    <button class="ac-tab-btn" onclick="acShow('employment')" data-panel="employment"><i class="fas fa-id-badge"></i> Employment</button>
     <button class="ac-tab-btn" onclick="acShow('notifications')" data-panel="notifications"><i class="fas fa-bell"></i> Alerts</button>
     <button class="ac-tab-btn" onclick="acShow('privacy')" data-panel="privacy"><i class="fas fa-eye-slash"></i> Privacy</button>
     <button class="ac-tab-btn" onclick="acShow('verification')" data-panel="verification"><i class="fas fa-circle-check"></i> Verify</button>
@@ -934,6 +938,46 @@
         <div class="ac-btn-row">
           <button class="ac-btn ac-btn-ghost" onclick="location.href='businesses.html'">
             <i class="fas fa-plus"></i> Register a Business
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7b. Employment ──────────────────────────────────── -->
+    <section class="ac-panel" id="panel-employment">
+      <h1 class="ac-panel-title">Employment &amp; Workspaces</h1>
+      <p class="ac-panel-sub">Your active jobs, pending invitations, and work history across all businesses on SOKONI.</p>
+
+      <!-- Active workspaces -->
+      <div class="ac-card">
+        <div class="ac-card-title">Active Workspaces</div>
+        <div id="acEmpActive">
+          <div class="ac-loader"><div class="ac-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Pending invitations -->
+      <div class="ac-card">
+        <div class="ac-card-title">Pending Invitations</div>
+        <div id="acEmpPending">
+          <div class="ac-loader"><div class="ac-spinner"></div></div>
+        </div>
+      </div>
+
+      <!-- Past jobs -->
+      <div class="ac-card">
+        <div class="ac-card-title">Work History</div>
+        <div id="acEmpHistory">
+          <div class="ac-loader"><div class="ac-spinner"></div></div>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Staff Management</div>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:12px;">Own a business? Invite and manage your team.</p>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-ghost" onclick="location.href='staff-management.html'">
+            <i class="fas fa-users-gear"></i> Manage Staff
           </button>
         </div>
       </div>
@@ -1654,6 +1698,129 @@ async function _loadBusinesses() {
   }
 }
 
+/* ── Employment ─────────────────────────────────────────────── */
+var _empLoaded = false;
+async function _loadEmployment() {
+  if (_empLoaded) return;
+  _empLoaded = true;
+
+  const activeEl  = document.getElementById('acEmpActive');
+  const pendingEl = document.getElementById('acEmpPending');
+  const historyEl = document.getElementById('acEmpHistory');
+
+  /* Use cached workspaces for instant paint, then fetch from CF for pending+history */
+  try {
+    var workspaces = [];
+    try { workspaces = JSON.parse(localStorage.getItem('sokoniWorkspaces') || '[]'); } catch(_) {}
+    var activeWsId = localStorage.getItem('sokoniActiveWorkspace') || null;
+
+    const wsRoleName = r => {
+      const M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+        inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+        receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+      return M[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g,' ') : 'Staff');
+    };
+    const empTypeLabel = t => ({ permanent:'Permanent', contract:'Contract', seasonal:'Seasonal',
+      one_week:'1 Week', one_day:'1 Day', one_shift:'1 Shift' }[t] || (t || ''));
+    const bizEmoji = t => ({ marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
+      events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[t] || '🏢');
+
+    if (activeEl) {
+      if (!workspaces.length) {
+        activeEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">💼</div><div class="ac-empty-text">Not employed at any business yet.</div></div>';
+      } else {
+        activeEl.innerHTML = workspaces.map(ws => {
+          const isActive = ws.businessId === activeWsId;
+          const roleTitle = ws.roleTitle && ws.roleTitle !== wsRoleName(ws.role) ? ` · ${_esc(ws.roleTitle)}` : '';
+          const empType   = empTypeLabel(ws.employmentType);
+          const clocked   = ws.clockedIn ? '<span class="ac-badge" style="background:rgba(113,255,0,.15);color:#71ff00;">Clocked In</span>' : '';
+          return `
+            <div class="ac-biz-card" style="${isActive ? 'border-color:rgba(113,255,0,.4);' : ''}">
+              <div class="ac-biz-icon">${bizEmoji(ws.businessType)}</div>
+              <div class="ac-biz-info" style="flex:1;">
+                <div class="ac-biz-name">${_esc(ws.businessName || 'Business')}${isActive ? ' <span class="ac-badge" style="font-size:10px;">Active</span>' : ''}</div>
+                <div class="ac-biz-meta">${wsRoleName(ws.role)}${roleTitle} · ${empType} ${clocked}</div>
+              </div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="ac-btn ac-btn-ghost" style="padding:6px 12px;font-size:11px;"
+                  onclick="window._skSwitchWorkspace && window._skSwitchWorkspace('${_esc(ws.businessId)}')">
+                  ${isActive ? '✓ Active' : 'Switch'}
+                </button>
+              </div>
+            </div>`;
+        }).join('');
+      }
+    }
+  } catch (e) {
+    if (activeEl) activeEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">Unable to load workspaces.</div></div>';
+  }
+
+  /* Load pending invitations and history from Cloud Function */
+  try {
+    const fn     = httpsCallable(_fns, 'wfGetMyWorkspaces');
+    const result = await fn({});
+    const data   = result.data || {};
+    const pending = data.pending || [];
+    const past    = data.past    || [];
+
+    const wsRoleName2 = r => {
+      const M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+        inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+        receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+      return M[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g,' ') : 'Staff');
+    };
+    const bizEmoji2 = t => ({ marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
+      events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[t] || '🏢');
+
+    if (pendingEl) {
+      if (!pending.length) {
+        pendingEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">No pending invitations.</div></div>';
+      } else {
+        pendingEl.innerHTML = pending.map(inv => `
+          <div class="ac-device-card" style="align-items:flex-start;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:10px;width:100%;">
+              <div style="width:36px;height:36px;border-radius:8px;background:rgba(113,255,0,.08);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">${bizEmoji2(inv.businessType)}</div>
+              <div style="flex:1;">
+                <div style="font-weight:700;font-size:14px;">${_esc(inv.businessName || 'Business')}</div>
+                <div style="font-size:12px;color:var(--sub);margin-top:2px;">${wsRoleName2(inv.role)} · Invited by ${_esc(inv.invitedByName || 'Owner')}</div>
+              </div>
+            </div>
+            ${inv.personalMessage ? `<p style="font-size:12px;color:var(--sub);font-style:italic;margin:0;">"${_esc(inv.personalMessage)}"</p>` : ''}
+            <div style="display:flex;gap:8px;">
+              <button class="ac-btn" style="padding:6px 16px;font-size:12px;" onclick="location.href='workspace-invite.html?code=${_esc(inv.invitationCode)}'">
+                View Invitation
+              </button>
+            </div>
+          </div>`).join('');
+      }
+    }
+
+    if (historyEl) {
+      if (!past.length) {
+        historyEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">No past employment records.</div></div>';
+      } else {
+        historyEl.innerHTML = past.map(p => {
+          const endDate  = p.endDate  ? new Date(p.endDate).toLocaleDateString('en-KE',{year:'numeric',month:'short'}) : 'Ongoing';
+          const startDate = p.addedAt ? new Date(p.addedAt).toLocaleDateString('en-KE',{year:'numeric',month:'short'}) : '–';
+          const statusLabel = { terminated:'Terminated', resigned:'Resigned', completed:'Completed', suspended:'Suspended' }[p.status] || p.status;
+          return `
+            <div class="ac-device-card">
+              <div class="ac-device-icon">${bizEmoji2(p.businessType)}</div>
+              <div class="ac-device-info">
+                <div class="ac-device-name">${_esc(p.businessName || 'Business')}</div>
+                <div class="ac-device-meta">${wsRoleName2(p.role)} · ${startDate} – ${endDate} · ${statusLabel}</div>
+              </div>
+            </div>`;
+        }).join('');
+      }
+    }
+  } catch (e) {
+    if (pendingEl) pendingEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">Unable to load invitations.</div></div>';
+    if (historyEl) historyEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">Unable to load work history.</div></div>';
+    console.warn('[AccountCentre] loadEmployment error:', e.message);
+  }
+}
+
 /* ── Panel switching ────────────────────────────────────────── */
 window.acShow = function(id) {
   // Panels
@@ -1676,6 +1843,7 @@ window.acShow = function(id) {
     if (_sessions.length === 0) _loadSessions();
   }
   if (id === 'businesses') _loadBusinesses();
+  if (id === 'employment') _loadEmployment();
 };
 
 /* ── Delete account flow ────────────────────────────────────── */
@@ -1842,7 +2010,7 @@ function _checkHash() {
     '#profile':'profile','#security':'security','#devices':'devices',
     '#sessions':'sessions','#notifications':'notifications','#privacy':'privacy',
     '#subscriptions':'subscriptions','#payments':'payments','#wallet':'wallet',
-    '#businesses':'businesses','#verification':'verification','#legal':'legal',
+    '#businesses':'businesses','#employment':'employment','#verification':'verification','#legal':'legal',
     '#downloads':'downloads','#delete':'delete',
   };
   const panel = map[location.hash];

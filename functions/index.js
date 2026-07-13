@@ -9336,3 +9336,19 @@ exports.cancelAccountDeletion     = _acctMgr.cancelAccountDeletion;
 exports.requestDataExport         = _acctMgr.requestDataExport;
 exports.revokeAllSessions         = _acctMgr.revokeAllSessions;
 exports.finaliseExpiredDeletions  = _acctMgr.finaliseExpiredDeletions;
+
+/* ── Workforce Identity System ─────────────────────────────── */
+const _wfId = require("./workforce-identity");
+exports.wfInviteEmployee              = _wfId.wfInviteEmployee;
+exports.wfGetInvitation               = _wfId.wfGetInvitation;
+exports.wfAcceptInvitation            = _wfId.wfAcceptInvitation;
+exports.wfDeclineInvitation           = _wfId.wfDeclineInvitation;
+exports.wfCancelInvitation            = _wfId.wfCancelInvitation;
+exports.wfRevokeMembership            = _wfId.wfRevokeMembership;
+exports.wfUpdatePermissions           = _wfId.wfUpdatePermissions;
+exports.wfUpdateRole                  = _wfId.wfUpdateRole;
+exports.wfGetBusinessMembers          = _wfId.wfGetBusinessMembers;
+exports.wfGetMyWorkspaces             = _wfId.wfGetMyWorkspaces;
+exports.wfClockIn                     = _wfId.wfClockIn;
+exports.wfClockOut                    = _wfId.wfClockOut;
+exports.wfGetPendingInvitationsByEmail = _wfId.wfGetPendingInvitationsByEmail;

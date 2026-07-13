@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Staff Management</title>
+  <meta name="theme-color" content="#71ff00">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root {
+      --bg:#050505; --sur:#111; --sur2:#181818;
+      --bor:rgba(255,255,255,0.08); --g:#71ff00;
+      --g-dim:rgba(113,255,0,0.08); --g-mid:rgba(113,255,0,0.18);
+      --txt:#fff; --sub:rgba(255,255,255,0.5);
+      --red:#ff4d4d; --red-dim:rgba(255,77,77,0.08);
+      --radius:14px;
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      background:var(--bg); color:var(--txt);
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      padding-bottom:calc(80px + env(safe-area-inset-bottom,0));
+      min-height:100vh;
+    }
+
+    /* ── Page shell ────────────────────── */
+    .sm-shell {
+      max-width:900px; margin:0 auto;
+      padding:24px 16px;
+    }
+
+    /* ── Page header ───────────────────── */
+    .sm-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px; margin-bottom:24px; flex-wrap:wrap;
+    }
+    .sm-hdr-left h1 {
+      font-size:22px; font-weight:800; letter-spacing:-.02em;
+    }
+    .sm-hdr-left p {
+      font-size:13px; color:var(--sub); margin-top:3px;
+    }
+
+    /* Business selector */
+    .sm-biz-select {
+      display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px;
+    }
+    .sm-biz-pill {
+      padding:7px 14px; border-radius:20px; font-size:12.5px; font-weight:700;
+      border:1px solid var(--bor); background:none; color:var(--sub);
+      cursor:pointer; transition:all .15s;
+    }
+    .sm-biz-pill.active {
+      background:var(--g-dim); border-color:rgba(113,255,0,0.3); color:var(--g);
+    }
+
+    /* ── Tab strip ─────────────────────── */
+    .sm-tabs {
+      display:flex; gap:0; border-bottom:1px solid var(--bor);
+      margin-bottom:20px; overflow-x:auto; scrollbar-width:none;
+    }
+    .sm-tabs::-webkit-scrollbar { display:none; }
+    .sm-tab {
+      padding:10px 18px; font-size:13.5px; font-weight:700;
+      color:var(--sub); cursor:pointer; border:none; background:none;
+      border-bottom:2px solid transparent; margin-bottom:-1px;
+      transition:color .15s, border-color .15s; white-space:nowrap;
+    }
+    .sm-tab.active { color:var(--g); border-bottom-color:var(--g); }
+
+    /* ── Cards ─────────────────────────── */
+    .sm-card {
+      background:var(--sur); border:1px solid var(--bor);
+      border-radius:var(--radius); padding:20px; margin-bottom:16px;
+    }
+    .sm-card-title {
+      font-size:12px; font-weight:700; letter-spacing:.08em;
+      text-transform:uppercase; color:var(--sub); margin-bottom:16px;
+    }
+
+    /* ── Staff grid ────────────────────── */
+    .sm-staff-list { display:flex; flex-direction:column; gap:1px; }
+    .sm-staff-item {
+      display:flex; align-items:center; gap:14px;
+      padding:14px 0; border-bottom:1px solid var(--bor);
+    }
+    .sm-staff-item:last-child { border-bottom:none; padding-bottom:0; }
+    .sm-avatar {
+      width:44px; height:44px; border-radius:50%;
+      background:var(--g-dim); border:1px solid rgba(113,255,0,0.15);
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; font-weight:900; color:var(--g); flex-shrink:0;
+    }
+    .sm-staff-info { flex:1; min-width:0; }
+    .sm-staff-name { font-size:14px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .sm-staff-meta { font-size:12px; color:var(--sub); margin-top:2px; }
+    .sm-staff-actions { display:flex; gap:6px; flex-shrink:0; }
+    .sm-act-btn {
+      padding:6px 12px; border-radius:8px; font-size:12px; font-weight:700;
+      cursor:pointer; border:1px solid var(--bor); background:none;
+      color:var(--sub); transition:all .12s;
+    }
+    .sm-act-btn:hover { background:var(--g-dim); color:var(--g); border-color:rgba(113,255,0,0.25); }
+    .sm-act-btn-danger:hover { background:var(--red-dim); color:var(--red); border-color:rgba(255,77,77,0.25); }
+
+    /* Status indicators */
+    .sm-status-dot {
+      display:inline-block; width:7px; height:7px; border-radius:50%;
+      margin-right:5px; vertical-align:middle;
+    }
+    .sm-status-dot.active { background:var(--g); }
+    .sm-status-dot.clocked { background:#fbbf24; }
+    .sm-status-dot.terminated { background:var(--red); }
+    .sm-badge {
+      display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px;
+      font-size:11px; font-weight:700;
+    }
+    .sm-badge-green { background:var(--g-dim); color:var(--g); border:1px solid rgba(113,255,0,0.2); }
+    .sm-badge-yellow { background:rgba(251,191,36,0.1); color:#fbbf24; border:1px solid rgba(251,191,36,0.2); }
+    .sm-badge-grey { background:rgba(255,255,255,0.06); color:var(--sub); border:1px solid var(--bor); }
+
+    /* ── Invite form ───────────────────── */
+    .sm-form { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .sm-form-full { grid-column:1 / -1; }
+    .sm-label {
+      display:block; font-size:11.5px; font-weight:700;
+      text-transform:uppercase; letter-spacing:.07em;
+      color:var(--sub); margin-bottom:6px;
+    }
+    .sm-input {
+      width:100%; padding:11px 14px;
+      background:var(--sur2); border:1px solid var(--bor);
+      border-radius:10px; color:var(--txt); font-size:14px;
+      outline:none; transition:border-color .15s; font-family:inherit;
+    }
+    .sm-input:focus { border-color:rgba(113,255,0,0.4); }
+    .sm-select {
+      appearance:none; -webkit-appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.35)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:right 14px center;
+      padding-right:36px;
+    }
+    .sm-select option { background:#1a1a1a; }
+
+    /* Permissions checkboxes */
+    .sm-perms-grid {
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr));
+      gap:8px; margin-top:8px;
+    }
+    .sm-perm-item {
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px; border-radius:8px;
+      background:var(--sur2); border:1px solid var(--bor);
+      cursor:pointer; transition:all .12s;
+    }
+    .sm-perm-item:hover { border-color:rgba(113,255,0,0.2); }
+    .sm-perm-item input[type=checkbox] { accent-color:var(--g); width:14px; height:14px; }
+    .sm-perm-item label { font-size:12px; font-weight:600; cursor:pointer; }
+
+    /* ── Primary / ghost buttons ───────── */
+    .sm-btn {
+      padding:11px 20px; border-radius:10px;
+      font-size:13.5px; font-weight:700; cursor:pointer;
+      border:none; display:inline-flex; align-items:center; gap:8px;
+      transition:opacity .15s, transform .1s;
+    }
+    .sm-btn:active { transform:scale(.97); }
+    .sm-btn-primary { background:var(--g); color:#050505; }
+    .sm-btn-ghost { background:var(--g-dim); color:var(--g); border:1px solid rgba(113,255,0,0.25); }
+    .sm-btn-danger { background:var(--red-dim); color:var(--red); border:1px solid rgba(255,77,77,0.2); }
+    .sm-btn-row { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
+
+    /* ── Modal overlay ─────────────────── */
+    .sm-modal-bg {
+      position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:10000;
+      display:none; align-items:center; justify-content:center; padding:16px;
+    }
+    .sm-modal-bg.open { display:flex; }
+    .sm-modal {
+      background:var(--sur); border:1px solid var(--bor);
+      border-radius:var(--radius); padding:24px; width:100%;
+      max-width:520px; max-height:90vh; overflow-y:auto;
+      animation:smModalIn .2s cubic-bezier(.19,1.32,.34,1);
+    }
+    @keyframes smModalIn { from{opacity:0;transform:scale(.95)} to{opacity:1;transform:none} }
+    .sm-modal-title {
+      font-size:18px; font-weight:800; margin-bottom:4px;
+    }
+    .sm-modal-sub { font-size:13px; color:var(--sub); margin-bottom:20px; }
+    .sm-modal-close {
+      position:absolute; top:16px; right:16px;
+      background:none; border:none; color:var(--sub);
+      font-size:18px; cursor:pointer; padding:4px;
+    }
+
+    /* ── Invite success ────────────────── */
+    .sm-invite-success {
+      text-align:center; padding:20px 0; display:none;
+    }
+    .sm-invite-success-icon { font-size:48px; margin-bottom:12px; }
+    .sm-invite-code {
+      font-size:28px; font-weight:900; letter-spacing:.08em;
+      color:var(--g); margin:12px 0;
+      font-variant-numeric:tabular-nums;
+    }
+    .sm-invite-link {
+      font-size:12px; color:var(--sub); word-break:break-all;
+      background:var(--sur2); padding:10px 14px; border-radius:8px;
+      margin-bottom:16px;
+    }
+
+    /* ── Empty state ───────────────────── */
+    .sm-empty {
+      text-align:center; padding:40px 24px; color:var(--sub);
+    }
+    .sm-empty-icon { font-size:40px; margin-bottom:12px; }
+
+    /* ── Loader ────────────────────────── */
+    .sm-loader { display:flex; justify-content:center; padding:32px; }
+    .sm-spinner {
+      width:28px; height:28px; border:3px solid rgba(113,255,0,0.12);
+      border-top-color:var(--g); border-radius:50%;
+      animation:smSpin .7s linear infinite;
+    }
+    @keyframes smSpin { to{transform:rotate(360deg)} }
+
+    /* ── Pending invite items ──────────── */
+    .sm-invite-item {
+      display:flex; align-items:center; gap:12px;
+      padding:12px 0; border-bottom:1px solid var(--bor);
+    }
+    .sm-invite-item:last-child { border-bottom:none; }
+    .sm-invite-icon {
+      width:40px; height:40px; border-radius:10px;
+      background:rgba(251,191,36,0.1); border:1px solid rgba(251,191,36,0.2);
+      display:flex; align-items:center; justify-content:center;
+      font-size:18px; flex-shrink:0;
+    }
+
+    @media(max-width:600px) {
+      .sm-form { grid-template-columns:1fr; }
+      .sm-form-full { grid-column:1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="sm-shell">
+
+  <!-- Page header -->
+  <div class="sm-hdr">
+    <div class="sm-hdr-left">
+      <h1><i class="fas fa-people-group" style="color:var(--g);margin-right:8px;"></i>Staff Management</h1>
+      <p>Invite people to join your business. They keep their personal SOKONI account.</p>
+    </div>
+    <button class="sm-btn sm-btn-primary" onclick="openInviteModal()">
+      <i class="fas fa-plus"></i> Invite Staff
+    </button>
+  </div>
+
+  <!-- Business selector -->
+  <div class="sm-biz-select" id="smBizSelect">
+    <div class="sm-loader"><div class="sm-spinner"></div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="sm-tabs">
+    <button class="sm-tab active" onclick="smShowTab('active')" data-tab="active">
+      Active Staff <span id="tabCountActive"></span>
+    </button>
+    <button class="sm-tab" onclick="smShowTab('pending')" data-tab="pending">
+      Pending Invitations <span id="tabCountPending"></span>
+    </button>
+    <button class="sm-tab" onclick="smShowTab('history')" data-tab="history">
+      History
+    </button>
+  </div>
+
+  <!-- Tab: Active Staff -->
+  <div id="tabActive">
+    <div class="sm-card">
+      <div id="smStaffList">
+        <div class="sm-loader"><div class="sm-spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Pending Invitations -->
+  <div id="tabPending" style="display:none;">
+    <div class="sm-card">
+      <div id="smInviteList">
+        <div class="sm-loader"><div class="sm-spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: History (terminated members) -->
+  <div id="tabHistory" style="display:none;">
+    <div class="sm-card">
+      <div id="smHistoryList">
+        <div class="sm-empty">
+          <div class="sm-empty-icon">📋</div>
+          <div>Past employment records appear here.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── Invite Modal ──────────────────────────────────────── -->
+<div class="sm-modal-bg" id="inviteModal">
+  <div class="sm-modal" style="position:relative;">
+    <button class="sm-modal-close" onclick="closeInviteModal()"><i class="fas fa-times"></i></button>
+
+    <!-- Form -->
+    <div id="inviteFormSection">
+      <div class="sm-modal-title">Invite a Staff Member</div>
+      <div class="sm-modal-sub">They will receive an invitation via email or push notification.</div>
+
+      <div class="sm-form">
+        <div>
+          <label class="sm-label">Email Address *</label>
+          <input type="email" class="sm-input" id="invEmail" placeholder="name@email.com">
+        </div>
+        <div>
+          <label class="sm-label">Phone (optional)</label>
+          <input type="tel" class="sm-input" id="invPhone" placeholder="+254 7XX XXX XXX">
+        </div>
+        <div>
+          <label class="sm-label">Role *</label>
+          <select class="sm-input sm-select" id="invRole" onchange="smRoleChanged()">
+            <option value="">— Select role —</option>
+            <option value="manager">Manager</option>
+            <option value="supervisor">Supervisor</option>
+            <option value="cashier">Cashier</option>
+            <option value="inventory_officer">Inventory Officer</option>
+            <option value="accountant">Accountant</option>
+            <option value="driver">Driver</option>
+            <option value="receptionist">Receptionist</option>
+            <option value="waiter">Waiter</option>
+            <option value="security">Security</option>
+            <option value="cleaner">Cleaner</option>
+          </select>
+        </div>
+        <div>
+          <label class="sm-label">Custom Title (optional)</label>
+          <input type="text" class="sm-input" id="invTitle" placeholder="e.g. Head Cashier">
+        </div>
+        <div>
+          <label class="sm-label">Employment Type *</label>
+          <select class="sm-input sm-select" id="invEmployType">
+            <option value="permanent">Permanent</option>
+            <option value="contract">Contract</option>
+            <option value="seasonal">Seasonal</option>
+            <option value="one_week">One Week</option>
+            <option value="one_day">One Day</option>
+            <option value="one_shift">One Shift</option>
+          </select>
+        </div>
+        <div>
+          <label class="sm-label">Start Date</label>
+          <input type="date" class="sm-input" id="invStartDate">
+        </div>
+        <div class="sm-form-full">
+          <label class="sm-label">Personal Message (optional)</label>
+          <textarea class="sm-input" id="invMessage" rows="2"
+            placeholder="Welcome to the team! Looking forward to working with you."></textarea>
+        </div>
+
+        <div class="sm-form-full">
+          <label class="sm-label">Permissions <span style="font-weight:400;text-transform:none;letter-spacing:0;">(auto-set by role, you can customise)</span></label>
+          <div class="sm-perms-grid" id="smPermsGrid"></div>
+        </div>
+      </div>
+
+      <div id="inviteError" style="display:none;color:var(--red);font-size:13px;margin-top:12px;padding:10px 14px;background:var(--red-dim);border-radius:8px;border:1px solid rgba(255,77,77,0.2);"></div>
+
+      <div class="sm-btn-row">
+        <button class="sm-btn sm-btn-primary" onclick="sendInvite()" id="sendBtn">
+          <i class="fas fa-paper-plane"></i> Send Invitation
+        </button>
+        <button class="sm-btn sm-btn-ghost" onclick="closeInviteModal()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Success state -->
+    <div class="sm-invite-success" id="inviteSuccess">
+      <div class="sm-invite-success-icon">✅</div>
+      <div style="font-size:18px;font-weight:800;margin-bottom:8px;">Invitation Sent!</div>
+      <div style="font-size:13px;color:var(--sub);margin-bottom:16px;">
+        Share this link with your new staff member:
+      </div>
+      <div class="sm-invite-code" id="successCode"></div>
+      <div class="sm-invite-link" id="successLink"></div>
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+        <button class="sm-btn sm-btn-primary" onclick="copyInviteLink()">
+          <i class="fas fa-copy"></i> Copy Link
+        </button>
+        <button class="sm-btn sm-btn-ghost" onclick="shareInvite()">
+          <i class="fas fa-share-nodes"></i> Share
+        </button>
+        <button class="sm-btn sm-btn-ghost" onclick="closeInviteModal();loadMembers()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Staff detail / edit modal ─────────────────────────── -->
+<div class="sm-modal-bg" id="staffModal">
+  <div class="sm-modal" style="position:relative;">
+    <button class="sm-modal-close" onclick="document.getElementById('staffModal').classList.remove('open')">
+      <i class="fas fa-times"></i>
+    </button>
+    <div id="staffModalContent"></div>
+  </div>
+</div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+import { db } from './firebase.js';
+import { collection, query, where, getDocs, orderBy } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const fns         = getFunctions();
+const _invite     = httpsCallable(fns, 'wfInviteEmployee');
+const _revoke     = httpsCallable(fns, 'wfRevokeMembership');
+const _updateRole = httpsCallable(fns, 'wfUpdateRole');
+const _updatePerms= httpsCallable(fns, 'wfUpdatePermissions');
+const _cancelInv  = httpsCallable(fns, 'wfCancelInvitation');
+const _getMembers = httpsCallable(fns, 'wfGetBusinessMembers');
+
+/* ── Global state ─────────────────────────────────────────── */
+let _user      = null;
+let _businesses = [];
+let _activeBizId = null;
+let _members    = [];
+let _pendingInv = [];
+let _invLink    = '';
+let _invCode    = '';
+
+const ROLE_PERMISSIONS = {
+  owner:            ['view_products','manage_products','pos','inventory','refunds','discounts','finance','payroll','reports','customers','bookings','drivers','deliveries','branches','users','analytics','settings'],
+  manager:          ['view_products','manage_products','pos','inventory','refunds','discounts','reports','customers','bookings','drivers','deliveries','branches','users','analytics'],
+  supervisor:       ['view_products','manage_products','pos','inventory','refunds','discounts','reports','customers','analytics'],
+  cashier:          ['pos','view_products','customers','refunds'],
+  inventory_officer:['view_products','manage_products','inventory','reports'],
+  accountant:       ['finance','payroll','reports','analytics'],
+  driver:           ['drivers','deliveries'],
+  receptionist:     ['bookings','customers','view_products'],
+  waiter:           ['pos','bookings','customers','view_products'],
+  security:         ['customers'],
+  cleaner:          [],
+};
+
+const ALL_PERMISSIONS = [
+  { key:'view_products',   label:'View Products' },
+  { key:'manage_products', label:'Manage Products' },
+  { key:'pos',             label:'POS / Checkout' },
+  { key:'inventory',       label:'Inventory' },
+  { key:'refunds',         label:'Refunds' },
+  { key:'discounts',       label:'Discounts' },
+  { key:'finance',         label:'Finance' },
+  { key:'payroll',         label:'Payroll' },
+  { key:'reports',         label:'Reports' },
+  { key:'customers',       label:'Customers' },
+  { key:'bookings',        label:'Bookings' },
+  { key:'drivers',         label:'Drivers' },
+  { key:'deliveries',      label:'Deliveries' },
+  { key:'branches',        label:'Branches' },
+  { key:'users',           label:'Manage Staff' },
+  { key:'analytics',       label:'Analytics' },
+  { key:'settings',        label:'Settings' },
+];
+
+/* ── Boot ─────────────────────────────────────────────────── */
+function _boot() {
+  try { _user = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+  if (!_user) return;
+  _loadBusinesses();
+}
+
+async function _loadBusinesses() {
+  const bizEl = document.getElementById('smBizSelect');
+  try {
+    const q    = query(collection(db, 'businesses'), where('ownerId', '==', _user.uid));
+    const snap = await getDocs(q);
+
+    _businesses = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (_businesses.length === 0) {
+      bizEl.innerHTML = `<div style="font-size:13px;color:var(--sub);">No businesses found. <a href="businesses.html" style="color:var(--g);">Register one</a>.</div>`;
+      return;
+    }
+
+    _activeBizId = _businesses[0].id;
+    bizEl.innerHTML = _businesses.map(b =>
+      `<button class="sm-biz-pill ${b.id === _activeBizId ? 'active' : ''}" onclick="smSelectBiz('${_esc(b.id)}')">${_esc(b.name)}</button>`
+    ).join('');
+
+    loadMembers();
+  } catch (e) {
+    bizEl.innerHTML = `<span style="color:var(--red);font-size:13px;">Failed to load businesses: ${_esc(e.message)}</span>`;
+  }
+}
+
+/* ── Select a business ────────────────────────────────────── */
+window.smSelectBiz = function(id) {
+  _activeBizId = id;
+  document.querySelectorAll('.sm-biz-pill').forEach(p => p.classList.toggle('active', p.getAttribute('onclick').includes(`'${id}'`)));
+  loadMembers();
+};
+
+/* ── Load members ─────────────────────────────────────────── */
+window.loadMembers = async function() {
+  if (!_activeBizId) return;
+
+  document.getElementById('smStaffList').innerHTML  = `<div class="sm-loader"><div class="sm-spinner"></div></div>`;
+  document.getElementById('smInviteList').innerHTML = `<div class="sm-loader"><div class="sm-spinner"></div></div>`;
+
+  try {
+    const res = await _getMembers({ businessId: _activeBizId });
+    _members    = res.data.members    || [];
+    _pendingInv = res.data.pendingInvites || [];
+    renderStaff();
+    renderPending();
+  } catch (e) {
+    document.getElementById('smStaffList').innerHTML = `<div style="color:var(--red);padding:16px;">${_esc(e.message)}</div>`;
+  }
+};
+
+/* ── Render active staff ──────────────────────────────────── */
+function renderStaff() {
+  const el = document.getElementById('smStaffList');
+  const countEl = document.getElementById('tabCountActive');
+  const active = _members.filter(m => m.status === 'active');
+
+  if (countEl) countEl.textContent = active.length ? ` (${active.length})` : '';
+
+  if (active.length === 0) {
+    el.innerHTML = `<div class="sm-empty"><div class="sm-empty-icon">👥</div><div>No active staff yet. Invite your first team member.</div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="sm-staff-list">${active.map(_renderMember).join('')}</div>`;
+}
+
+function _renderMember(m) {
+  const initial = (m.userName || m.userEmail || '?').charAt(0).toUpperCase();
+  const status  = m.clockedIn ? 'clocked' : 'active';
+  const statusLabel = m.clockedIn ? 'Clocked In' : 'Active';
+  return `
+    <div class="sm-staff-item">
+      <div class="sm-avatar">${_esc(initial)}</div>
+      <div class="sm-staff-info">
+        <div class="sm-staff-name">${_esc(m.userName || m.userEmail || 'Unknown')}</div>
+        <div class="sm-staff-meta">
+          ${_esc(_roleName(m.role))}
+          ${m.roleTitle && m.roleTitle !== _roleName(m.role) ? ' · ' + _esc(m.roleTitle) : ''}
+          · ${_esc(m.employmentType || 'permanent')}
+          · <span class="sm-status-dot ${status}"></span>${statusLabel}
+        </div>
+      </div>
+      <div class="sm-staff-actions">
+        <button class="sm-act-btn" onclick="openStaffModal('${_esc(m.membershipId)}')"><i class="fas fa-ellipsis"></i></button>
+        <button class="sm-act-btn sm-act-btn-danger" onclick="confirmRevoke('${_esc(m.membershipId)}','${_esc(m.userName||m.userEmail)}')">
+          <i class="fas fa-user-minus"></i>
+        </button>
+      </div>
+    </div>`;
+}
+
+/* ── Render pending invitations ───────────────────────────── */
+function renderPending() {
+  const el = document.getElementById('smInviteList');
+  const countEl = document.getElementById('tabCountPending');
+  if (countEl) countEl.textContent = _pendingInv.length ? ` (${_pendingInv.length})` : '';
+
+  if (_pendingInv.length === 0) {
+    el.innerHTML = `<div class="sm-empty"><div class="sm-empty-icon">📨</div><div>No pending invitations.</div></div>`;
+    return;
+  }
+
+  el.innerHTML = `<div class="sm-staff-list">${_pendingInv.map(inv => `
+    <div class="sm-invite-item">
+      <div class="sm-invite-icon">📧</div>
+      <div class="sm-staff-info">
+        <div class="sm-staff-name">${_esc(inv.invitedEmail || inv.invitedPhone || '—')}</div>
+        <div class="sm-staff-meta">${_esc(_roleName(inv.role))} · Sent ${_timeAgo(inv.sentAt)} · Expires ${inv.expiresAt ? new Date(inv.expiresAt).toLocaleDateString('en-KE') : '—'}</div>
+      </div>
+      <button class="sm-act-btn sm-act-btn-danger" onclick="confirmCancelInv('${_esc(inv.invitationId)}','${_esc(inv.invitedEmail||inv.invitedPhone||'')}')">Cancel</button>
+    </div>`).join('')}</div>`;
+}
+
+/* ── Tab switching ────────────────────────────────────────── */
+window.smShowTab = function(tab) {
+  ['active','pending','history'].forEach(t => {
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.display = t === tab ? '' : 'none';
+    document.querySelectorAll('.sm-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  });
+};
+
+/* ── Invite modal ─────────────────────────────────────────── */
+window.openInviteModal = function() {
+  document.getElementById('invEmail').value    = '';
+  document.getElementById('invPhone').value    = '';
+  document.getElementById('invRole').value     = '';
+  document.getElementById('invTitle').value    = '';
+  document.getElementById('invMessage').value  = '';
+  document.getElementById('invError') && (document.getElementById('inviteError').style.display = 'none');
+  document.getElementById('inviteFormSection').style.display = '';
+  document.getElementById('inviteSuccess').style.display = 'none';
+  _buildPermsGrid([]);
+  document.getElementById('inviteModal').classList.add('open');
+};
+window.closeInviteModal = function() {
+  document.getElementById('inviteModal').classList.remove('open');
+};
+
+/* ── Permissions grid ─────────────────────────────────────── */
+function _buildPermsGrid(selectedPerms) {
+  const grid = document.getElementById('smPermsGrid');
+  grid.innerHTML = ALL_PERMISSIONS.map(p => `
+    <div class="sm-perm-item">
+      <input type="checkbox" id="perm_${p.key}" ${selectedPerms.includes(p.key) ? 'checked' : ''}>
+      <label for="perm_${p.key}">${p.label}</label>
+    </div>`).join('');
+}
+
+window.smRoleChanged = function() {
+  const role = document.getElementById('invRole').value;
+  const defaults = ROLE_PERMISSIONS[role] || [];
+  _buildPermsGrid(defaults);
+};
+
+function _getSelectedPerms() {
+  return ALL_PERMISSIONS.filter(p => document.getElementById('perm_' + p.key)?.checked).map(p => p.key);
+}
+
+/* ── Send invite ──────────────────────────────────────────── */
+window.sendInvite = async function() {
+  const email    = (document.getElementById('invEmail').value || '').trim();
+  const phone    = (document.getElementById('invPhone').value || '').trim();
+  const role     = document.getElementById('invRole').value;
+  const errEl    = document.getElementById('inviteError');
+  const btn      = document.getElementById('sendBtn');
+
+  if (!email && !phone) { showErr('Email or phone number is required.'); return; }
+  if (!role)            { showErr('Please select a role.'); return; }
+  if (!_activeBizId)    { showErr('No business selected.'); return; }
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending…';
+  errEl.style.display = 'none';
+
+  try {
+    const res = await _invite({
+      businessId:     _activeBizId,
+      email:          email || null,
+      phone:          phone || null,
+      role,
+      roleTitle:      document.getElementById('invTitle').value.trim() || null,
+      employmentType: document.getElementById('invEmployType').value,
+      startDate:      document.getElementById('invStartDate').value || null,
+      message:        document.getElementById('invMessage').value.trim() || null,
+      permissions:    _getSelectedPerms(),
+      inviterName:    _user.name || _user.displayName || '',
+    });
+
+    const d = res.data;
+    _invCode = d.invitationCode;
+    _invLink = `${location.origin}/workspace-invite.html?code=${d.invitationCode}`;
+
+    document.getElementById('successCode').textContent = d.invitationCode;
+    document.getElementById('successLink').textContent  = _invLink;
+    document.getElementById('inviteFormSection').style.display = 'none';
+    document.getElementById('inviteSuccess').style.display     = 'block';
+  } catch (e) {
+    showErr(e.message || 'Failed to send invitation. Please try again.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Invitation';
+  }
+};
+
+function showErr(msg) {
+  const el = document.getElementById('inviteError');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+/* ── Copy / share invite link ─────────────────────────────── */
+window.copyInviteLink = async function() {
+  try {
+    await navigator.clipboard.writeText(_invLink);
+    alert('Link copied to clipboard!');
+  } catch (_) {
+    prompt('Copy this link:', _invLink);
+  }
+};
+
+window.shareInvite = function() {
+  if (navigator.share) {
+    navigator.share({ title: 'Join me on SOKONI', text: `I've invited you to join our team. Use code: ${_invCode}`, url: _invLink });
+  } else {
+    copyInviteLink();
+  }
+};
+
+/* ── Staff detail modal ───────────────────────────────────── */
+window.openStaffModal = function(membershipId) {
+  const m = _members.find(x => x.membershipId === membershipId);
+  if (!m) return;
+
+  const modal   = document.getElementById('staffModal');
+  const content = document.getElementById('staffModalContent');
+
+  const currentPerms = m.permissions || [];
+  const permList = ALL_PERMISSIONS.map(p =>
+    `<div class="sm-perm-item">
+      <input type="checkbox" id="mp_${p.key}" ${currentPerms.includes(p.key) ? 'checked' : ''}>
+      <label for="mp_${p.key}">${p.label}</label>
+    </div>`
+  ).join('');
+
+  content.innerHTML = `
+    <div class="sm-modal-title">${_esc(m.userName || m.userEmail)}</div>
+    <div class="sm-modal-sub">${_esc(m.userEmail || '')} · ${_esc(_roleName(m.role))}</div>
+
+    <div style="margin-bottom:16px;">
+      <label class="sm-label">Change Role</label>
+      <select class="sm-input sm-select" id="editRole">
+        ${['manager','supervisor','cashier','inventory_officer','accountant','driver','receptionist','waiter','security','cleaner'].map(r =>
+          `<option value="${r}" ${r === m.role ? 'selected':''}>${_roleName(r)}</option>`
+        ).join('')}
+      </select>
+    </div>
+
+    <div style="margin-bottom:16px;">
+      <label class="sm-label">Permissions</label>
+      <div class="sm-perms-grid">${permList}</div>
+    </div>
+
+    <div class="sm-btn-row">
+      <button class="sm-btn sm-btn-primary" onclick="saveStaffChanges('${_esc(membershipId)}')">
+        <i class="fas fa-check"></i> Save Changes
+      </button>
+      <button class="sm-btn sm-btn-ghost" onclick="document.getElementById('staffModal').classList.remove('open')">
+        Cancel
+      </button>
+    </div>`;
+
+  modal.classList.add('open');
+};
+
+window.saveStaffChanges = async function(membershipId) {
+  const role  = document.getElementById('editRole')?.value;
+  const perms = ALL_PERMISSIONS.filter(p => document.getElementById('mp_' + p.key)?.checked).map(p => p.key);
+
+  try {
+    await Promise.all([
+      _updateRole({ membershipId, role }),
+      _updatePerms({ membershipId, permissions: perms }),
+    ]);
+    document.getElementById('staffModal').classList.remove('open');
+    await loadMembers();
+    alert('Staff member updated.');
+  } catch (e) {
+    alert('Failed to update: ' + e.message);
+  }
+};
+
+/* ── Revoke membership ────────────────────────────────────── */
+window.confirmRevoke = async function(membershipId, name) {
+  const reason = prompt(`Remove ${name} from this business?\n\nEnter a reason (optional):`);
+  if (reason === null) return; // cancelled
+
+  try {
+    await _revoke({ membershipId, reason });
+    await loadMembers();
+    alert(`${name} has been removed. Their personal SOKONI account is unaffected.`);
+  } catch (e) {
+    alert('Failed to remove: ' + e.message);
+  }
+};
+
+/* ── Cancel invitation ────────────────────────────────────── */
+window.confirmCancelInv = async function(invitationId, target) {
+  if (!confirm(`Cancel the invitation to ${target}?`)) return;
+  try {
+    await _cancelInv({ invitationId });
+    await loadMembers();
+  } catch (e) {
+    alert('Failed to cancel: ' + e.message);
+  }
+};
+
+/* ── Utilities ────────────────────────────────────────────── */
+function _esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function _roleName(role) {
+  const M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+    inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+    receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+  return M[role] || (role ? role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g,' ') : '—');
+}
+function _timeAgo(ms) {
+  if (!ms) return '—';
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 3600)  return Math.floor(s/60)  + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+_boot();
+</script>
+</body>
+</html>

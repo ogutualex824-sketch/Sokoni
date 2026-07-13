@@ -1,4 +1,87 @@
-﻿﻿## [2026-07-13] — Enterprise Authentication 2.0 / Premium Identity & Session Experience
+﻿﻿## [2026-07-13] — Workforce Identity System v1.0 — "One Person. One Account. Unlimited Businesses."
+
+### Summary
+
+Enterprise employment layer on top of personal SOKONI accounts. Every user keeps one personal
+account for life. Businesses invite people in via secure 10-character codes. Employees switch
+between workspaces instantly from the profile dropdown — no logout, no password. Real-time
+permission revocation via Firestore `onSnapshot`. Full clock-in / clock-out shift tracking.
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `sokoni-workspace.js` | Client SDK — workspace switcher, localStorage cache, Firestore real-time watcher, clock-in/clock-out, `window.SokoniWorkspace` API |
+| `functions/workforce-identity.js` | 13 Cloud Functions covering the full employment lifecycle |
+| `workspace-invite.html` | Invitation acceptance page — auth-aware, handles Accept / Decline, unauthenticated redirect gate |
+| `staff-management.html` | Business owner UI — invite staff, manage permissions, revoke employment, view pending invitations |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `shared-header.js` | Account dropdown now shows workspace switcher: Personal Account + all business memberships with active indicator; `window._skSwitchWorkspace()` handler added; workspace CSS added |
+| `account-centre.html` | New Employment panel (section 7b): active workspaces with Switch button, pending invitations with code link, work history; sidebar nav + mobile tab strip wired; `_loadEmployment()` lazy-loads on first open; `#employment` deep-link registered |
+| `functions/index.js` | Exports 13 new `wfXxx` Cloud Functions |
+
+### Cloud Functions (new — 13)
+
+| Function | Trigger | Description |
+|---|---|---|
+| `wfInviteEmployee` | onCall | Creates invitation with 10-char code; validates permissions; notifies invitee |
+| `wfGetInvitation` | onCall | Public — looks up invitation by code; returns safe subset |
+| `wfAcceptInvitation` | onCall | Validates email match; creates `workspaceMemberships` doc; notifies employer |
+| `wfDeclineInvitation` | onCall | Sets invitation status to `declined`; notifies employer |
+| `wfCancelInvitation` | onCall | Only sender can cancel; sets status to `cancelled` |
+| `wfRevokeMembership` | onCall | Sets membership `status: terminated`; triggers client real-time revocation; cannot remove owner |
+| `wfUpdatePermissions` | onCall | Fine-grained permission editing; owner permissions immutable |
+| `wfUpdateRole` | onCall | Role change resets permissions to role preset |
+| `wfGetBusinessMembers` | onCall | Returns active members + pending invitations for a business |
+| `wfGetMyWorkspaces` | onCall | Returns all memberships (active + past) + pending invitations for the caller |
+| `wfClockIn` | onCall | Opens a `shiftSessions` doc; marks `clockedIn: true` on membership |
+| `wfClockOut` | onCall | Closes the shift session with duration; marks `clockedIn: false` |
+| `wfGetPendingInvitationsByEmail` | onCall | Used at login to backfill `invitedUid` on pre-sent invitations |
+
+### Firestore Collections (new)
+
+| Collection | Purpose |
+|---|---|
+| `workspaceMemberships` | Employment records per `uid + businessId`; real-time revocation via `onSnapshot` |
+| `workspaceInvitations` | Invitation records with 10-char code; 7-day expiry |
+| `shiftSessions` | Clock-in / clock-out records for shift tracking |
+
+### Security
+
+- All CFs enforce `_assertAuth()` — unauthenticated calls rejected
+- `_assertBusinessPermission(callerUid, businessId, requiredPermission)` — checks owner OR membership; used in every mutating CF
+- Owner permissions are always `ALL_PERMISSIONS` — cannot be customised or reduced
+- Owner cannot be removed from their own business (`wfRevokeMembership` guard)
+- Invitation codes: 10-char alphanumeric, excludes I/O/0/1 (ambiguous characters), generated with `crypto.randomBytes`
+- `wfAcceptInvitation` validates caller email matches `invitedEmail` (or `invitedUid` matches on backfilled invitations)
+- Permission whitelist (`ALL_PERMISSIONS`) validated on every `wfUpdatePermissions` call
+
+### Performance
+
+- `sokoni-workspace.js` uses dynamic imports — Firestore SDK loaded only once on first auth, not on every page load
+- `sokoniWorkspaces` localStorage cache enables zero-latency workspace switcher with no Firestore read on render
+- `onSnapshot` listener runs only while user is signed in; stopped and cleared on `sokoniSignedOut`
+
+### Backward Compatibility
+
+- Zero breaking changes: Firebase Auth, Role Engine, Session Engine, Notification Engine untouched
+- No duplicate user accounts created — pure employment overlay on existing personal accounts
+- `acShow('employment')` in `account-centre.html` is lazy-loaded; no impact on initial page load time
+
+### Migration / Deployment
+
+1. Deploy new Cloud Functions: `firebase deploy --only functions:wfInviteEmployee,functions:wfGetInvitation,functions:wfAcceptInvitation,functions:wfDeclineInvitation,functions:wfCancelInvitation,functions:wfRevokeMembership,functions:wfUpdatePermissions,functions:wfUpdateRole,functions:wfGetBusinessMembers,functions:wfGetMyWorkspaces,functions:wfClockIn,functions:wfClockOut,functions:wfGetPendingInvitationsByEmail`
+2. Add `sokoni-workspace.js`, `workspace-invite.html`, `staff-management.html` to Firebase Hosting deploy
+3. No new Firestore indexes required initially (single-field queries covered by default indexes)
+4. No new secrets required
+
+---
+
+## [2026-07-13] — Enterprise Authentication 2.0 / Premium Identity & Session Experience
 
 ### Summary
 

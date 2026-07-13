@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <script src="security.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Job Invitation</title>
+  <meta name="theme-color" content="#71ff00">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    :root {
+      --bg: #050505; --sur: #111; --sur2: #181818;
+      --bor: rgba(255,255,255,0.08); --g: #71ff00;
+      --g-dim: rgba(113,255,0,0.08); --txt: #fff;
+      --sub: rgba(255,255,255,0.5); --red: #ff4d4d;
+      --radius: 16px;
+    }
+    *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg); color: var(--txt);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      padding-top: 80px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom,0));
+    }
+
+    .wi-card {
+      width: 100%; max-width: 480px;
+      background: var(--sur);
+      border: 1px solid var(--bor);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    /* Header band */
+    .wi-header {
+      background: radial-gradient(ellipse 140% 120% at 50% -20%, rgba(113,255,0,0.12) 0%, transparent 70%);
+      border-bottom: 1px solid var(--bor);
+      padding: 32px 28px 24px;
+      text-align: center;
+    }
+    .wi-biz-logo {
+      width: 72px; height: 72px; border-radius: 18px;
+      background: var(--g-dim); border: 2px solid rgba(113,255,0,0.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; margin: 0 auto 16px;
+      overflow: hidden;
+    }
+    .wi-biz-logo img { width: 100%; height: 100%; object-fit: cover; }
+    .wi-biz-name { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .wi-sub { font-size: 13px; color: var(--sub); }
+
+    /* Body */
+    .wi-body { padding: 24px 28px; }
+
+    .wi-role-box {
+      background: var(--g-dim);
+      border: 1px solid rgba(113,255,0,0.2);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .wi-role-label { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--sub); margin-bottom: 6px; }
+    .wi-role-name { font-size: 20px; font-weight: 900; color: var(--g); }
+    .wi-role-type { font-size: 12px; color: var(--sub); margin-top: 4px; }
+
+    .wi-detail-row {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid var(--bor);
+      font-size: 13.5px;
+    }
+    .wi-detail-row:last-child { border-bottom: none; }
+    .wi-detail-row i { width: 18px; text-align: center; color: var(--sub); margin-top: 2px; flex-shrink: 0; }
+    .wi-detail-label { color: var(--sub); flex-shrink: 0; min-width: 90px; }
+    .wi-detail-value { color: var(--txt); font-weight: 600; flex: 1; }
+
+    .wi-message {
+      background: var(--sur2); border-radius: 12px;
+      padding: 14px 16px; margin-top: 16px; margin-bottom: 20px;
+      font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.5;
+      font-style: italic;
+    }
+
+    .wi-expires {
+      font-size: 12px; color: var(--sub);
+      text-align: center; margin-bottom: 20px;
+    }
+    .wi-expires span { color: var(--red); font-weight: 600; }
+
+    /* Actions */
+    .wi-actions {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    }
+    .wi-btn {
+      padding: 14px; border-radius: 12px;
+      font-size: 14px; font-weight: 700; cursor: pointer;
+      border: none; transition: opacity .15s, transform .1s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .wi-btn:active { transform: scale(.97); }
+    .wi-btn-accept { background: var(--g); color: #050505; }
+    .wi-btn-decline { background: rgba(255,77,77,0.1); color: var(--red); border: 1px solid rgba(255,77,77,0.2); }
+    .wi-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Auth gate */
+    .wi-auth-gate { padding: 24px 28px; text-align: center; }
+    .wi-auth-icon { font-size: 48px; margin-bottom: 16px; }
+    .wi-auth-title { font-size: 18px; font-weight: 800; margin-bottom: 8px; }
+    .wi-auth-sub { font-size: 13px; color: var(--sub); line-height: 1.5; margin-bottom: 20px; }
+    .wi-auth-btn {
+      display: block; width: 100%; padding: 14px; border-radius: 12px;
+      background: var(--g); color: #050505; font-size: 14px; font-weight: 700;
+      text-decoration: none; margin-bottom: 10px; border: none; cursor: pointer;
+    }
+    .wi-auth-btn-sec {
+      display: block; width: 100%; padding: 14px; border-radius: 12px;
+      background: var(--g-dim); color: var(--g); font-size: 14px; font-weight: 700;
+      border: 1px solid rgba(113,255,0,0.2); text-decoration: none; cursor: pointer;
+    }
+
+    /* Result states */
+    .wi-result { padding: 32px 28px; text-align: center; display: none; }
+    .wi-result-icon { font-size: 56px; margin-bottom: 16px; }
+    .wi-result-title { font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+    .wi-result-sub { font-size: 13px; color: var(--sub); line-height: 1.5; margin-bottom: 20px; }
+    .wi-result-btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px; border-radius: 12px;
+      background: var(--g); color: #050505; font-size: 14px; font-weight: 700;
+      text-decoration: none; border: none; cursor: pointer;
+    }
+
+    /* Loader */
+    .wi-loading {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 16px; padding: 48px;
+    }
+    .wi-spinner {
+      width: 36px; height: 36px;
+      border: 3px solid rgba(113,255,0,0.12);
+      border-top-color: var(--g); border-radius: 50%;
+      animation: spin .7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .wi-loading-text { font-size: 13px; color: var(--sub); }
+
+    /* Error */
+    .wi-error { padding: 32px 28px; text-align: center; }
+    .wi-error-icon { font-size: 48px; margin-bottom: 12px; }
+    .wi-error-msg { font-size: 14px; color: var(--red); font-weight: 600; margin-bottom: 8px; }
+    .wi-error-sub { font-size: 13px; color: var(--sub); }
+  </style>
+</head>
+<body>
+
+<div class="wi-card" id="wiCard">
+  <!-- Loading state -->
+  <div class="wi-loading" id="wiLoading">
+    <div class="wi-spinner"></div>
+    <div class="wi-loading-text">Loading invitation…</div>
+  </div>
+</div>
+
+<script type="module">
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+
+const fns   = getFunctions();
+const _get  = httpsCallable(fns, 'wfGetInvitation');
+const _accept = httpsCallable(fns, 'wfAcceptInvitation');
+const _decline = httpsCallable(fns, 'wfDeclineInvitation');
+
+const card = document.getElementById('wiCard');
+
+/* ── Parse code from URL ──────────────────────────────────── */
+const params = new URLSearchParams(location.search);
+const code   = (params.get('code') || '').trim().toUpperCase();
+
+if (!code) {
+  showError('No invitation code found.', 'This link may be broken or incomplete. Ask your employer to resend the invitation.');
+} else {
+  init();
+}
+
+/* ── Boot ─────────────────────────────────────────────────── */
+async function init() {
+  try {
+    const res  = await _get({ code });
+    const inv  = res.data;
+
+    /* Check auth state */
+    const loggedIn = localStorage.getItem('loggedIn') === 'true';
+    const user     = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+
+    if (!loggedIn || !user) {
+      renderAuthGate(inv);
+    } else {
+      renderInvitation(inv, user);
+    }
+  } catch (e) {
+    const msg = e.message || 'Unable to load invitation.';
+    if (msg.includes('not-found')) {
+      showError('Invitation not found', 'This invitation code is invalid or does not exist.');
+    } else if (msg.includes('expired')) {
+      showError('Invitation expired', 'This invitation has expired. Ask your employer to send a new one.');
+    } else if (msg.includes('accepted')) {
+      showResult('check', 'Already Accepted', 'This invitation has already been accepted. Check your workspaces in the Account Centre.', 'account-centre.html#employment');
+    } else {
+      showError('Unable to load invitation', msg);
+    }
+  }
+}
+
+/* ── Render invitation card ───────────────────────────────── */
+function renderInvitation(inv, user) {
+  const logo = inv.businessLogo
+    ? `<img src="${_esc(inv.businessLogo)}" alt="${_esc(inv.businessName)}">`
+    : _bizEmoji(inv.businessType);
+
+  const employType = {
+    permanent: 'Permanent Position', contract: 'Contract',
+    seasonal: 'Seasonal', one_week: 'One Week', one_day: 'One Day', one_shift: 'One Shift',
+  }[inv.employmentType] || inv.employmentType;
+
+  const expires = inv.expiresAt
+    ? new Date(inv.expiresAt).toLocaleDateString('en-KE', { weekday:'short', month:'short', day:'numeric' })
+    : null;
+
+  card.innerHTML = `
+    <div class="wi-header">
+      <div class="wi-biz-logo">${logo}</div>
+      <div class="wi-biz-name">${_esc(inv.businessName)}</div>
+      <div class="wi-sub">has invited you to join their team</div>
+    </div>
+    <div class="wi-body">
+      <div class="wi-role-box">
+        <div class="wi-role-label">Your Role</div>
+        <div class="wi-role-name">${_esc(inv.roleTitle || _roleName(inv.role))}</div>
+        <div class="wi-role-type">${_esc(employType)}</div>
+      </div>
+
+      <div class="wi-detail-row">
+        <i class="fas fa-user-tie"></i>
+        <span class="wi-detail-label">From</span>
+        <span class="wi-detail-value">${_esc(inv.inviterName || 'Business Owner')}</span>
+      </div>
+      <div class="wi-detail-row">
+        <i class="fas fa-briefcase"></i>
+        <span class="wi-detail-label">Business</span>
+        <span class="wi-detail-value">${_esc(inv.businessName)}</span>
+      </div>
+      <div class="wi-detail-row">
+        <i class="fas fa-tag"></i>
+        <span class="wi-detail-label">Role</span>
+        <span class="wi-detail-value">${_esc(inv.roleTitle || _roleName(inv.role))}</span>
+      </div>
+      <div class="wi-detail-row">
+        <i class="fas fa-person-circle-check"></i>
+        <span class="wi-detail-label">Accepting as</span>
+        <span class="wi-detail-value">${_esc(user.name || user.email)}</span>
+      </div>
+
+      ${inv.message ? `<div class="wi-message">"${_esc(inv.message)}"</div>` : ''}
+      ${expires ? `<div class="wi-expires">Expires <span>${expires}</span></div>` : ''}
+
+      <div class="wi-actions">
+        <button class="wi-btn wi-btn-accept" id="btnAccept" onclick="doAccept()">
+          <i class="fas fa-check"></i> Accept
+        </button>
+        <button class="wi-btn wi-btn-decline" id="btnDecline" onclick="doDecline()">
+          <i class="fas fa-times"></i> Decline
+        </button>
+      </div>
+    </div>`;
+}
+
+/* ── Auth gate — not signed in ────────────────────────────── */
+function renderAuthGate(inv) {
+  const logo = inv.businessLogo
+    ? `<img src="${_esc(inv.businessLogo)}" alt="${_esc(inv.businessName)}">`
+    : _bizEmoji(inv.businessType);
+
+  /* Store return URL in sessionStorage so login.html redirects back */
+  try { sessionStorage.setItem('sokoniLoginRedirect', location.href); } catch (_) {}
+
+  card.innerHTML = `
+    <div class="wi-header">
+      <div class="wi-biz-logo">${logo}</div>
+      <div class="wi-biz-name">${_esc(inv.businessName)}</div>
+      <div class="wi-sub">has invited you to join as <strong>${_esc(inv.roleTitle || _roleName(inv.role))}</strong></div>
+    </div>
+    <div class="wi-auth-gate">
+      <div class="wi-auth-icon">🔐</div>
+      <div class="wi-auth-title">Sign in to accept</div>
+      <div class="wi-auth-sub">
+        You need a SOKONI account to accept this invitation.
+        Your personal account stays separate from your work access.
+      </div>
+      <a class="wi-auth-btn" href="login.html?next=${encodeURIComponent(location.href)}">
+        <i class="fas fa-right-to-bracket"></i> Sign In
+      </a>
+      <a class="wi-auth-btn-sec" href="signup.html?next=${encodeURIComponent(location.href)}">
+        Create Account
+      </a>
+    </div>`;
+}
+
+/* ── Accept ───────────────────────────────────────────────── */
+window.doAccept = async function() {
+  const btn = document.getElementById('btnAccept');
+  const dec = document.getElementById('btnDecline');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting…'; }
+  if (dec) dec.disabled = true;
+
+  try {
+    const res = await _accept({ code });
+    const d   = res.data;
+    showResult('🎉', `Welcome to ${d.businessName}!`,
+      `You are now ${_roleName(d.role)} at ${d.businessName}. Your workspace will appear instantly.`,
+      location.pathname.split('/').pop() === 'workspace-invite.html' ? '/' : null,
+      d.businessName);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-check"></i> Accept'; }
+    if (dec) dec.disabled = false;
+    showError('Could not accept', e.message || 'Please try again.');
+  }
+};
+
+/* ── Decline ──────────────────────────────────────────────── */
+window.doDecline = async function() {
+  if (!confirm('Decline this invitation? The employer will be notified.')) return;
+  const dec = document.getElementById('btnDecline');
+  const acc = document.getElementById('btnAccept');
+  if (dec) { dec.disabled = true; dec.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; }
+  if (acc) acc.disabled = true;
+
+  try {
+    await _decline({ code });
+    showResult('👋', 'Invitation Declined',
+      'You have declined this invitation. You can always ask your employer to resend it.', '/');
+  } catch (e) {
+    if (dec) { dec.disabled = false; dec.innerHTML = '<i class="fas fa-times"></i> Decline'; }
+    if (acc) acc.disabled = false;
+    alert(e.message || 'Failed to decline. Please try again.');
+  }
+};
+
+/* ── UI helpers ───────────────────────────────────────────── */
+function showResult(icon, title, sub, href, bizName) {
+  card.innerHTML = `
+    <div class="wi-result" style="display:block;">
+      <div class="wi-result-icon">${icon}</div>
+      <div class="wi-result-title">${_esc(title)}</div>
+      <div class="wi-result-sub">${_esc(sub)}</div>
+      ${href ? `<a class="wi-result-btn" href="${_esc(href)}"><i class="fas fa-house"></i> Go Home</a>` : ''}
+    </div>`;
+}
+
+function showError(title, sub) {
+  card.innerHTML = `
+    <div class="wi-error">
+      <div class="wi-error-icon">⚠️</div>
+      <div class="wi-error-msg">${_esc(title)}</div>
+      <div class="wi-error-sub">${_esc(sub)}</div>
+    </div>`;
+}
+
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _roleName(role) {
+  const M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+    inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+    receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+  return M[role] || (role ? role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g,' ') : 'Staff');
+}
+
+function _bizEmoji(type) {
+  return { marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
+    events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[type] || '🏢';
+}
+</script>
+</body>
+</html>

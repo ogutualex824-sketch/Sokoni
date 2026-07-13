@@ -855,6 +855,51 @@
     .sk-acct-role-pill.active { background: rgba(113,255,0,.1); border-color: rgba(113,255,0,.28); color: #71ff00; }
     .sk-acct-role-pill:hover { background: rgba(113,255,0,.07); color: #71ff00; }
 
+    /* ── Workspace switcher entries ── */
+    .sk-acct-ws-section { padding: 4px 0 6px; }
+    .sk-acct-ws-label {
+      font-size: 10px; font-weight: 700; letter-spacing: .09em;
+      text-transform: uppercase; color: rgba(255,255,255,.22);
+      padding: 4px 16px 6px;
+    }
+    .sk-acct-ws-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 16px; cursor: pointer; transition: background .12s;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .sk-acct-ws-item:hover { background: rgba(255,255,255,.04); }
+    .sk-acct-ws-item.ws-active { background: rgba(113,255,0,.06); }
+    .sk-acct-ws-icon {
+      width: 30px; height: 30px; border-radius: 8px;
+      background: rgba(113,255,0,.08); border: 1px solid rgba(113,255,0,.12);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; flex-shrink: 0;
+    }
+    .sk-acct-ws-info { flex: 1; min-width: 0; }
+    .sk-acct-ws-name {
+      font-size: 13px; font-weight: 700; color: rgba(255,255,255,.9);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sk-acct-ws-role { font-size: 11px; color: rgba(255,255,255,.4); margin-top: 1px; }
+    .sk-acct-ws-dot {
+      width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(255,255,255,.2);
+    }
+    .sk-acct-ws-dot.active { background: #71ff00; }
+    .sk-acct-personal-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; cursor: pointer; transition: background .12s;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .sk-acct-personal-item:hover { background: rgba(255,255,255,.04); }
+    .sk-acct-personal-item.ws-active { background: rgba(113,255,0,.06); }
+    .sk-acct-personal-icon {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(113,255,0,.1); border: 1px solid rgba(113,255,0,.2);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 900; color: #71ff00; flex-shrink: 0;
+    }
+
     /* ── Site menu drawer — layout handled by sokoni-drawers.css ── */
     /* #sk-menu-drawer is a .sk-drawer; header/close/backdrop/swipe/ESC
        are all managed by SokoniDrawer. Content styles below. */
@@ -1229,13 +1274,65 @@
     const existing = document.getElementById('sk-acct-popup');
     if (existing) { existing.remove(); return; }
 
+    /* ── Read workspace memberships from localStorage ── */
+    var workspaces = [];
+    try { workspaces = JSON.parse(localStorage.getItem('sokoniWorkspaces') || '[]'); } catch (_) {}
+    var activeWsId = localStorage.getItem('sokoniActiveWorkspace') || null;
+
+    /* ── Personal roles (non-workspace) ── */
     const roles   = Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : ['buyer']);
     const active  = roles[0] || 'buyer';
     const roleMap = { buyer:'Buyer', seller:'Seller', provider:'Provider', driver:'Driver',
                       rider:'Rider', admin:'Admin', superAdmin:'Super Admin', employer:'Employer' };
     const rName   = r => roleMap[r] || (r.charAt(0).toUpperCase() + r.slice(1));
+    const wsRoleName = r => {
+      const M = { owner:'Owner', manager:'Manager', supervisor:'Supervisor', cashier:'Cashier',
+        inventory_officer:'Inventory Officer', accountant:'Accountant', driver:'Driver',
+        receptionist:'Receptionist', waiter:'Waiter', security:'Security', cleaner:'Cleaner' };
+      return M[r] || (r ? r.charAt(0).toUpperCase() + r.slice(1).replace(/_/g,' ') : 'Staff');
+    };
 
-    const rolePills = roles.length > 1
+    const bizEmoji = type => ({ marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥',
+      events:'🎪', property:'🏠', vehicle:'🚗', hotel:'🏨' }[type] || '🏢');
+
+    /* ── Workspace switcher HTML ── */
+    const isPersonalActive = !activeWsId;
+
+    const personalEntry =
+      '<button class="sk-acct-personal-item ' + (isPersonalActive ? 'ws-active' : '') + '" ' +
+        'onclick="window._skSwitchWorkspace(\'personal\')">' +
+        '<div class="sk-acct-personal-icon">' + (user.name || user.email || '?').charAt(0).toUpperCase() + '</div>' +
+        '<div class="sk-acct-ws-info">' +
+          '<div class="sk-acct-ws-name">Personal Account</div>' +
+          '<div class="sk-acct-ws-role">' + rName(active) + '</div>' +
+        '</div>' +
+        '<div class="sk-acct-ws-dot ' + (isPersonalActive ? 'active' : '') + '"></div>' +
+      '</button>';
+
+    const wsEntries = workspaces.map(function (ws) {
+      const isActive = ws.businessId === activeWsId;
+      const clockedLabel = ws.clockedIn ? ' · Clocked In' : '';
+      return '<button class="sk-acct-ws-item ' + (isActive ? 'ws-active' : '') + '" ' +
+        'onclick="window._skSwitchWorkspace(\'' + _hesc(ws.businessId) + '\')">' +
+        '<div class="sk-acct-ws-icon">' + bizEmoji(ws.businessType) + '</div>' +
+        '<div class="sk-acct-ws-info">' +
+          '<div class="sk-acct-ws-name">' + _hesc(ws.businessName || 'Business') + '</div>' +
+          '<div class="sk-acct-ws-role">' + wsRoleName(ws.role) + (ws.roleTitle && ws.roleTitle !== wsRoleName(ws.role) ? ' · ' + _hesc(ws.roleTitle) : '') + clockedLabel + '</div>' +
+        '</div>' +
+        '<div class="sk-acct-ws-dot ' + (isActive ? 'active' : '') + '"></div>' +
+      '</button>';
+    }).join('');
+
+    const switcherSection =
+      '<div class="sk-acct-ws-section">' +
+        '<div class="sk-acct-ws-label">Workspaces</div>' +
+        personalEntry +
+        wsEntries +
+      '</div>' +
+      '<div class="sk-acct-separator"></div>';
+
+    /* ── Role pills (personal roles, only if > 1 AND in personal mode) ── */
+    const rolePills = (isPersonalActive && roles.length > 1)
       ? '<div class="sk-acct-role-strip">' +
           '<div class="sk-acct-role-label">Switch Role</div>' +
           '<div class="sk-acct-role-pills">' +
@@ -1256,11 +1353,12 @@
         '<div class="sk-acct-name">' + _hesc(user.name || user.displayName || 'User') + '</div>' +
         '<div class="sk-acct-email">' + _hesc(user.email || '') + '</div>' +
       '</div>' +
-      (rolePills) +
+      switcherSection +
+      rolePills +
       '<div class="sk-acct-links">' +
         '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()"><i class="fas fa-user"></i> My Profile</a>' +
         '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Account Centre</a>' +
-        '<a class="sk-acct-link" href="orders.html" onclick="window._skCloseAcct()"><i class="fas fa-bag-shopping"></i> My Orders</a>' +
+        '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()"><i class="fas fa-briefcase"></i> My Workspaces</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()"><i class="fas fa-wallet"></i> Wallet</a>' +
         '<div class="sk-acct-separator"></div>' +
         '<button class="sk-acct-link sk-acct-link-danger" onclick="window._skSignOutFromAcct()"><i class="fas fa-arrow-right-from-bracket"></i> Sign Out</button>' +
@@ -1321,6 +1419,24 @@
   window._skSignOutFromAcct = function () {
     window._skCloseAcct();
     if (window.sokoniSignOut) { window.sokoniSignOut(); } else { location.href = 'login.html'; }
+  };
+
+  window._skSwitchWorkspace = function (businessId) {
+    window._skCloseAcct();
+    if (window.SokoniWorkspace) {
+      window.SokoniWorkspace.switchTo(businessId === 'personal' ? null : businessId);
+    } else {
+      /* Fallback: set localStorage directly if SDK not yet loaded */
+      try {
+        if (!businessId || businessId === 'personal') {
+          localStorage.removeItem('sokoniActiveWorkspace');
+        } else {
+          localStorage.setItem('sokoniActiveWorkspace', businessId);
+        }
+      } catch (_) {}
+    }
+    /* Reload so the nav engine and role-gated content re-render */
+    location.reload();
   };
 
   /* ══════════════════════════════════════════════════════════
