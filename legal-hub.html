@@ -1507,6 +1507,11 @@
 </nav>
 
 <script>
+/* HTML escaper. Declared HERE, in the first inline block, because the lawyer and document
+   renderers below run at parse time - a declaration in a later <script> block does not
+   exist yet. Page-local name: the global _esc is already owned by sokoni-pay.js (const). */
+function lhEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 /* """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
    TAB SWITCHER
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""" */
@@ -1722,17 +1727,17 @@ function _renderLawyerCards(lawyers){
     const loc         = (l.location||"Kenya").charAt(0).toUpperCase()+(l.location||"kenya").slice(1);
     const skills      = (l.skills||[]).slice(0,3);
 
-    return `<div class="lawyer-card" data-provider-id="lgl_${_esc(l.id)}" onclick="bookLawyer('${_esc(l.id)}')">
+    return `<div class="lawyer-card" data-provider-id="lgl_${lhEsc(l.id)}" onclick="bookLawyer('${lhEsc(l.id)}')">
       <div class="lc-header">
-        <div class="lc-avatar">${_esc(initials)}</div>
+        <div class="lc-avatar">${lhEsc(initials)}</div>
         <div class="lc-info">
-          <div class="lc-name">${_esc(displayName)}</div>
-          <div class="lc-spec">${_esc(l.spec||l.category||"General Practice")}</div>
-          ${l.firm ? `<div class="lc-firm">🏢 ${_esc(l.firm)}</div>` : ""}
+          <div class="lc-name">${lhEsc(displayName)}</div>
+          <div class="lc-spec">${lhEsc(l.spec||l.category||"General Practice")}</div>
+          ${l.firm ? `<div class="lc-firm">🏢 ${lhEsc(l.firm)}</div>` : ""}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
           <div class="lc-badge ${l.verified?"lc-badge-lsk":"lc-badge-pending"}">${l.verified?"✅ LSK":"⏳ Pending"}</div>
-          <div data-avail-provider="lgl_${_esc(l.id)}" onclick="event.stopPropagation()"></div>
+          <div data-avail-provider="lgl_${lhEsc(l.id)}" onclick="event.stopPropagation()"></div>
         </div>
       </div>
 
@@ -1740,19 +1745,19 @@ function _renderLawyerCards(lawyers){
         <div class="lc-meta-row">
           <div class="lc-stars">
             <span style="color:#ffc107;">${starStr}</span>
-            <span>${_esc(rating)}  ${Number(l.jobsCompleted||0)} cases</span>
+            <span>${lhEsc(rating)}  ${Number(l.jobsCompleted||0)} cases</span>
           </div>
         </div>
-        ${skills.length ? `<div class="lc-skills">${skills.map(s=>`<span class="lc-skill">${_esc(s)}</span>`).join("")}</div>` : ""}
-        ${l.bio ? `<div class="lc-bio">${_esc(l.bio)}</div>` : ""}
+        ${skills.length ? `<div class="lc-skills">${skills.map(s=>`<span class="lc-skill">${lhEsc(s)}</span>`).join("")}</div>` : ""}
+        ${l.bio ? `<div class="lc-bio">${lhEsc(l.bio)}</div>` : ""}
       </div>
 
       <div class="lc-footer">
         <div>
-          <div class="lc-rate-num">KES ${Number(l.rate||0).toLocaleString()} <span class="lc-rate-type">${_esc(rateLabel)}</span></div>
-          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#c8ff80;font-size:9px;"></i> ${_esc(loc)}${l.rollNo ? `  Roll #${_esc(l.rollNo)}` : ""}</div>
+          <div class="lc-rate-num">KES ${Number(l.rate||0).toLocaleString()} <span class="lc-rate-type">${lhEsc(rateLabel)}</span></div>
+          <div class="lc-location"><i class="fas fa-map-marker-alt" style="color:#c8ff80;font-size:9px;"></i> ${lhEsc(loc)}${l.rollNo ? `  Roll #${lhEsc(l.rollNo)}` : ""}</div>
         </div>
-        <button type="button" class="lc-book-btn" onclick="event.stopPropagation();bookLawyer('${_esc(l.id)}')">
+        <button type="button" class="lc-book-btn" onclick="event.stopPropagation();bookLawyer('${lhEsc(l.id)}')">
           💬 Book
         </button>
       </div>
@@ -1875,8 +1880,8 @@ function _openConsultModal(id){
   const initials=l.name.replace(/^Advocates*/i,'').split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
   const modalTitle=document.getElementById('consultModalTitle');
   const modalBody=document.getElementById('consultModalBody');
-  if(modalTitle) modalTitle.textContent='Book  '+_esc(l.name);
-  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+_esc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:3px;border:1px solid rgba(113,255,0,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">'+_esc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+_esc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#c8ff80;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+_esc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
+  if(modalTitle) modalTitle.textContent='Book  '+lhEsc(l.name);
+  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+lhEsc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:3px;border:1px solid rgba(113,255,0,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">'+lhEsc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+lhEsc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#c8ff80;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+lhEsc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
   const today=new Date().toISOString().slice(0,10);
   const dateEl=document.getElementById('cbDate');
   if(dateEl){dateEl.min=today;dateEl.value=today;}
@@ -1906,7 +1911,7 @@ function confirmConsultation(lawyerId){
       `⚖️ *SOKONI Legal Hub  Consultation Request*\n\nRef: ${ref}\n\n👤 Client: ${name}\n📞 Phone: ${phone}\n🔍 Matter: ${matter}\n📅 Date: ${date||"Flexible"}\n🕐 Time: ${time||"TBD"}\n${mpesaCode?`💚 Deposit paid: ${mpesaCode}\n`:""}\n${details?`Details:\n${details}\n\n`:""}`+
       `I found you on SOKONI Legal Hub and would like to book a consultation. Please confirm your availability. Thank you!`
     );
-    if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${_esc(ref)}</strong>`; msgEl.style.color="#71ff00"; }
+    if(msgEl){ msgEl.innerHTML=`✅ Opening WhatsApp... Booking ref: <strong>${lhEsc(ref)}</strong>`; msgEl.style.color="#71ff00"; }
     /* Track lead fee — recorded when WhatsApp contact is actually shared */
     (async function(){try{
       const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
@@ -3424,9 +3429,9 @@ function legalGlobalSearch(q) {
         return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(113,255,0,0.2);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <div style="width:44px;height:44px;border-radius:50%;background:linear-gradient(135deg,rgba(113,255,0,0.25),rgba(79,70,229,0.2));display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;color:#c8ff80;flex-shrink:0;">${initials}</div>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:14px;font-weight:800;color:white;">${_esc(l.name)} ${l.verified?'<span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
-            <div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">${_esc(l.spec||l.category)}</div>
-            ${l.firm?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 ${_esc(l.firm)}</div>`:''}
+            <div style="font-size:14px;font-weight:800;color:white;">${lhEsc(l.name)} ${l.verified?'<span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:4px;">✅ LSK</span>':'<span style="font-size:9px;background:rgba(255,152,0,0.12);color:#ff9800;padding:1px 6px;border-radius:4px;">⏳ Pending</span>'}</div>
+            <div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">${lhEsc(l.spec||l.category)}</div>
+            ${l.firm?`<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 ${lhEsc(l.firm)}</div>`:''}
           </div>
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
             <div style="font-size:15px;font-weight:900;color:#c8ff80;">KES ${Number(l.rate||0).toLocaleString()} <span style="font-size:10px;color:rgba(255,255,255,0.3);font-weight:400;">${RATE_LBL[l.rateType]||'/ session'}</span></div>
@@ -3485,10 +3490,10 @@ function checkExistingApp(){
   const info = document.getElementById("existingAppInfo");
   if(info){
     const date = new Date(app.createdAt).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"});
-    info.innerHTML = `<strong style="color:white;">Advocate ${_esc(app.name)}</strong>  Roll #${_esc(app.rollNo)}<br>
-      ${_esc(SPEC_LABELS[app.spec]||app.spec)}  ${_esc(app.location?.charAt(0).toUpperCase()+app.location?.slice(1)||"Kenya")}<br>
-      <span style="color:#ff9800;">⏳ Status: Pending LSK Verification</span>  Submitted ${_esc(date)}<br>
-      <span style="color:rgba(255,255,255,0.35);">Ref: ${_esc(app.ref)}</span>`;
+    info.innerHTML = `<strong style="color:white;">Advocate ${lhEsc(app.name)}</strong>  Roll #${lhEsc(app.rollNo)}<br>
+      ${lhEsc(SPEC_LABELS[app.spec]||app.spec)}  ${lhEsc(app.location?.charAt(0).toUpperCase()+app.location?.slice(1)||"Kenya")}<br>
+      <span style="color:#ff9800;">⏳ Status: Pending LSK Verification</span>  Submitted ${lhEsc(date)}<br>
+      <span style="color:rgba(255,255,255,0.35);">Ref: ${lhEsc(app.ref)}</span>`;
   }
   const waLink = document.getElementById("existingAppWA");
   if(waLink){
@@ -3816,9 +3821,9 @@ function renderAppointments(){
     return `<div class="appt-card">
       <div class="appt-icon">${typeIcon}</div>
       <div class="appt-info">
-        <div class="appt-title">${_esc(a.area)} Consultation</div>
-        <div class="appt-meta">${_esc(a.date)} • ${_esc(a.time)} • ${_esc(a.type||'')}</div>
-        ${a.preferredLawyer&&a.preferredLawyer!=='Any'?`<div class="appt-meta">With: ${_esc(a.preferredLawyer)}</div>`:''}
+        <div class="appt-title">${lhEsc(a.area)} Consultation</div>
+        <div class="appt-meta">${lhEsc(a.date)} • ${lhEsc(a.time)} • ${lhEsc(a.type||'')}</div>
+        ${a.preferredLawyer&&a.preferredLawyer!=='Any'?`<div class="appt-meta">With: ${lhEsc(a.preferredLawyer)}</div>`:''}
         <div class="appt-badge ${badgeClass}">${a.status.toUpperCase()}</div>
         <div class="appt-actions">
           ${a.status==='pending'?`<button class="appt-btn" onclick="cancelAppointment('${a.id}')" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Cancel</button>`:''}
@@ -4028,11 +4033,11 @@ function _renderRequests(containerId, category){
     return `<div class="appt-card">
       <div class="appt-icon" style="background:linear-gradient(135deg,#4f46e5,#71ff00);">📋</div>
       <div class="appt-info">
-        <div class="appt-title">${_esc(r.type||r.category)}</div>
-        <div class="appt-meta">${dt} • Ref: ${_esc(r.id||'')}</div>
-        ${r.location?'<div class="appt-meta">'+_esc(r.location)+'</div>':''}
-        ${r.regNo?'<div class="appt-meta">Reg: '+_esc(r.regNo)+'</div>':''}
-        ${r.bizName?'<div class="appt-meta">'+_esc(r.bizName)+'</div>':''}
+        <div class="appt-title">${lhEsc(r.type||r.category)}</div>
+        <div class="appt-meta">${dt} • Ref: ${lhEsc(r.id||'')}</div>
+        ${r.location?'<div class="appt-meta">'+lhEsc(r.location)+'</div>':''}
+        ${r.regNo?'<div class="appt-meta">Reg: '+lhEsc(r.regNo)+'</div>':''}
+        ${r.bizName?'<div class="appt-meta">'+lhEsc(r.bizName)+'</div>':''}
         <div class="appt-badge ${badge}">${(r.status||'pending').toUpperCase()}</div>
       </div>
     </div>`;
@@ -4067,8 +4072,8 @@ function renderClientDashboard(){
         <div class="notif-item${n.read?'':' unread'}">
           <div class="notif-dot"></div>
           <div class="notif-content">
-            <div class="notif-title">${_esc(n.title)}</div>
-            <div class="notif-body">${_esc(n.body)}</div>
+            <div class="notif-title">${lhEsc(n.title)}</div>
+            <div class="notif-body">${lhEsc(n.body)}</div>
             <div class="notif-time">${n.time ? new Date(n.time).toLocaleString('en-KE') : ''}</div>
           </div>
         </div>`).join('');
@@ -4085,8 +4090,8 @@ function renderClientDashboard(){
       upEl.innerHTML = upcoming.map(a=>`<div class="appt-card">
         <div class="appt-icon">${a.type==='video'?'📹':a.type==='phone'?'📞':'🏢'}</div>
         <div class="appt-info">
-          <div class="appt-title">${_esc(a.area)}</div>
-          <div class="appt-meta">${_esc(a.date)} • ${_esc(a.time)}</div>
+          <div class="appt-title">${lhEsc(a.area)}</div>
+          <div class="appt-meta">${lhEsc(a.date)} • ${lhEsc(a.time)}</div>
           <div class="appt-badge ${a.status==='confirmed'?'confirmed':'pending'}">${(a.status||'pending').toUpperCase()}</div>
         </div></div>`).join('');
     }
@@ -4101,7 +4106,7 @@ function renderClientDashboard(){
       recEl.innerHTML = reqs.slice(0,3).map(r=>`<div class="appt-card">
         <div class="appt-icon" style="background:linear-gradient(135deg,#4f46e5,#71ff00);">📋</div>
         <div class="appt-info">
-          <div class="appt-title">${_esc(r.type||r.category)}</div>
+          <div class="appt-title">${lhEsc(r.type||r.category)}</div>
           <div class="appt-meta">${r.createdAt?new Date(r.createdAt).toLocaleDateString('en-KE'):''}</div>
           <div class="appt-badge ${r.status==='completed'?'completed':'pending'}">${(r.status||'pending').toUpperCase()}</div>
         </div></div>`).join('');
@@ -4117,8 +4122,8 @@ function renderClientDashboard(){
       savEl.innerHTML = saved.slice(0,4).map(l=>`<div class="appt-card" style="cursor:pointer;" onclick="showLawTab('lawyers')">
         <div class="appt-icon">⚖️</div>
         <div class="appt-info">
-          <div class="appt-title">${_esc(l.name||l.id)}</div>
-          <div class="appt-meta">${_esc(l.specialisation||'')}</div>
+          <div class="appt-title">${lhEsc(l.name||l.id)}</div>
+          <div class="appt-meta">${lhEsc(l.specialisation||'')}</div>
         </div></div>`).join('');
     }
   }
@@ -4232,9 +4237,9 @@ function _loadProDashContent(){
       el.innerHTML = pending.map(a=>`<div class="appt-card">
         <div class="appt-icon">📨</div>
         <div class="appt-info">
-          <div class="appt-title">${_esc(a.area)} – ${_esc(a.type||'')}</div>
-          <div class="appt-meta">${_esc(a.date)} • ${_esc(a.time)}</div>
-          <div class="appt-meta" style="color:rgba(255,255,255,0.5);">${_esc(a.desc).substring(0,80)}…</div>
+          <div class="appt-title">${lhEsc(a.area)} – ${lhEsc(a.type||'')}</div>
+          <div class="appt-meta">${lhEsc(a.date)} • ${lhEsc(a.time)}</div>
+          <div class="appt-meta" style="color:rgba(255,255,255,0.5);">${lhEsc(a.desc).substring(0,80)}…</div>
           <div class="appt-actions">
             <button class="appt-btn" onclick="proConfirmAppt('${a.id}')" style="border-color:rgba(113,255,0,0.3);color:#71ff00;">Confirm</button>
             <button class="appt-btn" onclick="proCancelAppt('${a.id}')" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Decline</button>
@@ -4366,7 +4371,6 @@ function _addNotif(title, body, status){
 /* ═══════════════════════════════════════
    UTILITIES
 ═══════════════════════════════════════ */
-function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function _setText(id,val){ const el=document.getElementById(id); if(el) el.textContent=val; }
 function _clearFields(ids){ ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; }); }
 function _setPct(labelId, barId, pct){
