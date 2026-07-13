@@ -210,6 +210,11 @@
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-quality.css' }, 'sk-quality-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
+  /* Sticky Quick Actions — ONE component, adopted by every hub's existing action row.
+     It has to be JS, not a CSS class: 116 pages scroll an inner container, where sticky
+     resolves against that container rather than the viewport, so the correct top offset
+     differs per page and only the DOM knows which. */
+  _injectAsset('script', { src: 'sokoni-quick-actions.js', defer: true }, 'sk-qa-script');
   /* Delight layer (sokoni-delight.js) — BUILT BUT NOT SHIPPED.
      The module exists in the repo and is ready, but it has NOT been authorised for
      production. Injecting it here would ship it on all 302 pages with the next hosting
