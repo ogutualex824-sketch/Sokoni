@@ -522,9 +522,22 @@
     body > header { display: none !important; }
 
     /* ── Sub-nav tab bars: stick below the 58px shared header ── */
+    /* ── Sticky hub sub-navs (Services "List My Service", Healthcare, Property, …) ──
+       This used to be a hardcoded top of 58px. That is the header's height on a WIDE
+       screen. On a phone the header wraps its search box onto a second row and is ~110px
+       tall — so every hub sub-nav on the platform stuck 50px TOO HIGH, tucked underneath
+       the header, and the header's search input swallowed every tap aimed at the primary
+       CTA sitting in it.
+
+       The bar was sticky. It was even visible. It simply could not be pressed — which is
+       indistinguishable, to a user, from a button that scrolls away and does nothing.
+
+       The offset is now MEASURED from the header itself (--sk-header-h, published below
+       and re-measured on resize/rotate), so it cannot drift from reality again. A layout
+       constant that describes the layout on only one class of device is not a constant. */
     body > .sk-sub-nav {
       position: sticky !important;
-      top: 58px !important;
+      top: var(--sk-header-h, 58px) !important;
       z-index: 100 !important;
       box-shadow: 0 2px 10px rgba(0,0,0,0.28), 0 1px 0 rgba(113,255,0,0.05) !important;
     }
@@ -548,14 +561,45 @@
     }
     body > .sk-sub-nav [class*="-nav-right"]::-webkit-scrollbar,
     body > .sk-sub-nav [class*="-nav-tabs"]::-webkit-scrollbar { display: none !important; }
-    /* ── Hub nav link items: no squeeze, no wrap, proper touch targets ── */
+    /* ── Hub nav link items: no squeeze, no wrap, proper touch targets ──
+       This said "proper touch targets" and then set 40px. 44px is the iOS floor — below
+       it, a control is reliably mis-tapped, and this rule is !important so it was the
+       thing PREVENTING the very touch targets its comment promised. The primary CTA in
+       every hub sub-nav ("List My Service", "Register Facility", "List Property") sits
+       in here. */
+    /* Scoped to the nav ITEMS, deliberately — not to every anchor in the bar. A blanket
+       descendant selector also matches the LOGO anchor, and forcing that to 44px
+       inline-flex reflows the whole row and pushes the CTA off the right edge of a phone.
+       It made the button bigger and unreachable, which is a strictly worse bug than the
+       one it was fixing. Measured that, then narrowed it. */
+    /* NO display declaration here, deliberately.
+
+       [class*="-nav-link"] is a SUBSTRING match, so it also matches the CONTAINER
+       .sv-nav-links — the desktop-only centre links, which are display:none on a phone.
+       Adding display:inline-flex !important overrode that and forced them visible on
+       mobile, blowing the bar from 390px to 729px and shoving the primary CTA clean off
+       the right edge of the screen. The button was 44px, sticky, and unreachable.
+
+       It is not needed anyway: these items are flex children of .sv-nav-right, so
+       min-height applies to them without touching display. Set the size; leave the layout
+       alone. */
     body > .sk-sub-nav [class*="-nav-link"],
     body > .sk-sub-nav [class*="-nav-tab"],
-    body > .sk-sub-nav [class*="-nav-btn"] {
+    body > .sk-sub-nav [class*="-nav-btn"],
+    body > .sk-sub-nav [class*="-nav-sell"] {
       flex-shrink: 0 !important;
       white-space: nowrap !important;
-      min-height: 40px !important;
+      min-height: 44px !important;
     }
+
+    /* NOT overflow-x:auto here. I tried it, measured it, and it was worse: on a flex
+       container, allowing horizontal overflow stops the children shrinking, so the row
+       grew from 390px to 729px and pushed the primary CTA clean OFF the right edge of the
+       phone. The bar became scrollable and the button became unreachable — a strictly
+       worse bug than the clipping it was meant to prevent.
+
+       The row already fits: the centre links are desktop-only, so on a phone the bar holds
+       just the logo and the right-hand actions. Leave the flex shrinking alone. */
 
     /* ── Hide home-page orphaned floating elements (hamburger + bell) ──
        These are <div> elements so the nav rule above doesn't catch them.
@@ -1653,5 +1697,57 @@
      styled by style.css — .footer::before layers the dark gradient over
      assets/sokoni footer.png. It is not generated, and nothing should generate it.
      Rolled back to 911a042. */
+
+  /* ── PUBLISH THE REAL HEADER HEIGHT ──────────────────────────────────────────
+     --sk-header-h was a CSS constant (58px / 64px depending on which stylesheet won).
+     The header is not a constant height: on a phone it wraps its search box onto a
+     second row and stands ~110px tall. So every consumer of that variable — the sticky
+     hub sub-navs, the Quick Actions bar, anything anchored below the header — was 50px
+     out on mobile, sitting UNDER the header where its taps were swallowed by the search
+     input. Visible, sticky, and unpressable.
+
+     Measure it instead. A layout constant that is only true on a desktop is not a
+     constant; it is a bug with a default value.
+
+     Re-measured on resize and orientationchange, because the header's height genuinely
+     changes when the search box wraps — and a value captured once at load is exactly how
+     it drifted out of true in the first place. */
+  (function () {
+    var _raf = 0;
+
+    function publishHeaderHeight() {
+      var nav = document.getElementById('sk-top-nav');
+      if (!nav) return;
+      var r = nav.getBoundingClientRect();
+      /* bottom, not height: the header may be inset from the top (safe-area, banners),
+         and what a sticky element below it needs to clear is where the header ENDS. */
+      var h = Math.round(r.bottom);
+      if (!(h > 0) || h > 400) return;              /* nonsense guard */
+      document.documentElement.style.setProperty('--sk-header-h', h + 'px');
+    }
+
+    function schedule() {
+      if (_raf) cancelAnimationFrame(_raf);
+      _raf = requestAnimationFrame(publishHeaderHeight);
+    }
+
+    /* The header is injected asynchronously, so measure once it exists rather than
+       guessing when. ResizeObserver also catches the search box wrapping — which is the
+       exact moment the height changes and the old constant went wrong. */
+    function attach() {
+      var nav = document.getElementById('sk-top-nav');
+      if (!nav) { setTimeout(attach, 120); return; }
+      publishHeaderHeight();
+      if (window.ResizeObserver) new ResizeObserver(schedule).observe(nav);
+      window.addEventListener('resize', schedule, { passive: true });
+      window.addEventListener('orientationchange', schedule, { passive: true });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', attach, { once: true });
+    } else {
+      attach();
+    }
+  }());
 
 })();
