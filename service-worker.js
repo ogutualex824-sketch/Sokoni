@@ -432,9 +432,16 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  /* Other CSS / JS â†' Cache First */
-  if (["css","js","woff","woff2","ttf","eot"].includes(ext)) {
+  /* Fonts — Cache First (fonts rarely change; offline-safe) */
+  if (["woff","woff2","ttf","eot"].includes(ext)) {
     event.respondWith(cacheFirst(request, STATIC_CACHE));
+    return;
+  }
+
+  /* CSS / JS — Stale While Revalidate (cached version served instantly;
+     background fetch keeps cache fresh for the next load) */
+  if (["css","js"].includes(ext)) {
+    event.respondWith(staleWhileRevalidate(request));
     return;
   }
 
@@ -593,24 +600,49 @@ async function networkFirstPage(request) {
     const offline = await caches.match("/offline") || await caches.match("/offline.html");
     if (offline) return offline;
 
-    /* Honest error state for the page the user actually asked for, with a Retry.
-       "Go home" is offered as an EXPLICIT choice — never taken on the user's behalf. */
+    /* Honest error state for the requested route — never substitutes another page.
+       Three explicit choices: Retry (same page), Go Back, Go Home. */
     const target = url.pathname + url.search;
-    const label  = target.replace(/^\//, "").replace(/\.html$/, "").replace(/[-_]/g, " ") || "this page";
+    const label  = target.replace(/^\//, "").replace(/\.html$/, "").replace(/[-_]/g, " ").toUpperCase() || "THIS PAGE";
     return new Response(
-      `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-         <meta name="viewport" content="width=device-width,initial-scale=1">
-         <title>Couldn't load — SOKONI</title></head>
-       <body style="background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                    text-align:center;padding:80px 24px;margin:0;">
-         <div style="font-size:44px;margin-bottom:14px;">&#x26A0;&#xFE0F;</div>
-         <h2 style="margin:0 0 10px;font-size:20px;">Couldn't load ${label}</h2>
-         <p style="color:rgba(255,255,255,0.5);margin:0 0 26px;font-size:14px;line-height:1.6;">
-           You may be offline, or the page failed to load.<br>Your place has been kept — try again.</p>
-         <a href="${target}" style="display:inline-block;min-height:48px;line-height:48px;padding:0 26px;
-            background:#71ff00;color:#050505;border-radius:12px;font-weight:800;text-decoration:none;">Retry</a>
-         <div style="margin-top:18px;">
-           <a href="/" style="color:rgba(255,255,255,0.45);font-size:13px;text-decoration:underline;">Go to homepage</a>
+      `<!DOCTYPE html><html lang="en"><head>
+         <meta charset="UTF-8">
+         <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+         <title>Couldn't Load — SOKONI</title>
+         <style>
+           *{box-sizing:border-box;margin:0;padding:0}
+           body{background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+           .box{text-align:center;max-width:360px;width:100%}
+           .icon{font-size:52px;margin-bottom:18px;line-height:1}
+           .route{font-size:11px;font-weight:700;letter-spacing:0.12em;color:#71ff00;margin-bottom:10px;
+                  background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.18);
+                  border-radius:6px;padding:4px 10px;display:inline-block}
+           h2{font-size:20px;font-weight:900;margin:0 0 10px}
+           p{font-size:13px;color:rgba(255,255,255,0.45);line-height:1.65;margin:0 0 28px}
+           .btns{display:flex;flex-direction:column;gap:10px}
+           .btn-p{display:block;padding:14px 24px;background:#71ff00;color:#050505;
+                  font-weight:900;font-size:14px;border:none;border-radius:14px;
+                  cursor:pointer;text-decoration:none;font-family:inherit}
+           .btn-s{display:block;padding:14px 24px;
+                  background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);
+                  color:rgba(255,255,255,0.75);font-weight:700;font-size:14px;
+                  border-radius:14px;cursor:pointer;text-decoration:none;font-family:inherit}
+           .sig{margin-top:24px;font-size:11px;color:rgba(255,255,255,0.18);letter-spacing:0.05em}
+         </style>
+       </head>
+       <body>
+         <div class="box">
+           <div class="icon">&#x26A0;&#xFE0F;</div>
+           <div class="route">/${label}</div>
+           <h2>Page Unavailable</h2>
+           <p>You may be offline, or this page failed to load.<br>Your session has been preserved.</p>
+           <div class="btns">
+             <a href="${target}" class="btn-p">&#x1F504; Retry</a>
+             <button onclick="history.length>1?history.back():location.assign('/')" class="btn-s">&#x2190; Go Back</button>
+             <a href="/" class="btn-s">&#x1F3E0; Go Home</a>
+           </div>
+           <div class="sig">SOKONI — Kenya's Marketplace</div>
          </div>
        </body></html>`,
       { headers: { "Content-Type": "text/html" }, status: 503 }

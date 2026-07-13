@@ -1,4 +1,42 @@
-﻿## [2026-07-13] — Brand Visibility & Logo Polish Sprint
+﻿## [2026-07-13] — Platform-Wide Service Worker Recovery Sprint (SW v63)
+
+### Summary
+
+Complete audit and hardening of the service worker against incorrect page fallbacks, stale caches, and missing route coverage. The homepage-substitution bug was already fixed in a prior sprint; this sprint makes the fix permanent, expands coverage to all 309 routes, and upgrades the asset caching strategy.
+
+**Incorrect fallbacks: eliminated.** The SW never serves the homepage in response to a request for another page. If a page fails to load and has no cached copy, a branded 503 is returned with three explicit choices: Retry, Go Back, Go Home.
+
+**38 new routes added to PRECACHE_PAGES** (discovered by disk audit): `/analytics`, `/observability`, `/api-gateway`, `/webhooks`, `/auction`, `/auction-manager`, `/automation-center`, `/digital-store`, `/rental`, `/email-preview`, `/etims-admin`, `/etims-seller`, `/finance-budget`, `/finance-expenses`, `/finance-invoices`, `/finance-reconcile`, `/settlement-dashboard`, `/fleet-manager`, `/rider-dashboard`, `/route-planner`, `/legal-admin`, `/legal-centre`, `/logistics-reports`, `/pos-cash-manager`, `/pos-completeness`, `/pos-kds`, `/pos-live-floor`, `/pos-till-manager`, `/status`, `/trust-and-safety`, `/task-queue`, `/warehouse`, `/test-accounts`, `/404`, and 5 CF tooling pages.
+
+**Asset strategy upgraded:**
+- CSS/JS (non-ALWAYS_FRESH): Cache First → **Stale While Revalidate** (deploys reach users on next background fetch)
+- Fonts (woff/woff2/ttf/eot): separated from CSS/JS → dedicated **Cache First** block
+- ALWAYS_FRESH scripts unchanged: Network First (auth, payment, UI corrections must deploy immediately)
+
+**`skipWaiting()` on install:** SW now activates unconditionally on install. Session state lives in Firebase/localStorage, not the SW — forced activation is safe and prevents stale workers from lingering indefinitely in background tabs.
+
+**Inline error page redesigned:** Premium dark layout; route label chip; Retry + Go Back + Go Home buttons. `history.back()` with `/` fallback for Go Back.
+
+**`offline.html`:** Go Back button added.
+
+### Files affected
+`service-worker.js` · `offline.html` · `docs/SW_RECOVERY_REPORT.md` · `CHANGELOG.md`
+
+### Database changes
+None.
+
+### API changes
+None.
+
+### Security changes
+None. The SW fallback fix closes a user-experience (not security) vulnerability where a wrong page could be silently served. No authentication or authorization paths affected.
+
+### Breaking changes
+None. The `sokoni-tiles-v1` persistent cache is preserved across this version bump — offline map tiles are not evicted.
+
+---
+
+## [2026-07-13] — Brand Visibility & Logo Polish Sprint
 
 ### Summary
 
