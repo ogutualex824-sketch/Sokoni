@@ -277,6 +277,55 @@ function settleHoldTxn(txn, db, entityId, amountCents, { description }) {
 /* ─────────────────────────────────────────────────────────────
    COMMISSION ENGINE  (server-side only)
 ──────────────────────────────────────────────────────────────*/
+/* revenueConfig/plan_adjustments, memoised for the life of the container.
+ *
+ * ONE doc, not one per plan, and cached — a commission calculation happens on every payment,
+ * and the constitution is explicit about minimal Firestore reads. The TTL means an operator's
+ * change reaches production within a minute without a redeploy. */
+let _planCfgCache = null, _planCfgAt = 0;
+const _PLAN_CFG_TTL_MS = 60_000;
+
+/* Drop the memo. Used by tests, and by an admin write that must take effect immediately
+   rather than after the TTL. */
+function _resetPlanConfigCache() { _planCfgCache = null; _planCfgAt = 0; }
+
+async function _planAdjustmentOverrides(db) {
+  const now = Date.now();
+  if (_planCfgCache !== null && (now - _planCfgAt) < _PLAN_CFG_TTL_MS) return _planCfgCache;
+  const snap = await db.collection('revenueConfig').doc(CC.PLAN_ADJUSTMENTS_DOC)
+    .get().catch(() => null);
+  _planCfgCache = (snap && snap.exists) ? (snap.data() || {}) : {};
+  _planCfgAt = now;
+  return _planCfgCache;
+}
+
+/* The seller's plan, from the CANONICAL Subscription Engine — never a second lookup, and never
+   a second plan table. subscription-core.resolveSubscription() already reads across all five
+   subscription stores and recomputes status from dates, so a stale stored status cannot make an
+   expired plan keep discounting.
+
+   discountPct is the plan catalog's OWN `features.commission_discount_pct` (sub-billing.js),
+   which has existed all along and which nothing has ever read. */
+async function _resolveSellerPlan(sellerId) {
+  try {
+    const subs = require('./subscription-core');
+    const c = await subs.resolveSubscription(sellerId, { role: 'seller' });
+    if (!c || !c.found || !c.tier) return null;
+    const f = c.features || {};
+    const discountPct = Number(f.commission_discount_pct);
+    return {
+      tier:        c.tier,
+      status:      c.status,
+      active:      subs.isActive(c.status),
+      discountPct: Number.isFinite(discountPct) ? discountPct : 0,
+    };
+  } catch (_) {
+    /* Subscription Engine unavailable: charge the base rate. Never guess a discount — an
+       unearned discount is a silent revenue leak, and an unearned surcharge is theft. */
+    return null;
+  }
+}
+
 async function calculateCommission(db, opts) {
   /* Two call sites forgot the `db` argument and called calculateCommission({...}). `db` then
      bound to the options object, `opts` was undefined, and destructuring it threw a TypeError
@@ -343,6 +392,44 @@ async function calculateCommission(db, opts) {
   /* Flat fees: a revenueConfig override wins, else the config's own fixedKES (e.g. vehicles). */
   const fixedKES = rcFixedKES || base.fixedKES || 0;
 
+  /* ── STEP 4: subscription plan adjustment ──────────────────────────────────────────────
+   * Applied to whatever base survived rules -> revenueConfig -> category, so the seller's
+   * plan discounts the rate they would otherwise have paid. It NEVER replaces the base:
+   * see commission-config.js for why absolute plan rates were a trap.
+   *
+   * Billing efficiency (constitution): the subscription lookup is skipped entirely unless a
+   * plan adjustment is actually configured. While discounts are off — which is how this
+   * ships — this costs ONE cached read of revenueConfig/plan_adjustments and nothing more.
+   *
+   * The plan comes from the canonical Subscription Engine (subscription-core.resolveSubscription),
+   * not from a second lookup, and only counts when the subscription is genuinely active — an
+   * expired Business plan must not keep discounting.
+   *
+   * A `fixed` rule has no percentage to discount, so the plan does not apply to it. */
+  const baseRate = effectiveRate;
+  let planId = null, planStatus = null, planDeltaPct = 0, planLabel = null;
+  let planApplied = false, planSource = 'none';
+
+  if (sellerId && !(rule && rule.type === 'fixed')) {
+    const sub = await _resolveSellerPlan(sellerId);
+    if (sub && sub.tier) {
+      planId = sub.tier;
+      planStatus = sub.status;
+      /* An expired or cancelled plan must not keep discounting. */
+      if (sub.active) {
+        const overrides = await _planAdjustmentOverrides(db);
+        const adj = CC.applyPlanAdjustment(sub.tier, overrides, sub.discountPct, effectiveRate);
+        if (adj.applied) {
+          effectiveRate = adj.rate;
+          planDeltaPct  = adj.deltaPct;
+          planLabel     = adj.label;
+          planSource    = adj.source;
+          planApplied   = true;
+        }
+      }
+    }
+  }
+
   if (rule && rule.type === 'fixed') {
     commissionCents = rule.amountCents || 0;
     effectiveRate   = orderAmountCents ? Math.round(commissionCents / orderAmountCents * 100) : 0;
@@ -390,6 +477,11 @@ async function calculateCommission(db, opts) {
   }
 
   const sellerNetCents = orderAmountCents - commissionCents;
+
+  /* A commission holiday zeroes the rate; the breakdown must say so rather than blaming
+     whatever base or plan happened to be resolved first. */
+  const holidayApplied = effectiveRate === 0 && baseRate > 0 && !planApplied;
+
   return {
     orderAmountCents,
     effectiveRate,
@@ -402,6 +494,25 @@ async function calculateCommission(db, opts) {
     ruleId:     rule ? rule.id : 'default',
     ruleSource: rule ? (rule.entityId ? 'entity_specific' : rule.category)
               : (rcPct !== null ? 'revenue_config' : 'default_table'),
+
+    /* ── AUDIT BREAKDOWN ────────────────────────────────────────────────────────────────
+     * Written verbatim into commissionLedger and shown verbatim to the seller, so a
+     * settlement is reproducible years later and a dashboard cannot disagree with it.
+     * baseRate + planAdjustment == effectiveRate, except where a floor or a holiday clamped
+     * it — which is precisely why the clamp is recorded rather than implied. */
+    baseRate,                                   /* before the plan touched it */
+    planId,                                     /* the tier, or null if the seller has none */
+    planStatus,                                 /* ACTIVE / TRIALING / EXPIRED ... */
+    planAdjustment: planApplied ? planDeltaPct : 0,
+    planApplied,
+    planSource,
+    planLabel,                                  /* the human reason: "Business Plan Discount" */
+    reason: planApplied
+      ? (planLabel || ('Plan: ' + planId))
+      : (holidayApplied ? 'Commission holiday'
+        : (rule ? 'Commission rule' : (rcPct !== null ? 'Revenue configuration' : 'Category default'))),
+    calculatedAt: Date.now(),
+    engineVersion: 2,                           /* bumped when the resolution ORDER changes */
   };
 }
 
@@ -572,6 +683,7 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
 }
 
 module.exports = {
+  _resetPlanConfigCache,
   ACCOUNTS, TAX_CONFIG,
   /* Rates come from commission-config; re-exported so existing importers keep working. */
   COMMISSION_CONFIG: CC,

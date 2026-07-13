@@ -3418,6 +3418,24 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
        calculateCommission already applied the minimum and the flat fee, so do NOT re-apply. */
     commissionKES: Math.round((r.commissionCents - (r.fixedKES || 0) * 100)) / 100,
     totalOwed:     r.commissionCents / 100,
+    /* The audit breakdown, passed through verbatim so the ledger can retain it. A settlement
+       must stay reproducible: years later it has to be possible to say WHICH rule, WHICH plan
+       and WHICH adjustment produced the rate that was charged. */
+    audit: {
+      baseRate:       r.baseRate,
+      planId:         r.planId,
+      planStatus:     r.planStatus,
+      planAdjustment: r.planAdjustment,
+      planApplied:    r.planApplied,
+      planLabel:      r.planLabel,
+      planSource:     r.planSource,
+      effectiveRate:  r.effectiveRate,
+      ruleId:         r.ruleId,
+      ruleSource:     r.ruleSource,
+      reason:         r.reason,
+      calculatedAt:   r.calculatedAt,
+      engineVersion:  r.engineVersion,
+    },
   };
 }
 
@@ -3432,7 +3450,7 @@ exports.onSellerPaymentCreated = onDocumentCreated(
     if (!sellerUid || !amount || Number(amount) <= 0) return;
 
     const grossAmount = Number(amount);
-    const { pct, fixedKES, commissionKES, totalOwed } = await _resolveCommission(sellerUid, hub, grossAmount);
+    const { pct, fixedKES, commissionKES, totalOwed, audit } = await _resolveCommission(sellerUid, hub, grossAmount);
     const paymentId = event.params.paymentId;
     const period    = new Date().toISOString().slice(0, 7); // "2026-06"
 

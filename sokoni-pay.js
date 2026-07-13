@@ -89,11 +89,15 @@ const SERVICE_FEES = {
 /* ═══════════════════════════════════════════════════════════
    SUBSCRIPTION PLANS
 ═══════════════════════════════════════════════════════════ */
+/* PLANS carries no commissionPct any more. It advertised absolute rates (free 15%, business 4%)
+   that the server never enforced and that no longer match any real base rate — marketplace is 3%.
+   A seller's plan benefit is now applied server-side inside the one Commission Engine and returned
+   by previewCommission as { baseRate, planAdjustment, effectiveRate, reason }. Display that. */
 const PLANS = {
-  free:     { name:"Free",     price:0,    listings:3,   commissionPct:15, badge:false, featured:false, leads:5,   label:"Get started free" },
-  starter:  { name:"Starter",  price:499,  listings:20,  commissionPct:10, badge:true,  featured:false, leads:30,  label:"Best for new sellers" },
-  pro:      { name:"Pro",      price:1499, listings:999, commissionPct:7,  badge:true,  featured:true,  leads:999, label:"Most popular" },
-  business: { name:"Business", price:4999, listings:999, commissionPct:4,  badge:true,  featured:true,  leads:999, label:"For agencies & large sellers" },
+  free:     { name:"Free",     price:0,    listings:3,   badge:false, featured:false, leads:5,   label:"Get started free" },
+  starter:  { name:"Starter",  price:499,  listings:20,  badge:true,  featured:false, leads:30,  label:"Best for new sellers" },
+  pro:      { name:"Pro",      price:1499, listings:999, badge:true,  featured:true,  leads:999, label:"Most popular" },
+  business: { name:"Business", price:4999, listings:999, badge:true,  featured:true,  leads:999, label:"For agencies & large sellers" },
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -526,7 +530,7 @@ function chargeLead(opts){
       saveRecords("sokoniLeadFees", leads);
       saveBookingFee({
         ref, providerName:opts.providerName, category:opts.category||"default",
-        depositAmount:fee, commissionPct:0, phone:"",
+        depositAmount:fee, phone:"",
         providerPhone:opts.providerPhone||"",
         serviceDesc:"Lead fee", status:"paid", createdAt:Date.now()
       });

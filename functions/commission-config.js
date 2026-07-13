@@ -102,6 +102,136 @@ const ALIASES = {
  * to process than it earns. Was hardcoded as `const minKES = 10` inside index.js. */
 const MIN_COMMISSION_KES = 10;
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+   SUBSCRIPTION PLAN ADJUSTMENTS
+   ══════════════════════════════════════════════════════════════════════════════════════════
+   A plan adjusts the BASE rate. It does not replace it.
+
+   That distinction is load-bearing. sokoni-pay.js PLANS advertised ABSOLUTE plan rates
+   (free 15%, starter 10%, pro 7%, business 4%) which the server never enforced — they are
+   left over from an older pricing model where the base was ~10-15%. The consolidated base for
+   marketplace is 3%. Enforcing those absolute numbers as written would RAISE commission for
+   every seller on the platform: a free seller would jump 3% -> 15%, and even a Business seller
+   would go 3% -> 4%. The "discount" was a penalty.
+
+   So a plan is modelled as a DELTA on whatever base survives rules/revenueConfig/category —
+   which is also exactly what the sprint brief describes: "Marketplace, Base 3%, Business Plan
+   Discount, Final 2%".
+
+   DEFAULTS ARE ZERO, DELIBERATELY. The brief says "do not change existing commission
+   percentages unless required by configuration". Shipping a non-zero default would silently
+   reprice every seller on the platform the moment this deploys. The mechanism ships enabled;
+   the discounts ship OFF, and an operator turns them on by writing:
+
+     revenueConfig/plan_adjustments = {
+       business: { deltaPct: -1, label: "Business Plan Discount" },
+       pro:      { deltaPct: -0.5, label: "Pro Plan Discount" },
+     }
+
+   ...which requires no code change, and supports plans that do not exist yet (an unknown tier
+   simply has no adjustment). Firestore wins over this file; this file is the safe default.
+
+   deltaPct  — percentage POINTS added to the base. Negative = discount. -1 turns 3% into 2%.
+   minPct    — floor for this plan, so a discount can never drive commission below it.
+   label     — the human reason shown to the seller ("Business Plan Discount").
+   ══════════════════════════════════════════════════════════════════════════════════════════ */
+const PLAN_ADJUSTMENTS = {
+  free:     { deltaPct: 0, minPct: 0, label: 'Free Plan' },
+  starter:  { deltaPct: 0, minPct: 0, label: 'Starter Plan' },
+  pro:      { deltaPct: 0, minPct: 0, label: 'Pro Plan' },
+  business: { deltaPct: 0, minPct: 0, label: 'Business Plan' },
+};
+
+/* Floor for any plan-discounted rate. A plan may reduce commission; it may never make the
+   platform pay to process a sale. Overridable per-plan via minPct. */
+const PLAN_MIN_PCT = 0.5;
+
+/* The Firestore document that overrides the table above. One doc, not one per plan, so the
+   engine costs ONE cached read rather than a read per plan. */
+const PLAN_ADJUSTMENTS_DOC = 'plan_adjustments';   /* revenueConfig/plan_adjustments */
+
+/**
+ * Apply a seller's plan to a resolved base rate.
+ *
+ * THE DISCOUNT IS NOT DEFINED HERE. It comes from the canonical Subscription Engine — the plan
+ * catalog in sub-billing.js already carries `features.commission_discount_pct` (seller_basic 2,
+ * seller_pro 5, seller_enterprise 10, enterprise 15) and subscription-core surfaces it in the
+ * canonical `features` map. Nothing has ever read it. Defining a second plan table here would
+ * be exactly the duplication the constitution forbids, so this function CONSUMES that value.
+ *
+ * SEMANTICS: commission_discount_pct is RELATIVE — "15% off your commission", which is how the
+ * UI labels it ("Commission discount (%)", plans.html:204).
+ *
+ * It is not points off. That reading is a trap, and the same trap the absolute plan rates were:
+ * the values were authored when the base was ~15%. Taken as points against today's consolidated
+ * 3% marketplace base, a `pro` seller would pay 3 - 5 = 0%, and enterprise would go negative.
+ * A plan must never be able to zero out commission by arithmetic accident, so:
+ *
+ *     effective = base * (1 - discountPct/100)      floored at minPct
+ *
+ *     Marketplace base 3%, enterprise plan (15% off) -> 2.55%
+ *
+ * An operator who genuinely wants points-off can say so explicitly with `deltaPct` in
+ * revenueConfig/plan_adjustments, which overrides the plan catalog. Both forms are supported;
+ * only one is the default, and it is the safe one.
+ *
+ * @param {string}  tier        the plan tier from the Subscription Engine
+ * @param {object}  overrides   revenueConfig/plan_adjustments payload (or null)
+ * @param {number}  planDiscountPct  features.commission_discount_pct from the subscription
+ * @param {number}  baseRate    the rate that survived rules -> revenueConfig -> category
+ * @returns {{rate:number, deltaPct:number, label:string|null, source:string, applied:boolean}}
+ */
+function applyPlanAdjustment(tier, overrides, planDiscountPct, baseRate) {
+  const none = { rate: baseRate, deltaPct: 0, label: null, source: 'none', applied: false };
+  const t = String(tier || '').trim().toLowerCase();
+  if (!t || !(baseRate > 0)) return none;
+
+  const ov = (overrides && overrides[t]) || null;
+  const file = PLAN_ADJUSTMENTS[t] || null;
+  /* Careful: Number(null) is 0, which IS finite — so `Number.isFinite(ov && ov.minPct)` would
+     wave a null `ov` straight through and then dereference it. Read each source explicitly. */
+  const ovMin   = ov   && Number(ov.minPct);
+  const fileMin = file && Number(file.minPct);
+  const floor = Number.isFinite(ovMin) && ovMin > 0 ? ovMin
+              : Number.isFinite(fileMin) && fileMin > 0 ? fileMin
+              : PLAN_MIN_PCT;
+  const label = (ov && ov.label) || (file && file.label) || null;
+
+  let rate = baseRate, deltaPct = 0, source = 'none';
+
+  /* 1. An explicit operator override wins over everything. Points off, by request. */
+  const ovDelta = ov && Number(ov.deltaPct);
+  if (Number.isFinite(ovDelta) && ovDelta !== 0) {
+    rate = baseRate + ovDelta;
+    deltaPct = ovDelta;
+    source = 'revenue_config_plan';
+  } else {
+    /* 2. Otherwise the plan catalog's own discount, applied RELATIVELY. */
+    const disc = Number(planDiscountPct);
+    if (Number.isFinite(disc) && disc > 0) {
+      rate = baseRate * (1 - disc / 100);
+      deltaPct = rate - baseRate;              /* record the actual points moved, for audit */
+      source = 'subscription_plan';
+    }
+  }
+
+  if (source === 'none') return none;
+
+  /* Validate. A plan discounts; it never inverts. */
+  if (rate < floor) rate = floor;
+  if (rate < 0) rate = 0;
+  if (rate > 100) rate = 100;
+  rate = Math.round(rate * 1000) / 1000;       /* 3dp — keeps 2.55% exact, avoids float dust */
+
+  return {
+    rate,
+    deltaPct: Math.round((rate - baseRate) * 1000) / 1000,
+    label,
+    source,
+    applied: rate !== baseRate,
+  };
+}
+
 /**
  * Resolve the effective default rate for a hub OR a category name.
  * This is the ONLY function permitted to read RATES.
@@ -134,6 +264,10 @@ module.exports = {
   listCategories,
   categoryForHub,
   MIN_COMMISSION_KES,
+  PLAN_ADJUSTMENTS_DOC,
+  applyPlanAdjustment,
+  PLAN_MIN_PCT,
+  PLAN_ADJUSTMENTS: Object.freeze(PLAN_ADJUSTMENTS),
   /* Exposed READ-ONLY for admin dashboards and the client rate endpoint. Never mutate. */
   RATES: Object.freeze(RATES),
   ALIASES: Object.freeze(ALIASES),

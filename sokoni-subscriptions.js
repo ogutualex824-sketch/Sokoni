@@ -33,10 +33,10 @@
 
   /* ── Plan definitions (read-only; same as sokoni-pay.js PLANS) ── */
   const PLANS = {
-    free:     { level:0, listings:3,   commissionPct:15, badge:false, featured:false, leads:5   },
-    starter:  { level:1, listings:20,  commissionPct:10, badge:true,  featured:false, leads:30  },
-    pro:      { level:2, listings:999, commissionPct:7,  badge:true,  featured:true,  leads:999 },
-    business: { level:3, listings:999, commissionPct:4,  badge:true,  featured:true,  leads:999 },
+    free:     { level:0, listings:3,   badge:false, featured:false, leads:5   },
+    starter:  { level:1, listings:20,  badge:true,  featured:false, leads:30  },
+    pro:      { level:2, listings:999, badge:true,  featured:true,  leads:999 },
+    business: { level:3, listings:999, badge:true,  featured:true,  leads:999 },
   };
 
   /* Features locked behind paid plans */

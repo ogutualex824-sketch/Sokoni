@@ -281,6 +281,30 @@ exports.previewCommission = onCall(
       ruleId:              comm.ruleId,
       ruleSource:          comm.ruleSource,
       sellerReceivesKES:   (comm.sellerNetCents - wht.whtCents) / 100,
+
+      /* ── The transparency breakdown every seller-facing screen must show ──────────────
+       * Base Rate -> Plan Benefit -> Final Commission -> Reason.
+       * This is the ONLY sanctioned source of a commission figure for a client. The client
+       * may render these numbers; it may never compute them. */
+      baseRate:            comm.baseRate,
+      planId:              comm.planId,
+      planStatus:          comm.planStatus,
+      planAdjustment:      comm.planAdjustment,
+      planApplied:         comm.planApplied,
+      planLabel:           comm.planLabel,
+      reason:              comm.reason,
+      calculatedAt:        comm.calculatedAt,
+      engineVersion:       comm.engineVersion,
+      /* Ready to render, so that eight different pages cannot each invent their own wording. */
+      breakdown: {
+        base:   { rate: comm.baseRate, label: 'Base rate (' + comm.category + ')' },
+        plan:   comm.planApplied
+                  ? { adjustment: comm.planAdjustment,
+                      label: comm.planLabel || ('Plan: ' + comm.planId) }
+                  : null,
+        final:  { rate: comm.effectiveRate, label: 'Final commission' },
+        reason: comm.reason,
+      },
     };
   }
 );

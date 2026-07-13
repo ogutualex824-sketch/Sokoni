@@ -2518,9 +2518,16 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     currentCart.forEach(function(item){
       var _u2 = JSON.parse(localStorage.getItem("sokoniUser")||"null");
       var _sid = item.sellerEmail || item.sellerName || "unknown_seller";
-      var _plan = SokoniPay.getProviderPlan(_sid);
-      var _planData = SokoniPay.PLANS[_plan] || SokoniPay.PLANS.free;
-      var _commPct = _planData.commissionPct || 10;
+      /* The client no longer computes commission.
+         This used to read SokoniPay.PLANS[plan].commissionPct — ABSOLUTE plan rates
+         (free 15%, business 4%) that the server never enforced, and which no longer match any
+         real base rate: marketplace is 3%. A free seller was recorded here at 15% while being
+         charged 3%. That mismatch is precisely what this sprint removes.
+
+         _platformFeeRate comes from previewCommission — the one Commission Engine — and already
+         includes any subscription-plan benefit the seller has earned. The server is the only
+         authority for an effective rate; the client renders what it is given. */
+      var _commPct = Number(_platformFeeRate) || 0;
       var _itemTotal = Number(item.price||0);
       var _sokCut = Math.round(_itemTotal * _commPct / 100);
       var _providerNet = _itemTotal - _sokCut;

@@ -139,6 +139,31 @@ for (const f of files) {
   });
 }
 
+/* ── 3c. client-side plan commission ───────────────────────────────────────────
+   A plan's commission benefit is resolved SERVER-side, inside calculateCommission, from the
+   Subscription Engine's features.commission_discount_pct. The client may render what
+   previewCommission returns; it may never hold a plan's rate or apply one.
+
+   sokoni-pay.js PLANS used to carry commissionPct (free 15%, business 4%) and checkout.html
+   applied it — absolute rates the server never enforced, against a real base of 3%. That is
+   the mismatch this sprint removed; it must not come back. */
+for (const f of files) {
+  if (ALLOWLIST[f]) continue;
+  if (f.startsWith('functions/')) continue;          /* server may resolve plans */
+  const lines = SRC[f].split('\n');
+  lines.forEach((l, i) => {
+    const readsPlanRate = /PLANS?\s*\??\.?\s*\[[^\]]*\]\s*\??\.?\s*commission(Pct|Rate)\b/.test(l);
+    /* A commissionPct sitting inside a PLANS object — look back for the declaration, because
+       the rate lives on the plan's own row, not on a line that says "plan". */
+    const definesPlanRate = /commission(Pct|Rate)\s*:\s*[\d.]/.test(l)
+      && /\bPLANS\b|\bplan\b/i.test(lines.slice(Math.max(0, i - 8), i + 1).join('\n'));
+    if (readsPlanRate || definesPlanRate) {
+      errors.push(f + ':' + (i + 1) + '  client-side PLAN commission — the server is the only '
+        + 'authority for an effective rate; render previewCommission\'s breakdown instead');
+    }
+  });
+}
+
 /* ── 4. magic fallbacks on a commission lookup ─────────────────────────────── */
 for (const f of files) {
   if (ALLOWLIST[f]) continue;
