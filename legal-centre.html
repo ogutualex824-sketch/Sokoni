@@ -327,7 +327,9 @@ const _want = new URLSearchParams(location.search).get('certificate');
 _auth.onAuthStateChanged((u) => {
   if (!u) {
     document.getElementById('lc-loading').textContent = 'Please sign in to view your agreements.';
-    document.getElementById('lc-certloading').textContent = '';
+    /* Hide it, don't just blank it: an emptied .lc-empty still renders its padding
+       as a ~96px dead box under the certificates heading. */
+    document.getElementById('lc-certloading').style.display = 'none';
     return;
   }
   render();
