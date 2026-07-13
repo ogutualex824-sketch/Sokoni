@@ -1,4 +1,21 @@
-﻿## [2026-07-13] — Identity Command Center Sprint 6 — Adaptive Identity Intelligence
+﻿## [2026-07-13] — SOKONI Platform Constitution v1.0 Ratified
+
+### Summary
+
+Ratified the **SOKONI Platform Constitution** — a permanent governance document that supersedes all previous architecture decisions and governs every future sprint. Establishes SOKONI as Africa's Commerce, Workforce and Enterprise Operating System (not a marketplace). Defines the identity model (One Person → One Identity → Unlimited Businesses/Orgs/Workspaces/Roles/Devices), 26 canonical engines that must be extended rather than rebuilt, absolute non-duplicate rules (no duplicate auth, wallets, notifications, payments, CFs, UI components), and a mandatory sprint template with success criteria. Stored at `docs/PLATFORM_CONSTITUTION.md` in the Obsidian vault.
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `docs/PLATFORM_CONSTITUTION.md` | Permanent governance document; platform mission, engineering principles, canonical engine registry, non-negotiable rules, sprint template, success criteria, final rule |
+
+### Breaking Changes
+None. Documentation-only change.
+
+---
+
+## [2026-07-13] — Identity Command Center Sprint 6 — Adaptive Identity Intelligence
 
 ### Summary
 
