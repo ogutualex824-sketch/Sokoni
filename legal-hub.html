@@ -676,7 +676,7 @@
         <textarea class="doc-preview" id="docOutput" style="min-height:340px;" placeholder="Your document will appear here..."></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;" id="docActions">
           <button type="button" onclick="copyLegalDoc()" style="flex:1;min-width:100px;padding:11px 14px;border-radius:10px;border:1px solid rgba(0,170,255,0.3);background:rgba(0,170,255,0.08);color:#00aaff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">📋 Copy</button>
-          <button type="button" onclick="downloadLegalDoc()" style="flex:1;min-width:100px;padding:11px 14px;border-radius:10px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.06);color:#71ff00;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">⬇️ Download</button>
+          <button type="button" onclick="downloadLegalDoc()" style="flex:1;min-width:100px;padding:11px 14px;border-radius:10px;border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.06);color:#71ff00;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">⬇️ Download PDF</button>
           <button type="button" onclick="printLegalDoc()" style="flex:1;min-width:100px;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,152,0,0.25);background:rgba(255,152,0,0.08);color:#ff9800;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">🖨️ Print / PDF</button>
           <button type="button" onclick="shareDocWA()" style="flex:1;min-width:100px;padding:11px 14px;border-radius:10px;border:1px solid rgba(37,211,102,0.25);background:rgba(37,211,102,0.08);color:#25d366;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;"><i class="fab fa-whatsapp"></i> WhatsApp</button>
         </div>
@@ -1564,6 +1564,35 @@
    renderers below run at parse time - a declaration in a later <script> block does not
    exist yet. Page-local name: the global _esc is already owned by sokoni-pay.js (const). */
 function lhEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* Money and dates in a legal document must never render as "NaN" or "Invalid Date".
+   The money fields were untyped text inputs and the templates used
+   Number(v||0).toLocaleString(), so "fifty thousand" produced "AMOUNT DEMANDED: KES NaN"
+   in a real demand letter. These return null on bad input; callers validate first. */
+function lhMoney(v){
+  if (v === null || v === undefined || String(v).trim() === "") return null;
+  const n = Number(String(v).replace(/[\s,]/g, ""));
+  return Number.isFinite(n) ? n.toLocaleString("en-KE") : null;
+}
+function lhDateLong(v){
+  if (!v) return null;
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? null : d.toLocaleDateString("en-KE", { day:"numeric", month:"long", year:"numeric" });
+}
+/* Returns a human message naming the bad field, or null when everything is usable. */
+function lhValidateDoc(vals){
+  const money = { dAmount:"Amount Demanded", saaPrice:"Purchase Price", saaDeposit:"Deposit", daAmount:"Amount",
+                  nqArrears:"Rent Arrears", plAmount:"Total Claim" };
+  for (const id in money){
+    if (vals[id] && lhMoney(vals[id]) === null) return money[id] + " must be a number (e.g. 50000).";
+  }
+  const days = { dDeadline:"Response Deadline", nqDays:"Notice Period", cdDeadline:"Compliance Deadline", ndaDuration:"Duration (years)" };
+  for (const id in days){
+    if (vals[id] && !Number.isFinite(Number(vals[id]))) return days[id] + " must be a number (e.g. 14).";
+  }
+  if (vals.daRepayDate && lhDateLong(vals.daRepayDate) === null) return "Repayment Date is not a valid date.";
+  return null;
+}
 /* """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
    TAB SWITCHER
 """""""""""""""""""""""""""""""""""""""""""""""""""""""""" */
@@ -2050,9 +2079,9 @@ const DOC_FORMS = {
       { id:"dSenderAddr", label:"Your Address", ph:"Physical address" },
       { id:"dRecipient", label:"Recipient Name *", ph:"Name of person / company" },
       { id:"dRecipientAddr", label:"Recipient Address", ph:"Their physical address" },
-      { id:"dAmount", label:"Amount Demanded (KES)", ph:"e.g. 50000" },
+      { id:"dAmount", label:"Amount Demanded (KES)", ph:"e.g. 50000", type:"number" },
       { id:"dReason", label:"Reason for Demand *", ph:"e.g. Unpaid loan, breach of contract, damaged goods..." },
-      { id:"dDeadline", label:"Response Deadline (days)", ph:"e.g. 14" },
+      { id:"dDeadline", label:"Response Deadline (days)", ph:"e.g. 14", type:"number" },
       { id:"dDate", label:"Letter Date", type:"date" },
     ]
   },
@@ -2063,8 +2092,8 @@ const DOC_FORMS = {
       { id:"nqTenant", label:"Tenant Name *", ph:"Tenant's full name" },
       { id:"nqProperty", label:"Property Address *", ph:"Full property address" },
       { id:"nqRent", label:"Monthly Rent (KES)", ph:"e.g. 15000" },
-      { id:"nqArrears", label:"Arrears (KES, if any)", ph:"e.g. 30000" },
-      { id:"nqDays", label:"Notice Period (days)", ph:"30" },
+      { id:"nqArrears", label:"Arrears (KES, if any)", ph:"e.g. 30000", type:"number" },
+      { id:"nqDays", label:"Notice Period (days)", ph:"30", type:"number" },
       { id:"nqReason", label:"Reason for Notice *", ph:"Rent arrears, expiry of lease, breach of agreement..." },
       { id:"nqDate", label:"Notice Date", type:"date" },
     ]
@@ -2090,7 +2119,7 @@ const DOC_FORMS = {
       { id:"cdConduct", label:"Describe the Conduct to Stop *", ph:"e.g. Infringing our registered trademark 'SOKONI' by using it on competing goods..." },
       { id:"cdLegalBasis", label:"Legal Basis", ph:"e.g. Trade Marks Act Cap 506, Copyright Act Cap 130..." },
       { id:"cdDemand", label:"Specific Actions Demanded *", ph:"1. Immediately cease using...\n2. Remove all infringing material...\n3. Provide written confirmation..." },
-      { id:"cdDeadline", label:"Deadline (days)", ph:"7" },
+      { id:"cdDeadline", label:"Deadline (days)", ph:"7", type:"number" },
       { id:"cdDate", label:"Letter Date", type:"date" },
     ]
   },
@@ -2100,7 +2129,7 @@ const DOC_FORMS = {
       { id:"ndaPartyA", label:"Disclosing Party (Company/Name) *", ph:"e.g. Sokoni Technologies Ltd" },
       { id:"ndaPartyB", label:"Receiving Party (Company/Name) *", ph:"e.g. XYZ Consultants Ltd" },
       { id:"ndaPurpose", label:"Purpose of Disclosure *", ph:"e.g. Exploring a potential business partnership for software development" },
-      { id:"ndaDuration", label:"Duration (years)", ph:"2" },
+      { id:"ndaDuration", label:"Duration (years)", ph:"2", type:"number" },
       { id:"ndaDate", label:"Agreement Date", type:"date" },
     ]
   },
@@ -2110,8 +2139,8 @@ const DOC_FORMS = {
       { id:"saaSeller", label:"Seller Name *", ph:"Full legal name" },
       { id:"saaBuyer", label:"Buyer Name *", ph:"Full legal name" },
       { id:"saaItem", label:"Item / Property Being Sold *", ph:"e.g. 2019 Toyota Probox KBX 123A / Plot No. 456..." },
-      { id:"saaPrice", label:"Agreed Sale Price (KES) *", ph:"e.g. 1200000" },
-      { id:"saaDeposit", label:"Deposit / Down Payment (KES)", ph:"e.g. 200000" },
+      { id:"saaPrice", label:"Agreed Sale Price (KES) *", ph:"e.g. 1200000", type:"number" },
+      { id:"saaDeposit", label:"Deposit / Down Payment (KES)", ph:"e.g. 200000", type:"number" },
       { id:"saaDate", label:"Agreement Date", type:"date" },
       { id:"saaConditions", label:"Special Conditions (optional)", ph:"e.g. Subject to inspection, balance payable within 30 days..." },
     ]
@@ -2121,7 +2150,7 @@ const DOC_FORMS = {
     fields: [
       { id:"daDebtor", label:"Debtor Name *", ph:"Full name of person who owes money" },
       { id:"daCreditor", label:"Creditor Name *", ph:"Your full name" },
-      { id:"daAmount", label:"Amount (KES) *", ph:"e.g. 75000" },
+      { id:"daAmount", label:"Amount (KES) *", ph:"e.g. 75000", type:"number" },
       { id:"daReason", label:"Reason for Debt *", ph:"e.g. Personal loan advanced on 01/01/2026" },
       { id:"daRepayDate", label:"Agreed Repayment Date", type:"date" },
       { id:"daDate", label:"Acknowledgment Date", type:"date" },
@@ -2150,7 +2179,7 @@ const DOC_FORMS = {
       { id:"plDefendantAddr", label:"Defendant Address *", ph:"Physical address / last known address" },
       { id:"plFacts", label:"Brief Facts / Cause of Action *", ph:"1. The Plaintiff is a businessman...\n2. On [date], the Defendant...\n3. The Defendant has failed/refused to...", type:"textarea" },
       { id:"plRelief", label:"Relief / Orders Sought *", ph:"1. Judgment for KES ...\n2. Interest at court rate...\n3. Costs of this suit...", type:"textarea" },
-      { id:"plAmount", label:"Total Amount Claimed (KES)", ph:"e.g. 250000" },
+      { id:"plAmount", label:"Total Amount Claimed (KES)", ph:"e.g. 250000", type:"number" },
       { id:"plAdvocate", label:"Advocate's Name & Firm", ph:"e.g. John Kamau, Kamau & Associates Advocates" },
       { id:"plDate", label:"Filing Date", type:"date" },
     ]
@@ -2278,6 +2307,11 @@ function closeDocForm(){
   const outArea = document.getElementById("docOutputArea");
   if(outArea) outArea.style.display = "none";
   const msgEl = document.getElementById("docGenMsg");
+
+  /* Refuse to build a legal document out of unusable input. Previously a non-numeric
+     amount sailed through and rendered as "KES NaN". */
+  const _bad = lhValidateDoc(vals);
+  if (_bad) { if (msgEl) msgEl.textContent = "⚖️ " + _bad; return; }
   if(msgEl) msgEl.textContent = "";
 }
 window.closeDocForm = closeDocForm;
@@ -2316,7 +2350,13 @@ function selectDocType(type){
         ? `<textarea id="${f.id}" class="lh-input lh-textarea" placeholder="${f.ph||""}" style="margin-top:4px;"></textarea>`
         : f.type==="date"
         ? `<input type="date" id="${f.id}" class="lh-input" value="${today}" style="margin-top:4px;">`
-        : `<input type="text" id="${f.id}" class="lh-input" placeholder="${f.ph||""}" style="margin-top:4px;">`
+        : f.type==="number"
+        /* The renderer used to hardcode type="text" for everything that was not a textarea
+           or a date, so a field declared type:"number" still rendered as free text — which is
+           how "fifty thousand" reached the amount formatter and printed "KES NaN" into a
+           demand letter. inputmode=decimal also gives phones a numeric keypad. */
+        ? `<input type="number" inputmode="decimal" min="0" step="any" id="${f.id}" class="lh-input" placeholder="${f.ph||""}" style="margin-top:4px;">`
+        : `<input type="${f.type||"text"}" id="${f.id}" class="lh-input" placeholder="${f.ph||""}" style="margin-top:4px;">`
       }
     </div>`).join("");
 
@@ -2361,7 +2401,7 @@ I, ${vals.dSender}, hereby formally demand the following from you:
 REASON FOR DEMAND:
 ${vals.dReason}
 
-${vals.dAmount ? `AMOUNT DEMANDED: KES ${Number(vals.dAmount||0).toLocaleString()}` : ""}
+${vals.dAmount ? `AMOUNT DEMANDED: KES ${lhMoney(vals.dAmount)}` : ""}
 
 You are hereby required to comply with this demand within ${vals.dDeadline||14} days of receipt of this letter  by ${new Date(Date.now()+(Number(vals.dDeadline||14)*86400000)).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"})}.
 
@@ -2537,7 +2577,7 @@ Date: _______________________         Date: _______________________`;
 
   else if(type==="sale_agreement"){
     if(!vals.saaSeller||!vals.saaBuyer||!vals.saaItem||!vals.saaPrice){ if(msgEl){msgEl.textContent="⚖️ Fill required fields"; msgEl.style.color="#ff9800";} return; }
-    const balance = Number(vals.saaPrice||0) - Number(vals.saaDeposit||0);
+    const balance = (Number(vals.saaPrice) || 0) - (Number(vals.saaDeposit) || 0);
     text=`SALE AGREEMENT
 
 This Sale Agreement is entered into on ${vals.saaDate||today}
@@ -2552,8 +2592,8 @@ RE: SALE OF ${vals.saaItem}
 The Seller agrees to sell and the Buyer agrees to purchase: ${vals.saaItem}
 
 2. PURCHASE PRICE
-Agreed Sale Price: KES ${Number(vals.saaPrice||0).toLocaleString()}
-${vals.saaDeposit&&Number(vals.saaDeposit)>0?`Deposit Paid:      KES ${Number(vals.saaDeposit||0).toLocaleString()}\nBalance Payable:   KES ${balance.toLocaleString()}`:""}
+Agreed Sale Price: KES ${lhMoney(vals.saaPrice)}
+${vals.saaDeposit&&Number(vals.saaDeposit)>0?`Deposit Paid:      KES ${lhMoney(vals.saaDeposit)}\nBalance Payable:   KES ${balance.toLocaleString()}`:""}
 
 3. PAYMENT
 Payment shall be made by M-Pesa / bank transfer / cash as agreed between the parties.
@@ -2587,11 +2627,11 @@ Full Name & ID:`;
     if(!vals.daDebtor||!vals.daCreditor||!vals.daAmount||!vals.daReason){ if(msgEl){msgEl.textContent="⚖️ Fill required fields"; msgEl.style.color="#ff9800";} return; }
     text=`DEBT ACKNOWLEDGMENT
 
-I, ${vals.daDebtor} ("the Debtor"), hereby acknowledge that I owe the sum of KES ${Number(vals.daAmount||0).toLocaleString()} to ${vals.daCreditor} ("the Creditor").
+I, ${vals.daDebtor} ("the Debtor"), hereby acknowledge that I owe the sum of KES ${lhMoney(vals.daAmount)} to ${vals.daCreditor} ("the Creditor").
 
 REASON FOR DEBT: ${vals.daReason}
 
-I undertake to repay the full outstanding amount of KES ${Number(vals.daAmount||0).toLocaleString()} on or before ${vals.daRepayDate ? new Date(vals.daRepayDate).toLocaleDateString("en-KE",{day:"numeric",month:"long",year:"numeric"}) : "______________"}.
+I undertake to repay the full outstanding amount of KES ${lhMoney(vals.daAmount)} on or before ${vals.daRepayDate ? lhDateLong(vals.daRepayDate) : "______________"}.
 
 This acknowledgment constitutes a binding promise to pay.
 
@@ -3107,10 +3147,40 @@ Generated by SOKONI Legal Hub`;
   if(btn) btn.innerHTML = `🔄 Regenerate Document`;
 }
 
+/* Download the generated document as a real PDF.
+ *
+ * This used to emit a .txt file. A plain-text file is not a document you can serve on a
+ * party or file in a registry — every one of these 16 types (demand letters, leases,
+ * affidavits, plaints) exists to be printed and signed.
+ *
+ * Reads #docOutput.value at click time, NOT the text generateLegalDoc() produced, because
+ * #docOutput is an editable textarea — the user's edits must make it into the PDF.
+ *
+ * Falls back to the old .txt path if the renderer failed to load, so the button never
+ * becomes dead. */
 function downloadLegalDoc(){
   const text = document.getElementById("docOutput")?.value;
   if(!text) return;
   const docType = _activeDocType || "legal-document";
+  const title = (DOC_FORMS[docType]?.title || "Legal Document").replace(/[^\w\s&/-]/g, "").trim();
+
+  if (window.SokoniLegalPDF) {
+    const btn = document.querySelector('[onclick="downloadLegalDoc()"]');
+    const label = btn ? btn.textContent : "";
+    if (btn) { btn.disabled = true; btn.textContent = "Building PDF…"; }
+    window.SokoniLegalPDF.download({ title, body: text, docType })
+      .catch(err => {
+        console.warn("[Legal Hub] PDF render failed, falling back to text:", err.message);
+        _downloadLegalDocText(text, docType);
+      })
+      .then(() => { if (btn) { btn.disabled = false; btn.textContent = label; } });
+    return;
+  }
+  _downloadLegalDocText(text, docType);
+}
+
+/* Fallback only — used if sokoni-legal-pdf.js did not load. */
+function _downloadLegalDocText(text, docType){
   const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement("a");
@@ -4778,6 +4848,9 @@ function _setPct(labelId, barId, pct){
      window.SokoniSocial is undefined and both buttons silently do nothing —
      they are guarded by `&&`, so they failed without any error. -->
 <script src="sokoni-social.js" defer></script>
+<!-- Real multi-page PDF for the 16 generated document types. Not deferred: the Download
+     button can be clicked as soon as a document is generated. -->
+<script src="sokoni-legal-pdf.js"></script>
   <!-- REGISTER CTA — universal fallback for other business types -->
   <div id="sreg-floating-cta" style="background:rgba(0,0,0,0.5);border-top:1px solid rgba(255,255,255,0.06);padding:18px 20px;text-align:center;">
     <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;">Join SOKONI as a Provider</div>
