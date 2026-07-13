@@ -595,7 +595,13 @@ function buildProductCard(product, size = "normal"){
       : product.verificationStatus === "pending"
       ? `<div style="font-size:10px;font-weight:700;background:rgba(255,152,0,0.08);border:1px solid rgba(255,152,0,0.2);color:#ff9800;padding:3px 8px;border-radius:6px;display:inline-block;margin-bottom:4px;">🔍 Ownership Review</div>`
       : "";
-    const compact  = (size === "compact");
+    const compact    = (size === "compact");
+    const _mkSafeId  = id => String(id||'').replace(/[^a-zA-Z0-9_-]/g,'');
+    const inWishlist = Array.isArray(wishlist) && wishlist.some(w => _mkSafeId(w.id) === safeId);
+    const stockNum   = Number(product.stock);
+    const stockChip  = !oos && product.stock !== undefined && stockNum > 0 && stockNum <= 5
+        ? `<span class="pcard-stock pcard-stock--low">⚡ Only ${stockNum} left</span>`
+        : '';
     const SVC_CATS = new Set(["phone-repair","computer-repair","electronics-repair","graphic-design","photography","videography","music-audio","cleaning","laundry","gardening","plumbing","electrical","interior-design","delivery-service","courier","boda-delivery","marketing","accounting","legal","virtual-assistant","printing","tutoring","coaching","events","catering","hair-beauty","fitness","services"]);
     const DIG_CATS = new Set(["ebook","template","course","software","license"]);
     const isServiceProd = SVC_CATS.has(product.category) || product.isService;
@@ -616,7 +622,7 @@ function buildProductCard(product, size = "normal"){
                     <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
                         ${isServiceProd ? "📩" : "🛒"} <span>${isServiceProd ? "Book" : "Cart"}</span>
                     </button>
-                    <button class="pcard-btn pcard-btn--wish" data-action="wish" title="Wishlist">
+                    <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">
                         ❤
                     </button>
                     <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
@@ -629,7 +635,7 @@ function buildProductCard(product, size = "normal"){
                     <button class="pcard-btn pcard-btn--cart" data-action="cart" ${btnDisabled}>
                         ${isServiceProd ? "📩" : "🛒"} ${cartLabel.replace(/^[^\s]+ /,"")}
                     </button>
-                    <button class="pcard-btn pcard-btn--wish" data-action="wish" title="Wishlist">❤</button>
+                    <button class="pcard-btn pcard-btn--wish${inWishlist?' pcard-btn--wish-active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
                     <button class="pcard-btn pcard-btn--buy" data-action="buy" ${btnDisabled}>
                         ${buyLabel}
                     </button>
@@ -666,10 +672,13 @@ function buildProductCard(product, size = "normal"){
 
     /* data-stop-prop on the strip prevents accidental card-open on strip touch/scroll */
     const mobileStrip = `<div class="pcard-mobile-strip" data-stop-prop="1">
-        <span class="pcard-strip-info">${_stripInfo}</span>
+        <div class="pcard-m-top-row">
+            <span class="pcard-strip-info">${_stripInfo}</span>${stockChip}
+        </div>
         <div class="pcard-m-btns">
-            <button class="pcard-m-wish" data-action="wish" title="Wishlist">❤</button>
-            <button class="pcard-m-buy" data-action="buy" ${btnDisabled}>${isServiceProd?'📩 Book':'⚡ Buy'}</button>
+            <button class="pcard-m-wish${inWishlist?' pcard-m-wish--active':''}" data-action="wish" title="${inWishlist?'Saved':'Wishlist'}">❤</button>
+            <button class="pcard-m-cart" data-action="cart" ${btnDisabled}>${isServiceProd?'📩':'🛒'}</button>
+            <button class="pcard-m-buy" data-action="buy" ${btnDisabled}>${isServiceProd?'Book':'⚡ Buy'}</button>
         </div>
     </div>`;
 
@@ -695,6 +704,7 @@ function buildProductCard(product, size = "normal"){
                 </div>
                 ${rating ? `<div class="rating-stars" style="font-size:9px;color:rgba(255,193,7,0.8);font-weight:700;margin-top:2px;">${ratingStarsHtml(rating.avg)} <span style="color:rgba(255,255,255,0.35);font-size:8px;">(${rating.count})</span></div>` : ""}
             </div>
+            ${btnRow}
             ${mobileStrip}
         </div>
     `;
@@ -709,6 +719,7 @@ function _productCardClick(e) {
     const btn = e.target.closest('[data-action]');
     if (btn) {
         e.stopPropagation();
+        if (btn.disabled || btn.dataset.loading === '1') return;
         const card = btn.closest('[data-pid]');
         const pid  = card ? card.dataset.pid : null;
         if (!pid) return;
@@ -716,9 +727,9 @@ function _productCardClick(e) {
         /* dataset.name gives the HTML-decoded raw value (browser unescapes &amp; etc.) */
         const rawName = btn.dataset.name || '';
         const price   = btn.dataset.price || '0';
-        if (action === 'cart')  { buyProduct(pid); return; }
+        if (action === 'cart')  { buyProduct(pid, btn); return; }
         if (action === 'wish')  { addToWishlist(pid); return; }
-        if (action === 'buy')   { buyNow(pid); return; }
+        if (action === 'buy')   { buyNow(pid, btn); return; }
         if (action === 'share') { shareProductWA(encodeURIComponent(rawName), price); return; }
         if (action === 'offer') { quickOffer(pid, encodeURIComponent(rawName), price); return; }
         return;
@@ -973,19 +984,26 @@ function searchProducts(){
    BUY PRODUCT
 ========================= */
 
-async function buyProduct(productId){
+async function buyProduct(productId, _trigBtn){
+    if (_trigBtn) { _trigBtn.dataset.loading = '1'; _trigBtn.disabled = true; }
 
     const selectedProduct = products.find(
         product => String(product.id) === String(productId)
     );
 
-    if(!selectedProduct) return;
+    if(!selectedProduct) {
+        if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+        return;
+    }
 
     /* 18+ age gate */
     if(typeof isAdultCategory === "function" && isAdultCategory(selectedProduct.category)){
         if(typeof requireAgeVerification === "function"){
             const verified = await requireAgeVerification();
-            if(!verified) return;
+            if(!verified) {
+                if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+                return;
+            }
         }
     }
 
@@ -995,6 +1013,7 @@ async function buyProduct(productId){
     updateCart();
     if(typeof sokoniTrackAddToCart === "function") sokoniTrackAddToCart(selectedProduct);
     showNotification("Added To Cart 🛒", "success");
+    if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
 
     /* Phase 9 — cart-add flash on the product tile */
     const safeId = String(selectedProduct.id || '').replace(/[^a-zA-Z0-9_-]/g,'');
@@ -1011,19 +1030,26 @@ async function buyProduct(productId){
    BUY NOW
 ========================= */
 
-async function buyNow(productId){
+async function buyNow(productId, _trigBtn){
+    if (_trigBtn) { _trigBtn.dataset.loading = '1'; _trigBtn.disabled = true; }
 
     const selectedProduct = products.find(
         product => String(product.id) === String(productId)
     );
 
-    if(!selectedProduct) return;
+    if(!selectedProduct) {
+        if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+        return;
+    }
 
     /* 18+ age gate */
     if(typeof isAdultCategory === "function" && isAdultCategory(selectedProduct.category)){
         if(typeof requireAgeVerification === "function"){
             const verified = await requireAgeVerification();
-            if(!verified) return;
+            if(!verified) {
+                if (_trigBtn) { delete _trigBtn.dataset.loading; _trigBtn.disabled = false; }
+                return;
+            }
         }
     }
 
