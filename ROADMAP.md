@@ -241,6 +241,30 @@ Each initiative ranked on 5 axes (1–5 each, 25 max):
 
 ---
 
+### Enterprise Authentication 2.0 — Premium Session Experience (v1.1)
+
+**Scope:** Full premium identity and session experience — silent auth on launch, multi-profile switching, Account Centre, active device management, graceful logout, 30-day deletion grace period, offline access, data export.
+
+**User Experience Target:** TikTok / Instagram / Uber quality — sign in once, never prompted again unless security event forces it.
+
+**Key capabilities to build:**
+- Silent auth on every launch: splash → token refresh → profile restore → last page restore
+- Multi-profile switcher: Buyer / Merchant / Driver / Provider / Admin — no logout required
+- Account Centre (14 sections): Profile, Security, Devices, Sessions, Legal, Subscriptions, Payments, Wallet, Notifications, Privacy, Businesses, Verification, Downloads, Delete Account
+- Active devices panel: device name, platform, browser, city, last active, revoke session
+- Premium logout flow: single device or all devices (requires password/OTP)
+- Account deletion: 5-step flow with 30-day grace period, data export, legal compliance
+- Refresh token rotation + server-side session revocation
+- Suspicious login detection
+- Offline access to cached content with sync on reconnect
+- First-login onboarding: biometrics offer, notification opt-in, role selection
+
+**Backward compatibility:** Reuse existing Firebase Auth, App Check, role engine, onboarding, subscriptions. No breaking changes.
+
+**Deferred from v1.0 code freeze:** 2026-07-13.
+
+---
+
 ### Tier 1 — v1.1 (Build First)
 
 #### 1. Loyalty & Rewards Program — Score: 22/25

@@ -212,6 +212,11 @@
   _injectAsset('link', { rel: 'stylesheet', href: 'sokoni-quality.css' }, 'sk-quality-link');
   /* UI library — shared toast / modal / spinner / skeleton */
   _injectAsset('script', { src: 'sokoni-ui.js', defer: true }, 'sk-ui-script');
+  /* Delight layer — the ONE way a "something good just happened" moment is shown.
+     Loaded after sokoni-ui.js so it can reuse SokoniUI.toast (and inherit its a11y)
+     rather than growing a second toast. Moments are keyed by the SAME names the
+     server notification engine uses, so one event has one name end to end. */
+  _injectAsset('script', { src: 'sokoni-delight.js', defer: true }, 'sk-delight-script');
   /* Universal footer — ONE footer for the whole platform. Loading it here means
      every page with the SOKONI header gets the SOKONI footer, with no
      page-specific markup. It removes any legacy <footer class="footer"> it finds. */

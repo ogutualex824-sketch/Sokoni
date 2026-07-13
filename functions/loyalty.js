@@ -186,25 +186,40 @@ async function _getRules() {
 
 // ── FCM notification ──────────────────────────────────────────────────────────
 
+/* Routed through the Communication Engine — push AND in-app, with preferences,
+   quiet hours and idempotency, none of which this function had before.
+
+   Two bugs lived here, one inside the other:
+
+   1. It queried a top-level collection('fcmTokens'). Nothing in the codebase has ever
+      WRITTEN that collection — the client writes users/{uid}.fcmToken, a FIELD. So the
+      query always returned empty and every loyalty push reached nobody, silently.
+
+   2. Worse, push was the ONLY channel. There was no in-app notification row, so when
+      push failed there was no fallback: the user was told nothing at all. Points landed
+      in total silence, and the only way to discover them was to go and look.
+
+   An unannounced reward is not a reward. Fixing (1) alone would still leave anyone who
+   declined push notifications — which on iOS is most people — permanently uninformed.
+   The engine writes the in-app row regardless, so the reward is always visible. */
 async function _notify(uid, title, body, data = {}) {
   try {
-    /* Token source is the notification engine — the ONE place that knows where a push
-       token lives.
-
-       This used to query a top-level collection('fcmTokens'). NOTHING in the codebase
-       ever wrote that collection: the client writes users/{uid}.fcmToken, a FIELD on the
-       user document. So this query always returned empty and every loyalty push silently
-       reached nobody, for as long as this function has existed. */
-    const tokens = await _notifyEngine.collectTokens(uid);
-    if (!tokens.length) return;
-    await admin.messaging().sendEachForMulticast({
-      tokens,
-      notification: { title, body },
-      data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])),
-      android: { priority: 'normal' },
-      apns: { payload: { aps: { sound: 'default' } } },
-    }).catch(e => logger.warn('[loyalty] FCM error', e.message));
+    const { type, ...rest } = data;
+    await _notifyEngine.notify({
+      uid,
+      type: type || 'system_update',
+      title,
+      body,
+      deepLink: '/loyalty.html',
+      /* One notification per award, not one per retry. The awarding CF is already
+         idempotent on orderId; the notification must be too, or a retried award
+         re-congratulates the user for points they were told about a minute ago. */
+      dedupeKey: rest.orderId ? `loyalty:${type}:${rest.orderId}` : undefined,
+      data: rest,
+    });
   } catch (e) {
+    /* Never let a notification failure fail the award itself. The points are the
+       product; telling the user is important, but not more important than the money. */
     logger.warn('[loyalty] Notify failed', { uid, error: e.message });
   }
 }
@@ -505,7 +520,7 @@ exports.awardLoyaltyPoints = onCall({ ...OPT, timeoutSeconds: 30 }, exports._h.a
 
   _notify(customerUid, `+${result.pointsAwarded} Points Earned!`,
     `Balance: ${result.newBalance.toLocaleString()} pts${result.tierChanged ? ' Â· Tier upgraded!' : ''}`,
-    { type: 'loyalty_earned', points: result.pointsAwarded, balance: result.newBalance }).catch(() => {});
+    { type: 'loyalty_earned', orderId, points: result.pointsAwarded, balance: result.newBalance }).catch(() => {});
 
   logger.info('[loyalty] Points awarded', { customerUid, orderId, pts: result.pointsAwarded });
   return result;
