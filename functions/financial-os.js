@@ -283,20 +283,56 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
   const tx = txSnap.data();
   if (tx.status === 'COMPLETED') return; /* Already processed */
 
-  /* Calculate commission via existing finos-utils */
+  /* Calculate commission via existing finos-utils.
+   *
+   * The `fsdb` first argument is NOT optional. It was missing here, and the consequences
+   * were silent and total: calculateCommission(db, {opts}) bound `db` to the options
+   * object, leaving `opts` undefined, so destructuring it threw a TypeError. The catch
+   * below swallowed that, commissionCents stayed 0, and netCents became the FULL gross —
+   * so every payment that completed through fosSecureWebhook credited the seller 100% and
+   * the platform nothing. Not for legal only: for every hub on this code path.
+   * Proven by calling the real function both ways: KES 5,000 legal consultation ->
+   * commission KES 600 when db is passed, KES 0 when it is not.
+   *
+   * Commission failures must never be silent again — see the review-queue block below,
+   * which now also refuses to settle rather than settling at zero. */
   let commissionCents = 0;
   let commissionFailed = false;
+  let commissionRate = null;
   try {
     const { calculateCommission } = require('./finos-utils');
-    const result = await calculateCommission({
+    const result = await calculateCommission(fsdb, {
       orderAmountCents: tx.amountCents,
       category:         tx.hubType,
       sellerId:         tx.sellerUid,
     });
     commissionCents = result.commissionCents || 0;
+    commissionRate  = result.effectiveRate ?? null;
   } catch (commErr) {
     commissionFailed = true;
     console.error('[FOS] Commission calc failed — flagging for manual review', txId, commErr.message);
+  }
+
+  /* If the commission could not be computed, do NOT settle. Crediting the seller the full
+     gross and "flagging for review" means the money is already gone by the time a human
+     looks. Leave the transaction PENDING_REVIEW so it can be replayed once the cause is
+     fixed — an unsettled payment is recoverable; an over-credited wallet is not. */
+  if (commissionFailed) {
+    await fsdb.collection('fosReviewQueue').add({
+      type: 'commission_calc_failure',
+      txId, payRef,
+      hubType:    tx.hubType,
+      sellerUid:  tx.sellerUid,
+      amountCents: tx.amountCents,
+      note: 'Settlement withheld — commission could not be computed. Nothing was credited.',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await txRef.update({
+      status: 'PENDING_REVIEW',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    logger.error('[FOS] Settlement withheld, commission unavailable', { txId, payRef });
+    return;
   }
 
   const netCents = tx.amountCents - commissionCents;
@@ -306,11 +342,30 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
     txn.update(txRef, {
       status:          'COMPLETED',
       commissionCents,
+      commissionRate,
       netCents,
       checkoutId:      checkoutId || tx.checkoutId,
       completedAt:     now(),
       updatedAt:       now(),
     });
+
+    /* Mark the SOURCE document paid.
+     *
+     * Nothing on this path ever did. fosSecureWebhook updated `payments`, `fosTransactions`
+     * and `wallets` — but the thing the user actually booked stayed `pending` forever, so a
+     * paid legal consultation still looked unpaid to both the client and the advocate.
+     * The link is metadata.consultationId, stamped at initiation. */
+    const consultId = tx.metadata && tx.metadata.consultationId;
+    if (consultId) {
+      txn.set(fsdb.collection('legalConsultations').doc(consultId), {
+        paymentStatus:  'paid',
+        status:         'confirmed',
+        paidAmountCents: tx.amountCents,
+        payRef,
+        paidAt:         now(),
+        updatedAt:      now(),
+      }, { merge: true });
+    }
 
     /* Credit seller wallet */
     const walletRef = fsdb.collection('wallets').doc(tx.sellerUid);
@@ -337,15 +392,12 @@ async function _processFOSTransaction(txId, { payRef, netAmount, provider, check
   });
 
   await _audit('transaction_completed', tx.buyerUid, {
-    fosTransactionId: txId, payRef, amountCents: tx.amountCents, commissionCents, netCents,
+    fosTransactionId: txId, payRef, amountCents: tx.amountCents,
+    commissionCents, commissionRate, netCents,
   });
-
-  if (commissionFailed) {
-    await db().collection('fosReviewQueue').add({
-      type: 'commission_calc_failure', txId, payRef,
-      amountCents: tx.amountCents, createdAt: now(), status: 'pending_review',
-    }).catch(() => {});
-  }
+  /* The old commission-failure review-queue write lived here, AFTER the wallets were
+     already credited at zero commission. It is gone: the failure path now returns above,
+     before any money moves. */
 }
 
 /* ════════════════════════════════════════════════════════════
