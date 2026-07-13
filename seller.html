@@ -4760,7 +4760,73 @@ class="notification-container"
 /* ══ SELLER DASHBOARD MOBILE TAB SYSTEM ══ */
 (function(){
   var isMobile = window.matchMedia && window.matchMedia('(max-width:768px)').matches;
-  if(!isMobile) return;
+
+  /* ══ THE DEAD DASHBOARD TILES ═════════════════════════════════════════════════
+     This block used to begin:
+
+         if(!isMobile) return;          ← bailed out above 768px
+
+     …and window.sdSwitchTab is defined INSIDE it. So on any viewport wider than
+     768px — every desktop, every tablet, a phone in landscape — sdSwitchTab was
+     never assigned.
+
+     But the quick-action tiles (Add Product, Orders, Analytics, KRA Tax, Marketing,
+     Flash Sale, Messages, Visit Store, Team) call sdSwitchTab(...) from inline
+     onclick, and they are rendered at EVERY width. Above 768px each tap threw a
+     ReferenceError into the void and the tile did nothing at all. Silently: no
+     uncaught error at load, nothing in the console until you actually tapped.
+
+     Desktop already has an equivalent mechanism — showDashPage() — driven by the
+     sidebar. The two simply used different names for the same pages:
+
+         sdSwitchTab   showDashPage
+         home       →  overview
+         analyse    →  analytics
+         market     →  marketing
+         kra        →  tax
+         inbox      →  messages
+
+     Two vocabularies for one set of pages, in one file, with nothing asserting they
+     agreed — the same shape as fcmToken/fcmTokens and deepLink/url elsewhere in this
+     codebase. The tiles spoke one dialect; the only function that could answer them
+     spoke the other, and only on phones.
+
+     sdSwitchTab is now ALWAYS defined. Below 768px it drives the mobile tab system
+     exactly as before. Above 768px it translates the name and delegates to
+     showDashPage, so one tile does one thing on every device.
+
+     It decides at CALL time, not at load time, so rotating a phone or resizing a
+     window cannot strand the handler in the wrong mode. */
+  var DESKTOP_PAGE = {
+    home: 'overview', analyse: 'analytics', market: 'marketing',
+    kra:  'tax',      inbox:   'messages',
+    /* products, orders, flash, store, team already agree — listed for the reader */
+    products: 'products', orders: 'orders', flash: 'flash',
+    store: 'store', team: 'team'
+  };
+
+  function _switchDesktop(name){
+    /* "more" is the mobile bottom-sheet. On desktop everything is already in the
+       sidebar, so the honest behaviour is to go Home rather than open nothing. */
+    var page = DESKTOP_PAGE[name] || (name === 'more' ? 'overview' : name);
+    if (typeof window.showDashPage === 'function') {
+      window.showDashPage(page, null);
+      window.scrollTo(0, 0);
+      return true;
+    }
+    /* showDashPage missing too — do NOT fail silently, which is the whole bug. */
+    if (window.SokoniUI && typeof window.SokoniUI.toast === 'function') {
+      window.SokoniUI.toast('This section could not be opened. Please refresh the page.', 'error');
+    }
+    console.error('[seller] sdSwitchTab("' + name + '") — showDashPage is unavailable.');
+    return false;
+  }
+
+  if(!isMobile){
+    /* Desktop: skip all mobile DOM setup, but STILL give the tiles a working handler. */
+    window.sdSwitchTab = function(name){ return _switchDesktop(name); };
+    return;
+  }
 
   document.body.classList.add('sdm-mobile-mode');
 
@@ -4837,6 +4903,13 @@ class="notification-container"
   }
 
   window.sdSwitchTab = function(name){
+    /* Re-check the viewport at CALL time. A phone rotated to landscape, or a window
+       dragged wider, crosses 768px without reloading — and the mobile tab DOM
+       (bottom bar, back bar, sheets) is hidden by CSS at that width. Continuing to
+       drive it would make the tile appear to do nothing all over again. */
+    if(!(window.matchMedia && window.matchMedia('(max-width:768px)').matches)){
+      return _switchDesktop(name);
+    }
     if(name==='more'){
       var drawer = document.getElementById('sdmMoreDrawer');
       var panel  = document.getElementById('sdmMorePanel');

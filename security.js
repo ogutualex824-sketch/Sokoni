@@ -540,9 +540,27 @@ const SokoniSecurity = (() => {
           "</div>"
         ].join("");
         document.body.appendChild(b);
+
+        /* Reserve space for the banner so it OVERLAYS NOTHING.
+           It is position:fixed at bottom:0 with z-index 99997, so without this it sits
+           on top of whatever happens to be at the foot of the viewport and swallows every
+           tap there. On the seller dashboard that was the Messages and Marketing tiles —
+           they looked perfectly normal and simply did not respond, which is indis-
+           tinguishable from a broken button.
+
+           A consent banner is allowed to be prominent. It is not allowed to quietly eat
+           the controls underneath it. */
+        var _pad = function(){
+          document.body.style.paddingBottom = (b.offsetHeight || 72) + 'px';
+        };
+        _pad();
+        window.addEventListener('resize', _pad);   /* it reflows/wraps on narrow screens */
+
         document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){
           localStorage.setItem("sokoniPrivacyAccepted", Date.now().toString());
           b.style.cssText += ";transform:translateY(100%);transition:transform .35s ease;";
+          window.removeEventListener('resize', _pad);
+          document.body.style.paddingBottom = '';   /* give the space straight back */
           setTimeout(function(){ if(b.isConnected) b.remove(); }, 400);
         };
       };
