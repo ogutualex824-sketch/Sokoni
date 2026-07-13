@@ -9402,3 +9402,14 @@ exports.deviceLogoutAll               = _devEng.deviceLogoutAll;
 exports.deviceTrust                   = _devEng.deviceTrust;
 exports.deviceUntrust                 = _devEng.deviceUntrust;
 exports.devicePing                    = _devEng.devicePing;
+
+/* ── Profile & Identity Engine ─────────────────────────────── */
+const _profEng = require('./profile-engine');
+exports.profileGetOverview            = _profEng.profileGetOverview;
+exports.profileGetCompletion          = _profEng.profileGetCompletion;
+exports.profileGetAchievements        = _profEng.profileGetAchievements;
+exports.profileGetActivityTimeline    = _profEng.profileGetActivityTimeline;
+exports.profileGenerateCard           = _profEng.profileGenerateCard;
+exports.profileGetEmployment          = _profEng.profileGetEmployment;
+exports.profileUpdatePersonalization  = _profEng.profileUpdatePersonalization;
+exports.profileGetDocumentVault       = _profEng.profileGetDocumentVault;

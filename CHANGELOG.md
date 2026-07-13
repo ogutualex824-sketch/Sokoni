@@ -1,4 +1,90 @@
-﻿## [2026-07-13] — Enterprise Organization & Workforce Management Platform v2.0 — Device Management · Custom Roles · Guaranteed Auto-Expiry
+﻿## [2026-07-13] — Next-Generation Profile & Identity Center v1.0 — One Person · One Identity · One SOKONI Life
+
+### Summary
+
+Full enterprise profile and identity layer built directly into `profile.html` with zero breaking changes. Every SOKONI member now has a permanent **SOKONI ID** (`SKN-XXXXXX`), a live **Trust Score** (0–100 across 9 verification dimensions) with an animated SVG ring and a Bronze / Silver / Gold / Platinum identity level, and animated **verification badges** in the profile hero. Five new lazy-loaded tabs provide: a **Digital Identity Card** (visual credentials + QR profile), full **Profile Completion** checklist with KASS-style recommendations; an **Employment Centre** (current + past orgs, pending invitations); an **Achievements** system with badges, next-milestone progress bars, and activity stats; a **Security** health panel; and a **Digital Business Card** generator with one-tap Share. A new `functions/profile-engine.js` module delivers all backend data via 8 Cloud Functions using single-field Firestore queries — adding **zero new composite indexes** (stays at 199/200).
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `functions/profile-engine.js` | 8 Cloud Functions: overview aggregation (trust + completion), profile completion + KASS recommendations, achievements + badges, activity timeline, digital business card, employment overview, personalization preferences, document vault |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `profile.html` | Hero: SOKONI ID chip + animated Trust Score SVG ring + animated verification badges; 5 new tabs (Identity, Employment, Achievements, Security, ID Card); 5 new panels; 200+ lines new CSS; lazy-load JS module (IIFE) with panel loaders and tab extension |
+| `functions/index.js` | Import `profile-engine` + 8 exports (`profileGetOverview`, `profileGetCompletion`, `profileGetAchievements`, `profileGetActivityTimeline`, `profileGenerateCard`, `profileGetEmployment`, `profileUpdatePersonalization`, `profileGetDocumentVault`) |
+
+### Cloud Functions (new — 8)
+
+| Function | Description |
+|---|---|
+| `profileGetOverview` | Parallel reads of `users`, `verifications`, `professionalProfiles`, `workspaceMemberships`, `businesses`, `wallets`; computes Trust Score (9 dimensions), profile completion %, active workspaces; returns full identity summary |
+| `profileGetCompletion` | 10-step completion check + rule-based KASS-style AI recommendations (up to 4 actions with impact labels and deep-link hrefs) |
+| `profileGetAchievements` | Badge calculation from buyer/seller order counts, business count, active memberships, account age; returns earned badges + next-milestone progress entries |
+| `profileGetActivityTimeline` | Cross-hub events: orders (buyer + seller) + shift sessions; sorted in JS (avoids composite index); default limit 30, max 50 |
+| `profileGenerateCard` | Digital Business Card data package: name, headline, SOKONI ID, photo, email/phone, primary workspace, skills, verified status; used for Share and Download |
+| `profileGetEmployment` | All `workspaceMemberships` for the caller split into current / past / pending; pending invitations by email from `workspaceInvitations` |
+| `profileUpdatePersonalization` | Writes to `userPrefs/{uid}` (merge) — theme, accentColor, language, currency, region, accessibility |
+| `profileGetDocumentVault` | Reads `userDocuments/{uid}/docs` subcollection; returns document metadata (type, name, downloadUrl, expiresAt, isVerified) |
+
+### Trust Score Formula
+
+| Verification | Points |
+|---|---|
+| Email verified | +15 |
+| Phone verified | +15 |
+| Identity verified (ID/passport) | +20 |
+| Business registered / verified | +10 |
+| KRA PIN verified | +10 |
+| Bank account verified | +10 |
+| Address verified | +5 |
+| Profile photo present | +5 |
+| Legal agreements signed | +5 |
+| Merchant verified | +5 |
+| **Max total** | **100** |
+
+Identity levels: Bronze 0–44 · Silver 45–69 · Gold 70–89 · Platinum 90–100.
+
+### Achievements Badges System (16 badges)
+
+First Purchase · Regular Shopper · Power Buyer · Elite Buyer · First Sale · Active Seller · Top Seller · Power Seller · Entrepreneur · Business Mogul · Team Member · Multi-Org Pro · Fully Verified · Trusted Merchant · Established Member · 1/2/3 Year Milestones · Complete Profile
+
+### UX Additions
+
+- **Hero row**: SOKONI ID chip (copy-to-clipboard) + Trust Score SVG ring with animated fill + Trust Level label
+- **Animated verification badges**: slide-in with staggered delay after overview loads
+- **Profile completion**: existing bar in hero now fed from `profileGetCompletion`; Identity tab shows step-by-step list with deep-links
+- **Tab strip**: 5 new tabs appended; all lazy-load (one CF call on first open, cached thereafter)
+- **Digital Business Card**: share sheet (Web Share API with clipboard fallback) for card and profile link
+
+### Security
+
+- All 8 CFs require Firebase Auth (`_assertAuth` → `HttpsError('unauthenticated')`).
+- `profileGetOverview` with `targetUid`: email and phone are only returned for the caller's own profile, never another user's.
+- `profileUpdatePersonalization`: UID from auth token, not client input.
+- `profileGetDocumentVault`: read-only; upload handled client-side via Firebase Storage (not this CF).
+- No sensitive fields (KRA PIN, bank details) are returned by any profile CF — those stay in FinOS.
+
+### Performance
+
+- Overview CF uses `Promise.all` for 6 parallel Firestore reads.
+- All 5 new panels are lazy-loaded — only the Identity panel's `profileGetOverview` fires immediately (on auth state change) to populate the hero row.
+- Achievements and Timeline panels only load when the user taps their respective tab.
+- Zero composite Firestore indexes consumed.
+
+### Firestore Index Impact
+
+No new composite indexes. Count remains **199/200**.
+- `workspaceMemberships` filtered by `uid` (single field) — `status` + `employmentStatus` filtered in JS.
+- `orders` queried by `customerId` or `sellerId` (separate single-field queries, merged in JS).
+- `userDocuments/{uid}/docs` — subcollection, no composite index required.
+
+---
+
+## [2026-07-13] — Enterprise Organization & Workforce Management Platform v2.0 — Device Management · Custom Roles · Guaranteed Auto-Expiry
 
 ### Summary
 

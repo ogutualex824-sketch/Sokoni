@@ -526,6 +526,297 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 .bnav-item.active-bnav,.bnav-item:hover{color:#71ff00;}
 .bnav-emoji{font-size:18px;display:block;}
 @media(min-width:769px){.bottom-nav{display:none;}}
+
+/* ══════════════════════════════════════════════════════════════
+   NEXT-GEN IDENTITY LAYER — Profile & Identity Center v1.0
+══════════════════════════════════════════════════════════════ */
+
+/* ── Identity row (SOKONI ID + Trust chip) ── */
+.pi-identity-row{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+  margin-top:12px;
+}
+.pi-sokoni-id{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);
+  border-radius:20px;padding:5px 12px 5px 8px;
+  font-size:12px;font-weight:900;color:#71ff00;letter-spacing:.08em;
+}
+.pi-sokoni-id-icon{font-size:13px;}
+.pi-copy-btn{
+  background:none;border:none;cursor:pointer;font-size:13px;
+  padding:2px 4px;border-radius:6px;color:rgba(255,255,255,0.45);
+  transition:color .15s;
+}
+.pi-copy-btn:hover{color:#71ff00;}
+
+/* Trust score ring */
+.pi-trust-wrap{display:inline-flex;align-items:center;gap:8px;}
+.pi-trust-ring{position:relative;width:44px;height:44px;flex-shrink:0;}
+.pi-trust-svg{width:44px;height:44px;transform:rotate(-90deg);}
+.pi-trust-bg{fill:none;stroke:rgba(255,255,255,0.08);stroke-width:4;}
+.pi-trust-fill{fill:none;stroke-width:4;stroke-linecap:round;transition:stroke-dashoffset .9s ease;}
+.pi-trust-num{
+  position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+  font-size:11px;font-weight:900;color:#fff;
+}
+.pi-trust-chip{
+  display:flex;flex-direction:column;
+}
+.pi-trust-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);line-height:1;}
+.pi-trust-level{
+  font-size:12px;font-weight:900;margin-top:2px;
+}
+.pi-level-bronze{color:#cd7f32;}
+.pi-level-silver{color:#c0c0c0;}
+.pi-level-gold  {color:#ffd700;}
+.pi-level-platinum{color:#71ff00;}
+
+/* Animated verification badges */
+.pi-verif-badges{
+  display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;
+}
+.pi-badge{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:4px 10px;border-radius:20px;font-size:11px;font-weight:800;
+  border:1px solid rgba(113,255,0,0.25);background:rgba(113,255,0,0.06);color:#71ff00;
+  animation:piBadgeIn .4s ease both;
+}
+.pi-badge-dim{
+  border-color:rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);
+  color:rgba(255,255,255,0.25);animation:none;
+}
+@keyframes piBadgeIn{
+  from{opacity:0;transform:scale(.8) translateY(4px);}
+  to{opacity:1;transform:scale(1) translateY(0);}
+}
+
+/* ── New tab strip additions ── */
+.up-tabs{scrollbar-width:none;}
+.up-tabs::-webkit-scrollbar{display:none;}
+
+/* ── Common panel utils ── */
+.pi-section-title{
+  font-size:11px;font-weight:900;color:rgba(255,255,255,0.4);
+  letter-spacing:.1em;text-transform:uppercase;margin:20px 0 10px;
+}
+.pi-row{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.pi-row:last-child{border-bottom:none;}
+
+/* ── IDENTITY PANEL ── */
+.pi-id-card{
+  background:linear-gradient(135deg,rgba(113,255,0,.08) 0%,rgba(30,30,30,.6) 100%);
+  border:1px solid rgba(113,255,0,0.18);border-radius:18px;
+  padding:22px 20px 18px;margin-bottom:16px;position:relative;overflow:hidden;
+}
+.pi-id-card::before{
+  content:'';position:absolute;top:-40px;right:-40px;
+  width:120px;height:120px;border-radius:50%;
+  background:radial-gradient(circle,rgba(113,255,0,.12),transparent 70%);
+  pointer-events:none;
+}
+.pi-id-card-top{display:flex;align-items:flex-start;gap:16px;}
+.pi-id-avatar{width:56px;height:56px;border-radius:14px;object-fit:cover;background:rgba(113,255,0,.1);}
+.pi-id-meta{flex:1;}
+.pi-id-name{font-size:16px;font-weight:900;color:#fff;}
+.pi-id-sub{font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;}
+.pi-id-sid{
+  display:inline-block;margin-top:8px;font-size:13px;font-weight:900;
+  color:#71ff00;letter-spacing:.08em;font-family:monospace;
+}
+.pi-id-divider{height:1px;background:rgba(255,255,255,0.07);margin:14px 0;}
+.pi-verif-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.pi-verif-item{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:8px 4px;border-radius:12px;background:rgba(255,255,255,0.03);text-align:center;
+}
+.pi-verif-icon{font-size:18px;}
+.pi-verif-label{font-size:10px;font-weight:700;color:rgba(255,255,255,0.45);}
+.pi-verif-status{font-size:10px;font-weight:900;}
+.pi-vs-yes{color:#71ff00;} .pi-vs-no{color:rgba(255,255,255,0.2);}
+.pi-verif-item.done{background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);}
+
+.pi-qr-wrap{
+  display:flex;flex-direction:column;align-items:center;
+  gap:12px;padding:20px;background:rgba(255,255,255,0.02);
+  border:1px solid rgba(255,255,255,0.07);border-radius:16px;
+  margin-top:12px;
+}
+.pi-qr-canvas{
+  width:140px;height:140px;background:#fff;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;color:#333;font-weight:700;text-align:center;
+  padding:8px;
+}
+.pi-qr-hint{font-size:11px;color:rgba(255,255,255,0.3);text-align:center;}
+
+/* ── EMPLOYMENT PANEL ── */
+.pi-emp-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:16px;padding:16px;margin-bottom:10px;
+  display:flex;align-items:flex-start;gap:14px;
+}
+.pi-emp-icon{
+  width:44px;height:44px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;font-size:20px;background:rgba(113,255,0,0.08);flex-shrink:0;
+}
+.pi-emp-meta{flex:1;}
+.pi-emp-biz{font-size:14px;font-weight:900;color:#fff;}
+.pi-emp-role{font-size:12px;color:rgba(255,255,255,0.5);margin-top:2px;}
+.pi-emp-dept{font-size:11px;color:rgba(255,255,255,0.3);margin-top:2px;}
+.pi-emp-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-top:6px;
+  padding:3px 9px;border-radius:20px;font-size:10px;font-weight:900;
+}
+.pi-emp-badge.active{background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.2);color:#71ff00;}
+.pi-emp-badge.past  {background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:rgba(255,255,255,0.35);}
+.pi-emp-badge.pending{background:rgba(255,200,0,0.08);border:1px solid rgba(255,200,0,0.2);color:#ffc800;}
+
+.pi-emp-pending-card{
+  padding:12px 16px;border-radius:14px;margin-bottom:8px;
+  background:rgba(255,200,0,0.05);border:1px solid rgba(255,200,0,0.15);
+  display:flex;align-items:center;gap:12px;
+}
+.pi-emp-pending-card .pi-emp-biz{font-size:13px;}
+
+/* ── SECURITY PANEL ── */
+.pi-sec-item{
+  display:flex;align-items:center;gap:14px;padding:14px 0;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.pi-sec-item:last-child{border-bottom:none;}
+.pi-sec-icon{
+  width:40px;height:40px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;font-size:18px;background:rgba(255,255,255,0.04);flex-shrink:0;
+}
+.pi-sec-info{flex:1;}
+.pi-sec-label{font-size:14px;font-weight:800;color:#fff;}
+.pi-sec-sub  {font-size:12px;color:rgba(255,255,255,0.4);margin-top:2px;}
+.pi-sec-action{
+  padding:7px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);
+  background:rgba(255,255,255,0.04);color:#fff;font-size:12px;font-weight:800;
+  cursor:pointer;font-family:inherit;white-space:nowrap;
+}
+.pi-sec-action:hover{background:rgba(113,255,0,0.08);border-color:rgba(113,255,0,0.25);color:#71ff00;}
+.pi-sec-good{color:#71ff00;font-size:18px;}
+.pi-sec-warn{color:#ffc800;font-size:18px;}
+
+/* ── ACHIEVEMENTS PANEL ── */
+.pi-ach-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px;}
+@media(min-width:480px){.pi-ach-grid{grid-template-columns:repeat(4,1fr);}}
+.pi-ach-card{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:14px 8px;border-radius:16px;text-align:center;
+  background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);
+  animation:piBadgeIn .4s ease both;
+}
+.pi-ach-card.locked{
+  background:rgba(255,255,255,0.02);border-color:rgba(255,255,255,0.07);opacity:.45;animation:none;
+}
+.pi-ach-icon{font-size:26px;}
+.pi-ach-label{font-size:10px;font-weight:800;color:rgba(255,255,255,0.7);line-height:1.3;}
+.pi-ach-card:not(.locked) .pi-ach-label{color:#fff;}
+
+.pi-upcoming-card{
+  padding:14px 16px;border-radius:14px;margin-bottom:8px;
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+}
+.pi-upcoming-top{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.pi-upcoming-lbl{flex:1;font-size:13px;font-weight:800;color:#fff;}
+.pi-upcoming-pct{font-size:12px;font-weight:900;color:#71ff00;}
+.pi-prog-bar{height:4px;border-radius:4px;background:rgba(255,255,255,0.07);overflow:hidden;}
+.pi-prog-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,#71ff00,#4fc800);transition:width .8s ease;}
+.pi-upcoming-req{font-size:11px;color:rgba(255,255,255,0.3);margin-top:6px;}
+
+/* ── DIGITAL BUSINESS CARD PANEL ── */
+.pi-bcard{
+  background:linear-gradient(135deg,#0d0d0d 0%,#111 100%);
+  border:1px solid rgba(113,255,0,0.2);border-radius:20px;
+  padding:28px 22px 22px;position:relative;overflow:hidden;margin-bottom:16px;
+}
+.pi-bcard::after{
+  content:'';position:absolute;bottom:-30px;right:-30px;
+  width:100px;height:100px;border-radius:50%;
+  background:radial-gradient(circle,rgba(113,255,0,.15),transparent 70%);
+  pointer-events:none;
+}
+.pi-bcard-top{display:flex;align-items:center;gap:16px;margin-bottom:18px;}
+.pi-bcard-avatar{width:60px;height:60px;border-radius:16px;object-fit:cover;background:rgba(113,255,0,.1);}
+.pi-bcard-name{font-size:18px;font-weight:900;color:#fff;}
+.pi-bcard-hl{font-size:12px;color:rgba(255,255,255,0.5);margin-top:3px;}
+.pi-bcard-sid{font-size:11px;color:#71ff00;letter-spacing:.08em;font-family:monospace;margin-top:4px;}
+.pi-bcard-verified{
+  display:inline-flex;align-items:center;gap:4px;margin-top:4px;
+  padding:2px 8px;border-radius:20px;font-size:10px;font-weight:900;
+  background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.2);color:#71ff00;
+}
+.pi-bcard-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+.pi-bcard-field{background:rgba(255,255,255,0.03);border-radius:10px;padding:8px 10px;}
+.pi-bcard-fk{font-size:10px;color:rgba(255,255,255,0.35);font-weight:700;}
+.pi-bcard-fv{font-size:12px;color:#fff;font-weight:800;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.pi-bcard-skills{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:16px;}
+.pi-bcard-skill{
+  padding:4px 10px;border-radius:20px;font-size:11px;font-weight:700;
+  background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);border:1px solid rgba(255,255,255,0.07);
+}
+.pi-bcard-actions{display:flex;gap:10px;flex-wrap:wrap;}
+.pi-bcard-btn{
+  flex:1;padding:11px 14px;border-radius:12px;font-size:13px;font-weight:800;
+  cursor:pointer;font-family:inherit;border:none;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+}
+.pi-bcard-btn-primary{background:#71ff00;color:#000;}
+.pi-bcard-btn-primary:hover{background:#5de600;}
+.pi-bcard-btn-sec{background:rgba(255,255,255,0.06);color:#fff;border:1px solid rgba(255,255,255,0.1);}
+.pi-bcard-btn-sec:hover{background:rgba(255,255,255,0.1);}
+
+/* ── COMPLETION STEPS ── */
+.pi-steps{display:flex;flex-direction:column;gap:2px;}
+.pi-step{
+  display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:12px;
+  background:rgba(255,255,255,0.02);
+}
+.pi-step.done{background:rgba(113,255,0,0.04);}
+.pi-step-check{
+  width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:12px;flex-shrink:0;border:1px solid rgba(255,255,255,0.12);
+  background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.3);
+}
+.pi-step.done .pi-step-check{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.3);color:#71ff00;}
+.pi-step-lbl{flex:1;font-size:13px;font-weight:700;color:rgba(255,255,255,0.55);}
+.pi-step.done .pi-step-lbl{color:#fff;}
+.pi-step-link{
+  font-size:11px;font-weight:800;color:#71ff00;text-decoration:none;padding:4px 8px;
+  border-radius:8px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);
+}
+.pi-step-link:hover{background:rgba(113,255,0,0.15);}
+
+/* ── AI Recommendation cards ── */
+.pi-reco-card{
+  display:flex;align-items:flex-start;gap:12px;padding:14px 16px;
+  border-radius:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  margin-bottom:8px;
+}
+.pi-reco-icon{font-size:20px;flex-shrink:0;margin-top:2px;}
+.pi-reco-body{flex:1;}
+.pi-reco-action{font-size:13px;font-weight:800;color:#fff;}
+.pi-reco-impact{font-size:11px;color:#71ff00;margin-top:3px;}
+
+/* ── Stat grid ── */
+.pi-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:12px 0;}
+.pi-stat-card{
+  background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+  border-radius:14px;padding:14px 10px;text-align:center;
+}
+.pi-stat-val{font-size:22px;font-weight:900;color:#fff;}
+.pi-stat-lbl{font-size:10px;font-weight:700;color:rgba(255,255,255,0.4);margin-top:4px;}
+
+/* ── Loading skeleton ── */
+.pi-skeleton{
+  background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.04) 75%);
+  background-size:400% 100%;border-radius:8px;animation:piSkele 1.4s ease infinite;
+}
+@keyframes piSkele{0%{background-position:100% 0}100%{background-position:-100% 0}}
 </style>
 </head>
 
@@ -598,6 +889,34 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
       <!-- Role badges -->
       <div class="up-role-chips" id="upRoleChips"></div>
 
+      <!-- ── SOKONI ID + Trust Score ── -->
+      <div class="pi-identity-row" id="piIdentityRow" style="display:none;">
+        <div class="pi-sokoni-id">
+          <span class="pi-sokoni-id-icon">&#128273;</span>
+          <span id="piSokoniIdText">SKN-XXXXXXXX</span>
+          <button type="button" class="pi-copy-btn" onclick="piCopyId()" title="Copy SOKONI ID">&#128203;</button>
+        </div>
+        <div class="pi-trust-wrap">
+          <div class="pi-trust-ring">
+            <svg class="pi-trust-svg" viewBox="0 0 44 44">
+              <circle class="pi-trust-bg" cx="22" cy="22" r="18"/>
+              <circle class="pi-trust-fill" id="piTrustFill" cx="22" cy="22" r="18"
+                stroke="#71ff00"
+                stroke-dasharray="113.1"
+                stroke-dashoffset="113.1"/>
+            </svg>
+            <div class="pi-trust-num" id="piTrustNum">0</div>
+          </div>
+          <div class="pi-trust-chip">
+            <span class="pi-trust-label">Trust Score</span>
+            <span class="pi-trust-level pi-level-bronze" id="piTrustLevel">Bronze</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Animated verification badges ── -->
+      <div class="pi-verif-badges" id="piVerifBadges" style="display:none;"></div>
+
       <!-- Profile completion bar -->
       <div id="profileCompletionWrap" style="margin-top:14px;display:none;">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
@@ -668,6 +987,11 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
     <button type="button" class="up-tab" data-tab="reviews" onclick="switchTab('reviews')" role="tab">Reviews</button>
     <button type="button" class="up-tab" data-tab="following" onclick="switchTab('following')" role="tab">Following</button>
     <button type="button" class="up-tab" data-tab="wallet" onclick="switchTab('wallet')" role="tab">Wallet</button>
+    <button type="button" class="up-tab" data-tab="identity" onclick="switchTab('identity')" role="tab">Identity</button>
+    <button type="button" class="up-tab" data-tab="employment" onclick="switchTab('employment')" role="tab">Employment</button>
+    <button type="button" class="up-tab" data-tab="achievements" onclick="switchTab('achievements')" role="tab">Achievements</button>
+    <button type="button" class="up-tab" data-tab="security" onclick="switchTab('security')" role="tab">Security</button>
+    <button type="button" class="up-tab" data-tab="card" onclick="switchTab('card')" role="tab">ID Card</button>
   </div>
 
   <!-- OVERVIEW panel -->
@@ -810,6 +1134,228 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
       <div class="up-card-title">Recent Transactions <a href="wallet.html" class="up-card-link">See All</a></div>
       <div id="walletTxPanel">
         <div class="up-empty"><div class="up-empty-icon">&#128181;</div>No transactions yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ IDENTITY PANEL ══ -->
+  <div id="panel-identity" class="up-panel">
+    <div class="up-card" style="padding:0;overflow:hidden;">
+
+      <!-- Digital Identity Card -->
+      <div style="padding:16px 16px 0;">
+        <div class="pi-section-title">Digital Identity Card</div>
+        <div class="pi-id-card">
+          <div class="pi-id-card-top">
+            <img class="pi-id-avatar" id="piIdAvatar" src="" alt="Avatar">
+            <div class="pi-id-meta">
+              <div class="pi-id-name" id="piIdName">Loading&hellip;</div>
+              <div class="pi-id-sub" id="piIdSub"></div>
+              <div class="pi-id-sid" id="piIdSid">SKN-XXXXXXXX</div>
+            </div>
+          </div>
+          <div class="pi-id-divider"></div>
+          <div class="pi-verif-grid" id="piVerifGrid">
+            <!-- Filled by JS -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile QR -->
+      <div style="padding:0 16px 16px;">
+        <div class="pi-section-title">Profile QR Code</div>
+        <div class="pi-qr-wrap">
+          <div class="pi-qr-canvas" id="piQrBox">
+            <div style="text-align:center;">
+              <div style="font-size:28px;margin-bottom:6px;">&#128247;</div>
+              <div style="font-size:10px;color:rgba(0,0,0,0.5);">QR visible after identity<br>verification</div>
+            </div>
+          </div>
+          <div class="pi-qr-hint" id="piQrHint">Scan to view this SOKONI profile</div>
+          <button type="button" class="pi-bcard-btn pi-bcard-btn-sec" style="width:100%;" onclick="piShareProfile()">
+            &#128279; Share Profile Link
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Completion + Recommendations -->
+    <div class="up-card">
+      <div class="up-card-title">Profile Completion</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+        <span style="font-size:13px;color:rgba(255,255,255,0.45);" id="piComplDone">0 of 10 steps complete</span>
+        <span style="font-size:18px;font-weight:900;color:#71ff00;" id="piComplPct">0%</span>
+      </div>
+      <div style="height:6px;border-radius:6px;background:rgba(255,255,255,0.07);overflow:hidden;margin-bottom:16px;">
+        <div id="piComplBar" style="height:100%;border-radius:6px;background:linear-gradient(90deg,#71ff00,#4fc800);width:0%;transition:width .7s ease;"></div>
+      </div>
+      <div class="pi-steps" id="piStepsList"></div>
+    </div>
+
+    <div class="up-card" id="piRecoCard" style="display:none;">
+      <div class="up-card-title">&#129504; KASS Recommendations</div>
+      <div id="piRecoList"></div>
+    </div>
+  </div>
+
+  <!-- ══ EMPLOYMENT PANEL ══ -->
+  <div id="panel-employment" class="up-panel">
+
+    <div class="up-card">
+      <div class="up-card-title">Current Employment</div>
+      <div id="piEmpCurrent">
+        <div class="up-empty"><div class="up-empty-icon">&#127970;</div>No active employment found.<br>Join an organization or create a business.</div>
+      </div>
+    </div>
+
+    <div class="up-card" id="piEmpPendingCard" style="display:none;">
+      <div class="up-card-title">Pending Invitations</div>
+      <div id="piEmpPending"></div>
+    </div>
+
+    <div class="up-card" id="piEmpPastCard" style="display:none;">
+      <div class="up-card-title">Work History</div>
+      <div id="piEmpPast"></div>
+    </div>
+
+  </div>
+
+  <!-- ══ ACHIEVEMENTS PANEL ══ -->
+  <div id="panel-achievements" class="up-panel">
+
+    <div class="up-card">
+      <div class="up-card-title">My Badges</div>
+      <div id="piAchBadges">
+        <div class="up-empty"><div class="up-empty-icon">&#127942;</div>Start using SOKONI to earn badges.</div>
+      </div>
+    </div>
+
+    <div class="up-card" id="piUpcomingCard" style="display:none;">
+      <div class="up-card-title">Next Milestones</div>
+      <div id="piUpcomingList"></div>
+    </div>
+
+    <div class="up-card">
+      <div class="up-card-title">Activity Stats</div>
+      <div class="pi-stat-grid" id="piStatGrid">
+        <div class="pi-stat-card"><div class="pi-stat-val" id="piStatOrders">&#8212;</div><div class="pi-stat-lbl">Orders</div></div>
+        <div class="pi-stat-card"><div class="pi-stat-val" id="piStatSales">&#8212;</div><div class="pi-stat-lbl">Sales</div></div>
+        <div class="pi-stat-card"><div class="pi-stat-val" id="piStatBiz">&#8212;</div><div class="pi-stat-lbl">Businesses</div></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ SECURITY PANEL ══ -->
+  <div id="panel-security" class="up-panel">
+
+    <div class="up-card">
+      <div class="up-card-title">Account Security</div>
+      <div id="piSecList">
+        <div class="pi-sec-item">
+          <div class="pi-sec-icon">&#128233;</div>
+          <div class="pi-sec-info">
+            <div class="pi-sec-label">Email Verification</div>
+            <div class="pi-sec-sub" id="piSecEmail">Checking&hellip;</div>
+          </div>
+          <span id="piSecEmailStatus" class="pi-sec-good" style="display:none;">&#10003;</span>
+        </div>
+        <div class="pi-sec-item">
+          <div class="pi-sec-icon">&#128241;</div>
+          <div class="pi-sec-info">
+            <div class="pi-sec-label">Phone Verification</div>
+            <div class="pi-sec-sub" id="piSecPhone">Checking&hellip;</div>
+          </div>
+          <span id="piSecPhoneStatus" class="pi-sec-good" style="display:none;">&#10003;</span>
+        </div>
+        <div class="pi-sec-item">
+          <div class="pi-sec-icon">&#128100;</div>
+          <div class="pi-sec-info">
+            <div class="pi-sec-label">Identity Verification</div>
+            <div class="pi-sec-sub" id="piSecId">National ID or Passport</div>
+          </div>
+          <span id="piSecIdStatus"></span>
+        </div>
+        <div class="pi-sec-item">
+          <div class="pi-sec-icon">&#128274;</div>
+          <div class="pi-sec-info">
+            <div class="pi-sec-label">Two-Factor Authentication</div>
+            <div class="pi-sec-sub">Adds an extra layer of protection</div>
+          </div>
+          <a href="account-centre.html#security" class="pi-sec-action">Set up</a>
+        </div>
+        <div class="pi-sec-item">
+          <div class="pi-sec-icon">&#128241;</div>
+          <div class="pi-sec-info">
+            <div class="pi-sec-label">Devices &amp; Sessions</div>
+            <div class="pi-sec-sub" id="piSecDevices">Manage trusted devices</div>
+          </div>
+          <a href="account-centre.html" class="pi-sec-action">Manage</a>
+        </div>
+        <div class="pi-sec-item">
+          <div class="pi-sec-icon">&#128203;</div>
+          <div class="pi-sec-info">
+            <div class="pi-sec-label">Legal Agreements</div>
+            <div class="pi-sec-sub" id="piSecLegal">Terms &amp; Privacy Policy</div>
+          </div>
+          <span id="piSecLegalStatus"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="up-card">
+      <div class="up-card-title">Quick Actions</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <a href="account-centre.html" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:13px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);text-decoration:none;color:#fff;">
+          <span style="font-size:18px;">&#9881;</span>
+          <span style="flex:1;font-size:13px;font-weight:800;">Account Settings</span>
+          <span style="color:rgba(255,255,255,0.3);font-size:16px;">&#8250;</span>
+        </a>
+        <a href="account-centre.html#verification" style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:13px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);text-decoration:none;color:#fff;">
+          <span style="font-size:18px;">&#9989;</span>
+          <span style="flex:1;font-size:13px;font-weight:800;">Verification Center</span>
+          <span style="color:rgba(255,255,255,0.3);font-size:16px;">&#8250;</span>
+        </a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ DIGITAL BUSINESS CARD PANEL ══ -->
+  <div id="panel-card" class="up-panel">
+    <div class="up-card" style="padding:0;background:transparent;border:none;box-shadow:none;">
+
+      <!-- The card itself -->
+      <div class="pi-bcard" id="piBcard">
+        <div class="pi-bcard-top">
+          <img class="pi-bcard-avatar" id="piBcardAvatar" src="" alt="">
+          <div>
+            <div class="pi-bcard-name" id="piBcardName">Loading&hellip;</div>
+            <div class="pi-bcard-hl" id="piBcardHl"></div>
+            <div class="pi-bcard-sid" id="piBcardSid">SKN-XXXXXXXX</div>
+            <div class="pi-bcard-verified" id="piBcardVerif" style="display:none;">
+              &#10003; Verified SOKONI Member
+            </div>
+          </div>
+        </div>
+        <div class="pi-bcard-fields" id="piBcardFields">
+          <!-- Filled by JS -->
+        </div>
+        <div class="pi-bcard-skills" id="piBcardSkills"></div>
+        <div class="pi-bcard-actions">
+          <button type="button" class="pi-bcard-btn pi-bcard-btn-primary" onclick="piShareCard()">
+            &#128172; Share Card
+          </button>
+          <button type="button" class="pi-bcard-btn pi-bcard-btn-sec" onclick="piDownloadCard()">
+            &#8659; Download
+          </button>
+        </div>
+      </div>
+
+      <!-- Preview hint -->
+      <div style="text-align:center;padding:0 16px 12px;font-size:11px;color:rgba(255,255,255,0.25);">
+        Your Digital Business Card &mdash; powered by SOKONI Identity
       </div>
     </div>
   </div>
@@ -1928,6 +2474,561 @@ function logoutUser(_c){
   window.location.href = 'login.html';
 }
 window.logoutUser = logoutUser;
+
+/* ══════════════════════════════════════════════════════════════
+   NEXT-GEN PROFILE & IDENTITY CENTER v1.0
+   Lazy-loaded panels for Identity, Employment, Security,
+   Achievements, and Digital Business Card.
+══════════════════════════════════════════════════════════════ */
+(function() {
+  'use strict';
+
+  /* ── Firebase SDK handles ── */
+  function _fns() {
+    return window.firebase && firebase.app ? firebase.app().functions('us-central1') : null;
+  }
+  function _call(name, data) {
+    var f = _fns();
+    if (!f) return Promise.reject(new Error('Firebase not ready'));
+    return f.httpsCallable(name)(data || {}).then(function(r){ return r.data; });
+  }
+
+  /* ── State ── */
+  var _piLoaded     = {};  // which panels have been loaded
+  var _piOverview   = null;
+  var _piCard       = null;
+
+  /* ── SOKONI ID from UID (mirrors profile-engine.js) ── */
+  function _sokoniId(uid) {
+    if (!uid) return 'SKN-XXXXXXXX';
+    var hex = uid.replace(/[^a-zA-Z0-9]/g, '').slice(0, 8).toUpperCase();
+    return 'SKN-' + (hex || uid.slice(-8).toUpperCase());
+  }
+
+  /* ── Trust Score ring fill ── */
+  function _animateTrustRing(score) {
+    var fill = document.getElementById('piTrustFill');
+    if (!fill) return;
+    var circ = 2 * Math.PI * 18; // r=18 → 113.1
+    var offset = circ - (score / 100) * circ;
+    var color = score >= 90 ? '#71ff00'
+              : score >= 70 ? '#ffd700'
+              : score >= 45 ? '#c0c0c0'
+              : '#cd7f32';
+    fill.setAttribute('stroke', color);
+    setTimeout(function() { fill.style.strokeDashoffset = offset; }, 120);
+  }
+
+  /* ── Render verification badges in hero ── */
+  function _renderHeroBadges(verifications) {
+    var wrap = document.getElementById('piVerifBadges');
+    if (!wrap) return;
+    var MAP = {
+      email:      { icon: '✉️', label: 'Email' },
+      phone:      { icon: '📱', label: 'Phone' },
+      identity:   { icon: '🪪', label: 'Identity' },
+      business:   { icon: '🏢', label: 'Business' },
+      kra:        { icon: '📑', label: 'KRA' },
+      address:    { icon: '📍', label: 'Address' },
+      bank:       { icon: '💳', label: 'Payment' },
+      merchant:   { icon: '🏅', label: 'Merchant' },
+    };
+    var html = '';
+    var delay = 0;
+    Object.keys(MAP).forEach(function(k) {
+      if (verifications[k]) {
+        html += '<span class="pi-badge" style="animation-delay:' + delay + 'ms">'
+              + MAP[k].icon + ' ' + MAP[k].label
+              + '</span>';
+        delay += 60;
+      }
+    });
+    wrap.innerHTML = html || '';
+    wrap.style.display = html ? '' : 'none';
+  }
+
+  /* ── Boot: wire up hero identity row from auth user ── */
+  function _bootIdentityRow() {
+    function _tryBoot() {
+      if (!window.firebase || !firebase.auth) { setTimeout(_tryBoot, 800); return; }
+      firebase.auth().onAuthStateChanged(function(user) {
+        if (!user) return;
+        var sid = _sokoniId(user.uid);
+        var el  = document.getElementById('piSokoniIdText');
+        var el2 = document.getElementById('piIdSid');
+        var el3 = document.getElementById('piBcardSid');
+        if (el)  el.textContent  = sid;
+        if (el2) el2.textContent = sid;
+        if (el3) el3.textContent = sid;
+        var row = document.getElementById('piIdentityRow');
+        if (row) row.style.display = '';
+
+        // Fetch full overview to populate trust ring + badges
+        _call('profileGetOverview').then(function(data) {
+          _piOverview = data;
+          var num = document.getElementById('piTrustNum');
+          var lvl = document.getElementById('piTrustLevel');
+          if (num) num.textContent = data.trust ? data.trust.score : 0;
+          if (lvl) {
+            var level = (data.trust && data.trust.level) || 'Bronze';
+            lvl.textContent = level;
+            lvl.className = 'pi-trust-level pi-level-' + level.toLowerCase();
+          }
+          if (data.trust) _animateTrustRing(data.trust.score);
+          if (data.verifications) _renderHeroBadges(data.verifications);
+          var badges = document.getElementById('piVerifBadges');
+          if (badges) badges.style.display = '';
+
+          // Also update existing profile completion bar
+          if (data.profileCompletion) {
+            var pct = data.profileCompletion.percent || 0;
+            var bar = document.getElementById('profileCompletionBar');
+            var pctEl = document.getElementById('profileCompletionPct');
+            var hintEl = document.getElementById('profileCompletionHint');
+            var wrap2 = document.getElementById('profileCompletionWrap');
+            if (wrap2) wrap2.style.display = '';
+            if (bar)   bar.style.width = pct + '%';
+            if (pctEl) pctEl.textContent = pct + '%';
+            if (hintEl && data.profileCompletion.steps) {
+              var next = data.profileCompletion.steps.find(function(s){ return !s.done; });
+              if (next) hintEl.textContent = 'Next: ' + next.label;
+            }
+          }
+        }).catch(function(e){ console.warn('[PI] overview error', e); });
+      });
+    }
+    _tryBoot();
+  }
+
+  /* ── Tab extension: lazy-load each new panel on first open ── */
+  var _origSwitch = window.switchTab;
+  window.switchTab = function(id) {
+    if (_origSwitch) _origSwitch(id);
+    var LOADERS = {
+      identity:     _piLoadIdentity,
+      employment:   _piLoadEmployment,
+      achievements: _piLoadAchievements,
+      security:     _piLoadSecurity,
+      card:         _piLoadCard,
+    };
+    if (LOADERS[id] && !_piLoaded[id]) {
+      _piLoaded[id] = true;
+      LOADERS[id]();
+    }
+  };
+
+  /* ─────────────────────────────────────────────
+     PANEL: IDENTITY
+  ───────────────────────────────────────────── */
+  function _piLoadIdentity() {
+    // Populate card from cached overview if available, else fetch
+    function _render(data) {
+      var avatar = document.getElementById('piIdAvatar');
+      var name   = document.getElementById('piIdName');
+      var sub    = document.getElementById('piIdSub');
+      var sid    = document.getElementById('piIdSid');
+      if (avatar && data.photoURL) { avatar.src = data.photoURL; }
+      if (name)   name.textContent = data.displayName || 'SOKONI Member';
+      if (sub)    sub.textContent  = data.headline  || data.location || '';
+      if (sid)    sid.textContent  = data.sokoniId  || _sokoniId('');
+
+      // Verifications grid
+      var VERIF_MAP = [
+        { k:'email',    icon:'✉️',  label:'Email'    },
+        { k:'phone',    icon:'📱',  label:'Phone'    },
+        { k:'identity', icon:'🪪',  label:'Identity' },
+        { k:'business', icon:'🏢',  label:'Business' },
+        { k:'kra',      icon:'📑',  label:'KRA'      },
+        { k:'bank',     icon:'💳',  label:'Bank'     },
+      ];
+      var grid = document.getElementById('piVerifGrid');
+      if (grid && data.verifications) {
+        grid.innerHTML = VERIF_MAP.map(function(v) {
+          var done = data.verifications[v.k];
+          return '<div class="pi-verif-item' + (done ? ' done' : '') + '">'
+               + '<span class="pi-verif-icon">' + v.icon + '</span>'
+               + '<span class="pi-verif-label">' + v.label + '</span>'
+               + '<span class="pi-verif-status ' + (done ? 'pi-vs-yes' : 'pi-vs-no') + '">'
+               + (done ? '✓ Verified' : 'Pending')
+               + '</span>'
+               + '</div>';
+        }).join('');
+      }
+
+      // Populate QR hint with profile URL
+      var qrHint = document.getElementById('piQrHint');
+      if (qrHint && data.sokoniId) qrHint.textContent = data.sokoniId + ' — mysokoni.co.ke/profile';
+
+      // QR box — show stylised text representation (no external library)
+      var qrBox = document.getElementById('piQrBox');
+      if (qrBox && data.verifications && data.verifications.identity) {
+        qrBox.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;">'
+          + '<div style="font-size:36px;">&#128197;</div>'
+          + '<div style="font-size:11px;font-weight:900;color:#000;letter-spacing:.04em;">' + (data.sokoniId || '') + '</div>'
+          + '<div style="font-size:9px;color:rgba(0,0,0,0.5);">SOKONI Verified Identity</div>'
+          + '</div>';
+      }
+    }
+
+    function _loadCompletion(data) {
+      var pct   = (data && data.percent)   || 0;
+      var done  = (data && data.done)      || 0;
+      var total = (data && data.total)     || 10;
+      var steps = (data && data.steps)     || [];
+      var recos = (data && data.recommendations) || [];
+
+      var bar   = document.getElementById('piComplBar');
+      var pctEl = document.getElementById('piComplPct');
+      var doneEl= document.getElementById('piComplDone');
+      if (bar)   bar.style.width = pct + '%';
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (doneEl) doneEl.textContent = done + ' of ' + total + ' steps complete';
+
+      var HREFS = {
+        photo:'', bio:'professional-profile.html', email:'account-centre.html',
+        phone:'account-centre.html', identity:'account-centre.html',
+        address:'', skills:'professional-profile.html', cert:'professional-profile.html',
+        bank:'account-centre.html', kra:'account-centre.html',
+      };
+
+      var list = document.getElementById('piStepsList');
+      if (list) {
+        list.innerHTML = steps.map(function(s) {
+          var linkHtml = (!s.done && HREFS[s.id]) ?
+            '<a href="' + HREFS[s.id] + '" class="pi-step-link">Fix</a>' : '';
+          return '<div class="pi-step' + (s.done ? ' done' : '') + '">'
+               + '<div class="pi-step-check">' + (s.done ? '✓' : '') + '</div>'
+               + '<div class="pi-step-lbl">' + _esc(s.label) + '</div>'
+               + linkHtml
+               + '</div>';
+        }).join('');
+      }
+
+      if (recos.length) {
+        var ICONS = { photo:'📷', bio:'✍️', email:'✉️', phone:'📱', identity:'🪪',
+                      address:'📍', skills:'🎯', cert:'📄', bank:'💳', kra:'📑' };
+        var recoList = document.getElementById('piRecoList');
+        var recoCard = document.getElementById('piRecoCard');
+        if (recoList) {
+          recoList.innerHTML = recos.map(function(r) {
+            return '<div class="pi-reco-card">'
+                 + '<span class="pi-reco-icon">' + (ICONS[r.id] || '⚡') + '</span>'
+                 + '<div class="pi-reco-body">'
+                 + '<div class="pi-reco-action">' + _esc(r.action) + '</div>'
+                 + '<div class="pi-reco-impact">' + _esc(r.impact) + '</div>'
+                 + '</div>'
+                 + (r.href ? '<a href="' + r.href + '" class="pi-step-link">Go</a>' : '')
+                 + '</div>';
+          }).join('');
+        }
+        if (recoCard) recoCard.style.display = '';
+      }
+    }
+
+    if (_piOverview) {
+      _render(_piOverview);
+      // Fetch completion separately for the detailed step list
+      _call('profileGetCompletion').then(_loadCompletion).catch(function(){});
+    } else {
+      _call('profileGetOverview').then(function(data) {
+        _piOverview = data;
+        _render(data);
+        return _call('profileGetCompletion');
+      }).then(_loadCompletion).catch(function(e){ console.warn('[PI] identity load error', e); });
+    }
+  }
+
+  /* ─────────────────────────────────────────────
+     PANEL: EMPLOYMENT
+  ───────────────────────────────────────────── */
+  function _piLoadEmployment() {
+    var STATUS_MAP = {
+      probation: '🟡 Probation', confirmed: '🟢 Confirmed', active: '🟢 Active',
+      suspended: '🔴 Suspended', on_leave: '🟠 On Leave', transferred: '🔵 Transferred',
+      resigned: '⚫ Resigned', terminated: '⛔ Terminated', archived: '⬛ Archived',
+    };
+    _call('profileGetEmployment').then(function(data) {
+      // Current
+      var curEl = document.getElementById('piEmpCurrent');
+      if (curEl) {
+        if (data.current && data.current.length) {
+          curEl.innerHTML = data.current.map(function(m) {
+            var st = STATUS_MAP[m.employmentStatus] || m.employmentStatus;
+            return '<div class="pi-emp-card">'
+                 + '<div class="pi-emp-icon">🏢</div>'
+                 + '<div class="pi-emp-meta">'
+                 + '<div class="pi-emp-biz">' + _esc(m.businessName) + '</div>'
+                 + '<div class="pi-emp-role">' + _esc(m.roleTitle || m.role) + '</div>'
+                 + (m.department ? '<div class="pi-emp-dept">' + _esc(m.department) + (m.branch ? ' · ' + _esc(m.branch) : '') + '</div>' : '')
+                 + '<span class="pi-emp-badge active">' + st + '</span>'
+                 + '</div></div>';
+          }).join('');
+        } else {
+          curEl.innerHTML = '<div class="up-empty"><div class="up-empty-icon">🏢</div>No active employment found.</div>';
+        }
+      }
+
+      // Pending invitations
+      if (data.pending && data.pending.length) {
+        var pendEl = document.getElementById('piEmpPending');
+        var pendCard = document.getElementById('piEmpPendingCard');
+        if (pendEl) {
+          pendEl.innerHTML = data.pending.map(function(p) {
+            return '<div class="pi-emp-pending-card">'
+                 + '<span style="font-size:22px;">📨</span>'
+                 + '<div><div class="pi-emp-biz">' + _esc(p.businessName) + '</div>'
+                 + '<div class="pi-emp-role" style="font-size:11px;">' + _esc(p.role) + '</div></div>'
+                 + '<span class="pi-emp-badge pending" style="margin:0;">Pending</span>'
+                 + '</div>';
+          }).join('');
+        }
+        if (pendCard) pendCard.style.display = '';
+      }
+
+      // Past
+      if (data.past && data.past.length) {
+        var pastEl = document.getElementById('piEmpPast');
+        var pastCard = document.getElementById('piEmpPastCard');
+        if (pastEl) {
+          pastEl.innerHTML = data.past.map(function(m) {
+            var st = STATUS_MAP[m.employmentStatus] || m.employmentStatus;
+            return '<div class="pi-emp-card">'
+                 + '<div class="pi-emp-icon" style="background:rgba(255,255,255,0.04);">🏛️</div>'
+                 + '<div class="pi-emp-meta">'
+                 + '<div class="pi-emp-biz">' + _esc(m.businessName) + '</div>'
+                 + '<div class="pi-emp-role">' + _esc(m.roleTitle || m.role) + '</div>'
+                 + '<span class="pi-emp-badge past">' + st + '</span>'
+                 + '</div></div>';
+          }).join('');
+        }
+        if (pastCard) pastCard.style.display = '';
+      }
+    }).catch(function(e){ console.warn('[PI] employment error', e); });
+  }
+
+  /* ─────────────────────────────────────────────
+     PANEL: ACHIEVEMENTS
+  ───────────────────────────────────────────── */
+  function _piLoadAchievements() {
+    _call('profileGetAchievements').then(function(data) {
+      // Badges
+      var badgesEl = document.getElementById('piAchBadges');
+      if (badgesEl && data.badges && data.badges.length) {
+        badgesEl.innerHTML = '<div class="pi-ach-grid">'
+          + data.badges.map(function(b, i) {
+              return '<div class="pi-ach-card" style="animation-delay:' + (i * 50) + 'ms" title="' + _esc(b.desc) + '">'
+                   + '<div class="pi-ach-icon">' + b.icon + '</div>'
+                   + '<div class="pi-ach-label">' + _esc(b.label) + '</div>'
+                   + '</div>';
+            }).join('')
+          + '</div>';
+      } else if (badgesEl) {
+        badgesEl.innerHTML = '<div class="up-empty"><div class="up-empty-icon">🎯</div>Complete actions on SOKONI to earn badges.</div>';
+      }
+
+      // Upcoming
+      if (data.upcoming && data.upcoming.length) {
+        var upEl   = document.getElementById('piUpcomingList');
+        var upCard = document.getElementById('piUpcomingCard');
+        if (upEl) {
+          upEl.innerHTML = data.upcoming.map(function(u) {
+            var pct = Math.round(u.progress * 100);
+            return '<div class="pi-upcoming-card">'
+                 + '<div class="pi-upcoming-top">'
+                 + '<span style="font-size:18px;">' + u.icon + '</span>'
+                 + '<span class="pi-upcoming-lbl">' + _esc(u.label) + '</span>'
+                 + '<span class="pi-upcoming-pct">' + pct + '%</span>'
+                 + '</div>'
+                 + '<div class="pi-prog-bar"><div class="pi-prog-fill" style="width:' + pct + '%"></div></div>'
+                 + '<div class="pi-upcoming-req">' + _esc(u.requirement) + '</div>'
+                 + '</div>';
+          }).join('');
+        }
+        if (upCard) upCard.style.display = '';
+      }
+
+      // Stats
+      if (data.stats) {
+        var sO = document.getElementById('piStatOrders');
+        var sS = document.getElementById('piStatSales');
+        var sB = document.getElementById('piStatBiz');
+        if (sO) sO.textContent = data.stats.buyCount  || 0;
+        if (sS) sS.textContent = data.stats.sellCount || 0;
+        if (sB) sB.textContent = data.stats.bizCount  || 0;
+      }
+    }).catch(function(e){ console.warn('[PI] achievements error', e); });
+  }
+
+  /* ─────────────────────────────────────────────
+     PANEL: SECURITY
+  ───────────────────────────────────────────── */
+  function _piLoadSecurity() {
+    function _mark(id, ok, yesText, noText) {
+      var el = document.getElementById(id + 'Status');
+      var sub = document.getElementById(id);
+      if (el) {
+        el.style.display = '';
+        el.className = ok ? 'pi-sec-good' : 'pi-sec-warn';
+        el.textContent = ok ? '✓' : '!';
+      }
+      if (sub) sub.textContent = ok ? yesText : noText;
+    }
+
+    var data = _piOverview;
+    if (data && data.verifications) {
+      var v = data.verifications;
+      _mark('piSecEmail', v.email, 'Email verified', 'Email not yet verified');
+      _mark('piSecPhone', v.phone, 'Phone verified', 'Phone not yet verified');
+      _mark('piSecId',    v.identity, 'Identity verified (ID/Passport)', 'Not yet verified — tap to verify');
+
+      var legalEl = document.getElementById('piSecLegal');
+      var legalSt = document.getElementById('piSecLegalStatus');
+      if (v.legal) {
+        if (legalEl) legalEl.textContent = 'Agreements signed';
+        if (legalSt) { legalSt.className = 'pi-sec-good'; legalSt.textContent = '✓'; legalSt.style.display = ''; }
+      } else {
+        if (legalEl) legalEl.textContent = 'Agreements not yet signed';
+        if (legalSt) { legalSt.className = 'pi-sec-warn'; legalSt.textContent = '!'; legalSt.style.display = ''; }
+      }
+    } else {
+      _call('profileGetOverview').then(function(d) {
+        _piOverview = d;
+        _piLoadSecurity();
+      }).catch(function(){});
+    }
+
+    // Device count hint
+    var devEl = document.getElementById('piSecDevices');
+    if (devEl && window.firebase && firebase.auth && firebase.auth().currentUser) {
+      devEl.textContent = 'Manage trusted devices and sessions';
+    }
+  }
+
+  /* ─────────────────────────────────────────────
+     PANEL: DIGITAL BUSINESS CARD
+  ───────────────────────────────────────────── */
+  function _piLoadCard() {
+    function _render(data) {
+      _piCard = data;
+      var avatar = document.getElementById('piBcardAvatar');
+      var name   = document.getElementById('piBcardName');
+      var hl     = document.getElementById('piBcardHl');
+      var sid    = document.getElementById('piBcardSid');
+      var verifEl= document.getElementById('piBcardVerif');
+
+      if (avatar && data.photoURL) { avatar.src = data.photoURL; }
+      if (name)    name.textContent = data.displayName || 'SOKONI Member';
+      if (hl)      hl.textContent   = data.headline    || '';
+      if (sid)     sid.textContent  = data.sokoniId    || '';
+      if (verifEl) verifEl.style.display = data.isVerified ? '' : 'none';
+
+      // Fields
+      var fieldsEl = document.getElementById('piBcardFields');
+      if (fieldsEl) {
+        var fields = [];
+        if (data.primaryWorkspace) {
+          fields.push({ k:'Organisation', v: data.primaryWorkspace.businessName });
+          fields.push({ k:'Role',         v: data.primaryWorkspace.role });
+        }
+        if (data.email)    fields.push({ k:'Email',    v: data.email });
+        if (data.phone)    fields.push({ k:'Phone',    v: data.phone });
+        if (data.website)  fields.push({ k:'Website',  v: data.website });
+        if (data.location) fields.push({ k:'Location', v: data.location });
+        fieldsEl.innerHTML = fields.slice(0, 4).map(function(f) {
+          return '<div class="pi-bcard-field">'
+               + '<div class="pi-bcard-fk">' + _esc(f.k) + '</div>'
+               + '<div class="pi-bcard-fv">' + _esc(f.v) + '</div>'
+               + '</div>';
+        }).join('');
+      }
+
+      // Skills
+      var skillsEl = document.getElementById('piBcardSkills');
+      if (skillsEl && data.skills && data.skills.length) {
+        skillsEl.innerHTML = data.skills.map(function(s) {
+          return '<span class="pi-bcard-skill">' + _esc(s) + '</span>';
+        }).join('');
+      }
+    }
+
+    _call('profileGenerateCard').then(_render).catch(function(e){ console.warn('[PI] card error', e); });
+  }
+
+  /* ── Global actions ── */
+  window.piCopyId = function() {
+    var el = document.getElementById('piSokoniIdText');
+    var id = el ? el.textContent : '';
+    if (!id) return;
+    navigator.clipboard.writeText(id).then(function() {
+      _toast('SOKONI ID copied!');
+    }).catch(function() {
+      _toast(id);
+    });
+  };
+
+  window.piShareProfile = function() {
+    var url = _piOverview && _piOverview.profileUrl
+      ? _piOverview.profileUrl
+      : window.location.href;
+    if (navigator.share) {
+      navigator.share({ title: 'SOKONI Profile', url: url }).catch(function(){});
+    } else {
+      navigator.clipboard.writeText(url).then(function(){ _toast('Profile link copied!'); });
+    }
+  };
+
+  window.piShareCard = function() {
+    if (!_piCard) { _toast('Card loading, please wait…'); return; }
+    var text = [
+      _piCard.displayName,
+      _piCard.headline,
+      _piCard.sokoniId,
+      _piCard.email   || '',
+      _piCard.phone   || '',
+      _piCard.website || '',
+      _piCard.profileUrl,
+    ].filter(Boolean).join('\n');
+
+    if (navigator.share) {
+      navigator.share({ title: _piCard.displayName + ' — SOKONI', text: text }).catch(function(){});
+    } else {
+      navigator.clipboard.writeText(text).then(function(){ _toast('Card copied to clipboard!'); });
+    }
+  };
+
+  window.piDownloadCard = function() {
+    _toast('Download coming soon — use Share for now.');
+  };
+
+  /* ── Toast (re-use existing if available) ── */
+  function _toast(msg) {
+    if (window.upToast) { window.upToast(msg); return; }
+    var el = document.getElementById('upToast');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.opacity = '1';
+    el.style.transform = 'translateX(-50%) translateY(0)';
+    clearTimeout(el._t);
+    el._t = setTimeout(function() {
+      el.style.opacity = '0';
+      el.style.transform = 'translateX(-50%) translateY(30px)';
+    }, 2500);
+  }
+
+  /* ── HTML escape ── */
+  function _esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── Init ── */
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _bootIdentityRow);
+  } else {
+    _bootIdentityRow();
+  }
+
+})();
 
 /* Reveal super-admin link for superAdmin custom claim holders */
 (function(){
