@@ -4,7 +4,7 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
+    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:appcheck": "node scripts/verify-appcheck.js",
     "test:offline": "node scripts/test-offline-detection.js",
     "verify:indexes": "node scripts/verify-index-governance.js",
@@ -14,9 +14,9 @@
     "dev": "http-server . -p 3000 -o --cors -c-1",
     "dev:bs": "browser-sync start --config bs-config.js",
     "deploy": "npx -y firebase-tools@latest deploy --only hosting",
-    "deploy:all": "npx -y firebase-tools@latest deploy --project sokoni-aeb26",
-    "deploy:functions": "npx -y firebase-tools@latest deploy --only functions --project sokoni-aeb26",
-    "deploy:hosting": "npx -y firebase-tools@latest deploy --only hosting --project sokoni-aeb26",
+    "deploy:all": "node scripts/verify-commission-single-source.js && npx -y firebase-tools@latest deploy --project sokoni-aeb26",
+    "deploy:functions": "node scripts/verify-commission-single-source.js && npx -y firebase-tools@latest deploy --only functions --project sokoni-aeb26",
+    "deploy:hosting": "node scripts/verify-commission-single-source.js && npx -y firebase-tools@latest deploy --only hosting --project sokoni-aeb26",
     "deploy:rules": "npx -y firebase-tools@latest deploy --only firestore,storage --project sokoni-aeb26",
     "check": "node scripts/pre-deploy-check.js",
     "monitor": "node scripts/setup-monitoring.js",
@@ -24,7 +24,8 @@
     "test:kass-modes": "node scripts/test-kass-modes-memory.js",
     "test:promotions": "node scripts/test-promotions.js",
     "test:sms": "node scripts/test-sms.js",
-    "test:notify": "node scripts/test-notify.js"
+    "test:notify": "node scripts/test-notify.js",
+    "verify:commission": "node scripts/verify-commission-single-source.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

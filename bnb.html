@@ -279,7 +279,7 @@
 
       /* Commission */
       if(window.SokoniPay && SokoniPay.saveCommission && total > 0){
-        var _cPct = (SokoniPay.COMMISSION_RATES&&SokoniPay.COMMISSION_RATES.completion&&SokoniPay.COMMISSION_RATES.completion['bnb']) || 10;
+        var _cPct =SokoniCommission.pct('bnb');
         var _cCut = Math.round(total * _cPct / 100);
         SokoniPay.saveCommission({ref,providerName:b?.hostName||b?.name||'BnB Host',category:'bnb',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'BnB booking · '+nights+' night(s)',createdAt:Date.now()});
       }
@@ -374,6 +374,7 @@
 <script src="analytics.js" defer></script>
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-invoice.js"></script>
+<script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>

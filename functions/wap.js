@@ -892,10 +892,21 @@ async function _svcPaymentRefund({ orderId, amount, reason, uid }, inst) {
 
 /* FIXED: idempotent — orderId as doc ID */
 async function _svcCommission({ orderId, total, category, sellerUid }, inst) {
-  const rates      = { food: 0.15, delivery: 0.12, marketplace: 0.08, services: 0.10, default: 0.08 };
-  const pct        = rates[category] ?? rates.default;
-  const commission = Math.round(Number(total) * pct * 100) / 100;
-  const sellerNet  = Math.round((Number(total) - commission) * 100) / 100;
+  /* This used to carry its own rate table — { food: 0.15, delivery: 0.12, marketplace: 0.08,
+     services: 0.10 } — a TENTH set of commission rates that agreed with nothing else on the
+     platform. It charged 15% on food where the platform charges 5%, and 8% on marketplace
+     where the platform charges 3%, and it wrote the result straight into `commissions`, which
+     drives payouts. Rates now come from the single config through the commission engine, so a
+     workflow-automated order is priced exactly like every other order. */
+  const U = require('./finos-utils');
+  const result = await U.calculateCommission(db, {
+    orderAmountCents: Math.round(Number(total) * 100),
+    category,
+    sellerId: sellerUid,
+  });
+  const pct        = result.effectiveRate / 100;      /* engine returns a percent; this file stores a fraction */
+  const commission = result.commissionCents / 100;
+  const sellerNet  = result.sellerNetCents / 100;
 
   const ref = db.collection("commissions").doc(orderId);
   await db.runTransaction(async (txn) => {

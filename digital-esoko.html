@@ -190,6 +190,7 @@ a{text-decoration:none;color:inherit}
 <script src="analytics.js" defer></script>
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-invoice.js"></script>
+<script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-ui-extras.js" defer></script>
 <script src="sw-register.js" defer></script>
@@ -371,7 +372,7 @@ function purchaseProduct(id){
       if(window._incrementDEDownloadFS) window._incrementDEDownloadFS(p.id);
       /* Commission */
       if(window.SokoniPay?.saveCommission && p.price>0){
-        const cPct = (window.SokoniPay.COMMISSION_RATES?.completion?.['digital'])||5;
+        const cPct =SokoniCommission.pct('digital');
         window.SokoniPay.saveCommission({ref,providerName:p.sellerName||'Digital Seller',category:'digital',commissionPct:cPct,sokoniCut:Math.round(p.price*cPct/100),providerNet:p.price-Math.round(p.price*cPct/100),serviceTotal:p.price,status:'auto_collected',note:'Digital product: '+p.title,createdAt:Date.now()});
       }
       /* Invoice */

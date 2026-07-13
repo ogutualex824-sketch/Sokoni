@@ -5,23 +5,23 @@
 
 window.SokoniRevenue = (() => {
 
-  /* ── Commission rates (mirrors server HUB_COMMISSION_DEFAULTS) ── */
-  const HUB_RATES = {
-    marketplace: { pct: 3,  fixedKES: 0,    label: "Marketplace" },
-    restaurant:  { pct: 5,  fixedKES: 0,    label: "Restaurant"  },
-    food:        { pct: 5,  fixedKES: 0,    label: "Food"        },
-    freelance:   { pct: 8,  fixedKES: 0,    label: "Freelance"   },
-    property:    { pct: 2,  fixedKES: 0,    label: "Property"    },
-    vehicles:    { pct: 0,  fixedKES: 2000, label: "Vehicles"    },
-    healthcare:  { pct: 5,  fixedKES: 0,    label: "Healthcare"  },
-    legal:       { pct: 5,  fixedKES: 0,    label: "Legal"       },
-    bnb:         { pct: 5,  fixedKES: 0,    label: "BnB"         },
-    digital:     { pct: 10, fixedKES: 0,    label: "Digital"     },
-    b2b:         { pct: 3,  fixedKES: 0,    label: "B2B"         },
-    delivery:    { pct: 8,  fixedKES: 0,    label: "Delivery"    },
-    entertainment:{ pct: 5, fixedKES: 0,    label: "Entertainment"},
-    default:     { pct: 5,  fixedKES: 0,    label: "Other"       },
+  /* The commission table used to be hand-copied here — its own comment said it "mirrors server
+     HUB_COMMISSION_DEFAULTS", and it had already fallen behind (it was missing `saas`).
+     Rates now come from SokoniCommission (sokoni-commission-rates.js, generated from
+     functions/commission-config.js), so this file cannot drift from the server again.
+     The labels are presentation, not pricing, so they stay. */
+  const HUB_LABELS = {
+    marketplace: "Marketplace", restaurant: "Restaurant", food: "Food", freelance: "Freelance",
+    property: "Property", vehicles: "Vehicles", healthcare: "Healthcare", legal: "Legal",
+    bnb: "BnB", digital: "Digital", b2b: "B2B", delivery: "Delivery",
+    entertainment: "Entertainment", saas: "SaaS", default: "Other",
   };
+  /* Always a number — SokoniCommission.pct() falls back to the platform default itself. */
+  const _rate = (hub) => ({
+    pct:      window.SokoniCommission ? window.SokoniCommission.pct(hub)      : 5,
+    fixedKES: window.SokoniCommission ? window.SokoniCommission.fixedKES(hub) : 0,
+    label:    HUB_LABELS[hub] || HUB_LABELS.default,
+  });
 
   /* ── Subscription plans ── */
   const PLANS = {
@@ -50,7 +50,7 @@ window.SokoniRevenue = (() => {
 
   /* ── Estimate commission for display ── */
   function estimateCommission(hub, grossAmount) {
-    const rate = HUB_RATES[hub] || HUB_RATES.default;
+    const rate = _rate(hub);
     const commKES  = grossAmount * rate.pct / 100;
     const minKES   = 10;
     const totalOwed = Math.max(commKES, rate.pct > 0 ? minKES : 0) + rate.fixedKES;
@@ -97,12 +97,12 @@ window.SokoniRevenue = (() => {
 
   /* ── Hub badge ── */
   function hubBadge(hub) {
-    const rate = HUB_RATES[hub] || HUB_RATES.default;
+    const rate = _rate(hub);
     return `<span style="background:#ffffff11;color:#ccc;padding:2px 8px;border-radius:20px;font-size:11px">${rate.label}</span>`;
   }
 
   return {
-    HUB_RATES, PLANS, PLAN_FEATURES, FEATURED_PRICING, AD_CPM,
+    PLANS, PLAN_FEATURES, FEATURED_PRICING, AD_CPM,
     estimateCommission, fmtKES, fmtPeriod, statusBadge, hubBadge,
   };
 })();

@@ -1315,7 +1315,11 @@ const SA={
   async _loadCommissionEditor(){
     const el=document.getElementById('saCommissionEditor');
     el.innerHTML='<div class="sa-spinner"><div></div></div>';
-    let data={marketplace:10,food:12,events:8,property:5,vehicles:7,healthcare:5,legal:10,education:8,entertainment:8};
+    /* This was a hardcoded fallback table (marketplace 10%, legal 10%) shown to the admin
+         before platformConfig/commissions loaded — none of those numbers matched what the
+         platform actually charged. Seed from the single config instead. */
+      let data=Object.fromEntries(Object.entries((window.SokoniCommission&&SokoniCommission.RATES)||{})
+        .map(([k,v])=>[k,v.pct]));
     try{
       const doc=await this._db.collection('platformConfig').doc('commissions').get();
       if(doc.exists)data=Object.assign(data,doc.data());

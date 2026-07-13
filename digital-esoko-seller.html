@@ -107,6 +107,7 @@ a{text-decoration:none;color:inherit}
   .des-earn-cards{grid-template-columns:1fr}
 }
 </style>
+  <script src="sokoni-commission-rates.js"></script>
 </head>
 <body class="landlord-body">
 <script src="sokoni-security.js"></script>
@@ -274,7 +275,7 @@ function showSection(name, btn){
 
 function loadStats(){
   const dl = _myProducts.reduce((s,p)=>s+(p.downloads||0),0);
-  const commPct = (window.SokoniPay?.COMMISSION_RATES?.completion?.['digital'])||5;
+  const commPct =SokoniCommission.pct('digital');
   const gross = _mySales.filter(s=>s.status==='completed').reduce((s,p)=>s+Number(p.amount||0),0);
   const net = Math.round(gross*(1-commPct/100));
   const el1=document.getElementById('statProds'); if(el1) el1.textContent=_myProducts.length;
@@ -336,7 +337,7 @@ function loadMySales(){
 
 function loadEarnings(){
   const el = document.getElementById('desEarningsBody'); if(!el) return;
-  const commPct = (window.SokoniPay?.COMMISSION_RATES?.completion?.['digital'])||5;
+  const commPct =SokoniCommission.pct('digital');
   const gross = _mySales.filter(s=>s.status==='completed').reduce((s,p)=>s+Number(p.amount||0),0);
   const comm  = Math.round(gross*commPct/100);
   const net   = gross-comm;

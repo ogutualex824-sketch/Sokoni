@@ -3369,24 +3369,12 @@ exports.sendTestSTKPush = onCall(
    collected (bank transfer, M-Pesa, or future auto-collection).
 ══════════════════════════════════════════════════════════════ */
 
-/* Commission defaults per hub — overridden by Firestore config */
-const HUB_COMMISSION_DEFAULTS = {
-  marketplace: { pct: 3,  fixedKES: 0     },
-  restaurant:  { pct: 5,  fixedKES: 0     },
-  food:        { pct: 5,  fixedKES: 0     },
-  freelance:   { pct: 8,  fixedKES: 0     },
-  property:    { pct: 2,  fixedKES: 0     },
-  vehicles:    { pct: 0,  fixedKES: 2000  },
-  healthcare:  { pct: 5,  fixedKES: 0     },
-  legal:       { pct: 5,  fixedKES: 0     },
-  bnb:         { pct: 5,  fixedKES: 0     },
-  digital:     { pct: 10, fixedKES: 0     },
-  b2b:         { pct: 3,  fixedKES: 0     },
-  delivery:    { pct: 8,  fixedKES: 0     },
-  entertainment:{ pct: 5, fixedKES: 0     },
-  saas:        { pct: 0,  fixedKES: 0     },
-  default:     { pct: 5,  fixedKES: 0     },
-};
+/* Commission rates are NOT defined here any more. The per-hub table that used to sit at this
+   spot is now the single authoritative config in ./commission-config.js. Its rates carry the
+   values this table held — the only rates ever actually charged — so consolidating repriced
+   nothing. Do NOT reintroduce a table here: scripts/verify-commission-single-source.js fails
+   the deploy if a second commission table appears anywhere in the repo. */
+const COMMISSION_CONFIG = require('./commission-config');
 
 /* Plan definitions (priceKES/month) */
 const SUBSCRIPTION_PLANS = {
@@ -3432,13 +3420,13 @@ async function _resolveCommission(sellerUid, hub, grossAmount) {
 
   /* 4. Hard-coded fallback */
   if (pct === null) {
-    const fallback = HUB_COMMISSION_DEFAULTS[hub] || HUB_COMMISSION_DEFAULTS.default;
+    const fallback = COMMISSION_CONFIG.resolveRate(hub);
     pct = fallback.pct;
     if (fixedKES === 0) fixedKES = fallback.fixedKES;
   }
 
   const commissionKES = Math.round(grossAmount * pct / 100 * 100) / 100;
-  const minKES = 10;
+  const minKES = COMMISSION_CONFIG.MIN_COMMISSION_KES;
   const totalOwed = Math.max(commissionKES, pct > 0 ? minKES : 0) + fixedKES;
 
   return { pct, fixedKES, commissionKES, totalOwed };
@@ -3530,7 +3518,7 @@ exports.getRevenueConfig = onCall({ timeoutSeconds: 15, cors: true }, async (req
     const snap = await db.collection("revenueConfig").get();
     const cfg  = {};
     snap.forEach(d => { cfg[d.id] = d.data(); });
-    return { configs: cfg, hubDefaults: HUB_COMMISSION_DEFAULTS, plans: SUBSCRIPTION_PLANS };
+    return { configs: cfg, hubDefaults: COMMISSION_CONFIG.RATES, plans: SUBSCRIPTION_PLANS };
   }
 
   const [sellerSnap, globalSnap] = await Promise.all([
@@ -3540,7 +3528,7 @@ exports.getRevenueConfig = onCall({ timeoutSeconds: 15, cors: true }, async (req
   return {
     sellerOverride: sellerSnap.exists ? sellerSnap.data() : null,
     global:         globalSnap.exists ? globalSnap.data() : null,
-    hubDefaults:    HUB_COMMISSION_DEFAULTS,
+    hubDefaults:    COMMISSION_CONFIG.RATES,
   };
 });
 
@@ -8108,6 +8096,7 @@ exports.updateCommissionRule      = commission.updateCommissionRule;
 exports.deleteCommissionRule      = commission.deleteCommissionRule;
 exports.listCommissionRules       = commission.listCommissionRules;
 exports.previewCommission         = commission.previewCommission;
+exports.getCommissionConfig       = commission.getCommissionConfig;
 exports.getSellerEarningsReport   = commission.getSellerEarningsReport;
 exports.getAdminRevenueByHub      = commission.getAdminRevenueByHub;
 

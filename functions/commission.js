@@ -799,3 +799,34 @@ exports.getWithdrawals = onCall(
     return { withdrawals, hasMore, nextCursor };
   }
 );
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   getCommissionConfig — the ONLY way a client may learn a commission rate.
+   ─────────────────────────────────────────────────────────────────────────────
+   sokoni-pay.js, sokoni-revenue.js, finos.html and revenue.html each used to carry their
+   own hardcoded copy of the rate table, and they had already drifted apart from the server
+   and from each other (bnb.html defaulted to 10% while bnb-manage.html defaulted to 5% for
+   the same category). Clients now fetch the table from here.
+
+   Read-only, no side effects, and it deliberately requires no admin claim: a seller must be
+   able to see what they will be charged. It returns the DEFAULT table only. It does not
+   apply commissionRules overrides or commission holidays — for a real, order-specific,
+   authoritative figure the caller must use previewCommission(), which runs the full engine.
+   That distinction is the point: this endpoint is for DISPLAY, never for computing money.
+───────────────────────────────────────────────────────────────────────────── */
+exports.getCommissionConfig = onCall(
+  OPT,
+  async (req) => {
+    if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    const CC = require('./commission-config');
+    return {
+      rates:      CC.RATES,
+      aliases:    CC.ALIASES,
+      minKES:     CC.MIN_COMMISSION_KES,
+      /* Callers must not cache this indefinitely — a rate change has to be able to reach them. */
+      ttlSeconds: 3600,
+      /* Loud reminder in the payload itself, for anyone reading a network trace. */
+      note: 'Display only. Use previewCommission() for the authoritative figure on a real order.',
+    };
+  }
+);

@@ -6,12 +6,39 @@
 (function(global){
 'use strict';
 
+/* Commission percentages come from SokoniCommission (sokoni-commission-rates.js, generated
+   from functions/commission-config.js). If that file did not load, we must NOT fall back to
+   an invented rate — showing a seller the wrong percentage is exactly the bug being removed.
+   Fail loudly instead: the platform default is used and the mistake is reported, rather than
+   silently charging a number nobody chose. */
+if (typeof window !== 'undefined' && !window.SokoniCommission) {
+  console.error('[SokoniPay] sokoni-commission-rates.js did not load — commission rates are '
+    + 'unavailable. Load it BEFORE sokoni-pay.js.');
+  window.SokoniCommission = {
+    pct: function () { return 5; },          /* the platform default, per commission-config */
+    fixedKES: function () { return 0; },
+    _degraded: true,
+  };
+}
+
 const _esc = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ═══════════════════════════════════════════════════════════
    COMMISSION RATES — what SOKONI earns per category
 ═══════════════════════════════════════════════════════════ */
-const COMMISSION_RATES = {
+/* Commission PERCENTAGES are no longer defined here. They live in
+     functions/commission-config.js and reach the browser via sokoni-commission-rates.js
+     (generated). What remains below is only the flat service pricing — deposits, lead fees,
+     phone-reveal fees — which are fees, not commission rates.
+
+     The percentages that used to sit here had already drifted from the server: this file said
+     legal 5% while the finos engine said 12%, and it advertised 12% for car-rental and 10% for
+     plumbing, neither of which the server ever charged. Use SokoniCommission.pct(category);
+     it always returns a number, so never write a `|| 10` fallback. */
+/* Flat service fees — booking deposits, phone-reveal fees, lead fees. These are PRICES, not
+   commission rates, and they are deliberately not in commission-config.js.
+   Commission percentages come from SokoniCommission.pct(). */
+const SERVICE_FEES = {
   // Booking deposit (paid upfront, guaranteed)
   deposits: {
     default:          200,   // Standard service
@@ -33,28 +60,6 @@ const COMMISSION_RATES = {
     ride:             100,   // Ride booking hold
   },
   // Platform commission % on total service fee (invoiced after completion)
-  completion: {
-    default:          10,
-    legal:            5,
-    healthcare:       5,
-    entertainment:    10,
-    'car-rental':     12,  // high-value, already has deposit
-    construction:     3,   // large transactions
-    sports:           8,
-    'hair-beauty':    10,
-    plumbing:         10,
-    electrical:       10,
-    cleaning:         10,
-    'home-services':  10,
-    'phone-repair':   10,
-    delivery:         8,
-    ride:             12,
-    bnb:              10,
-    escrow:           5,   // buyer-protection premium
-    catering:         8,
-    accounting:       8,
-    tutoring:         10,
-  },
 
   // Phone/contact reveal fee (Channel: Call Lead)
   phoneLead: {
@@ -79,12 +84,6 @@ const COMMISSION_RATES = {
   },
 
   // % of total booking value — platform-native bookings (Channel: Platform Book)
-  platform: {
-    bnb:             10,   // nightly rate
-    ride:            12,   // fare (88% driver — fair pay policy)
-    property:         2,   // first month's rent
-    digital:         15,   // free tier; subscription plan overrides
-  },
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -154,15 +153,15 @@ function showGateway(options){
         providerPhone, onSuccess(ref), onCancel
       }
     */
-    const commissionPct = COMMISSION_RATES.completion[options.category] ||
-      COMMISSION_RATES.completion.default;
+    const commissionPct = SokoniCommission.pct(options.category)
+      SokoniCommission.pct("default");
 
     /* If caller provides the full service total, collect it all through SOKONI.
        Otherwise fall back to the small upfront deposit (legacy behaviour). */
     const serviceTotal   = Number(options.serviceTotal||0);
     const depositFallback = options.depositAmount ||
-      COMMISSION_RATES.deposits[options.category] ||
-      COMMISSION_RATES.deposits.default;
+      SERVICE_FEES.deposits[options.category] ||
+      SERVICE_FEES.deposits.default;
     const payAmount      = serviceTotal > 0 ? serviceTotal : depositFallback;
     const sokoniCut      = Math.round(payAmount * commissionPct / 100);
     const providerNet    = payAmount - sokoniCut;
@@ -380,7 +379,7 @@ function sendCommissionInvoice(ref, serviceTotal){
   const alreadyPaid = fee ? (fee.totalPaid||fee.depositAmount||0) : 0;
   const remaining   = Math.max(0, serviceTotal - alreadyPaid);
 
-  const pct    = (fee&&fee.commissionPct) || COMMISSION_RATES.completion.default;
+  const pct    = (fee&&fee.commissionPct) || SokoniCommission.pct("default");
   const sokCut = Math.round(remaining * pct / 100);
   const netPay = remaining - sokCut;
 
@@ -411,7 +410,7 @@ function revealPhone(opts, callback){
     opts = { providerName, category, phone, serviceDesc }
     Shows payment gate; on success reveals the phone number to the user.
   */
-  const fee = COMMISSION_RATES.phoneLead[opts.category] || COMMISSION_RATES.phoneLead.default;
+  const fee = SERVICE_FEES.phoneLead[opts.category] || SERVICE_FEES.phoneLead.default;
   showGateway({
     providerName:  opts.providerName || "Service Provider",
     category:      opts.category     || "default",
@@ -451,7 +450,7 @@ function platformBook(opts){
   const depositPct   = (opts.depositPct !== undefined) ? opts.depositPct : 50;
   const total        = opts.totalAmount || 0;
   const deposit      = Math.round(total * depositPct / 100);
-  const platformPct  = COMMISSION_RATES.platform[opts.category] || 10;
+  const platformPct  = SokoniCommission.pct(opts.category);
   const platformFee  = Math.round(total * platformPct / 100);
 
   showGateway({
@@ -504,7 +503,7 @@ function chargeLead(opts){
     }
     Charged to the PROVIDER when SOKONI delivers a qualified lead/RFQ.
   */
-  const fee = COMMISSION_RATES.leadFee[opts.category] || COMMISSION_RATES.leadFee.default;
+  const fee = SERVICE_FEES.leadFee[opts.category] || SERVICE_FEES.leadFee.default;
   showGateway({
     providerName:  opts.providerName || "Provider",
     category:      opts.category     || "default",
@@ -546,7 +545,7 @@ function issueVoucher(opts){
     Customer pays a small deposit → receives a voucher code to present at the provider.
     Provider redeems code → SOKONI invoices provider for a completion commission.
   */
-  const dep = COMMISSION_RATES.deposits[opts.category] || COMMISSION_RATES.deposits.default;
+  const dep = SERVICE_FEES.deposits[opts.category] || SERVICE_FEES.deposits.default;
   showGateway({
     providerName:  opts.providerName || "Provider",
     category:      opts.category     || "default",
@@ -584,7 +583,7 @@ function redeemVoucher(code){
     ref:          v.ref,
     providerName: v.providerName,
     category:     v.category,
-    commissionPct:COMMISSION_RATES.completion[v.category] || COMMISSION_RATES.completion.default,
+    commissionPct:SokoniCommission.pct(v.category),
     status:       "pending",
     serviceTotal: 0,
     commissionOwed: 0,
@@ -605,8 +604,8 @@ function propertyConnect(opts){
     Tenant pays KES 500 connection deposit.
     SOKONI defers a 2% invoice to the landlord after lease is signed.
   */
-  const deposit     = COMMISSION_RATES.deposits["property"] || 500;
-  const platformPct = COMMISSION_RATES.platform["property"] || 2;
+  const deposit     = SERVICE_FEES.deposits["property"] || 500;
+  const platformPct = SokoniCommission.pct("property");
   showGateway({
     providerName:  opts.landlordName  || "Property Owner",
     category:      "property",
@@ -759,8 +758,8 @@ function seedDemoRevenue(){
   const fees=[], obligations=[];
   for(let i=0;i<120;i++){
     const cat = cats[i%cats.length];
-    const dep = COMMISSION_RATES.deposits[cat]||200;
-    const pct = COMMISSION_RATES.completion[cat]||10;
+    const dep = SERVICE_FEES.deposits[cat]||200;
+    const pct = SokoniCommission.pct(cat);
     const ref = "SKN"+(100000+i).toString(36).toUpperCase();
     const daysAgo = Math.floor(Math.random()*30);
     const ts = Date.now() - daysAgo*86400000 - Math.random()*43200000;
@@ -779,7 +778,7 @@ function seedDemoRevenue(){
   const phoneLeads = [];
   for(let i=0;i<30;i++){
     const cat = phoneLeadCats[i%phoneLeadCats.length];
-    const fee = COMMISSION_RATES.phoneLead[cat]||100;
+    const fee = SERVICE_FEES.phoneLead[cat]||100;
     const ts = Date.now() - Math.floor(Math.random()*30)*86400000;
     phoneLeads.push({ ref:"PHL"+(10000+i).toString(36).toUpperCase(), fee, providerName:phoneLeadProvs[i%phoneLeadProvs.length], category:cat, unlockedPhone:"07"+Math.floor(10000000+Math.random()*89999999), status:"paid", createdAt:ts });
   }
@@ -790,7 +789,7 @@ function seedDemoRevenue(){
   const leadFees = [];
   for(let i=0;i<20;i++){
     const cat = i%2===0?"b2b":"banking";
-    const fee = COMMISSION_RATES.leadFee[cat]||300;
+    const fee = SERVICE_FEES.leadFee[cat]||300;
     const ts = Date.now() - Math.floor(Math.random()*30)*86400000;
     leadFees.push({ ref:"LDF"+(10000+i).toString(36).toUpperCase(), fee, providerName:leadProviders[i%leadProviders.length], category:cat, clientName:"Buyer "+(i+1), status:"paid", createdAt:ts });
   }
@@ -802,7 +801,7 @@ function seedDemoRevenue(){
   for(let i=0;i<25;i++){
     const cat = i%3===0?"ride":"bnb";
     const total = cat==="bnb" ? 3000+Math.round(Math.random()*7000) : 300+Math.round(Math.random()*500);
-    const pct = COMMISSION_RATES.platform[cat]||10;
+    const pct = SokoniCommission.pct(cat);
     const ts = Date.now() - Math.floor(Math.random()*30)*86400000;
     platformBookings.push({ ref:"PLB"+(10000+i).toString(36).toUpperCase(), providerName:cat==="bnb"?bnbProviders[i%3]:"Driver "+i, category:cat, totalAmount:total, depositPaid:Math.round(total*0.5), balanceDue:Math.round(total*0.5), platformPct:pct, platformFee:Math.round(total*pct/100), providerEarns:total-Math.round(total*pct/100), status:"confirmed", createdAt:ts });
     fees.push({ ref:"PLB"+(10000+i).toString(36).toUpperCase(), providerName:cat==="bnb"?bnbProviders[i%3]:"Driver "+i, category:cat, depositAmount:Math.round(total*pct/100), commissionPct:pct, phone:"", providerPhone:"", serviceDesc:cat+" booking", status:"paid", createdAt:ts });
@@ -814,7 +813,7 @@ function seedDemoRevenue(){
   const voucherRecs = [];
   for(let i=0;i<15;i++){
     const cat = ["catering","hair-beauty","fitness","healthcare"][i%4];
-    const dep = COMMISSION_RATES.deposits[cat]||200;
+    const dep = SERVICE_FEES.deposits[cat]||200;
     const statuses = ["issued","redeemed","redeemed","invoiced"];
     const ts = Date.now() - Math.floor(Math.random()*30)*86400000;
     voucherRecs.push({ ref:"VCH"+(10000+i).toString(36).toUpperCase(), code:"V-VCH"+(10000+i).toString(36).toUpperCase(), providerName:voucherProvs[i%4], category:cat, depositPaid:dep, status:statuses[i%4], createdAt:ts });
@@ -826,7 +825,7 @@ function seedDemoRevenue(){
   const propConnects = [];
   for(let i=0;i<12;i++){
     const rent = 15000+Math.round(Math.random()*45000);
-    const pct = COMMISSION_RATES.platform["property"]||2;
+    const pct = SokoniCommission.pct("property");
     const ts = Date.now() - Math.floor(Math.random()*30)*86400000;
     propConnects.push({ ref:"PRP"+(10000+i).toString(36).toUpperCase(), landlordName:propLandlords[i%4], propertyDesc:["1BR Westlands","2BR Kilimani","Bedsitter Kasarani","3BR Mombasa"][i%4], monthlyRent:rent, tenantDeposit:500, platformPct:pct, commissionOwed:Math.round(rent*pct/100), status:"viewing-scheduled", createdAt:ts });
   }
@@ -867,8 +866,8 @@ const SokoniPay = {
   getProviderPlan:      getProviderPlan,
   savePlanSubscription: savePlanSubscription,
   // ── Admin / Analytics ──────────────────────────────────────
-  getRevenueStats:      getRevenueStats,
-  COMMISSION_RATES,
+  getRevenueStats:      getRevenueStats,  SERVICE_FEES,
+  COMMISSION_RATES: SERVICE_FEES, /* deprecated alias — flat fees only; percentages live in SokoniCommission */
   PLANS,
   BOOST_PRICES,
   seedDemoRevenue,

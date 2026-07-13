@@ -158,8 +158,10 @@ wap.register('payment.refund', async ({ orderId, amount, reason, uid }, ctx) => 
 /* ── Commission + payout handlers ───────────────────────────── */
 
 wap.register('commission.calculate', async ({ orderId, total, category, sellerUid }, ctx) => {
-  const rates      = { food: 0.15, delivery: 0.12, marketplace: 0.08, services: 0.10, default: 0.08 };
-  const pct        = rates[category] ?? rates.default;
+  /* This mirrored the server table in wap.js — food 15%, marketplace 8% — which agreed
+       with nothing else on the platform. The server now prices this through the commission
+       engine; the client only estimates, using the same single config. */
+    const pct        = (window.SokoniCommission ? window.SokoniCommission.pct(category) : 5) / 100;
   const commission = Math.round(total * pct * 100) / 100;
   const sellerNet  = Math.round((total - commission) * 100) / 100;
 

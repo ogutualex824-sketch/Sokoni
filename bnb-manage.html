@@ -24,6 +24,7 @@
   <link rel="stylesheet" href="sokoni-premium-v2.css">
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
+  <script src="sokoni-commission-rates.js"></script>
 </head>
 <body class="landlord-body">
 <script src="sokoni-security.js"></script>
@@ -290,7 +291,7 @@
     const bks = getBookings();
     const confirmed = bks.filter(b => b.status === "confirmed" || b.status === "completed");
     const total = confirmed.reduce((s,b) => s + Number(b.total||0), 0);
-    const commPct = (window.SokoniPay?.COMMISSION_RATES?.completion?.['bnb']) || 5;
+    const commPct =SokoniCommission.pct('bnb');
     const commission = Math.round(total * commPct / 100);
     const net = total - commission;
     const container = document.getElementById("earningsSummary");

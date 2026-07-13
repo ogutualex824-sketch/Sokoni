@@ -396,6 +396,7 @@ input:checked+.ch-toggle-slider::before{transform:translateX(18px);background:#0
 body{padding-bottom:70px;}
 </style>
 <script src="market-actions.js" defer></script>
+<script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"AutoDealer","name":"SOKONI Car Hub — Cars, Hire & NTSA Services Kenya","description":"Hire a car in Kenya, check NTSA services, driving licence renewal, insurance quotes, GPS tracking and find garages near you.","url":"https://mysokoni.co.ke/car-hub.html","logo":"https://mysokoni.co.ke/assets/Sokoni%20Logo.png","telephone":"+254705726803","areaServed":{"@type":"Country","name":"Kenya"}}</script>
 <script src="shared-header.js" defer></script>
@@ -2558,7 +2559,7 @@ function confirmBooking(){
   showFleetMsg("✅ Booking confirmed — M-Pesa request sent!");
   /* Record SOKONI commission (12% car-rental rate) */
   if(typeof SokoniPay !== 'undefined' && SokoniPay.saveCommission){
-    var _cPct = SokoniPay.COMMISSION_RATES.completion['car-rental'] || 12;
+    var _cPct =SokoniCommission.pct('car-rental');
     var _cCut = Math.round(total * _cPct / 100);
     SokoniPay.saveCommission({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'Car rental booking',createdAt:Date.now()});
     SokoniPay.saveFee&&SokoniPay.saveFee({ref:bid,providerName:c.owner||'Car Owner',category:'car-rental',totalPaid:total,sokoniCut:_cCut,providerNet:total-_cCut,commissionPct:_cPct,phone:phone,providerPhone:c.ownerPhone||'',serviceDesc:c.make+' '+c.model+' rental',status:'paid',paymentType:'car_rental',createdAt:Date.now()});

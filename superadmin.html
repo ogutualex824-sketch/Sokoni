@@ -481,7 +481,12 @@ const _cfgDefaults = {
   flags: { marketplace:true, foodHub:true, eventHub:true, carHub:true, jobsHub:true,
            healthHub:true, legalHub:true, educationHub:true, bnbHub:true,
            walletEnabled:true, loyaltyEnabled:true, smartPOS:true },
-  commissions: { marketplace:8, food:10, events:5, car:6, jobs:8, legal:10, health:10, rides:12 },
+  /* Was a hardcoded table (marketplace 8%, legal 10%) that matched neither server table.
+       Derived from the single config so the admin sees what is actually charged. */
+    get commissions() {
+      const R = (window.SokoniCommission && SokoniCommission.RATES) || {};
+      return Object.fromEntries(Object.entries(R).map(([k, v]) => [k, v.pct]));
+    },
   limits: { maxProductImages:10, maxListingPrice:5000000, deliveryRadiusKm:80, maxFileUploadMB:10 },
 };
 let _cfg = JSON.parse(JSON.stringify(_cfgDefaults));

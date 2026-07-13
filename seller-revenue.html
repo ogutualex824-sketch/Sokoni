@@ -375,7 +375,11 @@ const fmtPeriod = p => { if (!p) return "—"; const [y,m] = p.split("-"); const
 const statusMap = { pending:{l:"Pending",c:"#ff9500"},invoiced:{l:"Invoiced",c:"#00d4ff"},paid:{l:"Paid",c:"#71ff00"},waived:{l:"Waived",c:"#888"},active:{l:"Active",c:"#71ff00"},pending_review:{l:"In Review",c:"#ff9500"},expired:{l:"Expired",c:"#ff4444"},pending_payment:{l:"Unpaid",c:"#ff9500"} };
 const badge = (s) => { const b=statusMap[s]||{l:s,c:"#888"}; return `<span class="badge" style="background:${b.c}22;color:${b.c}">${b.l}</span>`; };
 const PLAN_COLORS = {free:"#aaa",pro:"#71ff00",business:"#00d4ff",enterprise:"#ff9500"};
-const HUB_RATES = {marketplace:{pct:3},restaurant:{pct:5},food:{pct:5},freelance:{pct:8},property:{pct:2},vehicles:{pct:0,fixed:2000},healthcare:{pct:5},legal:{pct:5},bnb:{pct:5},digital:{pct:10},b2b:{pct:3},delivery:{pct:8},entertainment:{pct:5},default:{pct:5}};
+/* HUB_RATE_VIEW was a hand-copied mirror of the server table. Rates come from
+     SokoniCommission (generated from functions/commission-config.js) so this page
+     cannot show a seller a rate the server will not charge. */
+  const HUB_RATE_VIEW = new Proxy({}, { get: (_, hub) =>
+    ({ pct: (window.SokoniCommission ? window.SokoniCommission.pct(String(hub)) : 5) }) });
 const HUB_LABELS = {marketplace:"Marketplace",restaurant:"Restaurant",food:"Food",freelance:"Freelance",property:"Property",vehicles:"Vehicles",healthcare:"Healthcare",legal:"Legal",bnb:"BnB",digital:"Digital",b2b:"B2B",delivery:"Delivery",entertainment:"Entertainment"};
 
 let _uid = null;
@@ -438,7 +442,7 @@ function renderOverview() {
   /* Hub rates grid */
   const HUBS = ["marketplace","food","freelance","healthcare","legal","property","bnb","digital","delivery"];
   document.getElementById("ratesGrid").innerHTML = HUBS.map(h => {
-    const r = HUB_RATES[h]||HUB_RATES.default;
+    const r = HUB_RATE_VIEW[h]||HUB_RATE_VIEW.default;
     return `<div style="background:#0d0d0d;border:1px solid #1e1e1e;border-radius:10px;padding:12px">
       <div style="font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.5px">${HUB_LABELS[h]||h}</div>
       <div style="font-size:20px;font-weight:900;color:var(--g);margin-top:4px">${r.pct}%${r.fixed?"+KES"+r.fixed:""}</div>

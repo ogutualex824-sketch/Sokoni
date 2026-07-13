@@ -37,28 +37,11 @@ const TAX_CONFIG = {
   EXEMPT_CATEGORIES: new Set(['property', 'jobs', 'healthcare', 'education']),
 };
 
-/* ─────────────────────────────────────────────────────────────
-   COMMISSION RATE TABLE  (% of order value, server-side only)
-──────────────────────────────────────────────────────────────*/
-const DEFAULT_COMMISSION_RATES = {
-  marketplace:       10,
-  services:          15,
-  food_delivery:      8,
-  bookings:          12,
-  events:            10,
-  digital_products:  20,
-  property:           3,
-  vehicles:           5,
-  jobs:              15,
-  classifieds:        8,
-  subscriptions:    100,  /* full amount is platform revenue */
-  advertising:      100,
-  hub:                8,
-  healthcare:        12,
-  education:         15,
-  legal:             12,
-  default:           10,
-};
+/* The commission rate table used to live here. It is now the single authoritative
+   config in ./commission-config.js — see that file for why, and for the pricing
+   conflict it resolved. Do NOT reintroduce a table here; the drift guard
+   (scripts/verify-commission-single-source.js) fails the deploy if you do. */
+const CC = require('./commission-config');
 
 /* ─────────────────────────────────────────────────────────────
    IDEMPOTENCY
@@ -322,7 +305,7 @@ async function calculateCommission(db, opts) {
     || null;
 
   let commissionCents;
-  let effectiveRate = rule ? rule.rate : (DEFAULT_COMMISSION_RATES[category] || DEFAULT_COMMISSION_RATES.default);
+  let effectiveRate = rule ? rule.rate : CC.resolveRate(category).pct;
 
   if (rule && rule.type === 'fixed') {
     commissionCents = rule.amountCents || 0;
@@ -538,7 +521,9 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
 }
 
 module.exports = {
-  ACCOUNTS, TAX_CONFIG, DEFAULT_COMMISSION_RATES,
+  ACCOUNTS, TAX_CONFIG,
+  /* Rates come from commission-config; re-exported so existing importers keep working. */
+  COMMISSION_CONFIG: CC,
   generateIdempotencyKey, checkIdempotency, markIdempotency,
   createLedgerEntry, reverseLedgerEntry,
   getOrInitWallet, creditWalletTxn, debitWalletTxn, holdWalletTxn, releaseHoldTxn, settleHoldTxn,

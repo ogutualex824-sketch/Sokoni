@@ -33,6 +33,7 @@
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
+<script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="shared-header.js" defer></script>
 <script src="sokoni-branch.js"></script>
@@ -5265,7 +5266,7 @@ window.deleteSellerAccount=deleteSellerAccount;
           ref: id
         });
         if(window.SokoniPay && SokoniPay.saveCommission && amount > 0){
-          var _pct = (SokoniPay.COMMISSION_RATES&&SokoniPay.COMMISSION_RATES.completion&&SokoniPay.COMMISSION_RATES.completion['default'])||10;
+          var _pct =SokoniCommission.pct('default');
           var _cut = Math.round(amount*_pct/100);
           SokoniPay.saveCommission({ref:id,providerName:o.sellerName||o.shop||'Seller',category:'sale',commissionPct:_pct,sokoniCut:_cut,providerNet:amount-_cut,serviceTotal:amount,status:'auto_collected',note:'Sale: '+(o.product||o.item||'Order'),createdAt:Date.now()});
         }
