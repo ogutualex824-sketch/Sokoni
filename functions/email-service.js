@@ -142,6 +142,15 @@ async function _sendViaSendGrid(payload) {
     categories:  payload.category ? [payload.category] : [],
     customArgs:  { emailId: payload.emailId || "", uid: payload.uid || "" },
   };
+
+  /* Attachments — required for Purchase Orders, which must arrive as a real PDF a
+     supplier can file, print and sign. Expected shape (SendGrid's own):
+       [{ content: <base64>, filename, type, disposition: 'attachment' }]
+     Omitted entirely when there are none, so no existing email changes shape. */
+  if (Array.isArray(payload.attachments) && payload.attachments.length) {
+    msg.attachments = payload.attachments;
+  }
+
   const [response] = await sgMail.send(msg);
   return { provider: "sendgrid", statusCode: response.statusCode, messageId: response.headers["x-message-id"] || "" };
 }
@@ -181,6 +190,17 @@ async function _sendViaSmtp(payload) {
     html:    payload.html,
     text:    payload.text || "",
     headers: customHeaders,
+    /* Attachment parity with the SendGrid transport. If the fallback could not carry the
+       PDF, a SendGrid outage would silently downgrade a Purchase Order to a plain email —
+       the supplier would receive a message referring to an attachment that is not there. */
+    attachments: (Array.isArray(payload.attachments) && payload.attachments.length)
+      ? payload.attachments.map(a => ({
+          filename:    a.filename,
+          content:     a.content,          /* base64 */
+          encoding:    "base64",
+          contentType: a.type || "application/pdf",
+        }))
+      : undefined,
   });
   return { provider: "smtp", statusCode: 250, messageId: info.messageId };
 }

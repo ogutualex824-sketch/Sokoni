@@ -154,6 +154,19 @@ Wallet debited: ${amount}${balance ? `\nNew balance: ${balance}` : ''}
 
 If this was not you, contact support immediately.`,
   },
+  /* Purchase Order → supplier. Deliberately short: it is a POINTER to the email that
+     carries the PDF, not a summary of the order. Prices and quantities do not belong in
+     an SMS a supplier may read on a bus — they belong in the document they must sign. */
+  po_sent: {
+    category: 'transactional', pref: 'procurement',
+    body: ({ poNumber, merchant }) =>
+`SOKONI
+
+You have received Purchase Order ${poNumber || ''} from ${merchant || 'a SOKONI merchant'}.
+
+Please check your email or supplier portal.`,
+  },
+
   order_placed: {
     category: 'transactional', pref: 'orders',
     body: ({ orderId, total }) =>

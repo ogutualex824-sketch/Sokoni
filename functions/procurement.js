@@ -47,8 +47,82 @@ const admin                   = require('firebase-admin');
 const crypto                  = require('crypto');
 const logger                  = require('firebase-functions/logger');
 
+/* Reuse the platform engines rather than growing private copies of them. The old
+   sendPurchaseOrder hand-wrote its own emailQueue document and got the shape wrong — the
+   whole reason no supplier ever received a PO. */
+const emailSvc                = require('./email-service');
+const notify                  = require('./notify');
+const { buildPoPdf }          = require('./po-pdf');
+
 const db = admin.firestore();
 const F  = admin.firestore.FieldValue;
+
+/* Escape anything interpolated into the PO email. A supplier name is attacker-controllable
+   in principle (a merchant types it), and this HTML lands in someone's inbox. */
+const _esc = s => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+const _ksh = n => 'KES ' + Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2 });
+
+/* The PO email. The PDF is the artefact; this is the covering note that makes the
+   supplier open it. SOKONI-branded throughout — the legal entity belongs on the PDF's
+   footer, not in a customer-facing email header. */
+function _poEmailHtml(po, poId, supplier, merchant) {
+  const rows = (po.items || []).map(it => {
+    const qty  = Number(it.qty || 0);
+    const unit = Number(it.unitCost || 0);
+    return '<tr>' +
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee">' + _esc(it.name || 'Item') +
+        (it.sku ? '<br><span style="color:#999;font-size:11px">SKU: ' + _esc(it.sku) + '</span>' : '') + '</td>' +
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:right">' + qty + '</td>' +
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:right">' + _ksh(unit) + '</td>' +
+      '<td style="padding:9px 8px;border-bottom:1px solid #eee;text-align:right"><strong>' + _ksh(qty * unit) + '</strong></td>' +
+    '</tr>';
+  }).join('');
+
+  const due = po.expectedDelivery ? new Date(po.expectedDelivery).toDateString() : 'To be confirmed';
+
+  return `<!doctype html><html><body style="margin:0;background:#f5f6f7;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif">
+<div style="max-width:640px;margin:0 auto;padding:24px">
+  <div style="background:#fff;border-radius:14px;padding:28px;border:1px solid #e6e8ea">
+    <div style="font-size:22px;font-weight:800;letter-spacing:-.4px">SOKONI</div>
+    <div style="color:#888;font-size:12px;margin-top:2px">Procurement</div>
+    <h1 style="font-size:19px;margin:22px 0 4px">Purchase Order ${_esc(po.poNumber || poId)}</h1>
+    <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 18px">
+      Dear ${_esc(supplier?.contactName || supplier?.name || 'Supplier')},<br>
+      ${_esc(merchant?.name || 'A SOKONI merchant')} has issued you the purchase order below.
+      The signed PDF is attached.
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px">
+      <thead><tr style="background:#fafafa">
+        <th style="padding:9px 8px;text-align:left;color:#777;font-size:11px">DESCRIPTION</th>
+        <th style="padding:9px 8px;text-align:right;color:#777;font-size:11px">QTY</th>
+        <th style="padding:9px 8px;text-align:right;color:#777;font-size:11px">UNIT</th>
+        <th style="padding:9px 8px;text-align:right;color:#777;font-size:11px">AMOUNT</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <table style="width:100%;font-size:13px;margin-top:10px">
+      <tr><td style="text-align:right;color:#666;padding:3px 8px">Subtotal</td>
+          <td style="text-align:right;width:130px;padding:3px 8px">${_ksh(po.subtotal)}</td></tr>
+      <tr><td style="text-align:right;color:#666;padding:3px 8px">VAT (${po.vatRate != null ? po.vatRate : 16}%)</td>
+          <td style="text-align:right;padding:3px 8px">${_ksh(po.vatAmount)}</td></tr>
+      <tr><td style="text-align:right;font-weight:800;padding:8px;border-top:2px solid #111">Grand Total</td>
+          <td style="text-align:right;font-weight:800;padding:8px;border-top:2px solid #111">${_ksh(po.total)}</td></tr>
+    </table>
+    <p style="font-size:13px;color:#555;margin-top:18px">
+      <strong>Expected delivery:</strong> ${_esc(due)}<br>
+      <strong>Payment terms:</strong> ${_esc(po.paymentTerms || 'Net 30 days from date of delivery.')}
+    </p>
+    ${po.notes ? '<p style="font-size:13px;color:#555;background:#fafafa;padding:12px;border-radius:8px"><strong>Notes:</strong> ' + _esc(po.notes) + '</p>' : ''}
+    <p style="font-size:13px;color:#555;margin-top:18px">Please confirm receipt and your expected fulfilment date.</p>
+  </div>
+  <p style="text-align:center;color:#aaa;font-size:11px;margin-top:16px">
+    Sent via SOKONI. SOKONI is operated by Bravilex International Co. Limited.
+  </p>
+</div></body></html>`;
+}
 
 /* ── Runtime options ──────────────────────────────────────────── */
 const REGION = 'us-central1';
@@ -278,8 +352,33 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
   const seed  = `${merchantId}|${supplierId}|${Date.now()}`;
   const poId  = _deterministicId(seed, 'po');
 
+  /* Human-readable PO number — PO-2026-00042. A supplier quotes this on their invoice and
+     their delivery note; "po_a3f9c1…" is a database key, not something anyone will write
+     on a carton. Counter is a transactional increment so two POs created in the same
+     second cannot collide.
+
+     Falls back to the poId ONLY if the counter is unreachable — a PO that cannot be
+     numbered must still be creatable, because refusing to place an order because a
+     counter is down would be a worse failure than an ugly reference. */
+  let poNumber;
+  try {
+    const year    = new Date().getFullYear();
+    const cRef    = db.collection('procCounters').doc(`po_${merchantId}_${year}`);
+    const next    = await db.runTransaction(async (t) => {
+      const snap = await t.get(cRef);
+      const n    = (snap.exists ? (snap.data().seq || 0) : 0) + 1;
+      t.set(cRef, { seq: n, year, merchantId, updatedAt: F.serverTimestamp() }, { merge: true });
+      return n;
+    });
+    poNumber = `PO-${year}-${String(next).padStart(5, '0')}`;
+  } catch (e) {
+    logger.warn('procurement: PO counter unavailable, falling back to poId', { error: e.message });
+    poNumber = poId;
+  }
+
   const poData = {
     poId,
+    poNumber,
     merchantId,
     supplierId,
     supplierName: supplier.name,
@@ -287,6 +386,7 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
     subtotal,
     vatAmount,
     total,
+    vatRate:          Math.round(VAT_RATE * 100),
     status:           'draft',
     notes:            _san(notes, MAX_NOTE_LEN),
     expectedDelivery: expectedDelivery ? new Date(expectedDelivery) : null,
@@ -303,7 +403,7 @@ const createPurchaseOrder = onCall(OPT, async (request) => {
   await _audit(uid, 'po_created', poId, { merchantId, supplierId, total });
   logger.info('procurement.createPurchaseOrder', { poId, merchantId, total });
 
-  return { poId, subtotal, vatAmount, total };
+  return { poId, poNumber, subtotal, vatAmount, total };
 });
 
 /* ════════════════════════════════════════════════════════════════
@@ -363,9 +463,20 @@ const sendPurchaseOrder = onCall(OPT, async (request) => {
     _err(`PO must be in 'approved' status to send. Current status: '${po.status}'.`);
   }
 
-  /* Fetch supplier to get contact email */
-  const supplierSnap = await db.collection('procSuppliers').doc(po.supplierId).get();
-  const supplier     = supplierSnap.exists ? supplierSnap.data() : null;
+  /* Fetch supplier + the merchant who is buying — both appear on the PDF. */
+  const [supplierSnap, merchantSnap] = await Promise.all([
+    db.collection('procSuppliers').doc(po.supplierId).get(),
+    po.merchantId ? db.collection('users').doc(po.merchantId).get() : Promise.resolve(null),
+  ]);
+  const supplier = supplierSnap.exists ? supplierSnap.data() : null;
+  const mData    = merchantSnap && merchantSnap.exists ? merchantSnap.data() : {};
+  const merchant = {
+    name:    mData.businessName || mData.displayName || mData.name || 'SOKONI Merchant',
+    email:   mData.email   || '',
+    phone:   mData.phone   || '',
+    address: mData.address || '',
+    kraPin:  mData.kraPin  || '',
+  };
 
   const now = F.serverTimestamp();
 
@@ -378,37 +489,102 @@ const sendPurchaseOrder = onCall(OPT, async (request) => {
     updatedAt: now,
   });
 
-  if (supplier?.email) {
-    const itemsList = (po.items ?? [])
-      .map(it => `- ${it.name} (SKU: ${it.sku}) × ${it.qty} @ KES ${it.unitCost.toLocaleString()}`)
-      .join('\n');
-
-    const emailRef = db.collection('emailQueue').doc();
-    batch.set(emailRef, {
-      to:      supplier.email,
-      subject: `Purchase Order ${poId} — SOKONI`,
-      body: `Dear ${supplier.contactName || supplier.name},\n\n` +
-            `Please find below our purchase order ${poId}.\n\n` +
-            `Items:\n${itemsList}\n\n` +
-            `Subtotal: KES ${po.subtotal.toLocaleString()}\n` +
-            `VAT (16%): KES ${po.vatAmount.toLocaleString()}\n` +
-            `Total: KES ${po.total.toLocaleString()}\n\n` +
-            (po.expectedDelivery
-              ? `Expected Delivery: ${new Date(po.expectedDelivery).toDateString()}\n\n`
-              : '') +
-            `Please confirm receipt and expected fulfilment date.\n\nThank you,\nSOKONI Procurement`,
-      poId,
-      type:      'procurement_po_sent',
-      createdAt: now,
-    });
-  }
-
   await batch.commit();
 
-  await _audit(uid, 'po_sent', poId, { merchantId: po.merchantId, supplierId: po.supplierId });
-  logger.info('procurement.sendPurchaseOrder', { poId, supplierEmail: supplier?.email });
+  /* ── DELIVERY ────────────────────────────────────────────────────────────────
+     This used to hand-write a document into emailQueue like so:
 
-  return { poId, status: 'sent', emailQueued: !!supplier?.email };
+         batch.set(emailRef, { to, subject, body, poId, type, createdAt });
+
+     processEmailQueue selects on  .where('status','==','pending').where('nextAttempt','<=',now)
+     and that document had NEITHER field. So it never matched the query, was never picked
+     up, and no supplier has ever received a purchase order by email. The PO was marked
+     "sent" regardless — the status said sent, the outbox said nothing.
+
+     It also wrote `body`, while the sender requires `html`. Two independent reasons the
+     same email could not go out.
+
+     EmailService.queue() is the ONE correct enqueue: it validates to/subject/html and
+     stamps status/nextAttempt/retryCount. Going through it means the PO inherits the
+     retry, dead-letter and delivery-tracking that already exist, rather than a private
+     copy of them that works less well. */
+  const pdf  = buildPoPdf(
+    { ...po, poNumber: po.poNumber || poId, createdAt: Date.now() },
+    supplier || {},
+    merchant || {},
+  );
+  const html = _poEmailHtml(po, poId, supplier, merchant);
+
+  const delivery = { email: 'skipped', sms: 'skipped', inApp: 'skipped' };
+
+  /* ── Email + PDF attachment (primary channel) ── */
+  if (supplier?.email) {
+    try {
+      await emailSvc.queue({
+        to:       supplier.email,
+        subject:  `Purchase Order ${po.poNumber || poId} from ${merchant?.name || 'SOKONI'}`,
+        html,
+        category: 'procurement',
+        /* Deterministic id — a retried send must not email the supplier twice. */
+        emailId:  `po-sent-${poId}`,
+        attachments: [{
+          content:     pdf.toString('base64'),
+          filename:    `${po.poNumber || poId}.pdf`,
+          type:        'application/pdf',
+          disposition: 'attachment',
+        }],
+      });
+      delivery.email = 'queued';
+    } catch (e) {
+      /* Do NOT swallow this. A PO marked "sent" whose email failed is exactly the lie we
+         are here to remove — record it on the PO so it is visible, not just in a log. */
+      delivery.email = 'failed';
+      logger.error('procurement.sendPurchaseOrder email failed', { poId, error: e.message });
+    }
+  } else {
+    delivery.email = 'no_email_on_supplier';
+  }
+
+  /* ── SMS + in-app + push, via the ONE notification engine ── */
+  if (supplier?.phone || supplier?.uid) {
+    try {
+      await notify.notify({
+        uid:   supplier.uid || `supplier:${po.supplierId}`,
+        phone: supplier.phone || undefined,
+        type:  'po_sent',
+        title: 'New Purchase Order',
+        body:  `You have received Purchase Order ${po.poNumber || poId} from ` +
+               `${merchant?.name || 'a SOKONI merchant'}. Please check your email.`,
+        deepLink:  `/procurement?po=${poId}`,
+        dedupeKey: `po:${poId}:sent`,      /* one notification per PO, ever */
+        /* Feeds the po_sent SMS template. */
+        vars: { poNumber: po.poNumber || poId, merchant: merchant?.name || '' },
+        data: { poId, supplierId: po.supplierId },
+      });
+      delivery.sms   = supplier.phone ? 'queued' : 'skipped';
+      delivery.inApp = supplier.uid   ? 'queued' : 'skipped';
+    } catch (e) {
+      logger.error('procurement.sendPurchaseOrder notify failed', { poId, error: e.message });
+      delivery.sms = 'failed';
+    }
+  }
+
+  /* The PO carries its own delivery record. "sent" now means something checkable. */
+  await poRef.update({
+    delivery,
+    deliveryAt: F.serverTimestamp(),
+  });
+
+  await _audit(uid, 'po_sent', poId, {
+    merchantId: po.merchantId, supplierId: po.supplierId, delivery,
+  });
+  logger.info('procurement.sendPurchaseOrder', { poId, delivery });
+
+  /* Return the real delivery outcome, not a boolean guess. The old version returned
+     `emailQueued: !!supplier.email` — true whenever the supplier merely HAD an email
+     address, whether or not anything was actually queued. It would have reported success
+     for every one of the emails that never sent. */
+  return { poId, status: 'sent', poNumber: po.poNumber || poId, delivery };
 });
 
 /* ════════════════════════════════════════════════════════════════

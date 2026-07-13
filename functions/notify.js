@@ -107,6 +107,12 @@ const TYPES = {
   loyalty_welcome:      { priority: 'commerce',  category: 'loyalty',       smsTemplate: null },
   birthday_bonus:       { priority: 'marketing', category: 'loyalty',       smsTemplate: null },
   cashback_received:    { priority: 'commerce',  category: 'loyalty',       smsTemplate: null },
+  /* Procurement. A supplier receiving a purchase order is commerce, not marketing — it is
+     an order for goods, and it must not be suppressible by a preference toggle. */
+  po_sent:              { priority: 'commerce',  category: 'procurement',   smsTemplate: 'po_sent' },
+  po_accepted:          { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
+  po_rejected:          { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
+  goods_received:       { priority: 'commerce',  category: 'procurement',   smsTemplate: null },
   support_reply:        { priority: 'commerce',  category: 'support',       smsTemplate: null },
   kass_reply:           { priority: 'commerce',  category: 'ai',            smsTemplate: null },
   system_update:        { priority: 'commerce',  category: 'system',        smsTemplate: null },

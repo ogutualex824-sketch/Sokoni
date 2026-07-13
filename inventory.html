@@ -2160,17 +2160,70 @@ async function loadWarehouses() {
 }
 
 // ── SUPPLIERS ─────────────────────────────────────────────
+/* Read from `procSuppliers` — the collection the procurement Cloud Functions actually
+   validate against. This used to read `inventory_suppliers` (client SDK), a completely
+   separate collection the server has never heard of. So a supplier picked here could not
+   be found by createPurchaseOrder, and the PO would have been rejected outright — if the
+   client had ever called it, which it did not.
+
+   One purchase-order system. One supplier list. procSuppliers is canonical because it is
+   the one the VAT, audit, GRN and payment ledger all hang off. */
+function _merchantId() {
+  return (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+      || (JSON.parse(localStorage.getItem('sokoniUser') || 'null') || {}).uid
+      || null;
+}
+
 async function loadSuppliers() {
-  _suppliers = await SokoniInventory.getSuppliers();
-  const sel  = document.getElementById('po-supplier');
+  const mid = _merchantId();
+  if (!mid) { _suppliers = []; return; }
+  try {
+    const snap = await firebase.firestore()
+      .collection('procSuppliers')
+      .where('merchantId', '==', mid)
+      .where('status', '==', 'active')
+      .get();
+    _suppliers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  } catch (e) {
+    _suppliers = [];
+    showToast('Could not load suppliers');
+  }
+  const sel = document.getElementById('po-supplier');
   if (!sel) return;
   sel.innerHTML = `<option value="">Select supplier…</option>` +
     _suppliers.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`).join('');
 }
 
 // ── PURCHASE ORDERS ───────────────────────────────────────
+/* Reads procPurchaseOrders — the collection the Cloud Functions actually write. It used
+   to read inventory_purchaseOrders, so a PO created by the server would never have
+   appeared in this list at all: the merchant would send a PO and watch nothing happen. */
 async function loadPOs() {
-  _pos = await SokoniInventory.getPurchaseOrders({ status: _poFilter || undefined });
+  const mid = _merchantId();
+  if (!mid) { _pos = []; renderPOs(_pos); return; }
+  try {
+    let q = firebase.firestore().collection('procPurchaseOrders')
+      .where('merchantId', '==', mid);
+    if (_poFilter) q = q.where('status', '==', _poFilter);
+    const snap = await q.orderBy('createdAt', 'desc').limit(50).get();
+    _pos = snap.docs.map(d => {
+      const p = d.data();
+      return {
+        id:        d.id,
+        number:    p.poNumber || d.id,
+        supplierId: p.supplierId,
+        supplierName: p.supplierName || '',
+        status:    p.status,
+        totalCost: p.total,
+        items:     p.items || [],
+        delivery:  p.delivery || null,
+        createdAt: p.createdAt && p.createdAt.toDate ? p.createdAt.toDate().toISOString() : null,
+      };
+    });
+  } catch (e) {
+    _pos = [];
+    showToast('Could not load purchase orders');
+  }
   renderPOs(_pos);
 }
 
@@ -2679,25 +2732,103 @@ function calcPOTotal() {
   document.getElementById('po-total').textContent = `KES ${total.toFixed(2)}`;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   SEND PO — was a data write, is now a delivery.
+
+   This function used to call SokoniInventory.createPO() and then updatePO(id,'sent').
+   Both write to the `inventory_purchaseOrders` collection through the client SDK. No
+   Cloud Function reads that collection.
+
+   Meanwhile a complete procurement backend already existed — createPurchaseOrder,
+   approvePurchaseOrder, sendPurchaseOrder, receiveGoods, invoicing, a double-entry
+   ledger, vendor performance — writing to `procPurchaseOrders`. The client never called
+   any of it. TWO purchase-order systems, in one product, that had never met.
+
+   So "Send PO" set a status field to "sent" and stopped. No email. No PDF. No supplier
+   was ever told anything. The button was honest about saving and silent about sending.
+
+   Same shape as fcmToken/fcmTokens and deepLink/url elsewhere in this codebase: a
+   producer and a consumer that were never introduced.
+
+   Now: create → approve → send, all server-side. Totals and VAT are computed by the
+   server (the client's figures are not trusted — CLAUDE.md), the supplier gets a real
+   PDF by email plus an SMS, and the PO carries a delivery record so "sent" is a claim
+   that can be checked. */
 async function submitPO(status = 'sent') {
-  const supplierId = document.getElementById('po-supplier').value;
-  if (!supplierId) { showToast('Select a supplier'); return; }
-  if (!_poLines.length) { showToast('Add at least one item'); return; }
-  const po = {
+  const supplierId  = document.getElementById('po-supplier').value;
+  const warehouseId = document.getElementById('po-warehouse').value;
+
+  /* Validate BEFORE anything is created — and say what is wrong, not just "failed". */
+  const problems = [];
+  if (!supplierId)        problems.push('Select a supplier');
+  if (!warehouseId)       problems.push('Select a delivery location');
+  if (!_poLines.length)   problems.push('Add at least one item');
+  _poLines.forEach((l, i) => {
+    const qty  = Number(l.qty);
+    const cost = Number(l.unitCost);
+    if (!(qty > 0))            problems.push(`Line ${i + 1}: quantity must be greater than 0`);
+    if (!(cost >= 0))          problems.push(`Line ${i + 1}: unit price is not valid`);
+    if (!Number.isFinite(qty) || !Number.isFinite(cost)) problems.push(`Line ${i + 1}: invalid number`);
+  });
+  if (problems.length) { showToast(problems[0]); return; }
+
+  const btn = document.querySelector('#po-modal .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = status === 'draft' ? 'Saving…' : 'Sending…'; }
+
+  const merchantId = _merchantId();
+  if (!merchantId) { showToast('Please sign in again'); if (btn) btn.disabled = false; return; }
+
+  const payload = {
+    merchantId,                       /* createPurchaseOrder requires this */
     supplierId,
-    warehouseId:    document.getElementById('po-warehouse').value,
-    expectedDelivery:document.getElementById('po-delivery').value,
-    notes:          document.getElementById('po-notes').value,
-    items:          _poLines,
-    status,
+    branchId:         warehouseId,
+    expectedDelivery: document.getElementById('po-delivery').value || null,
+    notes:            document.getElementById('po-notes').value || '',
+    items: _poLines.map(l => ({
+      productId: l.productId || l.id || '',
+      sku:       l.sku  || '',
+      name:      l.name || 'Item',
+      qty:       Number(l.qty),
+      unitCost:  Number(l.unitCost),
+    })),
   };
+
   try {
-    const saved = await SokoniInventory.createPO(po);
-    if (status === 'sent') await SokoniInventory.updatePO(saved.id, { status: 'sent' });
-    showToast(`PO ${saved.number} ${status === 'draft' ? 'saved' : 'sent'}`);
+    const call = n => firebase.functions().httpsCallable(n);
+
+    /* 1. Create — server computes subtotal, VAT and total. */
+    const created = await call('createPurchaseOrder')(payload);
+    const poId    = created.data.poId;
+    const poNo    = created.data.poNumber || poId;
+
+    if (status === 'draft') {
+      showToast(`Draft ${poNo} saved`);
+      closeModal('po-modal'); loadPOs(); return;
+    }
+
+    /* 2. Approve — sendPurchaseOrder refuses to send anything not approved, which is the
+          control that stops an unreviewed order reaching a supplier. */
+    await call('approvePurchaseOrder')({ poId });
+
+    /* 3. Send — generates the PDF, emails the supplier, SMSs them, writes the audit. */
+    const sent = await call('sendPurchaseOrder')({ poId });
+    const d    = (sent.data && sent.data.delivery) || {};
+
+    /* Report what ACTUALLY happened. If the supplier has no email on file the PO is sent
+       but undeliverable, and the merchant needs to know that now — not when the goods
+       fail to arrive. */
+    if (d.email === 'queued')                showToast(`PO ${poNo} sent to supplier`);
+    else if (d.email === 'no_email_on_supplier') showToast(`PO ${poNo} created — supplier has no email address on file`);
+    else if (d.email === 'failed')           showToast(`PO ${poNo} saved, but the email could not be sent`);
+    else                                     showToast(`PO ${poNo} sent`);
+
     closeModal('po-modal');
     loadPOs();
-  } catch (e) { showToast('Error: ' + e.message); }
+  } catch (e) {
+    showToast('Could not send PO: ' + (e.message || 'please try again'));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = status === 'draft' ? 'Save Draft' : 'Send PO'; }
+  }
 }
 
 function savePODraft() { submitPO('draft'); }
@@ -2753,18 +2884,32 @@ async function finaliseStockCount() {
 // ── SUPPLIER MODAL ────────────────────────────────────────
 function openSupplierModal() { openModal('supplier-modal'); }
 
+/* Routed through the addSupplier Cloud Function, which writes procSuppliers — the
+   collection createPurchaseOrder validates against. It previously wrote
+   inventory_suppliers via the client SDK, so every supplier the merchant created was
+   invisible to the procurement backend. A supplier you cannot order from is not a
+   supplier. */
 async function saveSupplier() {
-  const name = document.getElementById('sup-name').value.trim();
-  if (!name) { showToast('Supplier name required'); return; }
+  const name  = document.getElementById('sup-name').value.trim();
+  const phone = document.getElementById('sup-phone').value.trim();
+  const mid   = _merchantId();
+
+  /* addSupplier REQUIRES a phone. Catch it here with a clear message rather than letting
+     the server reject it with a raw error the merchant cannot act on. */
+  if (!mid)   { showToast('Please sign in again'); return; }
+  if (!name)  { showToast('Supplier name is required'); return; }
+  if (!phone) { showToast('Contact phone is required — the supplier is notified by SMS'); return; }
+
   try {
-    await SokoniInventory.saveSupplier({
+    await firebase.functions().httpsCallable('addSupplier')({
+      merchantId:    mid,
       name,
-      contactName:   document.getElementById('sup-contact').value,
-      phone:         document.getElementById('sup-phone').value,
-      email:         document.getElementById('sup-email').value,
+      phone,
+      contactName:   document.getElementById('sup-contact').value || '',
+      email:         document.getElementById('sup-email').value   || '',
       paymentTerms:  parseInt(document.getElementById('sup-terms').value) || 30,
       leadTimeDays:  parseInt(document.getElementById('sup-lead').value)  || 7,
-      notes:         document.getElementById('sup-notes').value,
+      notes:         document.getElementById('sup-notes').value || '',
     });
     showToast(`Supplier "${name}" saved`);
     closeModal('supplier-modal');
