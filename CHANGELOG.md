@@ -1,4 +1,53 @@
-﻿## [2026-07-13] — SOKONI Platform Constitution v1.0 Ratified
+﻿## [2026-07-13] — Identity Command Center Sprint 7 — Platform Integration & Executive Workspace
+
+### Summary
+
+Sprint 7 transforms the Identity Command Center into the **executive operating system** of the entire SOKONI platform. Every major module now surfaces a summary card inside the Identity Center. Zero new Cloud Functions deployed. All intelligence is derived from already-cached data (`window._piOverview`, `profileGetCompletion`, `profileGetDocumentVault`) with lazy re-reads.
+
+**Executive Morning Brief** (`#pi7Brief`) — time-aware salutation (morning/afternoon/evening) + live data grid (pending orders, today's revenue, wallet balance, unread messages, businesses, trust score, expiring docs) + a rule-based KASS recommendation that escalates through verification priorities. The S5 greeting is suppressed when the brief is visible.
+
+**Business Health Widget** (`#pi7BizHealth`) — composite 0-100 score (trust 20pts + identity 15 + KRA 15 + bank 10 + legal 10 + security 10 + business 10 + profile 10). Horizontal component bars. Only shown for business roles or users with `businessCount > 0`.
+
+**Notification Summary** (`#pi7NotifSummary`) — grouped activity chips (orders, messages, approvals, system alerts, payouts) derived from overview data with a "View All" link. Hidden when no activity.
+
+**Pinned Actions** (`#pi7PinsWrap`) — users pin any action from the Command Palette. Stored in `localStorage._pi7pins`. Edit mode shows remove handles. "+" button opens palette in pin mode.
+
+**Cross-Module Summary Cards** (`#pi7ModuleCards`) — 5 role-aware ecosystem cards (wallet/orders/analytics/legal/notifications per role; 10 role configs). One-tap deep links into any module.
+
+**Universal Command Palette** — injected into `document.body` via JS (no static anchor needed). 33 NLP commands across all SOKONI modules. Ctrl+K / Cmd+K shortcut. Arrow key navigation. Pin mode for adding pinned actions. Closes on Esc or backdrop click.
+
+**Workspace Memory (enhanced)** — `switchTab` chain now saves per-business-context key (`_pi7ws_{activeWorkspace}`). Boot sequence: S3:0ms → S4:900ms → S5:1400ms → S6:1800ms → S7:2200ms.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `profile.html` | Sprint 7 CSS (~180 lines: brief, biz health, notif, pins, module cards, command palette); 5 HTML placeholders in Overview panel; Sprint 7 IIFE (~430 lines: morning brief, biz health, notif summary, pins, module summaries, workspace memory, NLP command palette, switchTab chain, boot) |
+
+### Architecture Compliance (Platform Constitution)
+- **No duplicate engines** — reuses Profile Engine, Wallet Engine, Document Engine, Analytics Engine
+- **No new Cloud Functions** — `profileGetCompletion` and `profileGetDocumentVault` already existed
+- **No duplicate search** — Command Palette uses in-memory NLP index; does not re-implement search CF
+- **No duplicate analytics** — module cards read `ov.analyticsScore` from existing overview; do not call analytics CF
+- **Canonical engine usage** — every module card links to the canonical module page; no logic is duplicated
+
+### Security
+- Command Palette onclick strings reference `location.href` and `switchTab` only — no `eval`, no user-data injection
+- `_pi7PinFromPalette` decodes `encodeURIComponent(JSON.stringify({}))` — structured, not eval'd
+- No credentials, tokens, or PII written to localStorage
+
+### Performance
+- S7 boots at 2200ms — zero added startup delay for any existing functionality
+- Module summary cards, notification groups, pins: all render from already-cached data (no additional reads)
+- Command Palette DOM injected lazily on first use (not on page load)
+- Vault refetch in S7 is de-duplicated: only fires if `_pi7VaultCache` is not already set by S5
+
+### Breaking Changes
+None.
+
+---
+
+## [2026-07-13] — SOKONI Platform Constitution v1.0 Ratified
 
 ### Summary
 
