@@ -9326,3 +9326,13 @@ exports.notifyGetPreferences = _notify.notifyGetPreferences;
 exports.notifySetPreferences = _notify.notifySetPreferences;
 exports.notifyStats          = _notify.notifyStats;
 exports.orderAdvance         = _notify.orderAdvance;   /* 11-stage order timeline */
+
+/* ══════════════════════════════════════════════════════════════
+   ACCOUNT MANAGER — deletion grace period, data export, session revocation.
+══════════════════════════════════════════════════════════════ */
+const _acctMgr = require("./account-manager");
+exports.scheduleAccountDeletion   = _acctMgr.scheduleAccountDeletion;
+exports.cancelAccountDeletion     = _acctMgr.cancelAccountDeletion;
+exports.requestDataExport         = _acctMgr.requestDataExport;
+exports.revokeAllSessions         = _acctMgr.revokeAllSessions;
+exports.finaliseExpiredDeletions  = _acctMgr.finaliseExpiredDeletions;

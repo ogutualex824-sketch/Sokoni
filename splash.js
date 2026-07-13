@@ -30,6 +30,7 @@
     'cart.html':                'Your Cart Awaits',
     'checkout.html':            'Secure Checkout',
     'profile.html':             'Your SOKONI Account',
+    'account-centre.html':      'Your Account, Your Control.',
     'wishlist.html':            'Things You Love',
     'invoice.html':             'Your Receipt',
     'offer.html':               'Exclusive Offer — Just for You',
@@ -178,6 +179,18 @@
   };
 
   var _line = _T[_pg] || 'One Platform. Endless Possibilities.';
+
+  /* ── Personalise tagline for returning users ──────────────────────── */
+  var _AUTH_PG = { 'login.html':1, 'signup.html':1, 'register.html':1, 'join.html':1 };
+  if (!_AUTH_PG[_pg]) {
+    try {
+      if (localStorage.getItem('loggedIn') === 'true') {
+        var _u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+        var _first = (_u.name || _u.displayName || '').split(' ')[0].trim();
+        if (_first) _line = 'Welcome back, ' + _first + '.';
+      }
+    } catch (_) {}
+  }
 
   /* ── Inline SVG basket icon (no "SOKONI" text) ────────────────────────── */
   var ICON =

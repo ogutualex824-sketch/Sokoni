@@ -1,4 +1,62 @@
-﻿﻿## [2026-07-13] — Legal Hub Recovery Sprint (defect half; feature half deferred to v1.1)
+﻿﻿## [2026-07-13] — Enterprise Authentication 2.0 / Premium Identity & Session Experience
+
+### Summary
+
+Session persistence, personalised splash experience, premium account management page, avatar
+dropdown with role switching, and the account lifecycle Cloud Functions (deletion grace period,
+data export, session revocation).
+
+### Files Added
+
+| File | Purpose |
+|---|---|
+| `sokoni-session-state.js` | Lightweight session context tracker — last page, last role, last business; auto-saves on every qualifying page visit |
+| `account-centre.html` | 14-section premium account management page (Profile, Security, Devices, Subscriptions, Payments, Wallet, Businesses, Notifications, Privacy, Verification, Session Log, My Data, Legal, Delete Account) |
+| `functions/account-manager.js` | 5 Cloud Functions: `scheduleAccountDeletion`, `cancelAccountDeletion`, `requestDataExport`, `revokeAllSessions`, `finaliseExpiredDeletions` |
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `splash.js` | "Welcome back, [firstName]." tagline for returning signed-in users; `account-centre.html` added to tagline map |
+| `shared-header.js` | Avatar button now opens a dropdown with profile links, Account Centre, and role switcher (multi-role users only); added `.sk-acct-wrap` / `#sk-acct-popup` CSS and `window._skToggleAcct` / `window._skSwitchRole` handlers |
+| `functions/index.js` | Exports 5 new account-manager Cloud Functions |
+
+### Cloud Functions (new — 5)
+
+| Function | Trigger | Description |
+|---|---|---|
+| `scheduleAccountDeletion` | onCall | Marks user for deletion 30 days from now; writes `deletionScheduledAt` to users doc |
+| `cancelAccountDeletion` | onCall | Removes deletion flag when user signs in during grace period |
+| `requestDataExport` | onCall | Queues data export; rate-limited to 1 per 7 days; notifies by email within 24h |
+| `revokeAllSessions` | onCall | Revokes Firebase refresh tokens + marks all Firestore userSessions inactive |
+| `finaliseExpiredDeletions` | Scheduled (daily 23:00 UTC) | Hard-deletes Firebase Auth accounts + redacts Firestore docs after grace period |
+
+### Security
+
+- Account deletion requires typed confirmation (`DELETE`) + Cloud Function auth check
+- Data export rate-limited: 1 request per 7 days per UID
+- `revokeAllSessions` uses Firebase Admin `auth.revokeRefreshTokens()` — forces sign-out on every device simultaneously
+- Hard-deleted Firestore user documents are **redacted** (not deleted) to preserve audit trail and legal compliance
+- All 5 Cloud Functions enforce `_assertAuth()` — unauthenticated calls receive `unauthenticated` HttpsError
+
+### Backward Compatibility
+
+- Zero breaking changes: all existing auth flows, session-manager.js, firebase.js, auth.js untouched
+- `sokoni-session-state.js` auto-initialises on page load; no changes needed in other pages
+- `shared-header.js` avatar still navigates to `login.html` when user is not signed in
+- `profile.html` is unchanged and remains the primary profile editing page
+
+### Migration / Deployment
+
+1. Deploy new Cloud Functions: `firebase deploy --only functions:scheduleAccountDeletion,functions:cancelAccountDeletion,functions:requestDataExport,functions:revokeAllSessions,functions:finaliseExpiredDeletions`
+2. Add `account-centre.html` to Firebase Hosting (auto-deployed with next `firebase deploy --only hosting`)
+3. `dataExportRequests` Firestore collection is auto-created on first export request (no index required initially)
+4. Scheduled `finaliseExpiredDeletions` will appear in GCP Cloud Scheduler after functions deploy
+
+---
+
+## [2026-07-13] — Legal Hub Recovery Sprint (defect half; feature half deferred to v1.1)
 
 ### Scope note
 

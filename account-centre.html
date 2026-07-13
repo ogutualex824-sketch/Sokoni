@@ -1,0 +1,1876 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1" data-require-auth="true">
+<head>
+  <script src="security.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>SOKONI — Account Centre</title>
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script src="shared-header.js" defer></script>
+  <style>
+    /* ── Tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:     #050505;
+      --sur:    #111111;
+      --sur2:   #181818;
+      --bor:    rgba(255,255,255,0.08);
+      --g:      #71ff00;
+      --g-dim:  rgba(113,255,0,0.08);
+      --g-mid:  rgba(113,255,0,0.18);
+      --txt:    #ffffff;
+      --sub:    rgba(255,255,255,0.55);
+      --red:    #ff4d4d;
+      --red-dim:rgba(255,77,77,0.08);
+      --radius: 14px;
+      --hdr-h:  64px;
+    }
+
+    /* ── Reset / Base ────────────────────────────────────── */
+    *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--txt);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0));
+    }
+
+    /* ── Page Shell ──────────────────────────────────────── */
+    .ac-shell {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      grid-template-rows: auto 1fr;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 16px;
+      gap: 0 24px;
+      min-height: calc(100vh - var(--hdr-h));
+      padding-top: 24px;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    .ac-sidebar {
+      grid-column: 1;
+      grid-row: 1 / 3;
+      position: sticky;
+      top: calc(var(--hdr-h) + 16px);
+      height: fit-content;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ac-sidebar-header {
+      padding: 0 12px 16px;
+      border-bottom: 1px solid var(--bor);
+      margin-bottom: 8px;
+    }
+    .ac-user-name {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--txt);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ac-user-email {
+      font-size: 12px;
+      color: var(--sub);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .ac-nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--sub);
+      transition: background .15s, color .15s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+    }
+    .ac-nav-item:hover { background: var(--g-dim); color: var(--txt); }
+    .ac-nav-item.active {
+      background: var(--g-dim);
+      color: var(--g);
+      font-weight: 700;
+    }
+    .ac-nav-item i { width: 18px; text-align: center; font-size: 14px; }
+    .ac-nav-danger { color: var(--red) !important; }
+    .ac-nav-danger:hover { background: var(--red-dim) !important; color: var(--red) !important; }
+    .ac-nav-separator {
+      height: 1px;
+      background: var(--bor);
+      margin: 8px 0;
+    }
+
+    /* ── Mobile tab strip ────────────────────────────────── */
+    .ac-tab-strip {
+      display: none;
+      overflow-x: auto;
+      overflow-y: hidden;
+      white-space: nowrap;
+      padding: 8px 0;
+      gap: 6px;
+      scrollbar-width: none;
+      border-bottom: 1px solid var(--bor);
+      margin-bottom: 16px;
+    }
+    .ac-tab-strip::-webkit-scrollbar { display: none; }
+    .ac-tab-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 1px solid var(--bor);
+      background: none;
+      color: var(--sub);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .ac-tab-btn.active {
+      background: var(--g-dim);
+      border-color: rgba(113,255,0,0.3);
+      color: var(--g);
+    }
+
+    /* ── Main content ────────────────────────────────────── */
+    .ac-main {
+      grid-column: 2;
+      min-width: 0;
+    }
+
+    /* ── Section panels ──────────────────────────────────── */
+    .ac-panel { display: none; }
+    .ac-panel.active { display: block; }
+
+    .ac-panel-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: var(--txt);
+      margin-bottom: 4px;
+      letter-spacing: -.02em;
+    }
+    .ac-panel-sub {
+      font-size: 13px;
+      color: var(--sub);
+      margin-bottom: 24px;
+    }
+
+    /* ── Cards ───────────────────────────────────────────── */
+    .ac-card {
+      background: var(--sur);
+      border: 1px solid var(--bor);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .ac-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--sub);
+      margin-bottom: 16px;
+    }
+
+    /* ── Row rows (label / value pairs) ─────────────────── */
+    .ac-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--bor);
+      gap: 12px;
+    }
+    .ac-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .ac-row:first-child { padding-top: 0; }
+    .ac-row-label {
+      font-size: 13.5px;
+      font-weight: 500;
+      color: var(--sub);
+      flex-shrink: 0;
+    }
+    .ac-row-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--txt);
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ac-row-action {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--g);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px 0;
+      flex-shrink: 0;
+    }
+    .ac-row-action:hover { text-decoration: underline; }
+
+    /* ── Avatar row ──────────────────────────────────────── */
+    .ac-avatar-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .ac-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--g-dim);
+      border: 2px solid rgba(113,255,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--g);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .ac-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .ac-avatar-info { flex: 1; min-width: 0; }
+    .ac-avatar-name { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+    .ac-avatar-meta { font-size: 12.5px; color: var(--sub); }
+
+    /* ── Badges ──────────────────────────────────────────── */
+    .ac-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--g-dim);
+      color: var(--g);
+      border: 1px solid rgba(113,255,0,0.2);
+    }
+    .ac-badge-red {
+      background: var(--red-dim);
+      color: var(--red);
+      border-color: rgba(255,77,77,0.2);
+    }
+    .ac-badge-grey {
+      background: rgba(255,255,255,0.05);
+      color: var(--sub);
+      border-color: var(--bor);
+    }
+
+    /* ── Buttons ─────────────────────────────────────────── */
+    .ac-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s, transform .1s;
+    }
+    .ac-btn:active { transform: scale(.97); }
+    .ac-btn-primary { background: var(--g); color: #050505; }
+    .ac-btn-ghost {
+      background: var(--g-dim);
+      color: var(--g);
+      border: 1px solid rgba(113,255,0,0.25);
+    }
+    .ac-btn-danger { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,77,77,0.25); }
+    .ac-btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    /* ── Toggle switch ───────────────────────────────────── */
+    .ac-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--bor);
+    }
+    .ac-toggle-row:last-child { border-bottom: none; }
+    .ac-toggle-info { flex: 1; }
+    .ac-toggle-label { font-size: 14px; font-weight: 600; }
+    .ac-toggle-desc { font-size: 12px; color: var(--sub); margin-top: 2px; }
+    .ac-toggle {
+      position: relative;
+      width: 44px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    .ac-toggle input { opacity: 0; width: 0; height: 0; }
+    .ac-toggle-track {
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0.12);
+      border-radius: 13px;
+      transition: background .2s;
+      cursor: pointer;
+    }
+    .ac-toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform .2s;
+    }
+    .ac-toggle input:checked + .ac-toggle-track { background: var(--g); }
+    .ac-toggle input:checked + .ac-toggle-track::after { transform: translateX(18px); }
+
+    /* ── Device card ─────────────────────────────────────── */
+    .ac-device-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--bor);
+    }
+    .ac-device-card:last-child { border-bottom: none; }
+    .ac-device-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: var(--g-dim);
+      border: 1px solid rgba(113,255,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .ac-device-info { flex: 1; min-width: 0; }
+    .ac-device-name { font-size: 14px; font-weight: 700; }
+    .ac-device-meta { font-size: 12px; color: var(--sub); margin-top: 2px; }
+    .ac-device-current { display: inline-block; margin-left: 6px; }
+
+    /* ── Role pill list ──────────────────────────────────── */
+    .ac-roles-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .ac-role-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12.5px;
+      font-weight: 700;
+      background: var(--sur2);
+      border: 1px solid var(--bor);
+      color: var(--txt);
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .ac-role-pill.active-role {
+      background: var(--g-dim);
+      border-color: rgba(113,255,0,0.3);
+      color: var(--g);
+    }
+
+    /* ── Delete account steps ────────────────────────────── */
+    .ac-delete-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .ac-delete-step {
+      background: var(--sur2);
+      border: 1px solid var(--bor);
+      border-radius: 12px;
+      padding: 16px;
+      display: none;
+    }
+    .ac-delete-step.active { display: block; }
+    .ac-delete-step-num {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-bottom: 8px;
+    }
+    .ac-delete-step-title {
+      font-size: 16px;
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+    .ac-delete-step-body {
+      font-size: 13px;
+      color: var(--sub);
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .ac-warning-box {
+      background: var(--red-dim);
+      border: 1px solid rgba(255,77,77,0.2);
+      border-radius: 10px;
+      padding: 14px;
+      font-size: 13px;
+      color: rgba(255,150,150,0.9);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+    .ac-warning-box strong { color: var(--red); }
+
+    /* ── Business grid ───────────────────────────────────── */
+    .ac-biz-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .ac-biz-card {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px;
+      background: var(--sur2);
+      border: 1px solid var(--bor);
+      border-radius: 12px;
+      transition: border-color .15s;
+    }
+    .ac-biz-card:hover { border-color: rgba(113,255,0,0.25); }
+    .ac-biz-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: var(--g-dim);
+      border: 1px solid rgba(113,255,0,0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+    }
+    .ac-biz-info { flex: 1; min-width: 0; }
+    .ac-biz-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ac-biz-type { font-size: 12px; color: var(--sub); margin-top: 2px; }
+    .ac-biz-action { color: var(--g); font-size: 18px; flex-shrink: 0; }
+
+    /* ── Verification status ─────────────────────────────── */
+    .ac-verif-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--bor);
+    }
+    .ac-verif-item:last-child { border-bottom: none; }
+    .ac-verif-left { display: flex; align-items: center; gap: 12px; }
+    .ac-verif-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: var(--sur2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+    .ac-verif-label { font-size: 14px; font-weight: 600; }
+    .ac-verif-meta { font-size: 12px; color: var(--sub); margin-top: 2px; }
+
+    /* ── Form ────────────────────────────────────────────── */
+    .ac-form-group { margin-bottom: 16px; }
+    .ac-form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--sub);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 6px;
+    }
+    .ac-form-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--sur2);
+      border: 1px solid var(--bor);
+      border-radius: 10px;
+      color: var(--txt);
+      font-size: 14px;
+      outline: none;
+      transition: border-color .15s;
+      font-family: inherit;
+    }
+    .ac-form-input:focus { border-color: rgba(113,255,0,0.4); }
+    .ac-form-select {
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='rgba(255,255,255,0.35)' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+    }
+    .ac-form-radio-group { display: flex; flex-direction: column; gap: 10px; }
+    .ac-form-radio {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .ac-form-radio input[type=radio] { accent-color: var(--g); width: 16px; height: 16px; }
+
+    /* ── Empty state ─────────────────────────────────────── */
+    .ac-empty {
+      text-align: center;
+      padding: 40px 24px;
+      color: var(--sub);
+    }
+    .ac-empty-icon { font-size: 40px; margin-bottom: 12px; }
+    .ac-empty-text { font-size: 14px; }
+
+    /* ── Section divider label ───────────────────────────── */
+    .ac-section-divider {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.2);
+      padding: 14px 12px 4px;
+    }
+
+    /* ── Loader ──────────────────────────────────────────── */
+    .ac-loader {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+    .ac-spinner {
+      width: 28px;
+      height: 28px;
+      border: 3px solid rgba(113,255,0,0.12);
+      border-top-color: var(--g);
+      border-radius: 50%;
+      animation: ac-spin .7s linear infinite;
+    }
+    @keyframes ac-spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive — Mobile ─────────────────────────────── */
+    @media (max-width: 768px) {
+      .ac-sidebar { display: none; }
+      .ac-tab-strip { display: flex; }
+      .ac-shell {
+        grid-template-columns: 1fr;
+        padding: 0 12px;
+        padding-top: 12px;
+      }
+      .ac-main { grid-column: 1; }
+      .ac-panel-title { font-size: 18px; }
+    }
+
+    @media (min-width: 769px) {
+      .ac-tab-strip { display: none; }
+    }
+  </style>
+</head>
+<body>
+<!-- shared-header.js injects the top nav automatically -->
+
+<div class="ac-shell">
+
+  <!-- ── Sidebar navigation ──────────────────────────────── -->
+  <aside class="ac-sidebar" id="acSidebar">
+    <div class="ac-sidebar-header">
+      <div class="ac-user-name" id="acSbName">Loading…</div>
+      <div class="ac-user-email" id="acSbEmail"></div>
+    </div>
+
+    <div class="ac-section-divider">Account</div>
+    <button class="ac-nav-item active" onclick="acShow('profile')" data-panel="profile">
+      <i class="fas fa-user"></i> Profile
+    </button>
+    <button class="ac-nav-item" onclick="acShow('security')" data-panel="security">
+      <i class="fas fa-shield-halved"></i> Security
+    </button>
+    <button class="ac-nav-item" onclick="acShow('devices')" data-panel="devices">
+      <i class="fas fa-laptop-mobile"></i> Devices
+    </button>
+
+    <div class="ac-section-divider">Commerce</div>
+    <button class="ac-nav-item" onclick="acShow('subscriptions')" data-panel="subscriptions">
+      <i class="fas fa-crown"></i> Subscriptions
+    </button>
+    <button class="ac-nav-item" onclick="acShow('payments')" data-panel="payments">
+      <i class="fas fa-credit-card"></i> Payments
+    </button>
+    <button class="ac-nav-item" onclick="acShow('wallet')" data-panel="wallet">
+      <i class="fas fa-wallet"></i> Wallet
+    </button>
+    <button class="ac-nav-item" onclick="acShow('businesses')" data-panel="businesses">
+      <i class="fas fa-briefcase"></i> Businesses
+    </button>
+
+    <div class="ac-section-divider">Preferences</div>
+    <button class="ac-nav-item" onclick="acShow('notifications')" data-panel="notifications">
+      <i class="fas fa-bell"></i> Notifications
+    </button>
+    <button class="ac-nav-item" onclick="acShow('privacy')" data-panel="privacy">
+      <i class="fas fa-eye-slash"></i> Privacy
+    </button>
+
+    <div class="ac-section-divider">Identity</div>
+    <button class="ac-nav-item" onclick="acShow('verification')" data-panel="verification">
+      <i class="fas fa-circle-check"></i> Verification
+    </button>
+    <button class="ac-nav-item" onclick="acShow('sessions')" data-panel="sessions">
+      <i class="fas fa-clock-rotate-left"></i> Session Log
+    </button>
+
+    <div class="ac-section-divider">Data</div>
+    <button class="ac-nav-item" onclick="acShow('downloads')" data-panel="downloads">
+      <i class="fas fa-download"></i> My Data
+    </button>
+    <button class="ac-nav-item" onclick="acShow('legal')" data-panel="legal">
+      <i class="fas fa-file-contract"></i> Legal
+    </button>
+
+    <div class="ac-nav-separator"></div>
+    <button class="ac-nav-item ac-nav-danger" onclick="acShow('delete')" data-panel="delete">
+      <i class="fas fa-trash-can"></i> Delete Account
+    </button>
+  </aside>
+
+  <!-- ── Mobile tab strip ────────────────────────────────── -->
+  <div class="ac-tab-strip" id="acTabStrip">
+    <button class="ac-tab-btn active" onclick="acShow('profile')" data-panel="profile"><i class="fas fa-user"></i> Profile</button>
+    <button class="ac-tab-btn" onclick="acShow('security')" data-panel="security"><i class="fas fa-shield-halved"></i> Security</button>
+    <button class="ac-tab-btn" onclick="acShow('devices')" data-panel="devices"><i class="fas fa-laptop-mobile"></i> Devices</button>
+    <button class="ac-tab-btn" onclick="acShow('subscriptions')" data-panel="subscriptions"><i class="fas fa-crown"></i> Plan</button>
+    <button class="ac-tab-btn" onclick="acShow('payments')" data-panel="payments"><i class="fas fa-credit-card"></i> Payments</button>
+    <button class="ac-tab-btn" onclick="acShow('wallet')" data-panel="wallet"><i class="fas fa-wallet"></i> Wallet</button>
+    <button class="ac-tab-btn" onclick="acShow('businesses')" data-panel="businesses"><i class="fas fa-briefcase"></i> Businesses</button>
+    <button class="ac-tab-btn" onclick="acShow('notifications')" data-panel="notifications"><i class="fas fa-bell"></i> Alerts</button>
+    <button class="ac-tab-btn" onclick="acShow('privacy')" data-panel="privacy"><i class="fas fa-eye-slash"></i> Privacy</button>
+    <button class="ac-tab-btn" onclick="acShow('verification')" data-panel="verification"><i class="fas fa-circle-check"></i> Verify</button>
+    <button class="ac-tab-btn" onclick="acShow('sessions')" data-panel="sessions"><i class="fas fa-clock-rotate-left"></i> Sessions</button>
+    <button class="ac-tab-btn" onclick="acShow('downloads')" data-panel="downloads"><i class="fas fa-download"></i> My Data</button>
+    <button class="ac-tab-btn" onclick="acShow('legal')" data-panel="legal"><i class="fas fa-file-contract"></i> Legal</button>
+    <button class="ac-tab-btn" onclick="acShow('delete')" data-panel="delete"><i class="fas fa-trash-can"></i> Delete</button>
+  </div>
+
+  <!-- ── Main content panels ────────────────────────────── -->
+  <main class="ac-main">
+
+    <!-- 1. Profile ──────────────────────────────────────── -->
+    <section class="ac-panel active" id="panel-profile">
+      <h1 class="ac-panel-title">My Profile</h1>
+      <p class="ac-panel-sub">Your personal information and public identity on SOKONI.</p>
+
+      <div class="ac-card">
+        <div class="ac-avatar-row">
+          <div class="ac-avatar" id="acAvatarEl">?</div>
+          <div class="ac-avatar-info">
+            <div class="ac-avatar-name" id="acProfileName">Loading…</div>
+            <div class="ac-avatar-meta" id="acProfileMeta"></div>
+            <div class="ac-roles-grid" id="acRolesGrid" style="margin-top:8px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Personal Details</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Full Name</span>
+          <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+            <span class="ac-row-value" id="acProfName">—</span>
+            <button class="ac-row-action" onclick="acEditField('name')">Edit</button>
+          </div>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Email</span>
+          <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+            <span class="ac-row-value" id="acProfEmail">—</span>
+            <span class="ac-badge" id="acEmailVerified" style="display:none;">✓ Verified</span>
+          </div>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Phone</span>
+          <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+            <span class="ac-row-value" id="acProfPhone">—</span>
+            <button class="ac-row-action" onclick="acEditField('phone')">Edit</button>
+          </div>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Location</span>
+          <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+            <span class="ac-row-value" id="acProfLocation">—</span>
+            <button class="ac-row-action" onclick="acEditField('location')">Edit</button>
+          </div>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Member Since</span>
+          <span class="ac-row-value" id="acProfJoined">—</span>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Active Role</div>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:14px;">Switch between your roles without logging out.</p>
+        <div class="ac-roles-grid" id="acRoleSwitcher"></div>
+      </div>
+    </section>
+
+    <!-- 2. Security ─────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-security">
+      <h1 class="ac-panel-title">Security</h1>
+      <p class="ac-panel-sub">Manage your sign-in methods and account security settings.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Sign-In Methods</div>
+        <div class="ac-row">
+          <span class="ac-row-label"><i class="fab fa-google" style="margin-right:6px;"></i>Google</span>
+          <span class="ac-badge" id="secGoogleLinked" style="display:none;">Linked</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label"><i class="fas fa-envelope" style="margin-right:6px;"></i>Email & Password</span>
+          <span class="ac-badge" id="secPasswordLinked" style="display:none;">Linked</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label"><i class="fas fa-phone" style="margin-right:6px;"></i>Phone (OTP)</span>
+          <span class="ac-badge" id="secPhoneLinked" style="display:none;">Linked</span>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Password</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Password</span>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span class="ac-row-value">••••••••</span>
+            <button class="ac-row-action" onclick="acChangePassword()">Change</button>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--sub);margin-top:8px;">Use a strong password of at least 12 characters with letters, numbers, and symbols.</p>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Session Security</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Active Devices</span>
+          <span class="ac-row-value" id="secDeviceCount">—</span>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-ghost" onclick="acShow('devices')">
+            <i class="fas fa-laptop-mobile"></i> Manage Devices
+          </button>
+          <button class="ac-btn ac-btn-danger" onclick="acRevokeAll()">
+            <i class="fas fa-ban"></i> Sign Out All Devices
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. Devices ──────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-devices">
+      <h1 class="ac-panel-title">Active Devices</h1>
+      <p class="ac-panel-sub">All devices currently signed in to your SOKONI account.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Sessions</div>
+        <div id="acDeviceList">
+          <div class="ac-loader"><div class="ac-spinner"></div></div>
+        </div>
+        <div class="ac-btn-row" style="margin-top:12px;">
+          <button class="ac-btn ac-btn-danger" onclick="acRevokeAll()">
+            <i class="fas fa-ban"></i> Sign Out All Other Devices
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Subscriptions ────────────────────────────────── -->
+    <section class="ac-panel" id="panel-subscriptions">
+      <h1 class="ac-panel-title">Subscriptions</h1>
+      <p class="ac-panel-sub">Your SOKONI plan and premium feature access.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Current Plan</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Plan</span>
+          <span class="ac-badge" id="subPlanBadge">Free</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Status</span>
+          <span class="ac-row-value" id="subStatus">Active</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Renews</span>
+          <span class="ac-row-value" id="subRenews">—</span>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-primary" onclick="location.href='subscriptions.html'">
+            <i class="fas fa-crown"></i> Upgrade Plan
+          </button>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">AI Credits</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Monthly Credits</span>
+          <span class="ac-row-value" id="subAiCredits">—</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Used This Month</span>
+          <span class="ac-row-value" id="subAiUsed">0</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. Payments ─────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-payments">
+      <h1 class="ac-panel-title">Payment Methods</h1>
+      <p class="ac-panel-sub">Manage how you pay on SOKONI.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">M-Pesa</div>
+        <div class="ac-row">
+          <span class="ac-row-label"><i class="fas fa-mobile-screen" style="margin-right:6px;color:#00b04f;"></i>M-Pesa</span>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span class="ac-row-value" id="pmMpesa">—</span>
+            <button class="ac-row-action" onclick="acEditField('mpesa')">Edit</button>
+          </div>
+        </div>
+        <p style="font-size:12px;color:var(--sub);margin-top:8px;">
+          Your M-Pesa number is used for STK Push payments. You can update it at any time.
+        </p>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Transaction History</div>
+        <p style="font-size:13px;color:var(--sub);">View your full payment history in your wallet.</p>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-ghost" onclick="location.href='wallet.html'">
+            <i class="fas fa-wallet"></i> Open Wallet
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. Wallet ───────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-wallet">
+      <h1 class="ac-panel-title">SOKONI Wallet</h1>
+      <p class="ac-panel-sub">Your in-platform balance, cashback, and rewards.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Balance</div>
+        <div style="text-align:center;padding:20px 0;">
+          <div style="font-size:36px;font-weight:900;color:var(--g);" id="walletBalance">KES —</div>
+          <div style="font-size:13px;color:var(--sub);margin-top:6px;">Available Balance</div>
+        </div>
+        <div class="ac-btn-row" style="justify-content:center;">
+          <button class="ac-btn ac-btn-primary" onclick="location.href='wallet.html'">
+            <i class="fas fa-wallet"></i> Open Wallet
+          </button>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Loyalty Points</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Points Balance</span>
+          <span class="ac-row-value" id="loyaltyPoints">—</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Tier</span>
+          <span class="ac-badge" id="loyaltyTier">Bronze</span>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-ghost" onclick="location.href='loyalty.html'">
+            <i class="fas fa-star"></i> Loyalty Dashboard
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 7. Businesses ───────────────────────────────────── -->
+    <section class="ac-panel" id="panel-businesses">
+      <h1 class="ac-panel-title">My Businesses</h1>
+      <p class="ac-panel-sub">Manage your registered business accounts on SOKONI.</p>
+
+      <div class="ac-card">
+        <div id="acBizList">
+          <div class="ac-loader"><div class="ac-spinner"></div></div>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-ghost" onclick="location.href='businesses.html'">
+            <i class="fas fa-plus"></i> Register a Business
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. Notifications ───────────────────────────────── -->
+    <section class="ac-panel" id="panel-notifications">
+      <h1 class="ac-panel-title">Notification Preferences</h1>
+      <p class="ac-panel-sub">Choose what alerts you receive and how.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Push Notifications</div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Order Updates</div>
+            <div class="ac-toggle-desc">Dispatch, delivery, and status changes</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifOrders" checked onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Promotions & Offers</div>
+            <div class="ac-toggle-desc">Flash sales, vouchers, and exclusive deals</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifPromos" checked onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Messages</div>
+            <div class="ac-toggle-desc">New messages from sellers and buyers</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifMessages" checked onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Security Alerts</div>
+            <div class="ac-toggle-desc">New sign-ins and account changes</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifSecurity" checked onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Email Notifications</div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Order Receipts</div>
+            <div class="ac-toggle-desc">Email copy of every transaction</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifEmailReceipts" checked onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Weekly Digest</div>
+            <div class="ac-toggle-desc">Your activity summary every Monday</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifEmailDigest" onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Marketing Emails</div>
+            <div class="ac-toggle-desc">Product recommendations and campaigns</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="notifEmailMarketing" onchange="acSaveNotifPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- 9. Privacy ──────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-privacy">
+      <h1 class="ac-panel-title">Privacy Settings</h1>
+      <p class="ac-panel-sub">Control how your information is used and who can see it.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Profile Visibility</div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Public Profile</div>
+            <div class="ac-toggle-desc">Allow other users to view your public profile</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="privPublicProfile" checked onchange="acSavePrivacyPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Show Purchase History</div>
+            <div class="ac-toggle-desc">Sellers can see verified past purchases</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="privPurchaseHistory" onchange="acSavePrivacyPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Show Reviews</div>
+            <div class="ac-toggle-desc">Let others see reviews you've written</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="privShowReviews" checked onchange="acSavePrivacyPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Data & Personalisation</div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Personalised Recommendations</div>
+            <div class="ac-toggle-desc">Use browsing history to suggest products</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="privPersonalise" checked onchange="acSavePrivacyPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+        <div class="ac-toggle-row">
+          <div class="ac-toggle-info">
+            <div class="ac-toggle-label">Analytics & Improvement</div>
+            <div class="ac-toggle-desc">Help improve SOKONI by sharing usage patterns</div>
+          </div>
+          <label class="ac-toggle"><input type="checkbox" id="privAnalytics" checked onchange="acSavePrivacyPref()"><span class="ac-toggle-track"></span></label>
+        </div>
+      </div>
+    </section>
+
+    <!-- 10. Verification ────────────────────────────────── -->
+    <section class="ac-panel" id="panel-verification">
+      <h1 class="ac-panel-title">Identity Verification</h1>
+      <p class="ac-panel-sub">Verified accounts unlock more features and build trust with buyers and sellers.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Verification Status</div>
+        <div class="ac-verif-item">
+          <div class="ac-verif-left">
+            <div class="ac-verif-icon">📧</div>
+            <div>
+              <div class="ac-verif-label">Email Address</div>
+              <div class="ac-verif-meta" id="verifEmailMeta">Not verified</div>
+            </div>
+          </div>
+          <span class="ac-badge ac-badge-grey" id="verifEmailBadge">Pending</span>
+        </div>
+        <div class="ac-verif-item">
+          <div class="ac-verif-left">
+            <div class="ac-verif-icon">📱</div>
+            <div>
+              <div class="ac-verif-label">Phone Number</div>
+              <div class="ac-verif-meta" id="verifPhoneMeta">Not verified</div>
+            </div>
+          </div>
+          <span class="ac-badge ac-badge-grey" id="verifPhoneBadge">Pending</span>
+        </div>
+        <div class="ac-verif-item">
+          <div class="ac-verif-left">
+            <div class="ac-verif-icon">🪪</div>
+            <div>
+              <div class="ac-verif-label">National ID / Passport</div>
+              <div class="ac-verif-meta">Required for seller accounts</div>
+            </div>
+          </div>
+          <span class="ac-badge ac-badge-grey" id="verifIdBadge">Not Started</span>
+        </div>
+        <div class="ac-verif-item">
+          <div class="ac-verif-left">
+            <div class="ac-verif-icon">🏢</div>
+            <div>
+              <div class="ac-verif-label">Business Registration</div>
+              <div class="ac-verif-meta">Required for merchant accounts</div>
+            </div>
+          </div>
+          <span class="ac-badge ac-badge-grey" id="verifBizBadge">Not Started</span>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <p style="font-size:13px;color:var(--sub);margin-bottom:14px;">
+          Full identity verification unlocks seller payouts, higher transaction limits, and the Verified badge on your profile.
+        </p>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-primary" onclick="location.href='profile.html#verify'">
+            <i class="fas fa-circle-check"></i> Start Verification
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 11. Session Log ─────────────────────────────────── -->
+    <section class="ac-panel" id="panel-sessions">
+      <h1 class="ac-panel-title">Session Log</h1>
+      <p class="ac-panel-sub">A record of recent sign-in activity across your devices.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Recent Activity</div>
+        <div id="acSessionLog">
+          <div class="ac-loader"><div class="ac-spinner"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 12. My Data ─────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-downloads">
+      <h1 class="ac-panel-title">My Data</h1>
+      <p class="ac-panel-sub">Download a copy of your personal data or request deletion.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Data Export</div>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:16px;line-height:1.5;">
+          Your export includes: profile, order history, messages, reviews, loyalty points, and business data. We'll send you a download link within 24 hours.
+        </p>
+        <div id="acExportStatus" style="display:none;" class="ac-badge" style="margin-bottom:12px;"></div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-ghost" onclick="acRequestExport()" id="acExportBtn">
+            <i class="fas fa-download"></i> Request Data Export
+          </button>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Data Rights</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Right to Access</span>
+          <button class="ac-row-action" onclick="acRequestExport()">Request</button>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Right to Erasure</span>
+          <button class="ac-row-action" onclick="acShow('delete')">Delete Account</button>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Data Policy</span>
+          <button class="ac-row-action" onclick="location.href='privacy.html'">View</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 13. Legal ───────────────────────────────────────── -->
+    <section class="ac-panel" id="panel-legal">
+      <h1 class="ac-panel-title">Legal</h1>
+      <p class="ac-panel-sub">Terms you've agreed to and your legal standing with SOKONI.</p>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Agreements</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Terms of Service</span>
+          <button class="ac-row-action" onclick="location.href='terms.html'">View</button>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Privacy Policy</span>
+          <button class="ac-row-action" onclick="location.href='privacy.html'">View</button>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Cookie Policy</span>
+          <button class="ac-row-action" onclick="location.href='cookie-policy.html'">View</button>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Community Guidelines</span>
+          <button class="ac-row-action" onclick="location.href='community-guidelines.html'">View</button>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Seller Agreement</span>
+          <button class="ac-row-action" onclick="location.href='legal-hub.html'">View</button>
+        </div>
+      </div>
+
+      <div class="ac-card">
+        <div class="ac-card-title">Your Account Status</div>
+        <div class="ac-row">
+          <span class="ac-row-label">Account Standing</span>
+          <span class="ac-badge">In Good Standing</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Active Disputes</span>
+          <span class="ac-row-value" id="legalDisputeCount">0</span>
+        </div>
+        <div class="ac-row">
+          <span class="ac-row-label">Registered Jurisdiction</span>
+          <span class="ac-row-value">Kenya</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 14. Delete Account ──────────────────────────────── -->
+    <section class="ac-panel" id="panel-delete">
+      <h1 class="ac-panel-title" style="color:var(--red);">Delete Account</h1>
+      <p class="ac-panel-sub">Permanently delete your SOKONI account and all associated data.</p>
+
+      <!-- Step 1: Reason -->
+      <div class="ac-delete-step active" id="delStep1">
+        <div class="ac-delete-step-num">Step 1 of 5</div>
+        <div class="ac-delete-step-title">Why are you leaving?</div>
+        <div class="ac-delete-step-body">Your feedback helps us improve SOKONI for everyone.</div>
+        <div class="ac-form-radio-group" id="delReasonGroup">
+          <label class="ac-form-radio"><input type="radio" name="delReason" value="not_using"> Not using SOKONI enough</label>
+          <label class="ac-form-radio"><input type="radio" name="delReason" value="privacy_concerns"> Privacy concerns</label>
+          <label class="ac-form-radio"><input type="radio" name="delReason" value="switching"> Switching to another platform</label>
+          <label class="ac-form-radio"><input type="radio" name="delReason" value="bad_experience"> Had a bad experience</label>
+          <label class="ac-form-radio"><input type="radio" name="delReason" value="other"> Other reason</label>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-danger" onclick="acDelNext(2)">Continue</button>
+          <button class="ac-btn ac-btn-ghost" onclick="acShow('profile')">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Step 2: What you'll lose -->
+      <div class="ac-delete-step" id="delStep2">
+        <div class="ac-delete-step-num">Step 2 of 5</div>
+        <div class="ac-delete-step-title">What you'll lose</div>
+        <div class="ac-warning-box">
+          <strong>This action cannot be undone after 30 days.</strong><br><br>
+          Deleting your account will permanently remove:<br>
+          • Your profile, orders, and purchase history<br>
+          • All messages and conversations<br>
+          • Wallet balance and loyalty points<br>
+          • Business listings and seller ratings<br>
+          • Any pending payouts or refunds
+        </div>
+        <div class="ac-delete-step-body">
+          You have a 30-day grace period after requesting deletion. Sign in again during this period to cancel.
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-danger" onclick="acDelNext(3)">I Understand, Continue</button>
+          <button class="ac-btn ac-btn-ghost" onclick="acDelNext(1)">Go Back</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Pending items check -->
+      <div class="ac-delete-step" id="delStep3">
+        <div class="ac-delete-step-num">Step 3 of 5</div>
+        <div class="ac-delete-step-title">Resolve pending items</div>
+        <div class="ac-delete-step-body">
+          Before deleting, please resolve any of the following items. These cannot be processed after account deletion.
+        </div>
+        <div id="delPendingChecks" style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--sub);">
+            <i class="fas fa-circle-check" style="color:var(--g);"></i> No pending orders
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--sub);">
+            <i class="fas fa-circle-check" style="color:var(--g);"></i> No active disputes
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--sub);">
+            <i class="fas fa-circle-check" style="color:var(--g);"></i> No outstanding payouts
+          </div>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-danger" onclick="acDelNext(4)">Everything is Resolved</button>
+          <button class="ac-btn ac-btn-ghost" onclick="acDelNext(2)">Go Back</button>
+        </div>
+      </div>
+
+      <!-- Step 4: Final warning + export -->
+      <div class="ac-delete-step" id="delStep4">
+        <div class="ac-delete-step-num">Step 4 of 5</div>
+        <div class="ac-delete-step-title">Download your data first</div>
+        <div class="ac-delete-step-body">
+          We recommend downloading a copy of your data before deleting your account.
+        </div>
+        <div class="ac-btn-row" style="margin-bottom:16px;">
+          <button class="ac-btn ac-btn-ghost" onclick="acRequestExport()">
+            <i class="fas fa-download"></i> Download My Data
+          </button>
+        </div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-danger" onclick="acDelNext(5)">Skip & Continue to Deletion</button>
+          <button class="ac-btn ac-btn-ghost" onclick="acDelNext(3)">Go Back</button>
+        </div>
+      </div>
+
+      <!-- Step 5: Confirm deletion -->
+      <div class="ac-delete-step" id="delStep5">
+        <div class="ac-delete-step-num">Step 5 of 5</div>
+        <div class="ac-delete-step-title">Confirm account deletion</div>
+        <div class="ac-warning-box">
+          <strong>Your account will be scheduled for deletion.</strong><br>
+          You have 30 days to sign in and cancel. After 30 days, all your data will be permanently erased.
+        </div>
+        <div class="ac-form-group">
+          <label class="ac-form-label">Type DELETE to confirm</label>
+          <input type="text" class="ac-form-input" id="delConfirmInput" placeholder="DELETE" autocomplete="off">
+        </div>
+        <div id="delErrorMsg" style="display:none;color:var(--red);font-size:13px;margin-bottom:12px;"></div>
+        <div class="ac-btn-row">
+          <button class="ac-btn ac-btn-danger" onclick="acConfirmDelete()" id="delFinalBtn">
+            <i class="fas fa-trash-can"></i> Delete My Account
+          </button>
+          <button class="ac-btn ac-btn-ghost" onclick="acDelNext(4)">Go Back</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script type="module">
+import { db, auth } from './firebase.js';
+import {
+  doc, getDoc, updateDoc, collection, query, where, getDocs
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
+import { SokoniSessions } from './session-manager.js';
+
+/* ── State ──────────────────────────────────────────────────── */
+let _u = null;         // sokoniUser from localStorage
+let _sessions = [];    // active device sessions
+const _fns = getFunctions();
+
+/* ── Boot ───────────────────────────────────────────────────── */
+function _boot() {
+  try { _u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+  if (!_u) return; // auth-guard.js will redirect
+
+  _populateSidebar();
+  _populateProfile();
+  _populateSecurity();
+  _populateSubscriptions();
+  _populatePayments();
+  _populateWallet();
+  _populateVerification();
+  _loadNotifPrefs();
+  _loadPrivacyPrefs();
+
+  // Lazy-load sessions when devices panel is opened
+}
+
+/* ── Sidebar meta ───────────────────────────────────────────── */
+function _populateSidebar() {
+  const name  = _u.name || _u.displayName || _u.email || 'User';
+  const email = _u.email || '';
+  const el1 = document.getElementById('acSbName');
+  const el2 = document.getElementById('acSbEmail');
+  if (el1) el1.textContent = name;
+  if (el2) el2.textContent = email;
+}
+
+/* ── Profile panel ──────────────────────────────────────────── */
+function _populateProfile() {
+  const name  = _u.name || _u.displayName || '—';
+  const email = _u.email || '—';
+  const roles = Array.isArray(_u.roles) ? _u.roles : (_u.role ? [_u.role] : ['buyer']);
+  const initial = (name === '—' ? email : name).charAt(0).toUpperCase() || '?';
+
+  const avatarEl = document.getElementById('acAvatarEl');
+  if (avatarEl) {
+    if (_u.photoURL) {
+      avatarEl.innerHTML = `<img src="${_esc(_u.photoURL)}" alt="Avatar">`;
+    } else {
+      avatarEl.textContent = initial;
+    }
+  }
+
+  const el = (id, val) => { const e = document.getElementById(id); if(e) e.textContent = val; };
+  el('acProfileName',  name);
+  el('acProfName',     name);
+  el('acProfEmail',    email);
+  el('acProfPhone',    _u.phone || _u.phoneNumber || '—');
+  el('acProfLocation', _u.location || _u.city || '—');
+
+  const joined = _u.createdAt
+    ? new Date(_u.createdAt.seconds ? _u.createdAt.seconds * 1000 : _u.createdAt).toLocaleDateString('en-KE', { year:'numeric', month:'long' })
+    : '—';
+  el('acProfJoined', joined);
+
+  const metaEl = document.getElementById('acProfileMeta');
+  if (metaEl) metaEl.textContent = email;
+
+  // Email verified badge
+  const evEl = document.getElementById('acEmailVerified');
+  if (evEl && _u.emailVerified) evEl.style.display = 'inline-flex';
+
+  // Role pills (display)
+  const rolesGrid = document.getElementById('acRolesGrid');
+  if (rolesGrid) {
+    rolesGrid.innerHTML = roles.map(r =>
+      `<span class="ac-badge ac-badge-grey">${_roleName(r)}</span>`
+    ).join('');
+  }
+
+  // Role switcher
+  const switcher = document.getElementById('acRoleSwitcher');
+  if (switcher && roles.length > 0) {
+    const activeRole = _u.roles ? _u.roles[0] : 'buyer';
+    switcher.innerHTML = roles.map(r =>
+      `<button class="ac-role-pill ${r === activeRole ? 'active-role' : ''}" onclick="window.acSwitchRole('${_esc(r)}')">${_roleName(r)}</button>`
+    ).join('');
+  } else if (switcher) {
+    switcher.innerHTML = '<span class="ac-badge ac-badge-grey">Buyer</span>';
+  }
+}
+
+/* ── Security panel ─────────────────────────────────────────── */
+function _populateSecurity() {
+  const providers = _u.providerData || [];
+  const hasGoogle   = providers.some(p => p.providerId === 'google.com')   || _u.googleLinked;
+  const hasPassword = providers.some(p => p.providerId === 'password')     || _u.passwordLinked;
+  const hasPhone    = providers.some(p => p.providerId === 'phone')        || _u.phoneLinked;
+
+  const show = (id) => { const e = document.getElementById(id); if (e) e.style.display = 'inline-flex'; };
+  if (hasGoogle)   show('secGoogleLinked');
+  if (hasPassword) show('secPasswordLinked');
+  if (hasPhone)    show('secPhoneLinked');
+}
+
+/* ── Subscriptions panel ────────────────────────────────────── */
+function _populateSubscriptions() {
+  const sub   = _u.subscription || {};
+  const plan  = sub.plan || 'free';
+  const el    = document.getElementById('subPlanBadge');
+  if (el) el.textContent = plan.charAt(0).toUpperCase() + plan.slice(1);
+  const statusEl = document.getElementById('subStatus');
+  if (statusEl) statusEl.textContent = sub.status || 'Active';
+  const renewsEl = document.getElementById('subRenews');
+  if (renewsEl && sub.renewsAt) {
+    renewsEl.textContent = new Date(sub.renewsAt.seconds ? sub.renewsAt.seconds * 1000 : sub.renewsAt)
+      .toLocaleDateString('en-KE', { year:'numeric', month:'long', day:'numeric' });
+  }
+  const aiEl = document.getElementById('subAiCredits');
+  if (aiEl) aiEl.textContent = sub.aiCredits || '50 credits';
+}
+
+/* ── Payments panel ─────────────────────────────────────────── */
+function _populatePayments() {
+  const mpesaEl = document.getElementById('pmMpesa');
+  if (mpesaEl) {
+    const number = _u.mpesaNumber || _u.phone || _u.phoneNumber || '—';
+    mpesaEl.textContent = number;
+  }
+}
+
+/* ── Wallet panel ───────────────────────────────────────────── */
+async function _populateWallet() {
+  try {
+    const uid = _u.uid;
+    if (!uid) return;
+    const snap = await getDoc(doc(db, 'wallets', uid));
+    if (snap.exists()) {
+      const data = snap.data();
+      const balEl = document.getElementById('walletBalance');
+      if (balEl) balEl.textContent = 'KES ' + Number(data.balance || 0).toFixed(2);
+      const ptsEl = document.getElementById('loyaltyPoints');
+      if (ptsEl) ptsEl.textContent = (data.loyaltyPoints || 0).toLocaleString() + ' pts';
+      const tierEl = document.getElementById('loyaltyTier');
+      if (tierEl) tierEl.textContent = data.loyaltyTier || 'Bronze';
+    }
+  } catch (e) {
+    console.warn('[AccountCentre] wallet fetch error:', e.message);
+  }
+}
+
+/* ── Verification panel ─────────────────────────────────────── */
+function _populateVerification() {
+  const emailOk = !!_u.emailVerified;
+  const phoneOk = !!(_u.phone || _u.phoneNumber);
+
+  _setVerif('verifEmailBadge', 'verifEmailMeta', emailOk, 'Verified', _u.email || '', 'Unverified');
+  _setVerif('verifPhoneBadge', 'verifPhoneMeta', phoneOk, 'Linked', _u.phone || _u.phoneNumber || '', 'Not linked');
+
+  const idOk = !!_u.idVerified;
+  const bizOk = !!_u.businessVerified;
+  if (idOk) {
+    const b = document.getElementById('verifIdBadge');
+    if (b) { b.textContent = 'Verified'; b.className = 'ac-badge'; }
+  }
+  if (bizOk) {
+    const b = document.getElementById('verifBizBadge');
+    if (b) { b.textContent = 'Verified'; b.className = 'ac-badge'; }
+  }
+}
+
+function _setVerif(badgeId, metaId, ok, okLabel, metaVal, failLabel) {
+  const badge = document.getElementById(badgeId);
+  const meta  = document.getElementById(metaId);
+  if (badge) {
+    badge.textContent = ok ? okLabel : failLabel;
+    badge.className   = ok ? 'ac-badge' : 'ac-badge ac-badge-grey';
+  }
+  if (meta && metaVal) meta.textContent = metaVal;
+}
+
+/* ── Notification prefs ─────────────────────────────────────── */
+const NOTIF_KEY = 'sokoniNotifPrefs';
+function _loadNotifPrefs() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem(NOTIF_KEY) || '{}');
+    _setChk('notifOrders',       prefs.orders        !== false);
+    _setChk('notifPromos',       prefs.promos        !== false);
+    _setChk('notifMessages',     prefs.messages      !== false);
+    _setChk('notifSecurity',     prefs.security      !== false);
+    _setChk('notifEmailReceipts',prefs.emailReceipts !== false);
+    _setChk('notifEmailDigest',  !!prefs.emailDigest);
+    _setChk('notifEmailMarketing',!!prefs.emailMarketing);
+  } catch (_) {}
+}
+function _setChk(id, val) { const e = document.getElementById(id); if (e) e.checked = val; }
+window.acSaveNotifPref = function() {
+  const prefs = {
+    orders:         document.getElementById('notifOrders')?.checked,
+    promos:         document.getElementById('notifPromos')?.checked,
+    messages:       document.getElementById('notifMessages')?.checked,
+    security:       document.getElementById('notifSecurity')?.checked,
+    emailReceipts:  document.getElementById('notifEmailReceipts')?.checked,
+    emailDigest:    document.getElementById('notifEmailDigest')?.checked,
+    emailMarketing: document.getElementById('notifEmailMarketing')?.checked,
+  };
+  try { localStorage.setItem(NOTIF_KEY, JSON.stringify(prefs)); } catch (_) {}
+};
+
+/* ── Privacy prefs ──────────────────────────────────────────── */
+const PRIV_KEY = 'sokoniPrivacyPrefs';
+function _loadPrivacyPrefs() {
+  try {
+    const prefs = JSON.parse(localStorage.getItem(PRIV_KEY) || '{}');
+    _setChk('privPublicProfile',  prefs.publicProfile   !== false);
+    _setChk('privPurchaseHistory',!!prefs.purchaseHistory);
+    _setChk('privShowReviews',    prefs.showReviews      !== false);
+    _setChk('privPersonalise',    prefs.personalise      !== false);
+    _setChk('privAnalytics',      prefs.analytics        !== false);
+  } catch (_) {}
+}
+window.acSavePrivacyPref = function() {
+  const prefs = {
+    publicProfile:   document.getElementById('privPublicProfile')?.checked,
+    purchaseHistory: document.getElementById('privPurchaseHistory')?.checked,
+    showReviews:     document.getElementById('privShowReviews')?.checked,
+    personalise:     document.getElementById('privPersonalise')?.checked,
+    analytics:       document.getElementById('privAnalytics')?.checked,
+  };
+  try { localStorage.setItem(PRIV_KEY, JSON.stringify(prefs)); } catch (_) {}
+};
+
+/* ── Session / device loading ───────────────────────────────── */
+async function _loadSessions() {
+  const listEl = document.getElementById('acDeviceList');
+  const logEl  = document.getElementById('acSessionLog');
+
+  try {
+    _sessions = await SokoniSessions.getUserSessions();
+    const countEl = document.getElementById('secDeviceCount');
+    if (countEl) countEl.textContent = _sessions.length;
+
+    if (listEl) {
+      if (_sessions.length === 0) {
+        listEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">📱</div><div class="ac-empty-text">No active sessions found.</div></div>';
+      } else {
+        listEl.innerHTML = _sessions.map(_renderDevice).join('');
+      }
+    }
+    if (logEl) {
+      if (_sessions.length === 0) {
+        logEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">🕐</div><div class="ac-empty-text">No session history available.</div></div>';
+      } else {
+        logEl.innerHTML = _sessions.map(_renderSessionLog).join('');
+      }
+    }
+  } catch (e) {
+    const errHtml = '<div class="ac-empty"><div class="ac-empty-text">Unable to load sessions.</div></div>';
+    if (listEl) listEl.innerHTML = errHtml;
+    if (logEl)  logEl.innerHTML  = errHtml;
+    console.warn('[AccountCentre] loadSessions error:', e.message);
+  }
+}
+
+function _renderDevice(s) {
+  const time = s.lastActive?.seconds
+    ? _timeAgo(s.lastActive.seconds * 1000)
+    : 'Recently';
+  const icon = s.deviceType === 'mobile' ? '📱' : (s.deviceType === 'tablet' ? '📱' : '💻');
+  return `
+    <div class="ac-device-card">
+      <div class="ac-device-icon">${icon}</div>
+      <div class="ac-device-info">
+        <div class="ac-device-name">${_esc(s.displayName || s.deviceName || 'Unknown Device')}
+          ${s.isCurrent ? '<span class="ac-device-current"><span class="ac-badge" style="font-size:10px;">This device</span></span>' : ''}
+        </div>
+        <div class="ac-device-meta">Last active ${time}</div>
+      </div>
+      ${!s.isCurrent ? `<button class="ac-row-action" onclick="window.acRevokeDevice('${_esc(s.sessionId)}')">Revoke</button>` : ''}
+    </div>`;
+}
+
+function _renderSessionLog(s) {
+  const time = s.lastActive?.seconds
+    ? new Date(s.lastActive.seconds * 1000).toLocaleString('en-KE', { dateStyle:'medium', timeStyle:'short' })
+    : 'Unknown time';
+  const icon = s.deviceType === 'mobile' ? '📱' : '💻';
+  return `
+    <div class="ac-device-card">
+      <div class="ac-device-icon">${icon}</div>
+      <div class="ac-device-info">
+        <div class="ac-device-name">${_esc(s.displayName || s.deviceName || 'Unknown')}${s.isCurrent ? ' <span class="ac-badge" style="font-size:10px;">Current</span>' : ''}</div>
+        <div class="ac-device-meta">${time}</div>
+      </div>
+    </div>`;
+}
+
+/* ── Businesses ─────────────────────────────────────────────── */
+async function _loadBusinesses() {
+  const listEl = document.getElementById('acBizList');
+  if (!listEl || !_u?.uid) return;
+
+  try {
+    const q    = query(collection(db, 'businesses'), where('ownerId', '==', _u.uid));
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      listEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-icon">🏢</div><div class="ac-empty-text">No businesses registered yet.</div></div>';
+      return;
+    }
+
+    const items = snap.docs.map(d => {
+      const b = d.data();
+      const emoji = { marketplace:'🛍️', food:'🍽️', services:'🔧', healthcare:'🏥', events:'🎪', property:'🏠' }[b.type] || '🏢';
+      return `
+        <div class="ac-biz-card" onclick="location.href='seller.html'">
+          <div class="ac-biz-icon">${emoji}</div>
+          <div class="ac-biz-info">
+            <div class="ac-biz-name">${_esc(b.name || 'Unnamed Business')}</div>
+            <div class="ac-biz-type">${_esc(b.type || 'Business')} · ${_esc(b.category || '')}</div>
+          </div>
+          <i class="fas fa-chevron-right ac-biz-action"></i>
+        </div>`;
+    }).join('');
+
+    listEl.innerHTML = `<div class="ac-biz-grid">${items}</div>`;
+  } catch (e) {
+    listEl.innerHTML = '<div class="ac-empty"><div class="ac-empty-text">Unable to load businesses.</div></div>';
+    console.warn('[AccountCentre] loadBusinesses error:', e.message);
+  }
+}
+
+/* ── Panel switching ────────────────────────────────────────── */
+window.acShow = function(id) {
+  // Panels
+  document.querySelectorAll('.ac-panel').forEach(p => p.classList.remove('active'));
+  const target = document.getElementById('panel-' + id);
+  if (target) { target.classList.add('active'); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+  // Sidebar buttons
+  document.querySelectorAll('.ac-nav-item[data-panel]').forEach(b => {
+    b.classList.toggle('active', b.dataset.panel === id);
+  });
+
+  // Tab strip
+  document.querySelectorAll('.ac-tab-btn[data-panel]').forEach(b => {
+    b.classList.toggle('active', b.dataset.panel === id);
+  });
+
+  // Lazy loads
+  if (id === 'devices' || id === 'sessions') {
+    if (_sessions.length === 0) _loadSessions();
+  }
+  if (id === 'businesses') _loadBusinesses();
+};
+
+/* ── Delete account flow ────────────────────────────────────── */
+window.acDelNext = function(step) {
+  document.querySelectorAll('.ac-delete-step').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('delStep' + step);
+  if (el) el.classList.add('active');
+};
+
+window.acConfirmDelete = async function() {
+  const input = document.getElementById('delConfirmInput');
+  const errEl = document.getElementById('delErrorMsg');
+  const btn   = document.getElementById('delFinalBtn');
+
+  if (!input || input.value.trim() !== 'DELETE') {
+    if (errEl) { errEl.textContent = 'Please type DELETE exactly as shown.'; errEl.style.display = 'block'; }
+    return;
+  }
+  if (errEl) errEl.style.display = 'none';
+  if (btn)   { btn.disabled = true; btn.textContent = 'Scheduling…'; }
+
+  try {
+    const reason = document.querySelector('input[name="delReason"]:checked')?.value || 'not_specified';
+    const fn = httpsCallable(_fns, 'scheduleAccountDeletion');
+    await fn({ reason });
+
+    // Replace all steps with confirmation
+    document.getElementById('panel-delete').innerHTML = `
+      <h1 class="ac-panel-title" style="color:var(--red);">Deletion Scheduled</h1>
+      <p class="ac-panel-sub">Your account is scheduled for permanent deletion in 30 days.</p>
+      <div class="ac-card">
+        <div style="text-align:center;padding:20px 0;">
+          <div style="font-size:48px;margin-bottom:12px;">⏳</div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:8px;">Goodbye for now.</div>
+          <p style="font-size:13px;color:var(--sub);line-height:1.5;">
+            Your account and all associated data will be permanently deleted on
+            <strong style="color:var(--txt);">${new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-KE', { year:'numeric', month:'long', day:'numeric' })}</strong>.
+          </p>
+          <p style="font-size:13px;color:var(--sub);margin-top:12px;">
+            To cancel, simply sign back in to SOKONI before that date.
+          </p>
+        </div>
+        <div class="ac-btn-row" style="justify-content:center;">
+          <button class="ac-btn ac-btn-ghost" onclick="window.sokoniSignOut && window.sokoniSignOut()">Sign Out Now</button>
+        </div>
+      </div>`;
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-trash-can"></i> Delete My Account'; }
+    if (errEl) { errEl.textContent = 'Failed to schedule deletion. Please try again.'; errEl.style.display = 'block'; }
+    console.error('[AccountCentre] scheduleAccountDeletion error:', e.message);
+  }
+};
+
+/* ── Revoke all sessions ────────────────────────────────────── */
+window.acRevokeAll = async function() {
+  if (!confirm('Sign out all other devices? You will remain signed in on this device.')) return;
+  try {
+    const count = await SokoniSessions.revokeOtherSessions();
+    alert(`Signed out ${count} other device${count !== 1 ? 's' : ''}.`);
+    _sessions = [];
+    _loadSessions();
+  } catch (e) {
+    alert('Failed to revoke sessions. Please try again.');
+  }
+};
+
+/* ── Revoke individual device ───────────────────────────────── */
+window.acRevokeDevice = async function(sessionId) {
+  if (!confirm('Revoke this device? It will be signed out immediately.')) return;
+  try {
+    await SokoniSessions.revokeSession(sessionId);
+    _sessions = _sessions.filter(s => s.sessionId !== sessionId);
+    const listEl = document.getElementById('acDeviceList');
+    if (listEl) listEl.innerHTML = _sessions.map(_renderDevice).join('');
+    const logEl = document.getElementById('acSessionLog');
+    if (logEl) logEl.innerHTML = _sessions.map(_renderSessionLog).join('');
+    const countEl = document.getElementById('secDeviceCount');
+    if (countEl) countEl.textContent = _sessions.length;
+  } catch (e) {
+    alert('Failed to revoke device. Please try again.');
+  }
+};
+
+/* ── Role switcher ──────────────────────────────────────────── */
+window.acSwitchRole = function(role) {
+  if (!_u) return;
+  // Reorder roles array so selected role is first
+  const roles = Array.isArray(_u.roles) ? [..._u.roles] : [role];
+  const idx   = roles.indexOf(role);
+  if (idx > 0) { roles.splice(idx, 1); roles.unshift(role); }
+  _u.roles = roles;
+  _u.role  = role;
+  try { localStorage.setItem('sokoniUser', JSON.stringify(_u)); } catch (_) {}
+  if (window.SokoniSessionState) window.SokoniSessionState.setRole(role);
+  // Re-render role switcher
+  const switcher = document.getElementById('acRoleSwitcher');
+  if (switcher) {
+    switcher.innerHTML = roles.map(r =>
+      `<button class="ac-role-pill ${r === role ? 'active-role' : ''}" onclick="window.acSwitchRole('${_esc(r)}')">${_roleName(r)}</button>`
+    ).join('');
+  }
+  document.dispatchEvent(new CustomEvent('sokoniRoleChanged', { detail: { role } }));
+};
+
+/* ── Edit field ─────────────────────────────────────────────── */
+window.acEditField = function(field) {
+  location.href = 'profile.html#' + field;
+};
+
+/* ── Change password ────────────────────────────────────────── */
+window.acChangePassword = function() {
+  location.href = 'profile.html#security';
+};
+
+/* ── Data export ────────────────────────────────────────────── */
+window.acRequestExport = async function() {
+  const btn    = document.getElementById('acExportBtn');
+  const status = document.getElementById('acExportStatus');
+  if (btn) { btn.disabled = true; btn.textContent = 'Requesting…'; }
+  try {
+    const fn = httpsCallable(_fns, 'requestDataExport');
+    await fn({});
+    if (status) {
+      status.textContent = '✓ Export requested — we\'ll email you within 24 hours.';
+      status.style.display = 'inline-flex';
+      status.className = 'ac-badge';
+    }
+  } catch (e) {
+    if (status) {
+      status.textContent = 'Request failed. Please try again later.';
+      status.style.display = 'inline-flex';
+      status.className = 'ac-badge ac-badge-red';
+    }
+    console.warn('[AccountCentre] requestDataExport error:', e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-download"></i> Request Data Export'; }
+  }
+};
+
+/* ── Utilities ──────────────────────────────────────────────── */
+function _esc(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _roleName(role) {
+  const MAP = {
+    buyer:'Buyer', seller:'Seller', provider:'Provider', driver:'Driver',
+    rider:'Rider', admin:'Admin', superAdmin:'Super Admin', employer:'Employer',
+  };
+  return MAP[role] || (role.charAt(0).toUpperCase() + role.slice(1));
+}
+
+function _timeAgo(ms) {
+  const s = Math.floor((Date.now() - ms) / 1000);
+  if (s < 60)   return 'Just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400)return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+/* ── Handle deep-link from URL hash ────────────────────────── */
+function _checkHash() {
+  const map = {
+    '#profile':'profile','#security':'security','#devices':'devices',
+    '#sessions':'sessions','#notifications':'notifications','#privacy':'privacy',
+    '#subscriptions':'subscriptions','#payments':'payments','#wallet':'wallet',
+    '#businesses':'businesses','#verification':'verification','#legal':'legal',
+    '#downloads':'downloads','#delete':'delete',
+  };
+  const panel = map[location.hash];
+  if (panel) window.acShow(panel);
+}
+
+/* ── Run ────────────────────────────────────────────────────── */
+_boot();
+_checkHash();
+window.addEventListener('hashchange', _checkHash);
+
+// Make SokoniSessions available on window for onclick handlers
+window._acSessions = SokoniSessions;
+
+// Expose SokoniSessions.revokeSession / revokeOtherSessions / getUserSessions on window.SokoniSessions
+if (!window.SokoniSessions) {
+  window.SokoniSessions = SokoniSessions;
+}
+</script>
+
+<script>
+/* Non-module helpers exposed globally for onclick handlers */
+window.acShow = window.acShow || function(id) {
+  document.querySelectorAll('.ac-panel').forEach(p => p.classList.remove('active'));
+  const t = document.getElementById('panel-' + id);
+  if (t) { t.classList.add('active'); }
+  document.querySelectorAll('[data-panel]').forEach(b => b.classList.toggle('active', b.dataset.panel === id));
+};
+</script>
+</body>
+</html>

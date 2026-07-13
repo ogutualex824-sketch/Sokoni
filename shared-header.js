@@ -802,8 +802,58 @@
       display: flex; align-items: center; justify-content: center;
       font-size: 13px; font-weight: 900; color: #71ff00;
       text-decoration: none; flex-shrink: 0; transition: background .15s, border-color .15s;
+      cursor: pointer;
     }
-    #sk-nav-avatar:hover { background: rgba(113,255,0,0.18); border-color: rgba(113,255,0,0.4); }
+    #sk-nav-avatar:hover,
+    #sk-nav-avatar[aria-expanded="true"] { background: rgba(113,255,0,0.18); border-color: rgba(113,255,0,0.4); }
+
+    /* ── Account dropdown ── */
+    .sk-acct-wrap { position: relative; flex-shrink: 0; }
+    #sk-acct-popup {
+      position: absolute; top: calc(100% + 10px); right: 0;
+      min-width: 220px; background: #141414;
+      border: 1px solid rgba(113,255,0,0.15); border-radius: 14px;
+      box-shadow: 0 16px 40px rgba(0,0,0,.6);
+      z-index: 99999; overflow: hidden;
+      animation: skAcctIn .18s cubic-bezier(.19,1.32,.34,1);
+    }
+    @keyframes skAcctIn {
+      from { opacity: 0; transform: translateY(-8px) scale(.97); }
+      to   { opacity: 1; transform: none; }
+    }
+    .sk-acct-head {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .sk-acct-name { font-size: 13.5px; font-weight: 700; color: #fff; }
+    .sk-acct-email { font-size: 11.5px; color: rgba(255,255,255,.45); margin-top: 2px;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sk-acct-links { padding: 6px 0; }
+    .sk-acct-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 16px; font-size: 13px; font-weight: 600;
+      color: rgba(255,255,255,.8); text-decoration: none;
+      transition: background .12s, color .12s; cursor: pointer;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .sk-acct-link:hover { background: rgba(113,255,0,.07); color: #71ff00; }
+    .sk-acct-link i { width: 16px; text-align: center; font-size: 13px; color: rgba(255,255,255,.35); }
+    .sk-acct-link:hover i { color: rgba(113,255,0,.7); }
+    .sk-acct-separator { height: 1px; background: rgba(255,255,255,.06); margin: 4px 0; }
+    .sk-acct-link-danger { color: rgba(255,77,77,.8) !important; }
+    .sk-acct-link-danger:hover { background: rgba(255,77,77,.07) !important; color: #ff4d4d !important; }
+    .sk-acct-link-danger i { color: rgba(255,77,77,.4) !important; }
+    .sk-acct-role-strip { padding: 6px 16px 8px; }
+    .sk-acct-role-label { font-size: 10px; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: rgba(255,255,255,.25); margin-bottom: 6px; }
+    .sk-acct-role-pills { display: flex; flex-wrap: wrap; gap: 5px; }
+    .sk-acct-role-pill {
+      padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700;
+      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1);
+      color: rgba(255,255,255,.6); cursor: pointer; transition: all .12s;
+    }
+    .sk-acct-role-pill.active { background: rgba(113,255,0,.1); border-color: rgba(113,255,0,.28); color: #71ff00; }
+    .sk-acct-role-pill:hover { background: rgba(113,255,0,.07); color: #71ff00; }
 
     /* ── Site menu drawer — layout handled by sokoni-drawers.css ── */
     /* #sk-menu-drawer is a .sk-drawer; header/close/backdrop/swipe/ESC
@@ -1032,8 +1082,11 @@
           '<span aria-hidden="true">🛒</span> <span id="sk-nav-cart-pip" style="display:' + (cartCount > 0 ? 'flex' : 'none') + ';" aria-label="' + (cartCount || 0) + ' items">' + (cartCount || 0) + '</span>' +
         '</a>' +
 
-        /* Avatar / Profile */
-        '<a href="' + profileHref + '" id="sk-nav-avatar" aria-label="Profile">' + initial + '</a>' +
+        /* Avatar / Profile — opens account dropdown */
+        '<div class="sk-acct-wrap" id="sk-acct-wrap">' +
+          '<button type="button" id="sk-nav-avatar" aria-label="Account menu" aria-expanded="false" ' +
+            'onclick="window._skToggleAcct(event)">' + initial + '</button>' +
+        '</div>' +
 
         /* Theme toggle */
         '<button type="button" class="sk-nav-icon-btn" id="sk-theme-btn" ' +
@@ -1164,9 +1217,111 @@
     if (avatar && user) {
       const initial = (user.name || user.email || '').charAt(0).toUpperCase() || '👤';
       avatar.textContent = initial;
-      avatar.href = 'profile.html';
+    } else if (avatar && !user) {
+      avatar.textContent = '👤';
+      /* Not signed in — navigate directly to login on click */
+      avatar.onclick = function () { location.href = 'login.html'; };
     }
   }
+
+  /* ── Account dropdown ──────────────────────────────────────────── */
+  function _buildAcctPopup(user) {
+    const existing = document.getElementById('sk-acct-popup');
+    if (existing) { existing.remove(); return; }
+
+    const roles   = Array.isArray(user.roles) ? user.roles : (user.role ? [user.role] : ['buyer']);
+    const active  = roles[0] || 'buyer';
+    const roleMap = { buyer:'Buyer', seller:'Seller', provider:'Provider', driver:'Driver',
+                      rider:'Rider', admin:'Admin', superAdmin:'Super Admin', employer:'Employer' };
+    const rName   = r => roleMap[r] || (r.charAt(0).toUpperCase() + r.slice(1));
+
+    const rolePills = roles.length > 1
+      ? '<div class="sk-acct-role-strip">' +
+          '<div class="sk-acct-role-label">Switch Role</div>' +
+          '<div class="sk-acct-role-pills">' +
+            roles.map(r =>
+              '<button class="sk-acct-role-pill ' + (r === active ? 'active' : '') + '" ' +
+                'onclick="window._skSwitchRole(\'' + r + '\')">' + rName(r) + '</button>'
+            ).join('') +
+          '</div>' +
+        '</div>' +
+        '<div class="sk-acct-separator"></div>'
+      : '';
+
+    const popup = document.createElement('div');
+    popup.id = 'sk-acct-popup';
+    popup.setAttribute('role', 'menu');
+    popup.innerHTML =
+      '<div class="sk-acct-head">' +
+        '<div class="sk-acct-name">' + _hesc(user.name || user.displayName || 'User') + '</div>' +
+        '<div class="sk-acct-email">' + _hesc(user.email || '') + '</div>' +
+      '</div>' +
+      (rolePills) +
+      '<div class="sk-acct-links">' +
+        '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()"><i class="fas fa-user"></i> My Profile</a>' +
+        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Account Centre</a>' +
+        '<a class="sk-acct-link" href="orders.html" onclick="window._skCloseAcct()"><i class="fas fa-bag-shopping"></i> My Orders</a>' +
+        '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()"><i class="fas fa-wallet"></i> Wallet</a>' +
+        '<div class="sk-acct-separator"></div>' +
+        '<button class="sk-acct-link sk-acct-link-danger" onclick="window._skSignOutFromAcct()"><i class="fas fa-arrow-right-from-bracket"></i> Sign Out</button>' +
+      '</div>';
+
+    const wrap = document.getElementById('sk-acct-wrap');
+    if (wrap) wrap.appendChild(popup);
+
+    const avatar = document.getElementById('sk-nav-avatar');
+    if (avatar) avatar.setAttribute('aria-expanded', 'true');
+
+    /* Close on outside click */
+    setTimeout(function () {
+      document.addEventListener('click', _skOutsideClose, { once: true });
+    }, 0);
+  }
+
+  function _hesc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  window._skToggleAcct = function (e) {
+    e.stopPropagation();
+    var { user } = _readState();
+    if (!user) { location.href = 'login.html'; return; }
+    _buildAcctPopup(user);
+  };
+
+  window._skCloseAcct = function () {
+    const p = document.getElementById('sk-acct-popup');
+    if (p) p.remove();
+    const avatar = document.getElementById('sk-nav-avatar');
+    if (avatar) avatar.setAttribute('aria-expanded', 'false');
+  };
+
+  function _skOutsideClose(e) {
+    const wrap = document.getElementById('sk-acct-wrap');
+    if (wrap && wrap.contains(e.target)) return;
+    window._skCloseAcct();
+  }
+
+  window._skSwitchRole = function (role) {
+    try {
+      var u = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+      var roles = Array.isArray(u.roles) ? [...u.roles] : [role];
+      var idx = roles.indexOf(role);
+      if (idx > 0) { roles.splice(idx, 1); roles.unshift(role); }
+      u.roles = roles; u.role = role;
+      localStorage.setItem('sokoniUser', JSON.stringify(u));
+    } catch (_) {}
+    if (window.SokoniSessionState) window.SokoniSessionState.setRole(role);
+    document.dispatchEvent(new CustomEvent('sokoniRoleChanged', { detail: { role: role } }));
+    window._skCloseAcct();
+    /* Reload so nav re-renders with new role workspace */
+    location.reload();
+  };
+
+  window._skSignOutFromAcct = function () {
+    window._skCloseAcct();
+    if (window.sokoniSignOut) { window.sokoniSignOut(); } else { location.href = 'login.html'; }
+  };
 
   /* ══════════════════════════════════════════════════════════
      LIVE SEARCH AUTOCOMPLETE
