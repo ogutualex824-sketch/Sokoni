@@ -166,9 +166,27 @@
 
       /* Always reload when a new SW takes control — ensures the page HTML
          and inline scripts are always in sync with the active SW version.
-         Without this, users run old page content under a new SW. */
+         Without this, users run old page content under a new SW.
+
+         EXCEPTION: OAuth redirect round-trips.
+         signInWithRedirect() → Google → back to app is a multi-page navigation.
+         If a new SW installs during the round-trip and fires controllerchange,
+         reloading the page here abandons getRedirectResult() mid-exchange.
+         Firebase already consumed the IndexedDB pending credential; the reload
+         gets null from getRedirectResult() and the user sees an auth error.
+
+         auth.js sets sokoniAuthRedirectPending in sessionStorage before every
+         signInWithRedirect call and clears it when the result is handled.
+         sessionStorage survives in-tab navigations, so the flag is still set
+         when Google redirects back. We skip the reload in that window only. */
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
+        try {
+          if (sessionStorage.getItem('sokoniAuthRedirectPending')) {
+            console.info('[SOKONI SW] controllerchange skipped — OAuth redirect in flight');
+            return;
+          }
+        } catch (_) {}
         if (!refreshing) { refreshing = true; window.location.reload(); }
       });
     });

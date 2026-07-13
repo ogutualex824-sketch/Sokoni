@@ -748,7 +748,19 @@ function _googleAuthErr(code) {
             return 'Too many attempts. Please wait a moment.';
         case 'auth/operation-not-allowed':
             return 'Google sign-in is not enabled. Contact support.';
+        case 'auth/web-storage-unsupported':
+            return 'Enable cookies for this site in your browser settings, then try again.';
+        case 'auth/invalid-credential':
+        case 'auth/code-expired':
+        case 'auth/missing-or-invalid-nonce':
+            return 'Sign-in session expired. Please tap Continue with Google again.';
+        case 'auth/internal-error':
+        case 'auth/cors-unsupported':
+            return 'An unexpected error occurred. Please try again.';
+        case 'auth/redirect-cancelled-by-user':
+            return ''; /* silent — user cancelled */
         default:
+            console.warn('[SOKONI Auth] Unhandled Google error code:', code);
             return 'Google sign-in failed. Please try again.';
     }
 }
@@ -888,6 +900,9 @@ async function signInWithGoogle() {
                     _googleBtnLabel(btn, 'Redirecting to Google…');
                     /* Ensure session survives the redirect round-trip */
                     await setPersistence(window.firebaseAuth, browserLocalPersistence).catch(() => {});
+                    /* Flag: tells sw-register.js to skip the controllerchange reload
+                       so the OAuth round-trip is not interrupted by a SW update. */
+                    try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
                     await signInWithRedirect(window.firebaseAuth, provider);
                 } else if (popupErr.code === 'auth/account-exists-with-different-credential') {
                     _handleGoogleLinkError(popupErr);
@@ -906,6 +921,9 @@ async function signInWithGoogle() {
                redirect round-trip — without this the session defaults to
                whatever persistence was last set, which may be sessionStorage. */
             await setPersistence(window.firebaseAuth, browserLocalPersistence).catch(() => {});
+            /* Flag: tells sw-register.js to skip the controllerchange reload
+               so the OAuth round-trip is not interrupted by a SW update. */
+            try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
             await signInWithRedirect(window.firebaseAuth, provider);
         }
     } catch (err) {
@@ -920,6 +938,7 @@ async function signInWithGoogle() {
    NOTE: firebase.js dispatches sokoniOAuthRedirectDone for ALL providers.
    The Google-specific name is kept for any legacy listeners. */
 window.addEventListener('sokoniGoogleRedirectDone', async function(e) {
+    try { sessionStorage.removeItem('sokoniAuthRedirectPending'); } catch (_) {}
     console.info('[SOKONI Auth] Redirect result received (Google)', { uid: e.detail?.user?.uid });
     await _handleGoogleResult(e.detail);
 });
@@ -934,7 +953,9 @@ window.addEventListener('sokoniOAuthRedirectDone', async function(e) {
 });
 
 window.addEventListener('sokoniGoogleRedirectError', function(e) {
+    try { sessionStorage.removeItem('sokoniAuthRedirectPending'); } catch (_) {}
     const err = e.detail;
+    console.warn('[SOKONI Auth] Google redirect error:', err.code, err.message);
     if (err.code === 'auth/account-exists-with-different-credential') {
         _handleGoogleLinkError(err);
     } else {
@@ -944,8 +965,10 @@ window.addEventListener('sokoniGoogleRedirectError', function(e) {
     }
 });
 window.addEventListener('sokoniOAuthRedirectError', function(e) {
+    try { sessionStorage.removeItem('sokoniAuthRedirectPending'); } catch (_) {}
     const err        = e.detail;
     const providerId = err.customData?._tokenResponse?.providerId || 'unknown';
+    console.warn('[SOKONI Auth] OAuth redirect error:', err.code, providerId, err.message);
     if (err.code === 'auth/account-exists-with-different-credential' && providerId !== 'google.com') {
         _handleProviderLinkError(err, _providerLabel(providerId));
     } else if (providerId === 'google.com') {

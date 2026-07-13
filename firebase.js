@@ -351,6 +351,9 @@ if (!window.firebase) {
       "auth/operation-not-supported-in-this-environment",
     ];
     if (!silent.includes(err.code)) {
+      /* Log the real error code so production failures can be diagnosed from
+         console snapshots. Never exposes sensitive data — code is an enum string. */
+      console.warn('[SOKONI Auth] getRedirectResult error:', err.code, err.message);
       if (err.code === "auth/account-exists-with-different-credential") {
         /* Attach the matching credential for the linking flow in auth.js */
         const pid = err.customData?._tokenResponse?.providerId || "";
@@ -546,7 +549,19 @@ onAuthStateChanged(auth, async (user) => {
         })();
       }
     } catch (e) {
-      /* Keep existing localStorage data if Firestore is temporarily unreachable */
+      /* Firestore temporarily unreachable. The user IS authenticated (Firebase Auth
+         confirmed the session and set loggedIn above). Keep any existing localStorage
+         profile and still dispatch sokoniAuthReady so the login page redirects rather
+         than leaving the user stuck on a visually-signed-out state. */
+      console.warn('[SOKONI Auth] onAuthStateChanged: Firestore unreachable:', e.code || e.message);
+      let _roles = ['buyer'], _role = 'buyer';
+      try {
+        const _c = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
+        if (_c.roles && _c.roles.length) { _roles = _c.roles; _role = _c.roles[0]; }
+      } catch (_) {}
+      document.dispatchEvent(new CustomEvent('sokoniAuthReady', {
+        detail: { uid: user.uid, roles: _roles, role: _role }
+      }));
     }
 
     /* ── SokoniSync: restore cross-device data on every login ── */
