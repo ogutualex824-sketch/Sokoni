@@ -200,7 +200,10 @@
     '#kassSend:hover{background:#90ff30;}',
     '#kassSend:disabled{opacity:0.35;cursor:default;}',
     '@keyframes kass-blink{0%,100%{opacity:.2}50%{opacity:1}}',
-    '@media(max-width:400px){#kassModal{width:calc(100vw - 24px);right:12px;bottom:80px;max-height:72vh;}}',
+    /* On narrow phones the modal bottom must clear the bottom nav + safe area,
+       same as the FAB. Use the CSS variable so both stay in sync. */
+    '@media(max-width:480px){#kassModal{width:calc(100vw - 24px);right:12px;',
+    'bottom:calc(var(--sk-kass-bottom,86px) + 60px);max-height:65vh;}}',
   ].join('');
   document.head.appendChild(_styleEl);
 

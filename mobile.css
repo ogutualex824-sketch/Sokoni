@@ -4,6 +4,17 @@
    Breakpoints: 480px (small phones), 600px (phones), 768px (phablets)
 ================================================================ */
 
+/* ── FAB SAFE-AREA POSITIONING ──────────────────────────────────────────
+   --sk-kass-bottom and --sk-scroll-bottom are consumed by kass-widget.js
+   and scroll-top.js. The defaults (86 / 82 px) are not enough on iPhones
+   with a home indicator (env(safe-area-inset-bottom) ≈ 34 px), where the
+   bottom nav extends to ~98 px from the bottom of the viewport.
+   Setting these here at :root ensures all pages inherit safe values.   */
+:root {
+  --sk-kass-bottom:   calc(64px + env(safe-area-inset-bottom, 0px) + 20px);
+  --sk-scroll-bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 20px);
+}
+
 /* ── SCROLL FOUNDATION ──
    overflow-x:clip (NOT hidden) on html prevents iOS Safari scroll trapping.
    hidden creates a new BFC that blocks vertical touch events on iOS.

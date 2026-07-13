@@ -3657,7 +3657,7 @@ body, .main-content, .seller-section-card, .seller-stats { max-width: 100%; over
 .seller-nav-icon-btn, .seller-theme-btn {
   min-height: 44px;
 }
-.nav-item { display: flex; align-items: center; }
+.nav-item { display: flex; align-items: center; cursor: pointer; }
 
 /* Safe-area support on the bottom nav */
 .sd-mobile-bottom-bar {

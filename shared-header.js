@@ -555,7 +555,7 @@
       background: rgba(255,255,255,0.1);
       box-shadow: 0 0 0 3px rgba(113,255,0,0.08), 0 4px 20px rgba(0,0,0,0.3);
     }
-    #sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 13px; }
+    #sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 14px; }
     #sk-nav-search-icon {
       position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
       font-size: 15px; pointer-events: none; opacity: .45;
@@ -796,7 +796,7 @@
       #sk-nav-search-wrap {
         order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 2px;
       }
-      #sk-nav-search { padding: 8px 14px 8px 36px; font-size: 13px; }
+      #sk-nav-search { padding: 8px 14px 8px 36px; font-size: 16px; }
       /* Mobile: hide Messages + Theme */
       #sk-msg-btn { display: none !important; }
       #sk-theme-btn { display: none !important; }

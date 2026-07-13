@@ -677,9 +677,10 @@
     var _probeTimer = null;       /* handle for next scheduled probe */
     var _dismissed  = false;      /* user tapped ×; stay hidden until reconnect */
     var _bootTime   = Date.now(); /* used to suppress false positives during SW install */
-    var _GRACE_MS   = 4000;      /* short grace — the active probe already guards against
-                                    boot-time false positives, so a long grace only delays
-                                    a genuine offline banner. */
+    var _GRACE_MS   = 10000;     /* Must cover: first probe delay (3 s) + probe timeout
+                                    (4 s) + buffer (3 s) = 10 s total. Without this the
+                                    probe times out at ~7 s, after the old 4 s grace, and
+                                    the banner fires falsely on PWA cold-start / slow nets. */
 
     /* ── Probe ─────────────────────────────────────────────────────────────
        Active connectivity check — the SOURCE OF TRUTH. We deliberately do NOT

@@ -1728,7 +1728,7 @@ const FB_CFG = {
 };
 
 const _fbApps = firebase.apps;
-const _app    = _fbApps.length ? _fbApps[0] : if(!firebase.apps.length)firebase.initializeApp(FB_CFG);
+const _app    = _fbApps.length ? _fbApps[0] : firebase.initializeApp(FB_CFG);
 const _auth   = firebase.auth(_app);
 const _fns    = firebase.functions(_app);
 _fns.region = 'us-central1';

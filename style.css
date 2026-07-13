@@ -55,7 +55,7 @@ html:not(.sk-no-header) body {
   border-radius: 28px; color: rgba(255,255,255,0.92); font-size: 14px;
   font-family: inherit; outline: none;
 }
-#sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 13px; }
+#sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 14px; }
 #sk-nav-search-icon {
   position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
   font-size: 15px; pointer-events: none; opacity: .45;
@@ -1000,13 +1000,23 @@ body{
     margin-bottom: 10px; padding: 0 2px;
 }
 .qlinks-row {
-    display: flex; gap: 8px; flex-wrap: wrap;
+    display: flex; gap: 8px;
+    flex-wrap: nowrap;             /* single row — chips scroll, never stack */
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    touch-action: pan-x;
+    scrollbar-width: none;         /* Firefox */
+    -ms-overflow-style: none;      /* IE/Edge */
+    padding-bottom: 4px;           /* room for scroll rubber-band */
 }
+.qlinks-row::-webkit-scrollbar { display: none; }
 .qlink {
     display: inline-flex; align-items: center; gap: 7px;
     padding: 9px 14px; border-radius: 10px; border: 1px solid transparent;
     font-size: 12px; font-weight: 700; text-decoration: none;
     transition: transform .15s, filter .15s; white-space: nowrap;
+    flex-shrink: 0;                /* prevents Safari chip compression */
 }
 .qlink:hover { transform: translateY(-2px); filter: brightness(1.15); }
 .qlink span:first-child { font-size: 15px; }

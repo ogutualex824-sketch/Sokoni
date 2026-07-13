@@ -1,30 +1,36 @@
 /* ================================================================
-   sokoni-offline.js — Connectivity Detection v2.0
+   sokoni-offline.js — Connectivity Detection v2.1
 
    The banner is driven by an ACTIVE PROBE, never by navigator.onLine.
 
-   v2.0 — fixes "false offline banner with working internet, stuck":
-   • navigator.onLine is NOT authoritative. Installed PWAs, iOS Safari and
-     Android WebViews report it as `false` while the network is healthy.
-     v1.x showed the banner directly from that flag and could only hide it
-     when the flag flipped back — so on those platforms the banner appeared
-     falsely and never cleared.
-   • Now: the flag is only a HINT that schedules a probe.
-       – Only a FAILED probe may SHOW the banner.
-       – A SUCCESSFUL probe always HIDES it, immediately.
-     Recovery therefore can never be blocked and the banner cannot stick.
-   • Re-probes on online/offline, pageshow (bfcache/app-switch) and
-     visibilitychange, so state self-heals after install, backgrounding,
-     refresh and service-worker updates.
-   • Same policy as sokoni-ui.js's #sk-offline-bar — the two detectors no
-     longer contradict each other.
+   v2.1 — fixes "false offline banner on every page load":
+   • Boot-time grace period added to ALL event handlers (pageshow,
+     visibilitychange, offline). For the first 11 s after the script
+     loads we skip any banner — this covers the full first-probe
+     cycle in sokoni-ui.js (3 s delay + 4 s timeout + 4 s buffer),
+     which is the authoritative offline detector. Firing our own probe
+     during that window produced duplicate false banners before the
+     primary system had finished its first check.
+   • Initial probe delayed to 11 s (was 3.5 s) — fires as a
+     belt-and-suspenders backup AFTER the primary system (sokoni-ui.js
+     #sk-offline-bar) has confirmed connectivity at least once.
+   • _show() still short-circuits when #sk-offline-bar exists, so even
+     if this module fires early, the banner cannot appear alongside the
+     primary bar.
+
+   v2.0 policy (unchanged):
+   • Only a FAILED probe may SHOW the banner.
+   • A SUCCESSFUL probe always HIDES it.
+   • navigator.onLine is only a hint; it never directly shows the banner.
 ================================================================ */
 (function () {
   'use strict';
 
-  var _banner       = null;
-  var _shown        = false;
+  var _banner        = null;
+  var _shown         = false;
   var _debounceTimer = null;
+  var _bootTime      = Date.now();
+  var _GRACE_MS      = 11000; /* covers sokoni-ui.js's first probe cycle */
 
   /* ── Banner element ────────────────────────────────────── */
   function _ensureBanner() {
@@ -82,26 +88,7 @@
     if (_banner) _banner.style.transform = 'translateY(-100%)';
   }
 
-  /* ── Active connectivity probe — THE SOURCE OF TRUTH ────────────────────
-     `navigator.onLine` is NOT authoritative and must never gate the banner on
-     its own. Installed PWAs, iOS Safari and Android WebViews are known to report
-     `navigator.onLine === false` while the network is perfectly healthy. This
-     module previously treated the flag as authoritative and showed the banner
-     from it directly, so on those platforms the banner appeared with working
-     internet and could never be hidden again (nothing but the flag could clear
-     it) — the "false offline, stuck banner" defect.
-
-     Policy (identical to sokoni-ui.js, so the two detectors can no longer
-     contradict each other):
-       • The flag is a HINT that triggers a probe. It never shows the banner.
-       • Only a FAILED probe may show the banner.
-       • A SUCCESSFUL probe always hides it, immediately — recovery can never
-         be blocked, so the banner cannot get stuck.
-
-     Signal: no-cors GET https://www.gstatic.com/generate_204. Cross-origin and
-     never cached by our service worker, so it fails iff the network is truly
-     down. An own-origin URL would be served from the SW cache while offline and
-     would falsely report "online".                                            */
+  /* ── Active connectivity probe — THE SOURCE OF TRUTH ───────────── */
   function _probe() {
     var ctrl;
     try { ctrl = new AbortController(); } catch (_) { ctrl = null; }
@@ -112,17 +99,16 @@
       cache:  'no-store',
       signal: ctrl ? ctrl.signal : undefined,
     })
-      .then(function () { clearTimeout(timer); return true; })   /* reached the network */
+      .then(function () { clearTimeout(timer); return true; })
       .catch(function () {
         clearTimeout(timer);
-        /* gstatic unreachable. If the browser still reports a network, assume the
-           probe was blocked (firewall, extension, DNS) rather than declaring the
-           user offline — a blocked probe must not produce a false banner. */
+        /* gstatic unreachable. If the browser still reports a network,
+           assume the probe was blocked (firewall, extension, DNS) rather
+           than declaring the user offline. */
         return navigator.onLine === true;
       });
   }
 
-  /* Re-evaluate true connectivity and drive the banner from the RESULT. */
   function _sync() {
     return _probe().then(function (online) {
       if (online) _hide(); else _show();
@@ -130,50 +116,41 @@
     });
   }
 
-  /* Public API (window.SokoniOffline.check) — same probe-confirmed policy. */
   function _check() { return _sync(); }
 
-  /* ── Network event listeners ───────────────────────────── */
+  /* ── Network event listeners ────────────────────────────── */
   window.addEventListener('offline', function () {
-    /* The flag only schedules a probe. Debounced 1 s because Android/iOS fire
-       `offline` during Wi-Fi handoffs that recover on their own. The probe —
-       not the flag — decides whether the banner appears. */
+    /* Skip during grace period — sokoni-ui.js handles this window */
+    if (Date.now() - _bootTime < _GRACE_MS) return;
     clearTimeout(_debounceTimer);
     _debounceTimer = setTimeout(_sync, 1000);
   });
 
   window.addEventListener('online', function () {
-    /* Network restored — hide immediately, then confirm in the background.
-       Hiding is never blocked on the probe, so recovery is guaranteed. */
     clearTimeout(_debounceTimer);
     _hide();
+    /* Only re-probe after grace to avoid racing with primary system */
+    if (Date.now() - _bootTime >= _GRACE_MS) _sync();
+  });
+
+  /* Re-check on bfcache restore or focus — skip during initial boot
+     to avoid a false-offline race before the network is established. */
+  window.addEventListener('pageshow', function () {
+    if (Date.now() - _bootTime < _GRACE_MS) return;
     _sync();
   });
 
-  /* Re-check whenever the page is restored or refocused. Devices that sleep
-     offline and wake online frequently never fire `online`; without this the
-     banner stayed stranded after app-install, backgrounding, refresh, or a
-     service-worker update. */
-  window.addEventListener('pageshow', function () { _sync(); });
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden) _sync();
+    if (document.hidden) return;
+    if (Date.now() - _bootTime < _GRACE_MS) return;
+    _sync();
   });
 
-  /* Initial state: delay 3.5 s before the first probe.
-     Rationale: on PWA launch and mobile wakeup, navigator.onLine is
-     frequently false for the first few seconds even with a healthy network.
-     If we probe immediately and the result is a timeout + onLine=false,
-     the banner appears falsely. Delaying to 3.5 s lets:
-       1. The network interface fully initialise after app/tab launch.
-       2. sokoni-ui.js's own #sk-offline-bar to be created (it delays to
-          3 s); _show() guards against double banners by checking that
-          element's presence — but it must exist first.
-     sokoni-ui.js already runs its first probe at 3 s with a 4 s grace
-     period and handles fast `offline` events independently, so genuine
-     outages are still detected before this module's first probe fires. */
-  setTimeout(_sync, 3500);
+  /* Backup probe: fires after the primary system (sokoni-ui.js) has
+     had time to complete its own first probe and grace period. This
+     module only takes over when #sk-offline-bar is absent (pages that
+     don't load sokoni-ui.js). */
+  setTimeout(_sync, 11000);
 
-  /* hide is exposed so sokoni-ui.js can cross-clear this banner when its
-     own probe confirms connectivity — avoids double-banner race conditions. */
   window.SokoniOffline = { check: _check, sync: _sync, probe: _probe, hide: _hide };
 }());
