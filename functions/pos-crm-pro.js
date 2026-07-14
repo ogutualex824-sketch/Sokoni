@@ -89,6 +89,25 @@ function _walletId(sellerId, phone) {
   return `${sellerId}_${phone}`;
 }
 
+// --- Seller identity (server-derived, cross-tenant-safe) -----------------------
+// CRM/wallet records are namespaced by the merchant (sellerId). The authenticated
+// merchant's store is the sellerId claim on their token; the CRM UI never supplies it
+// (it only knows the customer phone). Derive it server-side: a merchant is LOCKED to
+// their claim (a mismatching client value is rejected — no cross-tenant access); an
+// admin/owner without a claim may target a store by passing sellerId; else fall back
+// to the caller uid. Never trust a client-supplied tenant id over the token claim.
+function _resolveSellerId(req) {
+  const claim = req.auth && req.auth.token ? req.auth.token.sellerId : null;
+  const provided = req.data ? req.data.sellerId : null;
+  if (claim) {
+    if (provided && provided !== claim)
+      throw new HttpsError('permission-denied', 'sellerId does not match your account');
+    return claim;
+  }
+  if (provided) return provided;
+  return req.auth ? req.auth.uid : null;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // SECTION A — Customer Wallet
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -101,8 +120,9 @@ function _walletId(sellerId, phone) {
    clash with the global wallet CF. Caller: pos-crm-pro.html cf('posGetWalletBalance'). */
 exports.getWalletBalance = onCall(_CF, exports._h.posGetWalletBalance = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone']);
+  const { phone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone']);
   const normPhone = _normalizePhone(phone);
   const walletId  = _walletId(sellerId, normPhone);
 
@@ -129,8 +149,9 @@ exports.getWalletBalance = onCall(_CF, exports._h.posGetWalletBalance = async (r
 exports.topUpWallet = onCall(_CF, exports._h.topUpWallet = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, phone, amount, method, ref } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone', 'amount', 'method']);
+  const { phone, amount, method, ref } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone', 'amount', 'method']);
   const normPhone  = _normalizePhone(phone);
   const safeAmount = _validateAmount(amount);
   const walletId   = _walletId(sellerId, normPhone);
@@ -172,8 +193,9 @@ exports.topUpWallet = onCall(_CF, exports._h.topUpWallet = async (req) => {
  */
 exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone, amount, saleId } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone', 'amount', 'saleId']);
+  const { phone, amount, saleId } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone', 'amount', 'saleId']);
   const normPhone  = _normalizePhone(phone);
   const safeAmount = _validateAmount(amount);
   const walletId   = _walletId(sellerId, normPhone);
@@ -215,8 +237,9 @@ exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
 exports.refundToWallet = onCall(_CF, exports._h.posRefundToWallet = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, phone, amount, saleId, reason } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone', 'amount']);
+  const { phone, amount, saleId, reason } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone', 'amount']);
   const normPhone  = _normalizePhone(phone);
   const safeAmount = _validateAmount(amount);
   const walletId   = _walletId(sellerId, normPhone);
@@ -263,8 +286,9 @@ exports.refundToWallet = onCall(_CF, exports._h.posRefundToWallet = async (req) 
  */
 exports.getWalletTransactions = onCall(_CF, exports._h.posGetWalletTransactions = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone']);
+  const { phone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone']);
   const normPhone = _normalizePhone(phone);
 
   const snap = await db.collection('posWalletTransactions')
@@ -302,8 +326,9 @@ function _generateGiftCardCode() {
 exports.issueGiftCard = onCall(_CF, exports._h.issueGiftCard = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, amount, recipientName, recipientPhone } = req.data;
-  _requireFields(req.data, ['sellerId', 'amount']);
+  const { amount, recipientName, recipientPhone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['amount']);
   const safeAmount = _validateAmount(amount);
 
   // Generate unique code — retry up to 5 times on collision
@@ -344,8 +369,9 @@ exports.issueGiftCard = onCall(_CF, exports._h.issueGiftCard = async (req) => {
  */
 exports.redeemGiftCard = onCall(_CF, exports._h.redeemGiftCard = async (req) => {
   _requireAuth(req);
-  const { sellerId, code, amount, saleId } = req.data;
-  _requireFields(req.data, ['sellerId', 'code', 'amount', 'saleId']);
+  const { code, amount, saleId } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['code', 'amount', 'saleId']);
   const safeAmount = _validateAmount(amount);
 
   const cardRef = db.collection('posGiftCards').doc(String(code).toUpperCase().trim());
@@ -415,8 +441,9 @@ exports.checkGiftCardBalance = onCall({ region: 'us-central1', enforceAppCheck: 
 exports.getGiftCards = onCall(_CF, exports._h.getGiftCards = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, status } = req.data;
-  _requireFields(req.data, ['sellerId']);
+  const { status } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, []);
 
   let query = db.collection('posGiftCards')
     .where('sellerId', '==', sellerId)
@@ -440,8 +467,9 @@ exports.getGiftCards = onCall(_CF, exports._h.getGiftCards = async (req) => {
 exports.issueStoreCredit = onCall(_CF, exports._h.issueStoreCredit = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, phone, amount, reason } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone', 'amount', 'reason']);
+  const { phone, amount, reason } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone', 'amount', 'reason']);
   const normPhone  = _normalizePhone(phone);
   const safeAmount = _validateAmount(amount);
 
@@ -471,8 +499,9 @@ exports.issueStoreCredit = onCall(_CF, exports._h.issueStoreCredit = async (req)
  */
 exports.useStoreCredit = onCall(_CF, exports._h.useStoreCredit = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone, amount, saleId } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone', 'amount', 'saleId']);
+  const { phone, amount, saleId } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone', 'amount', 'saleId']);
   const normPhone  = _normalizePhone(phone);
   const safeAmount = _validateAmount(amount);
 
@@ -509,8 +538,9 @@ exports.useStoreCredit = onCall(_CF, exports._h.useStoreCredit = async (req) => 
  */
 exports.getStoreCreditBalance = onCall(_CF, exports._h.getStoreCreditBalance = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone']);
+  const { phone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone']);
   const normPhone = _normalizePhone(phone);
 
   const snap = await db.collection('posCustomers').doc(`${sellerId}_${normPhone}`).get();
@@ -557,8 +587,9 @@ function _isWithinBirthdayWindow(birthdayMonth, birthdayDay) {
  */
 exports.checkBirthdayReward = onCall(_CF, exports._h.checkBirthdayReward = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone']);
+  const { phone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone']);
   const normPhone = _normalizePhone(phone);
 
   const customerRef = db.collection('posCustomers').doc(`${sellerId}_${normPhone}`);
@@ -610,8 +641,8 @@ exports.checkBirthdayReward = onCall(_CF, exports._h.checkBirthdayReward = async
 exports.getBirthdayCustomers = onCall(_CF, exports._h.getBirthdayCustomers = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId } = req.data;
-  _requireFields(req.data, ['sellerId']);
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, []);
 
   const today = new Date();
 
@@ -677,8 +708,9 @@ const REFERRAL_POINTS = 500;
  */
 exports.recordReferral = onCall(_CF, exports._h.recordReferral = async (req) => {
   _requireAuth(req);
-  const { sellerId, referrerPhone, referredPhone } = req.data;
-  _requireFields(req.data, ['sellerId', 'referrerPhone', 'referredPhone']);
+  const { referrerPhone, referredPhone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['referrerPhone', 'referredPhone']);
   const normReferrer = _normalizePhone(referrerPhone);
   const normReferred = _normalizePhone(referredPhone);
 
@@ -718,8 +750,9 @@ exports.recordReferral = onCall(_CF, exports._h.recordReferral = async (req) => 
 exports.completeReferralReward = onCall(_CF, exports._h.completeReferralReward = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, referredPhone, saleId } = req.data;
-  _requireFields(req.data, ['sellerId', 'referredPhone', 'saleId']);
+  const { referredPhone, saleId } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['referredPhone', 'saleId']);
   const normReferred = _normalizePhone(referredPhone);
 
   // Find pending referral
@@ -772,8 +805,9 @@ exports.completeReferralReward = onCall(_CF, exports._h.completeReferralReward =
  */
 exports.getReferralStats = onCall(_CF, exports._h.getReferralStats = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone']);
+  const { phone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone']);
   const normPhone = _normalizePhone(phone);
 
   const [asReferrer, asReferred] = await Promise.all([
@@ -814,12 +848,13 @@ exports.createOffer = onCall(_CF, exports._h.createOffer = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const {
-    sellerId, name, description, offerType, value,
+    name, description, offerType, value,
     eligibility, targetTier, minSpend, productId,
     startDate, endDate,
   } = req.data;
+  const sellerId = _resolveSellerId(req);
 
-  _requireFields(req.data, ['sellerId', 'name', 'offerType', 'value', 'eligibility']);
+  _requireFields(req.data, ['name', 'offerType', 'value', 'eligibility']);
 
   if (!VALID_OFFER_TYPES.includes(offerType))
     throw new HttpsError('invalid-argument', `offerType must be one of: ${VALID_OFFER_TYPES.join(', ')}`);
@@ -865,8 +900,9 @@ exports.createOffer = onCall(_CF, exports._h.createOffer = async (req) => {
  */
 exports.getActiveOffers = onCall(_CF, exports._h.getActiveOffers = async (req) => {
   _requireAuth(req);
-  const { sellerId, customerTier, customerSpend } = req.data;
-  _requireFields(req.data, ['sellerId']);
+  const { customerTier, customerSpend } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, []);
 
   const now = new Date();
 
@@ -918,8 +954,9 @@ exports.getActiveOffers = onCall(_CF, exports._h.getActiveOffers = async (req) =
 exports.getOffers = onCall(_CF, exports._h.getOffers = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, status } = req.data;
-  _requireFields(req.data, ['sellerId']);
+  const { status } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, []);
 
   let query = db.collection('posOffers')
     .where('sellerId', '==', sellerId)
@@ -994,8 +1031,8 @@ function _classifyCustomer(c) {
 exports.getCustomerSegments = onCall(_CF, exports._h.getCustomerSegments = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId } = req.data;
-  _requireFields(req.data, ['sellerId']);
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, []);
 
   const snap = await db.collection('posCustomers')
     .where('sellerId', '==', sellerId)
@@ -1046,8 +1083,9 @@ exports.getCustomerSegments = onCall(_CF, exports._h.getCustomerSegments = async
  */
 exports.getCustomerInsights = onCall(_CF, exports._h.getCustomerInsights = async (req) => {
   _requireAuth(req);
-  const { sellerId, phone } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone']);
+  const { phone } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone']);
   const normPhone = _normalizePhone(phone);
   const customerId = `${sellerId}_${normPhone}`;
 
@@ -1138,8 +1176,9 @@ exports.getCustomerInsights = onCall(_CF, exports._h.getCustomerInsights = async
 exports.upgradeMembershipTier = onCall(_CF, exports._h.upgradeMembershipTier = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId, phone, newTier, reason } = req.data;
-  _requireFields(req.data, ['sellerId', 'phone', 'newTier', 'reason']);
+  const { phone, newTier, reason } = req.data;
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, ['phone', 'newTier', 'reason']);
 
   if (!TIER_ORDER.includes(newTier))
     throw new HttpsError('invalid-argument', `newTier must be one of: ${TIER_ORDER.join(', ')}`);
@@ -1178,8 +1217,8 @@ exports.upgradeMembershipTier = onCall(_CF, exports._h.upgradeMembershipTier = a
 exports.getMembershipStats = onCall(_CF, exports._h.getMembershipStats = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
-  const { sellerId } = req.data;
-  _requireFields(req.data, ['sellerId']);
+  const sellerId = _resolveSellerId(req);
+  _requireFields(req.data, []);
 
   const snap = await db.collection('posCustomers')
     .where('sellerId', '==', sellerId)
