@@ -586,17 +586,37 @@ const SokoniSecurity = (() => {
            !important cannot be out-cascaded by either. Each button's own base offset is
            remembered, so Accept restores it exactly. */
         var FAB_SEL = '#sokoniScrollTop,#kassBtn,#sokoni-wa-support,.back-to-top-btn,.sk-fab,.fab';
+
+        /* Lifting the buttons by the banner's full height stopped the banner swallowing
+           their taps — but it created a worse problem. On a phone the banner wraps to
+           ~184px, which is 28% of a 664px viewport, so the buttons landed at bottom:270px:
+           levitated into the MIDDLE of the page, sitting on top of the content. Measured in
+           an authenticated Seller Dashboard session, that put the back-to-top button
+           squarely over the "Add Product" quick action and the chat button over "KRA Tax".
+
+           A transient banner must not relocate permanent furniture into the content. While
+           the banner is up, hide the buttons instead: a hidden button cannot have its taps
+           swallowed either, the consent bar is the only thing the user should be answering,
+           and Accept restores them to their real positions immediately.
+
+           visibility (not display) keeps their layout box intact so nothing else reflows,
+           and pointer-events:none guarantees they cannot eat a tap while invisible. */
         var _liftFabs = function (h) {
           document.querySelectorAll(FAB_SEL).forEach(function (el) {
-            if (el.__skFabBase == null) {
-              el.__skFabBase = parseFloat(getComputedStyle(el).bottom) || 82;
-            }
-            el.style.setProperty('bottom', (el.__skFabBase + h) + 'px', 'important');
+            if (el.__skFabHidden) return;
+            el.__skFabHidden = true;
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('pointer-events', 'none', 'important');
           });
         };
         var _dropFabs = function () {
           document.querySelectorAll(FAB_SEL).forEach(function (el) {
+            el.style.removeProperty('visibility');
+            el.style.removeProperty('pointer-events');
+            /* Older builds lifted the buttons with an inline `bottom`. Clear it so a
+               returning user is not left with a permanently levitated FAB. */
             el.style.removeProperty('bottom');
+            el.__skFabHidden = false;
             el.__skFabBase = null;
           });
         };
