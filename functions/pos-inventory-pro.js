@@ -1512,3 +1512,201 @@ exports.batchExpiryAlertSweep = onSchedule(
     );
   }
 );
+
+// ─────────────────────────────────────────────
+// SECTION J — PRODUCT CATALOGUE  (posUpsertProduct / posDeleteProduct)
+//
+// WHY THIS EXISTS (Phase 0 pilot blocker):
+//   Nothing in the platform could create a `posProducts` document. Every other reference to
+//   that collection is a read, a checkout stock-decrement, or a PO receipt against an EXISTING
+//   product. The CSV importer writes to `tenants/{t}/inventory_products` — a different
+//   collection, used only for search indexing, with no bridge to `posProducts`. The POS sells
+//   exclusively from `posProducts`, and `getSetupStatus.inventoryReady` checks `posProducts`.
+//   Net effect: a merchant could not put a single sellable item into the POS by any route.
+//
+// DESIGN NOTES:
+//   * Registered on `_h` ONLY — served through the existing smartPosDispatch, so this adds
+//     ZERO new Cloud Functions (Cloud Run CPU quota is exhausted).
+//   * merchantId is NEVER trusted from the client: `_assertMerchantAccess` (the canonical guard
+//     in business-bootstrap) verifies the caller is the owner, active branch staff, or a
+//     merchant admin. Reused, not re-implemented.
+//   * Writes the exact field names the checkout reads — `price` and `stockQty`
+//     (pos-zero-friction reads `prod.salePrice || prod.price` and `prod.stockQty ?? prod.quantity`).
+//     Writing `sellingPrice` instead would make every sale fail the server price-mismatch check.
+//   * Barcode uniqueness is enforced ATOMICALLY inside the transaction via a
+//     `posProductIndex/{merchantId}__{barcode}` reservation doc — a duplicate barcode would
+//     otherwise silently break scanning.
+//   * Create is idempotent on an optional `idempotencyKey` (deterministic doc id), so a
+//     double-tapped Save cannot create two products.
+//   * Any stock change writes a `posStockMovements` audit row (before/after/by/reason) — the
+//     mission requires audit trails to be preserved.
+// ─────────────────────────────────────────────
+
+const { _assertMerchantAccess } = require('./business-bootstrap');
+
+const _pcStr = (v, max) => String(v == null ? '' : v).trim().slice(0, max);
+const _pcId  = (v, max) => String(v == null ? '' : v).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, max);
+
+/** Coerce to a finite number within range. `undefined` passes through unless required. */
+function _pcNum(v, field, opts) {
+  const o = opts || {};
+  const min = o.min === undefined ? 0 : o.min;
+  const max = o.max === undefined ? 1e9 : o.max;
+  if (v === undefined || v === null || v === '') {
+    if (o.required) throw new HttpsError('invalid-argument', field + ' is required');
+    return undefined;
+  }
+  const n = Number(v);
+  if (!Number.isFinite(n)) throw new HttpsError('invalid-argument', field + ' must be a number');
+  if (n < min || n > max) throw new HttpsError('invalid-argument', field + ' must be between ' + min + ' and ' + max);
+  return Math.round(n * 100) / 100;
+}
+
+exports._h.posUpsertProduct = async (req) => {
+  const auth = _requireAuth(req);
+  _requireRole(auth, 'manager');            // editing the catalogue is a manager+ action
+  const d = req.data || {};
+
+  const merchantId = _pcId(d.merchantId, 64);
+  if (!merchantId) throw new HttpsError('invalid-argument', 'merchantId is required');
+  const branchId = _pcId(d.branchId, 80) || (merchantId + '-main');
+
+  /* Tenant guard — reuse the canonical membership check. Never trust a client merchantId. */
+  await _assertMerchantAccess(req, merchantId, branchId);
+
+  const name = _pcStr(d.name, 140);
+  if (!name) throw new HttpsError('invalid-argument', 'name is required');
+
+  const price        = _pcNum(d.price === undefined ? d.sellingPrice : d.price, 'price', { required: true });
+  const costPrice    = _pcNum(d.costPrice, 'costPrice');
+  const salePrice    = _pcNum(d.salePrice, 'salePrice');
+  const vatRate      = _pcNum(d.vatRate === undefined ? d.taxRate : d.vatRate, 'vatRate', { max: 100 });
+  const reorderPoint = _pcNum(d.reorderPoint, 'reorderPoint');
+  const stockQty     = _pcNum(d.stockQty === undefined ? d.qty : d.stockQty, 'stockQty', { max: 1e7 });
+
+  const sku      = _pcStr(d.sku, 64);
+  const barcode  = _pcStr(d.barcode, 64);
+  const category = _pcStr(d.category, 80) || 'General';
+  const brand    = _pcStr(d.brand, 80);
+  const unit     = _pcStr(d.unit, 24) || 'pcs';
+  const supplier = _pcStr(d.supplier, 120);
+  const active   = d.active === false ? false : true;
+
+  const isUpdate  = !!d.productId;
+  const idemKey   = _pcId(d.idempotencyKey, 100);
+  const productId = isUpdate
+    ? _pcId(d.productId, 120)
+    : (idemKey ? 'p_' + idemKey : db.collection('posProducts').doc().id);
+
+  const prodRef = db.collection('posProducts').doc(productId);
+  const bcRef   = barcode
+    ? db.collection('posProductIndex').doc(merchantId + '__' + barcode)
+    : null;
+
+  const result = await db.runTransaction(async (tx) => {
+    /* ── ALL READS FIRST (Firestore requires every read before any write) ── */
+    const [prodSnap, bcSnap] = await Promise.all([
+      tx.get(prodRef),
+      bcRef ? tx.get(bcRef) : Promise.resolve(null),
+    ]);
+
+    if (isUpdate && !prodSnap.exists) throw new HttpsError('not-found', 'Product not found');
+
+    /* Cross-tenant guard on the document itself: never let one merchant edit another's item. */
+    if (prodSnap.exists && prodSnap.data().merchantId !== merchantId) {
+      throw new HttpsError('permission-denied', 'Product belongs to another merchant');
+    }
+    /* Idempotent create: the same key replayed returns the existing product, never a duplicate. */
+    if (!isUpdate && prodSnap.exists) {
+      return { productId: productId, idempotent: true, created: false };
+    }
+    /* A duplicate barcode within a merchant would silently break scanning. */
+    if (bcSnap && bcSnap.exists && bcSnap.data().productId !== productId) {
+      throw new HttpsError('already-exists', 'Barcode ' + barcode + ' is already used by another product');
+    }
+
+    const prev    = prodSnap.exists ? prodSnap.data() : null;
+    const prevQty = prev ? (prev.stockQty === undefined ? 0 : prev.stockQty) : 0;
+    const nextQty = stockQty === undefined ? prevQty : stockQty;
+
+    /* ── WRITES ── */
+    const doc = {
+      merchantId: merchantId,
+      branchId:   branchId,
+      name:       name,
+      nameLower:  name.toLowerCase(),   // case-insensitive lookup
+      category:   category,
+      price:      price,                // canonical field the checkout reads
+      active:     active,
+      unit:       unit,
+      updatedAt:  _TS(),
+      updatedBy:  auth.uid,
+    };
+    if (costPrice    !== undefined) doc.costPrice    = costPrice;
+    if (salePrice    !== undefined) doc.salePrice    = salePrice;
+    if (vatRate      !== undefined) doc.vatRate      = vatRate;
+    if (reorderPoint !== undefined) doc.reorderPoint = reorderPoint;
+    if (sku)      doc.sku      = sku;
+    if (barcode)  doc.barcode  = barcode;
+    if (brand)    doc.brand    = brand;
+    if (supplier) doc.supplier = supplier;
+    if (stockQty !== undefined) doc.stockQty = nextQty;
+
+    if (!prodSnap.exists) {
+      doc.stockQty  = nextQty;          // always present on create so checkout can read it
+      doc.createdAt = _TS();
+      doc.createdBy = auth.uid;
+      tx.set(prodRef, doc);
+    } else {
+      tx.set(prodRef, doc, { merge: true });
+    }
+
+    if (bcRef) tx.set(bcRef, { merchantId: merchantId, productId: productId, barcode: barcode, updatedAt: _TS() });
+
+    /* Preserve the audit trail on any stock change (mission requirement). */
+    if (nextQty !== prevQty) {
+      const mvRef = db.collection('posStockMovements').doc();
+      tx.set(mvRef, {
+        merchantId:  merchantId,
+        branchId:    branchId,
+        productId:   productId,
+        type:        prodSnap.exists ? 'adjustment' : 'opening_stock',
+        qtyBefore:   prevQty,
+        qtyAfter:    nextQty,
+        delta:       nextQty - prevQty,
+        reason:      _pcStr(d.reason, 200) || (prodSnap.exists ? 'Manual stock adjustment' : 'Opening stock'),
+        performedBy: auth.uid,
+        createdAt:   _TS(),
+      });
+    }
+
+    return { productId: productId, created: !prodSnap.exists, idempotent: false };
+  });
+
+  return Object.assign({ ok: true }, result);
+};
+
+/** Soft-delete: deactivate rather than destroy, so sales history keeps resolving the product. */
+exports._h.posDeleteProduct = async (req) => {
+  const auth = _requireAuth(req);
+  _requireRole(auth, 'manager');
+  const d = req.data || {};
+  const merchantId = _pcId(d.merchantId, 64);
+  const productId  = _pcId(d.productId, 120);
+  if (!merchantId || !productId) {
+    throw new HttpsError('invalid-argument', 'merchantId and productId are required');
+  }
+  const branchId = _pcId(d.branchId, 80) || (merchantId + '-main');
+  await _assertMerchantAccess(req, merchantId, branchId);
+
+  const prodRef = db.collection('posProducts').doc(productId);
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(prodRef);
+    if (!snap.exists) throw new HttpsError('not-found', 'Product not found');
+    if (snap.data().merchantId !== merchantId) {
+      throw new HttpsError('permission-denied', 'Product belongs to another merchant');
+    }
+    tx.set(prodRef, { active: false, deletedAt: _TS(), deletedBy: auth.uid }, { merge: true });
+  });
+  return { ok: true, productId: productId, deactivated: true };
+};

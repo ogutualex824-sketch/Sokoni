@@ -1138,6 +1138,9 @@ module.exports = {
   invalidateBootstrapCache: exports.invalidateBootstrapCache,
   getBusinessConfig:        exports.getBusinessConfig,
   validateDeviceAccess:     exports.validateDeviceAccess,
+  /* Canonical merchant tenant-guard. Exported so other POS modules reuse it instead of
+     re-implementing membership checks (owner / active branch staff / merchant admin). */
+  _assertMerchantAccess,
   /* Onboarding v2 handlers — served through smartPosDispatch (no new CF). */
   _h: {
     getMyBusinesses:        _getMyBusinesses,
