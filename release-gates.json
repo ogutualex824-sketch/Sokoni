@@ -42,7 +42,7 @@
       "name": "Authentication",
       "critical": true,
       "state": "engineering_complete",
-      "note": "App Check enforced; auth CFs live; validation mode traces init → getRedirectResult → claims → Firestore profile. Never executed on a real device.",
+      "note": "Custom authDomain auth.mysokoni.co.ke live — DNS, SSL, Authorized Domains confirmed 2026-07-14. 4 bugs fixed: P0 iOS false-error banner, P2 Facebook redirect missing pending flag, P2 OAuthRedirectDone flag leak, P4 comment drift. ALWAYS_FRESH + SKIP_CACHE_PATTERNS verified. All 54 secondary initializeApp configs migrated. SW reload guard covers Google+Facebook. Code-complete and code-reviewed. PENDING: iPhone Safari + iOS PWA physical device execution. See docs/AUTH_DOMAIN_CERTIFICATION.md.",
       "roles": [
         "buyer",
         "merchant",
