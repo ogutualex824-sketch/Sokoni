@@ -47,7 +47,14 @@ import {
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  authDomain:        "sokoni-aeb26.firebaseapp.com",
+  /* auth.mysokoni.co.ke is a custom authDomain that runs the Firebase auth
+     handler (/__/auth/) from the same origin as the app.  This prevents Apple
+     ITP from treating the Firebase iframe as third-party, which was the root
+     cause of getRedirectResult() throwing on every iOS Safari page load.
+     DEPLOY ONLY AFTER: (1) auth.mysokoni.co.ke added as a custom domain in
+     Firebase Hosting Console, (2) SSL provisioned (auto, ~minutes), (3) domain
+     added to Firebase Auth → Settings → Authorized domains. */
+  authDomain:        "auth.mysokoni.co.ke",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.firebasestorage.app",
   messagingSenderId: "24799054989",

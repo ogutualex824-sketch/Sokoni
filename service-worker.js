@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260713-icon-standardization-v69";
+const CACHE_VERSION = "sokoni-20260714-auth-domain-v71";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -45,7 +45,7 @@ const PRECACHE_PAGES = [
   "/ent-organizer",
   "/home-services", "/cleaning", "/construction",
   "/electrical", "/mechanics", "/phone-repair", "/plumbing",
-  "/life-events", "/marketing", "/foundation",
+  "/life-events", "/marketing",
   "/offer", "/success", "/trust",
   "/register", "/seller-public", "/bnb-manage",
   "/payments", "/revenue", "/seller-revenue",
@@ -169,10 +169,8 @@ const PRECACHE_PAGES = [
   "/pos-kds", "/pos-live-floor", "/pos-till-manager",
   "/status", "/trust-and-safety",
   "/task-queue", "/warehouse",
-  "/test-accounts",
-  /* CF tooling pages */
-  "/cf-audit-report", "/cf-audit-shell", "/cf-complete-audit",
-  "/cf-migration-plan", "/cf-migration-plan-shell",
+  /* iOS / cross-platform print certification */
+  "/pos-ios-print-test",
 ];
 
 const PRECACHE_STATIC = [
@@ -215,7 +213,7 @@ const PRECACHE_STATIC = [
   /* SmartPOS core modules */
   "/pos.css", "/pos-bos.css", "/pos-mobile.css",
   "/sokoni-profile-switcher.js", "/sokoni-provider.js",
-  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/sokoni-bluetooth-printer.js", "/sokoni-printer-manager.js", "/sokoni-pos-print-service.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/sokoni-pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
+  "/pos.js", "/pos-db.js", "/pos-printer.js", "/sokoni-print-engine.js", "/sokoni-universal-printer.js", "/sokoni-bluetooth-printer.js", "/sokoni-printer-manager.js", "/sokoni-pos-ios-print.js", "/sokoni-pos-print-service.js", "/pos-health.js", "/pos-idempotency.js", "/pos-sync.js", "/sokoni-pos-resilience.js", "/pos-omni.js", "/pos-barcode.js",
   "/pos-ai.js", "/pos-analytics.js", "/pos-boss.js", "/pos-plugins.js",
   "/pos-voice.js", "/pos-ai-engine.js", "/pos-finance.js", "/pos-audit.js",
   "/pos-modules.js", "/pos-scanner.js", "/pos-mobile.js",
