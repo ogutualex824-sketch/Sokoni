@@ -1,4 +1,4 @@
-/*!
+﻿/*!
  * sokoni-recommendations.js
  * Cross-hub personalised recommendation engine for SOKONI
  * Exposes: window.SokoniRecs
@@ -9,7 +9,7 @@
   /* ── Firebase config (project sokoni-aeb26) ── */
   const FB_CONFIG = {
     apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
-    authDomain:        'sokoni-aeb26.firebaseapp.com',
+    authDomain: 'auth.mysokoni.co.ke',
     projectId:         'sokoni-aeb26',
     storageBucket:     'sokoni-aeb26.firebasestorage.app',
     messagingSenderId: '24799054989',

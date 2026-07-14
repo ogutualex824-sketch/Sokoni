@@ -1,4 +1,4 @@
-/* sokoni-appcheck.js — Firebase App Check (compat SDK pages)
+﻿/* sokoni-appcheck.js — Firebase App Check (compat SDK pages)
    Loaded after firebase-app-check-compat.js on every compat-SDK page.
    firebase.js (modular) initialises App Check independently. */
 (function () {
@@ -11,7 +11,7 @@
      Prefer a page-provided config when one exists so nothing is overridden. */
   var FB_CONFIG = (window.SOKONI_CONFIG && window.SOKONI_CONFIG.firebase) || window.firebaseConfig || {
     apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
-    authDomain:        'sokoni-aeb26.firebaseapp.com',
+    authDomain: 'auth.mysokoni.co.ke',
     projectId:         'sokoni-aeb26',
     storageBucket:     'sokoni-aeb26.firebasestorage.app',
     messagingSenderId: '24799054989',

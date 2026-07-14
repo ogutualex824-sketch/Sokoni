@@ -1730,7 +1730,7 @@ async function _getDb(){
     const { getFirestore }           = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
     const cfg = {
       apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-      authDomain:"sokoni-aeb26.firebaseapp.com",
+      authDomain: "auth.mysokoni.co.ke",
       projectId:"sokoni-aeb26",
       storageBucket:"sokoni-aeb26.firebasestorage.app",
       messagingSenderId:"24799054989",
@@ -1751,7 +1751,7 @@ async function _lhCallCF(name, data) {
     const apps = getApps();
     const app  = apps.length ? apps[0] : initializeApp({
       apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
-      authDomain:'sokoni-aeb26.firebaseapp.com', projectId:'sokoni-aeb26',
+      authDomain: 'auth.mysokoni.co.ke', projectId:'sokoni-aeb26',
       storageBucket:'sokoni-aeb26.firebasestorage.app',
       messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4',
     });
@@ -2069,7 +2069,7 @@ function confirmConsultation(lawyerId){
     (async function(){try{
       const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
       const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
       const _a=getApps().find(a=>a.name==="lh-lead")||initializeApp(_cfg,"lh-lead");
       const uid=window._sokoniUser?.uid||null;
       await addDoc(collection(getFirestore(_a),"leadFees"),{sellerUid:l.sellerUid||null,buyerUid:uid,buyerPhone:phone,hub:"legal",bookingRef:ref,providerName:l.name||"",matter,contactShared:true,feeKES:50,status:"pending",createdAt:serverTimestamp()});
@@ -4002,7 +4002,7 @@ async function _lhGetDb(){
     const { getFirestore } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
     const cfg = {
       apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-      authDomain:"sokoni-aeb26.firebaseapp.com",
+      authDomain: "auth.mysokoni.co.ke",
       projectId:"sokoni-aeb26"
     };
     const app = getApps().length ? getApps()[0] : initializeApp(cfg);
