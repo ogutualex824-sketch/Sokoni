@@ -1720,6 +1720,15 @@ const DEMO_LAWYERS = [
     location:"nairobi", rate:4000, rateType:"per hour", bio:"Labour & industrial relations advocate  11 yrs. Major union representation. ELRC specialist.",
     rating:4.7, jobsCompleted:203, available:true, verified:true, rollNo:"9988", spec:"⚖️ Labour & Industrial Relations" },
 ];
+/* P1 — Demo advocates must be unmistakably separated from real, bookable providers.
+   Flag every hardcoded sample and strip its (fake) LSK-verified signal, so the UI badges it
+   as a demonstration and confirmConsultation refuses to take a "booking" against a profile
+   that is not a real advocate. A user must never believe they booked a real advocate. */
+DEMO_LAWYERS.forEach(function(d){ d.demo = true; d.verified = false; });
+function _isDemoLawyer(l){
+  return !!(l && (l.demo === true ||
+    (typeof l.id === 'string' && /^LAW0\d\d$/.test(l.id) && !l.sellerUid)));
+}
 
 /*  Firebase Firestore helpers (dynamic import, no module required)  */
 let _fsDb = null;
@@ -2034,7 +2043,7 @@ function _openConsultModal(id){
   const modalTitle=document.getElementById('consultModalTitle');
   const modalBody=document.getElementById('consultModalBody');
   if(modalTitle) modalTitle.textContent='Book  '+lhEsc(l.name);
-  if(modalBody) modalBody.innerHTML='<div style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+lhEsc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:3px;border:1px solid rgba(113,255,0,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">'+lhEsc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+lhEsc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#c8ff80;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+lhEsc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
+  if(modalBody) modalBody.innerHTML=((l.demo||_isDemoLawyer(l))?'<div style="padding:10px 12px;background:rgba(255,152,0,0.12);border:1px solid rgba(255,152,0,0.4);border-radius:12px;margin-bottom:14px;font-size:12px;color:#ffb74d;font-weight:700;line-height:1.45;">🧪 Demonstration profile — a sample to show how the directory works. This is <u>not</u> a real, bookable advocate. Real advocates are being onboarded.</div>':'')+'<div style="padding:14px;background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.2);border-radius:12px;margin-bottom:16px;"><div style="font-size:14px;font-weight:800;color:white;margin-bottom:3px;">'+lhEsc(l.name)+(l.verified?' <span style="font-size:9px;background:rgba(113,255,0,0.15);color:#c8ff80;padding:1px 6px;border-radius:3px;border:1px solid rgba(113,255,0,0.25);">✅ LSK</span>':'')+'</div><div style="font-size:11px;color:rgba(113,255,0,0.8);font-weight:700;">'+lhEsc(l.spec||l.category)+'</div>'+(l.firm?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">🏢 '+lhEsc(l.firm)+'</div>':'')+'<div style="margin-top:6px;font-size:15px;font-weight:900;color:#c8ff80;">KES '+Number(l.rate||0).toLocaleString()+' <span style="font-size:10px;font-weight:400;color:rgba(255,255,255,0.3);">'+lhEsc(RATE_LBL[l.rateType]||'/ session')+'</span></div></div><label class="lh-label">Your Name *</label><input type="text" id="cbName" class="lh-input" placeholder="Full name"><label class="lh-label">Your Phone (M-Pesa / WhatsApp) *</label><input type="tel" id="cbPhone" class="lh-input" placeholder="07XXXXXXXX"><label class="lh-label">Legal Matter *</label><select id="cbMatter" class="lh-input"><option value="">-- Select matter --</option><option>🏠 Property / Land dispute</option><option>👨‍👩‍👧 Family law / Divorce</option><option>🏛️ Criminal defence</option><option>x Business / Contract dispute</option><option>⚖️ Employment / Wrongful dismissal</option><option>💡 IP / Copyright / Trademark</option><option>🌍 Immigration / Work permit</option><option>Debt recovery</option><option>⚖️ Human rights</option><option>x Document drafting</option><option>General legal advice</option></select><label class="lh-label">Preferred Date</label><input type="date" id="cbDate" class="lh-input"><label class="lh-label">Brief Description (optional)</label><textarea id="cbDetails" class="lh-input lh-textarea" style="min-height:64px;" placeholder="Briefly describe your situation..."></textarea><button type="button" onclick="confirmConsultation('+JSON.stringify(l.id)+')" style="width:100%;padding:14px;background:linear-gradient(135deg,#71ff00,#4f46e5);color:white;font-weight:900;border:none;border-radius:12px;cursor:pointer;font-size:14px;font-family:inherit;margin-bottom:8px;">📲 Book via WhatsApp</button><button type="button" onclick="closeConsultModal()" style="width:100%;padding:11px;background:none;border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:rgba(255,255,255,0.45);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;">Cancel</button><div id="cbMsg" style="margin-top:10px;font-size:12px;min-height:14px;"></div>';
   const today=new Date().toISOString().slice(0,10);
   const dateEl=document.getElementById('cbDate');
   if(dateEl){dateEl.min=today;dateEl.value=today;}
@@ -2054,6 +2063,14 @@ function confirmConsultation(lawyerId){
 
   const l = _findLawyer(lawyerId);
   if(!l){ if(msgEl){msgEl.textContent="⚖️ Lawyer not found"; msgEl.style.color="#ff9800";} return; }
+
+  /* P1 — Refuse to "book" a demonstration profile. It has no real advocate behind it, so a
+     confirmation here would be false. Tell the user plainly and stop before any WhatsApp,
+     payment, localStorage record or Cloud Function call. */
+  if(l.demo || _isDemoLawyer(l)){
+    if(msgEl){ msgEl.innerHTML="🧪 This is a <strong>demonstration profile</strong>, not a real advocate — so it can't be booked. Real advocates are being onboarded to the Legal Hub; please check back soon."; msgEl.style.color="#ff9800"; }
+    return;
+  }
 
   const ref = "LAW"+Date.now().toString().slice(-6);
   const wa  = l.phone ? l.phone.replace(/^0/,"254").replace(/\D/g,"") : "";
@@ -2079,7 +2096,7 @@ function confirmConsultation(lawyerId){
     } else {
       setTimeout(()=>{ window.open(`https://wa.me/${wa}?text=${msg}`,"_blank"); },600);
     }
-    setTimeout(closeConsultModal, 2000);
+    window._lhCloseTimer = setTimeout(closeConsultModal, 2000);
   }
 
   function _saveBookingRecord(status, mpesaCode){
@@ -2103,13 +2120,29 @@ function confirmConsultation(lawyerId){
             idempotencyKey: ref + '_bk',
           });
           if (result?.consultationId) {
-            /* Patch the localStorage record with the real consultationId for review / status wiring */
+            /* Patch the localStorage record with the real consultationId + mark it registered. */
             const stored = JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]');
             const idx = stored.findIndex(b => b.ref === ref);
-            if (idx >= 0) { stored[idx].consultationId = result.consultationId; }
+            if (idx >= 0) { stored[idx].consultationId = result.consultationId; stored[idx].status = 'confirmed'; }
             localStorage.setItem('sokoniLegalBookings', JSON.stringify(stored));
+            const m = document.getElementById('cbMsg');
+            if (m) { m.innerHTML = '✅ Booked &amp; registered with SOKONI · Ref <strong>'+lhEsc(ref)+'</strong>'; m.style.color = '#71ff00'; }
+          } else { throw new Error('no consultationId returned'); }
+        } catch (e) {
+          console.warn('[Legal Hub] bookLegalConsultation CF:', e.message);
+          /* P1 — never leave the UI on a false success. The WhatsApp message may have opened,
+             but the booking did NOT reach SOKONI, so the advocate won't see it in their
+             dashboard. Cancel the auto-close, mark the record as sync_failed (not a silent
+             fake success), say so plainly, and offer a retry — idempotent on ref+'_bk'. */
+          try { clearTimeout(window._lhCloseTimer); } catch(_){}
+          try { const st = JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]'); const i = st.findIndex(b => b.ref === ref); if (i>=0){ st[i].status = 'sync_failed'; localStorage.setItem('sokoniLegalBookings', JSON.stringify(st)); } } catch(_){}
+          const m = document.getElementById('cbMsg');
+          if (m) {
+            m.innerHTML = '⚠️ We could not register this booking on SOKONI, so the advocate may not see it. '+
+              '<button type="button" onclick="retryLegalBooking('+JSON.stringify(ref)+','+JSON.stringify(lawyerId)+')" style="margin-left:6px;padding:5px 12px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.35);border-radius:8px;color:#c8ff80;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">Retry</button>';
+            m.style.color = '#ff9800';
           }
-        } catch (e) { console.warn('[Legal Hub] bookLegalConsultation CF:', e.message); }
+        }
       })();
     }
   }
@@ -2149,10 +2182,45 @@ function closeConsultModal(){
   document.body.style.overflow = "";
 }
 
+/* P1 — Retry a booking whose bookLegalConsultation CF call failed. Re-runs the SAME
+   idempotency key (ref+'_bk'), so a retry after a partial success returns the existing
+   consultation rather than creating a duplicate (the CF is transactional + idempotent). */
+async function retryLegalBooking(ref, lawyerId){
+  const m = document.getElementById('cbMsg');
+  let rec = null;
+  try { rec = (JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]')).find(b => b.ref === ref); } catch(e){}
+  if(!rec){ if(m){ m.textContent = 'Could not find the booking to retry.'; m.style.color = '#ff9800'; } return; }
+  if(m){ m.textContent = 'Retrying…'; m.style.color = '#71ff00'; }
+  try {
+    const dtStr = (rec.date && rec.time)
+      ? new Date(rec.date + 'T' + rec.time).toISOString()
+      : new Date(Date.now() + 86400000).toISOString();
+    const result = await _lhCallCF('bookLegalConsultation', {
+      providerId:     lawyerId,
+      dateTime:       dtStr,
+      matter:         rec.matter || 'Legal consultation',
+      isOnline:       false,
+      idempotencyKey: ref + '_bk',
+    });
+    if(result?.consultationId){
+      const st = JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]');
+      const i = st.findIndex(b => b.ref === ref);
+      if(i>=0){ st[i].consultationId = result.consultationId; st[i].status = 'confirmed'; localStorage.setItem('sokoniLegalBookings', JSON.stringify(st)); }
+      if(m){ m.innerHTML = '✅ Booking registered with SOKONI · Ref <strong>'+lhEsc(ref)+'</strong>'; m.style.color = '#71ff00'; }
+    } else { throw new Error('no consultationId returned'); }
+  } catch(e){
+    console.warn('[Legal Hub] retryLegalBooking:', e.message);
+    if(m){ m.innerHTML = '⚠️ Still could not register the booking. Please try again shortly. '+
+      '<button type="button" onclick="retryLegalBooking('+JSON.stringify(ref)+','+JSON.stringify(lawyerId)+')" style="margin-left:6px;padding:5px 12px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.35);border-radius:8px;color:#c8ff80;font-weight:800;font-size:12px;cursor:pointer;font-family:inherit;">Retry</button>';
+      m.style.color = '#ff9800'; }
+  }
+}
+
 window.filterLawyers       = filterLawyers;
 window.bookLawyer          = bookLawyer;
 window.confirmConsultation = confirmConsultation;
 window.closeConsultModal   = closeConsultModal;
+window.retryLegalBooking   = retryLegalBooking;
 
 /* """"""""""""""""""""""""""""""""""""""""""""""""""""""""""
    LEGAL DOCUMENT GENERATOR
