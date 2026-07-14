@@ -145,7 +145,11 @@ console.log('\nSeller Dashboard — tile interaction\n');
   /* It is position:fixed at bottom:0, z-index 99997. Without reserved space it swallows
      every tap at the foot of the viewport — on the dashboard that was the Messages and
      Marketing tiles, which looked normal and simply did not respond. */
-  /_sokoniPrivacyBanner[\s\S]{0,3000}?paddingBottom/.test(sec)
+  /* Assert the BEHAVIOUR — that the banner reserves body space — not that the code happens
+     to sit within N characters of the banner's id. The old form searched a 3000-char window
+     and broke the moment the implementation grew a comment, which is a test measuring
+     source layout instead of behaviour. */
+  /setProperty\(\s*['"]padding-bottom['"]/.test(sec)
     ? ok('the privacy banner reserves body space — it overlays no tile')
     : bad('the privacy banner is fixed at bottom:0 with no reserved space — it swallows taps on whatever is beneath it');
 

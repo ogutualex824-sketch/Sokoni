@@ -512,32 +512,49 @@ const SokoniSecurity = (() => {
         if(document.getElementById("_sokoniPrivacyBanner")) return;
         const b = document.createElement("div");
         b.id = "_sokoniPrivacyBanner";
+        /* ── COMPACT CONSENT BAR ──────────────────────────────────────────────────
+           This used to be a two-block banner with a heading, four lines of body copy, two
+           inline policy links, a "Learn More" button and an "Accept" button, all set to
+           flex-wrap. On a phone it wrapped to ~184px — 28% of a 664px viewport — and on the
+           Seller Dashboard it covered EIGHT quick-action cards. Tapping POS/Cashier landed
+           on the Accept button: the user's first tap on the dashboard silently consented to
+           cookies instead of opening the till.
+
+           A consent notice must be readable and reachable. It does not need to be a quarter
+           of the screen. One row, ~56px: a single sentence, the two policy links (which ARE
+           the "learn more" — a separate button for the same destination was redundant), and
+           Accept. The legal content is unchanged; only its presentation is.
+
+           Height is what mattered here, so it is capped rather than left to wrap. */
         b.style.cssText = [
           "position:fixed","bottom:0","left:0","right:0",
           "background:rgba(10,10,10,0.98)","border-top:1px solid rgba(113,255,0,0.2)",
-          "z-index:99997","padding:14px 20px",
+          "z-index:99997",
+          "padding:8px 14px",
           "display:flex","align-items:center","justify-content:space-between",
-          "flex-wrap:wrap","gap:12px",
+          "gap:12px",                       /* NO flex-wrap: wrapping is what made it 184px */
+          "min-height:56px","box-sizing:border-box",
           "font-family:'Segoe UI',system-ui,sans-serif",
           "backdrop-filter:blur(16px)",
           "box-shadow:0 -4px 24px rgba(0,0,0,0.5)"
         ].join(";");
+        /* Announced to assistive tech as a region, not silently injected furniture. */
+        b.setAttribute("role", "region");
+        b.setAttribute("aria-label", "Cookie consent");
         b.innerHTML = [
-          "<div style='flex:1;min-width:220px;'>",
-            "<div style='font-size:13px;font-weight:800;color:white;margin-bottom:4px;'>🍪 Privacy &amp; Cookies</div>",
-            "<div style='font-size:12px;color:rgba(255,255,255,0.5);line-height:1.6;'>",
-              "SOKONI uses cookies and local storage to deliver and improve your experience.",
-              " By continuing you accept our ",
-              "<a href='legal.html#privacy' style='color:#71ff00;text-decoration:underline;'>Privacy Policy</a>",
-              " and ",
-              "<a href='legal.html#cookies' style='color:#71ff00;text-decoration:underline;'>Cookie Policy</a>",
-              ", in compliance with the Kenya Data Protection Act 2019.",
-            "</div>",
+          "<div style='flex:1;min-width:0;font-size:12px;line-height:1.35;color:rgba(255,255,255,0.62);'>",
+            "🍪 SOKONI uses cookies to run the platform. ",
+            "<a href='legal.html#privacy' style='color:#71ff00;text-decoration:underline;'>Privacy</a>",
+            " &middot; ",
+            "<a href='legal.html#cookies' style='color:#71ff00;text-decoration:underline;'>Cookies</a>",
+            " <span style='opacity:.7;'>(Kenya DPA 2019)</span>",
           "</div>",
-          "<div style='display:flex;gap:8px;flex-shrink:0;'>",
-            "<a href='legal.html#privacy' style='padding:9px 16px;border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.5);border-radius:9px;font-size:12px;font-weight:700;text-decoration:none;'>Learn More</a>",
-            "<button id='_sokoniPrivacyAcceptBtn' style='padding:9px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;border-radius:9px;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit;'>Accept</button>",
-          "</div>"
+          /* 44px minimum touch target — the old button was 34px tall. */
+          "<button id='_sokoniPrivacyAcceptBtn' aria-label='Accept cookies' ",
+            "style='flex-shrink:0;min-height:44px;padding:0 22px;",
+            "background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;",
+            "border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;'>",
+            "Accept</button>"
         ].join("");
         document.body.appendChild(b);
 
@@ -556,7 +573,39 @@ const SokoniSecurity = (() => {
            the page already had. Add to it; never replace it. */
         var _basePad = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
 
+        /* Sit ABOVE whatever bottom navigation this page has — measured, not guessed.
+           This used to be a hardcoded CSS offset (`bottom: 58px`) inside a mobile-only media
+           query. It was wrong twice over: 58px is shorter than every nav on the platform
+           (#sdmTabBar is 60px, .bottom-nav is 66px), so the bar overlapped them and — at
+           z-index 99997 — swallowed taps on the nav underneath; and because the rule was
+           mobile-only, on desktop the bar dropped to bottom:0 and sat straight on top of the
+           nav. Measuring the nav that is actually on the page is correct at every breakpoint,
+           and the nav's own height already includes its safe-area inset. */
+        var _clearBottomNav = function(){
+          var nav = document.querySelector('#sdmTabBar,.bottom-nav,.sk-bottom-nav');
+          var navH = 0;
+          if (nav) {
+            var cs = getComputedStyle(nav);
+            if (cs.position === 'fixed' && cs.display !== 'none' && cs.visibility !== 'hidden') {
+              navH = Math.round(nav.getBoundingClientRect().height);
+            }
+          }
+          /* With no nav, still clear the home indicator. Inline `important` beats the
+             mobile.css rule, so this one calculation is the single source of truth. */
+          b.style.setProperty(
+            'bottom',
+            navH ? navH + 'px' : 'env(safe-area-inset-bottom, 0px)',
+            'important'
+          );
+          return navH;
+        };
+
         var _pad = function(){
+          /* Position first, then measure — the height is read after it has settled.
+             Only the BAR's height is added to the padding: the nav's own space is already
+             inside _basePad (bottom-nav pages reserve it), and adding it twice would leave
+             a permanent dead gap under the page. */
+          _clearBottomNav();
           var h = (b.offsetHeight || 72);
           /* Normal page content: push it up so the banner sits below it.
              Set with `important`: mobile.css:43 declares

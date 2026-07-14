@@ -2161,9 +2161,14 @@ html {
     display: none !important;
   }
 
-  /* Cookie consent banner: appear above bottom nav, not on top of it */
+  /* Cookie consent banner: appear above bottom nav, not on top of it.
+     58px was too short for every nav on the platform — the Seller Dashboard's #sdmTabBar is
+     60px and the shared .bottom-nav is 66px, so the bar overlapped them (measured: 780px²
+     of the seller tab bar sat underneath it). A few px of GAP is harmless; overlap is not,
+     because the consent bar has z-index 99997 and swallows taps on the nav beneath it.
+     Clear the tallest nav on the platform. */
   #_sokoniPrivacyBanner {
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: calc(66px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
 

@@ -62,10 +62,22 @@ body.light-mode .kebs-notice{
     letter-spacing:1.5px;
 }
 
+/* The title used to be `position:absolute; left:50%` — taken OUT of the flex flow and
+   pinned to the centre of the bar. Out of flow means it cannot push anything and nothing
+   can push it: as the left group (back + logo) and the right group (six controls) grew,
+   they simply grew straight over the top of it. That is the whole reason the header looked
+   crowded on a phone — not the number of buttons, but a centred element that could not
+   participate in the layout.
+
+   Kept centred on desktop, where there is room, but as a real flex child that OWNS its
+   space (flex:1 + min-width:0 so it can shrink and truncate instead of being overlapped). */
 .seller-nav-center{
-    position:absolute;
-    left:50%;
-    transform:translateX(-50%);
+    flex:1 1 auto;
+    min-width:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
 }
 
 .seller-nav-title{
@@ -73,6 +85,69 @@ body.light-mode .kebs-notice{
     color:rgba(255,255,255,0.5);
     font-weight:600;
     letter-spacing:0.5px;
+    /* Truncate rather than collide. */
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    min-width:0;
+}
+
+/* ── Mobile header (<=768px) ───────────────────────────────────────────────────
+   Six controls + a 44px logo + a title cannot fit 390px while every control keeps a
+   44px touch target. Rather than shrink the targets below the accessibility floor or let
+   them overlap, the four SECONDARY controls move to the "More" drawer (which now carries
+   My Store, Community and Theme — nothing became unreachable). The header keeps what a
+   seller needs at a glance: back, logo, title, notifications, profile. */
+/* The branch switcher is a 136px labelled button injected into the centre group with the
+   default `min-width:auto`, so it REFUSED TO SHRINK: at 320px it swallowed the whole centre
+   and squeezed the title to 0px. Let it shrink and truncate, and hold it to the 44px touch
+   floor — as a plain <button> it was only 36px tall, under the minimum, on every desktop. */
+#seller-branch-switcher{ min-width:0; }
+#seller-branch-switcher button{
+    min-height:44px;
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+
+/* The 44px touch floor applies at EVERY width, not just on phones. It was scoped to
+   max-width:768px, so on a tablet the header icons measured 38x44 — narrower than the
+   minimum. Tablets are touch devices too; the floor is a property of the finger, not of
+   the breakpoint. */
+.seller-nav-icon-btn,
+.seller-nav-right .seller-nav-link{
+    min-width:44px;
+    min-height:44px;
+}
+
+@media (max-width: 768px){
+    .seller-navbar{
+        padding:0 12px;
+        gap:8px;
+    }
+    .seller-nav-secondary{ display:none !important; }
+    .seller-nav-logo-img{ height:32px; }
+    .seller-nav-left{ gap:8px; flex-shrink:0; }
+    .seller-nav-right{ gap:8px; flex-shrink:0; }
+    .seller-nav-center{ justify-content:flex-start; }
+    .seller-nav-title{ font-size:13px; }
+    /* Cap the switcher so it leaves the title room to exist rather than consuming the bar. */
+    #seller-branch-switcher{ max-width:96px; }
+    /* The accessibility floor, held explicitly so a future tweak cannot quietly cross it. */
+    .seller-nav-icon-btn,
+    .seller-nav-link{ min-width:44px; min-height:44px; }
+}
+
+/* iPhone SE (320px). With a back button, a logo, the branch switcher, notifications and
+   profile all holding a 44px touch target, there is genuinely no room left for the title —
+   it measured 0px wide, i.e. it was already invisible, just invisible AND still occupying
+   layout. Drop it honestly at this width. Nothing is lost: the sub-nav below shows the
+   active section and the greeting card reads "… · Seller Dashboard". Touch targets are not
+   negotiable; a decorative title is. */
+@media (max-width: 360px){
+    .seller-nav-title{ display:none; }
+    #seller-branch-switcher{ max-width:120px; }
 }
 
 .seller-nav-right{

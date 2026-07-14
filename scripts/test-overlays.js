@@ -80,6 +80,12 @@ console.log('\nOverlay architecture — can every sheet beat the header?\n');
     let src;
     try { src = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch (e) { continue; }
 
+    /* Strip comments before parsing. A comment EXPLAINING why an overlay has a given
+       z-index is prose, not a declaration — counting it as an offender punishes people for
+       documenting the very thing this gate exists to police, and teaches them to delete the
+       explanation instead of fixing the code. */
+    src = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+
     const re = /position:\s*fixed/g;
     let m;
     while ((m = re.exec(src))) {

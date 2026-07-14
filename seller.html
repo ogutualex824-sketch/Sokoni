@@ -126,11 +126,15 @@
         <!-- Notifications — SokoniNotifCenter auto-attaches to #sk-notif-btn -->
         <button type="button" class="seller-nav-link seller-nav-icon-btn" id="sk-notif-btn" aria-label="Notifications" title="Notifications" style="font-size:18px;position:relative;">&#x1F514;</button>
         <!-- Theme toggle — delegates to unified SokoniTheme if available -->
-        <button type="button" class="seller-theme-btn" id="sellerThemeBtn" onclick="(function(b){if(window.SokoniTheme){var m=SokoniTheme.toggle();b.textContent=m==='light'?'&#x2600;&#xFE0F;':m==='auto'?'&#x2699;&#xFE0F;':'&#x1F319;';}else{toggleTheme();}})(this)" title="Toggle theme">&#x1F319;</button>
-        <a href="ministore.html" class="seller-nav-link seller-nav-icon-btn" title="Visit My Store" onclick="event.preventDefault();goToMyStore()">&#x1F3EA;</a>
+        <!-- SECONDARY controls. Six controls plus a logo and a title cannot fit a 390px
+             header without either overlapping or dropping below the 44px touch minimum, so
+             below 768px these four are hidden here and surfaced in the mobile "More" drawer
+             instead. Nothing is removed — every destination stays one tap away. -->
+        <button type="button" class="seller-theme-btn seller-nav-secondary" id="sellerThemeBtn" onclick="(function(b){if(window.SokoniTheme){var m=SokoniTheme.toggle();b.textContent=m==='light'?'&#x2600;&#xFE0F;':m==='auto'?'&#x2699;&#xFE0F;':'&#x1F319;';}else{toggleTheme();}})(this)" title="Toggle theme">&#x1F319;</button>
+        <a href="ministore.html" class="seller-nav-link seller-nav-icon-btn seller-nav-secondary" title="Visit My Store" onclick="event.preventDefault();goToMyStore()">&#x1F3EA;</a>
         <a href="profile.html" class="seller-nav-link seller-nav-icon-btn" title="My Profile">&#x1F464;</a>
-        <a href="community.html" class="seller-nav-link seller-nav-icon-btn" title="Community">&#x1F4AC;</a>
-        <a href="subscriptions.html" class="seller-nav-link" title="Upgrade Plan" style="background:rgba(113,255,0,0.07);border-color:rgba(113,255,0,0.18);color:#71ff00;">&#x1F451;</a>
+        <a href="community.html" class="seller-nav-link seller-nav-icon-btn seller-nav-secondary" title="Community">&#x1F4AC;</a>
+        <a href="subscriptions.html" class="seller-nav-link seller-nav-secondary" title="Upgrade Plan" style="background:rgba(113,255,0,0.07);border-color:rgba(113,255,0,0.18);color:#71ff00;">&#x1F451;</a>
         <!-- admin access: hidden -->
     </div>
 
@@ -4413,6 +4417,17 @@ class="notification-container"
       <a href="pos.html" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;text-decoration:none;">
         <span style="font-size:26px;">🖥️</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">POS</span>
       </a>
+      <!-- Surfaced here because the header hides its secondary controls below 768px
+           (.seller-nav-secondary). These are the SAME destinations — nothing was removed. -->
+      <a href="ministore.html" onclick="event.preventDefault();goToMyStore()" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;text-decoration:none;">
+        <span style="font-size:26px;">🏪</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">My Store</span>
+      </a>
+      <a href="community.html" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;text-decoration:none;">
+        <span style="font-size:26px;">💬</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">Community</span>
+      </a>
+      <button type="button" onclick="(function(b){if(window.SokoniTheme){var m=SokoniTheme.toggle();b.querySelector('span').textContent=m==='light'?'☀️':m==='auto'?'⚙️':'🌙';}else if(window.toggleTheme){toggleTheme();}})(this)" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;cursor:pointer;font-family:inherit;">
+        <span style="font-size:26px;">🌙</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">Theme</span>
+      </button>
       <a href="seller-revenue.html" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;text-decoration:none;">
         <span style="font-size:26px;">💰</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">Revenue</span>
       </a>
