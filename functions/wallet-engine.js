@@ -1352,7 +1352,7 @@ exports.walletV2PayViaQR = onCall(
 const FALLBACK_INSIGHTS = [
   'Keep tracking your spending to stay on top of your finances!',
   'Set a savings goal this week — even KES 500 counts.',
-  'Review your subscriptions monthly and cancel what you don't use.',
+  "Review your subscriptions monthly and cancel what you don't use.",
 ];
 
 /**
