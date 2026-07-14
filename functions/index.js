@@ -8613,6 +8613,40 @@ exports.walletV2AiInsights      = walletEngine.walletV2AiInsights;
 exports.walletV2EscrowCreate    = walletEngine.walletV2EscrowCreate;
 exports.walletV2EscrowRelease   = walletEngine.walletV2EscrowRelease;
 
+/* ── SOKONI Financial Operating System (SFOS) ───────────────────────────── */
+const sfosEngine = require('./sfos-engine');
+// Identity
+exports.sfosIdentityGet        = sfosEngine.sfosIdentityGet;
+exports.sfosIdentityUpdate     = sfosEngine.sfosIdentityUpdate;
+// Ledger
+exports.sfosLedgerQuery        = sfosEngine.sfosLedgerQuery;
+// Universal Transaction Engine
+exports.sfosTransact           = sfosEngine.sfosTransact;
+exports.sfosTransactReverse    = sfosEngine.sfosTransactReverse;
+// Wallet
+exports.sfosWalletGet          = sfosEngine.sfosWalletGet;
+// Escrow
+exports.sfosEscrowCreate       = sfosEngine.sfosEscrowCreate;
+exports.sfosEscrowRelease      = sfosEngine.sfosEscrowRelease;
+exports.sfosEscrowDispute      = sfosEngine.sfosEscrowDispute;
+exports.sfosEscrowRefund       = sfosEngine.sfosEscrowRefund;
+// Group Wallets
+exports.sfosGroupCreate        = sfosEngine.sfosGroupCreate;
+exports.sfosGroupTransfer      = sfosEngine.sfosGroupTransfer;
+exports.sfosGroupGet           = sfosEngine.sfosGroupGet;
+// Merchant Finance
+exports.sfosMerchantDashboard  = sfosEngine.sfosMerchantDashboard;
+exports.sfosMerchantSettle     = sfosEngine.sfosMerchantSettle;
+// Rewards
+exports.sfosRewardsGet         = sfosEngine.sfosRewardsGet;
+exports.sfosRewardsRedeem      = sfosEngine.sfosRewardsRedeem;
+// Analytics & AI
+exports.sfosFinancialHealth    = sfosEngine.sfosFinancialHealth;
+exports.sfosNetWorth           = sfosEngine.sfosNetWorth;
+exports.sfosAnalyticsDetailed  = sfosEngine.sfosAnalyticsDetailed;
+exports.sfosAiForecast         = sfosEngine.sfosAiForecast;
+exports.sfosRiskCheck          = sfosEngine.sfosRiskCheck;
+
 /* ── Jobs Marketplace v1.0 ───────────────────────────────────────────────── */
 
 /* ── Education Hub ─────────────────────────────────────────────── */

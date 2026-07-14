@@ -2,6 +2,302 @@
 
 ---
 
+## 2026-07-14 — SFOS Engine v1.0 — Core Financial OS Cloud Functions
+
+**Scope:** Financial Infrastructure. Delivers the complete backend engine for all
+financial activity on SOKONI. All money movement, double-entry accounting, escrow,
+group wallets, merchant finance, rewards, AI forecasting, and real-time risk scoring
+are now served from a single authoritative file.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `functions/sfos-engine.js` | 22 Gen2 onCall Cloud Functions — full SFOS backend (2,502 lines) |
+
+### Cloud Functions Added (22 total)
+
+| Export | Description |
+|--------|-------------|
+| `sfosIdentityGet` | Get or create universal financial identity (SOK-XXXXXXXX walletId) |
+| `sfosIdentityUpdate` | Update username / displayName / limits with uniqueness check + audit log |
+| `sfosLedgerQuery` | Query immutable sfosLedger entries (own account or admin) |
+| `sfosTransact` | **Universal transaction engine** — all money movements via double-entry ledger |
+| `sfosTransactReverse` | Admin-only compensating transaction + REVERSED status + CRITICAL audit |
+| `sfosWalletGet` | Comprehensive wallet state: balances, limits, rewards, recent txs |
+| `sfosEscrowCreate` | Lock funds into typed escrow contract with optional milestones |
+| `sfosEscrowRelease` | Buyer/admin releases full or milestone-based escrow to seller |
+| `sfosEscrowDispute` | Buyer/seller flags dispute; notifies admin queue |
+| `sfosEscrowRefund` | Admin-only refund of locked escrow funds to buyer |
+| `sfosGroupCreate` | Create family/team/savings group wallet with per-member roles |
+| `sfosGroupTransfer` | Intra-group P2P transfer with canSend permission + spend limit checks |
+| `sfosGroupGet` | Group state, member list, and per-member sub-wallet balances |
+| `sfosMerchantDashboard` | 30-day revenue analytics with daily breakdown and commission totals |
+| `sfosMerchantSettle` | Trigger pending settlement payout to merchant wallet |
+| `sfosRewardsGet` | Points, tier, cashback, achievements, redemption history |
+| `sfosRewardsRedeem` | Redeem points for cashback (1 pt = KSh 0.10), discount, or product |
+| `sfosFinancialHealth` | 8-factor score 0–100, letter grade A–F, personalised recommendations |
+| `sfosNetWorth` | Sum available + savings + cashback + rewards value + escrow held |
+| `sfosAnalyticsDetailed` | Period analytics: totalIn/Out, byCategory, byDay, topMerchants |
+| `sfosAiForecast` | Claude Haiku 90-day cashflow forecast; graceful static fallback |
+| `sfosRiskCheck` | Real-time pre-transaction risk score with labelled flag set |
+
+### New Firestore Collections
+
+| Collection | Notes |
+|------------|-------|
+| `sfosIdentity/{uid}` | Financial identity; walletId guaranteed unique via query check |
+| `sfosLedger/{entryId}` | Immutable double-entry; every txn writes DEBIT + CREDIT pair |
+| `sfosTransactions/{txId}` | Canonical record; also mirrors to `walletTransactions/{txId}` |
+| `sfosEscrow/{escrowId}` | Escrow contracts with milestone array |
+| `sfosGroups/{groupId}` | Group wallet + sub-collection `wallets/{uid}` per member |
+| `sfosMerchant/{merchantId}` | Revenue counters; reset by settlement |
+| `sfosRewards/{uid}` | Points, tier, achievements |
+| `sfosAuditLog/{logId}` | Immutable; severity INFO/WARN/CRITICAL |
+
+### Internal Helpers (not exported)
+
+`_ensureIdentity`, `_velocityCheck`, `_riskScore`, `_writeAuditLog`,
+`_updateVelocity`, `_updateRewards`, `_generateReceipt`, `_ledgerPair`,
+`_writeLedgerEntries`
+
+### Architecture Notes
+
+- **Additive only** — zero existing collections modified; `wallets/{uid}` balance
+  kept in sync; `walletTransactions/{txId}` mirrored for backward compat
+- **enforceAppCheck: true** on all CFs
+- `sfosTransact` runs a single `db.runTransaction()` to write ledger entries,
+  update balances, and write transaction records atomically
+- Post-transaction work (velocity, rewards, notifications) is fire-and-forget so
+  the CF returns fast without holding the Firestore transaction open
+- `sfosAiForecast` calls Claude Haiku via raw Node.js `https` (no SDK) with a
+  15-second timeout and a static fallback on any Anthropic error
+
+### Security
+
+- All CFs validate `request.auth?.uid`; admin-only CFs additionally check
+  `token.admin || token.superAdmin`
+- All string inputs sanitised through `_san()` (strips HTML, trims, truncates)
+- Amount inputs validated: finite, positive, rounded to 2dp
+- Fraud auto-flagged + CRITICAL audit log when `riskScore > 80`
+- IP hashes (SHA-256) stored in audit log — raw IPs never persisted
+
+### No Breaking Changes
+
+`wallet.js` and `wallet-engine.js` untouched. Existing `wallets/{uid}` and
+`walletTransactions/{txId}` documents continue to work as before.
+
+---
+
+## 2026-07-14 — SFOS Client SDK + Architecture Documentation Suite
+
+**Scope:** SFOS / Financial / Documentation. Delivers the SFOS client SDK and the
+complete architecture documentation suite that serves as the living reference for
+all SFOS development.
+
+### New Files
+
+| File | Purpose |
+|------|---------|
+| `sfos-core.js` | SFOS client SDK — `window.SFOSCore` IIFE; 30+ public methods; canvas gauges |
+| `docs/SFOS_ARCHITECTURE.md` | 21-section authoritative architecture specification (~800 lines) |
+| `docs/SFOS_MIGRATION.md` | Zero-downtime 4-phase migration guide with runnable Node.js scripts |
+| `docs/SFOS_ROADMAP.md` | Q3 2026 → 2030 product and regulatory roadmap |
+
+### `sfos-core.js` — SDK Highlights
+
+- IIFE exposed as `window.SFOSCore`; auth-gated (unauthenticated → `login.html`)
+- All CF calls via `_cf(name)` — lazy Firebase Functions import; references cached per name
+- All `innerHTML` writes via `_esc()` — XSS prevention on every string
+- Delegates to `wallet-engine.js` v2 CFs for money ops (backward compat)
+- Delegates to `sfos-engine.js` CFs for identity, escrow, analytics, risk
+- Dispatches `CustomEvent('sfosReady')` when init is complete
+- Canvas renderers: `_drawHealthGauge()` (semi-circle, hsl colour band) and `_drawProgressRing()` (vault rings)
+- Animated balance counters via `_countUp()` (cubic ease-out, `requestAnimationFrame`)
+- `renderVaultGrid()` generates vault cards with inline canvas rings
+- Risk pre-check (`checkRisk`) before every P2P send; blocks HIGH, warns MEDIUM
+- `Promise.allSettled([loadIdentity(), getWalletState()])` parallel init for fast first paint
+- All 30+ public methods documented with JSDoc
+
+### Architecture Documentation Highlights
+
+**SFOS_ARCHITECTURE.md** covers:
+- System overview, service boundary diagram, data flow for P2P, savings, escrow, settlement
+- Full Firestore schema: 8 collections with field-by-field documentation
+- Double-entry ledger design: 14 entry types, immutability guarantees, reconciliation
+- CF architecture table: 17 SFOS CFs + performance targets (P50/P95/P99)
+- Security architecture: PIN, freeze, velocity, risk engine, Firestore rules per collection
+- UX architecture: panel system, overlay system, design tokens, canvas specs, accessibility
+- API contracts: I/O schemas for all 7 key CFs (with JSON examples)
+- 8 new Firestore composite indexes with query pattern annotations
+- Performance optimisation: read minimisation, cold start, client caching, init batching
+- Testing strategy: unit, integration, E2E (Playwright), load
+- Deployment checklist: secrets, CFs, Firestore, hosting, monitoring
+- Production readiness gate table
+- Scalability report: Firestore at scale, CF auto-scaling, cost projections to 1M users
+- Risk assessment: top 10 risks with mitigations
+- Technical documentation index
+
+**SFOS_MIGRATION.md** covers:
+- Phase 0 inventory (what is live, what works, what SFOS adds)
+- Phase 1: deploy sfos-engine.js + rules + indexes + batch identity migration
+- Phase 2: sfos-wallet.html gradual rollout (10% → 50% → 100%)
+- Phase 3: route order/commission/SmartPOS/settlement engines through sfosTransact
+- Phase 4 (future): full cutover from wallet.html
+- Rollback procedures for each phase (time estimate + data impact)
+- Three complete Node.js migration scripts:
+  - `scripts/sfos-migrate-identities.js` — batch upsert sfosIdentity for all users
+  - `scripts/sfos-reconcile.js` — verify ledger sums equal wallet balances
+  - `scripts/sfos-seed-rewards.js` — initialise sfosRewards for all users
+
+**SFOS_ROADMAP.md** covers:
+- Q3 2026: SFOS Foundation (CFs, identity, ledger, rewards, group wallets)
+- Q4 2026: Merchant Finance (auto-settlement, multi-user business wallet, KYC tiers)
+- Q1 2027: Biometric auth, fraud alerts, family wallets, SFOS API
+- Q2 2027: Virtual debit card programme (licensed issuer partnership)
+- Q3 2027: CBK Regulatory Sandbox + PSP licence application
+- Q4 2027: M-Pesa Tanzania, Uganda cross-border corridors
+- 2028: Digital Banking — savings with interest, BNPL loans, micro-insurance, MMF
+- 2029+: ISO 20022, Open Banking API, full CBK Tier 3 Banking Licence
+- Regulatory milestone timeline with responsible regulator (CBK, IRA, CMA)
+- Technical debt register + success metrics table
+
+### Security Implications
+- `_esc()` applied to every `innerHTML` write in `sfos-core.js` — no XSS vectors
+- Risk check before every P2P send (blocks HIGH risk server-side via `sfosRiskCheck`)
+- Auth-gate in `init()` — unauthenticated users redirect before any CF call
+- Freeze state checked before `executeSend()` at client layer (double-checked server-side)
+- No secrets, keys, or sensitive data in client SDK
+
+### Performance Implications
+- Lazy CF imports: Firebase Functions SDK only loaded on first CF call
+- CF reference caching: `_cfCache` avoids repeated `httpsCallable` construction
+- Parallel init: `loadIdentity()` and `getWalletState()` run simultaneously
+- Canvas drawing deferred to `requestAnimationFrame` after DOM insertion
+- Panel data loaded lazily on first activation (not at init time)
+
+### Files Affected
+- `sfos-core.js` (new)
+- `docs/SFOS_ARCHITECTURE.md` (new)
+- `docs/SFOS_MIGRATION.md` (new)
+- `docs/SFOS_ROADMAP.md` (new)
+- `docs/CHANGELOG.md` (this entry)
+
+---
+
+## 2026-07-14 — SOKONI Financial Operating System (SFOS) v1.0
+
+**Scope:** Platform-wide Financial Infrastructure. Transforms the SOKONI wallet into an enterprise Financial Operating System serving every vertical in the platform. All existing wallet functionality preserved with 100% backward compatibility.
+
+### Mission
+One User → One Identity → One Wallet → Every Financial Activity across the entire SOKONI ecosystem. No module maintains its own financial system — everything flows through SFOS.
+
+### New Cloud Functions (`functions/sfos-engine.js`)
+
+| # | Export | Purpose |
+|---|--------|---------|
+| 1 | `sfosIdentityGet` | Universal financial identity — get or auto-create with walletId SOK-XXXXXXXX |
+| 2 | `sfosIdentityUpdate` | Update identity fields with username uniqueness enforcement |
+| 3 | `sfosLedgerQuery` | Query immutable double-entry ledger (admin or own account) |
+| 4 | `sfosTransact` | **THE universal transaction engine** — all money movement types through one CF |
+| 5 | `sfosTransactReverse` | Admin: create compensating entry to reverse a completed transaction |
+| 6 | `sfosWalletGet` | Full multi-ledger wallet state (identity + balances + rewards + merchant) |
+| 7 | `sfosEscrowCreate` | Create escrow with optional milestones and auto-release |
+| 8 | `sfosEscrowRelease` | Release full or partial escrow to counterparty |
+| 9 | `sfosEscrowDispute` | Raise escrow dispute — notifies admin, freezes funds |
+| 10 | `sfosEscrowRefund` | Admin: refund disputed escrow back to buyer |
+| 11 | `sfosGroupCreate` | Create family/team/savings group wallet |
+| 12 | `sfosGroupTransfer` | Transfer within group wallet with permission check |
+| 13 | `sfosGroupGet` | Get group state including members and balances |
+| 14 | `sfosMerchantDashboard` | Daily/weekly/monthly revenue, commissions, pending settlement |
+| 15 | `sfosMerchantSettle` | Initiate merchant settlement to M-Pesa or bank |
+| 16 | `sfosRewardsGet` | Full rewards state: points, tier, cashback, achievements |
+| 17 | `sfosRewardsRedeem` | Convert points to cashback at KSh 0.10/point |
+| 18 | `sfosFinancialHealth` | Compute 0-100 financial health score with grade and recommendations |
+| 19 | `sfosNetWorth` | Calculate net worth across all ledgers |
+| 20 | `sfosAnalyticsDetailed` | Spending analytics by period, category, merchant, day |
+| 21 | `sfosAiForecast` | 30-day cashflow forecast + cost-reduction opportunities via Claude Haiku |
+| 22 | `sfosRiskCheck` | Real-time transaction risk score (0-100) with flag breakdown |
+
+### SFOS Architecture
+
+**Double-Entry Ledger:** Every financial event creates two immutable `sfosLedger` entries (DEBIT + CREDIT). No balance is ever modified directly — all changes flow through the ledger. Supports audit trails, rollback via compensating entries, fraud investigation, and financial reconciliation.
+
+**Universal Transaction Engine (`sfosTransact`):** Single Cloud Function handles all 19 transaction types: WALLET_TRANSFER, MARKETPLACE_PURCHASE, MERCHANT_SETTLEMENT, DELIVERY_PAYMENT, REFUND, WITHDRAWAL, DEPOSIT, ESCROW_LOCK, ESCROW_RELEASE, SUBSCRIPTION, COMMISSION, CASHBACK, LOYALTY_REDEMPTION, SAVINGS_DEPOSIT, SAVINGS_WITHDRAWAL, SALARY, INVOICE, DONATION, GIFT.
+
+**Universal Financial Identity (`sfosIdentity/{uid}`):** Every user gets a financial identity: wallet ID (SOK-XXXXXXXX), tier, rewards points, financial health score, risk score, KYC status, transaction limits, and security settings.
+
+### New Firestore Collections
+- `sfosIdentity/{uid}` — Universal financial identity (owner-read, CF-write)
+- `sfosLedger/{entryId}` — Immutable double-entry ledger (no client writes)
+- `sfosTransactions/{txId}` — Universal transaction records (participant-read only)
+- `sfosEscrow/{escrowId}` — Extended escrow (buyer/seller read)
+- `sfosGroups/{groupId}` — Group/family wallets (member-read)
+- `sfosMerchant/{merchantId}` — Merchant finance state (owner-read)
+- `sfosRewards/{uid}` — Rewards state (owner-read)
+- `sfosAuditLog/{logId}` — Immutable security audit (admin-read only)
+- `sfosRiskEvents/{riskId}` — Risk/fraud events (admin only)
+- `sfosFinancialHealth/{uid}` — Financial health scores (owner-read)
+
+### New UI
+- `sfos-wallet.html` — SFOS Financial Command Center: 6-panel enterprise fintech dashboard
+  - Home: Health score gauge (canvas), net worth with animated counter, AI forecast, rewards
+  - Money: Send / Pay / Receive with QR canvas
+  - Savings: Vault grid with canvas progress rings, auto-save rules
+  - Business: Merchant revenue dashboard, settlement, group wallets
+  - Activity: Ledger view with detailed/simple toggle, export stub
+  - Security: Security score, velocity limits, risk check, freeze controls
+- `sfos-core.js` — SFOS client SDK: 22 CF wrappers + canvas renderers + helpers
+
+### Database Changes
+- `firestore.rules`: 10 new SFOS collection rules (all `write: false` — CF Admin SDK only)
+- `firestore.indexes.json`: 10 new SFOS indexes (339 → 349 total — see deployment note)
+- `functions/index.js`: 22 new `sfos*` exports from sfos-engine.js
+
+### Deployment Note — Index Count
+Total indexes: 349. Firebase limits composite indexes to 200 per database. If the primary Firestore database is approaching this limit, deploy SFOS indexes to the `sokoni-ops` secondary database per the Index Management Rule.
+
+### Security Implications
+- `sfosTransact` enforces App Check + auth on every call
+- Velocity limits checked before any debit (daily + monthly caps)
+- Risk scoring on every transaction — high-risk (>80) flagged for review
+- Double-entry ledger is immutable — no balance can be changed without an audit trail
+- PIN-lock auto-triggers after 5 failed attempts (from walletV2VerifyPin)
+- All security events written to `sfosAuditLog` with severity classification
+
+### Performance Implications
+- `sfosWalletGet` fans out 4 reads in Promise.all — single round-trip for full state
+- Analytics queries capped at 500 documents per call
+- `sfosTransact` uses `runTransaction` with optimistic concurrency — no distributed locks
+- AI forecast reads last 90 transactions — batched single query
+
+### Breaking Changes
+None. `functions/wallet.js`, `functions/wallet-engine.js`, `wallet.html`, and all existing CFs are untouched.
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `functions/sfos-engine.js` | **NEW** — SFOS core engine |
+| `sfos-wallet.html` | **NEW** — SFOS Financial Command Center |
+| `sfos-core.js` | **NEW** — SFOS client SDK |
+| `functions/index.js` | 22 new sfos* exports added |
+| `firestore.rules` | 10 new SFOS collection rules |
+| `firestore.indexes.json` | 10 new SFOS indexes (339→349) |
+| `docs/SFOS_ARCHITECTURE.md` | **NEW** — Complete SFOS architecture (20 deliverables) |
+| `docs/SFOS_MIGRATION.md` | **NEW** — Migration + rollback plan |
+| `docs/SFOS_ROADMAP.md` | **NEW** — Feature roadmap to 2028 |
+| `docs/CHANGELOG.md` | This entry |
+
+### Deployment Steps
+1. Create secrets: `ANTHROPIC_API_KEY` (if not exists), `WALLET_QR_SECRET` (see Wallet 2.0)
+2. `firebase deploy --only functions:sfosIdentityGet,sfosTransact,...` (or deploy all)
+3. `firebase deploy --only firestore:rules,firestore:indexes`
+4. `firebase deploy --only hosting`
+5. Run batch migration: `node scripts/sfos-migrate-identities.js`
+6. Run reconciliation: `node scripts/sfos-reconcile.js`
+
+---
+
 ## 2026-07-14 — Wallet Engine 2.0
 
 **Scope:** Financial / Wallet. New Firebase Gen2 Cloud Functions file implementing

@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>Financial OS — SOKONI</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    /* ── Design tokens ── */
+    :root {
+      --bg:     #050505;
+      --sur:    #0d0d0d;
+      --sur2:   #141414;
+      --g:      #71ff00;
+      --ga:     rgba(113,255,0,.10);
+      --dim:    #555;
+      --txt:    #e8e8e8;
+      --sub:    #888;
+      --red:    #ff4757;
+      --amber:  #ffa502;
+      --hdr:    56px;
+      --nav:    62px;
+      --rad:    14px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--txt);
+      font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+      overflow: hidden; }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; border: none; background: none;
+      font-family: inherit; font-size: inherit; color: inherit; }
+    input, select { font-family: inherit; }
+
+    /* ── Shell ── */
+    #sfos-header {
+      position: fixed; top: 0; left: 0; right: 0; height: var(--hdr);
+      background: var(--sur); border-bottom: 1px solid #1a1a1a;
+      display: flex; align-items: center; padding: 0 16px; gap: 12px;
+      z-index: 100;
+    }
+    #sfos-logo { font-size: 13px; font-weight: 800; letter-spacing: .06em;
+      color: var(--g); flex: 1; }
+    #sfos-avatar { width: 34px; height: 34px; border-radius: 50%;
+      background: var(--ga); border: 1.5px solid var(--g);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; font-weight: 700; color: var(--g); }
+    #sfos-freeze-badge { font-size: 10px; font-weight: 700; background: var(--red);
+      color: #fff; border-radius: 20px; padding: 2px 8px;
+      display: none; }
+    #sfos-freeze-badge.visible { display: block; }
+    .sfos-tier-badge { font-size: 10px; font-weight: 700; border-radius: 20px;
+      padding: 2px 8px; letter-spacing: .04em; }
+    .sfos-tier-badge.bronze   { background: rgba(205,127,50,.15); color: #cd7f32; }
+    .sfos-tier-badge.silver   { background: rgba(192,192,192,.15); color: #c0c0c0; }
+    .sfos-tier-badge.gold     { background: rgba(255,215,0,.15); color: #ffd700; }
+    .sfos-tier-badge.platinum { background: rgba(229,228,226,.15); color: #e5e4e2; }
+    .sfos-tier-badge.diamond  { background: var(--ga); color: var(--g); }
+
+    /* ── Panels ── */
+    #sfos-panels {
+      position: fixed; top: var(--hdr); bottom: var(--nav); left: 0; right: 0;
+      overflow-y: auto; -webkit-overflow-scrolling: touch;
+    }
+    .sfos-panel { display: none; padding: 16px 16px 24px; min-height: 100%; }
+    .sfos-panel.active { display: block; }
+
+    /* ── Bottom nav ── */
+    #sfos-bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav);
+      background: var(--sur); border-top: 1px solid #1a1a1a;
+      display: grid; grid-template-columns: repeat(6, 1fr); z-index: 100;
+    }
+    .sfos-nav-btn {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 3px; font-size: 9px; font-weight: 600;
+      color: var(--dim); padding: 8px 0; transition: color .2s;
+      letter-spacing: .03em; text-transform: uppercase;
+    }
+    .sfos-nav-btn i { font-size: 18px; }
+    .sfos-nav-btn.active { color: var(--g); }
+
+    /* ── Balance card ── */
+    .sfos-bal-card {
+      background: var(--sur); border-radius: var(--rad);
+      border: 1px solid #1a1a1a; padding: 20px; margin-bottom: 14px;
+    }
+    .sfos-bal-label { font-size: 11px; color: var(--sub); letter-spacing: .08em;
+      text-transform: uppercase; margin-bottom: 4px; }
+    .sfos-bal-main { font-size: 32px; font-weight: 800; color: var(--txt);
+      letter-spacing: -.02em; line-height: 1; }
+    .sfos-bal-main span { font-size: 16px; color: var(--sub); margin-right: 4px; }
+    .sfos-bal-chips { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    .sfos-chip { background: var(--sur2); border: 1px solid #222;
+      border-radius: 20px; padding: 5px 12px; font-size: 11px; }
+    .sfos-chip b { color: var(--g); }
+
+    /* ── Action grid ── */
+    .sfos-action-grid { display: grid; grid-template-columns: repeat(4,1fr);
+      gap: 10px; margin-bottom: 16px; }
+    .sfos-action-btn {
+      background: var(--sur); border: 1px solid #1a1a1a; border-radius: var(--rad);
+      padding: 14px 8px; display: flex; flex-direction: column;
+      align-items: center; gap: 7px; font-size: 11px; font-weight: 600;
+      color: var(--sub); transition: border-color .2s, color .2s;
+    }
+    .sfos-action-btn i { font-size: 20px; color: var(--g); }
+    .sfos-action-btn:hover { border-color: var(--g); color: var(--txt); }
+
+    /* ── Section heading ── */
+    .sfos-section-title {
+      font-size: 12px; font-weight: 700; letter-spacing: .07em;
+      text-transform: uppercase; color: var(--sub); margin: 20px 0 10px;
+    }
+
+    /* ── Tx feed ── */
+    #sfos-tx-feed .sfos-tx-row {
+      background: var(--sur); border: 1px solid #1a1a1a; border-radius: 10px;
+      padding: 12px; display: flex; align-items: center; gap: 12px;
+      margin-bottom: 8px;
+    }
+    .sfos-tx-icon { width: 36px; height: 36px; border-radius: 50%;
+      background: var(--sur2); display: flex; align-items: center;
+      justify-content: center; font-size: 15px; flex-shrink: 0; }
+    .sfos-tx-info { flex: 1; min-width: 0; }
+    .sfos-tx-desc { font-size: 13px; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    .sfos-tx-time { font-size: 11px; color: var(--sub); }
+    .sfos-tx-amt { font-size: 14px; font-weight: 700; white-space: nowrap; }
+    .sfos-tx-amt.credit { color: var(--g); }
+    .sfos-tx-amt.debit  { color: var(--txt); }
+
+    /* ── Health gauge panel ── */
+    .sfos-health-wrap {
+      background: var(--sur); border: 1px solid #1a1a1a; border-radius: var(--rad);
+      padding: 20px; display: flex; align-items: center; gap: 20px;
+      margin-bottom: 14px;
+    }
+    #sfos-health-gauge { flex-shrink: 0; }
+    .sfos-health-info { flex: 1; }
+    #sfos-health-grade { font-size: 36px; font-weight: 900; color: var(--g); line-height: 1; }
+    .sfos-health-sub { font-size: 11px; color: var(--sub); margin-top: 2px; }
+    #sfos-health-factors { margin-top: 12px; }
+    .sfos-factor-row { display: flex; align-items: center; gap: 8px;
+      font-size: 12px; margin-bottom: 6px; }
+    .sfos-factor-icon { width: 18px; text-align: center; }
+    .sfos-factor-icon.good   { color: var(--g); }
+    .sfos-factor-icon.warn   { color: var(--amber); }
+    .sfos-factor-icon.bad    { color: var(--red); }
+
+    /* ── Stat tiles ── */
+    .sfos-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+      margin-bottom: 14px; }
+    .sfos-tile { background: var(--sur); border: 1px solid #1a1a1a;
+      border-radius: 10px; padding: 14px; }
+    .sfos-tile-label { font-size: 11px; color: var(--sub);
+      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+    .sfos-tile-value { font-size: 18px; font-weight: 800; }
+
+    /* ── Vault grid ── */
+    #sfos-vault-grid { display: grid; grid-template-columns: 1fr 1fr;
+      gap: 12px; margin-bottom: 16px; }
+    .sfos-vault-card { background: var(--sur); border: 1px solid #1a1a1a;
+      border-radius: var(--rad); padding: 14px; position: relative;
+      overflow: hidden; }
+    .sfos-vault-name { font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+    .sfos-vault-target { font-size: 11px; color: var(--sub); margin-bottom: 10px; }
+    .sfos-vault-ring { display: block; margin: 0 auto 8px; }
+    .sfos-vault-current { font-size: 13px; font-weight: 700; text-align: center;
+      color: var(--g); }
+    .sfos-vault-actions { display: flex; gap: 6px; margin-top: 10px; }
+    .sfos-vault-btn { flex: 1; background: var(--sur2); border: 1px solid #222;
+      border-radius: 8px; padding: 6px; font-size: 11px; font-weight: 600;
+      color: var(--sub); text-align: center; }
+    .sfos-vault-btn:hover { border-color: var(--g); color: var(--g); }
+
+    /* ── Merchant panel ── */
+    #sfos-merchant-panel .sfos-merch-stat {
+      background: var(--sur); border: 1px solid #1a1a1a; border-radius: 10px;
+      padding: 14px; margin-bottom: 10px; display: flex; justify-content: space-between;
+      align-items: center;
+    }
+    #sfos-merchant-panel .sfos-merch-label { font-size: 12px; color: var(--sub); }
+    #sfos-merchant-panel .sfos-merch-value { font-size: 20px; font-weight: 800; color: var(--g); }
+    #sfos-settle-btn { width: 100%; margin-top: 4px; }
+
+    /* ── Analytics ── */
+    .sfos-period-row { display: flex; gap: 8px; margin-bottom: 14px; }
+    .sfos-period-btn { background: var(--sur); border: 1px solid #222;
+      border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+      color: var(--sub); transition: all .2s; }
+    .sfos-period-btn.active { background: var(--ga); border-color: var(--g);
+      color: var(--g); }
+    .sfos-cat-row { display: flex; align-items: center; gap: 8px;
+      margin-bottom: 8px; }
+    .sfos-cat-name { font-size: 12px; width: 90px; flex-shrink: 0; }
+    .sfos-cat-bar-wrap { flex: 1; background: var(--sur2); border-radius: 20px;
+      height: 6px; overflow: hidden; }
+    .sfos-cat-bar { height: 6px; background: var(--g); border-radius: 20px; }
+    .sfos-cat-amt { font-size: 11px; color: var(--sub); white-space: nowrap; }
+
+    /* ── Rewards panel ── */
+    .sfos-rw-header { background: var(--sur); border: 1px solid #1a1a1a;
+      border-radius: var(--rad); padding: 20px; text-align: center;
+      margin-bottom: 14px; }
+    .sfos-rw-big { font-size: 40px; font-weight: 900; color: var(--g); display: block; }
+    .sfos-rw-label { font-size: 12px; color: var(--sub); display: block; margin-top: 4px; }
+    .sfos-rw-row { display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
+    .sfos-rw-pts.pos { color: var(--g); font-weight: 700; }
+    .sfos-rw-pts.neg { color: var(--red); font-weight: 700; }
+
+    /* ── Security panel ── */
+    .sfos-sec-row { background: var(--sur); border: 1px solid #1a1a1a;
+      border-radius: 10px; padding: 14px; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center; }
+    .sfos-sec-info { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+    .sfos-toggle { background: #222; border: 1px solid #333; border-radius: 20px;
+      padding: 5px 14px; font-size: 12px; font-weight: 700; color: var(--sub);
+      transition: all .2s; }
+    .sfos-toggle.active { background: var(--ga); border-color: var(--g); color: var(--g); }
+
+    /* ── QR panel ── */
+    .sfos-qr-wrap { display: flex; flex-direction: column; align-items: center;
+      padding: 24px 16px; }
+    #sfos-qr-canvas { border-radius: 12px; border: 2px solid var(--g); }
+    #sfos-qr-amount-label { font-size: 13px; color: var(--sub); margin-top: 10px; }
+    .sfos-qr-id { font-size: 13px; font-weight: 700; color: var(--g);
+      font-family: monospace; margin-top: 8px; letter-spacing: .1em; }
+    .sfos-qr-hint { font-size: 12px; color: var(--sub); margin-top: 4px;
+      text-align: center; }
+
+    /* ── Net worth ── */
+    .sfos-nw-card { background: var(--sur); border: 1px solid #1a1a1a;
+      border-radius: var(--rad); padding: 20px; margin-bottom: 14px; }
+    .sfos-nw-label { font-size: 11px; color: var(--sub); text-transform: uppercase;
+      letter-spacing: .07em; }
+    .sfos-nw-total { font-size: 28px; font-weight: 900; color: var(--g);
+      margin: 4px 0 14px; }
+    .sfos-nw-row { display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; padding: 6px 0; border-bottom: 1px solid #161616; }
+
+    /* ── Primary button ── */
+    .sfos-btn {
+      background: var(--g); color: #050505; font-weight: 800; font-size: 15px;
+      border-radius: 12px; padding: 14px; width: 100%; border: none;
+      cursor: pointer; transition: opacity .2s;
+    }
+    .sfos-btn:disabled { opacity: .45; cursor: not-allowed; }
+    .sfos-btn.secondary { background: var(--sur2); color: var(--g);
+      border: 1px solid var(--g); }
+
+    /* ── Overlays ── */
+    .sfos-overlay {
+      position: fixed; inset: 0; z-index: 300; display: none;
+      align-items: flex-end; background: rgba(0,0,0,.7);
+    }
+    .sfos-overlay.open { display: flex; }
+    .sfos-sheet {
+      width: 100%; max-height: 90vh; background: var(--sur);
+      border-radius: 20px 20px 0 0; padding: 20px; overflow-y: auto;
+    }
+    .sfos-sheet-handle { width: 40px; height: 4px; background: #333;
+      border-radius: 2px; margin: 0 auto 18px; }
+    .sfos-sheet-title { font-size: 18px; font-weight: 800; margin-bottom: 18px; }
+    .sfos-field { margin-bottom: 14px; }
+    .sfos-field label { display: block; font-size: 12px; color: var(--sub);
+      margin-bottom: 6px; }
+    .sfos-field input, .sfos-field select {
+      width: 100%; background: var(--sur2); border: 1px solid #222;
+      border-radius: 10px; padding: 14px; font-size: 16px; color: var(--txt);
+      outline: none; min-height: 48px;
+    }
+    .sfos-field input:focus, .sfos-field select:focus { border-color: var(--g); }
+
+    /* ── Toast ── */
+    #sfos-toast {
+      position: fixed; bottom: calc(var(--nav) + 16px); left: 16px; right: 16px;
+      background: #1a1a1a; color: var(--txt); border-radius: 12px;
+      padding: 12px 16px; font-size: 13px; font-weight: 600;
+      text-align: center; z-index: 400; opacity: 0; transform: translateY(8px);
+      pointer-events: none; transition: opacity .25s, transform .25s;
+    }
+    #sfos-toast.show { opacity: 1; transform: translateY(0); }
+    #sfos-toast.success { border-left: 3px solid var(--g); }
+    #sfos-toast.error   { border-left: 3px solid var(--red); }
+    #sfos-toast.warning { border-left: 3px solid var(--amber); }
+
+    /* ── Misc ── */
+    .sfos-loading { color: var(--sub); font-size: 13px; text-align: center;
+      padding: 24px 0; }
+    .sfos-dim { color: var(--dim); font-size: 13px; }
+    .sfos-an-subtitle { font-size: 12px; font-weight: 700; color: var(--sub);
+      text-transform: uppercase; letter-spacing: .06em; margin: 16px 0 10px; }
+    .sfos-an-summary, .sfos-forecast-grid { display: grid;
+      grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+    .sfos-stat-tile { background: var(--sur2); border: 1px solid #1a1a1a;
+      border-radius: 10px; padding: 12px; }
+    .sfos-stat-label { font-size: 11px; color: var(--sub); display: block;
+      text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; }
+    .sfos-stat-value { font-size: 14px; font-weight: 800; display: block; }
+    .sfos-insight-card { background: var(--sur2); border: 1px solid #1a1a1a;
+      border-radius: 10px; padding: 12px; margin-bottom: 8px; font-size: 13px; }
+    .sfos-insight-icon { color: var(--g); margin-right: 8px; }
+    .sfos-link { color: var(--g); font-weight: 700; font-size: 12px;
+      display: block; margin-top: 6px; }
+
+    /* ── STK status ── */
+    #sfos-stk-status { text-align: center; padding: 12px;
+      font-size: 13px; color: var(--sub); }
+    #sfos-stk-status.pending { color: var(--amber); }
+    #sfos-stk-status.success { color: var(--g); }
+    #sfos-stk-status.error   { color: var(--red); }
+
+    @media (min-width: 600px) {
+      #sfos-panels { max-width: 480px; left: 50%; transform: translateX(-50%); }
+      #sfos-header, #sfos-bottom-nav { max-width: 480px; left: 50%;
+        transform: translateX(-50%); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ HEADER ═══════════════ -->
+<header id="sfos-header">
+  <div id="sfos-logo">SOKONI <span style="color:var(--sub);font-weight:400">Financial OS</span></div>
+  <span id="sfos-tier-el" class="sfos-tier-badge bronze">Bronze</span>
+  <span id="sfos-freeze-badge"><i class="fas fa-snowflake"></i> FROZEN</span>
+  <div id="sfos-avatar" aria-label="User avatar">U</div>
+</header>
+
+<!-- ═══════════════ PANELS ═══════════════ -->
+<main id="sfos-panels">
+
+  <!-- ── HOME ── -->
+  <section id="sfos_home" class="sfos-panel active">
+
+    <div class="sfos-bal-card">
+      <div class="sfos-bal-label">Available Balance</div>
+      <div class="sfos-bal-main"><span>KES</span><span id="sfos-balance-main">0.00</span></div>
+      <div class="sfos-bal-chips">
+        <span class="sfos-chip">Savings <b id="sfos-balance-savings">0</b></span>
+        <span class="sfos-chip">Escrow <b id="sfos-balance-escrow">0</b></span>
+        <span class="sfos-chip">Points <b id="sfos-reward-points">0</b></span>
+      </div>
+    </div>
+
+    <!-- Quick actions -->
+    <div class="sfos-action-grid">
+      <button class="sfos-action-btn" onclick="_navTo('sfos_money','sfosNavMoney')">
+        <i class="fas fa-paper-plane"></i>Send
+      </button>
+      <button class="sfos-action-btn" onclick="_openTopUp()">
+        <i class="fas fa-plus-circle"></i>Top Up
+      </button>
+      <button class="sfos-action-btn" onclick="_navTo('sfos_qr_pan','sfosNavQR')">
+        <i class="fas fa-qrcode"></i>My QR
+      </button>
+      <button class="sfos-action-btn" onclick="_navTo('sfos_savings','sfosNavSavings')">
+        <i class="fas fa-piggy-bank"></i>Vaults
+      </button>
+    </div>
+
+    <!-- Health gauge -->
+    <div class="sfos-health-wrap">
+      <canvas id="sfos-health-gauge" width="120" height="70"></canvas>
+      <div class="sfos-health-info">
+        <div id="sfos-health-grade">–</div>
+        <div class="sfos-health-sub">Financial Health Score</div>
+        <div id="sfos-health-factors"></div>
+      </div>
+    </div>
+
+    <!-- Net worth -->
+    <div class="sfos-nw-card">
+      <div class="sfos-nw-label">Net Worth</div>
+      <div class="sfos-nw-total" id="sfos-networth-total">KES 0.00</div>
+      <div class="sfos-nw-row">
+        <span>Total Assets</span>
+        <span id="sfos-networth-assets">KES 0.00</span>
+      </div>
+      <div class="sfos-nw-row" style="border-bottom:none">
+        <span>Liabilities</span>
+        <span id="sfos-networth-liabilities">KES 0.00</span>
+      </div>
+    </div>
+
+    <!-- AI Forecast (loads on demand) -->
+    <div class="sfos-section-title">AI Forecast
+      <button onclick="SFOSCore.loadAiForecast()" style="float:right;font-size:11px;color:var(--g);font-weight:700">Refresh</button>
+    </div>
+    <div id="sfos-forecast-container"><p class="sfos-loading">Loading forecast…</p></div>
+
+    <!-- Recent activity -->
+    <div class="sfos-section-title">Recent Transactions</div>
+    <div id="sfos-tx-feed"><p class="sfos-loading">Loading…</p></div>
+  </section>
+
+  <!-- ── MONEY ── -->
+  <section id="sfos_money" class="sfos-panel">
+    <div style="font-size:18px;font-weight:800;margin-bottom:18px">Money Movement</div>
+
+    <!-- Send form -->
+    <div style="background:var(--sur);border:1px solid #1a1a1a;border-radius:var(--rad);padding:18px;margin-bottom:14px">
+      <div class="sfos-section-title" style="margin-top:0">Send Money</div>
+      <div class="sfos-field">
+        <label>Recipient Phone</label>
+        <input type="tel" id="sfos-send-phone" placeholder="0712 345 678"
+          inputmode="tel" autocomplete="tel">
+      </div>
+      <div class="sfos-field">
+        <label>Amount (KES)</label>
+        <input type="number" id="sfos-send-amount" placeholder="100"
+          inputmode="decimal" min="10">
+      </div>
+      <div class="sfos-field">
+        <label>Note (optional)</label>
+        <input type="text" id="sfos-send-note" placeholder="What's this for?"
+          maxlength="100">
+      </div>
+      <button class="sfos-btn" id="sfos-send-btn" onclick="_doSend()">Send</button>
+    </div>
+
+    <!-- Escrow -->
+    <div style="background:var(--sur);border:1px solid #1a1a1a;border-radius:var(--rad);padding:18px">
+      <div class="sfos-section-title" style="margin-top:0">Escrow / Safe Pay</div>
+      <p style="font-size:13px;color:var(--sub);margin-bottom:14px">
+        Lock funds in escrow — released only when both parties confirm delivery.
+      </p>
+      <button class="sfos-btn secondary" onclick="_openOverlay('sfos-escrow-overlay')">
+        <i class="fas fa-lock"></i>&nbsp;Create Escrow
+      </button>
+    </div>
+  </section>
+
+  <!-- ── SAVINGS ── -->
+  <section id="sfos_savings" class="sfos-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:18px;font-weight:800">Savings Vaults</span>
+      <button onclick="_openOverlay('sfos-newvault-overlay')"
+        style="background:var(--ga);border:1px solid var(--g);border-radius:20px;
+        padding:6px 14px;font-size:12px;font-weight:700;color:var(--g)">
+        <i class="fas fa-plus"></i> New Vault
+      </button>
+    </div>
+    <div id="sfos-vault-grid"><p class="sfos-loading">Loading vaults…</p></div>
+  </section>
+
+  <!-- ── BUSINESS ── -->
+  <section id="sfos_business" class="sfos-panel">
+    <div style="font-size:18px;font-weight:800;margin-bottom:16px">Business & Merchant</div>
+    <div id="sfos-merchant-panel"><p class="sfos-loading">Loading…</p></div>
+    <button class="sfos-btn secondary" id="sfos-settle-btn"
+      onclick="SFOSCore.settleMerchant()" style="margin-top:14px">
+      <i class="fas fa-money-bill-transfer"></i>&nbsp;Request Settlement
+    </button>
+
+    <div class="sfos-section-title">Group Wallet</div>
+    <div id="sfos-group-panel">
+      <div style="background:var(--sur);border:1px solid #1a1a1a;border-radius:var(--rad);padding:18px;text-align:center">
+        <i class="fas fa-users" style="font-size:28px;color:var(--sub);margin-bottom:8px;display:block"></i>
+        <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Create a shared wallet for your team or family.</p>
+        <button class="sfos-btn secondary" onclick="_openOverlay('sfos-group-overlay')">Create Group Wallet</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ACTIVITY ── -->
+  <section id="sfos_activity" class="sfos-panel">
+    <div style="font-size:18px;font-weight:800;margin-bottom:14px">Activity & Analytics</div>
+    <div class="sfos-period-row">
+      <button class="sfos-period-btn active" id="periWk"
+        onclick="_setPeriod('week',this)">Week</button>
+      <button class="sfos-period-btn" id="periMo"
+        onclick="_setPeriod('month',this)">Month</button>
+      <button class="sfos-period-btn" id="periYr"
+        onclick="_setPeriod('year',this)">Year</button>
+    </div>
+    <div id="sfos-activity-container"><p class="sfos-loading">Loading…</p></div>
+  </section>
+
+  <!-- ── SECURITY ── -->
+  <section id="sfos_security" class="sfos-panel">
+    <div style="font-size:18px;font-weight:800;margin-bottom:16px">Security Centre</div>
+    <div id="sfos-security-panel"><p class="sfos-loading">Loading…</p></div>
+
+    <!-- Rewards section inside Security-adjacent slot -->
+    <div class="sfos-section-title">Rewards & Loyalty</div>
+    <div id="sfos-rewards-panel"><p class="sfos-loading">Loading rewards…</p></div>
+  </section>
+
+  <!-- ── QR ── -->
+  <section id="sfos_qr_pan" class="sfos-panel">
+    <div style="font-size:18px;font-weight:800;margin-bottom:4px">Receive Payment</div>
+    <p style="font-size:13px;color:var(--sub);margin-bottom:16px">Share your QR code or Wallet ID to receive funds.</p>
+    <div class="sfos-qr-wrap">
+      <canvas id="sfos-qr-canvas" width="220" height="220"></canvas>
+      <div id="sfos-qr-amount-label">Scan to pay</div>
+      <div class="sfos-qr-id" id="sfos-walletid-display">SOK-________</div>
+      <div class="sfos-qr-hint">Valid for 15 minutes — tap to refresh</div>
+    </div>
+    <div class="sfos-field" style="margin-top:8px">
+      <label>Request specific amount (optional)</label>
+      <input type="number" id="sfos-qr-amount-input" placeholder="0"
+        inputmode="decimal" min="0" oninput="_refreshQR(this.value)">
+    </div>
+    <button class="sfos-btn" onclick="SFOSCore.generateQR(Number(document.getElementById('sfos-qr-amount-input').value)||0).then(d=>{ if(d&&d.walletId) document.getElementById('sfos-walletid-display').textContent=d.walletId; })">
+      <i class="fas fa-arrows-rotate"></i>&nbsp;Refresh QR
+    </button>
+  </section>
+
+</main>
+
+<!-- ═══════════════ BOTTOM NAV ═══════════════ -->
+<nav id="sfos-bottom-nav" aria-label="Main navigation">
+  <button class="sfos-nav-btn active" id="sfosNavHome"
+    onclick="_navTo('sfos_home','sfosNavHome')">
+    <i class="fas fa-house"></i>Home
+  </button>
+  <button class="sfos-nav-btn" id="sfosNavMoney"
+    onclick="_navTo('sfos_money','sfosNavMoney')">
+    <i class="fas fa-paper-plane"></i>Money
+  </button>
+  <button class="sfos-nav-btn" id="sfosNavSavings"
+    onclick="_navTo('sfos_savings','sfosNavSavings')">
+    <i class="fas fa-piggy-bank"></i>Savings
+  </button>
+  <button class="sfos-nav-btn" id="sfosNavBusiness"
+    onclick="_navTo('sfos_business','sfosNavBusiness')">
+    <i class="fas fa-briefcase"></i>Business
+  </button>
+  <button class="sfos-nav-btn" id="sfosNavActivity"
+    onclick="_navTo('sfos_activity','sfosNavActivity')">
+    <i class="fas fa-chart-bar"></i>Activity
+  </button>
+  <button class="sfos-nav-btn" id="sfosNavSecurity"
+    onclick="_navTo('sfos_security','sfosNavSecurity')">
+    <i class="fas fa-shield-halved"></i>Security
+  </button>
+</nav>
+
+<!-- ═══════════════ OVERLAYS ═══════════════ -->
+
+<!-- Top Up -->
+<div id="sfos-topup-overlay" class="sfos-overlay" aria-hidden="true"
+  onclick="if(event.target===this)_closeOverlay('sfos-topup-overlay')">
+  <div class="sfos-sheet">
+    <div class="sfos-sheet-handle"></div>
+    <div class="sfos-sheet-title">Top Up Wallet</div>
+    <div class="sfos-field">
+      <label>M-Pesa Phone Number</label>
+      <input type="tel" id="sfos-topup-phone" placeholder="0712 345 678"
+        inputmode="tel">
+    </div>
+    <div class="sfos-field">
+      <label>Amount (KES)</label>
+      <input type="number" id="sfos-topup-amount" placeholder="500"
+        inputmode="decimal" min="10">
+    </div>
+    <div id="sfos-stk-status"></div>
+    <button class="sfos-btn" id="sfos-topup-btn" onclick="_initiateTopUp()">
+      Pay via M-Pesa
+    </button>
+    <button class="sfos-btn secondary" style="margin-top:10px"
+      onclick="_closeOverlay('sfos-topup-overlay')">Cancel</button>
+  </div>
+</div>
+
+<!-- New Vault -->
+<div id="sfos-newvault-overlay" class="sfos-overlay" aria-hidden="true"
+  onclick="if(event.target===this)_closeOverlay('sfos-newvault-overlay')">
+  <div class="sfos-sheet">
+    <div class="sfos-sheet-handle"></div>
+    <div class="sfos-sheet-title">Create Savings Vault</div>
+    <div class="sfos-field">
+      <label>Vault Name</label>
+      <input type="text" id="sfos-nv-name" placeholder="e.g. Emergency Fund" maxlength="40">
+    </div>
+    <div class="sfos-field">
+      <label>Target Amount (KES)</label>
+      <input type="number" id="sfos-nv-target" placeholder="50000" inputmode="decimal" min="100">
+    </div>
+    <div class="sfos-field">
+      <label>Deadline (optional)</label>
+      <input type="date" id="sfos-nv-deadline">
+    </div>
+    <div class="sfos-field">
+      <label>Initial Deposit (KES)</label>
+      <input type="number" id="sfos-nv-deposit" placeholder="0" inputmode="decimal" min="0">
+    </div>
+    <button class="sfos-btn" onclick="_createVault()">Create Vault</button>
+    <button class="sfos-btn secondary" style="margin-top:10px"
+      onclick="_closeOverlay('sfos-newvault-overlay')">Cancel</button>
+  </div>
+</div>
+
+<!-- Escrow -->
+<div id="sfos-escrow-overlay" class="sfos-overlay" aria-hidden="true"
+  onclick="if(event.target===this)_closeOverlay('sfos-escrow-overlay')">
+  <div class="sfos-sheet">
+    <div class="sfos-sheet-handle"></div>
+    <div class="sfos-sheet-title">Create Escrow</div>
+    <div class="sfos-field">
+      <label>Recipient Phone</label>
+      <input type="tel" id="sfos-esc-phone" placeholder="0712 345 678" inputmode="tel">
+    </div>
+    <div class="sfos-field">
+      <label>Amount (KES)</label>
+      <input type="number" id="sfos-esc-amount" placeholder="5000" inputmode="decimal" min="100">
+    </div>
+    <div class="sfos-field">
+      <label>Description</label>
+      <input type="text" id="sfos-esc-desc" placeholder="What are you paying for?" maxlength="120">
+    </div>
+    <button class="sfos-btn" onclick="_createEscrow()">Lock Funds in Escrow</button>
+    <button class="sfos-btn secondary" style="margin-top:10px"
+      onclick="_closeOverlay('sfos-escrow-overlay')">Cancel</button>
+  </div>
+</div>
+
+<!-- Set Limits -->
+<div id="sfos-limits-overlay" class="sfos-overlay" aria-hidden="true"
+  onclick="if(event.target===this)_closeOverlay('sfos-limits-overlay')">
+  <div class="sfos-sheet">
+    <div class="sfos-sheet-handle"></div>
+    <div class="sfos-sheet-title">Spending Limits</div>
+    <div class="sfos-field">
+      <label>Daily Limit (KES, max 500,000)</label>
+      <input type="number" id="sfos-lim-daily" placeholder="15000"
+        inputmode="decimal" min="0" max="500000">
+    </div>
+    <div class="sfos-field">
+      <label>Monthly Limit (KES, max 5,000,000)</label>
+      <input type="number" id="sfos-lim-monthly" placeholder="150000"
+        inputmode="decimal" min="0" max="5000000">
+    </div>
+    <button class="sfos-btn" onclick="_saveLimits()">Save Limits</button>
+    <button class="sfos-btn secondary" style="margin-top:10px"
+      onclick="_closeOverlay('sfos-limits-overlay')">Cancel</button>
+  </div>
+</div>
+
+<!-- Group Wallet -->
+<div id="sfos-group-overlay" class="sfos-overlay" aria-hidden="true"
+  onclick="if(event.target===this)_closeOverlay('sfos-group-overlay')">
+  <div class="sfos-sheet">
+    <div class="sfos-sheet-handle"></div>
+    <div class="sfos-sheet-title">Create Group Wallet</div>
+    <div class="sfos-field">
+      <label>Group Name</label>
+      <input type="text" id="sfos-grp-name" placeholder="e.g. Family Budget" maxlength="60">
+    </div>
+    <div class="sfos-field">
+      <label>Initial Deposit (KES)</label>
+      <input type="number" id="sfos-grp-deposit" placeholder="0"
+        inputmode="decimal" min="0">
+    </div>
+    <p style="font-size:12px;color:var(--sub);margin-bottom:14px">
+      Members can be added after creation from the Business panel.
+    </p>
+    <button class="sfos-btn" onclick="_createGroup()">Create Group</button>
+    <button class="sfos-btn secondary" style="margin-top:10px"
+      onclick="_closeOverlay('sfos-group-overlay')">Cancel</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="sfos-toast" role="alert" aria-live="polite"></div>
+
+<!-- ═══════════════ SCRIPTS ═══════════════ -->
+<script type="module" src="firebase.js"></script>
+<script src="sfos-core.js"></script>
+<script>
+  /* ── Navigation ── */
+  function _navTo(panelId, btnId) {
+    SFOSCore.showPanel(panelId);
+    document.querySelectorAll('.sfos-nav-btn').forEach(b => b.classList.remove('active'));
+    const btn = document.getElementById(btnId);
+    if (btn) btn.classList.add('active');
+    if (panelId === 'sfos_qr_pan') {
+      SFOSCore.generateQR(0).then(d => {
+        if (d && d.walletId)
+          document.getElementById('sfos-walletid-display').textContent = d.walletId;
+      });
+    }
+  }
+
+  /* ── Overlay helpers ── */
+  function _openOverlay(id) { SFOSCore.openOverlay(id); }
+  function _closeOverlay(id) { SFOSCore.closeOverlay(id); }
+
+  /* ── Top Up ── */
+  function _openTopUp() {
+    document.getElementById('sfos-stk-status').textContent = '';
+    document.getElementById('sfos-stk-status').className = '';
+    _openOverlay('sfos-topup-overlay');
+  }
+
+  let _stkPollTimer = null;
+
+  async function _initiateTopUp() {
+    const phone  = document.getElementById('sfos-topup-phone').value.trim();
+    const amount = Number(document.getElementById('sfos-topup-amount').value);
+    if (!phone) { SFOSCore.toast('Enter your M-Pesa phone number', 'error'); return; }
+    if (!amount || amount < 10) { SFOSCore.toast('Minimum top-up is KES 10', 'error'); return; }
+
+    const btn = document.getElementById('sfos-topup-btn');
+    btn.disabled = true;
+    btn.textContent = 'Sending STK Push…';
+    const statusEl = document.getElementById('sfos-stk-status');
+    statusEl.className = 'pending';
+    statusEl.textContent = 'Sending STK push to your phone…';
+
+    try {
+      const { getFunctions, httpsCallable } = await import(
+        'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js'
+      );
+      const fns      = getFunctions(window.firebaseApp, 'us-central1');
+      const initiateFn = httpsCallable(fns, 'initiateWalletTopUp');
+      const res = await initiateFn({ phone, amount });
+      const checkoutId = res.data?.checkoutId;
+
+      if (!checkoutId) throw new Error('No checkoutId returned');
+
+      statusEl.textContent = 'Check your phone and enter your M-Pesa PIN…';
+      btn.textContent = 'Waiting for payment…';
+
+      const confirmFn = httpsCallable(fns, 'confirmWalletTopUp');
+      let polls = 0;
+      const maxPolls = 30; // 90s at 3s interval
+
+      _stkPollTimer = setInterval(async () => {
+        polls++;
+        try {
+          const confirm = await confirmFn({ checkoutId });
+          const status  = confirm.data?.status;
+
+          if (status === 'COMPLETE') {
+            clearInterval(_stkPollTimer);
+            statusEl.className = 'success';
+            statusEl.textContent = `KES ${amount.toLocaleString()} added to your wallet!`;
+            btn.textContent = 'Done';
+            SFOSCore.toast('Wallet topped up successfully', 'success');
+            await SFOSCore.getWalletState();
+            setTimeout(() => _closeOverlay('sfos-topup-overlay'), 2000);
+          } else if (status === 'FAILED' || status === 'CANCELLED') {
+            clearInterval(_stkPollTimer);
+            statusEl.className = 'error';
+            statusEl.textContent = status === 'CANCELLED'
+              ? 'You cancelled the payment.'
+              : 'Payment failed. Please try again.';
+            btn.disabled = false;
+            btn.textContent = 'Pay via M-Pesa';
+          } else if (polls >= maxPolls) {
+            clearInterval(_stkPollTimer);
+            statusEl.className = 'error';
+            statusEl.textContent = 'Timed out — please check your M-Pesa balance.';
+            btn.disabled = false;
+            btn.textContent = 'Pay via M-Pesa';
+          }
+        } catch { /* poll errors are transient */ }
+      }, 3000);
+
+    } catch (e) {
+      statusEl.className = 'error';
+      statusEl.textContent = e.message || 'Failed to initiate payment.';
+      btn.disabled = false;
+      btn.textContent = 'Pay via M-Pesa';
+    }
+  }
+
+  /* ── Send money ── */
+  async function _doSend() {
+    const phone  = document.getElementById('sfos-send-phone').value.trim();
+    const amount = Number(document.getElementById('sfos-send-amount').value);
+    const note   = document.getElementById('sfos-send-note').value.trim();
+    await SFOSCore.executeSend(phone, amount, note);
+  }
+
+  /* ── Create vault ── */
+  async function _createVault() {
+    const name    = document.getElementById('sfos-nv-name').value.trim();
+    const target  = Number(document.getElementById('sfos-nv-target').value);
+    const deposit = Number(document.getElementById('sfos-nv-deposit').value) || 0;
+    const deadline = document.getElementById('sfos-nv-deadline').value || null;
+    if (!name) { SFOSCore.toast('Enter a vault name', 'error'); return; }
+    if (!target || target < 100) { SFOSCore.toast('Minimum target is KES 100', 'error'); return; }
+    await SFOSCore.createVault({ name, targetAmount: target, initialDeposit: deposit, deadline });
+    _closeOverlay('sfos-newvault-overlay');
+  }
+
+  /* ── Create escrow ── */
+  async function _createEscrow() {
+    const phone  = document.getElementById('sfos-esc-phone').value.trim();
+    const amount = Number(document.getElementById('sfos-esc-amount').value);
+    const desc   = document.getElementById('sfos-esc-desc').value.trim();
+    if (!phone) { SFOSCore.toast('Enter recipient phone', 'error'); return; }
+    if (!amount || amount < 100) { SFOSCore.toast('Minimum escrow is KES 100', 'error'); return; }
+    await SFOSCore.openEscrow({ toPhone: phone, amount, description: desc });
+    _closeOverlay('sfos-escrow-overlay');
+  }
+
+  /* ── Set limits ── */
+  async function _saveLimits() {
+    const daily   = Number(document.getElementById('sfos-lim-daily').value);
+    const monthly = Number(document.getElementById('sfos-lim-monthly').value);
+    await SFOSCore.setLimits(daily, monthly);
+    _closeOverlay('sfos-limits-overlay');
+  }
+
+  /* ── Create group ── */
+  async function _createGroup() {
+    const name    = document.getElementById('sfos-grp-name').value.trim();
+    const deposit = Number(document.getElementById('sfos-grp-deposit').value) || 0;
+    if (!name) { SFOSCore.toast('Enter a group name', 'error'); return; }
+    await SFOSCore.loadGroupWallet();
+    _closeOverlay('sfos-group-overlay');
+  }
+
+  /* ── Period toggle ── */
+  function _setPeriod(period, btn) {
+    document.querySelectorAll('.sfos-period-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    SFOSCore.loadActivity(period);
+  }
+
+  /* ── QR refresh ── */
+  let _qrDebounce = null;
+  function _refreshQR(val) {
+    clearTimeout(_qrDebounce);
+    _qrDebounce = setTimeout(() => {
+      const amt = Number(val) || 0;
+      SFOSCore.generateQR(amt);
+    }, 600);
+  }
+
+  /* ── Load health + networth on home init ── */
+  window.addEventListener('sfosReady', () => {
+    SFOSCore.loadHealthScore();
+    SFOSCore.loadNetWorth();
+    SFOSCore.loadAiForecast();
+  });
+
+  /* ── Init ── */
+  document.addEventListener('DOMContentLoaded', () => {
+    window.SFOS = SFOSCore;
+    SFOSCore.init();
+  });
+</script>
+</body>
+</html>

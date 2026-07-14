@@ -4319,5 +4319,88 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ── SFOS — Financial Operating System ─────────────────────────────────────
+
+    match /sfosIdentity/{uid} {
+      // Only the identity owner or admin may read; writes via CF Admin SDK only
+      allow read:  if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow write: if false;
+    }
+
+    match /sfosLedger/{entryId} {
+      // Immutable double-entry ledger — account owner or admin may read
+      allow read:  if isAdmin() ||
+                     (isAuthed() &&
+                       resource.data.accountId == request.auth.uid);
+      allow write: if false; // immutable — CF Admin SDK only
+    }
+
+    match /sfosTransactions/{txId} {
+      // Initiator, counterparty, or admin may read
+      allow read:  if isAdmin() ||
+                     (isAuthed() &&
+                       (resource.data.fromId  == request.auth.uid ||
+                        resource.data.toId    == request.auth.uid ||
+                        resource.data.initiatorUid == request.auth.uid));
+      allow write: if false;
+    }
+
+    match /sfosEscrow/{escrowId} {
+      // Buyer, seller, or admin; no client writes
+      allow read:  if isAdmin() ||
+                     (isAuthed() &&
+                       (resource.data.buyerUid  == request.auth.uid ||
+                        resource.data.sellerUid == request.auth.uid));
+      allow write: if false;
+    }
+
+    match /sfosGroups/{groupId} {
+      // Group members may read; writes via CF only
+      allow read:  if isAdmin() ||
+                     (isAuthed() &&
+                       resource.data.members.hasAny([request.auth.uid]));
+      allow write: if false;
+    }
+
+    match /sfosGroups/{groupId}/wallets/{walletUid} {
+      allow read:  if isAuthed() && request.auth.uid == walletUid || isAdmin();
+      allow write: if false;
+    }
+
+    match /sfosMerchant/{merchantId} {
+      // Merchant owner or admin
+      allow read:  if isAdmin() ||
+                     (isAuthed() && request.auth.uid == merchantId);
+      allow write: if false;
+    }
+
+    match /sfosMerchant/{merchantId}/settlements/{settlementId} {
+      allow read:  if isAdmin() ||
+                     (isAuthed() && request.auth.uid == merchantId);
+      allow write: if false;
+    }
+
+    match /sfosRewards/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow write: if false;
+    }
+
+    match /sfosAuditLog/{logId} {
+      // Immutable audit log — admin-read only
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /sfosRiskEvents/{riskId} {
+      // Risk/fraud events — admin only
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /sfosFinancialHealth/{uid} {
+      allow read:  if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow write: if false;
+    }
+
   }
 }
