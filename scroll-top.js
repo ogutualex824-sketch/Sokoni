@@ -59,11 +59,20 @@
     document.body.appendChild(btn);
   }
 
-  /* Wire scroll-to-top action (preserves any onclick already set in HTML) */
+  /* Wire scroll-to-top action (preserves any onclick already set in HTML).
+
+     touchend ALONE left the button dead on desktop: the dynamically-created button carries no
+     onclick, and a mouse click never produces a touchend — so on every desktop browser the
+     back-to-top button appeared, highlighted on hover, and did nothing when clicked. Bind click
+     as well. On touch, touchend's preventDefault() suppresses the synthetic click, so this does
+     not double-fire; and scrolling to top twice would be a harmless no-op regardless. */
+  const _toTop = function(){ window.scrollTo({ top:0, behavior:"smooth" }); };
   btn.addEventListener("touchend", function(e){
     e.preventDefault();
-    window.scrollTo({ top:0, behavior:"smooth" });
+    _toTop();
   }, { passive:false });
+  /* Only bind click if the HTML did not already wire one, so a static button keeps its own. */
+  if (!btn.getAttribute("onclick")) btn.addEventListener("click", _toTop);
 
   let _shown = false;
   const SHOW_AT = 280;
