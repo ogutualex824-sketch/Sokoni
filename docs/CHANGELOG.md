@@ -2,6 +2,71 @@
 
 ---
 
+## 2026-07-14 — Full authDomain Migration to auth.mysokoni.co.ke
+
+**Scope:** Security / Auth. Every Firebase client configuration now points the
+`authDomain` field at the first-party custom domain, eliminating any remaining
+dependency on `sokoni-aeb26.firebaseapp.com` for OAuth flows.
+
+### Why this matters
+Apple ITP (Intelligent Tracking Prevention) classifies `*.firebaseapp.com` as a
+third-party tracker when loaded from `mysokoni.co.ke`. With `authDomain` pointing
+at `auth.mysokoni.co.ke`, Firebase's auth iframe runs in a first-party context —
+same eTLD+1 as the app — so ITP no longer interferes with session cookies,
+IndexedDB, or redirect-result delivery.
+
+### Changes
+- **54 HTML pages and JS modules** migrated from `authDomain: 'sokoni-aeb26.firebaseapp.com'`
+  to `authDomain: 'auth.mysokoni.co.ke'` — covers every secondary `initializeApp()` call
+  across the platform. Pages migrated include all consumer, seller, POS, admin, B2B, legal,
+  and hub pages plus core libraries (`shared-header.js`, `sokoni-appcheck.js`,
+  `sokoni-b2b.js`, `sokoni-notif-engine.js`, `sokoni-recommendations.js`,
+  `sokoni-featured.js`, `sokoni-verifications.js`, `sokoni-product-analytics.js`,
+  `product.js`, `firebase-messaging-sw.js`).
+- **SW bumped to v73** (`sokoni-20260714-authdomain-v73`) to bust caches and deliver
+  the updated `firebase-messaging-sw.js` immediately.
+
+### Intentional exclusions
+| File | Reason |
+|---|---|
+| `sokoni-spotlight.js` | Different Firebase project (different API key) — unrelated |
+| `sokoni-env.js` | Environment registry listing, not an authDomain config value |
+| `functions/index.js` | CORS allowlist — `sokoni-aeb26.firebaseapp.com` remains a valid allowed origin |
+| `auth.js`, `firebase.js` | Old domain appears in code comments explaining ITP — kept as documentation |
+
+### Pre-conditions (must be met before deploying)
+1. `auth.mysokoni.co.ke` CNAME is live in Cloudflare (DNS Only — **do not proxy**).
+2. Firebase Hosting shows `auth.mysokoni.co.ke` as **Connected** with SSL provisioned.
+3. Firebase Auth → Settings → Authorized domains includes `auth.mysokoni.co.ke`.
+
+### Deployment
+```bash
+firebase deploy --only hosting
+```
+
+### Cloudflare proxy guidance
+Keep `auth.mysokoni.co.ke` as **DNS Only** permanently. Enabling the Cloudflare
+orange cloud (proxied) would route `/__/auth/handler` responses through Cloudflare's
+edge, which terminates TLS and rewrites response headers. Firebase's auth iframe relies
+on exact response integrity for session-token delivery — proxying can break this silently.
+The main `mysokoni.co.ke` domain can remain proxied through Cloudflare as normal.
+
+### Files affected
+`service-worker.js`, `shared-header.js`, `sokoni-appcheck.js`, `sokoni-b2b.js`,
+`sokoni-notif-engine.js`, `sokoni-recommendations.js`, `sokoni-featured.js`,
+`sokoni-verifications.js`, `sokoni-product-analytics.js`, `firebase-messaging-sw.js`,
+`product.js`, plus 43 HTML pages.
+
+### Security implications
+- Zero regression risk: `sokoni-aeb26.firebaseapp.com` remains valid in Firebase's
+  authorized domains list and in the CSP `frame-src` directive — existing sessions
+  and gradual rollout both work.
+- Positive: eliminates the ITP-induced `auth/internal-error` false-positive entirely
+  once deployed, removing the need for the `_redirectWasPending` suppression guard
+  (guard remains in place as defense-in-depth).
+
+---
+
 ## 2026-07-14 — Single Verification Field (OTP UX Sprint)
 
 **Scope:** UX only. The six-box OTP grid is replaced by one premium verification input.
