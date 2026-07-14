@@ -513,30 +513,9 @@ body{
 }
 .phone-code-input:focus { outline: none; border-color: rgba(113,255,0,0.55); }
 
-/* OTP 6-digit grid */
-.otp-row {
-  display: flex;
-  gap: 7px;
-  justify-content: center;
-  margin: 14px 0 10px;
-}
-.otp-digit {
-  width: 42px;
-  height: 50px;
-  text-align: center;
-  font-size: 22px;
-  font-weight: 900;
-  background: rgba(255,255,255,0.05);
-  border: 2px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
-  color: #fff;
-  font-family: inherit;
-  transition: border-color .18s;
-  caret-color: #71ff00;
-}
-.otp-digit:focus { outline: none; border-color: #71ff00; background: rgba(113,255,0,0.05); }
-.otp-digit.filled { border-color: rgba(113,255,0,0.5); }
-
+/* The six-digit grid (.otp-row / .otp-digit) is gone — replaced by the single
+   verification field in sokoni-otp.js, which owns its own styling so login,
+   onboarding and provider-onboarding cannot drift apart again. */
 .otp-resend-row {
   text-align: center;
   font-size: 12px;
@@ -550,11 +529,6 @@ body{
   text-decoration: none;
 }
 .otp-resend-row a:hover { color: #71ff00; }
-
-@media (max-width: 380px) {
-  .otp-digit { width: 36px; height: 44px; font-size: 19px; }
-  .otp-row   { gap: 5px; }
-}
 
 /* ══════════════════════════════════════════════════════════════
    TRUST BADGES — inline SVG icons, never emoji
