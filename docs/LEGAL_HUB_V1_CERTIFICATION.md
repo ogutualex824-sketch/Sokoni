@@ -5,6 +5,12 @@
 browser QA (iPhone WebKit + Desktop Chrome), and concurrency attack simulations against the
 Cloud Function logic. Nothing assumed from "it compiles".
 
+> **UPDATE 2026-07-14 (see §9):** L-1 (demo advocates) and L-2 (booking-failure masking) are now
+> **fixed**, and a **new critical finding** — four missing composite indexes that were silently
+> breaking real provider search / booking history / provider dashboard behind the demo fallback —
+> was found and **deployed**. Current status: **READY, pending one coordinated hosting deploy** of
+> the committed `legal-hub.html` fixes. The original verdict below is preserved as the audit trail.
+>
 > ## RECOMMENDATION: **READY WITH MINOR LIMITATIONS**
 > Score **76 / 100.** Every core flow works UI → Cloud Function → Firestore → UI, and the two
 > data-integrity defects found during this pass are fixed and proven. Production deployment is
@@ -139,3 +145,68 @@ against a fake lawyer.
 3. Consolidate the two booking paths (L-3).
 
 Everything else is v1.1. This certifies Legal Hub v1.0 as **stable and complete for its scope.**
+
+---
+
+## 9. Post-certification hardening — 2026-07-14 (P1 closure + a NEW critical finding)
+
+### 9.1 NEW critical finding — missing composite indexes (FIXED)
+
+The certification's live QA "12 cards render on desktop" was the **demo fallback**, not real query
+results. Verifying the **deployed** project directly: only 3 legal composite indexes existed
+(`legalAppointments`, `legalReviews`, `legalServiceRequests`), and **none** of the four the Legal
+Hub queries require. So in production:
+
+- `getLegalProviders` (`status`+`rating`; `status`+`specializations`+`rating`),
+- `getMyLegalConsultations` (`clientUid`+`dateTime`),
+- `getProviderConsultations` (`providerId`+`dateTime`)
+
+were each throwing `FAILED_PRECONDITION`, and the client silently fell back to `DEMO_LAWYERS` —
+so **real provider search, customer booking history, and the provider dashboard were
+non-functional in production**, masked by the demo data. This was invisible to the earlier pass
+because the mask looked like success.
+
+**Fixed:** the 4 definitions were added to `firestore.indexes.json` and deployed **without
+`--force`** (additive only — the 4 pre-existing deployed-only indexes were preserved, not dropped,
+per the never-drop rule). Verified: **7 legal composite indexes now deployed**, including all 4
+required. Commit `3362211`.
+
+### 9.2 L-1 — demo advocates now separated (FIXED)
+
+`DEMO_LAWYERS` carried `verified:true` (rendering a fake "✅ LSK verified" badge) and were fully
+bookable. Now every demo is flagged (`demo:true`, `verified:false`) with an `_isDemoLawyer()`
+detector; the booking modal shows a clear **"Demonstration profile — not a real, bookable
+advocate"** banner, and `confirmConsultation` **refuses** to proceed (no WhatsApp, payment,
+localStorage record, or CF call) with a "real advocates are being onboarded" message. A user can
+no longer believe they booked a real advocate. Commit `179953e`.
+
+### 9.3 L-2 — booking-failure masking (FIXED)
+
+`confirmConsultation` fired `bookLegalConsultation` in a fire-and-forget `catch` and always showed
+success. Now the CF result drives the UI: success confirms "Booked & registered"; **failure
+cancels the modal auto-close, marks the record `sync_failed` (not a silent fake success), states
+plainly the advocate may not see it, and offers a Retry.** `retryLegalBooking` re-runs the **same**
+idempotency key (`ref+'_bk'`) so a retry after a partial success returns the existing consultation
+rather than duplicating it. Commit `179953e`.
+
+### 9.4 Regression (static, against the merged build)
+
+All **8** client CF calls resolve to real deployed exports (`bookLegalConsultation`,
+`getLegalProvider(s)`, `getMyLegalConsultations`, `getProviderConsultations`, `rateLegalProvider`,
+`registerLegalProvider`, `updateConsultationStatus`). The 139 KB script block passes `node --check`.
+The new `sync_failed` status renders safely (both status renderers have safe defaults). Rating,
+cancellation, and dashboard wiring are intact and untouched by these edits. Firestore **rules
+compiled successfully** for both databases during the index deploy — no rule changes needed.
+
+### Revised status: **READY (pending one coordinated hosting deploy)**
+
+L-1, L-2, and the newly-found index gap are closed and proven; the index fix is **already live**.
+The **HTML fixes (§9.2/§9.3) are committed but not yet on hosting** — `legal-hub.html`'s change
+must ride the next hosting deploy, which is deliberately **not** triggered unilaterally because
+several unrelated files (`kass-widget.js`, `auth.js`, `service-worker.js`, …) are under concurrent
+edit by another process; deploying now would ship their in-flight work. Deploy hosting once that
+work settles.
+
+**Still open (unchanged, non-blocking):** L-3 (two booking paths), L-4 (provider self-update),
+L-5 (client-side financial writes), L-6 (in-memory filter pagination) → v1.1. Onboarding real
+advocates (L-1 operator half) remains an operator action.
