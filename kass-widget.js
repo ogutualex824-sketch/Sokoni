@@ -561,7 +561,7 @@
     '    enterkeyhint="send" inputmode="text"',
     '    aria-label="Message input" aria-multiline="true"></textarea>',
     '  <button id="kassSend" aria-label="Send message" disabled>',
-    + _SEND_SVG +
+    _SEND_SVG,
     '  </button>',
     '</div>',
   ].join('');
@@ -613,13 +613,36 @@
     _scroll();
   }
 
+  /* ── Friendly error mapping ──────────────────────────────────── */
+  /* Converts raw browser/WebKit DOMExceptions into human-readable text so users
+     never see cryptic messages like "The string did not match the expected pattern." */
+  function _friendlyMsg(msg) {
+    if (!msg) return 'KASS is temporarily unavailable. Please try again.';
+    /* WebKit DOMException thrown by Safari/iOS when URL construction or
+       history.pushState rejects an argument — surfaces here if fetch() throws
+       synchronously (not as a rejected Promise) and escapes the .catch() path */
+    if (msg === 'The string did not match the expected pattern.') {
+      return 'Could not reach KASS — please check your connection and try again.';
+    }
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError')
+        || msg.includes('Load failed') || msg.includes('Network request failed')) {
+      return 'Could not reach KASS. Please check your internet connection.';
+    }
+    if (msg.includes('AbortError') || msg.includes('cancelled')) {
+      return 'Request timed out — please try again.';
+    }
+    return msg;
+  }
+
   function _addErr(msg) {
     var el = document.createElement('div');
     el.className = 'km err';
     el.setAttribute('role', 'alert');
-    el.textContent = '⚠ ' + msg;
+    el.textContent = '⚠ ' + _friendlyMsg(msg);
     _msgs.appendChild(el);
     _scroll();
+    /* Log raw message for diagnostics without exposing it to users */
+    _dbg('addErr raw:', msg);
   }
 
   function _showTyping() {
@@ -679,25 +702,47 @@
   function _callKass(text) {
     _history.push({ role: 'user', content: text });
     return _getAuthToken().then(function (token) {
-      var ctrl = new AbortController();
-      var tid  = setTimeout(function () { ctrl.abort(); }, 35000);
+      /* AbortController is available in all modern browsers but guard for iOS < 12.1 */
+      var ctrl = null, cSig;
+      try { ctrl = new AbortController(); cSig = ctrl.signal; } catch (_) { cSig = undefined; }
+      var tid  = ctrl ? setTimeout(function () { ctrl.abort(); }, 35000) : null;
       var body = { messages: _history.slice(-20) };
       if (token) body.auth_token = token;
-      return fetch(ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: ctrl.signal,
-      }).then(function (resp) {
-        clearTimeout(tid);
+
+      /* fetch() can throw SYNCHRONOUSLY in Safari iOS when WebKit's internal URL
+         constructor rejects the request arguments (DOMException SYNTAX_ERR,
+         message: "The string did not match the expected pattern.").  The
+         sokoni-validate.js fetch wrapper only catches Promise rejections, so a
+         synchronous throw escapes its .catch() and would reach _addErr() with the
+         raw WebKit message.  Wrapping here catches it at the source and converts it
+         to a rejected Promise so the standard error path produces a friendly message. */
+      var fetchPromise;
+      try {
+        fetchPromise = fetch(ENDPOINT, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify(body),
+          signal:  cSig,
+        });
+      } catch (syncErr) {
+        _dbg('fetch() threw synchronously:', syncErr && syncErr.name, syncErr && syncErr.message,
+             '| origin:', window.location.origin, '| endpoint:', ENDPOINT);
+        if (tid) clearTimeout(tid);
+        _history.pop();
+        return Promise.reject(new Error(_friendlyMsg((syncErr && syncErr.message) || '')));
+      }
+
+      return fetchPromise.then(function (resp) {
+        if (tid) clearTimeout(tid);
         return resp.json().then(function (data) {
           if (!resp.ok) throw new Error(data.error || 'KASS is temporarily unavailable.');
           _history.push({ role: 'assistant', content: data.response || '' });
           return data;
         });
       }).catch(function (err) {
-        clearTimeout(tid);
+        if (tid) clearTimeout(tid);
         _history.pop();
+        _dbg('callKass error:', err && err.name, '|', err && err.message);
         if (err.name === 'AbortError') throw new Error('Request timed out — please try again.');
         throw err;
       });

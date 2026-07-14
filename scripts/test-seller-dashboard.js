@@ -149,7 +149,13 @@ console.log('\nSeller Dashboard — tile interaction\n');
     ? ok('the privacy banner reserves body space — it overlays no tile')
     : bad('the privacy banner is fixed at bottom:0 with no reserved space — it swallows taps on whatever is beneath it');
 
-  /paddingBottom\s*=\s*''/.test(sec)
+  /* Assert the BEHAVIOUR (the space comes back), not the spelling. security.js now sets
+     the padding with `setProperty(..., 'important')` — a plain inline style lost to
+     mobile.css's `!important` body rule — and releases it with removeProperty(). The old
+     regex here pinned the assignment syntax, so a correct fix to the implementation broke
+     the test. A test that only recognises one spelling of the right answer is a test that
+     punishes people for improving the code. */
+  /removeProperty\(\s*['"]padding-bottom['"]\s*\)|paddingBottom\s*=\s*['"]{2}/.test(sec)
     ? ok('the reserved space is released when the banner is dismissed')
     : bad('body padding is never released — a permanent gap after the banner is accepted');
 

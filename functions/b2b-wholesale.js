@@ -329,13 +329,25 @@ const createWholesaleOrder = onCall(CF_OPTIONS, _h.createWholesaleOrder = async 
   }
 
   /* ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ Persist order + ledger entry ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ÃƒÂ¢Ã¢â‚¬ÂÃ¢â€šÂ¬ */
-  const orderId   = _genId('wo');
-  const ledgerId  = _genId('wl');
-  const now       = new Date();
-  const dueDate   = _addDays(now, _termDays(account.paymentTerms));
+  /* ── Persist order + ledger — IDEMPOTENT ──
+     Previously: orderId and ledgerId came from Math.random() (_genId) written with a db.batch().
+     A batch is atomic, not idempotent — a double-tap, refresh or client retry created a SECOND
+     order and a SECOND outstanding-ledger row, billing the buyer twice.
+
+     Now the client supplies an idempotencyKey (one per checkout attempt), the document ids are
+     DERIVED from it, and the write is a transaction that returns the existing order if it is
+     already present. Same key twice -> one order. An older cached client that sends no key falls
+     back to a generated one so it is never rejected; it simply does not gain cross-retry dedup
+     until it updates. */
+  const idemKey  = _san(req.data && req.data.idempotencyKey ? req.data.idempotencyKey : '', 128) || _genId('woidem');
+  const orderId  = 'wo_' + idemKey;
+  const ledgerId = orderId + '_ledger';
+  const now      = new Date();
+  const dueDate  = _addDays(now, _termDays(account.paymentTerms));
 
   const order = {
     orderId,
+    idempotencyKey: idemKey,
     buyerUid:       uid,
     businessName:   account.businessName,
     items:          resolvedItems,
@@ -351,23 +363,30 @@ const createWholesaleOrder = onCall(CF_OPTIONS, _h.createWholesaleOrder = async 
     createdAt:      admin.firestore.FieldValue.serverTimestamp(),
   };
 
-  const batch = db.batch();
-  batch.set(db.collection('wholesaleOrders').doc(orderId), order);
-  batch.set(db.collection('wholesaleLedger').doc(ledgerId), {
-    ledgerId,
-    orderId,
-    buyerUid:  uid,
-    type:      'order',
-    amount:    total,
-    balance:   total,       // outstanding; updated when paid
-    status:    'outstanding',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
-  await batch.commit();
+  const orderRef  = db.collection('wholesaleOrders').doc(orderId);
+  const ledgerRef = db.collection('wholesaleLedger').doc(ledgerId);
 
-  logger.info('wholesale_order_created', { uid, orderId, total, discountPct });
+  const alreadyExisted = await db.runTransaction(async (txn) => {
+    const existing = await txn.get(orderRef);
+    if (existing.exists) return true;          /* same key already placed this order — no-op */
+    txn.set(orderRef, order);
+    txn.set(ledgerRef, {
+      ledgerId,
+      orderId,
+      buyerUid:  uid,
+      type:      'order',
+      amount:    total,
+      balance:   total,       // outstanding; updated when paid
+      status:    'outstanding',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    return false;
+  });
+
+  logger.info('wholesale_order_created', { uid, orderId, total, discountPct, idempotent: alreadyExisted });
   return {
     success: true,
+    idempotent: alreadyExisted,
     orderId,
     subtotal,
     discountPct,

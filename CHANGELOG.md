@@ -1,4 +1,64 @@
-﻿## [2026-07-14] — Legal Hub v2.0 — Production Integration & Foundation Removal
+﻿## [2026-07-14] — KASS Widget P0 Bug Fix — Safari iOS "The string did not match the expected pattern."
+
+### Summary
+
+Root-cause fixed for a P0 production bug where the KASS AI widget was displaying the raw WebKit DOMException message "The string did not match the expected pattern." to users. Two bugs fixed in one pass.
+
+### Root Cause
+
+**Bug 1 — Send button rendered "NaN  " instead of SVG icon (`kass-widget.js:564`)**
+
+```js
+// BEFORE (broken):
+'  <button id="kassSend" ...>',
++ _SEND_SVG +      // unary + converts SVG string to NaN; result: 'NaN  </button>'
+'  </button>',
+
+// AFTER (fixed):
+'  <button id="kassSend" ...>',
+_SEND_SVG,         // proper array element — SVG string inserted correctly
+'  </button>',
+```
+
+`+ _SEND_SVG +` inside a JS array literal applied the unary `+` operator to the SVG string, coercing it to `NaN`. The send button displayed the text "NaN" on first open instead of the arrow icon.
+
+**Bug 2 — `fetch()` synchronous throw escaped into `_addErr()` with raw WebKit message**
+
+`sokoni-validate.js` monkey-patches `global.fetch` and only attaches a `.catch()` to handle Promise rejections. In Safari iOS (standalone PWA and browser), `fetch()` can throw **synchronously** with `DOMException: The string did not match the expected pattern.` when WebKit's internal URL constructor or AbortSignal handling rejects a request parameter. A synchronous throw is NOT caught by a Promise `.catch()`, so it propagated directly up to `_callKass()`'s outer `.catch()` and was passed to `_addErr(err.message)`, which displayed the raw WebKit message.
+
+Additionally, `new AbortController()` is unavailable in iOS < 12.1 and could throw `ReferenceError`.
+
+### Fixes Applied
+
+| File | Change |
+|---|---|
+| `kass-widget.js` | Fixed `+ _SEND_SVG +` → `, _SEND_SVG,` in modal innerHTML array |
+| `kass-widget.js` | Added `_friendlyMsg()` mapping WebKit DOMExceptions to user-readable text |
+| `kass-widget.js` | Wrapped `fetch()` call in `try/catch` to catch synchronous throws; emits diagnostic via `_dbg()` |
+| `kass-widget.js` | Guarded `new AbortController()` in `try/catch` for iOS < 12.1 compatibility |
+| `kass-widget.js` | `_addErr()` now routes message through `_friendlyMsg()` before display |
+| `service-worker.js` | Bumped cache version `v71 → v72` to force re-fetch of updated `kass-widget.js` on all devices |
+
+### Diagnostic Capability
+
+When `?kassdebug=1` is appended to any page URL (or `localStorage.setItem('kassDebug','1')` is set), the widget emits `console.warn('[KASS auth] fetch() threw synchronously: ... | origin: ... | endpoint: ...')` via `_dbg()`. Use Safari Remote Inspector (Mac + iPhone cable) or Android DevTools remote debugging to capture this on-device.
+
+### Verification Checklist
+
+- [ ] iPhone Safari: open KASS widget, tap a suggestion chip — friendly error or successful response
+- [ ] Installed iOS PWA (standalone): same test — no raw DOMException visible
+- [ ] Android Chrome: send a message — no raw error
+- [ ] Desktop Chrome: send a message — no raw error
+- [ ] Desktop Edge: send a message — no raw error
+- [ ] Send button shows arrow SVG icon (not "NaN" text) on first open
+
+### Security Implications
+
+No security impact. Error messages are now less specific, which is a marginal improvement (raw WebKit errors can expose internal paths/state to the console).
+
+---
+
+## [2026-07-14] — Legal Hub v2.0 — Production Integration & Foundation Removal
 
 ### Summary
 

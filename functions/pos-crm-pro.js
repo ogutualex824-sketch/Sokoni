@@ -221,29 +221,40 @@ exports.refundToWallet = onCall(_CF, exports._h.posRefundToWallet = async (req) 
   const safeAmount = _validateAmount(amount);
   const walletId   = _walletId(sellerId, normPhone);
 
-  const batch = db.batch();
+  /* ── IDEMPOTENT refund ──
+       Previously this used db.batch() with _INC() and an auto-id .doc() — atomic, but NOT
+       idempotent. A manager tapping "Refund" twice, or a retried call, CREDITED THE WALLET
+       TWICE with two orphan transaction rows. deductWallet gets this right; the refund path did
+       not inherit it. It is now keyed (client idempotencyKey, else the original sale id) and
+       written inside a transaction that skips a repeat — deductWallet's exact pattern. */
+    const refundKey = (String(req.data.idempotencyKey || req.data.originalSaleId || saleId || '')
+      .replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100))
+      || (Date.now().toString(36) + '_' + auth.uid);   /* Firestore-id-safe, non-empty */
+    const walletRef = db.collection('posWallets').doc(walletId);
+    const txDocRef  = db.collection('posWalletTransactions')
+      .doc(sellerId + '_' + normPhone + '_' + refundKey + '_refund');
 
-  const walletRef = db.collection('posWallets').doc(walletId);
-  batch.set(
-    walletRef,
-    { sellerId, phone: normPhone, balance: _INC(safeAmount), updatedAt: _TS() },
-    { merge: true }
-  );
+    const applied = await db.runTransaction(async (tx) => {
+      const txSnap = await tx.get(txDocRef);
+      if (txSnap.exists) return false;   /* already refunded under this key — idempotent no-op */
+      tx.set(walletRef,
+        { sellerId, phone: normPhone, balance: _INC(safeAmount), updatedAt: _TS() },
+        { merge: true });
+      tx.set(txDocRef, {
+        sellerId,
+        phone:          normPhone,
+        type:           'refund',
+        amount:         safeAmount,
+        saleId:         saleId || req.data.originalSaleId || null,
+        idempotencyKey: refundKey,
+        reason:         reason || null,
+        performedBy:    auth.uid,
+        createdAt:      _TS(),
+      });
+      return true;
+    });
 
-  const txRef = db.collection('posWalletTransactions').doc();
-  batch.set(txRef, {
-    sellerId,
-    phone: normPhone,
-    type: 'refund',
-    amount: safeAmount,
-    saleId: saleId || null,
-    reason: reason || null,
-    performedBy: auth.uid,
-    createdAt: _TS(),
-  });
-
-  await batch.commit();
-  return { ok: true, refunded: safeAmount };
+    return { ok: true, refunded: safeAmount, idempotent: !applied };
 });
 
 /**

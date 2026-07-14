@@ -38,7 +38,25 @@
      Every colour resolves through a CSS var with a fallback, so each page's own
      premium theme (--acc / --sk-accent) drives it and page CSS can still override. */
   var CSS = [
-    '.sk-otp{position:relative}',
+    /* Four stylesheets carry a global iOS-zoom guard on inputs. The strongest is
+       sokoni-premium-v2.css:
+
+         input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"])
+           { font-size: max(16px, 1em) !important }
+
+       Every :not() contributes its argument's specificity, so that selector scores (0,4,1)
+       WITH !important — it outranks any class-based rule this component could reasonably
+       write, and the field would render at a flat 16px with no tracking. The font-size is
+       therefore applied inline with priority at mount (see setFont); an inline !important
+       is the one thing a stylesheet !important cannot outrank, and it ends the arms race
+       instead of escalating it.
+
+       The guard's PURPOSE is preserved: it exists to stop iOS zooming the viewport when a
+       sub-16px field takes focus, and 24px is well above that 16px floor.
+
+       --sk-otp-fs keeps the size responsive — the media query below moves the variable,
+       and the inline declaration reads through to it. */
+    '.sk-otp{position:relative;--sk-otp-fs:24px}',
     '.sk-otp-in{',
     /* 16px minimum, or iOS Safari zooms the viewport on focus. 24px here because a
        verification code is the one thing the user is reading back off a lock screen. */
@@ -71,7 +89,8 @@
     '  margin:7px 2px 0;font-size:11px;line-height:1.4;',
     '  color:var(--muted,rgba(255,255,255,.38));text-align:center;',
     '}',
-    '@media (max-width:360px){.sk-otp-in{font-size:21px;letter-spacing:.3em;text-indent:.3em}}',
+    /* Still above the 16px no-zoom floor on the narrowest phones. */
+    '@media (max-width:360px){.sk-otp{--sk-otp-fs:21px}.sk-otp-in{letter-spacing:.3em;text-indent:.3em}}',
   ].join('');
 
   function injectCss() {
@@ -125,6 +144,10 @@
     hint.textContent = opts.hint || 'Paste the code, or tap the suggestion above your keyboard.';
     /* Announce "code complete" / errors without stealing focus from the field. */
     hint.setAttribute('aria-live', 'polite');
+
+    /* The only declaration a stylesheet !important cannot beat. See the note on the
+       zoom-guard rules above. Reads --sk-otp-fs so the media query still drives it. */
+    input.style.setProperty('font-size', 'var(--sk-otp-fs, 24px)', 'important');
 
     wrap.appendChild(input);
     wrap.appendChild(hint);

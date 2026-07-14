@@ -1722,6 +1722,16 @@ async function submitOrder() {
   const discount = subtotal * (discPct / 100);
   const total    = subtotal - discount;
 
+  /* One idempotency key per order attempt. Held across a failed-and-retried submit so the
+     server dedupes a re-send whose first response was lost; cleared on success so the next
+     order gets a fresh key. Without this a double-tap or a lost-response retry created a
+     duplicate order and a duplicate ledger entry (billed twice). */
+  if (!window._wpOrderIdemKey) {
+    window._wpOrderIdemKey = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'wo' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+  }
+
   try {
     const result = await callCF('createWholesaleOrder', {
       items,
@@ -1729,8 +1739,10 @@ async function submitOrder() {
       subtotal,
       discountPercent: discPct,
       discountAmount: discount,
-      total
+      total,
+      idempotencyKey: window._wpOrderIdemKey
     });
+    window._wpOrderIdemKey = null;   /* success — next order starts a new attempt */
 
     msgEl.style.color = 'var(--green)';
     msgEl.textContent = 'Order ' + escHtml(result.orderId || result.id || '') + ' submitted successfully!';
