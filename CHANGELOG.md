@@ -1,4 +1,145 @@
-﻿## [2026-07-13] — KASS Widget v3.0 — Premium AI Chat Polish Sprint
+﻿## [2026-07-14] — Legal Hub v2.0 — Production Integration & Foundation Removal
+
+### Summary
+
+Two workstreams in one deploy:
+
+1. **Foundation removal** — SOKONI Foundation page, backend, routes, navigation entries, event constants, and every related reference removed from 14 files. Zero dead code remains in the production build.
+
+2. **Legal Hub production wiring** — Legal Hub HTML (`legal-hub.html`) upgraded from localStorage-demo to full backend integration. All mocked/localStorage-only flows now call deployed Cloud Functions or Firestore directly. Provider directory, consultation booking, availability, commission tracking, review submission, Pro Dashboard auth, and appointment management are all live.
+
+### Foundation Removal
+
+| File | Change |
+|---|---|
+| `foundation.html` | **Deleted** |
+| `functions/foundation.js` | **Deleted** |
+| `functions/commerce-dispatch.js` | Removed `foundation` require and export |
+| `functions/index.js` | Removed Foundation CF exports |
+| `functions/platform-event-bus.js` | Removed `DONATION_RECEIVED`, `PROJECT_FUNDED` event constants |
+| `functions/release-readiness.js` | Removed Foundation readiness check |
+| `service-worker.js` | Removed `/foundation` route |
+| `about.html` | Removed Foundation footer link |
+| `contact.html` | Removed Foundation footer link |
+| `banking.html` | Removed Foundation section (donation form, JS) |
+| `nav-active.js` | Removed `'foundation.html': 'profile.html'` mapping |
+| `splash.js` | Removed `'foundation.html': 'Impact Beyond Commerce.'` tagline |
+| `scripts/verify-architecture.js` | Removed `'foundation'` from commerceDispatch expected modules |
+| `vision-2030.html` | Removed `foundation.html` from pages list |
+
+### Legal Hub — Integrations Completed
+
+| Flow | Before | After |
+|---|---|---|
+| Provider directory | localStorage only | `getLegalProviders` CF — real provider docs from `legalProviders` collection |
+| Provider registration | localStorage only | `registerLegalProvider` CF with Firebase Auth requirement |
+| Application status check | Always "Pending LSK Verification" | Reads `legalProviders/{uid}` directly from Firestore; shows real status (active / pending_review / suspended) |
+| Consultation booking | localStorage only | `bookLegalConsultation` CF — stored in `legalConsultations` with idempotency |
+| My appointments | localStorage only | Merges with `getMyLegalConsultations` CF — CF status is authoritative |
+| Cancel appointment | localStorage only | Calls `updateConsultationStatus` CF when consultationId present |
+| Pro Dashboard login | LSK number matching | Firebase Auth UID + `getLegalProvider` CF verification |
+| Pro Dashboard consultations | localStorage only | `getProviderConsultations` CF — live from Firestore |
+| Pro confirm / cancel appt | localStorage only | `updateConsultationStatus` CF |
+| Provider availability | localStorage only | Writes to `availabilityStatus/{uid}` Firestore collection |
+| Commission tracking | localStorage only | Writes to `legalCommissions/{commRef}` Firestore collection |
+| Review submission | `legalReviews` addDoc | `rateLegalProvider` CF (with consultationId); falls back to legacy write |
+
+### Additional Integrations
+
+| Flow | Before | After |
+|---|---|---|
+| Generated legal documents | Download only | Also saved to `legalDocDrafts/{uid}_{docId}` Firestore on download |
+| Client dashboard upcoming | localStorage only | CF hydration via `getMyLegalConsultations` — async update after localStorage render |
+| Admin provider approval | No UI | `legal-admin.html` — Provider Applications section with Firestore query + approve/reject via `approveLegalProvider` CF |
+
+### Firestore Rule Changes
+
+| Collection | Change |
+|---|---|
+| `legalProviders/{providerId}` | Added self-read: `\|\| (isAuthed() && request.auth.uid == providerId)` |
+| `availabilityStatus/{uid}` | Added `allow write: if isAuthed() && request.auth.uid == uid` |
+| `legalCommissions/{commId}` | New rule — provider create own records, admin full access |
+| `legalDocDrafts/{draftId}` | New rule — user CRUD of own drafts; content size capped at 100KB |
+
+### Security
+
+- Pro Dashboard no longer accepts LSK number as auth — requires Firebase Auth UID matching a `legalProviders` document
+- `cancelAppointment` calls `updateConsultationStatus` CF when cancelling CF-booked consultations — status change is server-authorised
+- `legalProviders` self-read: providers can check their own document status without being able to modify it (write remains CF-only)
+- `legalCommissions` write rule enforces `providerUid == request.auth.uid`, required fields, numeric types — prevents crafted commission inflation
+
+### Files Modified
+
+`legal-hub.html`, `legal-admin.html`, `firestore.rules`, `functions/email-triggers.js`, `functions/email-templates.js`, `functions/index.js`, `functions/commerce-dispatch.js`, `functions/platform-event-bus.js`, `functions/release-readiness.js`, `service-worker.js`, `about.html`, `contact.html`, `banking.html`, `nav-active.js`, `splash.js`, `scripts/verify-architecture.js`, `vision-2030.html`
+
+### Migration Steps
+
+1. Deploy Firestore rules (already included in this deploy)
+2. Deploy Cloud Functions: `registerLegalProvider`, `approveLegalProvider`, `getLegalProviders`, `getLegalProvider`, `bookLegalConsultation`, `getMyLegalConsultations`, `getProviderConsultations`, `updateConsultationStatus`, `rateLegalProvider`, `emailOnLegalConsultation`
+3. Deploy hosting
+
+---
+
+## [2026-07-14] — Enterprise Financial Integrity Sprint — Wallet & POS Hardening
+
+### Summary
+
+Forensic audit and remediation of all wallet financial integrity gaps discovered during code-freeze OAT. No new features. Zero schema migrations. All fixes are backward-compatible. Impacts: POS wallet payments now actually debit balances, wholesale and referral wallet ledger entries are idempotent and queryable, Firestore rules make write-deny intent explicit.
+
+### Root Cause Analysis
+
+**P0-1 — `posCompleteCheckout` silent wallet no-op (Critical)**
+`posCompleteCheckout` in `pos-zero-friction.js` accepted a `payments[]` array entry with `method: 'wallet'` but contained zero references to `posWallets` or `posWalletTransactions`. Customers paying by POS wallet received goods while their wallet balance was never decremented. The separate `deductWallet` CF existed but was never called from the checkout path.
+
+**P0-2 — `deductWallet` double-deduction risk (Critical)**
+`deductWallet` (pos-crm-pro.js) used `db.collection('posWalletTransactions').doc()` — a random auto-ID. A network retry after partial commit would create a second transaction record and deduct the balance twice. No idempotency guard existed.
+
+**P1-1 — `processWholesalePayment` random wallet tx ID (High)**
+`b2b-wholesale.js` line 571 used `_genId('wtx')` (random) for the `walletTransactions` ledger entry. A CF retry would create a duplicate deduction record, making reconciliation impossible.
+
+**P1-2 — `processReferralOnOrderComplete` wallet array growth (High)**
+`referral.js` wrote referral bonuses into `wallets/{uid}.transactions[]` via `arrayUnion`. This is invisible to the `walletTransactions` collection, unbounded in size (Firestore document 1MB limit), and cannot be queried independently. AT-LEAST-ONCE trigger delivery meant retries would also double-credit the balance (two runs, same `currentBalance` read, both add bonus).
+
+**P2-1 — Implicit write-deny on `walletTransactions` (Hardening)**
+`walletTransactions` collection only declared read rules; write-deny was implicit. Explicit declaration documents intent.
+
+### Files Modified
+
+| File | Change |
+|---|---|
+| `functions/pos-zero-friction.js` | Added wallet payment pre-validation + atomic deduction inside `posCompleteCheckout` Firestore transaction |
+| `functions/pos-crm-pro.js` | Fixed `deductWallet` — deterministic txId `${sellerId}_${normPhone}_${saleId}_deduct`, added idempotency guard at transaction start |
+| `functions/b2b-wholesale.js` | Fixed `processWholesalePayment` — deterministic walletTransactions ID `${uid}_${orderId}_wholesale` |
+| `functions/referral.js` | Fixed `processReferralOnOrderComplete` — writes to `walletTransactions/{ref_orderId}` collection; uses `FieldValue.increment` for safe concurrent balance updates; idempotency guard on `wtxSnap.exists` |
+| `firestore.rules` | Added explicit `allow write: if false` to `walletTransactions` collection |
+
+### Database Changes
+
+No schema migrations. New fields written to existing collections:
+
+- `posWalletTransactions/{idempotencyKey}_wallet` — new doc created by `posCompleteCheckout` for wallet-method POS sales. Fields: `sellerId`, `phone`, `type: 'pos_purchase'`, `amount` (negative), `saleId`, `idempotencyKey`, `createdAt`
+- `walletTransactions/ref_{orderId}` — referral bonus now written here instead of embedded in `wallets/{uid}.transactions[]`. Fields: `uid`, `type: 'referral_reward'`, `amount`, `currency`, `description`, `orderId`, `createdAt`, `status`
+- Existing `wallets/{uid}.transactions[]` arrays are not backfilled (legacy data only). No reads of this field exist in production code.
+
+### Security Implications
+
+- Wallet deduction is now inside the same Firestore transaction as inventory deduction — inventory and balance are atomically consistent
+- Idempotency keys derived from checkout `idempotencyKey` and `saleId` — same checkout cannot double-debit
+- `walletTransactions` write-deny now explicit — defense in depth against client-side writes
+
+### Breaking Changes
+
+None. The `payments[]` wallet entry format (`{ method: 'wallet', amount, customerId }`) is unchanged. Existing POS clients that do not send wallet payments are unaffected.
+
+### Migration Steps
+
+1. Deploy Cloud Functions (`posCompleteCheckout`, `smartPosDispatch`, `servicesDispatch`, `processReferralOnOrderComplete`)
+2. Deploy Firestore rules
+3. No data backfill required
+
+---
+
+## [2026-07-13] — KASS Widget v3.0 — Premium AI Chat Polish Sprint
 
 ### Summary
 
