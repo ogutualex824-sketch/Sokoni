@@ -35,7 +35,7 @@ const DISPATCHERS = {
   adminOsDispatch:       ['admin-os'],
   analyticsDispatch:     ['analytics-engine'],
   bookingDispatch:       ['booking', 'venue-booking', 'availability'],
-  commerceDispatch:      ['marketplace-extensions', 'merchant-success', 'foundation', 'marketing-engine'],
+  commerceDispatch:      ['marketplace-extensions', 'merchant-success', 'marketing-engine'],
   loyaltyDispatch:       ['loyalty', 'loyalty-enterprise'],
   messagesDispatch:      ['messages'],
   servicesDispatch:      ['healthcare-hub', 'security-identity', 'jobs', 'hr-payroll', 'b2b-wholesale', 'property-hub'],

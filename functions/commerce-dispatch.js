@@ -1,22 +1,19 @@
-'use strict';
+﻿'use strict';
 /**
  * SOKONI Commerce Dispatcher â€” 75 onCall CFs â†’ 1 Cloud Run service.
  *
  * Modules merged:
  *   marketplace-extensions.js â€” 30 handlers  (auctions, rentals, digital products, Q&A, SEO â€¦)
  *   merchant-success.js       â€” 17 handlers  (dashboard, AI coach, CRM, financials, campaigns â€¦)
- *   foundation.js             â€” 17 handlers  (charitable giving, donations, campaigns, admin â€¦)
  *   marketing-engine.js       â€” 11 handlers  (bundles, flash sales, cross-sell, coupons, A/B â€¦)
  *
  * Cloud Run reduction: 75 â†’ 1.
  *
  * Secrets bundled:
- *   INTASEND_PRIVATE_KEY â€” foundation.js donation STK push
- *   SENDGRID_API_KEY     â€” foundation.js email receipts
  *   ANTHROPIC_API_KEY    â€” merchant-success.js AI coach + marketing-engine.js recommendations
  *
  * Scheduled CFs remain individual in index.js:
- *   auctionCloseSweep, seoGetSitemap (onRequest), foundationScheduledRecurring,
+ *   auctionCloseSweep, seoGetSitemap (onRequest)
  *   concludeExpiredFlashSales
  */
 
@@ -29,7 +26,6 @@ const ANTHROPIC_API_KEY    = defineSecret('ANTHROPIC_API_KEY');
 
 const mktExt        = require('./marketplace-extensions');
 const merchantSuccess = require('./merchant-success');
-const foundation    = require('./foundation');
 const marketingEng  = require('./marketing-engine');
 
 function _merge() {
@@ -45,7 +41,6 @@ function _merge() {
 const _H = _merge(
   mktExt._h,
   merchantSuccess._h,
-  foundation._h,
   marketingEng._h
 );
 

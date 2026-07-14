@@ -158,7 +158,6 @@
     'business-os.html':        'profile.html',
 
     /* ── Misc / Informational ──────────────────────────── */
-    'foundation.html':         'profile.html',
     'inspiq.html':             'category.html',
     'ride-book.html':          'services.html',
     'test-accounts.html':      'profile.html',

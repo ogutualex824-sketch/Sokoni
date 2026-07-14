@@ -87,9 +87,6 @@ const EVENT_TYPES = {
   /* Reviews */
   REVIEW_ADDED:            'review.review.added',
   REVIEW_FLAGGED:          'review.review.flagged',
-  /* Foundation */
-  DONATION_RECEIVED:       'foundation.donation.received',
-  PROJECT_FUNDED:          'foundation.project.funded',
   /* Users */
   USER_REGISTERED:         'user.account.registered',
   USER_VERIFIED:           'user.account.verified',

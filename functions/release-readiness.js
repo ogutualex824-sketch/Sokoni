@@ -748,24 +748,7 @@ async function _checkPlatformModulesInternal() {
     }
   }
 
-  /* 6. Foundation module — campaigns collection readable */
-  try {
-    await db.collection('campaigns').limit(1).get();
-    details.push({
-      item:    'Foundation module',
-      status:  'pass',
-      message: 'campaigns collection readable — foundation module operational',
-    });
-  } catch (err) {
-    details.push({
-      item:    'Foundation module',
-      status:  'warning',
-      message: `campaigns collection not accessible: ${err.message}`,
-    });
-    warnings.push('Foundation module (campaigns) accessibility check failed');
-  }
-
-  /* 7. AI availability — ANTHROPIC_API_KEY must be set for AI features */
+  /* 6. AI availability — ANTHROPIC_API_KEY must be set for AI features */
   const aiAvailable = !!_ANTHROPIC_KEY.value();
   details.push({
     item:    'AI availability',

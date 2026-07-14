@@ -153,7 +153,6 @@
     'about.html':               "Kenya's Digital Backbone.",
     'careers.html':             'Build the Future With Us.',
     'contact.html':             "We'd Love to Hear From You.",
-    'foundation.html':          'Impact Beyond Commerce.',
     'franchise.html':           'Grow With SOKONI.',
     'gip.html':                 'Geo Intelligence Platform.',
     'inspiq.html':              'Insights That Inspire.',
