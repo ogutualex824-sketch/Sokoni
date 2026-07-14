@@ -5,11 +5,14 @@
 browser QA (iPhone WebKit + Desktop Chrome), and concurrency attack simulations against the
 Cloud Function logic. Nothing assumed from "it compiles".
 
-> **UPDATE 2026-07-14 (see §9):** L-1 (demo advocates) and L-2 (booking-failure masking) are now
-> **fixed**, and a **new critical finding** — four missing composite indexes that were silently
-> breaking real provider search / booking history / provider dashboard behind the demo fallback —
-> was found and **deployed**. Current status: **READY, pending one coordinated hosting deploy** of
-> the committed `legal-hub.html` fixes. The original verdict below is preserved as the audit trail.
+> **UPDATE 2026-07-14 (see §9 and §10):** L-1 (demo advocates) and L-2 (booking-failure masking)
+> are **fixed**; four missing composite indexes (silently breaking real provider search / history /
+> dashboard behind the demo fallback) were found and **deployed**; and the **coordinated hosting
+> deploy is now DONE and live-verified** (`/legal-hub` serves the P1 fixes on `mysokoni.co.ke` and
+> `web.app`; hosting == HEAD `76d21a7`). **Readiness 86/100 — READY FOR PHASE 0 PILOT.** Full
+> production certification is withheld pending the two gates that need inputs outside engineering:
+> real-advocate onboarding + interactive/real-device lifecycle & auth testing (§10.3). The original
+> verdict below is preserved as the audit trail.
 >
 > ## RECOMMENDATION: **READY WITH MINOR LIMITATIONS**
 > Score **76 / 100.** Every core flow works UI → Cloud Function → Firestore → UI, and the two
@@ -210,3 +213,63 @@ work settles.
 **Still open (unchanged, non-blocking):** L-3 (two booking paths), L-4 (provider self-update),
 L-5 (client-side financial writes), L-6 (in-memory filter pagination) → v1.1. Onboarding real
 advocates (L-1 operator half) remains an operator action.
+
+---
+
+## 10. Coordinated release + integration validation — 2026-07-14
+
+### 10.1 Coordinated hosting deploy — DONE and LIVE-verified
+
+Phase 1 gate before deploy: working tree **clean** (the parallel process's KASS/auth/onboarding
+work was committed — `2a938c9`, `76d21a7`), **0** real merge-conflict markers, Legal Hub P1 intact
+in HEAD (3 `_isDemoLawyer` markers). Nothing uncommitted to accidentally ship. Deployed HEAD
+`76d21a7`: `firebase deploy --only hosting` → **"Deploy complete!"** (3488 files, version
+finalized + released).
+
+**Live verification** (against the deployed app, following `cleanUrls` redirects):
+`https://mysokoni.co.ke/legal-hub` and `https://sokoni-aeb26.web.app/legal-hub` both serve the
+full 325,779-byte page with `_isDemoLawyer`=**3**, the "Demonstration profile" banner=**1**, and
+`retryLegalBooking`=**5**. Cloudflare already serves the fresh copy (matches `web.app`). Post-deploy
+smoke: `/`, `/login`, `/legal-hub`, `/pos-crm-pro`, `/checkout`, `/seller`, `/wallet` all **200**;
+SW live `sokoni-20260714-pos-router-v74`. **Hosting == HEAD.** *(Verification note: `/legal-hub.html`
+returns a 25-byte `cleanUrls` redirect stub — the correct URL to test is the extensionless
+`/legal-hub`.)*
+
+### 10.2 Phased validation — classification (Implemented / Deployed / Verified / Pending)
+
+| Phase | Item | Status | Evidence |
+|---|---|---|---|
+| **2** Provider discovery (browse/search/filter/profile/availability) with **real accounts** | **PENDING** | No real advocates onboarded (L-1); cannot validate against production data. **Not** substituting demo profiles (per instruction). Requires operator onboarding + interactive test |
+| **2** Booking create / confirm / failure / retry / cancel with **real accounts** | **PENDING** | Backend deployed + code-verified; live interactive run needs a real provider + browser session |
+| **2** Customer & provider dashboards with **real accounts** | **PENDING** | Queries deployed + indexed; live run needs real consultations |
+| **3** Idempotency prevents duplicate bookings | **VERIFIED (code)** | `legal-hub.js:159` deterministic `lc_<idempotencyKey>`; all reads then writes in one `runTransaction`; `idemSnap.exists`/`consultSnap.exists` → returns existing. Emulator attack 7/7 (§1) |
+| **3** Retry returns existing consultation; no duplicate docs | **VERIFIED (code)** | `retryLegalBooking` reuses `ref+'_bk'` → same `consultId` → CF returns existing |
+| **3** No duplicate payment / notification / audit | **VERIFIED (code)** | one consultation doc (deterministic id) → one onCreate email trigger (idempotent `emailId`); deposit STK guarded by the payment engine's own idempotency |
+| **4** Legal uses the ONE commission engine @ 5% | **VERIFIED (code)** | `finos-router.js:178` `calculateCommission(db, …)`; `commission-config.js:50` `legal: { pct: 5 }` |
+| **4** Escrow / settlement / refund model shared | **VERIFIED (code)** | routes through `finos-router` / `releaseEscrow` (charge-nothing, fail-closed) — same as platform |
+| **5** Email / in-app notifications wired; failures never shown as success | **VERIFIED (code + live)** | `email-triggers.js` + `index.js` legal email CFs; P1 fix (now LIVE) surfaces `sync_failed` + Retry instead of false success |
+| **5** Push / SMS | **PENDING (config)** | depend on FCM token + SMS provider secrets; not exercised here |
+| **6** Demo providers cannot be mistaken for real / cannot book | **VERIFIED (live)** | banner + `confirmConsultation` demo block deployed and confirmed in the served page |
+| **6** Rules enforce CF-only writes + ownership | **VERIFIED** | `legalProviders`/`legalConsultations` `write: if false`; `legalConsultIdempotency` fully locked; drafts owner-only; rules compiled OK on deploy |
+| **6** Audit logging on critical actions | **VERIFIED (code)** | `legalAuditLog` on acceptance/engine actions; booking emails idempotent |
+| **7** Production cleanup | **DONE (reviewed)** | `legal-hub.js` clean of debug artifacts; one dev banner `console.log` at `legal-hub.html:5077` ("Crash-fix… applied") — **neutralized in production** (`sokoni-ui.js` nulls `console.log`), left in place to preserve the just-achieved hosting==HEAD consistency; rides the next coordinated deploy. All 25 `console.warn` are intentional error diagnostics, **retained** |
+
+### 10.3 Production readiness — **86 / 100** (Phase-0-pilot ready; not GA)
+
+Up from 76. The coordinated deploy is done and live-verified, the four missing indexes are fixed,
+and booking integrity, commission wiring, rules, and demo safeguards are verified. The remaining
+**14 points are the two gates that require inputs outside engineering**: (a) **real advocate
+onboarding** so the full consultation lifecycle can be validated against production data, and
+(b) **interactive/real-device execution** of that lifecycle and Google Sign-In. Per the sprint's
+own preconditions, **full production certification is withheld** until those live, real-account
+tests pass — this is a *provisional* certification of everything verifiable without them.
+
+### 10.4 Recommendation
+
+**READY FOR PHASE 0 PILOT** (as part of the platform), with two explicit pre-GA tasks:
+1. Onboard ≥1 real advocate and run the Phase 2 lifecycle end-to-end against the deployed app
+   (discovery → booking → confirm/fail/retry → dashboards → rating → notifications).
+2. Complete real-device authentication testing (see `RELEASE_PACKAGE_PHASE0.md` §3.1).
+
+The finding that four missing indexes were masked by demo fallback stands as the governing lesson:
+**real-data validation is the source of truth** — do not certify the lifecycle on demo data.
