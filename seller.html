@@ -3922,8 +3922,15 @@ function mobilePhotoZoneUpdate(input) {
 window.mobilePhotoZoneUpdate = mobilePhotoZoneUpdate;
 
 /* ══ INLINE showDashPage FALLBACK ══
-   Ensures sidebar nav works immediately — seller.js module overwrites this
-   with the full version once loaded.                                        */
+   The RESILIENCE path, not the real router: it exists only so the sidebar still works if
+   seller.js fails to load. seller.js is deferred, so it runs after every inline script and
+   its definition is the one that actually serves users.
+
+   This map and DASH_PAGES in seller.js must therefore stay in step. They drifted once
+   already — this fallback knew 'pos', the real router did not, and the POS/Cashier button
+   silently rendered Overview for everyone. scripts/test-seller-dashboard.js now fails the
+   build if the two maps' keys diverge, or if any showDashPage() call site names a page
+   that either map lacks. */
 if(typeof window.showDashPage !== 'function') {
   (function(){
     var PAGES = {
@@ -3942,6 +3949,7 @@ if(typeof window.showDashPage !== 'function') {
       team:      ['employees-section','verify-section','restock-section'],
       disputes:  ['disputes-section'],
       pos:       ['pos-section'],
+      flash:     ['flash-section'],
     };
     var ALL = ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','disputes-section','pos-section'];
     window.showDashPage = function(page, navEl) {
@@ -4156,16 +4164,10 @@ window.submitDisputeResponse = submitDisputeResponse;
 window.showDisputeReplyForm  = showDisputeReplyForm;
 window.hideDisputeReplyForm  = hideDisputeReplyForm;
 
-/* Auto-load disputes when the section first becomes visible */
-(function() {
-  var _origShow = window.showDashPage;
-  window.showDashPage = function(page, navEl) {
-    if (typeof _origShow === 'function') _origShow(page, navEl);
-    if (page === 'disputes') {
-      setTimeout(loadSellerDisputes, 80);
-    }
-  };
-})();
+/* The disputes lazy-load used to be bolted on here by wrapping window.showDashPage. That
+   wrapper was dead code: seller.js is deferred, so it replaced this wrapper wholesale a
+   moment later — and seller.js already lazy-loads disputes itself (see showDashPage there).
+   Removed. One router, one owner. */
 </script>
 
   <!-- NOTIFICATIONS -->
@@ -4602,7 +4604,15 @@ class="notification-container"
     display: flex !important;
     position: fixed;
     bottom: 0; left: 0; right: 0;
-    height: 60px;
+    /* The safe-area inset must EXTEND the bar, not eat it.
+       style.css sets `* { box-sizing: border-box }` globally, so with a flat
+       `height: 60px` the home-indicator padding is subtracted from the 60px rather than
+       added to it: on an iPhone with a 34px inset the bar stayed 60px tall and the tabs
+       were crushed into the remaining 26px — well under the 44px touch minimum, and the
+       Safari home bar sat over them. Adding the inset to the height keeps the CONTENT box
+       at a full 60px and pushes the bar's background down behind the home indicator, which
+       is what the inset is for. env() resolves to 0 on desktop, so this is a no-op there. */
+    height: calc(60px + env(safe-area-inset-bottom, 0px));
     background: rgba(6,6,6,0.97);
     border-top: 1px solid rgba(113,255,0,0.22);
     backdrop-filter: blur(20px);
@@ -4978,115 +4988,18 @@ class="notification-container"
 </script>
 
 <script>
-/* ══ DESKTOP DASHBOARD NAV — showDashPage() ══
-   Called by sidebar <li> items. Maps sidebar label → data-sdtab groups.
-   On mobile this is a no-op (sdSwitchTab handles it).               */
-(function(){
-  /* sidebar name → data-sdtab values to reveal */
-  var TAB_MAP = {
-    overview:  ['home'],
-    products:  ['products'],
-    analytics: ['analyse'],
-    orders:    ['orders'],
-    customers: null,   /* show specific section only */
-    receipts:  null,
-    messages:  ['inbox'],
-    marketing: ['market'],
-    stories:   null,
-    tax:       ['kra'],
-    history:   null,
-    flash:     ['flash'],
-    store:     ['store'],
-    team:      ['team'],
-    pos:       null,   /* uses ID_MAP only */
-  };
+/* ══ DESKTOP DASHBOARD NAV ══
+   A third window.showDashPage used to live here (TAB_MAP / ID_MAP, .desk-visible classes).
+   It was DEAD CODE: seller.js is deferred, so it runs after every inline script and its
+   definition overwrote this one before a user could ever click anything. The .desk-visible
+   CSS it depended on therefore never matched a single element.
 
-  /* Specific section IDs for sidebar items that target one section */
-  var ID_MAP = {
-    customers: ['customers-section'],
-    receipts:  ['receipts-section'],
-    stories:   ['stories-section'],
-    history:   ['sales-history-section'],
-    pos:       ['pos-section'],
-  };
+   That is not a harmless duplicate. This dead copy DID know how to open POS/Cashier; the
+   live router in seller.js did not — so the button silently rendered Overview. Four
+   definitions of one function meant nobody could tell which one was real.
 
-  window.showDashPage = function(name, btn) {
-    /* POS on mobile: navigate to dedicated page for full-screen experience */
-    if (name === 'pos' && window.matchMedia('(max-width:768px)').matches) {
-      window.location.href = 'pos.html';
-      return;
-    }
-
-    /* On mobile (non-POS), delegate to sdSwitchTab if available */
-    if (window.sdSwitchTab && window.matchMedia('(max-width:768px)').matches) {
-      var mobileMap = {
-        overview:'home', products:'products', analytics:'analyse', orders:'orders',
-        customers:'orders', receipts:'orders', messages:'inbox', marketing:'market',
-        stories:'market', tax:'kra', history:'orders', flash:'flash', store:'store', team:'team'
-      };
-      sdSwitchTab(mobileMap[name] || name);
-      return;
-    }
-
-    /* Update sidebar active state */
-    document.querySelectorAll('.sidebar .nav-item').forEach(function(li) {
-      li.classList.remove('active-nav');
-    });
-    if (btn) btn.classList.add('active-nav');
-
-    /* Remove visibility from all sections */
-    document.querySelectorAll('section[data-sdtab], .seller-section-card').forEach(function(el) {
-      el.classList.remove('desk-visible');
-    });
-    /* Also hide POS section (it uses display, not desk-visible) */
-    var posEl = document.getElementById('pos-section');
-    if (posEl) posEl.style.display = 'none';
-
-    /* Revenue snapshot: hide on non-overview pages */
-    var snap = document.getElementById('_revSnapshot');
-    if (snap && name !== 'overview') snap.style.display = 'none';
-
-    /* Show by data-sdtab */
-    var tabs = TAB_MAP[name];
-    if (tabs) {
-      tabs.forEach(function(tab) {
-        document.querySelectorAll('[data-sdtab="' + tab + '"]').forEach(function(el) {
-          el.classList.add('desk-visible');
-        });
-      });
-    }
-
-    /* Show specific IDs */
-    var ids = ID_MAP[name];
-    if (ids) {
-      ids.forEach(function(id) {
-        var el = document.getElementById(id);
-        if (el) {
-          if (id === 'pos-section') {
-            /* POS section: use display not desk-visible (it has its own layout) */
-            el.style.display = 'block';
-            /* Lazy-load iframe on first open */
-            var iframe = document.getElementById('posIframe');
-            if (iframe && !iframe.src) iframe.src = 'pos.html';
-          } else {
-            el.classList.add('desk-visible');
-          }
-        }
-      });
-    }
-
-    window.scrollTo(0, 0);
-  };
-
-  /* Auto-init overview on desktop page load */
-  if (!window.matchMedia('(max-width:768px)').matches) {
-    window.addEventListener('DOMContentLoaded', function() {
-      var overviewBtn = document.querySelector('.sidebar .nav-item.active-nav') ||
-                        document.querySelector('.sidebar .nav-item');
-      showDashPage('overview', overviewBtn);
-    });
-  }
-
+   POS routing has been folded into seller.js (the real router) and this copy is removed.
+   The hash deep-link below is live and is kept. */
   /* ── Hash deep-link: seller.html#products / #orders / #earnings etc. ── */
   /* Lets the seller sub-nav and bottom nav on other pages link directly   */
   /* into specific sections without a separate route.                      */
@@ -5154,7 +5067,6 @@ class="notification-container"
       setTimeout(_applyHash, 150);
     }
   })();
-})();
 </script>
 
 <!-- ══ PRODUCT EDIT MODAL ══ -->

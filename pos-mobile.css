@@ -229,7 +229,11 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 72px;
+    /* box-sizing is border-box globally, so a flat height would let the safe-area padding
+       below EAT the bar instead of extending it — on an iPhone the 34px home-indicator
+       inset would crush 72px of tabs into 38px. Add the inset to the height so the content
+       box stays a full 72px. env() is 0 where there is no inset, so desktop is unaffected. */
+    height: calc(72px + env(safe-area-inset-bottom, 0px));
     background: var(--surface);
     border-top: 1px solid var(--border);
     z-index: 500;

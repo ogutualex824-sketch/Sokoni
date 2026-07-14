@@ -173,6 +173,86 @@ console.log('\nSeller Dashboard — tile interaction\n');
     : bad('the fixed sidebar ignores the banner — the banner covers its last entries and swallows those taps');
 }
 
+/* ── 4. Route integrity: every button must open the page it claims to ──────────
+   The checks above proved the tiles RESOLVE and DELEGATE. They never proved the page
+   name they delegate WITH actually exists — and check 2 validates routed names against a
+   set scraped from the very same call sites, which is circular and can never fail.
+
+   That blind spot shipped a P0. showDashPage does:
+
+       const sections = DASH_PAGES[page] || DASH_PAGES.overview;
+
+   so an unknown page is not an error — it silently renders Overview. DASH_PAGES had no
+   'pos' key and no 'flash' key, so POS/Cashier and Flash Sale quietly showed the seller
+   the Overview screen. The buttons fired, the handler ran, nothing appeared to happen.
+
+   There are two route maps: the real one (seller.js, deferred, the one users get) and the
+   pre-boot fallback in seller.html. They must both know every page the UI asks for, and
+   they must not drift apart. */
+{
+  const js = fs.readFileSync(path.resolve('seller.js'), 'utf8');
+
+  const mapKeys = (src, re) => {
+    const m = src.match(re);
+    if (!m) return null;
+    return new Set([...m[0].matchAll(/^\s+([a-zA-Z]+)\s*:/gm)].map(x => x[1]));
+  };
+
+  const real = mapKeys(js,   /const DASH_PAGES\s*=\s*\{[\s\S]*?\n\};/);
+  const fb   = mapKeys(html, /var PAGES\s*=\s*\{[\s\S]*?\n\s*\};/);
+
+  if (!real) { bad('DASH_PAGES not found in seller.js — the live router is gone'); }
+  if (!fb)   { bad('the pre-boot fallback PAGES map not found in seller.html'); }
+
+  if (real && fb) {
+    /* Every page the UI actually asks for must exist in the LIVE router. */
+    const used = [...new Set([...html.matchAll(/showDashPage\(\s*'([a-zA-Z-]+)'/g)].map(x => x[1]))];
+    const dead = used.filter(k => !real.has(k));
+    dead.length === 0
+      ? ok(`all ${used.length} showDashPage routes exist in the live router (seller.js)`)
+      : bad(`route(s) missing from seller.js DASH_PAGES — these buttons SILENTLY render Overview: ${dead.join(', ')}`);
+
+    /* And the fallback must not drift from the live router — that drift IS the bug. */
+    const onlyReal = [...real].filter(k => !fb.has(k));
+    const onlyFb   = [...fb].filter(k => !real.has(k));
+    (onlyReal.length === 0 && onlyFb.length === 0)
+      ? ok('the pre-boot fallback and the live router know exactly the same pages')
+      : bad('route maps have DRIFTED — ' +
+            (onlyFb.length   ? `only in the fallback: ${onlyFb.join(', ')}. ` : '') +
+            (onlyReal.length ? `only in seller.js: ${onlyReal.join(', ')}.` : ''));
+
+    /* POS specifically: on a phone the till must take the whole screen, not an iframe. */
+    /page\s*===\s*"pos"[\s\S]{0,200}?location\.href\s*=\s*"pos\.html"/.test(js)
+      ? ok('POS on mobile navigates to pos.html (the till needs the full screen)')
+      : bad('POS on mobile does not navigate to pos.html — the button opens nothing usable on a phone');
+
+    /* An unknown route must be loud, not silently render the wrong page. */
+    /if\s*\(\s*!DASH_PAGES\[page\]\s*\)[\s\S]{0,120}console\.warn/.test(js)
+      ? ok('an unknown route warns instead of silently falling back to Overview')
+      : bad('an unknown route still falls back to Overview in silence — the next dead button will hide the same way');
+  }
+
+  /* Every section a route points at must actually exist in the page. A route naming a
+     section that was renamed or deleted would open a blank screen. */
+  if (real) {
+    const ids = new Set([...html.matchAll(/id="([a-zA-Z0-9_-]+)"/g)].map(x => x[1]));
+    const dpBlock = js.match(/const DASH_PAGES\s*=\s*\{[\s\S]*?\n\};/)[0];
+    const targets = [...new Set([...dpBlock.matchAll(/"([a-z0-9-]+-section|seller-stats|seller-dms)"/g)].map(x => x[1]))];
+    const ghosts = targets.filter(t => !ids.has(t));
+    ghosts.length === 0
+      ? ok(`all ${targets.length} sections referenced by the router exist in seller.html`)
+      : bad(`router points at section(s) that do not exist — those pages open blank: ${ghosts.join(', ')}`);
+  }
+
+  /* Only ONE live definition of the router. Four coexisted; the deferred one won, and
+     nobody could tell which was real. */
+  const defs = (html.match(/window\.showDashPage\s*=\s*function/g) || []).length +
+               (js.match(/^function showDashPage/gm) || []).length;
+  defs <= 2
+    ? ok(`showDashPage has ${defs} definition(s) — the live router plus the pre-boot fallback`)
+    : bad(`showDashPage has ${defs} competing definitions — whichever loads last wins and nobody can tell which is real`);
+}
+
 console.log('');
 if (fail) { console.error(`Seller Dashboard FAILED (${fail}) — tiles may be dead\n`); process.exit(1); }
 console.log(`Seller Dashboard PASSED (${pass} checks) — every tile resolves at every viewport\n`);

@@ -4759,6 +4759,18 @@ const DASH_PAGES = {
   ],
   disputes: [
     "disputes-section"
+  ],
+  /* Flash Sale had NO key here. The sidebar and the mobile tile both call
+     showDashPage('flash'), and `DASH_PAGES[page] || DASH_PAGES.overview` silently resolved
+     that to Overview — the button "worked", it just rendered the wrong page. */
+  flash: [
+    "flash-section"
+  ],
+  /* POS/Cashier had no key either, AND #pos-section was absent from ALL_DASH_SECTIONS, so
+     the router could neither show it nor hide it. Handled specially in showDashPage()
+     below (mobile navigates to the standalone page; desktop reveals the embedded iframe). */
+  pos: [
+    "pos-section"
   ]
 };
 
@@ -4771,10 +4783,26 @@ const ALL_DASH_SECTIONS = [
   "delivery-performance-section","seller-ratings-section","profit-section",
   "sales-analytics-section","offers-section","returns-section","mpesa-insights-section",
   "premium-section","inventory-section","customers-section","receipts-section","danger-section",
-  "disputes-section"
+  "disputes-section",
+  /* Was missing: the router never hid #pos-section on other pages, and never showed it. */
+  "pos-section"
 ];
 
 function showDashPage(page, navEl) {
+  /* POS on a phone: the till needs the whole screen. The embedded iframe is a desktop
+     affordance — on mobile, go to the real page. This is why the POS button appeared dead:
+     the route did not exist, so it fell through to Overview and the user saw nothing
+     happen. */
+  if (page === "pos" && window.matchMedia("(max-width:768px)").matches) {
+    window.location.href = "pos.html";
+    return;
+  }
+
+  /* An unknown page silently becoming Overview is what hid the POS and Flash Sale bugs for
+     so long — the button "worked", it just quietly showed the wrong screen. Say so. */
+  if (!DASH_PAGES[page]) {
+    console.warn("[seller] showDashPage: unknown page '" + page + "' — falling back to overview");
+  }
   const sections = DASH_PAGES[page] || DASH_PAGES.overview;
 
   /* Show/hide sections */
@@ -4783,6 +4811,13 @@ function showDashPage(page, navEl) {
     if (!el) return;
     el.style.display = sections.includes(id) ? "" : "none";
   });
+
+  /* The POS iframe is loaded on first open, not on page load — pos.html is a heavy app and
+     eagerly loading it would cost every seller who never opens the till. */
+  if (page === "pos") {
+    const frame = document.getElementById("posIframe");
+    if (frame && !frame.src) frame.src = "pos.html";
+  }
 
   /* Update active nav highlight */
   document.querySelectorAll("#sidebarNav .nav-item").forEach(li => li.classList.remove("active-nav"));

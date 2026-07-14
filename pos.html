@@ -1204,7 +1204,10 @@
   left: 0;
   right: 0;
   z-index: 950;
-  height: 60px;
+  /* The safe-area padding must extend this bar, not eat it. box-sizing is border-box
+     globally, so a flat `height: 60px` subtracts the home-indicator inset from the 60px:
+     on an iPhone the till's quick-nav collapsed to 26px of usable height. */
+  height: calc(60px + env(safe-area-inset-bottom, 0px));
   background: #0d0f14;
   border-top: 1px solid rgba(255,255,255,.08);
   flex-direction: row;
