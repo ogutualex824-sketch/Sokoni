@@ -33,6 +33,7 @@
   var _closingViaHistory = false;
   var _swipeStartY = 0;
   var _prevFocus   = null;
+  var _chipsSent   = false;     /* chips dismissed by first send — must not be restored on auth change */
 
   /* ── SVG icons (stored once, reused) ────────────────────────── */
   var _SEND_SVG = [
@@ -204,9 +205,11 @@
     _authState = user ? 'authed' : 'guest';
     if (prev !== _authState) _dbg('state:', prev, '->', _authState);
     _syncAuthUI();
-    /* Signed in while the panel was open — greet without requiring a reload. */
-    if (prev !== 'authed' && _authState === 'authed' && _isOpen() && !_greeted) {
-      _showGreeting();
+    if (prev !== 'authed' && _authState === 'authed' && _isOpen()) {
+      /* Auth settled while panel was open: restore suggestion chips if the
+         user has not sent a message yet (chips are dismissed by _send). */
+      if (!_chipsSent) _chips.style.display = '';
+      if (!_greeted)   _showGreeting();
     }
   }
 
@@ -217,6 +220,11 @@
     _authState = 'pending';
     _syncAuthUI();
     _dbg('init — waiting for authentication to settle');
+    _dbg('env: origin=', window.location.origin,
+         '| endpoint=', ENDPOINT,
+         '| AbortController=', typeof AbortController !== 'undefined',
+         '| visualViewport=', !!window.visualViewport,
+         '| UA=', navigator.userAgent);
 
     _authReady().then(function (user) {
       _onAuthChange(user);
@@ -257,13 +265,29 @@
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
+  /* Sanitise URLs from server-side data before embedding in href / onclick.
+     _esc() escapes HTML entities but does NOT block protocol-based injection
+     (javascript:, data:, vbscript:). Apply this wrapper to any URL that came
+     from an external source (KASS AI response, API data). */
+  function _safeUrl(u) {
+    var s = String(u || '').trim();
+    if (/^(javascript|data|vbscript):/i.test(s)) return 'index.html';
+    return _esc(s || 'index.html');
+  }
+
   /* ── Markdown → safe HTML ────────────────────────────────────── */
   function _md(text) {
     var s = _esc(String(text || ''));
     s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     s = s.replace(/\*([^*\n]+?)\*/g, '<em>$1</em>');
-    s = s.replace(/\[([^\]]{1,80})\]\(([^)]{1,200})\)/g,
-      '<a href="$2">$1</a>');
+    s = s.replace(/\[([^\]]{1,80})\]\(([^)]{1,200})\)/g, function(_, label, url) {
+      /* _esc() runs before this, so the URL is already entity-encoded.
+         _esc() does NOT block javascript:/data:/vbscript: — check here.
+         Cannot call _safeUrl() because it would double-encode entities.
+         Trim whitespace before checking to catch " javascript:" variants. */
+      if (/^(javascript|data|vbscript):/i.test(url.trim())) url = '#';
+      return '<a href="' + url + '">' + label + '</a>';
+    });
     var lines = s.split('\n'), out = [], inList = false;
     for (var i = 0; i < lines.length; i++) {
       var l = lines[i];
@@ -299,7 +323,7 @@
       : '';
     var rating = r.rating ? '★'.repeat(Math.min(5, Math.round(Number(r.rating)))) : '';
     var meta   = [r.city, r.company, rating].filter(Boolean).join(' · ');
-    var url    = _esc(r.url || 'index.html');
+    var url    = _safeUrl(r.url || 'index.html');
     return [
       '<div class="kc-card" role="button" tabindex="0"',
         ' onclick="window.location.href=\'' + url + '\'"',
@@ -505,6 +529,7 @@
   _btn.id = 'kassBtn';
   _btn.setAttribute('aria-label', 'Ask KASS AI assistant');
   _btn.setAttribute('aria-haspopup', 'dialog');
+  _btn.setAttribute('aria-expanded', 'false');
   _btn.innerHTML = [
     '<div id="kassUnread" aria-hidden="true"></div>',
     '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="#71ff00"',
@@ -522,9 +547,9 @@
   _modal.setAttribute('aria-label', 'KASS — SOKONI AI Concierge');
   _modal.innerHTML = [
     /* Header */
-    '<div id="kassHead" aria-hidden="true">',
-    '  <div class="kh-av" role="img" aria-label="KASS avatar">🤖</div>',
-    '  <div class="kh-info">',
+    '<div id="kassHead">',
+    '  <div class="kh-av" aria-hidden="true">🤖</div>',
+    '  <div class="kh-info" aria-hidden="true">',
     '    <div class="kh-name">KASS — SOKONI AI</div>',
     '    <div class="kh-status" aria-live="polite">',
     '      <span class="kh-dot" id="kassStatusDot" aria-hidden="true"></span>',
@@ -618,18 +643,39 @@
      never see cryptic messages like "The string did not match the expected pattern." */
   function _friendlyMsg(msg) {
     if (!msg) return 'KASS is temporarily unavailable. Please try again.';
-    /* WebKit DOMException thrown by Safari/iOS when URL construction or
-       history.pushState rejects an argument — surfaces here if fetch() throws
-       synchronously (not as a rejected Promise) and escapes the .catch() path */
-    if (msg === 'The string did not match the expected pattern.') {
+    /* ── WebKit / Safari iOS errors ────────────────────────────── */
+    /* DOMException SYNTAX_ERR — synchronous fetch() throw in Safari/WebKit */
+    if (
+      msg === 'The string did not match the expected pattern.'
+      || msg.includes('A server with the specified hostname could not be found.')
+      || msg.includes('could not connect to the server')
+      || msg.includes('The Internet connection appears to be offline')
+      || msg.includes('XHRErrorDomain')
+    ) {
       return 'Could not reach KASS — please check your connection and try again.';
     }
-    if (msg.includes('Failed to fetch') || msg.includes('NetworkError')
-        || msg.includes('Load failed') || msg.includes('Network request failed')) {
-      return 'Could not reach KASS. Please check your internet connection.';
+    /* ── Network / connectivity errors ─────────────────────────── */
+    if (
+      msg.includes('Failed to fetch')
+      || msg.includes('NetworkError')
+      || msg.includes('Load failed')
+      || msg.includes('Network request failed')
+      || msg.includes('net::ERR_')
+      || msg.includes('network error')
+    ) {
+      return 'Network unavailable. Please check your internet connection.';
     }
-    if (msg.includes('AbortError') || msg.includes('cancelled')) {
+    /* ── Timeout / abort ─────────────────────────────────────────── */
+    if (
+      msg.includes('AbortError')
+      || msg.includes('cancelled')
+      || msg.includes('The user aborted a request')
+    ) {
       return 'Request timed out — please try again.';
+    }
+    /* ── Unsupported browser feature ─────────────────────────────── */
+    if (msg.includes('is not supported') || msg.includes('not implemented')) {
+      return 'Browser feature unsupported. Please try a different browser.';
     }
     return msg;
   }
@@ -689,7 +735,7 @@
     if (data.actions && data.actions.length) {
       html += '<div class="kc-actions">';
       for (var j = 0; j < data.actions.length; j++) {
-        html += '<a class="kc-action" href="' + _esc(data.actions[j].url || '#') + '">'
+        html += '<a class="kc-action" href="' + _safeUrl(data.actions[j].url || '#') + '">'
               + _esc(data.actions[j].label) + '</a>';
       }
       html += '</div>';
@@ -702,12 +748,15 @@
   function _callKass(text) {
     _history.push({ role: 'user', content: text });
     return _getAuthToken().then(function (token) {
+      var t0 = performance.now();
       /* AbortController is available in all modern browsers but guard for iOS < 12.1 */
       var ctrl = null, cSig;
       try { ctrl = new AbortController(); cSig = ctrl.signal; } catch (_) { cSig = undefined; }
       var tid  = ctrl ? setTimeout(function () { ctrl.abort(); }, 35000) : null;
       var body = { messages: _history.slice(-20) };
       if (token) body.auth_token = token;
+      _dbg('callKass →', ENDPOINT, '| msgs:', _history.length, '| authed:', !!token,
+           '| AbortController:', !!ctrl, '| online:', navigator.onLine);
 
       /* fetch() can throw SYNCHRONOUSLY in Safari iOS when WebKit's internal URL
          constructor rejects the request arguments (DOMException SYNTAX_ERR,
@@ -725,8 +774,9 @@
           signal:  cSig,
         });
       } catch (syncErr) {
-        _dbg('fetch() threw synchronously:', syncErr && syncErr.name, syncErr && syncErr.message,
-             '| origin:', window.location.origin, '| endpoint:', ENDPOINT);
+        _dbg('fetch() SYNC THROW:', syncErr && syncErr.name, '|', syncErr && syncErr.message,
+             '| origin:', window.location.origin, '| endpoint:', ENDPOINT,
+             '| ms:', Math.round(performance.now() - t0));
         if (tid) clearTimeout(tid);
         _history.pop();
         return Promise.reject(new Error(_friendlyMsg((syncErr && syncErr.message) || '')));
@@ -734,6 +784,7 @@
 
       return fetchPromise.then(function (resp) {
         if (tid) clearTimeout(tid);
+        _dbg('callKass ←', resp.status, resp.statusText, '| ms:', Math.round(performance.now() - t0));
         return resp.json().then(function (data) {
           if (!resp.ok) throw new Error(data.error || 'KASS is temporarily unavailable.');
           _history.push({ role: 'assistant', content: data.response || '' });
@@ -742,7 +793,8 @@
       }).catch(function (err) {
         if (tid) clearTimeout(tid);
         _history.pop();
-        _dbg('callKass error:', err && err.name, '|', err && err.message);
+        _dbg('callKass ERROR:', err && err.name, '|', err && err.message,
+             '| ms:', Math.round(performance.now() - t0));
         if (err.name === 'AbortError') throw new Error('Request timed out — please try again.');
         throw err;
       });
@@ -767,10 +819,17 @@
   function _send(text) {
     text = (text || '').trim();
     if (!text || _busy || _authState !== 'authed') return;
+    /* Quick offline pre-check. fetch() would eventually fail with a NetworkError,
+       but that can take several seconds on mobile. Give immediate feedback instead. */
+    if (navigator.onLine === false) {
+      _addErr('Network unavailable. Please check your internet connection.');
+      return;
+    }
     _busy = true;
     _field.value = '';
     _autoResize();
     _setSending(true);
+    _chipsSent = true;
     _chips.style.display = 'none';
     _addUser(text);
     var typing = _showTyping();
@@ -858,14 +917,17 @@
   function _open() {
     if (_isOpen()) return;
     _prevFocus = document.activeElement;
+    _btn.setAttribute('aria-expanded', 'true');
     _modal.classList.add('k-open');
     requestAnimationFrame(function () {
       requestAnimationFrame(function () { _modal.classList.add('k-vis'); });
     });
 
-    /* Auth-reactive: hide chips if guest */
-    if (_authState !== 'authed') {
+    /* Show chips only when authed and no message has been sent yet */
+    if (_authState !== 'authed' || _chipsSent) {
       _chips.style.display = 'none';
+    } else {
+      _chips.style.display = '';
     }
 
     /* Unread badge off */
@@ -891,6 +953,7 @@
 
   function _doClose() {
     if (!_isOpen()) return;
+    _btn.setAttribute('aria-expanded', 'false');
     _modal.classList.remove('k-vis');
     setTimeout(function () { _modal.classList.remove('k-open'); }, 220);
     /* Restore keyboard-adjustment */

@@ -386,7 +386,13 @@
         stack: r.stack ? String(r.stack).split('\n').slice(0, 5) : null,
       });
     });
-    /* Failed network requests — a 4xx/5xx that a page swallowed still lands here. */
+    /* Failed network requests — a 4xx/5xx that a page swallowed still lands here.
+       SYNCHRONOUS THROW GAP: this wrapper calls of.apply() and chains .then()/.catch().
+       That only intercepts Promise rejections. Safari/WebKit can throw fetch() SYNCHRONOUSLY
+       (DOMException SYNTAX_ERR — "The string did not match the expected pattern.") before
+       any Promise is created. That sync throw bypasses this .catch() entirely and propagates
+       straight to the call site. Callers MUST also wrap their own fetch() invocation in
+       try/catch in addition to .catch() — see kass-widget.js _callKass() for the pattern. */
     var of = global.fetch;
     if (of) {
       global.fetch = function (input, init) {

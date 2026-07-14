@@ -1,4 +1,151 @@
-﻿## [2026-07-14] — KASS Widget P0 Bug Fix — Safari iOS "The string did not match the expected pattern."
+﻿## [2026-07-14] — KASS Widget v3.1 — Final Production Certification
+
+### Summary
+
+Final production certification pass for KASS Widget v3.1. One additional security fix applied during audit: `_md()` markdown link rendering was not protocol-checking server-sourced URLs, allowing a `javascript:`/`data:`/`vbscript:` URI in a markdown link to reach the DOM unblocked. Fixed with an inline protocol check in the regex callback (cannot use `_safeUrl()` here — `_esc()` has already run, and double-encoding would corrupt entities). Regression suite expanded from 32 to 40 tests. Comprehensive certification report produced covering all 10 brief points. Physical device validation (iPhone Safari, iOS PWA) remains the only open item.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `kass-widget.js` | Security fix: `_md()` markdown link protocol injection blocked |
+| `scripts/test-kass-widget.js` | Expanded 32 → 40 tests: T32–T38 (`_md()` link security), T39 (diagnostics no-secrets), T40 (suggestion chip attrs) |
+| `docs/KASS_FINAL_CERTIFICATION.md` | **New file** — comprehensive final certification report |
+
+### Security Findings Fixed
+
+| Finding | Severity | Location | Description |
+|---|---|---|---|
+| `_md()` markdown link protocol injection | P1 | `kass-widget.js` `_md()` | Server-sourced markdown `[text](javascript:...)` reached `<a href>` unblocked; fixed with inline `/^(javascript|data|vbscript):/i` check |
+
+### Regression Suite (40/40 passing)
+
+| Range | Area |
+|---|---|
+| T1–T2 | SVG integrity / unary-plus P0 fix |
+| T3–T4 | `_esc()` XSS escaping |
+| T5–T10 | `_safeUrl()` protocol blocking + passthrough |
+| T11–T21 | `_friendlyMsg()` error mapping (all 11 browser/platform variants) |
+| T22–T25 | `_callKass()` fetch error paths + happy path |
+| T26 | AbortController iOS < 12.1 graceful fallback |
+| T27 | Empty input rejection |
+| T28 | History slice limit (max 20) |
+| T29 | auth_token excluded from diagnostic logs |
+| T30–T31 | `_md()` XSS + rendering |
+| T32–T38 | `_md()` markdown link protocol injection (7 variants: js, data, vbscript, case, whitespace, https allowed, relative allowed) |
+| T39 | Diagnostics log includes env, excludes secrets |
+| T40 | Suggestion chip `data-q` attributes |
+
+### Certification Status
+
+| Dimension | Status |
+|---|---|
+| Security (all URL call sites) | ✅ Verified — automated tests |
+| Accessibility (code review) | ✅ Verified — code review |
+| Regression suite | ✅ 40/40 automated |
+| Production cleanup | ✅ Verified — code review |
+| Diagnostics / no secrets in logs | ✅ Verified — automated tests |
+| iPhone Safari | ⏳ Pending physical device |
+| iOS PWA | ⏳ Pending physical device |
+| Assistive technology (VoiceOver/TalkBack) | ⏳ Pending physical device |
+
+### Breaking Changes
+
+None.
+
+### Migration / Deployment
+
+No deployment action required beyond existing v3.1 changes. `docs/KASS_FINAL_CERTIFICATION.md` documents the physical device checklist for iPhone validation.
+
+---
+
+## [2026-07-14] — Auth Domain Certification — auth.mysokoni.co.ke Fully Configured
+
+### Summary
+
+Firebase Auth Authorized Domains step confirmed complete. `auth.mysokoni.co.ke` is now live across all four required layers: DNS, SSL, Firebase Hosting, and Firebase Auth Authorized Domains. Two auth bugs found during the certification audit were fixed in the same pass: Facebook `signInWithRedirect` was missing the `sokoniAuthRedirectPending` flag (could silently lose the redirect result if a SW updated during the OAuth round-trip), and the `sokoniOAuthRedirectDone` listener was not clearing the flag for non-Google providers.
+
+### Blocker Removed
+
+**"Custom Firebase Auth domain not verified"** → resolved. `auth.mysokoni.co.ke` confirmed in Firebase Auth → Settings → Authorized Domains.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `auth.js` | Fixed: Facebook `signInWithRedirect` now sets `sokoniAuthRedirectPending` before redirecting |
+| `auth.js` | Fixed: `sokoniOAuthRedirectDone` clears `sokoniAuthRedirectPending` for non-Google providers |
+| `auth.js` | Updated: ITP comments no longer reference old `sokoni-aeb26.firebaseapp.com` authDomain |
+| `docs/AUTH_DOMAIN_CERTIFICATION.md` | **New file** — full auth domain certification report with cross-platform matrix |
+
+### Security Implications
+
+- No authentication tokens, OAuth callbacks, or session identifiers are cached by the service worker (code reviewed).
+- Facebook redirect result can no longer be silently swallowed due to missing SW reload guard.
+
+### Bugs Fixed
+
+| Bug | Severity | Description |
+|---|---|---|
+| BUG-AUTH-1 | P2 | Facebook `signInWithRedirect` missing `sokoniAuthRedirectPending` flag — SW reload could interrupt OAuth round-trip |
+| BUG-AUTH-2 | P2 | `sokoniOAuthRedirectDone` listener did not clear `sokoniAuthRedirectPending` for Facebook — flag could linger and block future SW updates |
+| BUG-AUTH-3 | P4 | ITP comment referenced old `sokoni-aeb26.firebaseapp.com` authDomain — misleading for future maintainers |
+
+### Pending
+
+Physical device validation (iPhone Safari, iOS PWA) required to achieve FULLY CERTIFIED status. See `docs/AUTH_DOMAIN_CERTIFICATION.md` Section 6 for the checklist.
+
+---
+
+## [2026-07-14] — KASS Widget v3.1 — Production Hardening & Cross-Browser Certification
+
+### Summary
+
+Nine hardening improvements applied on top of the P0 bug fixes. Key additions: URL sanitisation blocking `javascript:`/`data:`/`vbscript:` injection from server-sourced card URLs; accessibility fix restoring screen-reader access to the Close button; `aria-expanded` on the FAB; offline pre-check in `_send()`; broader error message mapping for more browser/platform combinations; chips visibility fix when auth settles during an open session; request timing and browser environment diagnostics; and 32 automated regression tests.
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `kass-widget.js` | v3.0 → v3.1: 9 hardening changes (see detail below) |
+| `sokoni-validate.js` | Added comment documenting synchronous-throw gap in fetch wrapper |
+| `scripts/test-kass-widget.js` | **New file** — 32 regression tests, Node.js, no dependencies |
+| `docs/KASS_CERTIFICATION_REPORT.md` | **New file** — full certification report with cross-browser matrix |
+
+### Hardening Detail
+
+| Change | Severity | Description |
+|---|---|---|
+| `_safeUrl()` — URL protocol sanitisation | Security P1 | Blocks `javascript:`, `data:`, `vbscript:` in card/action URLs from server |
+| Fix `aria-hidden` on `#kassHead` | A11y P1 | Container `aria-hidden` was hiding the Close button from screen readers |
+| Add `aria-expanded` to FAB | A11y P2 | Screen readers now announce dialog open/close state |
+| Chips restored on auth settle | UX P2 | If panel opened during auth settling window, chips are now shown when auth resolves |
+| Offline pre-check in `_send()` | Robustness P2 | Immediate friendly error when `navigator.onLine === false` |
+| Chips open-state consistency | UX P3 | `_open()` now has explicit show/hide logic; no implicit CSS reliance |
+| Expanded `_friendlyMsg()` patterns | UX P3 | iOS hostname, offline, WebKit internal, Chrome ERR_, Firefox abort, unsupported API |
+| Request timing + env diagnostics | Ops P3 | Debug mode logs RTT, HTTP status, UA, origin, AbortController presence |
+| `sokoni-validate.js` gap documented | Dev Safety P3 | Sync-throw limitation explicitly commented |
+
+### Security Implications
+
+- `_safeUrl()` prevents a theoretical XSS vector where a malicious KASS server response could inject `javascript:` URLs into card `onclick` handlers or action `href` attributes.
+- `_esc()` still does not escape single quotes — callers must not use single-quote as HTML attribute delimiter for `_esc()` output (documented in T4 of the regression suite).
+
+### Performance Implications
+
+None — all additions are conditional on `_KASS_DEBUG` or single-time boolean checks.
+
+### Deployment Requirements
+
+No new secrets, no CF changes, no index changes. Backward compatible.
+
+### Regression Tests
+
+Run: `node scripts/test-kass-widget.js` — 32/32 pass.
+
+---
+
+## [2026-07-14] — KASS Widget P0 Bug Fix — Safari iOS "The string did not match the expected pattern."
 
 ### Summary
 

@@ -726,12 +726,12 @@ async function completePasswordReset(){
 
 /* Detect whether popup-based OAuth is reliable.
 
-   Popup is preferred over redirect because it does not rely on the
-   firebase authDomain iframe postMessage mechanism, which is blocked by
-   Safari ITP (Intelligent Tracking Prevention) on any iOS device.
-   With redirect, getRedirectResult() silently returns null on iOS because
-   the sokoni-aeb26.firebaseapp.com iframe cannot access its own storage
-   from inside mysokoni.co.ke — a third-party context under ITP.
+   Popup is preferred over redirect because it does not need a full-page
+   round-trip. The custom authDomain (auth.mysokoni.co.ke) is on the same
+   registrable domain as the app (mysokoni.co.ke), so Apple ITP treats it as
+   first-party and no longer blocks the auth iframe. However, two cases must
+   still use redirect (PWA and in-app browsers — see below) because popups
+   either exit the PWA context or are suppressed by the host app.
 
    Only two cases must use redirect:
    1. Standalone PWA — window.open() exits the PWA into full Safari; the
@@ -937,9 +937,8 @@ async function signInWithGoogle() {
                        auth/popup-blocked:          browser blocked window.open().
                        auth/internal-error,
                        auth/cors-unsupported,
-                       auth/web-storage-unsupported: iOS Safari ITP prevents the
-                         Firebase authDomain iframe from delivering the popup result
-                         across origins (mysokoni.co.ke → sokoni-aeb26.firebaseapp.com).
+                       auth/web-storage-unsupported: Safari popup result failed to
+                         deliver (rare with the custom authDomain; kept for resilience).
                          Redirect completes the sign-in via a full-page round-trip. */
                     if (_isItpError) {
                         console.info('[SOKONI Auth] Popup failed (iOS/ITP) — falling back to redirect', { code: popupErr.code });
@@ -993,10 +992,11 @@ window.addEventListener('sokoniGoogleRedirectDone', async function(e) {
     await _handleGoogleResult(e.detail);
 });
 window.addEventListener('sokoniOAuthRedirectDone', async function(e) {
+    try { sessionStorage.removeItem('sokoniAuthRedirectPending'); } catch (_) {}
     const result     = e.detail;
     const providerId = result.user?.providerData?.[0]?.providerId || 'unknown';
     /* Google redirects already handled by sokoniGoogleRedirectDone above;
-       this listener handles Facebook, Phone */
+       this listener handles Facebook, Apple, and any future OAuth providers */
     if (providerId !== 'google.com') {
         await _handleOAuthResult(result, _providerLabel(providerId));
     }
@@ -1164,10 +1164,14 @@ async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
                 const result = await signInWithPopup(window.firebaseAuth, provider);
                 await _handleOAuthResult(result, providerLabel);
             } else {
+                /* Flag BEFORE redirect: sw-register.js skips reload on controllerchange;
+                   firebase.js does not suppress getRedirectResult() errors on return. */
+                try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
                 await signInWithRedirect(window.firebaseAuth, provider);
             }
         } catch (err) {
             if (err.code === 'auth/popup-blocked') {
+                try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
                 await signInWithRedirect(window.firebaseAuth, provider);
             } else if (err.code === 'auth/account-exists-with-different-credential') {
                 _handleProviderLinkError(err, providerLabel);

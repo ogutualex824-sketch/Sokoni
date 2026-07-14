@@ -311,6 +311,7 @@ const SKIP_CACHE_PATTERNS = [
      resolved and a genuine outage could never be detected. The probe is only a valid
      connectivity signal if it always hits the real network. */
   "generate_204",
+  "/__/",           /* Firebase reserved namespace — auth handler + iframe; must always hit network */
 ];
 
 
