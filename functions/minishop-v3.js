@@ -1414,7 +1414,7 @@ exports.miniShopScheduledDigest = onSchedule(
 
           await sgMail.send({
             to:      email,
-            from:    { email: 'noreply@mysokoni.co.ke', name: 'SOKONI MiniShop' },
+            from:    { email: 'notifications@mysokoni.co.ke', name: 'SOKONI' },
             subject: `Your Weekly MiniShop Report — ${shopName}`,
             html:    emailHtml,
           });

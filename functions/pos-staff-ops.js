@@ -122,7 +122,7 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
 
 /**
  * closeShift — closes the authenticated cashier's open shift.
- * Aggregates all sales for this shift from posSales.
+ * Aggregates all sales for this shift from posRetailSales.
  *
  * Input: { sellerId, closingCash, notes }
  */
@@ -136,6 +136,7 @@ exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
   if (isNaN(closingCash) || closingCash < 0)
     throw new HttpsError('invalid-argument', 'closingCash must be a non-negative number');
 
+  try {
   // Fetch the open shift
   const shiftSnap = await db.collection('posShifts')
     .where('sellerId', '==', sellerId)
@@ -150,8 +151,8 @@ exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
   const shiftDoc = shiftSnap.docs[0];
   const shiftId = shiftDoc.id;
 
-  // Aggregate sales from posSales for this shiftId
-  const salesSnap = await db.collection('posSales')
+  // Aggregate sales from posRetailSales for this shiftId
+  const salesSnap = await db.collection('posRetailSales')
     .where('shiftId', '==', shiftId)
     .get();
 
@@ -172,19 +173,23 @@ exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
       continue;
     }
     if (s.status === 'refunded') {
-      refundsGiven += Number(s.total || 0);
+      refundsGiven += Number(s.grandTotal || 0);
       continue;
     }
-    const amount = Number(s.total || 0);
+    const amount = Number(s.grandTotal || 0);
     totalSales += amount;
     totalTransactions++;
-    discountsGiven += Number(s.discount || 0);
+    discountsGiven += Number(s.discountTotal || 0);
 
-    const pm = (s.paymentMethod || '').toLowerCase();
-    if (pm === 'cash') cashSales += amount;
-    else if (pm === 'mpesa' || pm === 'm-pesa') mpesaSales += amount;
-    else if (pm === 'card') cardSales += amount;
-    else if (pm === 'qr') qrSales += amount;
+    /* payments is an array of { method, amount } — aggregate by method */
+    for (const p of (s.payments || [])) {
+      const pm  = (p.method || '').toLowerCase();
+      const amt = Number(p.amount || 0);
+      if (pm === 'cash')                  cashSales  += amt;
+      else if (pm === 'mpesa' || pm === 'm-pesa') mpesaSales += amt;
+      else if (pm === 'card')             cardSales  += amt;
+      else if (pm === 'qr')               qrSales    += amt;
+    }
   }
 
   const summary = {
@@ -216,6 +221,11 @@ exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
       branchId: shiftDoc.data().branchId,
     },
   };
+  } catch (err) {
+    logger.error('[closeShift] failed', { sellerId, cashierUid, error: err.message });
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError('internal', 'Shift close failed — please retry');
+  }
 });
 
 /**
@@ -560,7 +570,7 @@ exports.calculateMonthlyCommission = onCall(_CF, exports._h.calculateMonthlyComm
   const endDate = new Date(yr, mo, 0, 23, 59, 59, 999);
 
   // Fetch sales for this cashier in this month
-  const salesSnap = await db.collection('posSales')
+  const salesSnap = await db.collection('posRetailSales')
     .where('sellerId', '==', sellerId)
     .where('cashierUid', '==', cashierUid)
     .where('createdAt', '>=', startDate)
@@ -1053,7 +1063,7 @@ exports.getStaffPerformanceDashboard = onCall(_CF, exports._h.getStaffPerformanc
   const endDate = new Date(yr, mo, 0, 23, 59, 59, 999);
 
   // Fetch sales for the period
-  const salesSnap = await db.collection('posSales')
+  const salesSnap = await db.collection('posRetailSales')
     .where('sellerId', '==', sellerId)
     .where('createdAt', '>=', startDate)
     .where('createdAt', '<=', endDate)
@@ -1218,7 +1228,7 @@ exports.dailyStaffReport = onSchedule(
       let voidCount = 0;
 
       try {
-        const salesSnap = await db.collection('posSales')
+        const salesSnap = await db.collection('posRetailSales')
           .where('shiftId', '==', shiftId)
           .get();
 

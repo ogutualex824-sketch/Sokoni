@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="premium.css">
 <script src="security.js"></script>
+<script src="sokoni-otp.js"></script>
 <script src="sokoni-legal-sign.js"></script>
 <script src="sokoni-legal-gate.js" defer></script>
 <script src="sokoni-form-nav.js" defer></script>
@@ -65,9 +66,7 @@ a{color:var(--acc);text-decoration:none}
 .btn-goo:hover{border-color:var(--sub)}
 .prow{display:flex;gap:8px}
 .ppfx{padding:12px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--sub);font-size:.88rem;white-space:nowrap}
-.otp-boxes{display:flex;gap:7px;justify-content:center;margin:6px 0}
-.otp-b{width:42px;height:50px;text-align:center;font-size:1.25rem;font-weight:700;background:var(--surf2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);outline:none}
-.otp-b:focus{border-color:var(--acc)}
+/* six-box OTP grid removed — single field lives in sokoni-otp.js */
 .rh{text-align:center;max-width:540px;margin:0 auto 28px}
 .rh h2{font-size:1.5rem;font-weight:800}
 .rh p{color:var(--sub);margin-top:7px;font-size:.88rem}
@@ -188,14 +187,9 @@ a{color:var(--acc);text-decoration:none}
       <button class="btn btn-p btn-f" style="margin-top:8px" onclick="A.sendOTP()">Send OTP</button>
       <div id="otpSec" style="display:none;margin-top:14px">
         <label class="sk-lbl" style="text-align:center;display:block;margin-bottom:7px">Enter the 6-digit code</label>
-        <div class="otp-boxes" id="otpB">
-          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
-          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
-          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
-          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
-          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
-          <input class="otp-b" maxlength="1" type="text" inputmode="numeric">
-        </div>
+        <!-- Single verification field (sokoni-otp.js). The six boxes it replaces had no
+             autocomplete="one-time-code" at all, so SMS AutoFill never worked here. -->
+        <div id="otpB"></div>
         <button class="btn btn-p btn-f" style="margin-top:8px" onclick="A.verifyOTP()">Verify Code</button>
       </div>
     </div>
@@ -389,10 +383,13 @@ const A=(()=>{
   async function emailSU(e){e.preventDefault();showLoad('Creating account…');try{const c=await window.firebaseSDK.createUserWithEmailAndPassword(_qv('suE'),_qv('suP'));await window.firebaseSDK.updateProfile(c.user,{displayName:(_qv('suF')+' '+_qv('suL')).trim()})}catch(err){hideLoad();toast(_ae(err),'err')}}
   async function google(){showLoad('Signing in…');try{await window.firebaseSDK.signInWithPopup(new window.firebaseSDK.GoogleAuthProvider())}catch(err){hideLoad();toast(_ae(err),'err')}}
   function phoneToggle(){const s=_q('phoneSec');s.style.display=s.style.display==='none'?'block':'none'}
-  async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new window.firebaseSDK.RecaptchaVerifier(window.firebaseSDK.auth,'rcap',{size:'invisible'});_conf=await window.firebaseSDK.signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_q('otpB').querySelectorAll('.otp-b')[0].focus()}catch(err){hideLoad();toast(_ae(err),'err')}}
-  async function verifyOTP(){const code=[..._q('otpB').querySelectorAll('.otp-b')].map(b=>b.value).join('');if(code.length<6)return toast('Enter all 6 digits','err');showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();toast('Invalid code.','err')}}
+  /* One verification field. Mounted lazily because #otpSec is display:none until the
+     SMS is actually sent. Same Firebase confirm() call as before — backend untouched. */
+  let _otp=null;
+  function _mountOtp(){if(_otp||!window.SokoniOtp)return;_otp=window.SokoniOtp.mount('#otpB',{length:6,label:'Verification code',placeholder:'6-digit verification code',onComplete:verifyOTP});}
+  async function sendOTP(){const n='+254'+_qv('pNum').replace(/\D/g,'');if(n.length<13)return toast('Enter a valid Kenyan number','err');showLoad('Sending OTP…');try{if(!window._rv)window._rv=new window.firebaseSDK.RecaptchaVerifier(window.firebaseSDK.auth,'rcap',{size:'invisible'});_conf=await window.firebaseSDK.signInWithPhoneNumber(n,window._rv);hideLoad();_q('otpSec').style.display='block';toast('OTP sent!');_mountOtp();_otp?.clear().focus()}catch(err){hideLoad();toast(_ae(err),'err')}}
+  async function verifyOTP(){const code=(_otp?_otp.value():'').trim();if(!/^\d{6}$/.test(code)){_otp?.error(true);return toast('Enter all 6 digits','err')}showLoad('Verifying…');try{await _conf.confirm(code)}catch(err){hideLoad();_otp?.error(true);_otp?.focus();toast('Invalid code.','err')}}
   function _ae(e){const m={'auth/wrong-password':'Incorrect password.','auth/user-not-found':'No account found.','auth/email-already-in-use':'Email already in use.','auth/weak-password':'Password must be 8+ characters.','auth/invalid-email':'Invalid email.','auth/too-many-requests':'Too many attempts — try later.'};return m[e.code]||e.message}
-  document.addEventListener('DOMContentLoaded',()=>{document.querySelectorAll('.otp-b').forEach((b,i,a)=>{b.addEventListener('input',()=>{if(b.value&&a[i+1])a[i+1].focus()});b.addEventListener('keydown',e=>{if(e.key==='Backspace'&&!b.value&&a[i-1])a[i-1].focus()})})});
   return{tab,emailSI,emailSU,google,phoneToggle,sendOTP,verifyOTP};
 })();
 

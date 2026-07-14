@@ -27,12 +27,12 @@ const EmailHandler = {
     const body = templateId
       ? JSON.stringify({
           personalizations: [{ to: [{ email: to }], dynamic_template_data: templateData || {} }],
-          from: { email: from || 'noreply@mysokoni.co.ke' },
+          from: { email: from || 'noreply@mysokoni.co.ke', name: 'SOKONI' },
           template_id: templateId
         })
       : JSON.stringify({
           personalizations: [{ to: [{ email: to }] }],
-          from: { email: from || 'noreply@mysokoni.co.ke' },
+          from: { email: from || 'noreply@mysokoni.co.ke', name: 'SOKONI' },
           subject,
           content: html
             ? [{ type: 'text/html', value: html }]

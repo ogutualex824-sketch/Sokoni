@@ -147,14 +147,9 @@
           <p style="font-size:12px;color:rgba(255,255,255,0.38);text-align:center;margin:12px 0 2px;">
             Enter the 6-digit code sent to your phone
           </p>
-          <div class="otp-row">
-            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp0" autocomplete="one-time-code">
-            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp1">
-            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp2">
-            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp3">
-            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp4">
-            <input class="otp-digit" type="text" maxlength="1" inputmode="numeric" id="otp5">
-          </div>
+          <!-- Single verification field, mounted by sokoni-otp.js. One input is what
+               iOS SMS AutoFill and the Android keyboard suggestion can actually fill. -->
+          <div id="otpMount"></div>
           <button type="button" class="auth-btn" id="verifyOtpBtn" onclick="verifyPhoneOTP()">
             Verify Code →
           </button>
@@ -224,6 +219,8 @@
   <script src="sokoni-alerts.js"></script>
   <script type="module" src="firebase.js"></script>
   <script type="module" src="session-manager.js"></script>
+  <!-- Must load BEFORE auth.js: auth.js mounts the field on DOM ready. -->
+  <script src="sokoni-otp.js"></script>
   <script src="auth.js"></script>
   <script src="sokoni-audit.js" defer></script>
   <script src="scroll-top.js" defer></script>

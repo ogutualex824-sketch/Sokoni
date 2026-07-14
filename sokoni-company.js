@@ -42,12 +42,24 @@
     /* Registration (verified — BRS Certificate of Incorporation) */
     registrationNumber: 'CPR/2014/166272',
 
-    /* Contact */
-    email:            'info@mysokoni.co.ke',
-    billingEmail:     'billing@mysokoni.co.ke',
-    supportEmail:     'support@mysokoni.co.ke',
-    phone:            '+254 800 SOKONI',
-    supportPhone:     '+254 705 726 803',
+    /* Contact — executive */
+    email:             'info@mysokoni.co.ke',
+    adminEmail:        'admin@mysokoni.co.ke',
+    legalEmail:        'legal@mysokoni.co.ke',
+    privacyEmail:      'privacy@mysokoni.co.ke',
+    complianceEmail:   'compliance@mysokoni.co.ke',
+    /* Contact — operations */
+    supportEmail:      'support@mysokoni.co.ke',
+    financeEmail:      'finance@mysokoni.co.ke',
+    billingEmail:      'billing@mysokoni.co.ke',
+    paymentsEmail:     'payments@mysokoni.co.ke',
+    notificationsEmail:'notifications@mysokoni.co.ke',
+    /* Contact — technology */
+    securityEmail:     'security@mysokoni.co.ke',
+    developersEmail:   'developers@mysokoni.co.ke',
+    noReplyEmail:      'noreply@mysokoni.co.ke',
+    phone:             '+254 800 SOKONI',
+    supportPhone:      '+254 705 726 803',
 
     /* Web */
     website:          'mysokoni.co.ke',

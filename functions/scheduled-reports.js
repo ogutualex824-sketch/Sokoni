@@ -15,8 +15,9 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 const { defineSecret }     = require("firebase-functions/params");
 
-const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
-const OPS_EMAIL        = "devops@mysokoni.co.ke";
+const SENDGRID_API_KEY  = defineSecret("SENDGRID_API_KEY");
+const OPS_EMAIL         = "devops@mysokoni.co.ke";
+const SECURITY_EMAIL    = "security@mysokoni.co.ke";
 
 function requireAdmin(request) {
   if (!request.auth?.token?.isAdmin && !request.auth?.token?.isSuperAdmin) {
@@ -34,7 +35,7 @@ async function sendEmail(apiKey, to, subject, html) {
     headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body:    JSON.stringify({
       personalizations: [{ to: [{ email: to }] }],
-      from:    { email: "noreply@mysokoni.co.ke", name: "SOKONI Ops" },
+      from:    { email: "devops@mysokoni.co.ke", name: "SOKONI DevOps" },
       subject,
       content: [{ type: "text/html", value: html }],
     }),
@@ -268,8 +269,10 @@ exports.scheduledWeeklySecurityReport = onSchedule(
 </div>`;
 
     try {
-      await sendEmail(SENDGRID_API_KEY.value(), OPS_EMAIL,
-        `[SOKONI Security] Weekly Report — ${weekStart} to ${weekEnd}`, html);
+      await Promise.all([
+        sendEmail(SENDGRID_API_KEY.value(), OPS_EMAIL, `[SOKONI Security] Weekly Report — ${weekStart} to ${weekEnd}`, html),
+        sendEmail(SENDGRID_API_KEY.value(), SECURITY_EMAIL, `[SOKONI Security] Weekly Report — ${weekStart} to ${weekEnd}`, html),
+      ]);
     } catch (emailErr) {
       console.error("[WeeklySecurity] Email failed — report still saved to Firestore:", emailErr.message);
     }

@@ -44,12 +44,36 @@ const COMPANY = Object.freeze({
   /* Registration (verified — BRS Certificate of Incorporation) */
   registrationNumber: 'CPR/2014/166272',
 
-  /* Contact */
-  email:            'info@mysokoni.co.ke',
-  billingEmail:     'billing@mysokoni.co.ke',
-  supportEmail:     'support@mysokoni.co.ke',
-  phone:            '+254 800 SOKONI',
-  supportPhone:     '+254 705 726 803',
+  /* Contact — executive */
+  email:             'info@mysokoni.co.ke',           // general enquiries
+  adminEmail:        'admin@mysokoni.co.ke',           // administration
+  legalEmail:        'legal@mysokoni.co.ke',           // legal correspondence
+  privacyEmail:      'privacy@mysokoni.co.ke',         // privacy / GDPR requests
+  complianceEmail:   'compliance@mysokoni.co.ke',      // compliance queries
+  /* Contact — operations */
+  supportEmail:      'support@mysokoni.co.ke',         // customer support
+  financeEmail:      'finance@mysokoni.co.ke',         // finance team
+  billingEmail:      'billing@mysokoni.co.ke',         // billing / invoices
+  paymentsEmail:     'payments@mysokoni.co.ke',        // payment operations
+  notificationsEmail:'notifications@mysokoni.co.ke',   // automated notifications
+  /* Contact — technology */
+  securityEmail:     'security@mysokoni.co.ke',        // security incidents
+  developersEmail:   'developers@mysokoni.co.ke',      // webhook callbacks / API
+  noReplyEmail:      'noreply@mysokoni.co.ke',         // automated no-reply
+  phone:             '+254 800 SOKONI',
+  supportPhone:      '+254 705 726 803',
+
+  /* Platform administrators */
+  superAdmin: {
+    name:  'Alex Ogutu Ochieng',
+    email: 'admin@mysokoni.co.ke',
+    role:  'Super Administrator',
+  },
+  platformAdmin: {
+    name:  'Ochi Isaac',
+    email: 'isaac@mysokoni.co.ke',
+    role:  'Platform Administrator',
+  },
 
   /* Web */
   website:          'mysokoni.co.ke',
