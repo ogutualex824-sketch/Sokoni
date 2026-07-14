@@ -609,7 +609,12 @@ body{
    OVERLAYS — slide-up full-screen sheets
 ═══════════════════════════════════════════════ */
 .overlay{
-  position:fixed;inset:0;z-index:200;
+  position:fixed;inset:0;
+  /* These are full-screen sheets — the comment above says so. A full-screen sheet is a
+     MODAL, and at z-index 200 it rendered UNDER the shared header (100001): the header
+     floated on top of the wallet's own Send / QR / History sheets. Use the shared tier.
+     See docs/OVERLAY_ARCHITECTURE.md. */
+  z-index:var(--sk-z-sheet, 100010);
   display:flex;flex-direction:column;
   pointer-events:none;opacity:0;
   transition:opacity .2s;

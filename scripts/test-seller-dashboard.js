@@ -139,29 +139,41 @@ console.log('\nSeller Dashboard — tile interaction\n');
   }
 }
 
-/* ── 3. The consent banner must not sit on top of the tiles ─────────────────── */
+/* ── 3. The consent notice must not be able to eat a tile's tap ─────────────────
+   HISTORY — this is the third architecture, and the first two both failed by MEASUREMENT:
+
+     1. A 184px bottom banner. It covered EIGHT quick actions; tapping POS/Cashier landed on
+        the Accept button, so a seller's first tap consented to cookies instead of opening
+        the till. The fix at the time was to reserve body padding — which cannot work,
+        because body padding does not move a position:fixed element out of the viewport.
+     2. A compact 62px bar. Better, but measured in an authenticated session it STILL covered
+        four cards, POS among them, and a tap on "Revenue" still hit Accept. A fixed bar of
+        ANY height sits over whatever is at the foot of the viewport. Height was never the
+        real problem: overlaying live controls was.
+
+   So it is now a centred MODAL over a backdrop. The backdrop is the whole point — a stray
+   tap lands on it and does nothing, so a quick action can never be silently traded for a
+   consent. Assert the properties that make that true. */
 {
   const sec = fs.readFileSync(path.resolve('security.js'), 'utf8');
-  /* It is position:fixed at bottom:0, z-index 99997. Without reserved space it swallows
-     every tap at the foot of the viewport — on the dashboard that was the Messages and
-     Marketing tiles, which looked normal and simply did not respond. */
-  /* Assert the BEHAVIOUR — that the banner reserves body space — not that the code happens
-     to sit within N characters of the banner's id. The old form searched a 3000-char window
-     and broke the moment the implementation grew a comment, which is a test measuring
-     source layout instead of behaviour. */
-  /setProperty\(\s*['"]padding-bottom['"]/.test(sec)
-    ? ok('the privacy banner reserves body space — it overlays no tile')
-    : bad('the privacy banner is fixed at bottom:0 with no reserved space — it swallows taps on whatever is beneath it');
 
-  /* Assert the BEHAVIOUR (the space comes back), not the spelling. security.js now sets
-     the padding with `setProperty(..., 'important')` — a plain inline style lost to
-     mobile.css's `!important` body rule — and releases it with removeProperty(). The old
-     regex here pinned the assignment syntax, so a correct fix to the implementation broke
-     the test. A test that only recognises one spelling of the right answer is a test that
-     punishes people for improving the code. */
-  /removeProperty\(\s*['"]padding-bottom['"]\s*\)|paddingBottom\s*=\s*['"]{2}/.test(sec)
-    ? ok('the reserved space is released when the banner is dismissed')
-    : bad('body padding is never released — a permanent gap after the banner is accepted');
+  /inset\s*:\s*0/.test(sec) && /rgba\(0,\s*0,\s*0,\s*0\.\d+\)/.test(sec)
+    ? ok('the consent notice is a full-viewport backdrop — a stray tap cannot reach a tile')
+    : bad('the consent notice is not a backdrop — a fixed bar WILL overlay tiles at the foot of the viewport and eat their taps');
+
+  /aria-modal/.test(sec) && /role["'\s,]+dialog/.test(sec)
+    ? ok('announced as a modal dialog (role=dialog, aria-modal)')
+    : bad('the consent modal is not announced to assistive tech');
+
+  /* Everything it takes over must be given back, or the seller is left with a page that
+     cannot scroll and buttons that never return. */
+  /removeProperty\(\s*['"]overflow['"]\s*\)/.test(sec)
+    ? ok('the scroll lock is released on Accept')
+    : bad('the page stays scroll-locked after Accept');
+
+  /removeProperty\(\s*['"]padding-bottom['"]\s*\)/.test(sec)
+    ? ok('any padding left by an older build is cleared — no permanent dead gap under the page')
+    : bad('a previous build\'s body padding is never cleared — returning users keep a dead gap');
 
   /* Body padding CANNOT move a fixed element — it is out of flow. The dashboard sidebar
      is position:fixed, so the banner sat on top of its last entries (Messages, Marketing)

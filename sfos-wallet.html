@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
   <title>Financial OS — SOKONI</title>
@@ -254,7 +258,12 @@
 
     /* ── Overlays ── */
     .sfos-overlay {
-      position: fixed; inset: 0; z-index: 300; display: none;
+      position: fixed; inset: 0;
+      /* A sheet covering the whole screen is a MODAL, not an in-page drawer: at z-index 300
+         it rendered UNDER the header (100001), so the header stayed on top of the wallet's
+         own sheet. Use the shared tier — see docs/OVERLAY_ARCHITECTURE.md. */
+      z-index: var(--sk-z-sheet, 100010);
+      display: none;
       align-items: flex-end; background: rgba(0,0,0,.7);
     }
     .sfos-overlay.open { display: flex; }
@@ -280,7 +289,8 @@
       position: fixed; bottom: calc(var(--nav) + 16px); left: 16px; right: 16px;
       background: #1a1a1a; color: var(--txt); border-radius: 12px;
       padding: 12px 16px; font-size: 13px; font-weight: 600;
-      text-align: center; z-index: 400; opacity: 0; transform: translateY(8px);
+      /* A toast must out-rank the sheet it reports on; 400 put it below the header. */
+      text-align: center; z-index: var(--sk-z-toast, 200002); opacity: 0; transform: translateY(8px);
       pointer-events: none; transition: opacity .25s, transform .25s;
     }
     #sfos-toast.show { opacity: 1; transform: translateY(0); }
@@ -319,6 +329,60 @@
       #sfos-header, #sfos-bottom-nav { max-width: 480px; left: 50%;
         transform: translateX(-50%); }
     }
+
+    /* ── Loading skeletons ── */
+    @keyframes sfos-shimmer {
+      0%   { background-position: -200% 0; }
+      100% { background-position:  200% 0; }
+    }
+    .sfos-skel {
+      background: linear-gradient(90deg, #1a1a1a 25%, #252525 50%, #1a1a1a 75%);
+      background-size: 200% 100%;
+      animation: sfos-shimmer 1.5s infinite;
+      border-radius: 8px;
+    }
+    .sfos-skel-line  { height: 14px; margin-bottom: 8px; }
+    .sfos-skel-line.wide  { width: 80%; }
+    .sfos-skel-line.short { width: 45%; }
+    .sfos-skel-card { height: 120px; width: 100%; border-radius: var(--rad); }
+    .sfos-skel-num  { height: 36px; width: 60%; border-radius: 8px; }
+
+    /* ── Panel transitions ── */
+    .sfos-panel {
+      animation: none;
+    }
+    .sfos-panel.active {
+      animation: sfos-panel-in 0.22s ease-out;
+    }
+    @keyframes sfos-panel-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0);   }
+    }
+
+    /* ── Offline banner ── */
+    #sfos-offline-banner {
+      display: none;
+      position: fixed;
+      top: var(--hdr);
+      left: 0; right: 0;
+      background: #ffa502;
+      color: #050505;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: center;
+      padding: 6px;
+      z-index: 200;
+    }
+    #sfos-offline-banner.visible { display: block; }
+
+    /* ── Focus ring ── */
+    *:focus-visible {
+      outline: 2px solid var(--g);
+      outline-offset: 2px;
+    }
+
+    /* ── Overlay focus trap indicator ── */
+    .sfos-sheet:focus { outline: none; }
   </style>
 </head>
 <body>
@@ -331,8 +395,12 @@
   <div id="sfos-avatar" aria-label="User avatar">U</div>
 </header>
 
+<div id="sfos-offline-banner" role="alert" aria-live="polite">
+  <i class="fas fa-wifi-slash"></i>&nbsp;You are offline — some features unavailable
+</div>
+
 <!-- ═══════════════ PANELS ═══════════════ -->
-<main id="sfos-panels">
+<main id="sfos-panels" aria-live="polite">
 
   <!-- ── HOME ── -->
   <section id="sfos_home" class="sfos-panel active">
@@ -395,7 +463,11 @@
 
     <!-- Recent activity -->
     <div class="sfos-section-title">Recent Transactions</div>
-    <div id="sfos-tx-feed"><p class="sfos-loading">Loading…</p></div>
+    <div id="sfos-tx-feed">
+      <div class="sfos-skel sfos-skel-card" style="margin-bottom:8px"></div>
+      <div class="sfos-skel sfos-skel-card" style="margin-bottom:8px"></div>
+      <div class="sfos-skel sfos-skel-card"></div>
+    </div>
   </section>
 
   <!-- ── MONEY ── -->
@@ -445,13 +517,30 @@
         <i class="fas fa-plus"></i> New Vault
       </button>
     </div>
-    <div id="sfos-vault-grid"><p class="sfos-loading">Loading vaults…</p></div>
+    <div id="sfos-vault-grid">
+      <div class="sfos-skel sfos-skel-card"></div>
+      <div class="sfos-skel sfos-skel-card"></div>
+    </div>
+    <div id="sfos-no-vaults" style="display:none;text-align:center;padding:32px 16px;color:var(--sub)">
+      <i class="fas fa-piggy-bank" style="font-size:40px;color:var(--dim);display:block;margin-bottom:12px"></i>
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">No savings vaults yet</div>
+      <div style="font-size:13px">Create a vault to start saving towards your goals.</div>
+    </div>
   </section>
 
   <!-- ── BUSINESS ── -->
   <section id="sfos_business" class="sfos-panel">
     <div style="font-size:18px;font-weight:800;margin-bottom:16px">Business & Merchant</div>
-    <div id="sfos-merchant-panel"><p class="sfos-loading">Loading…</p></div>
+    <div id="sfos-merchant-panel">
+      <div class="sfos-skel sfos-skel-line wide"></div>
+      <div class="sfos-skel sfos-skel-line short"></div>
+      <div class="sfos-skel sfos-skel-card" style="margin-top:12px"></div>
+    </div>
+    <div id="sfos-no-merchant" style="display:none;text-align:center;padding:32px 16px;color:var(--sub)">
+      <i class="fas fa-store" style="font-size:40px;color:var(--dim);display:block;margin-bottom:12px"></i>
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">No merchant account</div>
+      <div style="font-size:13px">Register as a seller to enable merchant finance features.</div>
+    </div>
     <button class="sfos-btn secondary" id="sfos-settle-btn"
       onclick="SFOSCore.settleMerchant()" style="margin-top:14px">
       <i class="fas fa-money-bill-transfer"></i>&nbsp;Request Settlement
@@ -478,17 +567,26 @@
       <button class="sfos-period-btn" id="periYr"
         onclick="_setPeriod('year',this)">Year</button>
     </div>
-    <div id="sfos-activity-container"><p class="sfos-loading">Loading…</p></div>
+    <div id="sfos-activity-container">
+      <div class="sfos-skel sfos-skel-line wide"></div>
+      <div class="sfos-skel sfos-skel-line short"></div>
+      <div class="sfos-skel sfos-skel-card" style="margin-top:8px"></div>
+    </div>
   </section>
 
   <!-- ── SECURITY ── -->
   <section id="sfos_security" class="sfos-panel">
     <div style="font-size:18px;font-weight:800;margin-bottom:16px">Security Centre</div>
-    <div id="sfos-security-panel"><p class="sfos-loading">Loading…</p></div>
+    <div id="sfos-security-panel">
+      <div class="sfos-skel sfos-skel-card"></div>
+      <div class="sfos-skel sfos-skel-card" style="margin-top:8px"></div>
+    </div>
 
     <!-- Rewards section inside Security-adjacent slot -->
     <div class="sfos-section-title">Rewards & Loyalty</div>
-    <div id="sfos-rewards-panel"><p class="sfos-loading">Loading rewards…</p></div>
+    <div id="sfos-rewards-panel">
+      <div class="sfos-skel sfos-skel-card"></div>
+    </div>
   </section>
 
   <!-- ── QR ── -->
@@ -516,27 +614,27 @@
 <!-- ═══════════════ BOTTOM NAV ═══════════════ -->
 <nav id="sfos-bottom-nav" aria-label="Main navigation">
   <button class="sfos-nav-btn active" id="sfosNavHome"
-    onclick="_navTo('sfos_home','sfosNavHome')">
+    onclick="_navTo('sfos_home','sfosNavHome')" aria-label="Home panel">
     <i class="fas fa-house"></i>Home
   </button>
   <button class="sfos-nav-btn" id="sfosNavMoney"
-    onclick="_navTo('sfos_money','sfosNavMoney')">
+    onclick="_navTo('sfos_money','sfosNavMoney')" aria-label="Money panel">
     <i class="fas fa-paper-plane"></i>Money
   </button>
   <button class="sfos-nav-btn" id="sfosNavSavings"
-    onclick="_navTo('sfos_savings','sfosNavSavings')">
+    onclick="_navTo('sfos_savings','sfosNavSavings')" aria-label="Savings panel">
     <i class="fas fa-piggy-bank"></i>Savings
   </button>
   <button class="sfos-nav-btn" id="sfosNavBusiness"
-    onclick="_navTo('sfos_business','sfosNavBusiness')">
+    onclick="_navTo('sfos_business','sfosNavBusiness')" aria-label="Business panel">
     <i class="fas fa-briefcase"></i>Business
   </button>
   <button class="sfos-nav-btn" id="sfosNavActivity"
-    onclick="_navTo('sfos_activity','sfosNavActivity')">
+    onclick="_navTo('sfos_activity','sfosNavActivity')" aria-label="Activity panel">
     <i class="fas fa-chart-bar"></i>Activity
   </button>
   <button class="sfos-nav-btn" id="sfosNavSecurity"
-    onclick="_navTo('sfos_security','sfosNavSecurity')">
+    onclick="_navTo('sfos_security','sfosNavSecurity')" aria-label="Security panel">
     <i class="fas fa-shield-halved"></i>Security
   </button>
 </nav>
@@ -546,7 +644,7 @@
 <!-- Top Up -->
 <div id="sfos-topup-overlay" class="sfos-overlay" aria-hidden="true"
   onclick="if(event.target===this)_closeOverlay('sfos-topup-overlay')">
-  <div class="sfos-sheet">
+  <div class="sfos-sheet" role="dialog" aria-modal="true" tabindex="-1">
     <div class="sfos-sheet-handle"></div>
     <div class="sfos-sheet-title">Top Up Wallet</div>
     <div class="sfos-field">
@@ -571,7 +669,7 @@
 <!-- New Vault -->
 <div id="sfos-newvault-overlay" class="sfos-overlay" aria-hidden="true"
   onclick="if(event.target===this)_closeOverlay('sfos-newvault-overlay')">
-  <div class="sfos-sheet">
+  <div class="sfos-sheet" role="dialog" aria-modal="true" tabindex="-1">
     <div class="sfos-sheet-handle"></div>
     <div class="sfos-sheet-title">Create Savings Vault</div>
     <div class="sfos-field">
@@ -599,7 +697,7 @@
 <!-- Escrow -->
 <div id="sfos-escrow-overlay" class="sfos-overlay" aria-hidden="true"
   onclick="if(event.target===this)_closeOverlay('sfos-escrow-overlay')">
-  <div class="sfos-sheet">
+  <div class="sfos-sheet" role="dialog" aria-modal="true" tabindex="-1">
     <div class="sfos-sheet-handle"></div>
     <div class="sfos-sheet-title">Create Escrow</div>
     <div class="sfos-field">
@@ -623,7 +721,7 @@
 <!-- Set Limits -->
 <div id="sfos-limits-overlay" class="sfos-overlay" aria-hidden="true"
   onclick="if(event.target===this)_closeOverlay('sfos-limits-overlay')">
-  <div class="sfos-sheet">
+  <div class="sfos-sheet" role="dialog" aria-modal="true" tabindex="-1">
     <div class="sfos-sheet-handle"></div>
     <div class="sfos-sheet-title">Spending Limits</div>
     <div class="sfos-field">
@@ -645,7 +743,7 @@
 <!-- Group Wallet -->
 <div id="sfos-group-overlay" class="sfos-overlay" aria-hidden="true"
   onclick="if(event.target===this)_closeOverlay('sfos-group-overlay')">
-  <div class="sfos-sheet">
+  <div class="sfos-sheet" role="dialog" aria-modal="true" tabindex="-1">
     <div class="sfos-sheet-handle"></div>
     <div class="sfos-sheet-title">Create Group Wallet</div>
     <div class="sfos-field">
@@ -847,6 +945,15 @@
   document.addEventListener('DOMContentLoaded', () => {
     window.SFOS = SFOSCore;
     SFOSCore.init();
+
+    /* ── Offline detection ── */
+    function _updateOnlineStatus() {
+      const banner = document.getElementById('sfos-offline-banner');
+      if (banner) banner.classList.toggle('visible', !navigator.onLine);
+    }
+    window.addEventListener('online',  _updateOnlineStatus);
+    window.addEventListener('offline', _updateOnlineStatus);
+    _updateOnlineStatus(); // check on load
   });
 </script>
 </body>

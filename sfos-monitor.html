@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>SFOS Monitor — SOKONI Ops</title>
+  <meta name="theme-color" content="#050505">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    /* ── Design tokens (identical to sfos-wallet.html) ── */
+    :root {
+      --bg:    #050505;
+      --sur:   #0d0d0d;
+      --sur2:  #141414;
+      --g:     #71ff00;
+      --ga:    rgba(113,255,0,.10);
+      --dim:   #555;
+      --txt:   #e8e8e8;
+      --sub:   #888;
+      --red:   #ff4757;
+      --amber: #ffa502;
+      --blue:  #3498db;
+      --hdr:   60px;
+      --rad:   14px;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { height: 100%; }
+    body {
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--txt);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    a { color: inherit; text-decoration: none; }
+    button {
+      cursor: pointer; border: none; background: none;
+      font-family: inherit; font-size: inherit; color: inherit;
+    }
+    input {
+      font-family: inherit;
+      background: var(--sur2);
+      border: 1px solid #2a2a2a;
+      color: var(--txt);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input:focus { border-color: var(--g); }
+    input::placeholder { color: var(--dim); }
+
+    /* ── Auth gate overlay ── */
+    #auth-gate {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; align-items: center; justify-content: center;
+      /* A full-screen auth gate is a MODAL: at 9999 it rendered UNDER the header (100001),
+         so the header floated on top of the very gate that is meant to block the page. */
+      z-index: var(--sk-z-sheet, 100010);
+    }
+    #auth-gate.hidden { display: none; }
+    .auth-gate-inner {
+      text-align: center;
+    }
+    .auth-gate-inner i {
+      font-size: 40px; color: var(--dim); display: block; margin-bottom: 16px;
+    }
+    .auth-gate-inner p { color: var(--sub); font-size: 13px; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #1a1a1a;
+      border-top-color: var(--g);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Header ── */
+    #mon-header {
+      position: sticky; top: 0;
+      height: var(--hdr);
+      background: var(--sur);
+      border-bottom: 1px solid #1a1a1a;
+      display: flex; align-items: center;
+      padding: 0 20px; gap: 14px;
+      z-index: 100;
+    }
+    #mon-logo {
+      font-size: 13px; font-weight: 800;
+      letter-spacing: .07em; color: var(--g);
+      flex: 1;
+    }
+    #mon-logo span { color: var(--sub); font-weight: 500; }
+    #mon-user-label {
+      font-size: 11px; color: var(--sub);
+      white-space: nowrap;
+    }
+    #mon-refresh-btn {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--sur2); border: 1px solid #2a2a2a;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: var(--sub);
+      transition: all .2s;
+    }
+    #mon-refresh-btn:hover { border-color: var(--g); color: var(--g); }
+    #mon-refresh-btn.spinning i { animation: spin .7s linear infinite; }
+    #mon-last-refresh {
+      font-size: 10px; color: var(--dim);
+      white-space: nowrap;
+    }
+
+    /* ── Page layout ── */
+    #mon-page {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px 20px 40px;
+    }
+
+    /* ── Section headings ── */
+    .mon-section-title {
+      font-size: 11px; font-weight: 700;
+      letter-spacing: .09em; text-transform: uppercase;
+      color: var(--sub); margin: 28px 0 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .mon-section-title::after {
+      content: ''; flex: 1;
+      height: 1px; background: #1a1a1a;
+    }
+
+    /* ── Status hero ── */
+    #status-hero {
+      background: var(--sur);
+      border: 1px solid #1a1a1a;
+      border-radius: var(--rad);
+      padding: 24px 28px;
+      display: flex; align-items: center; gap: 24px;
+      flex-wrap: wrap;
+    }
+    #status-badge {
+      font-size: 11px; font-weight: 900;
+      letter-spacing: .14em; text-transform: uppercase;
+      padding: 6px 18px; border-radius: 30px;
+      border: 2px solid currentColor;
+      white-space: nowrap;
+    }
+    #status-badge.healthy  { color: var(--g);     background: rgba(113,255,0,.08); }
+    #status-badge.warning  { color: var(--amber);  background: rgba(255,165,2,.08); }
+    #status-badge.degraded { color: var(--red);    background: rgba(255,71,87,.08); }
+    #status-badge.loading  { color: var(--dim);    background: transparent; border-color: var(--dim); }
+
+    #status-main-text {
+      flex: 1; min-width: 180px;
+    }
+    #status-headline {
+      font-size: 22px; font-weight: 800;
+      letter-spacing: -.01em; color: var(--txt);
+    }
+    #status-sub {
+      font-size: 12px; color: var(--sub); margin-top: 3px;
+    }
+    #status-checks {
+      display: flex; flex-wrap: wrap; gap: 8px;
+    }
+    .status-check-chip {
+      font-size: 11px; font-weight: 600;
+      background: var(--sur2); border: 1px solid #222;
+      border-radius: 20px; padding: 4px 10px;
+      display: flex; align-items: center; gap: 5px;
+    }
+    .status-check-chip.ok   i { color: var(--g); }
+    .status-check-chip.warn i { color: var(--amber); }
+    .status-check-chip.fail i { color: var(--red); }
+
+    /* ── KPI grid ── */
+    #kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    @media (max-width: 760px) { #kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 480px) { #kpi-grid { grid-template-columns: 1fr; } }
+
+    .kpi-card {
+      background: var(--sur);
+      border: 1px solid #1a1a1a;
+      border-radius: var(--rad);
+      padding: 18px 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: var(--g);
+      opacity: .3;
+    }
+    .kpi-card.alert-card::before { background: var(--red); }
+    .kpi-card.warn-card::before  { background: var(--amber); }
+    .kpi-card.info-card::before  { background: var(--blue); }
+
+    .kpi-icon {
+      font-size: 16px; color: var(--g);
+      margin-bottom: 10px; display: block;
+    }
+    .kpi-card.alert-card .kpi-icon { color: var(--red); }
+    .kpi-card.warn-card  .kpi-icon { color: var(--amber); }
+    .kpi-card.info-card  .kpi-icon { color: var(--blue); }
+
+    .kpi-label {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--sub); margin-bottom: 6px;
+    }
+    .kpi-value {
+      font-size: 30px; font-weight: 900;
+      letter-spacing: -.02em; color: var(--txt);
+      line-height: 1;
+    }
+    .kpi-meta {
+      font-size: 11px; color: var(--dim); margin-top: 6px;
+    }
+
+    /* ── Audit log table ── */
+    .table-wrap {
+      background: var(--sur);
+      border: 1px solid #1a1a1a;
+      border-radius: var(--rad);
+      overflow: hidden;
+    }
+    #audit-table-container {
+      overflow-x: auto;
+    }
+    #audit-table {
+      width: 100%; border-collapse: collapse;
+      min-width: 640px;
+    }
+    #audit-table thead th {
+      background: var(--sur2);
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .08em; text-transform: uppercase;
+      color: var(--sub); padding: 10px 14px;
+      text-align: left; border-bottom: 1px solid #1a1a1a;
+      white-space: nowrap;
+    }
+    #audit-table tbody tr {
+      border-bottom: 1px solid #111;
+      transition: background .15s;
+    }
+    #audit-table tbody tr:last-child { border-bottom: none; }
+    #audit-table tbody tr:hover { background: var(--sur2); }
+    #audit-table tbody td {
+      padding: 10px 14px;
+      font-size: 12px; color: var(--sub);
+      vertical-align: middle;
+    }
+    #audit-table tbody td:first-child { color: var(--dim); font-size: 11px; white-space: nowrap; }
+    #audit-table .uid-cell {
+      font-family: 'Courier New', monospace;
+      font-size: 11px; color: var(--txt);
+    }
+    #audit-table .action-cell {
+      font-weight: 700; color: var(--txt); white-space: nowrap;
+    }
+    #audit-table .collection-cell {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+    }
+
+    /* Severity badges */
+    .sev-badge {
+      font-size: 10px; font-weight: 700;
+      letter-spacing: .05em; text-transform: uppercase;
+      border-radius: 20px; padding: 2px 8px;
+      white-space: nowrap;
+    }
+    .sev-badge.INFO     { background: rgba(52,152,219,.15); color: var(--blue); }
+    .sev-badge.WARN     { background: rgba(255,165,2,.15);  color: var(--amber); }
+    .sev-badge.ERROR    { background: rgba(255,71,87,.15);  color: var(--red); }
+    .sev-badge.CRITICAL { background: rgba(255,71,87,.25);  color: var(--red); border: 1px solid var(--red); }
+
+    /* ── Table empty/loading state ── */
+    .table-state {
+      padding: 36px; text-align: center;
+      color: var(--dim); font-size: 13px;
+    }
+    .table-state i { font-size: 24px; display: block; margin-bottom: 10px; }
+
+    /* ── Quick Actions panel ── */
+    #quick-actions {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+    @media (max-width: 640px) { #quick-actions { grid-template-columns: 1fr; } }
+
+    .qa-card {
+      background: var(--sur);
+      border: 1px solid #1a1a1a;
+      border-radius: var(--rad);
+      padding: 18px;
+    }
+    .qa-title {
+      font-size: 12px; font-weight: 700;
+      color: var(--txt); margin-bottom: 4px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .qa-title i { color: var(--g); font-size: 14px; }
+    .qa-desc {
+      font-size: 11px; color: var(--sub); margin-bottom: 14px;
+    }
+    .qa-row {
+      display: flex; gap: 8px; align-items: center;
+    }
+    .qa-row input { flex: 1; min-width: 0; }
+    .qa-btn {
+      padding: 8px 14px;
+      background: var(--ga);
+      border: 1px solid rgba(113,255,0,.3);
+      border-radius: 8px;
+      font-size: 12px; font-weight: 700;
+      color: var(--g);
+      white-space: nowrap;
+      transition: background .2s, border-color .2s;
+      flex-shrink: 0;
+    }
+    .qa-btn:hover { background: rgba(113,255,0,.2); border-color: var(--g); }
+    .qa-btn:disabled {
+      opacity: .4; cursor: not-allowed;
+    }
+    .qa-btn.danger {
+      background: rgba(255,71,87,.1);
+      border-color: rgba(255,71,87,.3);
+      color: var(--red);
+    }
+    .qa-btn.danger:hover { background: rgba(255,71,87,.2); border-color: var(--red); }
+    .qa-result {
+      margin-top: 12px;
+      background: var(--sur2);
+      border: 1px solid #222;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 11px;
+      font-family: 'Courier New', monospace;
+      color: var(--sub);
+      line-height: 1.6;
+      min-height: 0;
+      white-space: pre-wrap;
+      word-break: break-all;
+      display: none;
+    }
+    .qa-result.visible { display: block; }
+    .qa-result.ok    { border-color: rgba(113,255,0,.3); color: var(--g); }
+    .qa-result.error { border-color: rgba(255,71,87,.3); color: var(--red); }
+    .qa-result.info  { border-color: rgba(52,152,219,.3); color: var(--blue); }
+
+    /* ── Toast ── */
+    #mon-toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: var(--sur2); border: 1px solid #2a2a2a;
+      border-radius: 24px; padding: 10px 20px;
+      font-size: 13px; font-weight: 600;
+      color: var(--txt); z-index: 9990;
+      opacity: 0; pointer-events: none;
+      transition: opacity .3s;
+      white-space: nowrap;
+      max-width: calc(100vw - 40px);
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    #mon-toast.show { opacity: 1; pointer-events: auto; }
+    #mon-toast.ok    { border-color: rgba(113,255,0,.4); color: var(--g); }
+    #mon-toast.error { border-color: rgba(255,71,87,.4);  color: var(--red); }
+
+    /* ── Responsive header label hide ── */
+    @media (max-width: 520px) {
+      #mon-user-label { display: none; }
+      #mon-last-refresh { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate (shown while checking, hidden once verified) -->
+<div id="auth-gate">
+  <div class="auth-gate-inner">
+    <div class="spinner"></div>
+    <p id="auth-gate-msg">Verifying admin access…</p>
+  </div>
+</div>
+
+<!-- ── Header ── -->
+<header id="mon-header">
+  <div id="mon-logo">SFOS <span>/ OPS MONITOR</span></div>
+  <span id="mon-user-label"></span>
+  <span id="mon-last-refresh"></span>
+  <button id="mon-refresh-btn" title="Refresh now" onclick="triggerRefresh()">
+    <i class="fa-solid fa-rotate-right"></i>
+  </button>
+</header>
+
+<!-- ── Main page ── -->
+<main id="mon-page">
+
+  <!-- 1. System Health Header -->
+  <div class="mon-section-title"><i class="fa-solid fa-heart-pulse"></i> System Health</div>
+  <div id="status-hero">
+    <span id="status-badge" class="loading">LOADING</span>
+    <div id="status-main-text">
+      <div id="status-headline">Checking system status…</div>
+      <div id="status-sub">Last verified: —</div>
+    </div>
+    <div id="status-checks">
+      <span class="status-check-chip" id="sc-auth">
+        <i class="fa-solid fa-circle-question"></i> Auth
+      </span>
+      <span class="status-check-chip" id="sc-firestore">
+        <i class="fa-solid fa-circle-question"></i> Firestore
+      </span>
+      <span class="status-check-chip" id="sc-functions">
+        <i class="fa-solid fa-circle-question"></i> Functions
+      </span>
+      <span class="status-check-chip" id="sc-ledger">
+        <i class="fa-solid fa-circle-question"></i> Ledger
+      </span>
+      <span class="status-check-chip" id="sc-escrow">
+        <i class="fa-solid fa-circle-question"></i> Escrow
+      </span>
+    </div>
+  </div>
+
+  <!-- 2. Live KPI Cards -->
+  <div class="mon-section-title"><i class="fa-solid fa-chart-bar"></i> Live KPIs</div>
+  <div id="kpi-grid">
+
+    <div class="kpi-card">
+      <i class="kpi-icon fa-solid fa-users"></i>
+      <div class="kpi-label">Total Users</div>
+      <div class="kpi-value" id="kpi-users">—</div>
+      <div class="kpi-meta">Registered accounts</div>
+    </div>
+
+    <div class="kpi-card">
+      <i class="kpi-icon fa-solid fa-arrow-right-arrow-left"></i>
+      <div class="kpi-label">Transactions (24h)</div>
+      <div class="kpi-value" id="kpi-txns">—</div>
+      <div class="kpi-meta">Completed ledger entries</div>
+    </div>
+
+    <div class="kpi-card alert-card">
+      <i class="kpi-icon fa-solid fa-triangle-exclamation"></i>
+      <div class="kpi-label">Critical Alerts (24h)</div>
+      <div class="kpi-value" id="kpi-alerts">—</div>
+      <div class="kpi-meta">ERROR + CRITICAL severity</div>
+    </div>
+
+    <div class="kpi-card info-card">
+      <i class="kpi-icon fa-solid fa-clock-rotate-left"></i>
+      <div class="kpi-label">Audit Events (1h)</div>
+      <div class="kpi-value" id="kpi-audit">—</div>
+      <div class="kpi-meta">sfosAuditLog entries</div>
+    </div>
+
+    <div class="kpi-card warn-card">
+      <i class="kpi-icon fa-solid fa-lock"></i>
+      <div class="kpi-label">Active Escrows</div>
+      <div class="kpi-value" id="kpi-escrows">—</div>
+      <div class="kpi-meta">sfosEscrow status=ACTIVE</div>
+    </div>
+
+    <div class="kpi-card warn-card">
+      <i class="kpi-icon fa-solid fa-hourglass-half"></i>
+      <div class="kpi-label">Stuck Idempotency Keys</div>
+      <div class="kpi-value" id="kpi-idempotent">—</div>
+      <div class="kpi-meta">PENDING &gt; 5 min</div>
+    </div>
+
+  </div>
+
+  <!-- 3. Recent Audit Log -->
+  <div class="mon-section-title"><i class="fa-solid fa-list-check"></i> Recent Audit Log</div>
+  <div class="table-wrap">
+    <div id="audit-table-container">
+      <table id="audit-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>UID</th>
+            <th>Action</th>
+            <th>Severity</th>
+            <th>Collection</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody">
+          <tr>
+            <td colspan="5">
+              <div class="table-state">
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Loading audit log…
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 4. Quick Actions -->
+  <div class="mon-section-title"><i class="fa-solid fa-bolt"></i> Quick Actions</div>
+  <div id="quick-actions">
+
+    <!-- Integrity Check -->
+    <div class="qa-card">
+      <div class="qa-title">
+        <i class="fa-solid fa-shield-halved"></i>
+        Run Integrity Check
+      </div>
+      <div class="qa-desc">
+        Invokes sfosLedgerIntegrityCheck CF — verifies all wallets balance against their ledger sums.
+      </div>
+      <div class="qa-row">
+        <button class="qa-btn" id="btn-integrity" onclick="runIntegrityCheck()">
+          <i class="fa-solid fa-play"></i> Run Check
+        </button>
+      </div>
+      <div class="qa-result" id="res-integrity"></div>
+    </div>
+
+    <!-- View User Wallet -->
+    <div class="qa-card">
+      <div class="qa-title">
+        <i class="fa-solid fa-wallet"></i>
+        View User Wallet
+      </div>
+      <div class="qa-desc">
+        Calls sfosWalletGet for the specified UID and renders balance summary.
+      </div>
+      <div class="qa-row">
+        <input type="text" id="uid-wallet" placeholder="Enter UID…" maxlength="128">
+        <button class="qa-btn" onclick="viewUserWallet()">
+          <i class="fa-solid fa-magnifying-glass"></i> Lookup
+        </button>
+      </div>
+      <div class="qa-result" id="res-wallet"></div>
+    </div>
+
+    <!-- Check User Risk -->
+    <div class="qa-card">
+      <div class="qa-title">
+        <i class="fa-solid fa-user-shield"></i>
+        Check User Risk
+      </div>
+      <div class="qa-desc">
+        Calls sfosRiskCheck CF — returns risk score, flags, and recommended action for a UID.
+      </div>
+      <div class="qa-row">
+        <input type="text" id="uid-risk" placeholder="Enter UID…" maxlength="128">
+        <button class="qa-btn" onclick="checkUserRisk()">
+          <i class="fa-solid fa-magnifying-glass"></i> Check
+        </button>
+      </div>
+      <div class="qa-result" id="res-risk"></div>
+    </div>
+
+    <!-- Force Reconcile User -->
+    <div class="qa-card">
+      <div class="qa-title">
+        <i class="fa-solid fa-scale-balanced"></i>
+        Force Reconcile User
+      </div>
+      <div class="qa-desc">
+        Compares wallet balance against ledger sum. Highlights any mismatch in real-time.
+      </div>
+      <div class="qa-row">
+        <input type="text" id="uid-reconcile" placeholder="Enter UID…" maxlength="128">
+        <button class="qa-btn danger" onclick="forceReconcile()">
+          <i class="fa-solid fa-scale-balanced"></i> Reconcile
+        </button>
+      </div>
+      <div class="qa-result" id="res-reconcile"></div>
+    </div>
+
+  </div>
+
+</main>
+
+<!-- Toast -->
+<div id="mon-toast"></div>
+
+<!-- ── Firebase module ── -->
+<script type="module" src="firebase.js"></script>
+<!-- ── SFOS Core SDK (IIFE) ── -->
+<script src="sfos-core.js"></script>
+
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CONSTANTS
+═══════════════════════════════════════════════════════════════════════ */
+const FB_SDK        = 'https://www.gstatic.com/firebasejs/10.12.2';
+const CF_REGION     = 'us-central1';
+const AUDIT_LIMIT   = 20;
+const REFRESH_MS    = 60_000;      // auto-refresh every 60 s
+const STUCK_AGE_MS  = 5 * 60_000; // 5 minutes = stuck idempotency key
+
+/* ═══════════════════════════════════════════════════════════════════════
+   XSS ESCAPING — every innerHTML write goes through this
+═══════════════════════════════════════════════════════════════════════ */
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════════════ */
+let _fns      = null;   // Firebase Functions instance
+let _db       = null;   // Firestore instance
+let _uid      = null;   // current admin uid
+let _email    = null;   // current admin email
+let _refreshTimer = null;
+let _toastTimer   = null;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════════════════ */
+function toast(msg, type = '') {
+  const el = document.getElementById('mon-toast');
+  clearTimeout(_toastTimer);
+  el.className = 'show ' + type;
+  el.textContent = msg;
+  _toastTimer = setTimeout(() => { el.className = ''; }, 3500);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AUTH GATE — verify admin custom claim
+═══════════════════════════════════════════════════════════════════════ */
+async function checkAdminAuth() {
+  return new Promise((resolve) => {
+    // Wait for firebase.js module to expose firebaseApp on window
+    const waitForApp = setInterval(async () => {
+      if (!window.firebaseApp) return; // not ready yet
+      clearInterval(waitForApp);
+
+      try {
+        const { getAuth, onAuthStateChanged } =
+          await import(`${FB_SDK}/firebase-auth.js`);
+        const auth = getAuth(window.firebaseApp);
+
+        onAuthStateChanged(auth, async (user) => {
+          if (!user) {
+            document.getElementById('auth-gate-msg').textContent =
+              'Not signed in — redirecting…';
+            setTimeout(() => {
+              location.href = 'login.html?redirect=sfos-monitor.html';
+            }, 1200);
+            return;
+          }
+
+          const tokenResult = await user.getIdTokenResult(/* forceRefresh */ true);
+          if (tokenResult.claims.admin !== true) {
+            document.getElementById('auth-gate-msg').textContent =
+              'Access denied — admin privileges required.';
+            setTimeout(() => {
+              location.href = 'login.html?redirect=sfos-monitor.html';
+            }, 2000);
+            return;
+          }
+
+          _uid   = user.uid;
+          _email = user.email || user.displayName || _uid.slice(0, 8);
+
+          // Hide auth gate
+          document.getElementById('auth-gate').classList.add('hidden');
+          document.getElementById('mon-user-label').textContent =
+            esc(_email);
+
+          resolve(user);
+        });
+      } catch (err) {
+        document.getElementById('auth-gate-msg').textContent =
+          'Auth initialisation error: ' + esc(err.message);
+      }
+    }, 80);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   FIREBASE SDK HELPERS
+═══════════════════════════════════════════════════════════════════════ */
+async function getFns() {
+  if (_fns) return _fns;
+  const { getFunctions } = await import(`${FB_SDK}/firebase-functions.js`);
+  _fns = getFunctions(window.firebaseApp, CF_REGION);
+  return _fns;
+}
+
+async function getDb() {
+  if (_db) return _db;
+  const { getFirestore } = await import(`${FB_SDK}/firebase-firestore.js`);
+  _db = getFirestore(window.firebaseApp);
+  return _db;
+}
+
+async function callCf(name, payload = {}) {
+  const { httpsCallable } = await import(`${FB_SDK}/firebase-functions.js`);
+  const fns = await getFns();
+  const fn  = httpsCallable(fns, name);
+  const res = await fn(payload);
+  return res.data;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HEALTH DATA — calls sfosHealthCheck CF
+═══════════════════════════════════════════════════════════════════════ */
+async function loadHealthData() {
+  const btn = document.getElementById('mon-refresh-btn');
+  btn.classList.add('spinning');
+  setLastRefresh('Refreshing…');
+
+  try {
+    const data = await callCf('sfosHealthCheck', {});
+    renderStatus(data);
+    renderKPIs(data);
+    toast('Dashboard refreshed', 'ok');
+  } catch (err) {
+    console.error('[sfos-monitor] sfosHealthCheck error:', err);
+    renderStatusError(err);
+    toast('Health check failed — ' + esc(err.message), 'error');
+  } finally {
+    btn.classList.remove('spinning');
+    setLastRefresh(new Date().toLocaleTimeString());
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RENDER — Status Hero
+═══════════════════════════════════════════════════════════════════════ */
+function renderStatus(data) {
+  const badge   = document.getElementById('status-badge');
+  const headline = document.getElementById('status-headline');
+  const sub      = document.getElementById('status-sub');
+
+  const status  = (data.status || 'UNKNOWN').toUpperCase();
+  const checks  = data.checks || {};
+
+  // Badge
+  badge.className = '';
+  if (status === 'HEALTHY')        badge.classList.add('healthy');
+  else if (status === 'WARNING')   badge.classList.add('warning');
+  else                             badge.classList.add('degraded');
+  badge.textContent = status;
+
+  // Headline
+  const headlines = {
+    HEALTHY:  'All systems operational',
+    WARNING:  'Degraded performance detected',
+    DEGRADED: 'System health critical',
+  };
+  headline.textContent = headlines[status] || 'System status unknown';
+
+  // Sub
+  sub.textContent = 'Checked: ' + new Date().toLocaleString('en-KE', {
+    timeZone: 'Africa/Nairobi',
+    dateStyle: 'medium', timeStyle: 'short',
+  }) + ' EAT';
+
+  // Sub-checks
+  _renderCheck('sc-auth',      checks.auth,      'Auth');
+  _renderCheck('sc-firestore', checks.firestore, 'Firestore');
+  _renderCheck('sc-functions', checks.functions, 'Functions');
+  _renderCheck('sc-ledger',    checks.ledger,    'Ledger');
+  _renderCheck('sc-escrow',    checks.escrow,    'Escrow');
+}
+
+function _renderCheck(id, ok, label) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = 'status-check-chip ' + (ok === false ? 'fail' : ok === true ? 'ok' : 'warn');
+  const icon = ok === false ? 'fa-circle-xmark' : ok === true ? 'fa-circle-check' : 'fa-circle-question';
+  el.innerHTML = `<i class="fa-solid ${esc(icon)}"></i> ${esc(label)}`;
+}
+
+function renderStatusError(err) {
+  const badge   = document.getElementById('status-badge');
+  const headline = document.getElementById('status-headline');
+  const sub      = document.getElementById('status-sub');
+
+  badge.className = 'degraded';
+  badge.textContent = 'DEGRADED';
+  headline.textContent = 'Health check unreachable';
+  sub.textContent = 'Error: ' + esc(err.message);
+
+  ['sc-auth','sc-firestore','sc-functions','sc-ledger','sc-escrow'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.className = 'status-check-chip warn';
+      el.innerHTML = '<i class="fa-solid fa-circle-question"></i> Unknown';
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   RENDER — KPI Cards
+═══════════════════════════════════════════════════════════════════════ */
+function renderKPIs(data) {
+  const kpis = data.kpis || {};
+
+  _setKpi('kpi-users',      kpis.totalUsers);
+  _setKpi('kpi-txns',       kpis.transactions24h);
+  _setKpi('kpi-alerts',     kpis.criticalAlerts24h);
+  _setKpi('kpi-audit',      kpis.auditEvents1h);
+  _setKpi('kpi-escrows',    kpis.activeEscrows);
+  _setKpi('kpi-idempotent', kpis.stuckIdempotencyKeys);
+}
+
+function _setKpi(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = (value !== null && value !== undefined)
+    ? Number(value).toLocaleString()
+    : '—';
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   AUDIT LOG — reads sfosAuditLog directly via Firestore SDK
+═══════════════════════════════════════════════════════════════════════ */
+async function loadAuditLog() {
+  const tbody = document.getElementById('audit-tbody');
+  tbody.innerHTML = `<tr><td colspan="5"><div class="table-state">
+    <i class="fa-solid fa-spinner fa-spin"></i>Loading audit log…</div></td></tr>`;
+
+  try {
+    const db = await getDb();
+    const {
+      collection, query, orderBy, limit, getDocs,
+    } = await import(`${FB_SDK}/firebase-firestore.js`);
+
+    const q   = query(
+      collection(db, 'sfosAuditLog'),
+      orderBy('createdAt', 'desc'),
+      limit(AUDIT_LIMIT)
+    );
+    const snap = await getDocs(q);
+
+    if (snap.empty) {
+      tbody.innerHTML = `<tr><td colspan="5"><div class="table-state">
+        <i class="fa-solid fa-inbox"></i>No audit entries found.</div></td></tr>`;
+      return;
+    }
+
+    let html = '';
+    snap.forEach((docSnap) => {
+      const d = docSnap.data();
+
+      const ts = d.createdAt?.toDate
+        ? d.createdAt.toDate().toLocaleString('en-KE', {
+            timeZone: 'Africa/Nairobi',
+            dateStyle: 'short', timeStyle: 'medium',
+          })
+        : esc(String(d.createdAt || '—'));
+
+      const uid      = d.uid    ? (d.uid.length > 16 ? d.uid.slice(0, 8) + '…' + d.uid.slice(-6) : d.uid) : '—';
+      const action   = d.action    || '—';
+      const sev      = d.severity  || 'INFO';
+      const coll     = d.collection || d.targetCollection || '—';
+      const sevClass = ['INFO','WARN','ERROR','CRITICAL'].includes(sev) ? sev : 'INFO';
+
+      html += `<tr>
+        <td>${esc(ts)}</td>
+        <td class="uid-cell" title="${esc(d.uid || '')}">${esc(uid)}</td>
+        <td class="action-cell">${esc(action)}</td>
+        <td><span class="sev-badge ${esc(sevClass)}">${esc(sev)}</span></td>
+        <td class="collection-cell">${esc(coll)}</td>
+      </tr>`;
+    });
+
+    tbody.innerHTML = html;
+  } catch (err) {
+    console.error('[sfos-monitor] audit log error:', err);
+    tbody.innerHTML = `<tr><td colspan="5"><div class="table-state">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      Failed to load: ${esc(err.message)}</div></td></tr>`;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QUICK ACTION — Integrity Check
+═══════════════════════════════════════════════════════════════════════ */
+async function runIntegrityCheck() {
+  const btn = document.getElementById('btn-integrity');
+  const res = document.getElementById('res-integrity');
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+  _showResult(res, 'Invoking sfosLedgerIntegrityCheck…', 'info');
+
+  try {
+    const data = await callCf('sfosLedgerIntegrityCheck', {});
+    const mismatches = data.mismatches ?? 'N/A';
+    const checked    = data.checked    ?? 'N/A';
+    const status     = data.status     || (mismatches === 0 ? 'OK' : 'MISMATCH');
+    const isOk       = mismatches === 0 || status === 'OK';
+
+    const output = [
+      `Status:     ${status}`,
+      `Checked:    ${checked} wallets`,
+      `Mismatches: ${mismatches}`,
+      data.details ? `Details:    ${JSON.stringify(data.details, null, 2)}` : '',
+    ].filter(Boolean).join('\n');
+
+    _showResult(res, output, isOk ? 'ok' : 'error');
+    toast(isOk ? 'Integrity OK' : `${mismatches} mismatches found!`, isOk ? 'ok' : 'error');
+  } catch (err) {
+    _showResult(res, 'Error: ' + err.message, 'error');
+    toast('Integrity check failed', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-play"></i> Run Check';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QUICK ACTION — View User Wallet
+═══════════════════════════════════════════════════════════════════════ */
+async function viewUserWallet() {
+  const uid = _getInput('uid-wallet');
+  const res = document.getElementById('res-wallet');
+  if (!uid) { toast('Enter a UID', 'error'); return; }
+
+  _showResult(res, 'Looking up wallet…', 'info');
+
+  try {
+    const data = await callCf('sfosWalletGet', { targetUid: uid });
+    const bal   = data.balance       !== undefined ? 'KES ' + Number(data.balance).toLocaleString('en-KE', { minimumFractionDigits: 2 }) : 'N/A';
+    const tier  = data.tier          || 'N/A';
+    const kyc   = data.kycStatus     || 'N/A';
+    const escrow= data.escrowBalance !== undefined ? 'KES ' + Number(data.escrowBalance).toFixed(2) : 'N/A';
+    const frozen= data.frozen        ? 'YES ⚠' : 'No';
+
+    const output = [
+      `Balance:       ${bal}`,
+      `Tier:          ${tier}`,
+      `KYC Status:    ${kyc}`,
+      `Escrow Hold:   ${escrow}`,
+      `Frozen:        ${frozen}`,
+      `Daily Limit:   ${data.dailyLimit   !== undefined ? 'KES ' + data.dailyLimit   : 'N/A'}`,
+      `Monthly Limit: ${data.monthlyLimit !== undefined ? 'KES ' + data.monthlyLimit : 'N/A'}`,
+    ].join('\n');
+
+    _showResult(res, output, 'ok');
+  } catch (err) {
+    _showResult(res, 'Error: ' + err.message, 'error');
+    toast('Wallet lookup failed', 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QUICK ACTION — Check User Risk
+═══════════════════════════════════════════════════════════════════════ */
+async function checkUserRisk() {
+  const uid = _getInput('uid-risk');
+  const res = document.getElementById('res-risk');
+  if (!uid) { toast('Enter a UID', 'error'); return; }
+
+  _showResult(res, 'Invoking sfosRiskCheck…', 'info');
+
+  try {
+    const data = await callCf('sfosRiskCheck', { targetUid: uid });
+    const score  = data.riskScore  ?? data.score  ?? 'N/A';
+    const level  = data.riskLevel  ?? data.level  ?? 'N/A';
+    const action = data.recommended ?? data.action ?? 'N/A';
+    const flags  = Array.isArray(data.flags) ? data.flags.join(', ') || 'None' : 'N/A';
+
+    const output = [
+      `Risk Score:   ${score}`,
+      `Risk Level:   ${level}`,
+      `Recommended:  ${action}`,
+      `Flags:        ${flags}`,
+      data.detail ? `Detail:       ${data.detail}` : '',
+    ].filter(Boolean).join('\n');
+
+    const isHigh = String(level).match(/HIGH|CRITICAL|FREEZE/i);
+    _showResult(res, output, isHigh ? 'error' : 'ok');
+    toast(isHigh ? 'High risk user detected!' : 'Risk check complete', isHigh ? 'error' : 'ok');
+  } catch (err) {
+    _showResult(res, 'Error: ' + err.message, 'error');
+    toast('Risk check failed', 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QUICK ACTION — Force Reconcile User
+═══════════════════════════════════════════════════════════════════════ */
+async function forceReconcile() {
+  const uid = _getInput('uid-reconcile');
+  const res = document.getElementById('res-reconcile');
+  if (!uid) { toast('Enter a UID', 'error'); return; }
+
+  _showResult(res, 'Fetching wallet + ledger…', 'info');
+
+  try {
+    const db = await getDb();
+    const {
+      doc, getDoc, collection, query, where, getDocs,
+    } = await import(`${FB_SDK}/firebase-firestore.js`);
+
+    // 1. Wallet authoritative balance
+    const walletSnap = await getDoc(doc(db, 'wallets', uid));
+    if (!walletSnap.exists()) {
+      _showResult(res, 'Wallet document not found for UID: ' + uid, 'error');
+      return;
+    }
+    const walletBal = Number(walletSnap.data().balance ?? 0);
+
+    // 2. Sum sfosLedger entries for this user
+    const ledgerQ   = query(
+      collection(db, 'sfosLedger'),
+      where('uid', '==', uid)
+    );
+    const ledgerSnap = await getDocs(ledgerQ);
+    let ledgerSum = 0;
+    ledgerSnap.forEach((d) => {
+      const entry = d.data();
+      // Credits add, debits subtract
+      if (entry.direction === 'CREDIT') ledgerSum += Number(entry.amount ?? 0);
+      else if (entry.direction === 'DEBIT') ledgerSum -= Number(entry.amount ?? 0);
+    });
+
+    const diff  = Math.abs(walletBal - ledgerSum);
+    const match = diff < 0.01; // float tolerance
+
+    const output = [
+      `Wallet Balance: KES ${walletBal.toFixed(2)}`,
+      `Ledger Sum:     KES ${ledgerSum.toFixed(2)}`,
+      `Difference:     KES ${diff.toFixed(2)}`,
+      `Entries:        ${ledgerSnap.size}`,
+      '',
+      match
+        ? '✓ BALANCED — wallet and ledger agree'
+        : `⚠ MISMATCH — delta of KES ${diff.toFixed(2)}`,
+    ].join('\n');
+
+    _showResult(res, output, match ? 'ok' : 'error');
+    toast(match ? 'Ledger balanced' : `Mismatch: KES ${diff.toFixed(2)}`, match ? 'ok' : 'error');
+  } catch (err) {
+    _showResult(res, 'Error: ' + err.message, 'error');
+    toast('Reconcile failed', 'error');
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════════════════════════════ */
+function _getInput(id) {
+  return (document.getElementById(id)?.value || '').trim();
+}
+
+function _showResult(el, text, type) {
+  el.className = 'qa-result visible ' + (type || '');
+  // text is already plain — XSS escape before setting
+  el.textContent = text;
+}
+
+function setLastRefresh(str) {
+  document.getElementById('mon-last-refresh').textContent = esc(str);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   MANUAL REFRESH
+═══════════════════════════════════════════════════════════════════════ */
+function triggerRefresh() {
+  loadHealthData();
+  loadAuditLog();
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BOOT — wait for sfosReady, then check admin, then load data
+═══════════════════════════════════════════════════════════════════════ */
+async function boot() {
+  // 1. Verify admin custom claim
+  await checkAdminAuth();
+
+  // 2. Load initial data in parallel
+  await Promise.all([
+    loadHealthData(),
+    loadAuditLog(),
+  ]);
+
+  // 3. Start auto-refresh interval (60 s)
+  clearInterval(_refreshTimer);
+  _refreshTimer = setInterval(() => {
+    loadHealthData();
+    loadAuditLog();
+  }, REFRESH_MS);
+}
+
+/* Start */
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>

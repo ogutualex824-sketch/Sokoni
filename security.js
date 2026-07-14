@@ -512,115 +512,102 @@ const SokoniSecurity = (() => {
         if(document.getElementById("_sokoniPrivacyBanner")) return;
         const b = document.createElement("div");
         b.id = "_sokoniPrivacyBanner";
-        /* ── COMPACT CONSENT BAR ──────────────────────────────────────────────────
-           This used to be a two-block banner with a heading, four lines of body copy, two
-           inline policy links, a "Learn More" button and an "Accept" button, all set to
-           flex-wrap. On a phone it wrapped to ~184px — 28% of a 664px viewport — and on the
-           Seller Dashboard it covered EIGHT quick-action cards. Tapping POS/Cashier landed
-           on the Accept button: the user's first tap on the dashboard silently consented to
-           cookies instead of opening the till.
+        /* ── CENTRED CONSENT MODAL, WITH A BACKDROP ───────────────────────────────
+           History, because it explains why this is a modal and not a bar:
 
-           A consent notice must be readable and reachable. It does not need to be a quarter
-           of the screen. One row, ~56px: a single sentence, the two policy links (which ARE
-           the "learn more" — a separate button for the same destination was redundant), and
-           Accept. The legal content is unchanged; only its presentation is.
+           1. It began as a two-block banner (heading, four lines of copy, two inline links,
+              "Learn More" + "Accept", flex-wrap). On a phone it wrapped to 184px — 28% of a
+              664px viewport — and covered EIGHT Seller Dashboard quick actions. Tapping
+              POS/Cashier landed on the Accept button: the seller's first tap silently
+              consented to cookies instead of opening the till.
 
-           Height is what mattered here, so it is capped rather than left to wrap. */
+           2. Shrinking it to a 62px bar helped but did NOT fix it. Measured in an
+              authenticated session, FOUR cards were still covered — POS among them — and a
+              tap on the centre of "Revenue" still landed on #_sokoniPrivacyAcceptBtn. That
+              is inherent: a fixed bar of ANY height sits over whatever is at the foot of the
+              viewport. Height was never the real problem; overlaying live controls was.
+
+           So: a centred modal over a backdrop. The backdrop is the point — every stray tap
+           lands on IT and does nothing, so a quick action can never be silently traded for a
+           consent. It is also honest: the page IS blocked until the user answers, and it now
+           looks blocked instead of pretending to be usable.
+
+           The element keeps its id (#_sokoniPrivacyBanner) — other code and the CI gates
+           reference it. */
         b.style.cssText = [
-          "position:fixed","bottom:0","left:0","right:0",
-          "background:rgba(10,10,10,0.98)","border-top:1px solid rgba(113,255,0,0.2)",
+          "position:fixed","inset:0",
           "z-index:99997",
-          "padding:8px 14px",
-          "display:flex","align-items:center","justify-content:space-between",
-          "gap:12px",                       /* NO flex-wrap: wrapping is what made it 184px */
-          "min-height:56px","box-sizing:border-box",
-          "font-family:'Segoe UI',system-ui,sans-serif",
-          "backdrop-filter:blur(16px)",
-          "box-shadow:0 -4px 24px rgba(0,0,0,0.5)"
+          "display:flex","align-items:center","justify-content:center",
+          "padding:20px",
+          "padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px))",
+          "padding-top:calc(20px + env(safe-area-inset-top, 0px))",
+          "box-sizing:border-box",
+          "background:rgba(0,0,0,0.66)",
+          "backdrop-filter:blur(4px)",
+          "-webkit-backdrop-filter:blur(4px)",
+          "font-family:'Segoe UI',system-ui,sans-serif"
         ].join(";");
-        /* Announced to assistive tech as a region, not silently injected furniture. */
-        b.setAttribute("role", "region");
-        b.setAttribute("aria-label", "Cookie consent");
+        b.setAttribute("role", "dialog");
+        b.setAttribute("aria-modal", "true");
+        b.setAttribute("aria-labelledby", "_sokoniPrivacyTitle");
         b.innerHTML = [
-          "<div style='flex:1;min-width:0;font-size:12px;line-height:1.35;color:rgba(255,255,255,0.62);'>",
-            "🍪 SOKONI uses cookies to run the platform. ",
-            "<a href='legal.html#privacy' style='color:#71ff00;text-decoration:underline;'>Privacy</a>",
-            " &middot; ",
-            "<a href='legal.html#cookies' style='color:#71ff00;text-decoration:underline;'>Cookies</a>",
-            " <span style='opacity:.7;'>(Kenya DPA 2019)</span>",
-          "</div>",
-          /* 44px minimum touch target — the old button was 34px tall. */
-          "<button id='_sokoniPrivacyAcceptBtn' aria-label='Accept cookies' ",
-            "style='flex-shrink:0;min-height:44px;padding:0 22px;",
-            "background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;",
-            "border-radius:10px;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;'>",
-            "Accept</button>"
+          "<div style='width:100%;max-width:400px;box-sizing:border-box;",
+            "background:#0d0d0d;border:1px solid rgba(113,255,0,0.22);border-radius:18px;",
+            "padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,0.7);'>",
+
+            "<div id='_sokoniPrivacyTitle' style='font-size:16px;font-weight:800;color:white;margin-bottom:8px;'>",
+              "🍪 Privacy &amp; Cookies</div>",
+
+            "<div style='font-size:13px;line-height:1.6;color:rgba(255,255,255,0.6);margin-bottom:18px;'>",
+              "SOKONI uses cookies and local storage to deliver and improve your experience. ",
+              "By continuing you accept our ",
+              "<a href='legal.html#privacy' style='color:#71ff00;text-decoration:underline;'>Privacy Policy</a>",
+              " and ",
+              "<a href='legal.html#cookies' style='color:#71ff00;text-decoration:underline;'>Cookie Policy</a>",
+              ", in compliance with the Kenya Data Protection Act 2019.",
+            "</div>",
+
+            /* Both controls hold the 44px touch floor. */
+            "<button id='_sokoniPrivacyAcceptBtn' aria-label='Accept cookies' ",
+              "style='width:100%;min-height:48px;",
+              "background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;",
+              "border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;'>",
+              "Accept</button>",
+
+            "<a href='legal.html#privacy' ",
+              "style='display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;",
+              "color:rgba(255,255,255,0.45);font-size:12px;font-weight:700;text-decoration:none;'>",
+              "Learn more</a>",
+
+          "</div>"
         ].join("");
         document.body.appendChild(b);
 
-        /* Reserve space for the banner so it OVERLAYS NOTHING.
-           It is position:fixed at bottom:0 with z-index 99997, so without this it sits
-           on top of whatever happens to be at the foot of the viewport and swallows every
-           tap there. On the seller dashboard that was the Messages and Marketing tiles —
-           they looked perfectly normal and simply did not respond, which is indis-
-           tinguishable from a broken button.
+        /* Keyboard users must be able to reach Accept without tabbing the page behind. */
+        try { document.getElementById("_sokoniPrivacyAcceptBtn").focus({ preventScroll: true }); } catch (_) {}
 
-           A consent banner is allowed to be prominent. It is not allowed to quietly eat
-           the controls underneath it. */
-        /* The page's OWN bottom padding, read BEFORE we touch it (bottom-nav pages already
-           reserve ~80px). The old code assigned the banner height straight over the top of it,
-           so on a page reserving 80px for a 184px banner it actually reserved LESS space than
-           the page already had. Add to it; never replace it. */
+        /* The old bar was position:fixed at the foot of the page, so it reserved body
+           padding to avoid overlaying the controls beneath it. A MODAL needs the opposite:
+           it deliberately covers everything, and reserving its height as padding would add a
+           full viewport of dead space under the page.
+
+           What a modal owes the user instead is: nothing behind it can be tapped (the
+           backdrop guarantees that), and the page behind must not scroll away under it.
+
+           --sk-consent-h is published as 0 because the seller sidebar subtracts it from its
+           own height (`height: calc(100vh - var(--sk-consent-h))`). With a modal there is no
+           strip of screen to give up, and leaving a stale value there would shrink the
+           sidebar for no reason. */
         var _basePad = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
-
-        /* Sit ABOVE whatever bottom navigation this page has — measured, not guessed.
-           This used to be a hardcoded CSS offset (`bottom: 58px`) inside a mobile-only media
-           query. It was wrong twice over: 58px is shorter than every nav on the platform
-           (#sdmTabBar is 60px, .bottom-nav is 66px), so the bar overlapped them and — at
-           z-index 99997 — swallowed taps on the nav underneath; and because the rule was
-           mobile-only, on desktop the bar dropped to bottom:0 and sat straight on top of the
-           nav. Measuring the nav that is actually on the page is correct at every breakpoint,
-           and the nav's own height already includes its safe-area inset. */
-        var _clearBottomNav = function(){
-          var nav = document.querySelector('#sdmTabBar,.bottom-nav,.sk-bottom-nav');
-          var navH = 0;
-          if (nav) {
-            var cs = getComputedStyle(nav);
-            if (cs.position === 'fixed' && cs.display !== 'none' && cs.visibility !== 'hidden') {
-              navH = Math.round(nav.getBoundingClientRect().height);
-            }
-          }
-          /* With no nav, still clear the home indicator. Inline `important` beats the
-             mobile.css rule, so this one calculation is the single source of truth. */
-          b.style.setProperty(
-            'bottom',
-            navH ? navH + 'px' : 'env(safe-area-inset-bottom, 0px)',
-            'important'
-          );
-          return navH;
-        };
+        var _baseOverflow = document.body.style.overflow || '';
 
         var _pad = function(){
-          /* Position first, then measure — the height is read after it has settled.
-             Only the BAR's height is added to the padding: the nav's own space is already
-             inside _basePad (bottom-nav pages reserve it), and adding it twice would leave
-             a permanent dead gap under the page. */
-          _clearBottomNav();
-          var h = (b.offsetHeight || 72);
-          /* Normal page content: push it up so the banner sits below it.
-             Set with `important`: mobile.css:43 declares
-                 body { padding-bottom: max(80px, calc(64px + safe-area)) !important }
-             and a plain inline style loses to an !important rule. That is why the previous
-             attempt silently did nothing on a phone — the assignment ran, and the cascade
-             threw it away. */
-          document.body.style.setProperty('padding-bottom', (_basePad + h) + 'px', 'important');
-          /* FIXED panels cannot be moved by body padding — they are out of flow. The
-             seller dashboard's sidebar is `position:fixed; height:calc(100vh - 68px)`,
-             so the banner was sitting on top of its last entries (Messages, Marketing)
-             and swallowing those taps regardless of any body padding.
-             Publish the banner's height so fixed layouts can subtract it. */
-          document.documentElement.style.setProperty('--sk-consent-h', h + 'px');
-          _liftFabs(h);
+          document.documentElement.style.setProperty('--sk-consent-h', '0px');
+          /* Scroll-lock the page behind the modal. */
+          document.body.style.setProperty('overflow', 'hidden');
+          /* Hide the FABs: they sit below the backdrop anyway, but hiding them also takes
+             them out of the tab order while the dialog owns focus. */
+          _liftFabs(0);
         };
 
         /* The floating buttons are position:fixed at the foot of the screen, so no amount of
@@ -693,13 +680,20 @@ const SokoniSecurity = (() => {
 
         document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){
           localStorage.setItem("sokoniPrivacyAccepted", Date.now().toString());
-          b.style.cssText += ";transform:translateY(100%);transition:transform .35s ease;";
+          /* Fade the backdrop out. (The old slide-down belonged to a bottom bar; on a
+             centred dialog it would have slid the modal off the bottom of the screen.) */
+          b.style.setProperty('opacity', '0');
+          b.style.setProperty('transition', 'opacity .25s ease');
+          b.style.setProperty('pointer-events', 'none');
           window.removeEventListener('resize', _pad);
-          if (b.__skRO) { b.__skRO.disconnect(); b.__skRO = null; }  /* or it re-pads on the slide-out */
-          _dropFabs();                             /* buttons ride back down */
-          document.body.style.removeProperty('padding-bottom');  /* back to the page's own padding */
+          if (b.__skRO) { b.__skRO.disconnect(); b.__skRO = null; }
+          _dropFabs();                             /* buttons come back */
+          /* Release the scroll lock, and clear any padding an OLDER build left behind — a
+             returning user must not be stuck with a permanent gap under the page. */
+          document.body.style.removeProperty('overflow');
+          document.body.style.removeProperty('padding-bottom');
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
-          setTimeout(function(){ if(b.isConnected) b.remove(); }, 400);
+          setTimeout(function(){ if(b.isConnected) b.remove(); }, 300);
         };
       };
       /* Show after DOM is ready, skip on legal/auth pages to avoid clutter */
