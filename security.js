@@ -610,14 +610,28 @@ const SokoniSecurity = (() => {
            `visibility:hidden !important` (and re-applying `overflow:hidden`) with no _dropFabs()
            left to undo it — the buttons vanished permanently. This latch + the clearTimeout in
            accept() close that window from both ends. */
-        var _accepted  = false;
-        var _padTimers = [];
+        var _accepted    = false;
+        var _padTimers   = [];
+        /* iOS Safari bug: body{overflow:hidden} on a scrolled page offsets fixed-element
+           tap targets by window.scrollY, making the Accept button unreachable and freezing
+           the entire UI. Fix: position:fixed scroll-lock captures scrollY before locking
+           and restores it via window.scrollTo() on accept. _scrollLocked prevents
+           subsequent _pad() re-arms from overwriting the captured offset with 0. */
+        var _scrollLockY  = 0;
+        var _scrollLocked = false;
 
         var _pad = function(){
           if (_accepted) return;
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
-          /* Scroll-lock the page behind the modal. */
-          document.body.style.setProperty('overflow', 'hidden');
+          /* iOS-compatible scroll-lock. */
+          if (!_scrollLocked) {
+            _scrollLockY = window.scrollY || window.pageYOffset || 0;
+            document.body.style.setProperty('position', 'fixed');
+            document.body.style.setProperty('top', '-' + _scrollLockY + 'px');
+            document.body.style.setProperty('width', '100%');
+            document.body.style.setProperty('overflow-y', 'scroll');
+            _scrollLocked = true;
+          }
           /* Hide the FABs: they sit below the backdrop anyway, but hiding them also takes
              them out of the tab order while the dialog owns focus. */
           _liftFabs(0);
@@ -708,8 +722,13 @@ const SokoniSecurity = (() => {
           window.removeEventListener('resize', _pad);
           if (b.__skRO) { b.__skRO.disconnect(); b.__skRO = null; }
           _dropFabs();                             /* buttons come back — and stay back */
-          /* Release the scroll lock, and clear any padding an OLDER build left behind — a
-             returning user must not be stuck with a permanent gap under the page. */
+          /* Release the iOS position:fixed scroll lock and restore the captured scroll
+             position. Also clear legacy overflow/padding-bottom from older builds. */
+          document.body.style.removeProperty('position');
+          document.body.style.removeProperty('top');
+          document.body.style.removeProperty('width');
+          document.body.style.removeProperty('overflow-y');
+          window.scrollTo(0, _scrollLockY);
           document.body.style.removeProperty('overflow');
           document.body.style.removeProperty('padding-bottom');
           document.documentElement.style.setProperty('--sk-consent-h', '0px');

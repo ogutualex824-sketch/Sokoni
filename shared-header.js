@@ -186,7 +186,15 @@
       }, wait);
     }
     if (document.readyState === 'complete') { _dismiss(); }
-    else { window.addEventListener('load', _dismiss, { once: true }); }
+    else {
+      /* Hard failsafe: if window.load stalls (slow CDN resource, iOS Safari edge case),
+         the splash must never block the app indefinitely. Guard ensures _dismiss runs
+         at most once regardless of which path fires first. */
+      var _ssDone = false;
+      function _guardDismiss() { if (_ssDone) return; _ssDone = true; _dismiss(); }
+      window.addEventListener('load', _guardDismiss, { once: true });
+      setTimeout(_guardDismiss, 4000);
+    }
   }());
 
   /* ── PHASE 1: Infrastructure injection — runs on EVERY page ──────────
