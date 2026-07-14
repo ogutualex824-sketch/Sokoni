@@ -927,14 +927,27 @@ async function signInWithGoogle() {
                 console.info('[SOKONI Auth] Popup success', { uid: result.user?.uid });
                 await _handleGoogleResult(result);
             } catch (popupErr) {
-                if (popupErr.code === 'auth/popup-blocked') {
-                    /* Transparent fallback to redirect */
-                    console.info('[SOKONI Auth] Popup blocked — falling back to redirect');
+                const _isItpError = (
+                    popupErr.code === 'auth/internal-error' ||
+                    popupErr.code === 'auth/cors-unsupported' ||
+                    popupErr.code === 'auth/web-storage-unsupported'
+                );
+                if (popupErr.code === 'auth/popup-blocked' || _isItpError) {
+                    /* Transparent fallback to redirect.
+                       auth/popup-blocked:          browser blocked window.open().
+                       auth/internal-error,
+                       auth/cors-unsupported,
+                       auth/web-storage-unsupported: iOS Safari ITP prevents the
+                         Firebase authDomain iframe from delivering the popup result
+                         across origins (mysokoni.co.ke → sokoni-aeb26.firebaseapp.com).
+                         Redirect completes the sign-in via a full-page round-trip. */
+                    if (_isItpError) {
+                        console.info('[SOKONI Auth] Popup failed (iOS/ITP) — falling back to redirect', { code: popupErr.code });
+                    } else {
+                        console.info('[SOKONI Auth] Popup blocked — falling back to redirect');
+                    }
                     _googleBtnLabel(btn, 'Redirecting to Google…');
-                    /* Ensure session survives the redirect round-trip */
                     await setPersistence(window.firebaseAuth, browserLocalPersistence).catch(() => {});
-                    /* Flag: tells sw-register.js to skip the controllerchange reload
-                       so the OAuth round-trip is not interrupted by a SW update. */
                     try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
                     await signInWithRedirect(window.firebaseAuth, provider);
                 } else if (popupErr.code === 'auth/account-exists-with-different-credential') {
@@ -1190,6 +1203,7 @@ function signInWithFacebook() {
 let _phoneConfirmResult = null;
 let _recaptchaVerifier  = null;
 let _otpTimerHandle     = null;
+let _otpField           = null;   /* SokoniOtp controller — the single verification input */
 
 function openPhoneAuth() {
     const section = document.getElementById('phoneAuthSection');
@@ -1244,7 +1258,11 @@ async function sendPhoneOTP() {
 
         const otpEntry = document.getElementById('otpEntry');
         if (otpEntry) otpEntry.style.display = 'block';
-        document.getElementById('otp0')?.focus();
+        /* The field is inside a display:none block until now, so it may not have been
+           mountable on DOM ready — mount lazily, then focus so the keyboard (and its
+           SMS suggestion strip) comes up straight away. */
+        if (!_otpField) _setupOtpInputs();
+        _otpField?.clear().focus();
 
         if (btn) { btn.disabled = false; btn.textContent = 'Resend OTP'; }
         _startOTPTimer(60);
@@ -1265,11 +1283,10 @@ async function sendPhoneOTP() {
 }
 
 async function verifyPhoneOTP() {
-    const code = [0,1,2,3,4,5].map(function(i) {
-        return (document.getElementById('otp' + i)?.value || '').trim();
-    }).join('');
+    const code = (_otpField ? _otpField.value() : '').trim();
 
     if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+        _otpField?.error(true);
         showAuthMsg('Please enter the complete 6-digit code.', 'error');
         return;
     }
@@ -1286,12 +1303,19 @@ async function verifyPhoneOTP() {
         clearInterval(_otpTimerHandle);
         await _handleOAuthResult(result, 'Phone');
     } catch (err) {
-        if (btn) { btn.disabled = false; btn.textContent = 'Verify →'; }
+        /* Label matches the button's own text — it used to reset to "Verify →" and
+           silently rename itself the first time a code was rejected. */
+        if (btn) { btn.disabled = false; btn.textContent = 'Verify Code →'; }
         const _otpErrMap = {
             'auth/invalid-verification-code': 'Incorrect code. Please check and try again.',
             'auth/code-expired':              'Code expired. Please request a new OTP.',
             'auth/too-many-requests':         'Too many attempts. Please request a new OTP.',
         };
+        /* error() re-arms auto-submit. Without it the field stays "already fired" and
+           a corrected code would only ever verify via the button. */
+        _otpField?.error(true);
+        _otpField?.focus();
+        try { _otpField?.el.select(); } catch (e) {}
         showAuthMsg(_otpErrMap[err.code] || 'Verification failed. Please try again.', 'error');
     }
 }
@@ -1299,10 +1323,7 @@ async function verifyPhoneOTP() {
 function resendPhoneOTP() {
     _phoneConfirmResult = null;
     _recaptchaVerifier  = null;
-    [0,1,2,3,4,5].forEach(function(i) {
-        const el = document.getElementById('otp' + i);
-        if (el) { el.value = ''; el.classList.remove('filled'); }
-    });
+    _otpField?.clear();
     const resendEl = document.getElementById('otpResendLink');
     if (resendEl) resendEl.style.display = 'none';
     sendPhoneOTP();
@@ -1329,41 +1350,23 @@ function _startOTPTimer(seconds) {
     }, 1000);
 }
 
+/* One verification field, mounted from the shared component. Replaces the six
+   maxlength="1" boxes and every line of focus-jumping, paste-scattering and
+   cross-input synchronisation that went with them.
+
+   The old grid could not accept an SMS AutoFill: iOS fills a single field with the
+   whole code, and maxlength="1" then threw away five of the six digits. */
 function _setupOtpInputs() {
-    [0,1,2,3,4,5].forEach(function(i) {
-        const el = document.getElementById('otp' + i);
-        if (!el) return;
+    const mount = document.getElementById('otpMount');
+    if (!mount || !window.SokoniOtp) return;
 
-        el.addEventListener('input', function() {
-            this.value = this.value.replace(/\D/g, '').slice(0, 1);
-            this.classList.toggle('filled', this.value.length > 0);
-            if (this.value && i < 5) {
-                document.getElementById('otp' + (i + 1))?.focus();
-            }
-            if (i === 5 && this.value) {
-                const all = [0,1,2,3,4,5].map(function(j) {
-                    return document.getElementById('otp' + j)?.value || '';
-                }).join('');
-                if (all.length === 6) setTimeout(verifyPhoneOTP, 150);
-            }
-        });
-
-        el.addEventListener('keydown', function(e) {
-            if (e.key === 'Backspace' && !this.value && i > 0) {
-                document.getElementById('otp' + (i - 1))?.focus();
-            }
-        });
-
-        el.addEventListener('paste', function(e) {
-            e.preventDefault();
-            const text = (e.clipboardData || window.clipboardData)
-                .getData('text').replace(/\D/g, '').slice(0, 6);
-            [...text].forEach(function(ch, j) {
-                const t = document.getElementById('otp' + (i + j));
-                if (t) { t.value = ch; t.classList.add('filled'); }
-            });
-            document.getElementById('otp' + Math.min(i + text.length, 5))?.focus();
-        });
+    _otpField = window.SokoniOtp.mount(mount, {
+        length:     6,
+        label:      'Verification code',
+        placeholder:'6-digit verification code',
+        /* Auto-verify the moment six digits are present, from any source: typing,
+           paste, or the SMS suggestion. The Verify Code button stays as the fallback. */
+        onComplete: function() { verifyPhoneOTP(); },
     });
 }
 

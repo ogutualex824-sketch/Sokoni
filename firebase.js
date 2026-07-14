@@ -332,8 +332,26 @@ if (!window.firebase) {
    getRedirectResult() resolves with the credential (or null if no
    redirect was pending).  We dispatch custom events so auth.js
    (non-module) can handle the result without a direct import.
+
+   iOS Safari / ITP note
+   ─────────────────────
+   Apple's Intelligent Tracking Prevention (ITP) treats the Firebase
+   authDomain iframe (sokoni-aeb26.firebaseapp.com) as a third-party
+   in the context of mysokoni.co.ke, blocking it from reading its own
+   cookies / IndexedDB.  As a result, getRedirectResult() throws
+   auth/internal-error or auth/web-storage-unsupported on EVERY page
+   load on iPhone/iPad — even when no redirect was ever initiated.
+
+   The fix: read sokoniAuthRedirectPending (set by signInWithRedirect
+   in auth.js) BEFORE calling getRedirectResult.  If absent, any error
+   is environmental noise and must be swallowed silently — we log it
+   for diagnostics but never dispatch an event that would display an
+   error banner to the user.
 ══════════════════════════════════════════════════════════════════ */
 (async () => {
+  let _redirectWasPending = false;
+  try { _redirectWasPending = sessionStorage.getItem('sokoniAuthRedirectPending') === '1'; } catch (_) {}
+
   try {
     const result = await getRedirectResult(auth);
     if (result && result.user) {
@@ -350,6 +368,13 @@ if (!window.firebase) {
       "auth/no-auth-event",
       "auth/operation-not-supported-in-this-environment",
     ];
+    /* If no redirect was initiated by this session, the error is ITP noise from
+       iOS Safari.  Log it for diagnostics but do NOT dispatch events — dispatching
+       would surface an error banner to the user before they have done anything. */
+    if (!_redirectWasPending) {
+      console.warn('[SOKONI Auth] getRedirectResult error (no redirect pending — suppressed):', err.code, err.message);
+      return;
+    }
     if (!silent.includes(err.code)) {
       /* Log the real error code so production failures can be diagnosed from
          console snapshots. Never exposes sensitive data — code is an enum string. */

@@ -2,6 +2,210 @@
 
 ---
 
+## 2026-07-14 — P0 Fix: Google Sign-In False Error Banner on iPhone Safari
+
+**Scope:** Auth system — eliminates the "An unexpected error occurred" banner that appeared on `login.html` before the user entered any credentials on iPhone / iPad.
+
+### Root Cause
+
+Apple's Intelligent Tracking Prevention (ITP) classifies the Firebase authDomain iframe (`sokoni-aeb26.firebaseapp.com`) as a third-party context when the app is served from `mysokoni.co.ke`. Firebase's `getRedirectResult()` is called on every page load to catch returning OAuth redirects. On iOS Safari, ITP prevents the Firebase iframe from reading its own cookies / IndexedDB, causing `getRedirectResult()` to throw `auth/internal-error` or `auth/web-storage-unsupported` — even when no redirect had been initiated. The `sokoniGoogleRedirectError` event dispatched from that throw triggered `showAuthMsg('An unexpected error occurred. Please try again.', 'error')` in `auth.js` before the user had done anything.
+
+### Fix 1 — `firebase.js` (primary)
+
+The `getRedirectResult()` IIFE now reads `sokoniAuthRedirectPending` from `sessionStorage` before calling `getRedirectResult()`. This flag is written by `signInWithRedirect()` and cleared by the success/error listeners — so it is set only when the user actually started an OAuth redirect. If the flag is absent, any error from `getRedirectResult()` is silently logged (`console.warn`) and the function returns without dispatching any events. Error banners are only shown when a real redirect failure occurs.
+
+### Fix 2 — `auth.js` (secondary)
+
+The `signInWithPopup` catch block now treats `auth/internal-error`, `auth/cors-unsupported`, and `auth/web-storage-unsupported` as popup failures caused by iOS/ITP and falls through to the redirect fallback — the same path already used for `auth/popup-blocked`. If popup fails on any iOS device, sign-in retries via `signInWithRedirect()` instead of surfacing a generic error to the user.
+
+### Files Changed
+- `firebase.js` — `getRedirectResult` IIFE: added `_redirectWasPending` guard; errors suppressed when no redirect was pending
+- `auth.js` — `signInWithGoogle` popup catch: ITP error codes (`auth/internal-error`, `auth/cors-unsupported`, `auth/web-storage-unsupported`) now fall through to the redirect fallback
+
+### Security Changes
+None. The change suppresses UI presentation of a non-actionable error; all Firebase Auth session state logic is unchanged.
+
+### Breaking Changes
+None. The happy path (successful sign-in) is unchanged. Error banners for real redirect failures (when `sokoniAuthRedirectPending` is set) are still shown correctly.
+
+### Known Limitation
+If `signInWithRedirect()` is used (popup→redirect fallback), `getRedirectResult()` on iOS may silently return `null` due to ITP, causing the redirect to complete with no session. The long-term resolution requires configuring a custom `authDomain` (`auth.mysokoni.co.ke`) matching the app's own origin, which allows the Firebase iframe to access first-party storage. This is tracked in the v1.1 backlog.
+
+---
+
+## 2026-07-14 — SmartPOS TEST-13c Final Hardening — iPhone Merchant Experience
+
+**Scope:** Seven hardening items applied to the iOS print path: UX redesign, smart routing, intelligent fallback cascade, BLE guidance, and updated certification matrix.
+
+### Files Changed
+- `sokoni-pos-ios-print.js` — receipt panel redesign, `showBleGuidance()` added
+- `sokoni-bluetooth-printer.js` — iOS guard added to `requestDevice()`
+- `pos-ios-print-test.html` — three-tier certification matrix, final recommendations
+- `docs/PRINT_COMPATIBILITY_MATRIX.md` — three-tier status key, per-platform final recommendations
+
+### What Changed
+
+**`sokoni-pos-ios-print.js`**
+
+`showReceiptOptions` redesigned from a full-screen blocking modal to a compact fixed bottom panel:
+- **Single primary "Print Receipt" button** — opens receipt HTML in a new tab (synchronous `window.open()` from button click preserves user gesture; iOS AirPrint fires in that tab).
+- **Intelligent fallback row** (always visible below the print button): WhatsApp | Share Sheet | Email. Label updates to "No AirPrint printer found? Send digitally:" after the print button is pressed — guiding the cashier to digital delivery without an error screen.
+- **BLE guidance note** at bottom of panel: "Direct Bluetooth receipt printing isn't available in Safari. Use AirPrint or a supported network printer instead. (Safari / WebKit platform limitation)" — informational, not an error.
+- New `showBleGuidance()` function: non-blocking amber banner with 10 s auto-dismiss, shown when a Bluetooth connection is attempted on iOS. Message is specific: names AirPrint / Share / network printer as alternatives.
+- `showBleGuidance` added to public API.
+- Fixed bug: receipt HTML action buttons previously called `SokoniIOSPrint._doShare()` (which doesn't exist) — replaced with inline `navigator.share()` call.
+
+**`sokoni-bluetooth-printer.js`**
+
+iOS check added at the top of `requestDevice()`, before the generic `!navigator.bluetooth` guard. When iOS is detected:
+1. `SokoniIOSPrint.showBleGuidance()` is called if the module is loaded.
+2. A specific error message is thrown: "Direct Bluetooth receipt printing isn't available in Safari. Use AirPrint, Share, or a supported network printer instead. (Safari / WebKit platform limitation — not a SOKONI error.)"
+
+This ensures cashiers who attempt BLE on an iPhone see a clear explanation, not "Safari and Firefox are NOT supported".
+
+**`pos-ios-print-test.html` / `docs/PRINT_COMPATIBILITY_MATRIX.md`**
+
+Cross-platform matrix updated from two status tiers to three:
+- ✅ Physically Verified
+- ⚪ Verified by platform capability
+- ⏳ Pending verification
+
+Android BLE column updated to ⏳ Pending (needs physical test). iOS column updated to reflect smart routing. Final recommendation cards added per platform (Windows / Android / iPhone) with certified status, recommended printer models, and action items.
+
+### Security Changes
+None.
+
+### Breaking Changes
+None. Existing Windows/Android BLE path is unchanged. `showReceiptOptions` returns the same `{ printed, method }` shape.
+
+---
+
+## 2026-07-14 — SmartPOS iOS / Safari Print Certification (TEST-13c)
+
+**Scope:** iPhone printing capability detection, HTML receipt fallback, AirPrint / Share Sheet / WhatsApp workflow, and operator certification page.
+
+### Files Changed
+- `sokoni-pos-ios-print.js` — new
+- `pos-ios-print-test.html` — new
+- `sokoni-pos-print-service.js` — iOS routing fork in `printAfterSale()`
+- `pos-checkout.html` — imports `sokoni-pos-ios-print.js`
+
+### What Was Built
+
+**`sokoni-pos-ios-print.js`**
+Platform-aware iOS print module. Key facts validated against browser specs:
+- Web Bluetooth, Web Serial, WebUSB: NOT available in Safari / any iOS browser (Apple enforces WebKit for all iOS browsers via App Store rules — this is not a SOKONI limitation)
+- `window.print()` / AirPrint: Available — triggers iOS print dialog; works with AirPrint-certified network printers (not the P58E BLE printer)
+- Web Share API (`navigator.share`): Available iOS 12.1+; file sharing (`canShare`) iOS 14+
+- WhatsApp URL scheme: Available all platforms
+
+On iOS, `PosPrintService.printAfterSale()` now routes to `SokoniIOSPrint.printAfterSale()` which shows a bottom-sheet modal with: AirPrint, Share Sheet, WhatsApp, View Receipt. The sale is always recorded in Firestore first — receipt delivery is a separate step.
+
+**`pos-ios-print-test.html`**
+Self-contained TEST-13c operator certification page. Steps 1–2 auto-run on page load (platform + API capability detection). Steps 3–7 require physical iPhone interaction: POS accessibility, AirPrint dialog, Share Sheet, WhatsApp, cross-platform receipt consistency.
+
+### Receipt Workflow by Platform (post-certification)
+
+| Platform | Physical receipt | Digital receipt |
+|---|---|---|
+| Windows / Chrome | P58E BLE (ESC/POS) | WhatsApp |
+| Android / Chrome | P58E BLE (ESC/POS) | WhatsApp |
+| iPhone / Safari | AirPrint network printer (not P58E) | WhatsApp / Share Sheet |
+
+### Security Changes
+None.
+
+### Breaking Changes
+None. iOS routing is additive — existing Windows/Android BLE path is unchanged.
+
+---
+
+## 2026-07-14 — SmartPOS End-to-End Retail Cycle Fixes (TEST-13b)
+
+**Scope:** Three correctness bugs found during end-to-end retail cycle investigation. All three blocked the X/Z report reconciliation test and left print failures invisible to cashiers.
+
+### Files Changed
+- `pos-checkout.html`
+- `functions/pos-zero-friction.js`
+- `functions/pos-staff-ops.js`
+
+### Bug Fixes
+
+#### 1. Z Report always aggregated zero sales (`pos-staff-ops.js`)
+`closeShift` queried the `posSales` collection, but `posCompleteCheckout` writes every sale to `posRetailSales`. These collections are different — the Z report would always show KES 0 and 0 transactions regardless of how many sales had been made. Fixed: collection changed to `posRetailSales`. Field names also corrected: `s.total → s.grandTotal`, `s.discount → s.discountTotal`, `s.paymentMethod` (scalar) → per-payment-leg aggregation from `s.payments[]`.
+
+#### 2. Print failures invisible to cashiers (`pos-checkout.html`)
+Both catch blocks in `_printReceipt()` were empty (`catch (_) {}`). If the BLE printer was disconnected or out-of-paper after a successful sale, the cashier received no feedback and no retry option. Fixed: `_printReceipt()` now returns `{ printed, skipped, error }`. The caller checks the result and shows: a toast + `_showPrintRetry()` banner (with Retry / Dismiss, auto-dismiss 30s) on failure; a "auto-print is off" info toast if `PosPrintService` returned `{ skipped: true }`.
+
+#### 3. shiftId not linked to sale records (`pos-checkout.html` + `pos-zero-friction.js`)
+`_s.shiftId` was available on the client (set when shift opens) but was never sent to `posCompleteCheckout` and never stored in the `posRetailSales` document. This meant even after fix #1, `closeShift` would find no sales because the `shiftId` filter matched nothing. Fixed: `shiftId` added to the checkout CF payload; `posCompleteCheckout` now accepts and sanitizes `shiftId`, stores it in the sale record.
+
+### Database Changes
+- `posRetailSales` documents now include `shiftId` field (null if no shift was open at time of sale)
+- No schema migration needed for existing documents — `closeShift` will simply return zero for sales recorded before this fix
+
+### API Changes
+- `posCompleteCheckout` — new optional input field `shiftId`
+- `closeShift` — now reads from `posRetailSales`; existing Firestore index on `posRetailSales.shiftId` should be added (see `firestore.indexes.json`)
+
+### Security Changes
+None.
+
+### Breaking Changes
+None. `shiftId` is optional; existing checkout flows without a shift continue to work (sale stored with `shiftId: null`).
+
+---
+
+## 2026-07-14 — SmartPOS P58E Hardware Certification + Production Hardening
+
+**Scope:** Physical hardware validation of the P58E Bluetooth thermal printer. Production hardening of BLE transport. Default merchant profile persistence.
+
+### Hardware Certification
+- P58E 58mm Bluetooth ESC/POS printer **physically certified** as the primary SmartPOS printer for Phase 0
+- BLE service `0000ff00`, write char `0000ff02` confirmed operational
+- Full SOKONI receipt (994 bytes) prints correctly — QR code and Code128 barcode verified
+- Auto-reconnect via `getDevices()` confirmed (no picker after first authorization)
+- Root cause of GATT write failure resolved: 512-byte chunk exceeded P58E's ATT MTU; fixed to 128B
+
+### Production Hardening — `sokoni-universal-printer.js`
+- `BluetoothAdapter.write()`: per-packet 3-retry with 150ms/300ms backoff and alternate write method fallback
+- `setTransportConfig(mtu, delay)` method added — allows P58EPrinter to push probed MTU to adapter
+- Chunk size 128B and 40ms delay remain defaults (physically verified for P58E)
+
+### Production Hardening — `sokoni-bluetooth-printer.js`
+- `_probeMTU(char)`: NUL-byte probe at 20/64/128/180/244B after every GATT connection; result cached in settings
+- `_startHealthMonitor(device)` / `_stopHealthMonitor()`: 5-second interval checks `gatt.connected`; catches stale connections Chrome doesn't fire `gattserverdisconnected` for
+- `Promise.race([gatt.connect(), timeout])`: 12-second connection timeout prevents indefinite hang
+- `disconnect()` now stops health monitor before disconnecting
+- `recordPrintStart()` / `recordPrintEnd()` / `printCount` for latency tracking
+- `setStoreProfile(profile)` / `setRegisterName(name)` / `certify()` for merchant profile persistence
+- Default settings expanded: `paperWidth`, `mtuBytes`, `chunkDelay`, `template`, `registerName`, `storeProfile`, `certifiedAt`, `printCount`
+- Settings backfill: older saved settings get new keys without losing existing values
+
+### Printer Test Tool — `pos-printer-hardware-test.html`
+- Step 2 completely rewritten: `getDevices()` reconnect path vs `requestDevice()` pair path
+- Clear picker instructions: explains "Paired" badge does not mean "done"
+- "Show All Devices" (`acceptAllDevices: true`) fallback for when name filter doesn't show printer
+- Cancellation logged as warning (not error) — never added to failure list
+- Auto-advances to GATT connect after successful device selection
+- BLE settings panel (chunk size / delay / write method) visible above Step 1
+- MTU probe runs automatically in Step 3 and updates settings panel
+
+### New Documentation
+- `docs/P58E_HARDWARE_CERTIFICATION.md` — full certification record, BLE config, receipt format review, known limitations, unverified items
+
+### Checklist Updates
+- `GO_LIVE_CHECKLIST.md` TEST-13a: P58E hardware certification ✅
+
+### Files Affected
+- `sokoni-bluetooth-printer.js`
+- `sokoni-universal-printer.js`
+- `pos-printer-hardware-test.html`
+- `docs/P58E_HARDWARE_CERTIFICATION.md` (new)
+- `docs/GO_LIVE_CHECKLIST.md`
+
+---
+
 ## 2026-07-13 — Brand Asset Standardization Sprint (Icons Only)
 
 **Scope:** `assets/logosokoni.png` becomes the single source of truth for every application
