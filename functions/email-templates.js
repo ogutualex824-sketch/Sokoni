@@ -36,20 +36,17 @@ function fmt(n) { return "KES " + Number(n || 0).toLocaleString("en-KE"); }
    (googleusercontent) — so relative paths, authenticated URLs and redirect
    chains all fail.
 
-   PNG, not SVG: Gmail and Outlook do not render SVG in email, so an SVG here
-   would silently show nothing. PNG is the only reliable format.
+   JPEG, not SVG: Gmail and Outlook do not render SVG in email.
+   JPEG is universally supported by all major email clients.
 
-   Filename has no spaces on purpose. The source wordmark is "sokoni logoo.jpeg";
-   a space must be %20-encoded in a URL and is mishandled by some clients and
-   proxies, so it is published under a clean name.
+   %20-encoded space: most modern email clients (Gmail, Apple Mail, Outlook 2016+)
+   decode %20 correctly. The source file "sokoni logoo.jpeg" is served directly
+   from Firebase Hosting at the %20-encoded path.
 
-   Asset: assets/logosokoni.png (the official SOKONI logo), published at this
-   email-only path. Served from /assets/logosokoni.png directly, Cloudflare still
-   holds a stale 1 MB copy of that URL; this path is fresh, so mail clients get the
-   correct 301 KB file immediately.
+   Asset: assets/sokoni logoo.jpeg (600×400, black bg, lime-green mark).
+   Displayed at 160×160 (square crop, centered) in the email header.
 
-   Verified: HTTP 200 · image/png · no auth · 0 redirects.
-   Source 512x512 (1:1, square), displayed at 120x120 → 4.3x, sharp on Retina.
+   Verified: HTTP 200 · image/jpeg · no auth · 0 redirects.
 ═══════════════════════════════════════════════════════════ */
 const LOGO_URL = "https://mysokoni.co.ke/assets/sokoni%20logoo.jpeg";
 

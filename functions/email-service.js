@@ -135,7 +135,7 @@ async function _sendViaSendGrid(payload) {
   const msg = {
     to:          payload.to,
     from:        payload.from || FROM.default,
-    replyTo:     payload.replyTo,
+    replyTo:     payload.replyTo || "support@mysokoni.co.ke",
     subject:     payload.subject,
     html:        payload.html,
     text:        payload.text || "",
@@ -190,7 +190,7 @@ async function _sendViaSmtp(payload) {
   const info = await transporter.sendMail({
     from:    _sanitizeHeader(payload.from || FROM.default),
     to:      _sanitizeHeader(payload.to),
-    replyTo: payload.replyTo ? _sanitizeHeader(payload.replyTo) : undefined,
+    replyTo: _sanitizeHeader(payload.replyTo || "support@mysokoni.co.ke"),
     subject: _sanitizeHeader(payload.subject),
     html:    payload.html,
     text:    payload.text || "",

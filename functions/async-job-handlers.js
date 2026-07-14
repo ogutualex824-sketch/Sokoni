@@ -24,15 +24,18 @@ const EmailHandler = {
     const apiKey = helpers?.secrets?.sendgridKey;
     if (!apiKey)  throw new Error('SENDGRID_API_KEY not injected via secrets — ensure asyncWorker/asyncSweeper bind the secret');
 
+    const _REPLY_TO = { email: 'support@mysokoni.co.ke', name: 'SOKONI Support' };
     const body = templateId
       ? JSON.stringify({
           personalizations: [{ to: [{ email: to }], dynamic_template_data: templateData || {} }],
-          from: { email: from || 'noreply@mysokoni.co.ke', name: 'SOKONI' },
+          from:     { email: from || 'noreply@mysokoni.co.ke', name: 'SOKONI' },
+          reply_to: _REPLY_TO,
           template_id: templateId
         })
       : JSON.stringify({
           personalizations: [{ to: [{ email: to }] }],
-          from: { email: from || 'noreply@mysokoni.co.ke', name: 'SOKONI' },
+          from:     { email: from || 'noreply@mysokoni.co.ke', name: 'SOKONI' },
+          reply_to: _REPLY_TO,
           subject,
           content: html
             ? [{ type: 'text/html', value: html }]
