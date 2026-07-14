@@ -176,3 +176,32 @@ gates remain green. These findings are confined to the POS wallet / wholesale / 
 
 Fix the two write-order/idempotency defects using Pattern C (which `deductWallet` already demonstrates),
 re-run these attack scripts, and this set moves to APPROVE.
+
+---
+
+## Remediation — 2026-07-14 (all three fixed)
+
+| Finding | Fix | Verified |
+|---|---|---|
+| **P0-1** posCompleteCheckout read-after-write + racy claim | All reads hoisted before all writes inside the transaction; idempotency claim changed from get-check-set to atomic `create()` | HEAD `pos-zero-friction.js`: last `txn.get` precedes first write; concurrent-claim attack → one winner |
+| **P1-1** wholesale duplicate order/ledger on retry | Client supplies an idempotencyKey (held across retry, cleared on success); order + ledger ids derived from it; write is a `runTransaction` with existence check | double-tap same key → one order, one ledger row |
+| **P1** refundToWallet double-credit | Keyed, deterministic txn id, existence check + credit in one `runTransaction` — deductWallet's pattern | double-tap refund → credit once, no orphan row |
+
+Re-attacked with a fake Firestore modelling optimistic concurrency, reads-before-writes and
+atomic `create()`: **6/6 assertions pass.** Static financial audit: **V2 11→10, V3 5→4** — exactly
+the two removed, none reintroduced. `deductWallet` (P0-2) and the Firestore Rules (P2-1) were
+already sound and are unchanged.
+
+**P1-2 (referral wallet redesign)** remains NOT FOUND — no such code exists to fix. If referral
+bonuses are meant to credit wallets, that path must be implemented; there is nothing to certify.
+
+**Open, separate from idempotency:** `refundToWallet`'s client sends `originalSaleId` while the
+server also declared `saleId` and required a `sellerId` the client never sends — a pre-existing
+field-contract mismatch. The server now reads `originalSaleId` as a fallback; the `sellerId`
+resolution should be reviewed by the POS owner.
+
+### Revised recommendation: **APPROVE WITH CONDITIONS**
+The three integrity defects are remediated and re-verified. Condition: run one live POS wallet
+sale, one wholesale order (double-submit to confirm dedup), and one wallet refund (double-tap)
+against production before declaring done — the fixes are proven against a faithful transaction
+model, not yet against live Firestore.

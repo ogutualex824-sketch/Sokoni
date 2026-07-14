@@ -2,6 +2,84 @@
 
 ---
 
+## 2026-07-14 — Single Verification Field (OTP UX Sprint)
+
+**Scope:** UX only. The six-box OTP grid is replaced by one premium verification input.
+OTP generation and server-side verification are **unchanged** — every page still verifies
+through the same Firebase `confirmationResult.confirm(code)` call.
+
+### Findings
+- **The six-box grid could not accept an SMS AutoFill by construction.** iOS fills a
+  *single* field with the whole code; `maxlength="1"` then truncated it to one digit and
+  left the other five boxes empty. The "tap the suggestion above the keyboard" path — the
+  one users actually reach for — was broken on every page that had it.
+- **Two of the three pages had no `autocomplete="one-time-code"` at all.**
+  `onboarding.html` and `provider-onboarding.html` never offered the suggestion, so phone
+  sign-up there meant reading the SMS and typing six digits by hand.
+- **Pasting scattered digits.** Pasting into box 3 wrote from box 3 onward and dropped the
+  rest of the code on the floor.
+- **Three implementations of the same component** (`.otp-digit`, `.otp-b`, `.otpb`), each
+  with its own copy of the focus-jumping and backspace logic.
+
+### Changes
+- **`sokoni-otp.js` — NEW shared component.** One input: `type=text`,
+  `inputmode="numeric"`, `autocomplete="one-time-code"`, `maxlength=6`. Strips spaces and
+  every non-digit from paste and autofill (`"Your code is 89 92-97"` → `899297`), auto-
+  verifies once the code is complete from any source, de-duplicates the `input`+`change`
+  pair that autofill raises, and re-arms after a rejected code. WebOTP (Android) is wired
+  behind feature detection — see *Known limitation*.
+- **`login.html`, `onboarding.html`, `provider-onboarding.html`** — six boxes → one mount
+  point. The **Verify Code button is kept as the fallback** on all three.
+- **`auth.js`** — `_setupOtpInputs()` now mounts the shared component; all focus-jumping,
+  box synchronisation and paste-scattering deleted. `verifyPhoneOTP()` / `resendPhoneOTP()`
+  keep their names and their backend call. Fixed in passing: on a rejected code the button
+  relabelled itself from "Verify Code →" to "Verify →".
+- **`auth.css`** and the two onboarding pages — dead grid CSS removed.
+- **Styling:** four stylesheets carry a global iOS-zoom guard —
+  `input:not(…):not(…):not(…):not(…) { font-size: max(16px, 1em) !important }` — which
+  scores (0,4,1) with `!important` and pinned the field to a flat 16px. The component sets
+  its font-size inline with priority, which no stylesheet `!important` can outrank. The
+  guard's purpose is preserved: 24px is above the 16px threshold, so focus still never
+  zooms the viewport on iOS.
+- **`scripts/test-otp.js` — NEW CI gate.** Fails if any page reintroduces a multi-box grid,
+  if an OTP page stops using the shared component, if the autofill contract
+  (`one-time-code` / `inputmode` / `type=text` / digit-stripping) is broken, if the
+  double-fire or re-arm guards are removed, or if the component ever starts making network
+  calls of its own.
+- **`scripts/test-seller-dashboard.js`** — the consent-banner assertion was pinned to the
+  old `paddingBottom = ''` spelling and broke when `security.js` correctly moved to
+  `removeProperty()`. Now asserts the behaviour, not the syntax.
+- **`pos-ios-print-test.html`** — new page, was shipping with no favicon; canonical block
+  added (caught by `test-icons`).
+
+### Known limitation
+Android's **WebOTP API** only fires when the SMS body ends with the origin-bound line
+`@host #code`. Firebase's phone-auth template does not include it, so WebOTP is a no-op
+today; the listener is wired and feature-detected so it starts working the moment that
+template changes. **Adding the suffix is a server-side change and was explicitly out of
+scope for this sprint.** The Android keyboard-suggestion path (Gboard reading the SMS and
+offering the code above the keyboard) works today and does not depend on WebOTP.
+
+### Database / API / Security changes
+None. No backend logic was modified.
+
+### Breaking changes
+None. `verifyPhoneOTP()`, `resendPhoneOTP()`, `A.verifyOTP()` and `AU.verifyOTP()` keep
+their signatures and their `onclick` bindings.
+
+### Testing
+19/19 CI gates green. 19/19 behavioural assertions green in a headless iPhone 13 profile:
+typing, paste, dirty paste, one-shot autofill, input+change de-duplication, backspace
+editing, re-arm after rejection, button fallback, no overflow at 320px, ≥44px touch target.
+**Not yet verified on physical hardware** — see *Deployment*.
+
+### Deployment
+`firebase deploy --only hosting`. Per RVS this ships as **🟡 Engineering Complete**, not
+Verified: the one thing that matters most — tapping the real SMS suggestion on a real
+iPhone — cannot be proven in a headless browser and needs a physical-device pass.
+
+---
+
 ## 2026-07-14 — P0 Fix: Google Sign-In False Error Banner on iPhone Safari
 
 **Scope:** Auth system — eliminates the "An unexpected error occurred" banner that appeared on `login.html` before the user entered any credentials on iPhone / iPad.
