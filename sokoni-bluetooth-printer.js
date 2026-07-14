@@ -61,21 +61,44 @@ const KEY_SETTINGS   = 'p58e_settings';
 /* ─────────────────────────────────────────────────────────────────
    P58E SERVICE
 ───────────────────────────────────────────────────────────────── */
+const CONNECT_TIMEOUT_MS = 12000; /* 12s — prevents gatt.connect() hanging indefinitely */
+const HEALTH_INTERVAL_MS = 5000;  /* 5s — poll gatt.connected to catch stale connections */
+
+const DEFAULT_SETTINGS = {
+  autoConnect:    true,
+  drawerEnabled:  true,
+  paperWidth:     '58mm',
+  mtuBytes:       128,   /* physically verified safe for P58E — updated by probe */
+  chunkDelay:     40,    /* ms between BLE packets — P58E requires flow control */
+  template:       'standard',
+  registerName:   'Register 01',
+  storeProfile:   null,  /* { name, address, phone, pin, vatNumber } */
+  certifiedAt:    null,
+  printCount:     0,
+};
+
 class P58EService {
 
   constructor () {
-    this._info              = null;     /* connected device info */
-    this._status            = 'idle';   /* idle|scanning|connecting|connected|reconnecting|error */
-    this._btDevice          = null;     /* BluetoothDevice reference for reconnect */
+    this._info              = null;
+    this._status            = 'idle'; /* idle|scanning|connecting|connected|reconnecting|error */
+    this._btDevice          = null;
     this._reconnectTimer    = null;
     this._reconnectAttempts = 0;
     this._MAX_RECONNECT     = 8;
     this._listeners         = {};
+    this._healthInterval    = null;
+    this._lastPrintStartMs  = 0;
     this._checklist         = this._load(KEY_CHECKLIST, {});
     this._paired            = this._load(KEY_DEVICE, null);
-    this._settings          = this._load(KEY_SETTINGS, { autoConnect: true, drawerEnabled: true });
+    this._settings          = this._load(KEY_SETTINGS, { ...DEFAULT_SETTINGS });
+    /* Backfill any new keys not present in older saved settings */
+    let patched = false;
+    for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) {
+      if (!(k in this._settings)) { this._settings[k] = v; patched = true; }
+    }
+    if (patched) this._save(KEY_SETTINGS, this._settings);
 
-    /* Default paper width to 58mm when SokoniPrinter is available */
     this._applyCfg();
   }
 
@@ -120,6 +143,20 @@ class P58EService {
      DISCOVERY — opens the browser Bluetooth picker
   ───────────────────────────────────────────────────────────── */
   async requestDevice () {
+    /* iOS / WebKit: all browsers on iPhone and iPad use WebKit, which
+       does not implement Web Bluetooth. Show a friendly explanation
+       (not a generic error) and bail out early. */
+    const _isIOS = /iP(hone|od|ad)/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (_isIOS) {
+      if (window.SokoniIOSPrint) SokoniIOSPrint.showBleGuidance();
+      throw new Error(
+        'Direct Bluetooth receipt printing isn\'t available in Safari.\n\n' +
+        'Use AirPrint, Share, or a supported network printer instead.\n\n' +
+        '(Safari / WebKit platform limitation — not a SOKONI error.)'
+      );
+    }
+
     if (!navigator.bluetooth) {
       throw new Error(
         'Web Bluetooth is not available.\n\n' +
@@ -166,23 +203,75 @@ class P58EService {
   }
 
   /* ─────────────────────────────────────────────────────────────
+     MTU PROBE — find the largest single BLE write the P58E accepts.
+     ESC/POS printers silently ignore NUL (0x00) bytes, so this is
+     safe to run immediately after characteristic discovery.
+  ───────────────────────────────────────────────────────────── */
+  async _probeMTU (char) {
+    const SIZES = [20, 64, 128, 180, 244];
+    let best = 20;
+    for (const sz of SIZES) {
+      const probe = new Uint8Array(sz).fill(0x00);
+      try {
+        if (char.properties.writeWithoutResponse) await char.writeValueWithoutResponse(probe);
+        else await char.writeValue(probe);
+        best = sz;
+        await new Promise(r => setTimeout(r, 30));
+      } catch (_) { break; }
+    }
+    return best;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     CONNECTION HEALTH MONITOR — polls gatt.connected every 5s.
+     Chrome does not always fire gattserverdisconnected when a BLE
+     connection goes stale (no traffic for a long time). This guard
+     catches the gap and triggers reconnect proactively.
+  ───────────────────────────────────────────────────────────── */
+  _startHealthMonitor (device) {
+    this._stopHealthMonitor();
+    this._healthInterval = setInterval(() => {
+      if (this._status !== 'connected') return;
+      if (!device?.gatt?.connected) {
+        this._stopHealthMonitor();
+        this._emit('disconnected', this._info);
+        this._setStatus('reconnecting');
+        this._scheduleReconnect(device);
+      }
+    }, HEALTH_INTERVAL_MS);
+  }
+
+  _stopHealthMonitor () {
+    if (this._healthInterval) { clearInterval(this._healthInterval); this._healthInterval = null; }
+  }
+
+  /* ─────────────────────────────────────────────────────────────
      CONNECTION — internal; pass a BluetoothDevice instance
   ───────────────────────────────────────────────────────────── */
   async _connectDevice (device, savePaired = false) {
     this._setStatus('connecting');
     this._emit('connecting', { name: device.name || 'Bluetooth Printer' });
 
-    /* Root cause of "Cannot read properties of undefined (reading 'connect')":
-       BluetoothDevice.gatt is normally always present, but can be null on some
-       Android firmware builds or when the device handle has been invalidated
-       by a system BT stack reset.  Guard defensively before calling .connect(). */
     if (!device?.gatt) {
       this._setStatus('error');
-      throw new Error('Bluetooth GATT interface not available on this device. Ensure the printer is powered on, in range, and not connected to another device.');
+      throw new Error(
+        'Bluetooth GATT interface not available. ' +
+        'Ensure the printer is powered on, within 2 metres, ' +
+        'and not connected to another device or app.'
+      );
     }
 
     try {
-      const gatt = await device.gatt.connect();
+      /* Wrap gatt.connect() with a timeout — it can hang indefinitely if the
+         printer is out of range but still in Windows' paired devices list. */
+      const connectTimeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(
+          'Connection timed out after 12s. ' +
+          'Printer may be out of range, powered off, or occupied by another app. ' +
+          'Move closer and retry.'
+        )), CONNECT_TIMEOUT_MS)
+      );
+      const gatt = await Promise.race([device.gatt.connect(), connectTimeout]);
 
       /* — Service discovery — */
       let svc = null, matchedService = null;
@@ -209,6 +298,13 @@ class P58EService {
       }
       if (!char) throw new Error('No writable characteristic found on the print service.');
 
+      /* — MTU probe: find safe chunk size for this printer — */
+      const mtu = await this._probeMTU(char).catch(() => 128);
+      if (mtu !== this._settings.mtuBytes) {
+        this._settings.mtuBytes = mtu;
+        this._save(KEY_SETTINGS, this._settings);
+      }
+
       /* — Store connection info — */
       this._btDevice = device;
       this._info = {
@@ -217,17 +313,22 @@ class P58EService {
         serviceUUID: matchedService,
         charUUID:    char.uuid,
         writeMode:   char.properties.writeWithoutResponse ? 'writeWithoutResponse' : 'write',
+        mtuBytes:    mtu,
         connectedAt: new Date().toISOString(),
       };
       this._reconnectAttempts = 0;
 
       if (savePaired) {
-        this._paired = { name: this._info.name, id: this._info.id, serviceUUID: matchedService, savedAt: new Date().toISOString() };
+        this._paired = {
+          name: this._info.name, id: this._info.id,
+          serviceUUID: matchedService, savedAt: new Date().toISOString(),
+        };
         this._save(KEY_DEVICE, this._paired);
       }
 
-      /* — GATT disconnect handler — deduplicated to prevent listener accumulation on reconnect — */
+      /* — Deduplicated GATT disconnect handler — prevents listener accumulation across reconnects — */
       const disconnectHandler = () => {
+        this._stopHealthMonitor();
         this._setStatus('reconnecting');
         this._emit('disconnected', this._info);
         this._scheduleReconnect(device);
@@ -238,16 +339,22 @@ class P58EService {
       this._gattDisconnectHandler = disconnectHandler;
       device.addEventListener('gattserverdisconnected', disconnectHandler);
 
-      /* — Wire SokoniPrinter to this device for queue/render support — */
+      /* — Wire SokoniPrinter and push MTU config to its BT adapter — */
       if (window.SokoniPrinter) {
         try {
           await SokoniPrinter.connect({ type: 'bluetooth', name: device.name, id: device.id, _dev: device });
+          /* Push probed MTU to the adapter so its write loop uses the verified chunk size */
+          const adapter = SokoniPrinter._adapters?.get('bluetooth') || SokoniPrinter._adapter;
+          if (adapter?.setTransportConfig) adapter.setTransportConfig(mtu, this._settings.chunkDelay);
         } catch(e) {
           if (!/already (connected|managed)/i.test(e?.message || '')) {
             console.warn('[P58E] SokoniPrinter.connect failed during BLE pair:', e?.message);
           }
         }
       }
+
+      /* — Start health monitor after connection established — */
+      this._startHealthMonitor(device);
 
       this._setStatus('connected');
       this._emit('connected', this._info);
@@ -314,7 +421,8 @@ class P58EService {
   ───────────────────────────────────────────────────────────── */
   async disconnect () {
     clearTimeout(this._reconnectTimer);
-    this._reconnectAttempts = this._MAX_RECONNECT; // stop auto-reconnect
+    this._stopHealthMonitor();
+    this._reconnectAttempts = this._MAX_RECONNECT; /* stop auto-reconnect loop */
     if (this._btDevice?.gatt?.connected) {
       try { this._btDevice.gatt.disconnect(); } catch(e) {}
     }
@@ -324,6 +432,22 @@ class P58EService {
     if (window.SokoniPrinter) await SokoniPrinter.disconnect().catch(() => {});
     this._emit('disconnected', null);
   }
+
+  /* ─────────────────────────────────────────────────────────────
+     PRINT LATENCY TRACKING
+     Call recordPrintStart() before SokoniPrinter.print(), and
+     recordPrintEnd() in the then/catch.  getPrintLatency() returns
+     the last measured round-trip in milliseconds.
+  ───────────────────────────────────────────────────────────── */
+  recordPrintStart () { this._lastPrintStartMs = performance.now(); }
+  recordPrintEnd   () {
+    const ms = Math.round(performance.now() - this._lastPrintStartMs);
+    this._emit('print_latency', { ms });
+    this._settings.printCount = (this._settings.printCount || 0) + 1;
+    this._save(KEY_SETTINGS, this._settings);
+    return ms;
+  }
+  get printCount () { return this._settings.printCount || 0; }
 
   async forget () {
     this._paired = null;
@@ -639,6 +763,40 @@ class P58EService {
     this._save(KEY_CHECKLIST, this._checklist);
     this._emit('checklist', this.checklist);
   }
+
+  /* ─────────────────────────────────────────────────────────────
+     STORE PROFILE — remembered per register so cashiers never
+     need to reconfigure after the first session.
+  ───────────────────────────────────────────────────────────── */
+  setStoreProfile (profile) {
+    this._settings.storeProfile = {
+      name:       profile.name       || '',
+      address:    profile.address    || '',
+      phone:      profile.phone      || '',
+      pin:        profile.pin        || '',
+      vatNumber:  profile.vatNumber  || '',
+    };
+    this._save(KEY_SETTINGS, this._settings);
+    this._emit('profile_updated', this._settings.storeProfile);
+  }
+
+  get storeProfile () { return this._settings.storeProfile || null; }
+
+  setRegisterName (name) {
+    this._settings.registerName = String(name).trim() || 'Register 01';
+    this._save(KEY_SETTINGS, this._settings);
+  }
+
+  /* Mark printer as production-certified (called after hardware validation) */
+  certify () {
+    this._settings.certifiedAt = new Date().toISOString();
+    this._save(KEY_SETTINGS, this._settings);
+    this._emit('certified', { at: this._settings.certifiedAt, device: this._paired });
+    console.log('[P58E] Hardware certified at:', this._settings.certifiedAt);
+  }
+
+  get isCertified () { return !!this._settings.certifiedAt; }
+  get certifiedAt  () { return this._settings.certifiedAt  || null; }
 
   /* ─────────────────────────────────────────────────────────────
      STATUS SNAPSHOT (for settings page display)

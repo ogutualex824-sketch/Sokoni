@@ -96,6 +96,16 @@ td{padding:6px 8px;border-bottom:1px solid var(--border)}
 td.pass{color:var(--pass)}
 td.fail{color:var(--fail)}
 td.warn{color:var(--warn)}
+
+/* Connection diagnostics grid */
+.diag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:12px}
+.diag-cell{background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:8px 10px}
+.diag-cell .d-label{font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px}
+.diag-cell .d-val{font-size:13px;font-weight:700}
+.diag-cell .d-val.pass{color:var(--pass)}
+.diag-cell .d-val.fail{color:var(--fail)}
+.diag-cell .d-val.warn{color:var(--warn)}
+.diag-cell .d-val.dim{color:var(--txt3)}
 </style>
 </head>
 <body>
@@ -117,6 +127,54 @@ td.warn{color:var(--warn)}
   <div id="printerName"></div>
 </div>
 
+<!-- Environment Diagnostics (auto-populated on load) -->
+<div id="env-diag" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+    <span style="font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.06em;font-weight:700">Environment Diagnostics</span>
+    <span style="font-size:10px;color:var(--txt3)">Auto-detected · no action required</span>
+  </div>
+  <div class="diag-grid" id="env-cells"></div>
+  <div id="env-notice" style="display:none;margin-top:10px;font-size:11px;padding:8px 10px;border-radius:4px;background:var(--bg3);border-left:3px solid var(--warn);color:var(--warn);line-height:1.5"></div>
+</div>
+
+<!-- BLE Settings -->
+<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:12px;font-size:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <span style="color:var(--txt2);font-weight:700;letter-spacing:.05em">BLE PACKET SETTINGS</span>
+    <span style="color:var(--txt3);font-size:11px">Adjust if GATT write errors occur</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center">
+    <label style="display:flex;align-items:center;gap:8px;color:var(--txt2)">
+      Chunk size (bytes)
+      <input id="cfg-chunk" type="number" min="20" max="512" value="128"
+        style="width:72px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--txt);font-family:inherit;font-size:12px"
+        onchange="state.chunkSize=Math.max(20,Math.min(512,parseInt(this.value)||128));this.style.borderColor='var(--acc)'">
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;color:var(--txt2)">
+      Inter-packet delay (ms)
+      <input id="cfg-delay" type="number" min="0" max="500" value="60"
+        style="width:72px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--txt);font-family:inherit;font-size:12px"
+        onchange="state.chunkDelay=Math.max(0,Math.min(500,parseInt(this.value)||60));this.style.borderColor='var(--acc)'">
+    </label>
+    <label style="display:flex;align-items:center;gap:8px;color:var(--txt2)">
+      <input id="cfg-resp" type="checkbox"
+        onchange="state.useResponseWrite=this.checked">
+      Force writeValueWithResponse
+    </label>
+    <button class="btn btn-ghost" style="padding:6px 12px;font-size:11px"
+      onclick="state.chunkSize=128;state.chunkDelay=60;state.useResponseWrite=false;
+               document.getElementById('cfg-chunk').value=128;
+               document.getElementById('cfg-delay').value=60;
+               document.getElementById('cfg-resp').checked=false">
+      Reset defaults
+    </button>
+    <span id="cfg-hint" style="color:var(--txt3);font-size:11px">MTU probe runs automatically in Step 3</span>
+  </div>
+  <div style="margin-top:8px;color:var(--txt3);font-size:11px">
+    Recommended: if GATT fails at 128B try 64B → 50B → 20B. If writeWithoutResponse fails, tick "Force writeValueWithResponse".
+  </div>
+</div>
+
 <!-- STEP 1: Environment -->
 <div class="step" id="s1">
   <div class="step-header" onclick="toggleStep('s1')">
@@ -133,19 +191,67 @@ td.warn{color:var(--warn)}
   </div>
 </div>
 
-<!-- STEP 2: Discover -->
+<!-- STEP 2: Discover / Reconnect -->
 <div class="step" id="s2">
   <div class="step-header" onclick="toggleStep('s2')">
     <div class="step-num" id="s2-num">2</div>
-    <div class="step-title">Discover Printer (BLE Scan)</div>
+    <div class="step-title" id="s2-title">Printer Authorization</div>
     <div class="step-result" id="s2-res"></div>
   </div>
   <div class="step-body" id="s2-body">
-    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Opens the Chrome Bluetooth picker. Select your P58E from the list. The printer must be <strong>powered on</strong> and within 2 metres.</p>
-    <div class="btn-row">
-      <button class="btn btn-acc" id="s2-btn" onclick="runStep2()">Scan for Printer</button>
+
+    <!-- Connection diagnostics -->
+    <div class="diag-grid" id="diagGrid">
+      <div class="diag-cell">
+        <div class="d-label">Windows paired</div>
+        <div class="d-val dim" id="diag-win">Check OS</div>
+      </div>
+      <div class="diag-cell">
+        <div class="d-label">Browser authorized</div>
+        <div class="d-val dim" id="diag-auth">—</div>
+      </div>
+      <div class="diag-cell">
+        <div class="d-label">Session device</div>
+        <div class="d-val dim" id="diag-dev">None</div>
+      </div>
+      <div class="diag-cell">
+        <div class="d-label">GATT connected</div>
+        <div class="d-val dim" id="diag-gatt">No</div>
+      </div>
+      <div class="diag-cell">
+        <div class="d-label">Printer ready</div>
+        <div class="d-val dim" id="diag-ready">No</div>
+      </div>
     </div>
-    <div class="log" id="s2-log" style="display:none"></div>
+
+    <!-- Dynamic action area -->
+    <div id="s2-action" style="margin-top:14px"></div>
+
+    <!-- Picker walkthrough — shown when no saved device -->
+    <div id="s2-picker-guide" style="margin-top:12px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:12px 14px;font-size:12px;line-height:1.8">
+      <div style="font-weight:700;color:var(--txt2);margin-bottom:6px;letter-spacing:.04em">HOW TO COMPLETE THE CHROME PICKER</div>
+      <div style="color:var(--txt2)">
+        1. Click <strong>Pair Printer</strong> below — a Chrome dialog will open.<br>
+        2. Find <strong>P58E</strong> in the list. If it shows <em>"Paired"</em>, that is the OS status — you still need to select it.<br>
+        3. <strong>Click on P58E</strong> so the row is highlighted/selected.<br>
+        4. Click the <strong>"Pair"</strong> button at the bottom right of the Chrome dialog.<br>
+        5. Wait — do not close the dialog while it connects.<br>
+      </div>
+      <div style="margin-top:8px;color:var(--txt3)">
+        After this first selection, this page uses <code>getDevices()</code> on every reload — no picker needed again.<br>
+        If P58E does not appear in the list, use <strong>Show All Devices</strong> to see everything nearby.
+      </div>
+    </div>
+
+    <!-- Web BT security note -->
+    <div id="s2-note" style="margin-top:10px;font-size:11px;color:var(--txt3);line-height:1.6">
+      <strong style="color:var(--txt2)">Browser security model:</strong>
+      <code>requestDevice()</code> always requires a user gesture and opens a picker.
+      Once you select the device, <code>getDevices()</code> reconnects silently on every refresh.
+      Closing the picker is a browser permission event — it is not a printer error.
+    </div>
+
+    <div class="log" id="s2-log" style="display:none;margin-top:10px"></div>
   </div>
 </div>
 
@@ -195,7 +301,12 @@ td.warn{color:var(--warn)}
     <div class="step-result" id="s5-res"></div>
   </div>
   <div class="step-body" id="s5-body">
-    <p style="font-size:13px;color:var(--txt2);margin-top:10px">Prints a full SOKONI receipt: store name, branch, cashier, 3 items, subtotal, VAT, total, payment method, QR code, and Code128 barcode.</p>
+    <p style="font-size:13px;color:var(--txt2);margin-top:10px">
+      Three-phase progressive test:<br>
+      <strong>Phase A</strong> — 32B short write (proves single-packet works)<br>
+      <strong>Phase B</strong> — ~200B medium receipt (proves multi-packet works)<br>
+      <strong>Phase C</strong> — Full SOKONI receipt with QR + barcode (~994B)
+    </p>
     <div class="btn-row">
       <button class="btn btn-acc" id="s5-btn" onclick="runStep5()" disabled>Print Test Receipt</button>
     </div>
@@ -409,6 +520,25 @@ function buildTestReceipt(receiptNum,isStress=false){
   return e.build();
 }
 
+/* Medium receipt: header + 2 items, no QR/barcode (~200B) */
+function buildMediumReceipt(){
+  const e=new ESCPos().init();
+  const now=new Date();
+  e.ac().bold(true).text('SOKONI').lf().bold(false);
+  e.text('Westlands Branch').lf();
+  e.al().text(sep32()).lf();
+  e.text(W32('Receipt #:','RCP-MEDIUM')).lf();
+  e.text(W32('Date:',now.toLocaleDateString('en-KE'))).lf();
+  e.text(W32('Time:',now.toLocaleTimeString('en-KE'))).lf();
+  e.text(sep32()).lf();
+  e.text(W32('Sukari 1kg x2:','KES 260')).lf();
+  e.text(W32('Unga 2kg x1:','KES 180')).lf();
+  e.text(sep32()).lf();
+  e.bold(true).sz('tall').text(W32('TOTAL:','KES 440')).lf().sz('normal').bold(false);
+  e.lf(3).cut();
+  return e.build();
+}
+
 /* ─────────────────────────────────────────────────────────────
    BLE STATE
 ───────────────────────────────────────────────────────────── */
@@ -426,6 +556,12 @@ const state={
   stepResults:{},
   stressStats:{sent:0,failed:0,times:[],disconnects:0},
   s7Phase:null,s7ResolveFunc:null,
+  pairing:false, /* guard against concurrent requestDevice() calls */
+  /* BLE write tuning — conservative defaults; MTU probe updates chunkSize */
+  chunkSize:128,
+  chunkDelay:60,
+  probeMaxBytes:0,
+  useResponseWrite:false, /* set to true if writeWithoutResponse keeps failing */
 };
 
 /* ─────────────────────────────────────────────────────────────
@@ -486,14 +622,118 @@ function escHtml(s){
 }
 
 /* ─────────────────────────────────────────────────────────────
-   WRITE HELPER — chunk at 512 bytes, wait between chunks
+   MTU PROBE — find the largest single BLE write the printer accepts.
+   Sends NUL-filled buffers (ignored by ESC/POS printers) at increasing
+   sizes. Stops at the first failure; uses the last successful size.
+   Conservative upper limit: 244 bytes (BLE 5.0 DLE max - 3 header bytes).
 ───────────────────────────────────────────────────────────── */
-async function writeChunked(char,data){
-  const CHUNK=512;
-  for(let i=0;i<data.length;i+=CHUNK){
-    await char.writeValueWithoutResponse(data.slice(i,i+CHUNK));
-    await new Promise(r=>setTimeout(r,20));
+async function probeMTU(char){
+  const SIZES=[20,50,100,128,180,244];
+  let maxGood=20;
+  log('s3','Running MTU probe (NUL bytes, safe for ESC/POS)…','in');
+  for(const sz of SIZES){
+    const probe=new Uint8Array(sz).fill(0x00);
+    try{
+      if(char.properties.writeWithoutResponse){
+        await char.writeValueWithoutResponse(probe);
+      } else {
+        await char.writeValueWithResponse(probe);
+      }
+      maxGood=sz;
+      log('s3','Probe '+sz+'B OK','ok');
+      await new Promise(r=>setTimeout(r,40));
+    } catch(_){
+      log('s3','Probe '+sz+'B FAIL — max safe chunk: '+maxGood+'B','wn');
+      break;
+    }
   }
+  state.chunkSize=maxGood;
+  state.probeMaxBytes=maxGood;
+  /* update settings UI */
+  const inp=document.getElementById('cfg-chunk');
+  if(inp)inp.value=maxGood;
+  log('s3','MTU probe complete. Using chunk size: '+maxGood+'B','ok');
+  return maxGood;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   WRITE HELPER — splits payload into BLE-safe packets.
+
+   Root cause of "GATT operation failed for unknown reason":
+   A single write() call exceeding the negotiated ATT MTU causes
+   Chrome's Web Bluetooth layer to reject the operation silently.
+   Chrome does not expose the negotiated MTU to JS, so we use the
+   probe result (or a conservative 128-byte default) as the ceiling.
+
+   Per-packet retry: 3 attempts with 200ms/400ms backoff.
+   Write method: writeValueWithoutResponse first (faster); if the
+   char only supports write-with-response, falls back automatically.
+───────────────────────────────────────────────────────────── */
+async function writeChunked(char,data,logId){
+  const CHUNK=state.chunkSize;
+  const DELAY=state.chunkDelay;
+  const lid=logId||'s5';
+  const total=data.length;
+  const numPkts=Math.ceil(total/CHUNK);
+
+  log(lid,'Receipt size: '+total+'B | Packet size: '+CHUNK+'B | Packets: '+numPkts,'in');
+
+  const useWWR=char.properties.writeWithoutResponse&&!state.useResponseWrite;
+  log(lid,'Write method: '+(useWWR?'writeValueWithoutResponse':'writeValueWithResponse'),'dm');
+
+  const t0=Date.now();
+  for(let i=0;i<total;i+=CHUNK){
+    const pIdx=Math.floor(i/CHUNK)+1;
+    const chunk=data.slice(i,i+CHUNK);
+    let sent=false;
+
+    for(let attempt=1;attempt<=3;attempt++){
+      const pt0=Date.now();
+      try{
+        if(useWWR){
+          await char.writeValueWithoutResponse(chunk);
+        } else {
+          await char.writeValueWithResponse(chunk);
+        }
+        log(lid,'Packet '+pIdx+'/'+numPkts+' ('+chunk.length+'B) OK '+( Date.now()-pt0)+'ms','ok');
+        sent=true;
+        break;
+      } catch(e){
+        const isLast=attempt===3;
+        log(lid,'Packet '+pIdx+'/'+numPkts+' attempt '+attempt+' FAIL: '+e.message,isLast?'er':'wn');
+        if(!isLast) await new Promise(r=>setTimeout(r,200*attempt));
+        else {
+          /* On final failure try the other write method once */
+          try{
+            const pt1=Date.now();
+            if(useWWR){
+              await char.writeValueWithResponse(chunk);
+            } else {
+              await char.writeValueWithoutResponse(chunk);
+            }
+            log(lid,'Packet '+pIdx+' recovered via alternate write method '+( Date.now()-pt1)+'ms','wn');
+            sent=true;
+          } catch(e2){
+            /* both methods failed */
+          }
+        }
+      }
+    }
+
+    if(!sent){
+      throw new Error(
+        'Packet '+pIdx+'/'+numPkts+' failed after 3 attempts. '+
+        'Current chunk size: '+CHUNK+'B. '+
+        'Try reducing chunk size in BLE Settings below Step 1.'
+      );
+    }
+
+    if(i+CHUNK<total) await new Promise(r=>setTimeout(r,DELAY));
+  }
+
+  const elapsed=Date.now()-t0;
+  log(lid,'Receipt transmission complete: '+total+'B in '+elapsed+'ms','ok');
+  return elapsed;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -541,37 +781,216 @@ async function runStep1(){
 }
 
 /* ─────────────────────────────────────────────────────────────
-   STEP 2 — Discover
+   PRINTER DEVICE FILTER — same list used by requestDevice and
+   getDevices name-matching.
 ───────────────────────────────────────────────────────────── */
-async function runStep2(){
-  setStep('s2','run','Scanning…');
-  setStatus('Opening Bluetooth picker — select your P58E printer…','blink');
-  log('s2','Calling navigator.bluetooth.requestDevice()…','in');
-  log('s2','A browser popup will appear. Select your P58E printer.','wn');
+const PRINTER_PREFIXES=['P58','P80','PT-','BTP','HOP','POS','Printer','RPP','BTPT','TM-','BP-','iDPRT','SP-'];
+const PRINTER_EXACT=['P58E','P58-E','Cashino'];
+function looksLikePrinter(name){
+  if(!name)return false;
+  if(PRINTER_EXACT.includes(name))return true;
+  return PRINTER_PREFIXES.some(p=>name.startsWith(p));
+}
+
+/* ─────────────────────────────────────────────────────────────
+   DIAGNOSTICS — updates the 5-cell grid in Step 2
+───────────────────────────────────────────────────────────── */
+function refreshDiag(){
+  const set=(id,val,cls)=>{
+    const el=document.getElementById('diag-'+id);
+    if(!el)return;
+    el.textContent=val;
+    el.className='d-val '+cls;
+  };
+  /* Windows paired — cannot be detected from JS */
+  set('win','Check OS settings','dim');
+  /* Browser authorized */
+  const authName=state.device?state.device.name:'None';
+  set('auth',state.device?authName:'None',state.device?'pass':'fail');
+  /* Session device */
+  set('dev',state.device?state.device.name:'None',state.device?'pass':'dim');
+  /* GATT */
+  const gattOk=state.server&&state.server.connected;
+  set('gatt',gattOk?'Yes':'No',gattOk?'pass':'fail');
+  /* Printer ready */
+  const ready=state.char&&state.connected;
+  set('ready',ready?'Yes':'No',ready?'pass':'fail');
+}
+
+/* ─────────────────────────────────────────────────────────────
+   INIT BLUETOOTH — runs on page load.
+   Uses getDevices() (Chrome 85+) to find previously authorized
+   devices WITHOUT opening the picker.
+───────────────────────────────────────────────────────────── */
+async function initBluetooth(){
+  if(!navigator.bluetooth){renderS2Buttons(null);return;}
+  log('s2','Checking for previously authorized printers (getDevices)…','in');
+  try{
+    const devices=await navigator.bluetooth.getDevices();
+    const printers=devices.filter(d=>looksLikePrinter(d.name));
+    if(printers.length>0){
+      const saved=printers[0];
+      state.device=saved;
+      saved.addEventListener('gattserverdisconnected',onDisconnect);
+      log('s2','Found previously authorized device: '+saved.name,'ok');
+      renderS2Buttons(saved);
+      setStep('s2','warn','Saved: '+saved.name);
+      setStatus('Saved printer found: '+saved.name+'. Click "Connect" to proceed.','warn');
+    } else {
+      log('s2','No previously authorized printer found. Pair one below.','wn');
+      renderS2Buttons(null);
+    }
+  } catch(e){
+    log('s2','getDevices() not supported or failed: '+e.message+'. Use Pair button.','wn');
+    renderS2Buttons(null);
+  }
+  refreshDiag();
+}
+
+/* ─────────────────────────────────────────────────────────────
+   RENDER STEP 2 BUTTONS
+   saved = BluetoothDevice (reconnect path) or null (pair path)
+───────────────────────────────────────────────────────────── */
+function renderS2Buttons(saved){
+  const area=document.getElementById('s2-action');
+  if(!area)return;
+  const guide=document.getElementById('s2-picker-guide');
+  if(saved){
+    /* Hide the picker walkthrough — saved device found, no picker needed */
+    if(guide)guide.style.display='none';
+    area.innerHTML=
+      '<div style="font-size:13px;color:var(--txt2);margin-bottom:10px">'+
+      'Previously authorized printer: <strong style="color:var(--acc)">'+escHtml(saved.name)+'</strong><br>'+
+      '<span style="font-size:11px;color:var(--txt3)">No picker required — this page will connect directly.</span></div>'+
+      '<div class="btn-row">'+
+      '<button class="btn btn-acc" id="s2-connect-btn" onclick="connectSavedPrinter()">Connect '+escHtml(saved.name)+'</button>'+
+      '<button class="btn btn-ghost" style="font-size:12px" onclick="pairNewPrinter()">Pair Different Printer</button>'+
+      '</div>';
+  } else {
+    if(guide)guide.style.display='block';
+    area.innerHTML=
+      '<div style="font-size:13px;color:var(--txt2);margin-bottom:10px">'+
+      'No saved printer. Select the P58E in the Chrome picker (read the steps above).<br>'+
+      '<span style="font-size:11px;color:var(--txt3)">Printer must be powered on and within 2 metres.</span></div>'+
+      '<div class="btn-row">'+
+      '<button class="btn btn-acc" id="s2-pair-btn" onclick="pairNewPrinter(false)">Pair Printer (P58 filter)</button>'+
+      '<button class="btn btn-ghost" id="s2-all-btn" onclick="pairNewPrinter(true)">Show All Devices</button>'+
+      '</div>'+
+      '<div style="margin-top:8px;font-size:11px;color:var(--txt3)">'+
+      'Use <strong>Show All Devices</strong> if P58E does not appear with the filtered scan.</div>';
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   CONNECT SAVED PRINTER — uses getDevices() result, no picker.
+   Calls gatt.connect() directly then hands off to Step 3 logic.
+───────────────────────────────────────────────────────────── */
+async function connectSavedPrinter(){
+  if(state.pairing){return;}
+  if(state.connected){
+    log('s2','Already connected to '+state.device.name,'wn');
+    setStep('s2','pass',state.device.name);
+    document.getElementById('s3-btn').disabled=false;
+    return;
+  }
+  if(!state.device){
+    log('s2','No saved device. Use Pair Printer.','er');
+    return;
+  }
+  const btn=document.getElementById('s2-connect-btn');
+  if(btn)btn.disabled=true;
+  setStep('s2','run','Connecting…');
+  setStatus('Connecting to '+state.device.name+' (no picker required)…','blink');
+  log('s2','Using saved device: '+state.device.name,'in');
+  log('s2','Calling gatt.connect() — no picker needed.','dm');
+  refreshDiag();
+  /* Hand straight to Step 3 so all GATT logic lives in one place */
+  await runStep3();
+  if(btn)btn.disabled=false;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   PAIR NEW PRINTER — opens the Chrome picker (requestDevice).
+   Guard: only one call at a time; never if already connected.
+───────────────────────────────────────────────────────────── */
+async function pairNewPrinter(acceptAll=false){
+  if(state.pairing){
+    log('s2','Picker is already open. Complete the selection in the Chrome dialog.','wn');
+    setStatus('Chrome picker already open — look for the Bluetooth dialog.','warn');
+    return;
+  }
+  if(state.connected){
+    log('s2','Already connected to '+state.device.name+'. Disconnect first to change printer.','wn');
+    return;
+  }
+  state.pairing=true;
+  /* Disable both buttons while picker is open to prevent duplicate calls */
+  ['s2-pair-btn','s2-all-btn'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b)b.disabled=true;
+  });
+  setStep('s2','run','Opening picker…');
+
+  const modeLabel=acceptAll?'(showing ALL devices)':'(P58 filter)';
+  setStatus('Chrome Bluetooth picker '+modeLabel+' — select P58E, then click Pair','blink');
+  log('s2','Opening Chrome Bluetooth picker '+modeLabel+'…','in');
+  log('s2','IMPORTANT: click on P58E in the list to highlight it, then click the Pair button.','wn');
+  log('s2','Do NOT close the dialog. "Paired" label is the OS status — you still must select it.','wn');
 
   try{
-    const device=await navigator.bluetooth.requestDevice({
-      filters:[
-        {namePrefix:'P58'},{namePrefix:'P80'},{namePrefix:'PT-'},
-        {namePrefix:'BTP'},{namePrefix:'HOP'},{namePrefix:'POS'},
-        {namePrefix:'Printer'},{namePrefix:'RPP'},{namePrefix:'BTPT'},
-        {name:'P58E'},{name:'P58-E'}
-      ],
-      optionalServices:[BLE_SERVICE,...BLE_FALLBACK_SERVICES]
-    });
+    let requestOpts;
+    if(acceptAll){
+      requestOpts={
+        acceptAllDevices:true,
+        optionalServices:[BLE_SERVICE,...BLE_FALLBACK_SERVICES]
+      };
+    } else {
+      requestOpts={
+        filters:[
+          {namePrefix:'P58'},{namePrefix:'P80'},{namePrefix:'PT-'},
+          {namePrefix:'BTP'},{namePrefix:'HOP'},{namePrefix:'POS'},
+          {namePrefix:'Printer'},{namePrefix:'RPP'},{namePrefix:'BTPT'},
+          {name:'P58E'},{name:'P58-E'},{namePrefix:'TM-'}
+        ],
+        optionalServices:[BLE_SERVICE,...BLE_FALLBACK_SERVICES]
+      };
+    }
+    const device=await navigator.bluetooth.requestDevice(requestOpts);
     state.device=device;
-    log('s2','Device selected: '+device.name+' ('+device.id+')','ok');
-    setStep('s2','pass',device.name||'Unknown');
-    setStatus('Printer found: '+device.name+'. Proceed to Step 3.','pass');
-    document.getElementById('s3-btn').disabled=false;
-
     device.addEventListener('gattserverdisconnected',onDisconnect);
+    log('s2','Printer selected: '+device.name+' (id: '+device.id+')','ok');
+    log('s2','Browser-authorized. Reload this page anytime — no picker needed again.','ok');
+    setStep('s2','pass',device.name);
+    setStatus('Selected: '+device.name+'. Proceeding to connect…','pass');
+    renderS2Buttons(device);
+    document.getElementById('s3-btn').disabled=false;
+    /* Auto-advance to GATT connect */
+    await runStep3();
   } catch(e){
-    log('s2','Picker cancelled or error: '+e.message,'er');
-    setStep('s2','fail','FAIL');
-    setStatus('Printer not selected. Try again.','fail');
-    addFailure(2,e.message,'Power on the printer, ensure Bluetooth is on in Windows, and try again');
+    const cancelled=
+      e.name==='NotFoundError'||
+      e.message.toLowerCase().includes('cancel')||
+      e.message.toLowerCase().includes('user gesture');
+    if(cancelled){
+      log('s2','Printer selection was cancelled.','wn');
+      log('s2','To complete: click P58E in the list → click Pair button → wait for connection.','wn');
+      setStep('s2','warn','Cancelled');
+      setStatus('Selection cancelled — printer not connected. See instructions above.','warn');
+      /* Never add this to failures — it is a UX event, not a device error */
+    } else {
+      log('s2','Bluetooth API error: '+e.name+': '+e.message,'er');
+      setStep('s2','fail','BT Error');
+      setStatus('Bluetooth error: '+e.message,'fail');
+      addFailure(2,e.name+': '+e.message,
+        'Ensure Windows Bluetooth is ON, printer is powered, and Chrome has system Bluetooth permission (Windows Settings → Privacy → Bluetooth).');
+    }
   }
+  state.pairing=false;
+  ['s2-pair-btn','s2-all-btn'].forEach(id=>{
+    const b=document.getElementById(id);
+    if(b)b.disabled=false;
+  });
+  refreshDiag();
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -622,13 +1041,22 @@ async function runStep3(){
     const props=[];
     if(char.properties.write)props.push('write');
     if(char.properties.writeWithoutResponse)props.push('writeWithoutResponse');
+    if(char.properties.notify)props.push('notify');
+    if(char.properties.indicate)props.push('indicate');
     log('s3','Characteristic properties: '+props.join(', '),'ok');
 
-    setStep('s3','pass','Connected');
-    setStatus('Connected to '+state.device.name,'pass');
+    /* Run MTU probe to find safe chunk size */
+    const maxBytes=await probeMTU(char);
+    log('s3','Safe chunk size set to '+maxBytes+'B (was hardcoded 512B before — that caused the GATT failure)','wn');
+
+    setStep('s3','pass','Connected · MTU '+maxBytes+'B');
+    setStatus('Connected to '+state.device.name+' — chunk '+maxBytes+'B','pass');
     setPrinterName(state.device.name);
     document.getElementById('s3-disconnect').disabled=false;
     document.getElementById('s4-btn').disabled=false;
+    /* also mark Step 2 as pass when we got here via connectSavedPrinter() */
+    if(state.stepResults['s2']!=='pass')setStep('s2','pass',state.device.name);
+    refreshDiag();
   } catch(e){
     log('s3','Connection failed: '+e.message,'er');
     setStep('s3','fail','FAIL');
@@ -650,6 +1078,7 @@ async function disconnectPrinter(){
   document.getElementById('s3-btn').disabled=false;
   setPrinterName('');
   setStatus('Disconnected','warn');
+  refreshDiag();
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -724,7 +1153,7 @@ async function runStep4(){
   document.getElementById('s4-btn').disabled=true;
   try{
     const data=new ESCPos().init().lf().build();
-    await writeChunked(state.char,data);
+    await writeChunked(state.char,data,'s4');
     log('s4',data.length+' bytes written without error','ok');
     document.getElementById('s4-confirm').style.display='flex';
     setStatus('ESC/POS init sent. Did the paper advance?','warn');
@@ -751,25 +1180,68 @@ function confirmStep4(yes){
 }
 
 /* ─────────────────────────────────────────────────────────────
-   STEP 5 — Full test receipt
+   STEP 5 — Progressive receipt test
+   Phase A: short (~32B) — proves basic write works at current chunk size
+   Phase B: medium (~200B) — proves multi-packet works
+   Phase C: full receipt (~994B) — proves end-to-end transmission
+   Each phase must pass before the next starts.
 ───────────────────────────────────────────────────────────── */
 async function runStep5(){
   if(!state.char){log('s5','Not connected','er');return;}
-  setStep('s5','run','Printing…');
+  setStep('s5','run','Phase A…');
   document.getElementById('s5-btn').disabled=true;
-  const t0=Date.now();
+
+  /* Phase A — 32-byte probe: ESC @ + centered "SOKONI TEST" + 3 feeds */
+  log('s5','─── Phase A: Short write (~32B) ───','in');
   try{
-    const data=buildTestReceipt(1);
-    log('s5','Receipt payload: '+data.length+' bytes','in');
-    await writeChunked(state.char,data);
-    const elapsed=Date.now()-t0;
-    log('s5','All chunks written in '+elapsed+'ms','ok');
-    document.getElementById('s5-confirm').style.display='flex';
-    setStatus('Receipt sent. Inspect the physical printout.','warn');
+    const phA=new ESCPos().init().ac().text('SOKONI TEST').lf(3).build();
+    log('s5','Phase A payload: '+phA.length+'B','dm');
+    await writeChunked(state.char,phA,'s5');
+    log('s5','Phase A OK — printer printed "SOKONI TEST"','ok');
   } catch(e){
-    log('s5','Write error: '+e.message,'er');
-    setStep('s5','fail','FAIL');
-    addFailure(5,'Receipt write failed: '+e.message,'Check connection stability; retry after reconnect');
+    log('s5','Phase A FAIL: '+e.message,'er');
+    setStep('s5','fail','Phase A failed');
+    addFailure(5,'Short write failed ('+e.message+')','Even a small write failed. Check BLE connection is still active and characteristic UUID is correct.');
+    document.getElementById('s5-btn').disabled=false;
+    return;
+  }
+
+  await new Promise(r=>setTimeout(r,800));
+
+  /* Phase B — ~200-byte medium receipt: header + 2 items only */
+  log('s5','─── Phase B: Medium write (~200B) ───','in');
+  try{
+    const phB=buildMediumReceipt();
+    log('s5','Phase B payload: '+phB.length+'B','dm');
+    await writeChunked(state.char,phB,'s5');
+    log('s5','Phase B OK — medium receipt sent','ok');
+  } catch(e){
+    log('s5','Phase B FAIL: '+e.message,'er');
+    setStep('s5','fail','Phase B failed');
+    addFailure(5,'Medium write (~200B) failed: '+e.message,'Reduce chunk size in BLE Settings (try 64B) and retry.');
+    document.getElementById('s5-btn').disabled=false;
+    return;
+  }
+
+  await new Promise(r=>setTimeout(r,1200));
+
+  /* Phase C — full production receipt (~994B) */
+  log('s5','─── Phase C: Full receipt ───','in');
+  try{
+    const phC=buildTestReceipt(1);
+    log('s5','Phase C payload: '+phC.length+'B','in');
+    await writeChunked(state.char,phC,'s5');
+    log('s5','Phase C OK — full receipt transmission complete','ok');
+    document.getElementById('s5-confirm').style.display='flex';
+    setStatus('Full receipt sent. Inspect the physical printout.','warn');
+    setStep('s5','warn','Awaiting confirmation');
+  } catch(e){
+    log('s5','Phase C FAIL: '+e.message,'er');
+    setStep('s5','fail','Full receipt failed');
+    addFailure(5,'Full receipt write failed: '+e.message+
+      ' (Phase A+B passed — failure is at higher payload size)',
+      'Reduce chunk size further (try 64B or 50B) in BLE Settings. '+
+      'Increase inter-packet delay to 100ms. Then retry.');
     document.getElementById('s5-btn').disabled=false;
   }
 }
@@ -810,7 +1282,7 @@ async function runStep6(){
     log('s6','Printing receipt '+i+'/5…','dm');
     const t0=Date.now();
     try{
-      await writeChunked(state.char,buildTestReceipt(100+i,true));
+      await writeChunked(state.char,buildTestReceipt(100+i,true),'s6');
       const ms=Date.now()-t0;
       state.stressStats.times.push(ms);
       state.stressStats.sent++;
@@ -897,11 +1369,15 @@ async function runStep8(){
     ['Stress: Failed',String(state.stressStats.failed)],
     ['Stress: Avg Write',state.stressStats.times.length?Math.round(state.stressStats.times.reduce((a,b)=>a+b,0)/state.stressStats.times.length)+'ms':'—'],
     ['Failures Logged',String(state.failures.length)],
-    ['Web Bluetooth',navigator.bluetooth?'Available':'Not available'],
-    ['Web Serial',navigator.serial?'Available':'Not available'],
-    ['User Agent',navigator.userAgent.slice(0,80)+'…'],
-    ['Origin',location.origin],
-    ['Secure Context',String(window.isSecureContext)],
+    ['Web Bluetooth', navigator.bluetooth ? 'Available ✓' :
+      (!window.isSecureContext ? 'Blocked — insecure context (use localhost or HTTPS)' : 'Not available — Chrome 85+ required')],
+    ['Web Serial',   navigator.serial ? 'Available ✓' : 'Not available (Chrome Desktop only)'],
+    ['WebUSB',       navigator.usb    ? 'Available ✓' : 'Not available (Chrome Desktop only)'],
+    ['User Agent',   navigator.userAgent.slice(0,80)+'…'],
+    ['Origin',       location.origin],
+    ['Secure Context', window.isSecureContext ?
+      (['localhost','127.0.0.1','::1'].includes(location.hostname) ? 'true — localhost (Chrome dev)' : 'true — HTTPS') :
+      'false — http:// on non-localhost'],
   ];
   for(const [k,v] of rows){
     const tr=document.createElement('tr');
@@ -981,6 +1457,73 @@ function runStep10(){
 
 /* Open all step bodies by default so operator sees everything */
 document.querySelectorAll('.step-body').forEach(b=>b.style.display='block');
+
+/* ── Environment Diagnostics ── */
+function initEnvDiag(){
+  const ua=navigator.userAgent||'';
+  /* Browser + version */
+  let browser='Unknown',version='';
+  let m;
+  if((m=ua.match(/Edg\/(\d+\.\d+)/)))       {browser='Edge';   version=m[1];}
+  else if((m=ua.match(/OPR\/(\d+)/)))        {browser='Opera';  version=m[1];}
+  else if((m=ua.match(/Chrome\/(\d+)/)))     {browser='Chrome'; version=m[1];}
+  else if((m=ua.match(/Firefox\/(\d+)/)))    {browser='Firefox';version=m[1];}
+  else if((m=ua.match(/Version\/(\d+).*Safari/))) {browser='Safari'; version=m[1];}
+  /* OS */
+  let os='Unknown';
+  if(/Windows NT 10\.0/.test(ua))os='Windows 10/11';
+  else if(/Windows NT/.test(ua)) os='Windows';
+  else if(/iPhone/.test(ua))     os='iOS (iPhone)';
+  else if(/iPad/.test(ua))       os='iOS (iPad)';
+  else if(/Mac OS X/.test(ua))   os='macOS';
+  else if(/Android/.test(ua))    os='Android';
+  else if(/Linux/.test(ua))      os='Linux';
+  /* Secure context */
+  const sc=window.isSecureContext;
+  const isLocal=['localhost','127.0.0.1','::1'].includes(location.hostname);
+  const scLabel=sc?(isLocal?'YES — localhost (Chrome dev context)':'YES — HTTPS'):'NO — http:// on non-localhost';
+  /* BLE diagnosis */
+  const isIOS=/iP(hone|od|ad)/.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const bleOk=!!navigator.bluetooth;
+  let bleLabel,bleCls;
+  if(isIOS)         {bleLabel='Not available — iOS/WebKit';            bleCls='fail';}
+  else if(!sc)      {bleLabel='Blocked — insecure context';            bleCls='fail';}
+  else if(!bleOk)   {bleLabel='Not available — requires Chrome 85+';  bleCls='fail';}
+  else              {bleLabel='Available ✓';                           bleCls='pass';}
+  /* Render cells */
+  const cells=[
+    {label:'Current URL',       val:location.href.length>52?location.href.slice(0,52)+'…':location.href, cls:'dim'},
+    {label:'Secure Context',    val:scLabel,   cls:sc?'pass':'fail'},
+    {label:'Browser',           val:browser+' '+version, cls:browser==='Chrome'?'pass':'warn'},
+    {label:'Operating System',  val:os,        cls:'dim'},
+    {label:'Web Bluetooth',     val:bleLabel,  cls:bleCls},
+    {label:'Web Serial',        val:navigator.serial?'Available ✓':'Not available', cls:navigator.serial?'pass':'warn'},
+    {label:'WebUSB',            val:navigator.usb   ?'Available ✓':'Not available', cls:navigator.usb   ?'pass':'warn'},
+  ];
+  const container=document.getElementById('env-cells');
+  if(!container)return;
+  container.innerHTML=cells.map(c=>
+    `<div class="diag-cell"><div class="d-label">${c.label}</div><div class="d-val ${c.cls}">${escHtml(c.val)}</div></div>`
+  ).join('');
+  /* Show notice when BLE unavailable */
+  if(!bleOk){
+    const reasons={
+      ios:     'Safari and all iOS browsers use WebKit, which does not implement the Web Bluetooth API. This is an Apple platform decision.',
+      insecure:'http:// on non-localhost is not a secure context. Use Chrome on localhost (http://localhost) or deploy to HTTPS.',
+      browser: 'Web Bluetooth requires Chrome 85+ on Windows, macOS, or Android. Firefox and Safari are not supported.',
+    };
+    const key=isIOS?'ios':(!sc?'insecure':'browser');
+    const notice=document.getElementById('env-notice');
+    if(notice){
+      notice.style.display='block';
+      notice.innerHTML='<b>⚠ Web Bluetooth unavailable:</b> '+escHtml(reasons[key])+
+        '<br><span style="color:var(--txt3)">Steps 2–10 of this test require Web Bluetooth.</span>';
+    }
+  }
+}
+
+/* On load: init diagnostics, then check for previously authorized printer */
+window.addEventListener('load',()=>{initEnvDiag();initBluetooth();});
 </script>
 </body>
 </html>

@@ -790,6 +790,12 @@ class PosPrintService {
     const s = this.settings.get();
     if (!s.autoAfterSale) return { skipped: true };
 
+    /* iOS / Safari: Web Bluetooth / Serial / USB not available — route to HTML receipt */
+    if (window.SokoniIOSPrint) {
+      const { isIOS } = SokoniIOSPrint.getPlatform();
+      if (isIOS) return await SokoniIOSPrint.printAfterSale(receipt, context);
+    }
+
     const copies = Number(context.copies || s.copies || 1);
     const meta = {
       docType:     'pos_sale',

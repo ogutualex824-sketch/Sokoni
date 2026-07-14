@@ -1595,6 +1595,7 @@ body.queue-mode .hotkey-bar      { display: none; }
 <script src="sokoni-universal-printer.js"></script>
 <script src="sokoni-bluetooth-printer.js"></script>
 <script src="sokoni-printer-manager.js"></script>
+<script src="sokoni-pos-ios-print.js"></script>
 <script src="sokoni-pos-print-service.js"></script>
 <script src="pos-cash-manager.js"></script>
 <script src="sokoni-pos-performance.js"></script>
@@ -2756,6 +2757,7 @@ const Checkout = (() => {
         discountTotal: totals.discount + totals.couponDsc,
         taxTotal:      totals.tax,
         grandTotal:    totals.total,
+        shiftId:       _s.shiftId || null,
         metadata:      { checkoutStartedAt: _s.saleStartTs, note: _s.note || null },
       });
 
@@ -2801,11 +2803,19 @@ const Checkout = (() => {
         _offerWhatsAppReceipt(_s.customer.phone, _s.customer.name, receipt.receiptNo, totals.total);
       }
 
+      _s.lastReceipt = receipt; // kept for manual retry
       setTimeout(async () => {
         _setState('PRINTING');
-        await _printReceipt(receipt);
+        const printResult = await _printReceipt(receipt);
         _setState('COMPLETE');
-        _toast(`Receipt #${receipt.receiptNo}`, 'success');
+        if (printResult.printed) {
+          _toast(`Receipt #${receipt.receiptNo}`, 'success');
+        } else if (printResult.skipped) {
+          _toast(`Sale complete — auto-print is off`, 'info');
+        } else {
+          _toast(`Sale saved — printer didn't respond`, 'warning');
+          _showPrintRetry(receipt);
+        }
         const resetDelay = _s.queueMode ? 300 : 2200;
         setTimeout(() => _resetSale(), resetDelay);
       }, 600);
@@ -2834,77 +2844,129 @@ const Checkout = (() => {
 
   async function _printReceipt(receipt) {
     /* Route all print jobs through the production print service.
-       PosPrintService handles: auto-print settings, offline queue,
-       cash drawer, audit logging, performance metrics, history. */
+       Returns { printed, skipped, error } — never throws. */
+    const _ctx = {
+      cashierName:  _s.cashierName,
+      registerName: _s.registerName || _s.registerId || 'Default',
+      registerId:   _s.registerId   || 'default',
+      branchId:     _s.branchId     || '',
+      merchantId:   _s.merchantId   || '',
+      method:       _s.lastPaymentMethod || '',
+      payments:     _s.lastPayments || [],
+      loyalty:      receipt.loyalty || {},
+      store: {
+        businessName: _s.merchantName || 'SOKONI SmartPOS',
+        branchName:   _s.branchName   || _s.branchId || '',
+        address:      _s.address      || 'Nairobi, Kenya',
+        phone:        _s.phone        || '',
+        kraPin:       _s.kraPin       || '',
+      },
+    };
+
     if (window.PosPrintService) {
       try {
-        await PosPrintService.printAfterSale(receipt, {
-          cashierName:  _s.cashierName,
-          registerName: _s.registerName || _s.registerId || 'Default',
-          registerId:   _s.registerId   || 'default',
-          branchId:     _s.branchId     || '',
-          merchantId:   _s.merchantId   || '',
-          method:       _s.lastPaymentMethod || '',
-          payments:     _s.lastPayments || [],
-          loyalty:      receipt.loyalty || {},
-          store: {
-            businessName: _s.merchantName || 'SOKONI SmartPOS',
-            branchName:   _s.branchName   || _s.branchId || '',
-            address:      _s.address      || 'Nairobi, Kenya',
-            phone:        _s.phone        || '',
-            kraPin:       _s.kraPin       || '',
-          },
-        });
+        const result = await PosPrintService.printAfterSale(receipt, _ctx);
+        if (result?.skipped) return { printed: false, skipped: true };
+        /* PosPrintService succeeded */
+        _triggerDrawerIfNeeded(receipt);
+        return { printed: true, skipped: false };
       } catch (err) {
-        /* Silent fallback — never block checkout for a printer failure */
-        console.warn('[POS] PosPrintService.printAfterSale failed, trying raw fallback:', err?.message);
+        console.warn('[POS] PosPrintService failed, trying raw fallback:', err?.message);
+        /* Fallback to raw SokoniPrinter */
         try {
           if (window.SokoniPrinter?.connected) {
             await SokoniPrinter.print('sale', {
-              ...receipt,
-              cashierName: _s.cashierName,
-              tillNumber:  _s.registerId || 'Default',
-              branchId:    _s.branchId,
+              ...receipt, cashierName: _s.cashierName,
+              tillNumber: _s.registerId || 'Default', branchId: _s.branchId,
             });
+            _triggerDrawerIfNeeded(receipt);
+            return { printed: true, skipped: false };
           }
-        } catch (_) {}
+        } catch (e2) {
+          console.error('[POS] Raw SokoniPrinter fallback also failed:', e2?.message);
+        }
+        return { printed: false, skipped: false, error: err?.message };
       }
     } else {
-      /* Legacy fallback — PosPrintService not loaded */
+      /* Legacy path — PosPrintService not loaded */
       try {
         if (window.SokoniPrinter?.connected) {
           await SokoniPrinter.print('sale', {
-            ...receipt,
-            cashierName: _s.cashierName,
-            tillNumber:  _s.registerId || 'Default',
-            branchId:    _s.branchId,
+            ...receipt, cashierName: _s.cashierName,
+            tillNumber: _s.registerId || 'Default', branchId: _s.branchId,
           });
+          _triggerDrawerIfNeeded(receipt);
+          return { printed: true, skipped: false };
         }
-      } catch (_) {}
-
-      /* Legacy cash drawer — handled by PosPrintService.openDrawer when loaded */
-      if (window.CashDrawer) {
-        const mode = CashDrawer.getConfig().openMode;
-        const hasCashLeg = (_s.lastPaymentMethod === 'cash') ||
-          (_s.lastPayments || []).some(p => p.method === 'cash');
-        if (hasCashLeg && (mode === 'after_receipt' || mode === 'before_receipt')) {
-          CashDrawer.openAfterSale({
-            payments: _s.lastPayments,
-            method: _s.lastPaymentMethod,
-            receiptNo: receipt?.receiptNo,
-            amount: receipt?.grandTotal,
-            shiftId: _s.shiftId,
-            cashierId: _s.cashierId, cashierName: _s.cashierName,
-            merchantId: _s.merchantId, branchId: _s.branchId,
-          }).catch(() => {});
-          _logDrawerEvent({
-            merchantId: _s.merchantId, registerId: _s.registerId || 'default',
-            reason: 'payment', branch: _s.branchId || '', role: _s.role || 'cashier',
-            deviceId: (navigator.userAgent || '').slice(0, 64),
-          });
-        }
+      } catch (e) {
+        console.error('[POS] Legacy SokoniPrinter failed:', e?.message);
+        return { printed: false, skipped: false, error: e?.message };
       }
+      /* Printer not connected */
+      return { printed: false, skipped: true };
     }
+  }
+
+  function _triggerDrawerIfNeeded(receipt) {
+    if (!window.CashDrawer) return;
+    const mode = CashDrawer.getConfig().openMode;
+    const hasCashLeg = (_s.lastPaymentMethod === 'cash') ||
+      (_s.lastPayments || []).some(p => p.method === 'cash');
+    if (hasCashLeg && (mode === 'after_receipt' || mode === 'before_receipt')) {
+      CashDrawer.openAfterSale({
+        payments: _s.lastPayments, method: _s.lastPaymentMethod,
+        receiptNo: receipt?.receiptNo, amount: receipt?.grandTotal,
+        shiftId: _s.shiftId, cashierId: _s.cashierId, cashierName: _s.cashierName,
+        merchantId: _s.merchantId, branchId: _s.branchId,
+      }).catch(() => {});
+      _logDrawerEvent({
+        merchantId: _s.merchantId, registerId: _s.registerId || 'default',
+        reason: 'payment', branch: _s.branchId || '', role: _s.role || 'cashier',
+        deviceId: (navigator.userAgent || '').slice(0, 64),
+      });
+    }
+  }
+
+  function _showPrintRetry(receipt) {
+    const existing = document.getElementById('pos-print-retry-banner');
+    if (existing) existing.remove();
+    const banner = document.createElement('div');
+    banner.id = 'pos-print-retry-banner';
+    banner.style.cssText = [
+      'position:fixed;bottom:80px;left:50%;transform:translateX(-50%)',
+      'background:#1a1a1a;border:1px solid #71ff00;border-radius:10px',
+      'padding:14px 20px;display:flex;align-items:center;gap:14px',
+      'z-index:9999;box-shadow:0 4px 24px #0008;max-width:360px;width:calc(100% - 32px)',
+    ].join(';');
+    banner.innerHTML = `
+      <span style="color:#ffd700;font-size:1.2em">🖨</span>
+      <span style="color:#fff;font-size:.88rem;flex:1">Printer didn't respond — receipt saved in Firestore</span>
+      <button id="pos-print-retry-btn" style="background:#71ff00;color:#000;border:none;
+        border-radius:6px;padding:7px 14px;font-weight:700;font-size:.82rem;cursor:pointer;
+        white-space:nowrap">Retry</button>
+      <button id="pos-print-retry-dismiss" style="background:transparent;color:#888;border:none;
+        font-size:1.1em;cursor:pointer;padding:2px 6px">✕</button>
+    `;
+    document.body.appendChild(banner);
+    let retrying = false;
+    document.getElementById('pos-print-retry-btn').addEventListener('click', async () => {
+      if (retrying) return;
+      retrying = true;
+      const btn = document.getElementById('pos-print-retry-btn');
+      if (btn) { btn.textContent = '…'; btn.disabled = true; }
+      const result = await _printReceipt(receipt);
+      if (result.printed) {
+        banner.remove();
+        _toast(`Receipt #${receipt.receiptNo} printed`, 'success');
+      } else {
+        if (btn) { btn.textContent = 'Retry'; btn.disabled = false; }
+        _toast('Still no response from printer — check Bluetooth connection', 'error');
+        retrying = false;
+      }
+    });
+    document.getElementById('pos-print-retry-dismiss').addEventListener('click', () => banner.remove());
+    /* Auto-dismiss after 30 seconds */
+    setTimeout(() => banner.isConnected && banner.remove(), 30000);
   }
 
   function _printReceiptLocal(totals, method) {
@@ -3207,7 +3269,10 @@ const Checkout = (() => {
             _s.shiftId = shiftId;
             const t = new Date().toLocaleTimeString('en-KE', { hour12:false, hour:'2-digit', minute:'2-digit' });
             document.getElementById('topbar-shift').textContent = `Shift since ${t}`;
-          }).catch(() => {});
+          }).catch(err => {
+            console.error('[openShift] failed:', err);
+            _toast('Shift open failed — sales will not link to a shift. Retry or contact support.', 'error');
+          });
       }
       const confirmMsg = document.getElementById('sow-confirm-msg');
       const confirmSub = document.getElementById('sow-confirm-sub');
@@ -3380,8 +3445,25 @@ const Checkout = (() => {
           varianceExplanation:  variance.explanation || (managerApproved ? 'Manager approved' : ''),
         });
       }
+      let _shiftResult = null;
       if (typeof PosSales?.closeShift === 'function') {
-        await PosSales.closeShift(_s.cashierId, (variance.countedCents || 0) / 100).catch(() => {});
+        _shiftResult = await PosSales.closeShift(_s.cashierId, (variance.countedCents || 0) / 100);
+        /* throws on failure → caught by outer try/catch → cashier sees error toast, state is NOT reset */
+      }
+      /* Auto-print Z Report immediately after shift closes */
+      if (window.PosPrintService && typeof PosPrintService.printZReport === 'function') {
+        try {
+          await PosPrintService.printZReport({
+            ...(_shiftResult?.summary || {}),
+            cashierName: _s.cashierName,
+            registerId:  _s.registerId || 'default',
+            reportId:    _s.shiftId,
+            closedAt:    new Date().toISOString(),
+          });
+        } catch (_zErr) {
+          console.warn('[Z Report] print failed:', _zErr);
+          _toast('Shift closed. Z Report print failed — check printer', 'warning');
+        }
       }
       /* Log drawer open for register close event */
       _logDrawerEvent({

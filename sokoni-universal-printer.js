@@ -1026,17 +1026,55 @@ class BtAdapter {
 
   async disconnect () { this._dev?.gatt?.connected && this._dev.gatt.disconnect(); this.ok = false; }
 
+  /* Set chunk size and delay from outside (e.g. after MTU probe in P58EPrinter) */
+  setTransportConfig (mtu, delay) {
+    if (mtu  > 0)  this._chunkSize  = Math.max(20, Math.min(512, mtu));
+    if (delay >= 0) this._chunkDelay = Math.max(0,  Math.min(500, delay));
+  }
+
   async write (data) {
     if (!this.ok || !this._char) throw Object.assign(new Error('BT printer not connected'), { code: PRINTER_ERRORS.OFFLINE });
-    const CHUNK = this._chunkSize || 128; // 128 bytes — safe for P58E and all BLE printers
-    const DELAY = this._chunkDelay || 40; // 40ms inter-chunk delay required by P58E
+    const CHUNK    = this._chunkSize  || 128; // 128B — physically verified safe for P58E (2026-07-13)
+    const DELAY    = this._chunkDelay || 40;  // 40ms inter-packet — P58E requires flow control
+    const numPkts  = Math.ceil(data.length / CHUNK);
+
     for (let i = 0; i < data.length; i += CHUNK) {
-      if (this._char.properties.writeWithoutResponse) {
-        await this._char.writeValueWithoutResponse(data.slice(i, i + CHUNK));
-      } else {
-        await this._char.writeValue(data.slice(i, i + CHUNK));
+      const pkt  = data.slice(i, i + CHUNK);
+      const pIdx = Math.floor(i / CHUNK) + 1;
+      let sent   = false;
+
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          if (this._char.properties.writeWithoutResponse) {
+            await this._char.writeValueWithoutResponse(pkt);
+          } else {
+            await this._char.writeValue(pkt);
+          }
+          sent = true;
+          break;
+        } catch (e) {
+          if (attempt < 3) {
+            await new Promise(r => setTimeout(r, 150 * attempt));
+          } else {
+            /* Final attempt: try the other write method */
+            try {
+              if (this._char.properties.writeWithoutResponse) {
+                await this._char.writeValue(pkt);
+              } else {
+                await this._char.writeValueWithoutResponse(pkt);
+              }
+              sent = true;
+            } catch (_) { /* both methods exhausted */ }
+          }
+        }
       }
-      await new Promise(r => setTimeout(r, DELAY));
+
+      if (!sent) throw Object.assign(
+        new Error(`BLE write failed at packet ${pIdx}/${numPkts}. Reduce chunk size or increase delay in printer settings.`),
+        { code: PRINTER_ERRORS.WRITE_FAILED || 'WRITE_FAILED', pkt: pIdx, total: numPkts }
+      );
+
+      if (i + CHUNK < data.length) await new Promise(r => setTimeout(r, DELAY));
     }
   }
 }

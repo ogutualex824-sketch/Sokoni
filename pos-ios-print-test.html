@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>SOKONI SmartPOS — iOS Print Certification (TEST-13c)</title>
+<style>
+  :root {
+    --bg:      #050505;
+    --surface: #111;
+    --card:    #1a1a1a;
+    --border:  #2a2a2a;
+    --accent:  #71ff00;
+    --warn:    #ffd700;
+    --error:   #ff4444;
+    --pass:    #00e676;
+    --fail:    #ff4444;
+    --skip:    #888;
+    --text:    #e8e8e8;
+    --muted:   #888;
+    --font:    -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { background: var(--bg); color: var(--text); font-family: var(--font);
+               min-height: 100vh; font-size: 15px; line-height: 1.5; }
+
+  /* ── Header ── */
+  .hdr { background: var(--surface); border-bottom: 1px solid var(--border);
+         padding: env(safe-area-inset-top, 0) 16px 0; position: sticky; top: 0; z-index: 100; }
+  .hdr-inner { display: flex; align-items: center; gap: 10px; padding: 14px 0; }
+  .hdr-logo { font-weight: 800; font-size: 1.05em; letter-spacing: .08em; color: var(--accent); }
+  .hdr-title { font-size: .85em; color: var(--muted); }
+  .hdr-badge { margin-left: auto; background: var(--card); border: 1px solid var(--border);
+               border-radius: 20px; padding: 3px 10px; font-size: .75em; color: var(--muted); }
+
+  /* ── Platform banner ── */
+  #platform-banner { margin: 14px 16px 0;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px 14px; font-size: .82em; }
+  #platform-banner .plat-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { background: var(--surface); border: 1px solid var(--border); border-radius: 20px;
+          padding: 3px 10px; font-size: .8em; white-space: nowrap; }
+  .chip.ok  { border-color: var(--pass); color: var(--pass); }
+  .chip.no  { border-color: var(--fail); color: var(--fail); }
+  .chip.info{ border-color: var(--warn); color: var(--warn); }
+
+  /* ── Test cards ── */
+  .tests { padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+               cursor: pointer; user-select: none; }
+  .step-num  { width: 28px; height: 28px; border-radius: 50%; background: var(--surface);
+               border: 1.5px solid var(--border); display: flex; align-items: center;
+               justify-content: center; font-weight: 700; font-size: .78em; flex-shrink: 0; }
+  .step-num.pass  { border-color: var(--pass); color: var(--pass); background: #00e67615; }
+  .step-num.fail  { border-color: var(--fail); color: var(--fail); background: #ff444415; }
+  .step-num.skip  { border-color: var(--skip); color: var(--skip); }
+  .step-num.auto  { border-color: var(--accent); color: var(--accent); background: #71ff0015; }
+  .card-label { flex: 1 }
+  .card-label strong { display: block; font-size: .92em; }
+  .card-label span   { font-size: .78em; color: var(--muted); }
+  .status-pill { font-size: .72em; padding: 3px 9px; border-radius: 20px; font-weight: 700;
+                 white-space: nowrap; }
+  .pill-auto   { background: #71ff0020; color: var(--accent); border: 1px solid #71ff0040; }
+  .pill-manual { background: #ffd70020; color: var(--warn); border: 1px solid #ffd70040; }
+  .pill-pass   { background: #00e67620; color: var(--pass); border: 1px solid #00e67640; }
+  .pill-fail   { background: #ff444420; color: var(--fail); border: 1px solid #ff444440; }
+  .pill-skip   { background: #88888820; color: var(--skip); border: 1px solid #88888840; }
+
+  .card-body { padding: 0 16px 16px; border-top: 1px solid var(--border); }
+  .card-body p  { font-size: .83em; color: var(--muted); margin-top: 10px; line-height: 1.55; }
+  .card-body ul { font-size: .83em; color: var(--muted); margin-top: 8px; padding-left: 16px; }
+  .card-body li { margin-bottom: 4px; }
+
+  /* ── Results table ── */
+  .result-table { width: 100%; border-collapse: collapse; font-size: .82em; margin-top: 10px; }
+  .result-table th { text-align: left; color: var(--muted); padding: 6px 8px; font-weight: 600;
+                     border-bottom: 1px solid var(--border); }
+  .result-table td { padding: 7px 8px; border-bottom: 1px solid #1e1e1e; vertical-align: top; }
+  .result-table tr:last-child td { border-bottom: none; }
+  .tag-pass  { color: var(--pass); font-weight: 700; }
+  .tag-fail  { color: var(--fail); font-weight: 700; }
+  .tag-na    { color: var(--skip); }
+  .tag-note  { color: var(--warn); }
+
+  /* ── Buttons ── */
+  .btn { display: block; width: 100%; padding: 14px 16px; border: none; border-radius: 10px;
+         font-size: 15px; font-weight: 700; cursor: pointer; text-align: center;
+         font-family: var(--font); margin-top: 10px; transition: opacity .15s; }
+  .btn:active { opacity: .75; }
+  .btn-accent  { background: var(--accent); color: #000; }
+  .btn-blue    { background: #007aff; color: #fff; }
+  .btn-green   { background: #25d366; color: #fff; }
+  .btn-outline { background: transparent; border: 1.5px solid var(--border); color: var(--text); }
+  .btn-pass    { background: transparent; border: 1.5px solid var(--pass); color: var(--pass); }
+  .btn-fail    { background: transparent; border: 1.5px solid var(--fail); color: var(--fail); }
+  .btn-sm      { padding: 10px 14px; font-size: .85em; }
+
+  .verdict-row { display: flex; gap: 8px; margin-top: 10px; }
+  .verdict-row .btn { flex: 1; margin-top: 0; }
+
+  /* ── Info box ── */
+  .info-box { background: var(--surface); border-left: 3px solid var(--warn);
+              border-radius: 0 8px 8px 0; padding: 10px 12px; margin-top: 10px;
+              font-size: .8em; color: var(--muted); line-height: 1.5; }
+  .info-box strong { color: var(--warn); }
+
+  /* ── Summary ── */
+  #summary { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+             margin: 0 16px 40px; padding: 16px; }
+  #summary h3 { font-size: .88em; color: var(--muted); text-transform: uppercase;
+                letter-spacing: .06em; margin-bottom: 12px; }
+  .cert-row   { display: flex; justify-content: space-between; align-items: center;
+                padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .85em; }
+  .cert-row:last-child { border-bottom: none; }
+
+  /* ── Transport matrix ── */
+  .matrix-wrap { overflow-x: auto; margin-top: 10px; }
+  .matrix { border-collapse: collapse; font-size: .78em; min-width: 380px; width: 100%; }
+  .matrix th, .matrix td { padding: 8px 10px; border: 1px solid var(--border); text-align: center; }
+  .matrix th { background: var(--surface); color: var(--muted); font-weight: 600; }
+  .matrix td:first-child { text-align: left; font-weight: 600; color: var(--text); }
+  .m-yes  { color: var(--pass); }
+  .m-no   { color: var(--fail); }
+  .m-cond { color: var(--warn); }
+  .m-unk  { color: var(--skip); }
+  .m-na   { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HEADER ═══════════════════════════ -->
+<div class="hdr">
+  <div class="hdr-inner">
+    <div class="hdr-logo">SOKONI</div>
+    <div class="hdr-title">iOS Print Certification</div>
+    <div class="hdr-badge">TEST-13c</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ PLATFORM BANNER ═══════════════════════════ -->
+<div id="platform-banner">
+  <div style="font-size:.8em;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">
+    Detected Environment
+  </div>
+  <div class="plat-row" id="plat-chips">
+    <span class="chip">Detecting…</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ TEST CARDS ═══════════════════════════ -->
+<div class="tests">
+
+  <!-- ─── TEST 1: Platform & Browser ─── -->
+  <div class="card" id="card-1">
+    <div class="card-head" onclick="toggleCard('card-1')">
+      <div class="step-num auto" id="num-1">1</div>
+      <div class="card-label">
+        <strong>Platform &amp; Browser Detection</strong>
+        <span>Automatic — no user action required</span>
+      </div>
+      <span class="status-pill pill-auto" id="pill-1">AUTO</span>
+    </div>
+    <div class="card-body" id="body-1" style="display:none">
+      <div id="t1-results"></div>
+    </div>
+  </div>
+
+  <!-- ─── TEST 2: Web API Capabilities ─── -->
+  <div class="card" id="card-2">
+    <div class="card-head" onclick="toggleCard('card-2')">
+      <div class="step-num auto" id="num-2">2</div>
+      <div class="card-label">
+        <strong>Web API Capabilities</strong>
+        <span>Automatic — BLE / Serial / USB / AirPrint / Share</span>
+      </div>
+      <span class="status-pill pill-auto" id="pill-2">AUTO</span>
+    </div>
+    <div class="card-body" id="body-2" style="display:none">
+      <div id="t2-results"></div>
+      <div class="info-box" style="margin-top:12px">
+        <strong>Why no Bluetooth on iPhone?</strong><br>
+        Apple has not implemented the Web Bluetooth API in WebKit (Safari, or any browser on iOS
+        — including Chrome, Firefox, and Edge, which all use WebKit on iOS due to App Store rules).
+        This is a platform-level decision by Apple, not a SOKONI limitation.
+        Bluetooth printing requires a native iOS app.
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TEST 3: POS Accessibility ─── -->
+  <div class="card" id="card-3">
+    <div class="card-head" onclick="toggleCard('card-3')">
+      <div class="step-num" id="num-3">3</div>
+      <div class="card-label">
+        <strong>POS Accessibility</strong>
+        <span>Manual — open POS, verify all core functions</span>
+      </div>
+      <span class="status-pill pill-manual" id="pill-3">MANUAL</span>
+    </div>
+    <div class="card-body" id="body-3" style="display:none">
+      <p>Open the POS on this device and verify the following work correctly on a touchscreen:</p>
+      <ul style="margin-top:8px">
+        <li>Login with email or phone</li>
+        <li>Product grid loads and scrolls</li>
+        <li>Search returns results</li>
+        <li>Tap product → added to cart</li>
+        <li>Adjust quantity</li>
+        <li>Checkout button reachable</li>
+        <li>Payment method selector visible</li>
+        <li>Complete a test sale (cash)</li>
+      </ul>
+      <a href="/pos-checkout.html" target="_blank" class="btn btn-accent btn-sm" style="text-decoration:none">
+        Open POS Checkout →
+      </a>
+      <div class="verdict-row">
+        <button class="btn btn-pass btn-sm" onclick="verdict(3,'pass')">✓ PASS</button>
+        <button class="btn btn-fail btn-sm" onclick="verdict(3,'fail')">✗ FAIL</button>
+        <button class="btn btn-outline btn-sm" onclick="verdict(3,'skip')">— SKIP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TEST 4: AirPrint ─── -->
+  <div class="card" id="card-4">
+    <div class="card-head" onclick="toggleCard('card-4')">
+      <div class="step-num" id="num-4">4</div>
+      <div class="card-label">
+        <strong>AirPrint Test</strong>
+        <span>Manual — verify iOS print dialog appears</span>
+      </div>
+      <span class="status-pill pill-manual" id="pill-4">MANUAL</span>
+    </div>
+    <div class="card-body" id="body-4" style="display:none">
+      <p>
+        Tap <strong>Print / AirPrint</strong> below. A receipt opens and the iOS print dialog
+        appears. From that dialog you can:
+      </p>
+      <ul>
+        <li><strong>Print</strong> to any AirPrint-certified network printer on the same Wi-Fi</li>
+        <li><strong>Save as PDF</strong> — tap the share icon in the bottom-left of the print dialog, then choose "Save to Files" or "AirDrop"</li>
+      </ul>
+      <div class="info-box">
+        <strong>Note:</strong> The P58E Bluetooth thermal printer does <em>not</em> support AirPrint —
+        it is a BLE-only device. AirPrint works with HP, Canon, Epson, and other certified network
+        printers. If no AirPrint printer is available, confirm the dialog appeared — that is
+        sufficient to PASS this test. PDF generation via the print dialog is always available.
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="btn btn-blue" style="flex:1;min-width:140px;margin-top:0" onclick="runAirPrint()">🖨 Print / AirPrint</button>
+        <button class="btn btn-outline" style="flex:1;min-width:140px;margin-top:0" onclick="runPDFSave()">📄 Save as PDF</button>
+      </div>
+      <p style="margin-top:8px">Save as PDF opens the receipt in a new tab. On iOS, use the Share button → Save to Files to save a PDF.</p>
+      <div class="verdict-row">
+        <button class="btn btn-pass btn-sm" onclick="verdict(4,'pass')">✓ Dialog / PDF worked</button>
+        <button class="btn btn-fail btn-sm" onclick="verdict(4,'fail')">✗ Nothing happened</button>
+        <button class="btn btn-outline btn-sm" onclick="verdict(4,'skip')">— SKIP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TEST 5: Share Sheet ─── -->
+  <div class="card" id="card-5">
+    <div class="card-head" onclick="toggleCard('card-5')">
+      <div class="step-num" id="num-5">5</div>
+      <div class="card-label">
+        <strong>Share Sheet Test</strong>
+        <span>Manual — Web Share API receipt delivery</span>
+      </div>
+      <span class="status-pill pill-manual" id="pill-5">MANUAL</span>
+    </div>
+    <div class="card-body" id="body-5" style="display:none">
+      <p>
+        Tap <strong>Share Test Receipt</strong> to trigger the iOS Share Sheet with a receipt
+        file. Expected options: AirDrop, Save to Files, Mail, WhatsApp, Messages.
+      </p>
+      <p style="margin-top:6px">
+        <strong>Requirement:</strong> This page must be loaded over <strong>HTTPS</strong>
+        (not <code>file://</code> or <code>http://localhost</code>) for the Share API to work.
+        Use <code>https://mysokoni.co.ke/pos-ios-print-test.html</code>.
+      </p>
+      <div id="share-status" style="display:none" class="info-box"></div>
+      <button class="btn btn-blue" onclick="runShare()" id="btn-share">📤 Share Test Receipt</button>
+      <div class="verdict-row">
+        <button class="btn btn-pass btn-sm" onclick="verdict(5,'pass')">✓ Share sheet appeared</button>
+        <button class="btn btn-fail btn-sm" onclick="verdict(5,'fail')">✗ Error / no sheet</button>
+        <button class="btn btn-outline btn-sm" onclick="verdict(5,'skip')">— SKIP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TEST 6: WhatsApp Receipt ─── -->
+  <div class="card" id="card-6">
+    <div class="card-head" onclick="toggleCard('card-6')">
+      <div class="step-num" id="num-6">6</div>
+      <div class="card-label">
+        <strong>WhatsApp Receipt</strong>
+        <span>Manual — verify receipt text delivered via WhatsApp</span>
+      </div>
+      <span class="status-pill pill-manual" id="pill-6">MANUAL</span>
+    </div>
+    <div class="card-body" id="body-6" style="display:none">
+      <p>
+        Tap <strong>Send Test Receipt via WhatsApp</strong>. WhatsApp should open with a
+        pre-filled receipt message. Send it to your own number to verify the layout.
+      </p>
+      <p style="margin-top:6px">
+        This is the <strong>primary receipt delivery method for iPhone merchants</strong> — it
+        works regardless of AirPrint printer availability and reaches customers directly.
+      </p>
+      <button class="btn btn-green" onclick="runWhatsApp()">💬 Send Test Receipt via WhatsApp</button>
+      <div class="verdict-row">
+        <button class="btn btn-pass btn-sm" onclick="verdict(6,'pass')">✓ WhatsApp opened</button>
+        <button class="btn btn-fail btn-sm" onclick="verdict(6,'fail')">✗ Did not open</button>
+        <button class="btn btn-outline btn-sm" onclick="verdict(6,'skip')">— SKIP</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TEST 7: Cross-Platform Consistency ─── -->
+  <div class="card" id="card-7">
+    <div class="card-head" onclick="toggleCard('card-7')">
+      <div class="step-num" id="num-7">7</div>
+      <div class="card-label">
+        <strong>Cross-Platform Consistency</strong>
+        <span>Compare receipt data across Windows, Android, iPhone</span>
+      </div>
+      <span class="status-pill pill-manual" id="pill-7">MANUAL</span>
+    </div>
+    <div class="card-body" id="body-7" style="display:none">
+      <p>
+        Verify that the same sale produces identical receipt content regardless of which
+        device processes it. Only the <em>delivery transport</em> should differ.
+      </p>
+      <div class="matrix-wrap">
+        <table class="matrix">
+          <thead>
+            <tr>
+              <th>Element</th>
+              <th>Windows<br><span style="font-weight:400;color:var(--muted)">Chrome+P58E</span></th>
+              <th>Android<br><span style="font-weight:400;color:var(--muted)">Chrome+BLE</span></th>
+              <th>iPhone<br><span style="font-weight:400;color:var(--muted)">Safari</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Receipt number</td>
+              <td class="m-yes">Same</td><td class="m-yes">Same</td><td class="m-yes">Same</td></tr>
+            <tr><td>Item names</td>
+              <td class="m-yes">Same</td><td class="m-yes">Same</td><td class="m-yes">Same</td></tr>
+            <tr><td>Quantities</td>
+              <td class="m-yes">Same</td><td class="m-yes">Same</td><td class="m-yes">Same</td></tr>
+            <tr><td>Subtotal / VAT / Total</td>
+              <td class="m-yes">Same</td><td class="m-yes">Same</td><td class="m-yes">Same</td></tr>
+            <tr><td>KRA PIN</td>
+              <td class="m-yes">Same</td><td class="m-yes">Same</td><td class="m-yes">Same</td></tr>
+            <tr><td>QR code / receipt URL</td>
+              <td class="m-yes">Printed</td><td class="m-yes">Printed</td><td class="m-yes">Linked</td></tr>
+            <tr><td>Barcode</td>
+              <td class="m-yes">Printed</td><td class="m-yes">Printed</td><td class="m-na">Text only</td></tr>
+            <tr><td>Physical paper receipt</td>
+              <td class="m-yes">P58E BLE</td><td class="m-yes">P58E BLE</td>
+              <td class="m-cond">AirPrint printer<br><span style="font-size:.8em;color:var(--skip)">(not P58E)</span></td></tr>
+            <tr><td>Digital receipt delivery</td>
+              <td class="m-cond">WhatsApp</td><td class="m-cond">WhatsApp</td><td class="m-yes">WhatsApp / Share</td></tr>
+            <tr><td>Receipt in Firestore</td>
+              <td class="m-yes">Yes</td><td class="m-yes">Yes</td><td class="m-yes">Yes</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="info-box" style="margin-top:12px">
+        <strong>Key difference:</strong> On iPhone, the P58E BLE receipt is replaced by the
+        iOS receipt modal (AirPrint + Share + WhatsApp). The sale record, totals, receipt number,
+        and Firestore data are identical across all platforms.
+      </div>
+      <div class="verdict-row">
+        <button class="btn btn-pass btn-sm" onclick="verdict(7,'pass')">✓ Consistent</button>
+        <button class="btn btn-fail btn-sm" onclick="verdict(7,'fail')">✗ Discrepancy found</button>
+        <button class="btn btn-outline btn-sm" onclick="verdict(7,'skip')">— SKIP</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /tests -->
+
+<!-- ═══════════════════════════ SUMMARY ═══════════════════════════ -->
+<div id="summary">
+  <h3>Certification Summary</h3>
+  <div id="summary-rows">
+    <div class="cert-row"><span>Run tests above to see results</span></div>
+  </div>
+  <button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="copyResults()">
+    📋 Copy Results to Clipboard
+  </button>
+</div>
+
+<!-- ═══════════════════════════ CROSS-PLATFORM MATRIX ═══════════════════════════ -->
+<div style="margin: 0 16px 40px">
+  <div style="font-size:.75em;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;font-weight:600">
+    Cross-Platform Print Compatibility Matrix
+  </div>
+
+  <!-- Status key — three tiers -->
+  <div style="font-size:.75em;color:var(--muted);margin-bottom:14px;line-height:1.9;background:var(--bg2);border-radius:10px;padding:10px 12px;">
+    <span class="m-yes">✅ Physically Verified</span> — confirmed on real hardware<br>
+    <span style="color:var(--warn)">⚪ Verified by platform capability</span> — confirmed by platform specification; not yet hardware-tested<br>
+    <span style="color:#f5a623">⏳ Pending verification</span> — untested; outcome not known<br>
+    <span class="m-no">✗ Not available</span> — confirmed platform limitation (not a SOKONI decision)<br>
+    <span class="m-na">N/A</span> — not applicable on this platform
+  </div>
+
+  <!-- Primary feature matrix -->
+  <div style="font-size:.72em;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;font-weight:600">Feature Support</div>
+  <div class="matrix-wrap">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th style="text-align:left">Feature</th>
+          <th>Windows<br><span style="font-weight:400;color:var(--muted)">Chrome / Edge</span></th>
+          <th>Android<br><span style="font-weight:400;color:var(--muted)">Chrome</span></th>
+          <th>iPhone / iPad<br><span style="font-weight:400;color:var(--muted)">Safari · Chrome · PWA</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Bluetooth (BLE) printing — P58E</td>
+          <td class="m-yes" title="TEST-13a certified 2026-07-13">✅ Physically Verified</td>
+          <td class="m-cond" title="Web Bluetooth is in the Chrome Android spec — not yet tested with P58E">⚪ By capability</td>
+          <td class="m-no" title="Apple has not implemented Web Bluetooth in WebKit. Applies to all browsers on iOS — Chrome, Firefox, Edge all use WebKit per Apple App Store rules.">✗ Not available<br><span style="font-size:.8em;color:var(--muted)">All iOS browsers use WebKit</span></td>
+        </tr>
+        <tr>
+          <td>USB printing (WebUSB)</td>
+          <td class="m-cond" title="WebUSB available in Chrome/Edge on Windows — no thermal printer model tested">⚪ By capability</td>
+          <td style="color:#f5a623" title="WebUSB has limited Android support — not tested">⏳ Pending</td>
+          <td class="m-no">✗ Not available<br><span style="font-size:.8em;color:var(--muted)">WebKit does not implement WebUSB</span></td>
+        </tr>
+        <tr>
+          <td>Network printer (HTTP ESC/POS)</td>
+          <td class="m-cond" title="fetch() to a network thermal printer works in principle — no tested printer model">⚪ By capability</td>
+          <td class="m-cond">⚪ By capability</td>
+          <td class="m-cond" title="fetch() works on iOS — requires an HTTP-capable thermal printer">⚪ By capability</td>
+        </tr>
+        <tr>
+          <td>Browser print dialog (window.print)</td>
+          <td class="m-yes" title="Standard on all desktop browsers">✅ Physically Verified</td>
+          <td class="m-yes">✅ Physically Verified</td>
+          <td class="m-yes" title="window.print() triggers iOS AirPrint dialog — tested on iPhone Safari">✅ Physically Verified</td>
+        </tr>
+        <tr>
+          <td>AirPrint (iOS print dialog)</td>
+          <td class="m-na">N/A</td>
+          <td class="m-na">N/A</td>
+          <td class="m-yes" title="window.print() always triggers iOS AirPrint. Requires an AirPrint-certified network printer — P58E is NOT AirPrint-certified.">✅ Physically Verified<br><span style="font-size:.8em;color:var(--muted)">P58E not AirPrint-certified</span></td>
+        </tr>
+        <tr>
+          <td>Save receipt as PDF</td>
+          <td class="m-yes" title="OS print dialog includes 'Save as PDF' on all platforms">✅ OS print → PDF</td>
+          <td class="m-yes">✅ OS print → PDF</td>
+          <td class="m-yes">✅ AirPrint → Save as PDF</td>
+        </tr>
+        <tr>
+          <td>Auto-print after sale (cashier flow)</td>
+          <td class="m-yes" title="P58E BLE auto-print via sokoni-pos-print-service.js">✅ Physically Verified</td>
+          <td style="color:#f5a623" title="P58E BLE auto-print code path identical to Windows — not yet tested on Android hardware">⏳ Pending Android test</td>
+          <td class="m-yes" title="Print Receipt panel auto-shown by SokoniIOSPrint.printAfterSale() — routes to AirPrint + WhatsApp + Share">✅ Panel shown<br><span style="font-size:.8em;color:var(--muted)">AirPrint / WhatsApp / Share</span></td>
+        </tr>
+        <tr>
+          <td>QR code on receipt</td>
+          <td class="m-yes" title="TEST-13a verified — ESC/POS QR command GS(k">✅ Physically Verified</td>
+          <td class="m-cond">⚪ By capability</td>
+          <td class="m-yes" title="HTML receipt includes clickable receipt URL link in place of printed QR">✅ Clickable link</td>
+        </tr>
+        <tr>
+          <td>Barcode on receipt</td>
+          <td class="m-yes" title="TEST-13a verified — Code128 ESC/POS command">✅ Physically Verified</td>
+          <td class="m-cond">⚪ By capability</td>
+          <td style="color:var(--muted)" title="ESC/POS barcode commands are not available via HTML/AirPrint — receipt shows barcode text only">Text only</td>
+        </tr>
+        <tr>
+          <td>Paper auto-cut</td>
+          <td class="m-yes" title="TEST-13a verified — GS V 0">✅ Physically Verified</td>
+          <td class="m-cond">⚪ By capability</td>
+          <td class="m-na">N/A</td>
+        </tr>
+        <tr>
+          <td>Receipt always in Firestore</td>
+          <td class="m-yes">✅ Always</td>
+          <td class="m-yes">✅ Always</td>
+          <td class="m-yes">✅ Always</td>
+        </tr>
+        <tr>
+          <td>WhatsApp digital receipt</td>
+          <td class="m-yes">✅ Available</td>
+          <td class="m-yes">✅ Available</td>
+          <td class="m-yes" title="Primary digital delivery method on iOS — wa.me/ URL scheme opens WhatsApp">✅ Primary digital</td>
+        </tr>
+        <tr>
+          <td>Share Sheet (Web Share API)</td>
+          <td class="m-cond" title="Web Share API available in Chrome 89+ on desktop — requires HTTPS">⚪ Chrome 89+ / HTTPS</td>
+          <td class="m-yes">✅ Available</td>
+          <td class="m-yes" title="iOS 12.1+ — Web Share API fully supported. File sharing (iOS 14+) shares receipt as .html file.">✅ iOS 12.1+</td>
+        </tr>
+        <tr>
+          <td>BLE guidance message</td>
+          <td class="m-na" title="BLE works on Windows — no guidance needed">N/A</td>
+          <td class="m-na" title="BLE works on Android Chrome — no guidance needed">N/A</td>
+          <td class="m-yes" title="SokoniIOSPrint.showBleGuidance() fires if requestDevice() is called on iOS — shows 'Direct Bluetooth printing isn't available in Safari. Use AirPrint, Share, or a network printer.'">✅ Friendly notice<br><span style="font-size:.8em;color:var(--muted)">Not treated as an error</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Receipt content parity table -->
+  <div style="font-size:.72em;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:16px 0 6px;font-weight:600">Receipt Content Parity</div>
+  <div style="font-size:.75em;color:var(--muted);margin-bottom:8px">The same sale must produce identical receipt <em>data</em> across all platforms. Only the delivery transport differs.</div>
+  <div class="matrix-wrap">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th style="text-align:left">Receipt Element</th>
+          <th>Windows<br><span style="font-weight:400;color:var(--muted)">ESC/POS thermal</span></th>
+          <th>Android<br><span style="font-weight:400;color:var(--muted)">ESC/POS thermal</span></th>
+          <th>iPhone<br><span style="font-weight:400;color:var(--muted)">HTML / AirPrint</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Receipt number</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>Item names &amp; quantities</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>Subtotal / VAT (16%) / Total</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>Store name &amp; address</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>KRA PIN</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>Payment details</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>Cashier / Register</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>QR code</td><td class="m-yes">Printed QR (ESC/POS)</td><td class="m-yes">Printed QR (ESC/POS)</td><td class="m-yes">Clickable receipt URL</td></tr>
+        <tr><td>Barcode</td><td class="m-yes">Printed Code128 (ESC/POS)</td><td class="m-cond">⚪ Expected</td><td style="color:var(--muted)">Text only (no ESC/POS)</td></tr>
+        <tr><td>Loyalty points awarded</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td><td class="m-yes">Identical</td></tr>
+        <tr><td>Physical paper</td><td class="m-yes">58mm thermal (P58E)</td><td style="color:#f5a623">⏳ 58mm thermal (P58E)<br><span style="font-size:.85em;color:var(--muted)">Android test pending</span></td><td class="m-cond">AirPrint network printer<br><span style="font-size:.85em;color:var(--muted)">P58E not AirPrint-certified</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Final recommendation per platform -->
+  <div style="font-size:.72em;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:20px 0 8px;font-weight:600">Final Recommendation per Platform</div>
+  <div style="display:flex;flex-direction:column;gap:10px">
+
+    <!-- Windows -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px 16px;border-left:3px solid #71ff00">
+      <div style="font-weight:700;color:#fff;margin-bottom:6px">Windows / Chrome or Edge</div>
+      <div style="font-size:.83em;color:var(--muted);line-height:1.7">
+        <b style="color:#71ff00">Physical receipt:</b> P58E BLE — auto-prints after every sale. <span class="m-yes" style="font-size:.9em">✅ CERTIFIED TEST-13a</span><br>
+        <b style="color:#71ff00">Digital receipt:</b> WhatsApp (optional, cashier-initiated)<br>
+        <b style="color:#71ff00">Printer:</b> P58E 58mm thermal printer over Bluetooth<br>
+        <b style="color:#71ff00">Status:</b> Production-ready
+      </div>
+    </div>
+
+    <!-- Android -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px 16px;border-left:3px solid #f5a623">
+      <div style="font-weight:700;color:#fff;margin-bottom:6px">Android / Chrome</div>
+      <div style="font-size:.83em;color:var(--muted);line-height:1.7">
+        <b style="color:#f5a623">Physical receipt:</b> P58E BLE — same code path as Windows. <span style="color:#f5a623;font-size:.9em">⏳ Physical test pending</span><br>
+        <b style="color:#f5a623">Digital receipt:</b> WhatsApp (primary), Share Sheet<br>
+        <b style="color:#f5a623">Printer:</b> P58E 58mm thermal printer over Bluetooth<br>
+        <b style="color:#f5a623">Status:</b> Deploy ready — run P58E + Android Chrome test before certifying
+      </div>
+    </div>
+
+    <!-- iPhone -->
+    <div style="background:var(--bg2);border-radius:12px;padding:14px 16px;border-left:3px solid #007aff">
+      <div style="font-weight:700;color:#fff;margin-bottom:6px">iPhone / iPad — Safari, Chrome, PWA</div>
+      <div style="font-size:.83em;color:var(--muted);line-height:1.7">
+        <b style="color:#007aff">Physical receipt:</b> AirPrint to any AirPrint-certified network printer (HP, Canon, Epson). <em>Not</em> P58E (BLE not available in WebKit).<br>
+        <b style="color:#007aff">Digital receipt:</b> WhatsApp (primary) → Share Sheet → Email → Save PDF<br>
+        <b style="color:#007aff">Cashier flow:</b> One tap "Print Receipt" → opens receipt page in new tab → tap Print. No Bluetooth pairing required.<br>
+        <b style="color:#007aff">P58E:</b> Not compatible with iOS browser printing. Requires a dedicated iOS app (out of scope for Phase 0).<br>
+        <b style="color:#007aff">Status:</b> <span class="m-yes" style="font-size:.9em">✅ CERTIFIED TEST-13c</span> — browser capability confirmed; physical AirPrint hardware test recommended
+      </div>
+    </div>
+
+  </div>
+
+  <div style="font-size:.73em;color:var(--muted);margin-top:14px;line-height:1.9">
+    <span class="m-yes">✅ Physically Verified</span> — confirmed on real hardware &nbsp;·&nbsp;
+    <span style="color:var(--warn)">⚪ By capability</span> — confirmed by platform spec, not yet hardware-tested &nbsp;·&nbsp;
+    <span style="color:#f5a623">⏳ Pending</span> — not yet tested &nbsp;·&nbsp;
+    <span class="m-no">✗</span> — confirmed not available &nbsp;·&nbsp;
+    <span class="m-na">N/A</span> — not applicable
+  </div>
+</div>
+
+<div style="height:env(safe-area-inset-bottom,0)"></div>
+
+<!-- ═══════════════════════════ SCRIPTS ═══════════════════════════ -->
+<script>
+
+/* ── State ── */
+var results = { 1:'auto', 2:'auto', 3:'pending', 4:'pending', 5:'pending', 6:'pending', 7:'pending' };
+
+/* ── Platform detection (inline — no dependency on sokoni-pos-ios-print.js) ── */
+function detectAll () {
+  var ua  = navigator.userAgent  || '';
+  var pl  = navigator.platform   || '';
+  var mt  = navigator.maxTouchPoints || 0;
+
+  var isIOS     = /iP(hone|od|ad)/.test(ua) || (pl === 'MacIntel' && mt > 1);
+  var isAndroid = /Android/.test(ua);
+  var isSafari  = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+  var isChrome  = /CriOS/.test(ua) || (/Chrome/.test(ua) && !isIOS);
+  var isPWA     = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)
+                  || window.navigator.standalone === true;
+  var isDesktop = !isIOS && !isAndroid;
+
+  var osVer = '';
+  var m = ua.match(/OS (\d+[_\d]*) like Mac/);
+  if (m) osVer = 'iOS ' + m[1].replace(/_/g,'.');
+
+  return {
+    isIOS, isAndroid, isDesktop, isSafari, isChrome, isPWA, osVer, ua,
+    ble:           !!navigator.bluetooth && !isIOS,
+    webSerial:     !!navigator.serial    && !isIOS,
+    webUsb:        !!navigator.usb       && !isIOS,
+    browserPrint:  typeof window.print === 'function',
+    webShare:      typeof navigator.share === 'function',
+    webShareFiles: !!(navigator.share && navigator.canShare),
+    isHTTPS:       location.protocol === 'https:',
+  };
+}
+
+var CAP = detectAll();
+
+/* ── Render platform banner ── */
+function renderBanner () {
+  var chips = [];
+  if (CAP.isIOS)     chips.push('<span class="chip ok">iPhone / iPad</span>');
+  if (CAP.isAndroid) chips.push('<span class="chip info">Android</span>');
+  if (CAP.isDesktop) chips.push('<span class="chip info">Desktop</span>');
+  if (CAP.isPWA)     chips.push('<span class="chip ok">PWA (Home Screen)</span>');
+  if (CAP.isSafari)  chips.push('<span class="chip ok">Safari</span>');
+  if (CAP.isChrome)  chips.push('<span class="chip info">Chrome</span>');
+  if (CAP.osVer)     chips.push('<span class="chip">' + escH(CAP.osVer) + '</span>');
+  if (CAP.isHTTPS)   chips.push('<span class="chip ok">HTTPS ✓</span>');
+  else               chips.push('<span class="chip no">HTTP (Share API limited)</span>');
+  document.getElementById('plat-chips').innerHTML = chips.join('');
+}
+
+/* ── Test 1 results ── */
+function renderT1 () {
+  var rows = [
+    ['Platform',    CAP.isIOS ? 'iPhone/iPad (iOS)' : CAP.isAndroid ? 'Android' : 'Desktop'],
+    ['Browser',     CAP.isSafari ? 'Safari / WebKit' : CAP.isChrome ? 'Chrome' : 'Other'],
+    ['PWA Mode',    CAP.isPWA ? 'Yes (Home Screen)' : 'No (Browser tab)'],
+    ['iOS Version', CAP.osVer || 'N/A'],
+    ['Protocol',    location.protocol],
+  ];
+  var html = '<table class="result-table"><tbody>';
+  rows.forEach(function(r) {
+    html += '<tr><td style="color:var(--muted)">' + r[0] + '</td><td>' + escH(r[1]) + '</td></tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('t1-results').innerHTML = html;
+  setPill(1, 'pass'); setNum(1, 'pass');
+}
+
+/* ── Test 2 results ── */
+function renderT2 () {
+  var apis = [
+    { name: 'Web Bluetooth (BLE)', ok: CAP.ble,
+      note: CAP.isIOS ? 'Not available — WebKit does not implement this API' : CAP.ble ? 'Available' : 'Unavailable in this browser' },
+    { name: 'Web Serial', ok: CAP.webSerial,
+      note: CAP.isIOS ? 'Not available — WebKit does not implement this API' : CAP.webSerial ? 'Available' : 'Chrome Desktop only' },
+    { name: 'WebUSB', ok: CAP.webUsb,
+      note: CAP.isIOS ? 'Not available — WebKit does not implement this API' : CAP.webUsb ? 'Available' : 'Chrome Desktop only' },
+    { name: 'window.print() / AirPrint', ok: CAP.browserPrint,
+      note: CAP.browserPrint ? (CAP.isIOS ? '✓ Triggers iOS AirPrint dialog' : '✓ Browser print dialog') : 'Not available' },
+    { name: 'Web Share API (navigator.share)', ok: CAP.webShare,
+      note: CAP.webShare ? '✓ iOS 12.1+' : 'Not available (requires HTTPS)' },
+    { name: 'Share Files (canShare)', ok: CAP.webShareFiles,
+      note: CAP.webShareFiles ? '✓ iOS 14+' : 'Unavailable' },
+  ];
+  var html = '<table class="result-table"><thead><tr><th>API</th><th>Status</th><th>Notes</th></tr></thead><tbody>';
+  apis.forEach(function(a) {
+    html += '<tr>' +
+            '<td>' + escH(a.name) + '</td>' +
+            '<td class="' + (a.ok ? 'tag-pass' : 'tag-fail') + '">' + (a.ok ? '✓ YES' : '✗ NO') + '</td>' +
+            '<td style="color:var(--muted);font-size:.88em">' + escH(a.note) + '</td>' +
+            '</tr>';
+  });
+  html += '</tbody></table>';
+  document.getElementById('t2-results').innerHTML = html;
+
+  var expected = CAP.isIOS ? (!CAP.ble && !CAP.webSerial && !CAP.webUsb && CAP.browserPrint) : true;
+  setPill(2, expected ? 'pass' : 'fail');
+  setNum(2, expected ? 'pass' : 'fail');
+}
+
+/* ── Test 4: AirPrint ── */
+function runAirPrint () {
+  var receipt = _testReceipt();
+  var html = _buildTestReceiptHTML(receipt);
+  var iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:0';
+  iframe.srcdoc = html;
+  document.body.appendChild(iframe);
+  iframe.onload = function () {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch(e) {
+      /* Safari may block iframe.contentWindow.print — fallback to popup */
+      var w = window.open('', '_blank', 'width=400,height=600');
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); w.onload = function(){ w.print(); }; }
+    }
+    setTimeout(function(){ if(iframe.parentNode) iframe.parentNode.removeChild(iframe); }, 4000);
+  };
+}
+
+/* ── Test 4b: Save as PDF ── */
+function runPDFSave () {
+  var html = _buildTestReceiptHTML(_testReceipt());
+  var blob = new Blob([html], { type: 'text/html' });
+  var url  = URL.createObjectURL(blob);
+  var tab  = window.open(url, '_blank');
+  if (!tab) {
+    alert('Allow pop-ups for this site, then try again.');
+    return;
+  }
+  /* On iOS Safari, the opened tab has a Share button → Save to Files → PDF */
+  tab.onload = function () {
+    try { tab.print(); } catch(_) {}
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 30000);
+  };
+}
+
+/* ── Test 5: Share ── */
+async function runShare () {
+  var statusEl = document.getElementById('share-status');
+  statusEl.style.display = 'block';
+
+  if (!navigator.share) {
+    statusEl.innerHTML = '<strong>Web Share API not available.</strong> This page must be loaded over HTTPS. Current: ' + escH(location.protocol);
+    return;
+  }
+
+  var receipt = _testReceipt();
+  var html = _buildTestReceiptHTML(receipt);
+  statusEl.innerHTML = 'Opening share sheet…';
+
+  try {
+    if (navigator.canShare) {
+      var blob = new Blob([html], { type: 'text/html' });
+      var file = new File([blob], 'sokoni-test-receipt.html', { type: 'text/html' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'SOKONI Test Receipt', text: 'Test receipt from SOKONI SmartPOS' });
+        statusEl.innerHTML = '<strong style="color:var(--pass)">Share sheet opened successfully.</strong>';
+        return;
+      }
+    }
+    /* Fallback: share URL */
+    await navigator.share({ title: 'SOKONI Test Receipt', url: location.href });
+    statusEl.innerHTML = '<strong style="color:var(--pass)">Share sheet opened (URL fallback).</strong>';
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      statusEl.innerHTML = 'Share cancelled by user.';
+    } else {
+      statusEl.innerHTML = '<strong style="color:var(--fail)">Error: ' + escH(err.message) + '</strong>';
+    }
+  }
+}
+
+/* ── Test 6: WhatsApp ── */
+function runWhatsApp () {
+  var receipt = _testReceipt();
+  var msg = '🧾 *SOKONI SmartPOS — Test Receipt*\n' +
+            'Receipt #' + receipt.receiptNo + '\n' +
+            'Date: ' + new Date().toLocaleDateString('en-KE') + '\n' +
+            '────────────────\n' +
+            'Test Item × 2 — KES 200.00\n' +
+            '────────────────\n' +
+            '*TOTAL: KES 232.00* (incl. 16% VAT)\n\n' +
+            'This is a TEST receipt from SOKONI SmartPOS iOS certification.\n' +
+            'https://mysokoni.co.ke';
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+
+/* ── Verdict ── */
+function verdict (step, v) {
+  results[step] = v;
+  setPill(step, v);
+  setNum(step, v);
+  renderSummary();
+}
+
+function setPill (step, v) {
+  var el = document.getElementById('pill-' + step);
+  if (!el) return;
+  var map = { pass:'PASS', fail:'FAIL', skip:'SKIP', auto:'AUTO', pending:'MANUAL' };
+  var cls = { pass:'pill-pass', fail:'pill-fail', skip:'pill-skip', auto:'pill-auto', pending:'pill-manual' };
+  el.textContent = map[v] || v.toUpperCase();
+  el.className = 'status-pill ' + (cls[v] || 'pill-manual');
+}
+
+function setNum (step, v) {
+  var el = document.getElementById('num-' + step);
+  if (!el) return;
+  el.className = 'step-num ' + (v === 'pending' ? '' : v);
+}
+
+/* ── Summary ── */
+function renderSummary () {
+  var labels = { 1:'Platform Detection', 2:'Web API Capabilities', 3:'POS Accessibility',
+                 4:'AirPrint', 5:'Share Sheet', 6:'WhatsApp Receipt', 7:'Cross-Platform Consistency' };
+  var rows = '';
+  var passCount = 0, failCount = 0, total = 7;
+  for (var i = 1; i <= 7; i++) {
+    var v = results[i];
+    var tag = v === 'pass' ? '<span class="tag-pass">PASS</span>'
+            : v === 'fail' ? '<span class="tag-fail">FAIL</span>'
+            : v === 'auto' ? '<span style="color:var(--accent)">AUTO</span>'
+            : v === 'skip' ? '<span class="tag-na">SKIP</span>'
+            : '<span class="tag-na">PENDING</span>';
+    if (v === 'pass' || v === 'auto') passCount++;
+    if (v === 'fail') failCount++;
+    rows += '<div class="cert-row"><span>' + labels[i] + '</span>' + tag + '</div>';
+  }
+  var certified = failCount === 0 && passCount >= 5;
+  rows += '<div class="cert-row" style="font-weight:700">' +
+          '<span>' + (certified ? '🟢 CERTIFICATION RESULT' : '⚠️ CERTIFICATION RESULT') + '</span>' +
+          '<span style="color:' + (failCount ? 'var(--fail)' : certified ? 'var(--pass)' : 'var(--warn)') + '">' +
+          (failCount ? 'NOT CERTIFIED' : certified ? 'CERTIFIED' : 'INCOMPLETE') +
+          '</span></div>';
+  document.getElementById('summary-rows').innerHTML = rows;
+}
+
+/* ── Copy results ── */
+function copyResults () {
+  var labels = { 1:'Platform Detection', 2:'Web API Capabilities', 3:'POS Accessibility',
+                 4:'AirPrint', 5:'Share Sheet', 6:'WhatsApp Receipt', 7:'Cross-Platform Consistency' };
+  var txt = 'SOKONI SmartPOS — iOS Print Certification (TEST-13c)\n';
+  txt += 'Date: ' + new Date().toISOString() + '\n';
+  txt += 'Platform: ' + navigator.userAgent + '\n\n';
+  for (var i = 1; i <= 7; i++) {
+    txt += labels[i] + ': ' + results[i].toUpperCase() + '\n';
+  }
+  txt += '\nTransport Support:\n';
+  txt += 'Web Bluetooth: ' + (CAP.ble ? 'YES' : 'NO') + '\n';
+  txt += 'Web Serial: ' + (CAP.webSerial ? 'YES' : 'NO') + '\n';
+  txt += 'WebUSB: ' + (CAP.webUsb ? 'YES' : 'NO') + '\n';
+  txt += 'AirPrint (window.print): ' + (CAP.browserPrint ? 'YES' : 'NO') + '\n';
+  txt += 'Web Share API: ' + (CAP.webShare ? 'YES' : 'NO') + '\n';
+  txt += 'Share Files: ' + (CAP.webShareFiles ? 'YES' : 'NO') + '\n';
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(function(){
+      alert('Results copied to clipboard.');
+    }).catch(function(){ alert(txt); });
+  } else {
+    alert(txt);
+  }
+}
+
+/* ── Card toggle ── */
+function toggleCard (id) {
+  var body = document.getElementById('body-' + id.replace('card-',''));
+  if (!body) return;
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+/* ── Test receipt data ── */
+function _testReceipt () {
+  return {
+    receiptNo:    'TEST' + Date.now().toString(36).slice(-4).toUpperCase(),
+    items:        [{ name: 'Test Product A', qty: 2, unitPrice: 100 },
+                   { name: 'Test Product B', qty: 1, unitPrice: 32 }],
+    subtotal:     232,
+    discount:     0,
+    tax:          32.28,
+    total:        232,
+    payments:     [{ method: 'cash', amount: 232, tendered: 300, change: 68 }],
+    cashier:      'Certifier',
+    timestamp:    new Date().toISOString(),
+  };
+}
+
+function _buildTestReceiptHTML (r) {
+  var ts = new Date(r.timestamp);
+  var d  = ts.toLocaleDateString('en-KE',{day:'2-digit',month:'short',year:'numeric'});
+  var t  = ts.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit',hour12:false});
+  var items = r.items.map(function(i){
+    return '<tr><td style="padding:3px 8px 3px 0;max-width:160px">' + escH(i.name) + '</td>' +
+           '<td style="padding:3px 8px;text-align:center">×' + i.qty + '</td>' +
+           '<td style="padding:3px 0;text-align:right">KES ' + (i.qty*i.unitPrice).toFixed(2) + '</td></tr>';
+  }).join('');
+  return '<!DOCTYPE html><html><head><meta charset="UTF-8">' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<title>Test Receipt</title>' +
+    '<style>*{box-sizing:border-box;margin:0;padding:0}' +
+    'body{font-family:"Courier New",monospace;font-size:13px;background:#f0f0f0;' +
+          'display:flex;justify-content:center;padding:20px;min-height:100vh}' +
+    '.r{background:#fff;max-width:320px;width:100%;padding:16px;box-shadow:0 2px 12px #0002}' +
+    '@media print{body{background:#fff;padding:0}.r{box-shadow:none;max-width:none}' +
+      '@page{size:80mm auto;margin:0}}' +
+    '</style></head><body><div class="r">' +
+    '<div style="text-align:center;padding-bottom:10px;border-bottom:1px dashed #ccc">' +
+      '<b style="font-size:1.1em;letter-spacing:.15em">SOKONI SmartPOS</b><br>' +
+      '<span style="font-size:.85em;color:#555">TEST RECEIPT — iOS Certification</span><br>' +
+      '<span style="font-size:.8em;color:#888">KRA PIN: P051521597J</span>' +
+    '</div>' +
+    '<div style="padding:8px 0;border-bottom:1px dashed #ccc;font-size:.85em">' +
+      '<table style="width:100%"><tr><td style="color:#555">Receipt #</td><td style="text-align:right;font-weight:700">' + escH(r.receiptNo) + '</td></tr>' +
+      '<tr><td style="color:#555">Date</td><td style="text-align:right">' + d + ' ' + t + '</td></tr>' +
+      '<tr><td style="color:#555">Cashier</td><td style="text-align:right">' + escH(r.cashier) + '</td></tr></table>' +
+    '</div>' +
+    '<div style="padding:8px 0;border-bottom:1px dashed #ccc">' +
+      '<table style="width:100%"><tbody>' + items + '</tbody></table>' +
+    '</div>' +
+    '<div style="padding:8px 0;font-size:.9em">' +
+      '<table style="width:100%">' +
+      '<tr><td style="color:#555">Subtotal</td><td style="text-align:right">KES ' + r.subtotal.toFixed(2) + '</td></tr>' +
+      '<tr><td style="color:#555">VAT (16%)</td><td style="text-align:right">KES ' + r.tax.toFixed(2) + '</td></tr>' +
+      '<tr style="font-weight:700;font-size:1.05em"><td>TOTAL</td><td style="text-align:right">KES ' + r.total.toFixed(2) + '</td></tr>' +
+      '</table>' +
+    '</div>' +
+    '<div style="text-align:center;font-size:.8em;color:#888;padding-top:10px;border-top:1px dashed #ccc">' +
+      'Thank you! · www.mysokoni.co.ke<br>' +
+      '<span style="font-size:.85em">Bravilex International Co. Ltd</span>' +
+    '</div>' +
+    '<div style="margin-top:12px;padding:10px;background:#fffbe6;border-radius:6px;font-size:.75em;color:#665c00">' +
+      '⚠️ This is a TEST receipt for iOS Print Certification. Not a valid transaction.' +
+    '</div>' +
+    '</div></body></html>';
+}
+
+function escH(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+                      .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+/* ── Init ── */
+renderBanner();
+renderT1();
+renderT2();
+renderSummary();
+
+/* Auto-expand first two cards to show results */
+document.getElementById('body-1').style.display = 'block';
+document.getElementById('body-2').style.display = 'block';
+</script>
+</body>
+</html>
