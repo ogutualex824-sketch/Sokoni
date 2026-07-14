@@ -21,7 +21,7 @@
   ],
   "release": "v1.0.0-candidate",
   "standard": "RVS v1.0",
-  "updated": "2026-07-13",
+  "updated": "2026-07-14",
   "verdict": "NO_GO",
   "verdictReason": "0 of 10 critical gates VERIFIED. 9 are ENGINEERING COMPLETE (built, tested, unproven). 1 are NOT EXERCISED. Engineering Complete is not Production Proven.",
   "evidenceSchema": [
