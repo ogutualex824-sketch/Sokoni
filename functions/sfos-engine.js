@@ -27,8 +27,8 @@
  *   ANTHROPIC_API_KEY             — Claude Haiku for AI financial forecasting
  *
  * @module sfos-engine
- * @version 1.0.0
- * @since 2026-07-14
+ * @version 1.1.0
+ * @since 2026-07-14 (v1.1 hardening: idempotency, atomic velocity, balance floor, health CFs)
  */
 
 const { onCall, HttpsError }              = require('firebase-functions/v2/https');
@@ -380,48 +380,51 @@ async function _updateRewards(db, uid, txType, amount) {
     const rewardsRef  = db.collection('sfosRewards').doc(uid);
     const identityRef = db.collection('sfosIdentity').doc(uid);
 
-    const [rewardsSnap, identitySnap] = await Promise.all([rewardsRef.get(), identityRef.get()]);
+    // Wrap in a transaction to prevent duplicate-points race condition under concurrency
+    await db.runTransaction(async (t) => {
+      const [rewardsSnap, identitySnap] = await Promise.all([t.get(rewardsRef), t.get(identityRef)]);
 
-    const currentPoints   = (rewardsSnap.exists ? rewardsSnap.data().points        : 0) + pts;
-    const lifetimePoints  = (rewardsSnap.exists ? rewardsSnap.data().lifetimePoints : 0) + pts;
+      const currentPoints   = (rewardsSnap.exists ? rewardsSnap.data().points        : 0) + pts;
+      const lifetimePoints  = (rewardsSnap.exists ? rewardsSnap.data().lifetimePoints : 0) + pts;
 
-    // Tier upgrade check
-    let tier = (identitySnap.exists ? identitySnap.data().tier : 'bronze') || 'bronze';
-    if      (lifetimePoints >= TIER_THRESHOLDS.diamond)  tier = 'diamond';
-    else if (lifetimePoints >= TIER_THRESHOLDS.platinum) tier = 'platinum';
-    else if (lifetimePoints >= TIER_THRESHOLDS.gold)     tier = 'gold';
-    else if (lifetimePoints >= TIER_THRESHOLDS.silver)   tier = 'silver';
-    else                                                   tier = 'bronze';
+      // Tier upgrade check
+      let tier = (identitySnap.exists ? identitySnap.data().tier : 'bronze') || 'bronze';
+      if      (lifetimePoints >= TIER_THRESHOLDS.diamond)  tier = 'diamond';
+      else if (lifetimePoints >= TIER_THRESHOLDS.platinum) tier = 'platinum';
+      else if (lifetimePoints >= TIER_THRESHOLDS.gold)     tier = 'gold';
+      else if (lifetimePoints >= TIER_THRESHOLDS.silver)   tier = 'silver';
+      else                                                   tier = 'bronze';
 
-    // tierProgressPct toward next tier
-    const tiers       = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
-    const tierIdx     = tiers.indexOf(tier);
-    const nextTier    = tiers[tierIdx + 1];
-    const nextTarget  = nextTier ? TIER_THRESHOLDS[nextTier] : TIER_THRESHOLDS.diamond;
-    const prevTarget  = tierIdx > 0 ? TIER_THRESHOLDS[tiers[tierIdx]] : 0;
-    const progress    = nextTier
-      ? Math.min(100, Math.round(((lifetimePoints - prevTarget) / (nextTarget - prevTarget)) * 100))
-      : 100;
+      // tierProgressPct toward next tier
+      const tiers       = ['bronze', 'silver', 'gold', 'platinum', 'diamond'];
+      const tierIdx     = tiers.indexOf(tier);
+      const nextTier    = tiers[tierIdx + 1];
+      const nextTarget  = nextTier ? TIER_THRESHOLDS[nextTier] : TIER_THRESHOLDS.diamond;
+      const prevTarget  = tierIdx > 0 ? TIER_THRESHOLDS[tiers[tierIdx]] : 0;
+      const progress    = nextTier
+        ? Math.min(100, Math.round(((lifetimePoints - prevTarget) / (nextTarget - prevTarget)) * 100))
+        : 100;
 
-    await rewardsRef.set({
-      uid,
-      points:          currentPoints,
-      lifetimePoints,
-      tier,
-      tierProgressPct: progress,
-      nextTierPoints:  nextTarget,
-      cashback:        rewardsSnap.exists ? (rewardsSnap.data().cashback || 0) : 0,
-      streakDays:      rewardsSnap.exists ? (rewardsSnap.data().streakDays || 0) : 0,
-      streakLastAt:    rewardsSnap.exists ? (rewardsSnap.data().streakLastAt || null) : null,
-      achievements:    rewardsSnap.exists ? (rewardsSnap.data().achievements || []) : [],
-      updatedAt:       Timestamp.now(),
-    }, { merge: true });
+      t.set(rewardsRef, {
+        uid,
+        points:          currentPoints,
+        lifetimePoints,
+        tier,
+        tierProgressPct: progress,
+        nextTierPoints:  nextTarget,
+        cashback:        rewardsSnap.exists ? (rewardsSnap.data().cashback || 0) : 0,
+        streakDays:      rewardsSnap.exists ? (rewardsSnap.data().streakDays || 0) : 0,
+        streakLastAt:    rewardsSnap.exists ? (rewardsSnap.data().streakLastAt || null) : null,
+        achievements:    rewardsSnap.exists ? (rewardsSnap.data().achievements || []) : [],
+        updatedAt:       Timestamp.now(),
+      }, { merge: true });
 
-    await identityRef.update({
-      rewardPoints:   currentPoints,
-      lifetimePoints,
-      tier,
-      updatedAt:      Timestamp.now(),
+      t.update(identityRef, {
+        rewardPoints:   currentPoints,
+        lifetimePoints,
+        tier,
+        updatedAt:      Timestamp.now(),
+      });
     });
   } catch (e) {
     _log('warn', '_updateRewards error', { uid, err: e.message });
@@ -669,8 +672,28 @@ exports.sfosTransact = onCall(BASE_OPTS, async (request) => {
   const uid  = _requireAuth(request);
   const db   = _db();
   const data = request.data || {};
+  let iKey = '';
 
   try {
+    // Idempotency guard
+    iKey = _san(data.idempotencyKey || '', 128);
+    if (iKey) {
+      const idempRef = db.collection('sfosIdempotency').doc(iKey);
+      const idempSnap = await idempRef.get();
+      if (idempSnap.exists) {
+        const d = idempSnap.data();
+        if (d.uid !== uid) throw new HttpsError('permission-denied', 'IDEMPOTENCY_KEY_MISMATCH');
+        if (d.status === 'COMPLETED') return d.result;
+        // PENDING but older than 30s — allow retry (crash recovery)
+        const age = Date.now() - (d.createdAt?.toMillis() || 0);
+        if (d.status === 'PENDING' && age < 30_000) {
+          throw new HttpsError('already-exists', 'DUPLICATE_REQUEST');
+        }
+      }
+      // Claim the key
+      await idempRef.set({ uid, status: 'PENDING', createdAt: Timestamp.now() });
+    }
+
     // ── 1. Validate inputs ────────────────────────────────────────────────────
     const amount    = _assertPositiveAmount(data.amount);
     const txType    = _san(data.type, 50);
@@ -734,13 +757,37 @@ exports.sfosTransact = onCall(BASE_OPTS, async (request) => {
 
       fromBalanceBefore = sourceBalance;
 
-      // Sufficient funds check for deductions from user wallet
+      // Read sfosIdentity inside transaction for atomic velocity check
+      const identityRef = db.collection('sfosIdentity').doc(uid);
+      const identSnap   = await t.get(identityRef);
+
+      // Inline velocity check (atomic — prevents race condition where two concurrent
+      // requests both pass the check before either updates the counter)
       const deductsFromUser = ['WALLET', 'SAVINGS', 'ESCROW'].includes(fromLedger);
+      if (deductsFromUser && identSnap.exists) {
+        const iData        = identSnap.data();
+        const nowDate      = new Date();
+        const todayStr     = nowDate.toISOString().slice(0, 10);
+        const monthStr     = nowDate.toISOString().slice(0, 7);
+        const lastDay      = iData.velocityDayReset   ? iData.velocityDayReset.toDate().toISOString().slice(0, 10)   : null;
+        const lastMonth    = iData.velocityMonthReset ? iData.velocityMonthReset.toDate().toISOString().slice(0, 7) : null;
+        const txDailySpent   = lastDay   === todayStr ? (iData.dailySpent   || 0) : 0;
+        const txMonthlySpent = lastMonth === monthStr ? (iData.monthlySpent || 0) : 0;
+        const dailyLimitTx   = iData.dailyLimit   || DEFAULT_DAILY_LIMIT;
+        const monthlyLimitTx = iData.monthlyLimit || DEFAULT_MONTHLY_LIMIT;
+        if (amount > dailyLimitTx - txDailySpent || amount > monthlyLimitTx - txMonthlySpent) {
+          throw new HttpsError('resource-exhausted', 'VELOCITY_EXCEEDED');
+        }
+      }
+
+      // Sufficient funds check for deductions from user wallet
       if (deductsFromUser && sourceBalance < amount) {
         throw new HttpsError('failed-precondition', 'INSUFFICIENT_BALANCE');
       }
 
       fromBalanceAfter = deductsFromUser ? sourceBalance - amount : sourceBalance;
+      // Defensive floor — prevents float precision from creating infinitesimal negatives
+      fromBalanceAfter = Math.max(0, fromBalanceAfter);
 
       // Read destination balance
       let destRef, destData, destBalance;
@@ -800,6 +847,15 @@ exports.sfosTransact = onCall(BASE_OPTS, async (request) => {
         });
       }
 
+      // Atomic velocity counter — only for txns that deduct from the user's balance
+      if (deductsFromUser) {
+        t.update(identityRef, {
+          dailySpent:   FieldValue.increment(amount),
+          monthlySpent: FieldValue.increment(amount),
+          updatedAt:    now,
+        });
+      }
+
       // Write sfosTransactions
       const txDoc = {
         txId,
@@ -853,12 +909,6 @@ exports.sfosTransact = onCall(BASE_OPTS, async (request) => {
           updatedAt:         Timestamp.now(),
         });
 
-        // Update velocity counters for outbound transfers
-        const deductsFromUser = ['WALLET', 'SAVINGS', 'ESCROW'].includes(fromLedger);
-        if (deductsFromUser) {
-          await _updateVelocity(db, uid, amount);
-        }
-
         // Rewards
         await _updateRewards(db, uid, txType, amount);
 
@@ -896,6 +946,15 @@ exports.sfosTransact = onCall(BASE_OPTS, async (request) => {
             meta: { riskScore: risk, amount, txType, toId },
           }, 'CRITICAL');
         }
+
+        // Mark idempotency key COMPLETED with result
+        if (iKey) {
+          await db.collection('sfosIdempotency').doc(iKey).update({
+            status: 'COMPLETED',
+            result: { txId, status: 'COMPLETED' },
+            completedAt: Timestamp.now(),
+          }).catch(() => {});
+        }
       } catch (e) {
         _log('warn', 'post-transaction async error', { txId, err: e.message });
       }
@@ -926,6 +985,11 @@ exports.sfosTransact = onCall(BASE_OPTS, async (request) => {
     };
   } catch (e) {
     _log('error', 'sfosTransact', { uid, err: e.message });
+    if (iKey) {
+      await db.collection('sfosIdempotency').doc(iKey).update({
+        status: 'FAILED', failedAt: Timestamp.now(),
+      }).catch(() => {});
+    }
     if (e instanceof HttpsError) throw e;
     throw new HttpsError('internal', 'Transaction failed');
   }
@@ -2498,5 +2562,105 @@ exports.sfosRiskCheck = onCall(BASE_OPTS, async (request) => {
     _log('error', 'sfosRiskCheck', { uid, err: e.message });
     if (e instanceof HttpsError) throw e;
     throw new HttpsError('internal', 'Risk check failed');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 23. sfosHealthCheck — Platform health metrics for monitoring dashboard
+// ══════════════════════════════════════════════════════════════════════════════
+
+exports.sfosHealthCheck = onCall(BASE_OPTS, async (request) => {
+  _requireAuth(request);
+  const db = _db();
+  const now = new Date();
+  const since24h = new Date(now.getTime() - 86_400_000);
+  const since1h  = new Date(now.getTime() -  3_600_000);
+
+  try {
+    // Run all reads in parallel
+    const [
+      recentTxSnap,
+      recentAuditSnap,
+      totalIdentitySnap,
+      criticalAuditSnap,
+    ] = await Promise.all([
+      db.collection('sfosTransactions')
+        .where('createdAt', '>=', Timestamp.fromDate(since24h))
+        .count().get(),
+      db.collection('sfosAuditLog')
+        .where('createdAt', '>=', Timestamp.fromDate(since1h))
+        .count().get(),
+      db.collection('sfosIdentity').count().get(),
+      db.collection('sfosAuditLog')
+        .where('severity', '==', 'CRITICAL')
+        .where('createdAt', '>=', Timestamp.fromDate(since24h))
+        .count().get(),
+    ]);
+
+    const txLast24h       = recentTxSnap.data().count;
+    const auditLast1h     = recentAuditSnap.data().count;
+    const totalUsers      = totalIdentitySnap.data().count;
+    const criticalLast24h = criticalAuditSnap.data().count;
+
+    const status = criticalLast24h > 5 ? 'DEGRADED'
+      : criticalLast24h > 0 ? 'WARNING' : 'HEALTHY';
+
+    return {
+      status,
+      checkedAt:            now.toISOString(),
+      totalUsers,
+      txLast24h,
+      auditEventLast1h:     auditLast1h,
+      criticalAlertsLast24h: criticalLast24h,
+      ledgerEngine:         'SFOS v1.1',
+    };
+  } catch (e) {
+    _log('error', 'sfosHealthCheck', { err: e.message });
+    throw new HttpsError('internal', 'Health check failed');
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 24. sfosLedgerIntegrityCheck — Spot-check ledger balance vs wallet balance
+// ══════════════════════════════════════════════════════════════════════════════
+
+exports.sfosLedgerIntegrityCheck = onCall(BASE_OPTS, async (request) => {
+  const uid = _requireAuth(request);
+  const db  = _db();
+
+  try {
+    const [credits, debits, wallet] = await Promise.all([
+      db.collection('sfosLedger')
+        .where('accountId',  '==', uid)
+        .where('direction',  '==', 'CREDIT')
+        .where('ledgerType', '==', 'WALLET')
+        .get(),
+      db.collection('sfosLedger')
+        .where('accountId',  '==', uid)
+        .where('direction',  '==', 'DEBIT')
+        .where('ledgerType', '==', 'WALLET')
+        .get(),
+      db.collection('wallets').doc(uid).get(),
+    ]);
+
+    const totalCredits  = credits.docs.reduce((s, d) => s + (d.data().amount || 0), 0);
+    const totalDebits   = debits.docs.reduce((s, d)  => s + (d.data().amount || 0), 0);
+    const ledgerBalance = Math.round((totalCredits - totalDebits) * 100) / 100;
+    const walletBalance = Math.round(((wallet.exists ? wallet.data().balance : 0) || 0) * 100) / 100;
+    const diff          = Math.abs(ledgerBalance - walletBalance);
+    const reconciled    = diff <= 0.01; // 1 cent tolerance for float precision
+
+    return {
+      uid,
+      walletBalance,
+      ledgerBalance,
+      diff,
+      reconciled,
+      ledgerEntries: credits.size + debits.size,
+      checkedAt:     new Date().toISOString(),
+    };
+  } catch (e) {
+    _log('error', 'sfosLedgerIntegrityCheck', { uid, err: e.message });
+    throw new HttpsError('internal', 'Integrity check failed');
   }
 });

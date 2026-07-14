@@ -8644,8 +8644,11 @@ exports.sfosRewardsRedeem      = sfosEngine.sfosRewardsRedeem;
 exports.sfosFinancialHealth    = sfosEngine.sfosFinancialHealth;
 exports.sfosNetWorth           = sfosEngine.sfosNetWorth;
 exports.sfosAnalyticsDetailed  = sfosEngine.sfosAnalyticsDetailed;
-exports.sfosAiForecast         = sfosEngine.sfosAiForecast;
-exports.sfosRiskCheck          = sfosEngine.sfosRiskCheck;
+exports.sfosAiForecast              = sfosEngine.sfosAiForecast;
+exports.sfosRiskCheck               = sfosEngine.sfosRiskCheck;
+// Monitoring & Integrity (v1.1)
+exports.sfosHealthCheck             = sfosEngine.sfosHealthCheck;
+exports.sfosLedgerIntegrityCheck    = sfosEngine.sfosLedgerIntegrityCheck;
 
 /* ── Jobs Marketplace v1.0 ───────────────────────────────────────────────── */
 

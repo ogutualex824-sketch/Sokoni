@@ -2,6 +2,83 @@
 
 ---
 
+## 2026-07-14 — SFOS Engine v1.1 — Security Hardening Sprint
+
+**Scope:** Financial Infrastructure. Surgical hardening of `sfos-engine.js` with four
+critical fixes and two new monitoring Cloud Functions. No breaking changes.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `functions/sfos-engine.js` | v1.0.0 → v1.1.0 (2,502 → 2,666 lines) |
+| `docs/CHANGELOG.md` | This entry |
+
+### Critical Fixes
+
+**FIX 1 — Idempotency Table (`sfosTransact`)**
+- Added `sfosIdempotency/{iKey}` collection to deduplicate concurrent retries
+- `let iKey = ''` declared outside try so it is in scope for both the catch block
+  and the fire-and-forget `postTx` closure
+- Guard runs BEFORE validation; claims key as `PENDING`; returns cached result if
+  `COMPLETED`; allows retry if `PENDING` but older than 30 s (crash recovery)
+- On transaction success: `postTx` marks key `COMPLETED` with `{ txId, status }`
+- On transaction failure: outer catch marks key `FAILED`
+- IDEMPOTENCY_KEY_MISMATCH error thrown if a different uid tries to reuse a key
+
+**FIX 2 — Velocity Counter Inside Transaction (`sfosTransact`)**
+- Moved velocity check and counter write INSIDE `db.runTransaction()` to close the
+  race condition where two concurrent requests could both pass the check before
+  either incremented the counter
+- `sfosIdentity/{uid}` is now read atomically inside the transaction via `t.get()`
+  (reads must precede writes — identity read is placed before the sufficient-funds
+  check so all reads happen before any `t.update()` calls)
+- Inline velocity check mirrors `_velocityCheck` logic (day/month reset awareness)
+- `t.update(identityRef, { dailySpent: FieldValue.increment(amount), monthlySpent: FieldValue.increment(amount) })` applied only for deducting tx types
+- Removed the `_updateVelocity()` call from `postTx` (now handled atomically)
+- `_updateVelocity` function definition retained for any future use
+
+**FIX 3 — Balance Floor (`sfosTransact`)**
+- After computing `fromBalanceAfter`, added `fromBalanceAfter = Math.max(0, fromBalanceAfter)`
+- Prevents infinitesimal negative balances caused by IEEE 754 float subtraction errors
+
+**FIX 4 — Rewards Race Condition (`_updateRewards`)**
+- Wrapped the read + compute + write block in `db.runTransaction(async t => { ... })`
+- `t.get(rewardsRef)` + `t.get(identityRef)` now atomic with `t.set()` / `t.update()`
+- Prevents duplicate reward points being awarded when two concurrent transactions
+  trigger `_updateRewards` for the same user within the same Firestore contention window
+
+### New Cloud Functions (2)
+
+| Export | Description |
+|--------|-------------|
+| `sfosHealthCheck` | Four parallel aggregation queries (tx count 24 h, audit count 1 h, total users, critical alerts 24 h); returns `HEALTHY / WARNING / DEGRADED` status |
+| `sfosLedgerIntegrityCheck` | Sums all CREDIT and DEBIT ledger entries for the caller's WALLET account; compares against `wallets/{uid}.balance`; reports diff and reconciled flag (1 cent tolerance) |
+
+### New Firestore Collections
+
+| Collection | Notes |
+|------------|-------|
+| `sfosIdempotency/{key}` | Idempotency table for `sfosTransact`; entries: `uid`, `status` (PENDING/COMPLETED/FAILED), timestamps, cached result |
+
+### Security
+
+- Idempotency keys are sanitised through `_san(..., 128)` before use as document IDs
+- UID ownership check on idempotency key prevents cross-user key reuse attacks
+- Atomic velocity check eliminates the TOCTOU window on spending limits
+
+### Performance
+
+- `sfosHealthCheck` uses Firestore aggregation queries (`.count().get()`) — no document reads
+- All four aggregations in `sfosHealthCheck` run via `Promise.all()` for parallel execution
+
+### No Breaking Changes
+
+All 22 existing exports unchanged. `wallets/{uid}` and `walletTransactions/{txId}` 
+backward compat unaffected. `_updateVelocity` still defined (now unused internally).
+
+---
+
 ## 2026-07-14 — SFOS Engine v1.0 — Core Financial OS Cloud Functions
 
 **Scope:** Financial Infrastructure. Delivers the complete backend engine for all

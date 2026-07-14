@@ -4323,7 +4323,7 @@ service cloud.firestore {
 
     match /sfosIdentity/{uid} {
       // Only the identity owner or admin may read; writes via CF Admin SDK only
-      allow read:  if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow read:  if (isAuthed() && request.auth.uid == uid) || isAdmin();
       allow write: if false;
     }
 
@@ -4336,12 +4336,14 @@ service cloud.firestore {
     }
 
     match /sfosTransactions/{txId} {
-      // Initiator, counterparty, or admin may read
+      // Only direct financial participants (sender / receiver) or admin may read.
+      // initiatorUid is intentionally excluded: it can be set to a third-party UID
+      // (e.g. an agent acting on behalf of someone else), which would create a
+      // lateral-read vector if included here.
       allow read:  if isAdmin() ||
                      (isAuthed() &&
-                       (resource.data.fromId  == request.auth.uid ||
-                        resource.data.toId    == request.auth.uid ||
-                        resource.data.initiatorUid == request.auth.uid));
+                       (resource.data.fromId == request.auth.uid ||
+                        resource.data.toId   == request.auth.uid));
       allow write: if false;
     }
 
@@ -4363,7 +4365,9 @@ service cloud.firestore {
     }
 
     match /sfosGroups/{groupId}/wallets/{walletUid} {
-      allow read:  if isAuthed() && request.auth.uid == walletUid || isAdmin();
+      // Each member can only read their own sub-wallet; path wildcard walletUid
+      // IS the member UID, so no member can enumerate another member's balance.
+      allow read:  if (isAuthed() && request.auth.uid == walletUid) || isAdmin();
       allow write: if false;
     }
 
@@ -4381,7 +4385,7 @@ service cloud.firestore {
     }
 
     match /sfosRewards/{uid} {
-      allow read:  if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow read:  if (isAuthed() && request.auth.uid == uid) || isAdmin();
       allow write: if false;
     }
 
@@ -4398,8 +4402,16 @@ service cloud.firestore {
     }
 
     match /sfosFinancialHealth/{uid} {
-      allow read:  if isAuthed() && request.auth.uid == uid || isAdmin();
+      allow read:  if (isAuthed() && request.auth.uid == uid) || isAdmin();
       allow write: if false;
+    }
+
+    match /sfosIdempotency/{keyId} {
+      // Users can poll their own idempotency records to check retry status.
+      // The key document stores uid so the rule can bind to the authenticated user.
+      // CF Admin SDK is the sole writer — client writes are always rejected.
+      allow read:  if isAuthed() && resource.data.uid == request.auth.uid;
+      allow write: if false; // CF Admin SDK only
     }
 
   }
