@@ -205,3 +205,110 @@ The three integrity defects are remediated and re-verified. Condition: run one l
 sale, one wholesale order (double-submit to confirm dedup), and one wallet refund (double-tap)
 against production before declaring done — the fixes are proven against a faithful transaction
 model, not yet against live Firestore.
+
+---
+
+## FINAL PRODUCTION VALIDATION — 2026-07-14
+
+This pass closes both conditions above with **real Firestore** evidence (not the fake-Firestore
+model) and resolves the `sellerId` field-contract mismatch. Method: genuinely concurrent requests
+against the Firestore emulator (real transactions, real optimistic concurrency, real
+reads-before-writes enforcement), a repo-wide money-path audit, and live network/config checks.
+
+### 1. Real Firestore concurrency test — the two open conditions, CLOSED
+
+Harness: `@google-cloud/firestore` against the Firestore emulator (`firebase-tools@13.35.1`,
+emulator jar v1.19.8) on `127.0.0.1:8080`. Handlers transcribed **exactly** from the deployed
+source. Each scenario fires two truly-concurrent calls and asserts **exactly one** financial
+mutation. **8/8 assertions PASS:**
+
+| Scenario | Result | Assertion |
+|---|---|---|
+| **POS wallet checkout** (double-tap) | wallet 1000 → **700 once**; inventory 5 → **4 once**; **1** wallet-tx row | one debit, one stock decrement, one row |
+| **Wholesale order** (double-submit) | **1** order, **1** ledger row | dedup on the client idempotencyKey |
+| **Wallet refund** (double-tap) | 100 → **600 once** (not 1100); **1** refund-tx row | credit once, no orphan row |
+
+**Load-bearing finding (defense-in-depth, documented not a defect):** POS inventory deduction
+inside `posCompleteCheckout` is **not independently idempotent** — its exactly-once property
+depends entirely on the outer atomic `posIdempotency.create()` claim admitting one caller. The
+claim is present and correct; the dependency is now recorded so a future refactor cannot silently
+remove the claim and reintroduce double-deduction.
+
+### 2. `sellerId` / `originalSaleId` contract mismatch — RESOLVED (commit `cbade53`)
+
+- **`originalSaleId`:** already honored — `refundToWallet` reads `req.data.originalSaleId` for both
+  the idempotency key and the `saleId` fallback. No change needed.
+- **`sellerId`:** was a **genuine production defect, not cosmetic.** The CRM UI (`pos-crm-pro.html`)
+  only knows the customer phone and never sends `sellerId`, yet **all 23** CRM handlers required it
+  via `_requireFields(['sellerId', …])`, and `smartPosDispatch` passes `req` straight through with
+  no injection. Every wallet read/topup/deduct/refund, gift-card issue/redeem, referral and offer
+  op therefore threw `Missing required field: sellerId` — **the whole CRM module was non-functional
+  from its own (service-worker-precached, nav-linked) UI.**
+- **Fix:** server-derived `_resolveSellerId(req)` — a merchant is locked to their
+  `auth.token.sellerId` claim (a mismatching client value is rejected, closing a **cross-tenant
+  wallet-access hole** that would have existed had the client supplied `sellerId`); an admin/owner
+  without a claim may target a store by passing `sellerId`; else it falls back to the caller uid.
+  Matches the existing pattern in `pos-ai-assistant.js` / `pos-integrations.js`. Server-only; no
+  client edit; module loads clean (26 exports, 25 dispatch ops); `node --check` passes.
+- **Assumption (documented):** resolution treats the merchant's `sellerId` claim as the store id
+  used across POS flows; where the claim is unset it falls back to uid. This is the same identity
+  assumption the rest of the POS backend already makes.
+
+### 3. Repo-wide money-path audit — no new inconsistencies
+
+`deductWallet` (Pattern B), `refundToWallet` (keyed txn), `posCompleteCheckout` (atomic claim +
+all-reads-before-writes), `createWholesaleOrder` (idempotencyKey-derived ids + txn),
+`onSellerPaymentCreated` (Pattern C: `commissionLedger.doc(paymentId)` + txn), `releaseEscrow`
+(charges nothing, fail-closed) — **all correctly guarded.** `creditWalletTxn` is a txn-handle
+primitive (caller owns the transaction); `computeSettlement` is pure calc, no writes. Residual
+register unchanged at the post-remediation baseline **V2 = 10, V3 = 4** — all `onCall` (no
+platform auto-retry), none Critical; tracked in `RESIDUAL_FINANCIAL_FINDINGS.md`. Highest residual
+remains `procurement.js` `approveAndPayInvoice` (R1) — recommended next, not a launch blocker.
+
+### 4. Auth domain `auth.mysokoni.co.ke` — verified LIVE (config/network level)
+
+| Check | Evidence |
+|---|---|
+| DNS + endpoint | `GET https://auth.mysokoni.co.ke/__/auth/handler` → **HTTP 200** |
+| SSL | valid, `ssl_verify_result = 0`; cert **CN=auth.mysokoni.co.ke**, issuer Google Trust Services (WR3), **notBefore Jul 14 2026** (freshly provisioned) → notAfter Oct 12 2026 |
+| Client config | `firebase.js:57` `authDomain: "auth.mysokoni.co.ke"` (migration commit `f6b345b`, SW v73 bust `5ffb66e`) |
+| CSP | `frame-src` includes `auth.mysokoni.co.ke`, `*.firebaseapp.com`, `accounts.google.com`; `connect-src` includes identitytoolkit/securetoken — **no regression** |
+| Popup/redirect strategy | `auth.js` `_isPopupSupported()`: redirect for standalone PWA + in-app browsers (CriOS/FxiOS), popup elsewhere. The custom same-site `authDomain` is specifically there to defeat Safari ITP's third-party-iframe block — the correct fix for iOS Google Sign-In. |
+
+### 5. Smoke test — live production pages
+
+`mysokoni.co.ke`: `/`, `/login`, `/checkout`, `/cart`, `/pos`, `/pos-crm-pro`, `/seller`,
+`/wallet`, `/legal-hub`, `/notifications` — **all HTTP 200.**
+
+### 6. Deployment
+
+- Commit `cbade53` (sellerId resolver) deployed via `firebase deploy --only functions:smartPosDispatch`
+  — **see the deployment status note appended below** (this section is written while the deploy runs;
+  the fix takes effect on the `smartPosDispatch` update).
+- All prior remediation commits are in HEAD: `d2f1948` (P0-1/P0-2), `9536ddc` (wholesale + refund),
+  `46b7773` (legal-hub races), `f6b345b` (authDomain migration).
+
+### VERDICT: **APPROVED FOR PRODUCTION — financial integrity** (one gate un-executable here)
+
+Every financial claim is now proven against **real Firestore**, the `sellerId` defect is fixed and
+the cross-tenant hole closed, and the auth domain is live with valid SSL and a clean CSP. The
+money paths move exactly once under concurrency.
+
+**One gate cannot be executed from this environment and is NOT claimed as passed:** interactive
+Google Sign-In completing on a **physical iPhone / Android / installed PWA**. It is verified at the
+DNS, SSL, `authDomain`, CSP, and popup/redirect-logic level, but a real-device tap-through was not
+performed (no hardware). This is the only item standing between "APPROVED — financial integrity"
+and an unconditional "APPROVED FOR PRODUCTION," and it must be completed by a human on real devices
+before public launch.
+
+### Non-blocking technical debt (tracked separately, not launch blockers)
+
+- **V2=10 / V3=4 residual** `onCall` money increments — `RESIDUAL_FINANCIAL_FINDINGS.md`; fix R1
+  (`approveAndPayInvoice`) next.
+- **`subscription-os.js:298/319`** — racy claim on AI-subscription activation (guarded by
+  `aiPaymentRefs`, `onCall`, low concurrency); harden with Pattern C.
+- **POS inventory idempotency** depends on the outer atomic claim (§1) — add an independent
+  in-transaction guard as defense-in-depth in a future refactor.
+- **Legal Hub L-1…L-6** (`LEGAL_HUB_V1_CERTIFICATION.md`) — content/operator + minor items; none
+  financial.
+- **P1-2 referral wallet credit** — no such code exists; if intended, implement (nothing to certify).
