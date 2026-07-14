@@ -144,32 +144,50 @@ exports.bookLegalConsultation = onCall(CF_OPTS, async (req) => {
     throw new HttpsError('invalid-argument', 'providerId, dateTime, matter, idempotencyKey required');
   }
 
-  const idemRef = db().collection('legalConsultIdempotency').doc(idempotencyKey);
-  if ((await idemRef.get()).exists) return { consultationId: (await idemRef.get()).data().consultationId, idempotent: true };
-
-  const provSnap = await db().collection('legalProviders').doc(providerId).get();
-  if (!provSnap.exists || provSnap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');
-  const prov = provSnap.data();
   if (new Date(dateTime) < new Date()) throw new HttpsError('invalid-argument', 'dateTime must be in the future');
 
-  const ref = db().collection('legalConsultations').doc();
-  const batch = db().batch();
-  batch.set(ref, {
-    consultationId: ref.id, clientUid: uid, providerId,
-    providerName: prov.name, firmName: prov.firmName,
-    specializations: prov.specializations,
-    dateTime: new Date(dateTime).toISOString(),
-    matter: san(matter, 2000), isOnline: Boolean(isOnline),
-    consultationFee: prov.consultationFee, currency: prov.currency,
-    status: 'pending', idempotencyKey,
-    createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+  /* ── IDEMPOTENT booking ──
+     Previously: read-then-batch. The idempotency guard was a get() at one point and a
+     batch.set() at another, and the consultation used an AUTO-ID .doc(). Two concurrent taps
+     (or a retry racing the first) could both read "not exists" and both create a consultation
+     with a DIFFERENT id — a duplicate booking, plus a double totalConsultations increment.
+
+     Now the consultation id is DERIVED from the idempotencyKey, so the same key can only ever
+     target one document, and the provider read + validation + create + increment + idempotency
+     marker all happen in ONE transaction whose existence check makes a repeat a no-op. (The
+     provider is read only inside the transaction — one Firestore read, not two.) */
+  const consultId  = 'lc_' + String(idempotencyKey).replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
+  const consultRef = db().collection('legalConsultations').doc(consultId);
+  const provRef    = db().collection('legalProviders').doc(providerId);
+  const idemRef    = db().collection('legalConsultIdempotency').doc(idempotencyKey);
+
+  const result = await db().runTransaction(async (t) => {
+    const [idemSnap, consultSnap, pSnap] = await Promise.all([
+      t.get(idemRef), t.get(consultRef), t.get(provRef),
+    ]);
+    if (idemSnap.exists) return { consultationId: idemSnap.data().consultationId, idempotent: true };
+    if (consultSnap.exists) return { consultationId: consultId, idempotent: true };
+    if (!pSnap.exists || pSnap.data().status !== 'active') throw new HttpsError('not-found', 'Provider not found');
+    const prov = pSnap.data();
+
+    t.set(consultRef, {
+      consultationId: consultId, clientUid: uid, providerId,
+      providerName: prov.name, firmName: prov.firmName,
+      specializations: prov.specializations,
+      dateTime: new Date(dateTime).toISOString(),
+      matter: san(matter, 2000), isOnline: Boolean(isOnline),
+      consultationFee: prov.consultationFee, currency: prov.currency,
+      status: 'pending', idempotencyKey,
+      createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+    });
+    t.update(provRef, {
+      totalConsultations: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
+    });
+    t.set(idemRef, { consultationId: consultId, createdAt: FieldValue.serverTimestamp() });
+    return { consultationId: consultId, status: 'pending' };
   });
-  batch.update(db().collection('legalProviders').doc(providerId), {
-    totalConsultations: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp(),
-  });
-  batch.set(idemRef, { consultationId: ref.id, createdAt: FieldValue.serverTimestamp() });
-  await batch.commit();
-  return { consultationId: ref.id, status: 'pending' };
+
+  return result;
 });
 
 /* ── 6. getMyLegalConsultations (client) ── */
@@ -225,22 +243,31 @@ exports.rateLegalProvider = onCall(CF_OPTS, async (req) => {
   }
   if (rating < 1 || rating > 5) throw new HttpsError('invalid-argument', 'Rating 1–5');
 
-  const consultSnap = await db().collection('legalConsultations').doc(consultationId).get();
-  if (!consultSnap.exists) throw new HttpsError('not-found', 'Consultation not found');
-  const c = consultSnap.data();
-  if (c.clientUid !== uid) throw new HttpsError('permission-denied', 'Not your consultation');
-  if (c.status !== 'completed') throw new HttpsError('failed-precondition', 'Can only rate completed consultations');
-  if (c.rated) throw new HttpsError('already-exists', 'Already rated');
+  /* ── ATOMIC rating ──
+     The `rated` guard used to be read OUTSIDE the transaction (a get() before runTransaction),
+     while the flag was set inside it. Two concurrent rate calls for the same completed
+     consultation could both pass the outside check and both apply ratingCount+1, corrupting the
+     provider's aggregate. The consultation is now read and the `rated`/ownership/status guards
+     are all evaluated INSIDE the transaction, so a repeat sees rated:true and is rejected. */
+  const consultRef = db().collection('legalConsultations').doc(consultationId);
+  const provRef    = db().collection('legalProviders').doc(providerId);
 
-  await db().runTransaction(async t => {
-    const provRef = db().collection('legalProviders').doc(providerId);
-    const provSnap = await t.get(provRef);
-    if (!provSnap.exists) throw new HttpsError('not-found', 'Provider not found');
-    const p = provSnap.data();
-    const newCount = p.ratingCount + 1;
-    const newRating = ((p.rating * p.ratingCount) + rating) / newCount;
+  await db().runTransaction(async (t) => {
+    const [cSnap, pSnap] = await Promise.all([t.get(consultRef), t.get(provRef)]);
+    if (!cSnap.exists) throw new HttpsError('not-found', 'Consultation not found');
+    const c = cSnap.data();
+    if (c.clientUid !== uid) throw new HttpsError('permission-denied', 'Not your consultation');
+    if (c.status !== 'completed') throw new HttpsError('failed-precondition', 'Can only rate completed consultations');
+    if (c.rated) throw new HttpsError('already-exists', 'Already rated');
+    if (!pSnap.exists) throw new HttpsError('not-found', 'Provider not found');
+
+    const p = pSnap.data();
+    const prevCount  = p.ratingCount || 0;
+    const prevRating = p.rating || 0;
+    const newCount   = prevCount + 1;
+    const newRating  = ((prevRating * prevCount) + rating) / newCount;
     t.update(provRef, { rating: Math.round(newRating * 10) / 10, ratingCount: newCount, updatedAt: FieldValue.serverTimestamp() });
-    t.update(db().collection('legalConsultations').doc(consultationId), {
+    t.update(consultRef, {
       rated: true, rating, review: san(review, 500), ratedAt: FieldValue.serverTimestamp(),
     });
   });
