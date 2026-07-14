@@ -282,9 +282,11 @@ remains `procurement.js` `approveAndPayInvoice` (R1) — recommended next, not a
 
 ### 6. Deployment
 
-- Commit `cbade53` (sellerId resolver) deployed via `firebase deploy --only functions:smartPosDispatch`
-  — **see the deployment status note appended below** (this section is written while the deploy runs;
-  the fix takes effect on the `smartPosDispatch` update).
+- Commit `cbade53` (sellerId resolver) **DEPLOYED 2026-07-14** via
+  `firebase deploy --only functions:smartPosDispatch` (firebase-tools latest, project `sokoni-aeb26`):
+  predeploy `verify-commission-single-source.js` **passed** (no commission table reintroduced),
+  source packaged 1.92 MB, `smartPosDispatch(us-central1)` **"Successful update operation"**,
+  "Deploy complete!" (exit 0). The CRM wallet/gift-card/loyalty flows are now reachable in production.
 - All prior remediation commits are in HEAD: `d2f1948` (P0-1/P0-2), `9536ddc` (wholesale + refund),
   `46b7773` (legal-hub races), `f6b345b` (authDomain migration).
 
