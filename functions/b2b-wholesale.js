@@ -568,7 +568,7 @@ const processWholesalePayment = onCall(CF_OPTIONS, _h.processWholesalePayment = 
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       });
       /* Wallet transaction record */
-      const wtxRef = db.collection('walletTransactions').doc(_genId('wtx'));
+      const wtxRef = db.collection('walletTransactions').doc(`${uid}_${orderId}_wholesale`);
       tx.set(wtxRef, {
         uid,
         type:       'wholesale_payment',

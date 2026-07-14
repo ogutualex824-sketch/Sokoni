@@ -179,9 +179,12 @@ exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
   const walletId   = _walletId(sellerId, normPhone);
 
   const walletRef = db.collection('posWallets').doc(walletId);
+  const txDocRef  = db.collection('posWalletTransactions')
+    .doc(`${sellerId}_${normPhone}_${saleId}_deduct`);
 
   await db.runTransaction(async (tx) => {
-    const snap = await tx.get(walletRef);
+    const [snap, txSnap] = await Promise.all([tx.get(walletRef), tx.get(txDocRef)]);
+    if (txSnap.exists) return; // idempotent — already deducted on prior attempt
     const balance = snap.exists ? (snap.data().balance ?? 0) : 0;
     if (balance < safeAmount)
       throw new HttpsError('failed-precondition', 'Insufficient wallet balance');
@@ -192,8 +195,7 @@ exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
       { merge: true }
     );
 
-    const txRef = db.collection('posWalletTransactions').doc();
-    tx.set(txRef, {
+    tx.set(txDocRef, {
       sellerId,
       phone: normPhone,
       type: 'purchase',

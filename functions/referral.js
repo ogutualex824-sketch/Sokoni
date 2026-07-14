@@ -56,38 +56,38 @@ exports.processReferralOnOrderComplete = onDocumentUpdated(
 
     // Atomic transaction: mark buyer + credit referrer wallet
     await db.runTransaction(async (tx) => {
-      const walletDoc = await tx.get(walletRef);
+      const wtxRef = db.collection("walletTransactions").doc("ref_" + event.params.orderId);
+      const [walletDoc, wtxSnap] = await Promise.all([tx.get(walletRef), tx.get(wtxRef)]);
 
-      const currentBalance = walletDoc.exists ? (walletDoc.data().balance || 0) : 0;
-      const newBalance     = currentBalance + REFERRAL_BONUS_KES;
+      if (wtxSnap.exists) return; // idempotent — already credited on prior trigger delivery
 
-      const txEntry = {
-        id:          "ref_" + event.params.orderId,
-        type:        "referral_reward",
-        amount:      REFERRAL_BONUS_KES,
-        currency:    "KES",
-        description: `Referral bonus — ${userData.displayName || userData.name || "a friend"} completed their first order`,
-        orderId:     event.params.orderId,
-        createdAt:   admin.firestore.FieldValue.serverTimestamp(),
-        status:      "completed",
-      };
+      const txDesc = `Referral bonus — ${userData.displayName || userData.name || "a friend"} completed their first order`;
 
       if (walletDoc.exists) {
         tx.update(walletRef, {
-          balance:      newBalance,
-          transactions: admin.firestore.FieldValue.arrayUnion(txEntry),
-          updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+          balance:   admin.firestore.FieldValue.increment(REFERRAL_BONUS_KES),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       } else {
         tx.set(walletRef, {
-          uid:          referrerUid,
-          balance:      newBalance,
-          currency:     "KES",
-          transactions: [txEntry],
-          createdAt:    admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+          uid:       referrerUid,
+          balance:   REFERRAL_BONUS_KES,
+          currency:  "KES",
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
+
+      tx.set(wtxRef, {
+        uid:         referrerUid,
+        type:        "referral_reward",
+        amount:      REFERRAL_BONUS_KES,
+        currency:    "KES",
+        description: txDesc,
+        orderId:     event.params.orderId,
+        createdAt:   admin.firestore.FieldValue.serverTimestamp(),
+        status:      "completed",
+      });
 
       // Mark buyer so we don't double-credit
       tx.update(userRef, { firstReferralOrderDone: true });

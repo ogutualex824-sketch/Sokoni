@@ -57,6 +57,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     idempotencyKey,
     merchantId,
     branchId      = 'default',
+    shiftId,
     items         = [],
     customer,
     payments      = [],
@@ -74,15 +75,22 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!items?.length)  _e('items required');
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
 
-  /* ── 1. Idempotency check ── */
-  const idemRef  = db.collection('posIdempotency').doc(idempotencyKey);
-  const idemSnap = await idemRef.get();
-  if (idemSnap.exists) {
-    const prev = idemSnap.data();
-    if (prev.status === 'complete') return { saleId: prev.saleId, receipt: prev.receipt, cached: true };
-    if (prev.status === 'processing') _e('Checkout already in progress', 'already-exists');
+  /* ── 1. Idempotency claim — atomic ──
+     The previous version read, checked, then set: two concurrent requests (double-tap, HTTP
+     retry, two till terminals) could both read "not exists" and both proceed — the race window
+     in F3. create() is atomic: exactly one caller creates the doc; every other gets
+     ALREADY_EXISTS and is routed to the cached result or rejected. */
+  const idemRef = db.collection('posIdempotency').doc(idempotencyKey);
+  try {
+    await idemRef.create({ status: 'processing', startedAt: Date.now(), cashierId, merchantId });
+  } catch (err) {
+    if (err.code === 6 /* ALREADY_EXISTS */) {
+      const prev = (await idemRef.get()).data() || {};
+      if (prev.status === 'complete') return { saleId: prev.saleId, receipt: prev.receipt, cached: true };
+      _e('Checkout already in progress', 'already-exists');
+    }
+    throw err;   /* a real infra error — let the caller retry */
   }
-  await idemRef.set({ status: 'processing', startedAt: Date.now(), cashierId, merchantId });
 
   try {
     /* ── 2. Validate cart totals server-side — batch fetch all products ── */
@@ -127,56 +135,111 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const now      = Date.now();
     const saleDate = new Date(now).toISOString().split('T')[0];
 
-    /* ── 4. Firestore transaction: inventory + loyalty ── */
+    /* ── 3b. Wallet payment pre-validation ── */
+    const walletPayment = payments.find(p => p.method === 'wallet');
+    let walletAmt = 0, walletTxRef = null, walletDocRef = null;
+    if (walletPayment) {
+      if (!customer?.id) _e('Wallet payment requires an identified customer');
+      const rawAmt = Number(walletPayment.amount);
+      if (!Number.isInteger(rawAmt) || rawAmt <= 0)
+        _e('Wallet payment amount must be a positive whole number');
+      if (rawAmt > grandTotal)
+        _e('Wallet payment exceeds sale total');
+      if (walletPayment.customerId && walletPayment.customerId !== customer.id)
+        _e('Wallet payment customerId mismatch', 'permission-denied');
+      walletAmt    = rawAmt;
+      walletTxRef  = db.collection('posWalletTransactions').doc(`${idempotencyKey}_wallet`);
+      walletDocRef = db.collection('posWallets').doc(customer.id);
+    }
+
+    /* ── 4. Firestore transaction: wallet + inventory + loyalty ──
+       Firestore requires ALL READS before ALL WRITES in a transaction. The previous version
+       wrote the wallet debit and then read inventory inside the same transaction, so
+       Transaction.get() threw "all reads must be executed before all writes" — every
+       wallet-paid sale failed 100%. This is restructured into two phases: read everything,
+       validate, then write everything. */
     const { loyaltyAwarded } = await db.runTransaction(async txn => {
-      /* Deduct inventory */
-      for (const item of enrichedItems) {
-        const ref  = db.collection('posProducts').doc(item.productId);
-        const snap = await txn.get(ref);
+
+      /* ── PHASE 1: ALL READS (parallel) ── */
+      const productRefs = enrichedItems.map(item => db.collection('posProducts').doc(item.productId));
+      const custRef = customer?.id ? db.collection('posCustomers').doc(customer.id) : null;
+      const progRef = customer?.id ? db.collection('loyaltyPrograms').doc(merchantId) : null;
+
+      const [wTxSnap, wSnap, custSnap, progSnap, ...productSnaps] = await Promise.all([
+        walletPayment ? txn.get(walletTxRef)  : Promise.resolve(null),
+        walletPayment ? txn.get(walletDocRef) : Promise.resolve(null),
+        custRef ? txn.get(custRef) : Promise.resolve(null),
+        progRef ? txn.get(progRef) : Promise.resolve(null),
+        ...productRefs.map(r => txn.get(r)),
+      ]);
+
+      /* ── PHASE 2: VALIDATE (no writes yet, so a rejection touches nothing) ── */
+      /* Wallet: idempotent skip if the deterministic txn doc already exists (prior attempt). */
+      const doWalletDeduct = walletPayment && !wTxSnap.exists;
+      if (doWalletDeduct) {
+        const bal = wSnap.exists ? (wSnap.data().balance ?? 0) : -1;
+        if (bal < walletAmt)
+          throw new HttpsError('failed-precondition',
+            `Insufficient wallet balance: has KES ${Math.max(0, bal)}, needs KES ${walletAmt}`);
+      }
+      /* Inventory: assert stock before deducting anything. */
+      productSnaps.forEach((snap, i) => {
+        const item = enrichedItems[i];
         if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
-        const prod = snap.data();
+        const prod  = snap.data();
         const stock = prod.stockQty ?? prod.quantity ?? 9999;
-        if (stock < (item.qty || 1) && prod.trackInventory !== false) {
+        if (stock < (item.qty || 1) && prod.trackInventory !== false)
           throw new Error(`Insufficient stock for ${prod.name}`);
-        }
-        if (prod.trackInventory !== false) {
-          txn.update(ref, {
-            stockQty:        FieldValue.increment(-(item.qty || 1)),
-            lastSoldAt:      FieldValue.serverTimestamp(),
-            totalUnitsSold:  FieldValue.increment(item.qty || 1),
-            totalRevenue:    FieldValue.increment(item.unitPrice * (item.qty || 1)),
-          });
-        }
+      });
+
+      /* ── PHASE 3: ALL WRITES ── */
+      if (doWalletDeduct) {
+        txn.set(walletDocRef, {
+          balance:   FieldValue.increment(-walletAmt),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+        txn.set(walletTxRef, {
+          sellerId:  merchantId,
+          phone:     customer?.phone || '',
+          type:      'pos_purchase',
+          amount:    -walletAmt,
+          saleId,
+          idempotencyKey,
+          createdAt: FieldValue.serverTimestamp(),
+        });
       }
 
-      /* Award loyalty points */
+      productSnaps.forEach((snap, i) => {
+        const item = enrichedItems[i];
+        if (snap.data().trackInventory !== false) {
+          txn.update(productRefs[i], {
+            stockQty:       FieldValue.increment(-(item.qty || 1)),
+            lastSoldAt:     FieldValue.serverTimestamp(),
+            totalUnitsSold: FieldValue.increment(item.qty || 1),
+            totalRevenue:   FieldValue.increment(item.unitPrice * (item.qty || 1)),
+          });
+        }
+      });
+
       let loyaltyAwarded = 0;
-      if (customer?.id) {
-        const custRef  = db.collection('posCustomers').doc(customer.id);
-        const custSnap = await txn.get(custRef);
-        if (custSnap.exists) {
-          /* Fetch program config */
-          const progSnap = await txn.get(db.collection('loyaltyPrograms').doc(merchantId));
-          const prog     = progSnap.exists ? progSnap.data() : { points: { earnRate: 1, earnDenom: 100 } };
-          const earnCfg  = prog.points || { earnRate: 1, earnDenom: 100 };
-          loyaltyAwarded = Math.floor((serverSubtotal / earnCfg.earnDenom) * earnCfg.earnRate);
+      if (custRef && custSnap.exists) {
+        const prog    = progSnap && progSnap.exists ? progSnap.data() : { points: { earnRate: 1, earnDenom: 100 } };
+        const earnCfg = prog.points || { earnRate: 1, earnDenom: 100 };
+        loyaltyAwarded = Math.floor((serverSubtotal / earnCfg.earnDenom) * earnCfg.earnRate);
 
-          const cust = custSnap.data();
-          const newPoints = Math.max(0, (cust.loyaltyPoints || 0) + loyaltyAwarded - loyaltyRedeemPoints);
-          const newSpend  = (cust.totalSpent || 0) + grandTotal;
-          txn.update(custRef, {
-            loyaltyPoints: newPoints,
-            lifetimePoints: FieldValue.increment(loyaltyAwarded),
-            totalSpent:     FieldValue.increment(grandTotal),
-            lastPurchaseAt: FieldValue.serverTimestamp(),
-            purchaseCount:  FieldValue.increment(1),
-          });
-        }
+        const cust      = custSnap.data();
+        const newPoints = Math.max(0, (cust.loyaltyPoints || 0) + loyaltyAwarded - loyaltyRedeemPoints);
+        txn.update(custRef, {
+          loyaltyPoints:  newPoints,
+          lifetimePoints: FieldValue.increment(loyaltyAwarded),
+          totalSpent:     FieldValue.increment(grandTotal),
+          lastPurchaseAt: FieldValue.serverTimestamp(),
+          purchaseCount:  FieldValue.increment(1),
+        });
       }
 
-      /* Mark coupon used */
       if (couponCode) {
-        const cpRef = db.collection('coupons').doc(couponCode.trim().toUpperCase());
+        const cpRef  = db.collection('coupons').doc(couponCode.trim().toUpperCase());
         const update = { usageCount: FieldValue.increment(1) };
         if (customer?.id) update[`customerUses.${customer.id}`] = FieldValue.increment(1);
         txn.update(cpRef, update);
@@ -191,6 +254,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       merchantId:      _sanitize(merchantId),
       branchId:        _sanitize(branchId),
       cashierId:       _sanitize(cashierId),
+      shiftId:         shiftId ? _sanitize(shiftId) : null,
       items:           enrichedItems,
       customer:        customer ? {
         id:    _sanitize(customer.id || ''),
@@ -215,7 +279,12 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
 
     await db.collection('posRetailSales').doc(saleId).set(sale);
 
-    /* ── 6. Daily counter aggregation ── */
+    /* ── 6. Daily counter aggregation ──
+       These increments run exactly once per idempotencyKey: the atomic create() claim at the
+       top of this function admits a single caller per key, a retry of a 'complete' key returns
+       cached before reaching here, and a retry of a 'processing' key is rejected before reaching
+       here. So the counter cannot double on retry. (@financial-safe: guarded by the atomic
+       idempotency claim above.) */
     const dailyRef = db.collection('posDailySummary').doc(`${merchantId}_${saleDate}`);
     await dailyRef.set({
       merchantId, branchId, saleDate,
