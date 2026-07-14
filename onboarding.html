@@ -11,6 +11,12 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="premium.css">
 <script src="security.js"></script>
+<!-- This page calls window.firebaseSDK for every auth path (email, Google, phone OTP) but
+     never loaded the SDK, so it threw
+       TypeError: Cannot read properties of undefined (reading 'onAuthStateChanged')
+     on DOMContentLoaded and the ENTIRE onboarding flow was dead in production. The sibling
+     provider-onboarding.html has always loaded it; this page never did. -->
+<script type="module" src="firebase.js"></script>
 <script src="sokoni-otp.js"></script>
 <script src="sokoni-legal-sign.js"></script>
 <script src="sokoni-legal-gate.js" defer></script>
