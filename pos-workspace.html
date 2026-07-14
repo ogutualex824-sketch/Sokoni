@@ -1005,7 +1005,7 @@
   </main>
 
   <script type="module">
-    import { initializeApp }         from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+    import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
     import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
     import { getFirestore, doc, onSnapshot, getDoc, serverTimestamp, updateDoc }
                                       from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -1013,15 +1013,15 @@
 
     /* ── Firebase Config ── */
     const firebaseConfig = {
-      apiKey:            window.SOKONI_CONFIG?.apiKey            || '',
-      authDomain:        window.SOKONI_CONFIG?.authDomain        || 'sokoni-ke.firebaseapp.com',
-      projectId:         window.SOKONI_CONFIG?.projectId         || 'sokoni-ke',
-      storageBucket:     window.SOKONI_CONFIG?.storageBucket     || 'sokoni-ke.appspot.com',
-      messagingSenderId: window.SOKONI_CONFIG?.messagingSenderId || '',
-      appId:             window.SOKONI_CONFIG?.appId             || ''
+      apiKey:            window.SOKONI_CONFIG?.apiKey            || 'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+      authDomain:        window.SOKONI_CONFIG?.authDomain        || 'auth.mysokoni.co.ke',
+      projectId:         window.SOKONI_CONFIG?.projectId         || 'sokoni-aeb26',
+      storageBucket:     window.SOKONI_CONFIG?.storageBucket     || 'sokoni-aeb26.firebasestorage.app',
+      messagingSenderId: window.SOKONI_CONFIG?.messagingSenderId || '24799054989',
+      appId:             window.SOKONI_CONFIG?.appId             || '1:24799054989:web:e1cf6ca8c281bf1abf26c4'
     };
 
-    const app  = initializeApp(firebaseConfig);
+    const app  = getApps().find(a => a.name === '[DEFAULT]') || initializeApp(firebaseConfig);
     const auth = getAuth(app);
     const db   = getFirestore(app);
     const fns  = getFunctions(app, 'us-central1');

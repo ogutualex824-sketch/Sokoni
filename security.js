@@ -604,7 +604,17 @@ const SokoniSecurity = (() => {
         var _basePad = parseFloat(getComputedStyle(document.body).paddingBottom) || 0;
         var _baseOverflow = document.body.style.overflow || '';
 
+        /* Once the user has accepted, NOTHING may hide a FAB or re-lock the page again.
+           _pad() is re-armed on timers below to catch late-injected FABs; those timers used to
+           keep firing after accept(), re-hiding the back-to-top / KASS / WhatsApp buttons with
+           `visibility:hidden !important` (and re-applying `overflow:hidden`) with no _dropFabs()
+           left to undo it — the buttons vanished permanently. This latch + the clearTimeout in
+           accept() close that window from both ends. */
+        var _accepted  = false;
+        var _padTimers = [];
+
         var _pad = function(){
+          if (_accepted) return;
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
           /* Scroll-lock the page behind the modal. */
           document.body.style.setProperty('overflow', 'hidden');
@@ -673,7 +683,9 @@ const SokoniSecurity = (() => {
         requestAnimationFrame(function(){ requestAnimationFrame(_pad); });
         /* The FABs are injected by deferred scripts (kass-widget, scroll-top) that may not have
            run yet. Re-apply a few times so a late arrival is lifted too. */
-        [400, 1200, 2500, 5000].forEach(function (ms) { setTimeout(function () { _pad(); }, ms); });
+        _padTimers = [400, 1200, 2500, 5000].map(function (ms) {
+          return setTimeout(function () { _pad(); }, ms);
+        });
         if (typeof ResizeObserver === 'function') {
           var _ro = new ResizeObserver(_pad);
           _ro.observe(b);
@@ -688,9 +700,14 @@ const SokoniSecurity = (() => {
           b.style.setProperty('opacity', '0');
           b.style.setProperty('transition', 'opacity .25s ease');
           b.style.setProperty('pointer-events', 'none');
+          /* Latch first, then cancel every re-arm timer. Without this the 2.5s / 5s _pad()
+             timers fired AFTER _dropFabs() and re-hid the buttons for good. */
+          _accepted = true;
+          _padTimers.forEach(clearTimeout);
+          _padTimers = [];
           window.removeEventListener('resize', _pad);
           if (b.__skRO) { b.__skRO.disconnect(); b.__skRO = null; }
-          _dropFabs();                             /* buttons come back */
+          _dropFabs();                             /* buttons come back — and stay back */
           /* Release the scroll lock, and clear any padding an OLDER build left behind — a
              returning user must not be stuck with a permanent gap under the page. */
           document.body.style.removeProperty('overflow');
