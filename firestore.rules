@@ -3214,6 +3214,44 @@ service cloud.firestore {
       allow read:  if isAuthed() && resource.data.sellerUid == request.auth.uid || isAdmin();
     }
 
+    // ── Wallet Engine 2.0 — new collections ───────────────────────────────────
+
+    match /wallets/{walletUid}/savings/{vaultId} {
+      // Only the vault owner may read; all writes go through Admin SDK (Cloud Functions)
+      allow read:  if isAuthed() && request.auth.uid == walletUid;
+      allow write: if false;
+    }
+
+    match /moneyRequests/{reqId} {
+      // Sender or recipient may read their own request; no client writes
+      allow read:  if isAuthed() &&
+                     (resource.data.fromUid == request.auth.uid ||
+                      resource.data.toUid   == request.auth.uid ||
+                      isAdmin());
+      allow write: if false;
+    }
+
+    match /walletAuditLog/{logId} {
+      // Immutable security audit log — admin-read only, no client writes
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    match /walletPinAttempts/{uid} {
+      // Rate-limit tracking — Cloud Functions only
+      allow read:  if false;
+      allow write: if false;
+    }
+
+    match /escrowV2/{escrowId} {
+      // Buyer, seller, or admin may read; all mutations through Cloud Functions
+      allow read:  if isAdmin() ||
+                     (isAuthed() &&
+                       (resource.data.buyerUid  == request.auth.uid ||
+                        resource.data.sellerUid == request.auth.uid));
+      allow write: if false;
+    }
+
     match /jobs/{jobId} {
 
       allow read:  if resource.data.status == 'active'

@@ -1,4 +1,4 @@
 {
-  "count": 222,
+  "count": 218,
   "note": "Legacy full-screen overlays with a hardcoded z-index below the header. Rescued at runtime by SokoniSheet auto-promotion. This number may FALL, never RISE."
 }

@@ -2,6 +2,134 @@
 
 ---
 
+## 2026-07-14 — Wallet Engine 2.0
+
+**Scope:** Financial / Wallet. New Firebase Gen2 Cloud Functions file implementing
+18 production-ready Wallet 2.0 endpoints. All functions enforce App Check and
+require authentication. Does not modify or replace `functions/wallet.js`.
+
+### New Cloud Functions (`functions/wallet-engine.js`)
+
+| # | Export | Purpose |
+|---|--------|---------|
+| 1 | `walletV2Dashboard` | Full wallet state in one call — balance, limits, last 5 txns, savings summary |
+| 2 | `walletV2Send` | P2P internal transfer by phone number with 5-second idempotency window |
+| 3 | `walletV2Request` | Create a shareable money-request link (7-day expiry) |
+| 4 | `walletV2GetRequests` | List incoming + outgoing pending money requests |
+| 5 | `walletV2SavingsList` | List all savings vaults with running total |
+| 6 | `walletV2SavingsCreate` | Create a new savings vault (supports locked, auto-save, target, deadline) |
+| 7 | `walletV2SavingsDeposit` | Move funds from main balance into a vault (Firestore transaction) |
+| 8 | `walletV2SavingsWithdraw` | Withdraw from vault back to balance; enforces locked+deadline |
+| 9 | `walletV2SetPin` | Hash-store 4-digit PIN (SHA-256 + uid salt); rate-limited 5/hour |
+| 10 | `walletV2VerifyPin` | Verify PIN; auto-freezes wallet after 5 consecutive failures |
+| 11 | `walletV2FreezeToggle` | Freeze / unfreeze wallet with immutable audit log entry |
+| 12 | `walletV2SetLimits` | Set daily (0–500k) and monthly (0–5M) spend limits |
+| 13 | `walletV2Analytics` | Aggregated spending by category, day, and top merchants for week/month/year |
+| 14 | `walletV2GenerateQR` | Signed QR payload (SHA-256 HMAC, 15-min expiry) |
+| 15 | `walletV2PayViaQR` | Parse + validate QR, execute transfer (signature + expiry enforced) |
+| 16 | `walletV2AiInsights` | 3 personalised insights via Claude Haiku; falls back to static tips on error |
+| 17 | `walletV2EscrowCreate` | Lock funds in escrow; supports milestones; deducts from buyer balance |
+| 18 | `walletV2EscrowRelease` | Release escrow to seller; caller must be buyer or admin |
+
+### New Firestore Collections
+- `wallets/{uid}/savings/{vaultId}` — savings vaults subcollection
+- `moneyRequests/{reqId}` — P2P money requests
+- `walletAuditLog/{logId}` — immutable security audit trail
+- `walletPinAttempts/{uid}` — PIN rate-limit tracking (CF-only, no client access)
+- `escrowV2/{escrowId}` — escrow holds (separate from legacy escrow collection)
+
+### V2 Fields Added to `wallets/{uid}`
+`pendingBalance`, `savingsBalance`, `cashbackBalance`, `rewardPoints`, `tier`, `frozen`,
+`pinHash`, `pinLocked`, `dailyLimit`, `monthlyLimit`, `dailySpent`, `monthlySpent`, `v2`.
+Added via merge-safe migration in `_ensureWallet()` — existing `balance` field untouched.
+
+### Secrets Required
+- `ANTHROPIC_API_KEY` — Claude Haiku for AI insights (CF 16)
+- `WALLET_QR_SECRET` — HMAC key for QR payload signing (CFs 14, 15); falls back to uid
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `functions/wallet-engine.js` | **NEW** — 1,641 lines, 18 onCall CFs |
+| `firestore.rules` | Added rules for 5 new collections (lines 3217–3253) |
+| `firestore.indexes.json` | Added 7 indexes (total: 332 → 339) |
+| `docs/CHANGELOG.md` | This entry |
+
+### Security Implications
+- All 18 CFs enforce `enforceAppCheck: true` — unauthenticated App Check tokens rejected at runtime
+- PIN never stored in plaintext — SHA-256(pin + uid) only
+- QR codes expire after 15 minutes; signature covers uid + amount + timestamp
+- Wallet freeze applies to all spend operations; pin-lock applied after 5 failures
+- `walletAuditLog` and `walletPinAttempts` have `allow write: false` in rules — Admin SDK only
+- Idempotency key deduplication on both P2P send and QR payment prevents double-spend
+
+### Performance Implications
+- `walletV2Dashboard` fans out 3 Firestore reads in parallel (Promise.all) — single round-trip
+- Analytics queries capped at 500 documents per period call
+- AI Insights reads last 30 transactions and calls Anthropic via raw HTTPS (no SDK overhead)
+- All Firestore transactions use `runTransaction` with optimistic concurrency — no distributed locks
+
+### Breaking Changes
+None. `functions/wallet.js` and all its exports are untouched.
+
+### Deployment Steps
+1. `firebase deploy --only functions:walletV2Dashboard,functions:walletV2Send,...` (or deploy all)
+2. Ensure `ANTHROPIC_API_KEY` and `WALLET_QR_SECRET` secrets exist in Secret Manager
+3. `firebase deploy --only firestore:rules` — deploys updated security rules
+4. `firebase deploy --only firestore:indexes` — note: 339 total indexes; if hitting 200/collection limit, use sokoni-ops secondary database for overflow per Index Management Rule
+
+---
+
+## 2026-07-14 — Wallet 2.0 UI & Client SDK
+
+**Scope:** Frontend / Wallet. Complete premium redesign of `wallet.html` plus new `sokoni-wallet-v2.js` client SDK. Backward compatible — all v1 Cloud Function calls continue to work.
+
+### wallet.html — redesigned
+- **5-panel bottom-nav app** replacing 3-tab layout: Home, Send, QR, History, More
+- **Balance hero card** with Available Balance + cashback/savings/rewards sub-cards
+- **Quick actions grid** (8 actions): Add Money, Send, Withdraw, Request, Split, QR Pay, Savings, More
+- **AI Insight card** — Claude Haiku tip; dismissible; fails gracefully with static copy
+- **Recent transactions** with type icons (in/out/savings/escrow)
+- **Savings vaults strip** — horizontal scroll, progress bars, add-vault card
+- **Send panel** — 4-step wizard: find recipient → amount keypad → confirm → receipt
+- **QR panel** — static wallet QR + dynamic QR with amount; canvas rendering; share/download
+- **History panel** — full transaction list, search, filter tabs (All/In/Out/Savings/Top-ups), pagination
+- **More panel** — savings grid, analytics, security, merchant wallet, settings menu
+- **Overlay system** (10 overlays): Add Money, Withdraw, Request, Vaults List, New Vault, Vault Detail, Analytics, Security, PIN Setup, TX Detail
+- **Analytics overlay** — period tabs (week/month/year), in/out totals, canvas bar chart, category breakdown
+- **Security overlay** — freeze toggle, PIN setup, daily/monthly limits
+- **PIN setup overlay** — visual dot display, 4-digit keypad, confirm flow
+
+### sokoni-wallet-v2.js — new client SDK
+- IIFE exposed as `window.SokoniWalletV2` (and `window.W2` shorthand)
+- Wraps all 18 v2 CFs + v1 CFs with graceful fallback when v2 engine not deployed
+- `walletV2Dashboard` call with fallback to `getWalletBalance` for zero-downtime deploy
+- P2P send: Firestore user lookup (phone → uid), then `walletV2Send` CF
+- Real-time STK push polling (3s interval, 90s max) preserved from v1
+- Savings CRUD: create, deposit, withdraw, list
+- Security: freeze toggle, PIN setup with stage machine (set → confirm → save)
+- Analytics: canvas chart rendering, category bars
+- QR: deterministic canvas render from CF-signed payload; share/download via native APIs
+- All DOM writes via `_esc()` — XSS prevention
+- Auth-gated: unauthenticated users redirected to `login.html?redirect=wallet.html`
+
+### Files Changed
+| File | Change |
+|------|--------|
+| `wallet.html` | **REPLACED** — full premium redesign (~1,750 lines) |
+| `sokoni-wallet-v2.js` | **NEW** — client SDK (~570 lines) |
+| `docs/WALLET_V2_ARCHITECTURE.md` | **NEW** — architecture reference |
+
+### Breaking Changes
+None. `sokoni-wallet.js` is untouched. The new `wallet.html` loads `sokoni-wallet-v2.js` instead.
+
+### Deployment Steps
+1. Deploy `wallet-engine.js` CFs first (or wallet.html will fall back to v1 balance)
+2. `firebase deploy --only hosting`
+3. Verify balance loads on mobile and desktop
+
+---
+
 ## 2026-07-14 — Full authDomain Migration to auth.mysokoni.co.ke
 
 **Scope:** Security / Auth. Every Firebase client configuration now points the

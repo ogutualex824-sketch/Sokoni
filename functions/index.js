@@ -8592,6 +8592,27 @@ exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
 exports.refundToWallet           = wallet.refundToWallet;
 exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 
+/* ── Wallet Engine v2.0 ─────────────────────────────────────────────────── */
+const walletEngine = require('./wallet-engine');
+exports.walletV2Dashboard       = walletEngine.walletV2Dashboard;
+exports.walletV2Send            = walletEngine.walletV2Send;
+exports.walletV2Request         = walletEngine.walletV2Request;
+exports.walletV2GetRequests     = walletEngine.walletV2GetRequests;
+exports.walletV2SavingsList     = walletEngine.walletV2SavingsList;
+exports.walletV2SavingsCreate   = walletEngine.walletV2SavingsCreate;
+exports.walletV2SavingsDeposit  = walletEngine.walletV2SavingsDeposit;
+exports.walletV2SavingsWithdraw = walletEngine.walletV2SavingsWithdraw;
+exports.walletV2SetPin          = walletEngine.walletV2SetPin;
+exports.walletV2VerifyPin       = walletEngine.walletV2VerifyPin;
+exports.walletV2FreezeToggle    = walletEngine.walletV2FreezeToggle;
+exports.walletV2SetLimits       = walletEngine.walletV2SetLimits;
+exports.walletV2Analytics       = walletEngine.walletV2Analytics;
+exports.walletV2GenerateQR      = walletEngine.walletV2GenerateQR;
+exports.walletV2PayViaQR        = walletEngine.walletV2PayViaQR;
+exports.walletV2AiInsights      = walletEngine.walletV2AiInsights;
+exports.walletV2EscrowCreate    = walletEngine.walletV2EscrowCreate;
+exports.walletV2EscrowRelease   = walletEngine.walletV2EscrowRelease;
+
 /* ── Jobs Marketplace v1.0 ───────────────────────────────────────────────── */
 
 /* ── Education Hub ─────────────────────────────────────────────── */
