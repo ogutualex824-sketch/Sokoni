@@ -8,7 +8,13 @@
 <script src="shared-header.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://www.gstatic.com https://fonts.googleapis.com https://fonts.gstatic.com; script-src 'self' https://www.gstatic.com 'nonce-wap2026'; style-src 'self' https://fonts.googleapis.com 'nonce-wap2026';">
+  <!-- This page used to carry its OWN CSP:
+         default-src 'self' https://www.gstatic.com …   (no connect-src, no frame-src)
+       A page's meta policy is INTERSECTED with the firebase.json header, never merged. With
+       no connect-src, default-src applied to connections — so identitytoolkit, securetoken
+       and firestore were all blocked on this page and none of its Firebase calls could
+       complete. The header (served on "**") is the single source of truth; see
+       scripts/test-csp.js. -->
   <title>Workflow Automation Platform · SOKONI Admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">

@@ -61,35 +61,38 @@
 const SokoniSecurity = (() => {
 
   /* ════════════════════════════════════════════════════════
-     1. CONTENT SECURITY POLICY
-     Injected as a meta tag — servers should also send it
-     as an HTTP header for full protection.
-  ════════════════════════════════════════════════════════ */
-  function injectCSP(){
-    const csp = [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net https://cdn.intasend.com https://www.gstatic.com https://apis.google.com https://www.google.com https://www.recaptcha.net",
-      "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com https://cdn.jsdelivr.net",
-      "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
-      "img-src 'self' data: blob: https://firebasestorage.googleapis.com https://storage.googleapis.com https://*.tile.openstreetmap.org https://images.unsplash.com https://*.googleusercontent.com https://mysokoni.co.ke https://www.google.com https://www.gstatic.com",
-      "connect-src 'self' https://*.firebaseio.com wss://*.firebaseio.com https://firebasestorage.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com https://fcm.googleapis.com https://firebase.googleapis.com https://firebaseappcheck.googleapis.com https://content-firebaseappcheck.googleapis.com https://www.googleapis.com https://oauth2.googleapis.com https://www.gstatic.com https://api.intasend.com https://www.google-analytics.com https://analytics.google.com https://www.googletagmanager.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://www.google.com https://etims-api.kra.go.ke https://etims-sbx.kra.go.ke https://us-central1-sokoni-aeb26.cloudfunctions.net",
-      "worker-src 'self' blob:",
-      "manifest-src 'self'",
-      "media-src 'self' blob: https://firebasestorage.googleapis.com https://storage.googleapis.com",
-      "frame-src 'self' https://www.google.com https://maps.google.com https://maps.googleapis.com https://*.firebaseapp.com https://accounts.google.com",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "upgrade-insecure-requests"
-    ].join("; ");
+     1. CONTENT SECURITY POLICY — served as an HTTP HEADER, not injected here.
 
-    const existing = document.querySelector("meta[http-equiv='Content-Security-Policy']");
-    if(!existing){
-      const meta = document.createElement("meta");
-      meta.setAttribute("http-equiv", "Content-Security-Policy");
-      meta.setAttribute("content", csp);
-      document.head.insertBefore(meta, document.head.firstChild);
-    }
+     This function used to inject a SECOND CSP as a <meta> tag, alongside the header that
+     firebase.json already sends on every route ("source": "**").
+
+     When a page carries two policies the browser enforces BOTH — the effective policy is
+     their INTERSECTION. So the meta tag could never loosen anything; it could only quietly
+     make the real policy stricter than intended. And it had drifted:
+
+       directive     header (firebase.json)                 meta (here)        effective
+       frame-src     … https://auth.mysokoni.co.ke          MISSING            BLOCKED
+       connect-src   … https://payment.intasend.com         MISSING            BLOCKED
+       form-action   'self' https://payment.intasend.com    'self'             BLOCKED
+
+     The frame-src gap is the one that broke sign-in. Firebase Auth loads a helper IFRAME on
+     the configured authDomain (auth.mysokoni.co.ke) to complete popup/redirect OAuth and to
+     restore the session. Blocking that frame produced, in production:
+
+       Framing 'https://auth.mysokoni.co.ke/' violates the following Content Security Policy
+       directive: "frame-src 'self' https://www.google.com …"
+
+     Email/password sign-in survived (it is a plain XHR to identitytoolkit), which is exactly
+     why this looked like an intermittent, hard-to-pin failure rather than a broken policy.
+
+     The header is the single source of truth. It is strictly better than a meta tag: it
+     cannot be tampered with from the DOM, it applies to every response including ones this
+     script never runs on, and directives like frame-ancestors and report-uri are IGNORED in
+     a meta tag anyway. A second copy could only ever drift from it again. */
+  function injectCSP(){
+    /* Intentionally a no-op. See the note above: firebase.json serves the CSP header on
+       "**". Do NOT reintroduce a meta CSP — a duplicate policy is intersected with the
+       header and silently removes origins the platform depends on. */
   }
 
   /* ════════════════════════════════════════════════════════
