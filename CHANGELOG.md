@@ -1,4 +1,42 @@
-﻿## [2026-07-14] — Final Integration & Merge Integrity Sprint
+﻿## [2026-07-14] — P0 Fix: iOS Safari UI Non-Interactive
+
+### Summary
+
+Production P0: On iPhone Safari, the application loaded visually but no UI elements responded — menu, search, cards, bottom nav, floating chat, all buttons were frozen. Root cause was an iOS Safari-specific bug where `body{overflow:hidden}` (applied by the consent modal's `_pad()` function in `security.js`) causes fixed-position tap targets to be offset by `window.scrollY` from their visual position. The modal appeared ~1.5s after DOMContentLoaded; if the page had scrolled by then, the Accept button's true tap target landed outside the modal or on the non-interactive backdrop — making it impossible to dismiss. The backdrop (`inset:0; z-index:99997`) then blocked all page interaction permanently.
+
+Secondary hardening fix: `shared-header.js` splash (`#sk-splash`, `z-index:2147483647`) had no hard failsafe timer — it only dismissed on `window.load`. On slow CDN connections (Font Awesome from cdnjs), if `window.load` stalled, the splash would permanently block the app.
+
+### Root Cause
+
+| Component | Bug |
+|---|---|
+| `security.js` `_pad()` | `body{overflow:hidden}` corrupts iOS Safari fixed-element tap coordinates by `scrollY` offset |
+| `shared-header.js` splash | No failsafe timer — depends entirely on `window.load` with no backup |
+
+### Fix
+
+| Component | Change |
+|---|---|
+| `security.js` `_pad()` | Replaced `overflow:hidden` with `position:fixed; top:-{scrollY}px; width:100%; overflow-y:scroll` — iOS-compatible scroll-lock; `_scrollLockY`/`_scrollLocked` state guards against subsequent re-arms overwriting the captured offset |
+| `security.js` accept handler | Removes `position/top/width/overflow-y`; calls `window.scrollTo(0, _scrollLockY)` to restore original scroll position |
+| `shared-header.js` | Added idempotent `_guardDismiss()` called by both `window.load` and `setTimeout(4000)` failsafe, matching the pattern already in `splash.js` |
+| `service-worker.js` | `CACHE_VERSION` bumped to `sokoni-20260714-ios-safari-p0-v77` |
+
+### Files Affected
+
+| File | Change |
+|---|---|
+| `security.js` | P0 fix: iOS scroll-lock replaced; accept() restores scroll position |
+| `shared-header.js` | Defensive: 4s hard failsafe timer added to splash dismiss |
+| `service-worker.js` | `CACHE_VERSION` → `sokoni-20260714-ios-safari-p0-v77` |
+
+### Commit
+
+`a9c8167`
+
+---
+
+## [2026-07-14] — Final Integration & Merge Integrity Sprint
 
 ### Summary
 
