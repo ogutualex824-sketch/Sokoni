@@ -421,14 +421,33 @@
   }
 
   /* ── INIT ── */
+
+  /* Does this page already ship its own top navigation?
+     These buttons are position:fixed at top:20px, right:62/112/162px, z-index 9950 — they
+     assume the page has NO header and float over whatever is underneath. The guard below
+     already existed for the shared #sk-top-nav header, with the right reasoning ("duplicate
+     fixed elements that cover and interfere"), but it only recognised THAT header.
+
+     The Seller Dashboard ships its own (nav.seller-navbar + #sk-seller-subnav), so the
+     guard missed it and all three buttons were injected on top of it: measured against an
+     authenticated session, #sokoni-search-btn and #sokoni-inbox-btn each overlapped
+     nav.seller-navbar by 1408px², landing squarely on the "Seller Dashboard" title, and the
+     injected bell was a SECOND bell — the page already has #sk-notif-btn in its own navbar.
+
+     Recognise any page-owned header, not just one of them. data-own-header lets a page
+     opt out declaratively without this file having to learn its class name. */
+  function hasOwnHeader() {
+    return !!(document.getElementById('sk-top-nav') ||
+              document.querySelector('nav.seller-navbar') ||
+              document.documentElement.hasAttribute('data-own-header'));
+  }
+
   function init() {
-    injectNotificationBell();
+    /* Only inject a bell on pages that do not already have one. */
+    if (!document.getElementById('sk-notif-btn')) injectNotificationBell();
     injectDesktopBellBadge();
-    /* Skip legacy floating nav buttons and the old mobile drawer when the
-       shared #sk-top-nav header is active — it handles search, inbox, and
-       the hamburger menu natively. Injecting them would create duplicate
-       fixed elements that cover and interfere with the shared header. */
-    if (!document.getElementById('sk-top-nav')) {
+
+    if (!hasOwnHeader()) {
       injectSearchBtn();
       injectInboxBtn();
       injectMobileMenu();
