@@ -230,6 +230,28 @@ console.log('\nSeller Dashboard — tile interaction\n');
     /if\s*\(\s*!DASH_PAGES\[page\]\s*\)[\s\S]{0,120}console\.warn/.test(js)
       ? ok('an unknown route warns instead of silently falling back to Overview')
       : bad('an unknown route still falls back to Overview in silence — the next dead button will hide the same way');
+
+    /* The router and the desktop stylesheet must be wired to each other.
+       seller.html hides every section on desktop and reveals only `.desk-visible`:
+
+           section[data-sdtab] { display: none; }
+           section[data-sdtab].desk-visible { display: block !important; }
+
+       The router only ever set inline display, and `display = ""` hands the element back to
+       that `display:none` rule — so the section it was told to SHOW stayed hidden and POS
+       opened a blank panel. Nothing applied the class at all. If the toggle goes, desktop
+       silently blanks again. */
+    /classList\.toggle\(\s*["']desk-visible["']/.test(js)
+      ? ok('the router applies .desk-visible — the class the desktop stylesheet reveals on')
+      : bad('the router no longer applies .desk-visible — on desktop every section it shows will stay display:none');
+
+    /* And the hide must carry !important, because a shared stylesheet does:
+         @media(min-width:769px){ .seller-stats,… { display:grid !important } }
+       which outranks the router's inline display:none and leaves the Overview stat grid
+       showing underneath every other page, including POS. */
+    /section\[data-sdtab\]:not\(\.desk-visible\)[\s\S]{0,90}display:\s*none\s*!important/.test(html)
+      ? ok('sections without .desk-visible are hidden with !important — Overview cannot bleed through')
+      : bad('the :not(.desk-visible) hide rule is gone — a `display:grid !important` elsewhere will keep Overview on screen under every page');
   }
 
   /* Every section a route points at must actually exist in the page. A route naming a

@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260714-authdomain-v73";
+const CACHE_VERSION = "sokoni-20260714-pos-router-v74";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -428,7 +428,15 @@ self.addEventListener("fetch", event => {
     /* Auth-critical scripts: a stale version of any of these can silently
        break sign-in, getRedirectResult, or session persistence. Always
        fetch from network when reachable so fixes deploy immediately. */
-    "firebase.js","auth.js","session-manager.js"];
+    "firebase.js","auth.js","session-manager.js",
+    /* seller.js owns showDashPage — the router behind every Seller Dashboard button.
+       CSS/JS is otherwise stale-while-revalidate, which serves the CACHED copy on the
+       next visit and only picks up a fix on the visit AFTER. For a router that is
+       exactly one route-table entry away from a dead POS button, that means a seller
+       would tap POS, get the old broken build, and still see nothing happen — on a
+       version we had already fixed and shipped. Routing fixes must land on the first
+       load, not the second. */
+    "seller.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;

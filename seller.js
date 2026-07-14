@@ -4805,11 +4805,31 @@ function showDashPage(page, navEl) {
   }
   const sections = DASH_PAGES[page] || DASH_PAGES.overview;
 
-  /* Show/hide sections */
+  /* Show/hide sections.
+     TWO mechanisms have to agree here, because the page has two of them:
+
+       · MOBILE (<769px) — plain inline display. Sections are visible by default.
+       · DESKTOP (>=769px) — seller.html's stylesheet hides everything by default and
+         reveals only what carries `.desk-visible`:
+
+             section[data-sdtab]           { display: none; }
+             section[data-sdtab].desk-visible { display: block !important; }
+
+     This router only ever set inline display. On desktop, `display = ""` clears the inline
+     style and hands the element straight back to `section[data-sdtab] { display: none }` —
+     so the section it was asked to SHOW stayed hidden. The class that reveals it was
+     applied by nothing at all. That is why POS opened a blank panel on desktop: the router
+     and the stylesheet were never wired to each other.
+
+     Drive both: the class for desktop, the inline display for mobile. The `!important` on
+     the reveal rule means an active section wins over the inline `display:none` we would
+     otherwise leave behind, so the two can never contradict each other. */
   ALL_DASH_SECTIONS.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.style.display = sections.includes(id) ? "" : "none";
+    const active = sections.includes(id);
+    el.classList.toggle("desk-visible", active);
+    el.style.display = active ? "" : "none";
   });
 
   /* The POS iframe is loaded on first open, not on page load — pos.html is a heavy app and

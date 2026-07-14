@@ -4734,6 +4734,20 @@ class="notification-container"
   section[data-sdtab].desk-visible { display: block !important; }
   .seller-section-card.desk-visible { display: block !important; }
   .seller-stats.desk-visible { display: grid !important; }
+
+  /* …and HIDE when it does not.
+     A shared stylesheet declares
+
+         @media (min-width:769px){ .stats-row,.driver-stats,.seller-stats,.kpi-row
+                                   { display: grid !important } }
+
+     That !important beats the router's inline `display:none`, so #seller-stats could never
+     be switched off: the Overview stat grid stayed on screen underneath every other page,
+     including POS. An inline style cannot win against !important, so the hide has to carry
+     !important too. :not(.desk-visible) scores (0,2,1) against that rule's (0,1,0), so the
+     class — which the router owns — is the single authority on what is visible here. */
+  section[data-sdtab]:not(.desk-visible),
+  .seller-section-card:not(.desk-visible) { display: none !important; }
   .topbar { display: flex !important; } /* always show greeting on desktop */
 
   /* ── CRITICAL: fix sokoni-desktop.css global rule that resets margin-left:auto ──
