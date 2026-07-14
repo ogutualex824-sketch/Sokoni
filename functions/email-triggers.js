@@ -508,6 +508,43 @@ exports.emailOnLegalConsultation = onDocumentCreated(
 );
 
 /* ═══════════════════════════════════════════════════════════
+   LEGAL: Consultation status change — notify client
+   Fires when a provider confirms, cancels, or completes a consultation.
+═══════════════════════════════════════════════════════════ */
+exports.emailOnLegalConsultationUpdate = onDocumentUpdated(
+  { document: "legalConsultations/{consultId}", secrets: EMAIL_SECRETS },
+  async (event) => {
+    const before = event.data.before.data();
+    const after  = event.data.after.data();
+
+    /* Only fire on meaningful status transitions that require client notification */
+    const NOTIFY_STATUSES = new Set(["confirmed", "cancelled", "completed"]);
+    if (before.status === after.status || !NOTIFY_STATUSES.has(after.status)) return;
+
+    const uid   = after.clientUid || "";
+    const email = after.clientEmail || await emailForUid(uid);
+    if (!email) return;
+
+    const when = after.dateTime ? new Date(after.dateTime) : null;
+    const spec  = Array.isArray(after.specializations)
+      ? after.specializations.join(", ")
+      : (after.specializations || "");
+
+    await trigger("legal-consultation-update", {
+      name:       after.clientName || "Client",
+      lawyerName: after.providerName || "Your Advocate",
+      specialty:  spec,
+      date:       when ? when.toLocaleDateString("en-KE", { timeZone: "Africa/Nairobi" }) : "",
+      time:       when ? when.toLocaleTimeString("en-KE", { timeZone: "Africa/Nairobi", hour: "2-digit", minute: "2-digit" }) : "",
+      fee:        after.consultationFee ?? 0,
+      status:     after.status,
+      notes:      after.notes || "",
+      email,
+    }, { uid, emailId: `legal-update-${event.params.consultId}-${after.status}` });
+  }
+);
+
+/* ═══════════════════════════════════════════════════════════
    REVIEWS: Post-delivery review request (24h after delivery)
    Queues a review request instead of sending immediately.
 ═══════════════════════════════════════════════════════════ */

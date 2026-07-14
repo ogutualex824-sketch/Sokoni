@@ -1356,6 +1356,43 @@ const TEMPLATES = {
     }),
   },
 
+  "legal-consultation-update": {
+    subject: d => d.status === "confirmed"
+      ? `Confirmed: Your consultation with ${d.lawyerName}`
+      : d.status === "cancelled"
+        ? `Cancelled: Your consultation with ${d.lawyerName}`
+        : `Update on your consultation with ${d.lawyerName}`,
+    from:     FROM.law,
+    category: "order",
+    html: d => {
+      const isConfirmed  = d.status === "confirmed";
+      const isCancelled  = d.status === "cancelled";
+      const isCompleted  = d.status === "completed";
+      const icon   = isConfirmed ? "✅" : isCancelled ? "❌" : "⚖";
+      const badge  = isConfirmed ? "Consultation Confirmed" : isCancelled ? "Consultation Cancelled" : "Consultation Update";
+      const colour = isConfirmed ? "success" : isCancelled ? "error" : "info";
+      return base({
+        title: badge,
+        preheader: `${badge} — ${d.lawyerName}`,
+        cta: "View My Consultations", ctaUrl: `${BASE_URL}/legal-hub.html#appointments`,
+        body: `
+          ${statusCard(icon, badge, d.lawyerName, colour)}
+          ${greeting(d.name)}
+          ${card(`
+            ${infoRow("Lawyer", esc(d.lawyerName || ""), true)}
+            ${infoRow("Specialty", esc(d.specialty || ""))}
+            ${infoRow("Date", esc(d.date || ""))}
+            ${infoRow("Time", esc(d.time || ""))}
+            ${infoRow("Status", esc(d.status || ""))}
+            ${d.notes ? infoRow("Notes", esc(d.notes)) : ""}
+          `)}
+          ${isCancelled ? p("If you would like to rebook, please visit the Legal Hub to find another advocate.") : ""}
+          ${isCompleted ? p("Thank you for using SOKONI Legal Hub. We would appreciate your feedback.") : ""}
+        `,
+      });
+    },
+  },
+
   /* ─── MARKETING ────────────────────────────────────────── */
 
   "price-drop": {

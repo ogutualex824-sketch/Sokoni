@@ -1742,24 +1742,93 @@ async function _getDb(){
   }catch(e){ console.warn("[Legal Hub] Firestore init:", e.message); return null; }
 }
 
-async function _loadLawyersFs(){
-  try{
-    const db = await _getDb(); if(!db) return null;
-    const { collection, getDocs, query, orderBy } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    const q    = query(collection(db,"lawyers"), orderBy("createdAt","desc"));
-    const snap = await getDocs(q);
-    if(snap.empty) return [];
-    return snap.docs.map(d=>({ id:d.id, ...d.data() }));
-  }catch(e){ console.warn("[Legal Hub] Load lawyers:", e.message); return null; }
+/* ── Cloud Functions caller (lazy init) ─────────────────────────── */
+let _lhFnsObj = null;
+async function _lhCallCF(name, data) {
+  const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+  const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+  if (!_lhFnsObj) {
+    const apps = getApps();
+    const app  = apps.length ? apps[0] : initializeApp({
+      apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
+      authDomain:'sokoni-aeb26.firebaseapp.com', projectId:'sokoni-aeb26',
+      storageBucket:'sokoni-aeb26.firebasestorage.app',
+      messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4',
+    });
+    _lhFnsObj = getFunctions(app, 'us-central1');
+  }
+  const fn  = httpsCallable(_lhFnsObj, name);
+  const res = await fn(data);
+  return res.data;
 }
 
+/* Map HTML specialization keys → CF enum values */
+function _lhSpecToCF(category) {
+  const MAP = {
+    property:'property_law', family:'family_law', criminal:'criminal_law',
+    commercial:'corporate_law', employment:'employment_law', ip:'intellectual_property',
+    immigration:'immigration', human_rights:'litigation', environment:'other',
+    banking:'tax_law', general:'other',
+  };
+  return [MAP[category] || 'other'];
+}
+
+/* ── Provider directory: reads legalProviders via CF (enforces status:active, auth-less) */
+async function _loadLawyersFs(){
+  try {
+    const result = await _lhCallCF('getLegalProviders', { limit: 50 });
+    if (!result || !Array.isArray(result.providers)) return null;
+    return result.providers.map(p => ({
+      id:           p.providerId,
+      name:         /^advocate\s/i.test(p.name||'') ? p.name : 'Advocate ' + (p.name||''),
+      phone:        p.phone || '',
+      email:        '',
+      category:     (p.specializations||[])[0] || 'other',
+      isLawyer:     true,
+      skills:       p.specializations || [],
+      firm:         p.firmName || '',
+      location:     p.county || 'Nairobi',
+      rate:         p.consultationFee || 5000,
+      rateType:     'per session',
+      bio:          p.bio || '',
+      rating:       p.rating || 5.0,
+      jobsCompleted:p.totalConsultations || 0,
+      available:    p.isOnline !== false,
+      verified:     true,
+      rollNo:       p.licenseNumber || '',
+      spec:         (p.specializations||[]).map(s=>(SPEC_LABELS[s]||s)).join(', ') || '📋 General Practice',
+      sellerUid:    p.providerId,
+      depositAmount:p.consultationFee || 500,
+    }));
+  } catch (e) {
+    console.warn('[Legal Hub] getLegalProviders CF:', e.message);
+    return null;
+  }
+}
+
+/* ── Provider registration: writes via registerLegalProvider CF (auth-gated, validated) */
 async function _saveLawyerFs(lawyer){
-  try{
-    const db = await _getDb(); if(!db) return false;
-    const { collection, doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-    await setDoc(doc(collection(db,"lawyers"), lawyer.id), { ...lawyer, createdAt: serverTimestamp() });
+  try {
+    const uid = window._sokoniUser?.uid;
+    if (!uid) { console.warn('[Legal Hub] Auth required for CF registration'); return false; }
+    await _lhCallCF('registerLegalProvider', {
+      name:              lawyer.name.replace(/^Advocate\s+/i, ''),
+      firmName:          lawyer.firm || '',
+      specializations:   _lhSpecToCF(lawyer.category),
+      licenseNumber:     lawyer.rollNo || '',
+      bio:               lawyer.bio || '',
+      county:            lawyer.location || '',
+      phone:             lawyer.phone || '',
+      consultationFee:   lawyer.rate || 0,
+      yearsOfExperience: 0,
+      isOnline:          true,
+    });
     return true;
-  }catch(e){ console.warn("[Legal Hub] Save lawyer:", e.message); return false; }
+  } catch (e) {
+    if ((e.code||'') === 'already-exists') return true;
+    console.warn('[Legal Hub] registerLegalProvider CF:', e.message);
+    return false;
+  }
 }
 
 function filterLawyers(cat, btn){
@@ -2013,20 +2082,36 @@ function confirmConsultation(lawyerId){
     setTimeout(closeConsultModal, 2000);
   }
 
-  function _saveBookingRecord(status){
-    /* localStorage */
+  function _saveBookingRecord(status, mpesaCode){
+    /* localStorage backup */
     let bks=[];try{bks=JSON.parse(localStorage.getItem("sokoniLegalBookings"))||[];}catch(e){}
-    bks.unshift({ref,lawyerId,lawyerName:l.name,name,phone,matter,date,time,details,status,createdAt:Date.now()});
+    bks.unshift({ref,lawyerId,lawyerName:l.name,name,phone,matter,date,time,details,status,mpesaCode:mpesaCode||null,createdAt:Date.now()});
     localStorage.setItem("sokoniLegalBookings",JSON.stringify(bks));
-    /* Firestore — only called after payment confirmed or for WhatsApp-only bookings */
-    const uid=window._sokoniUser?.uid||null;
-    (async()=>{try{
-      const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-      const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-      const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain:"sokoni-aeb26.firebaseapp.com",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
-      const _a=getApps().find(a=>a.name==="lh-bk")||initializeApp(_cfg,"lh-bk");
-      await addDoc(collection(getFirestore(_a),'legalBookings'),{ref,lawyerId,lawyerName:l.name,clientName:name,clientUid:uid,phone,matter,date:date||'',time:time||'',details:details||'',status,hub:'legal',createdAt:serverTimestamp()});
-    }catch(e){}})();
+    /* Authoritative Firestore write via bookLegalConsultation CF */
+    const uid = window._sokoniUser?.uid || null;
+    if (uid) {
+      (async () => {
+        try {
+          const dtStr = (date && time)
+            ? new Date(date + 'T' + time).toISOString()
+            : new Date(Date.now() + 86400000).toISOString();
+          const result = await _lhCallCF('bookLegalConsultation', {
+            providerId:     lawyerId,
+            dateTime:       dtStr,
+            matter:         matter || 'Legal consultation',
+            isOnline:       false,
+            idempotencyKey: ref + '_bk',
+          });
+          if (result?.consultationId) {
+            /* Patch the localStorage record with the real consultationId for review / status wiring */
+            const stored = JSON.parse(localStorage.getItem('sokoniLegalBookings')||'[]');
+            const idx = stored.findIndex(b => b.ref === ref);
+            if (idx >= 0) { stored[idx].consultationId = result.consultationId; }
+            localStorage.setItem('sokoniLegalBookings', JSON.stringify(stored));
+          }
+        } catch (e) { console.warn('[Legal Hub] bookLegalConsultation CF:', e.message); }
+      })();
+    }
   }
 
   /* Collect booking deposit via Daraja if lawyer has it configured */
@@ -2042,8 +2127,8 @@ function confirmConsultation(lawyerId){
       sellerName: l.name,
       description: matter + ' Consultation Deposit',
       onSuccess: r => {
-        /* Booking only recorded after payment confirmed */
-        _saveBookingRecord('confirmed');
+        /* Booking recorded after payment confirmed — pass mpesa code for audit trail */
+        _saveBookingRecord('confirmed', r.mpesaCode);
         if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:matter+' Consultation Deposit',category:'Legal',qty:1,price:depositAmt}],subtotal:depositAmt,total:depositAmt,paymentMethod:'M-Pesa · '+(r.mpesaCode||''),paymentRef:ref,sellerName:l.name,date:new Date().toISOString(),notes:date?'Date: '+date:''}),700);
         _sendWA(r.mpesaCode);
       },
@@ -3167,6 +3252,9 @@ function downloadLegalDoc(){
   const docType = _activeDocType || "legal-document";
   const title = (DOC_FORMS[docType]?.title || "Legal Document").replace(/[^\w\s&/-]/g, "").trim();
 
+  /* Save draft to Firestore (fire-and-forget) when user is authenticated */
+  _lhSaveDocDraft(docType, title, text);
+
   if (window.SokoniLegalPDF) {
     const btn = document.querySelector('[onclick="downloadLegalDoc()"]');
     const label = btn ? btn.textContent : "";
@@ -3180,6 +3268,28 @@ function downloadLegalDoc(){
     return;
   }
   _downloadLegalDocText(text, docType);
+}
+
+async function _lhSaveDocDraft(docType, title, content) {
+  const uid = window._sokoniUser?.uid;
+  if (!uid) return;
+  try {
+    /* Save to localStorage history first (always works) */
+    const draftId = _lhRef('DOC');
+    const history = _lhGet('sokoniLegalDocHistory');
+    history.unshift({ id: draftId, type: docType, title, date: new Date().toISOString() });
+    _lhSet('sokoniLegalDocHistory', history.slice(0, 50));
+
+    /* Save full draft to Firestore — allow user to retrieve later from any device */
+    const fsDb = await _lhGetDb();
+    if (!fsDb) return;
+    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+    await setDoc(doc(fsDb, 'legalDocDrafts', `${uid}_${draftId}`), {
+      uid, draftId, docType, title,
+      content: content.slice(0, 100000), // cap at 100KB
+      createdAt: serverTimestamp(),
+    });
+  } catch(e) { console.warn('[Legal Hub] _lhSaveDocDraft:', e.message); }
 }
 
 /* Fallback only — used if sokoni-legal-pdf.js did not load. */
@@ -3606,11 +3716,42 @@ const SPEC_LABELS = {
   banking:"💰 Banking & Finance", general:"📋 General Practice"
 };
 
-function checkExistingApp(){
-  const app = JSON.parse(localStorage.getItem("sokoniLawyerApp")||"null");
+async function checkExistingApp(){
   const card = document.getElementById("existingAppCard");
   const form = document.getElementById("lawRegForm");
-  if(!app || !card || !form) return;
+  if(!card || !form) return;
+
+  /* Prefer Firestore status when logged in — provider can always read own doc */
+  const uid = window._sokoniUser?.uid;
+  if (uid) {
+    try {
+      const fsDb = await _lhGetDb();
+      if (fsDb) {
+        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+        const snap = await getDoc(doc(fsDb, 'legalProviders', uid));
+        if (snap.exists()) {
+          const p = snap.data();
+          const statusLabel = {
+            active:         '<span style="color:#71ff00;">✅ Active — Visible to Clients</span>',
+            pending_review: '<span style="color:#ff9800;">⏳ Pending Review</span>',
+            suspended:      '<span style="color:#ff6b6b;">⛔ Suspended — Contact Support</span>',
+          }[p.status] || `<span style="color:rgba(255,255,255,0.4);">${lhEsc(p.status||'unknown')}</span>`;
+          card.style.display = 'block';
+          const info = document.getElementById('existingAppInfo');
+          if (info) info.innerHTML = `<strong style="color:white;">Advocate ${lhEsc(p.name)}</strong>  Lic #${lhEsc(p.licenseNumber||'')}<br>
+            ${lhEsc((p.specializations||[]).join(', '))}  ${lhEsc(p.county||'Kenya')}<br>
+            ${statusLabel}<br>
+            <span style="color:rgba(255,255,255,0.35);">KES ${(p.consultationFee||0).toLocaleString()} / session</span>`;
+          if (form) form.style.display = 'none';
+          return;
+        }
+      }
+    } catch(e) { /* permission-denied = not yet registered; fall through */ }
+  }
+
+  /* Fallback: localStorage application record (submitted before login or CF) */
+  const app = JSON.parse(localStorage.getItem("sokoniLawyerApp")||"null");
+  if(!app) return;
   card.style.display = "block";
   const info = document.getElementById("existingAppInfo");
   if(info){
@@ -3773,28 +3914,35 @@ function submitCaseCompletion(){
   const commRef  = ref || ("LEGAL"+Date.now().toString(36).toUpperCase().slice(-6));
   const now      = Date.now();
 
-  /* Save to commission obligations (picked up by admin panel) */
+  /* Save to localStorage for UI rendering */
   let obligations = [];
   try{ obligations = JSON.parse(localStorage.getItem("sokoniCommissionObligation")||"[]"); }catch(e){}
-  obligations.unshift({
-    ref:          commRef,
-    providerName: lawyerName,
-    category:     "legal",
-    commissionPct:pct,
-    serviceTotal: total,
-    commissionOwed:owed,
-    status:       "invoiced",
-    note:         matter+(clientName?"  Client: "+clientName:""),
-    invoicedAt:   now,
-    createdAt:    now
-  });
+  obligations.unshift({ ref:commRef, providerName:lawyerName, category:"legal",
+    commissionPct:pct, serviceTotal:total, commissionOwed:owed, status:"invoiced",
+    note:matter+(clientName?"  Client: "+clientName:""), invoicedAt:now, createdAt:now });
   localStorage.setItem("sokoniCommissionObligation", JSON.stringify(obligations));
 
-  /* Save locally for "My Completions" list */
   let myComps = [];
   try{ myComps = JSON.parse(localStorage.getItem("sokoniLegalCompletions")||"[]"); }catch(e){}
   myComps.unshift({ ref:commRef, lawyerName, clientName, matter, total, owed, pct, createdAt:now });
   localStorage.setItem("sokoniLegalCompletions", JSON.stringify(myComps));
+
+  /* Write commission obligation to Firestore for admin visibility */
+  const _cUid = window._sokoniUser?.uid;
+  if (_cUid) {
+    (async()=>{
+      try {
+        const db = await _lhGetDb(); if(!db) return;
+        const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+        await setDoc(doc(db,'legalCommissions',commRef),{
+          ref:commRef, providerUid:_cUid, providerName:lawyerName,
+          clientName, matter, serviceTotal:total,
+          commissionPct:pct, commissionOwed:owed, status:'invoiced',
+          hub:'legal', createdAt:serverTimestamp(),
+        });
+      } catch(e){ console.warn('[Legal Hub] Commission Firestore write:', e.message); }
+    })();
+  }
 
   /* Show confirmation + payment instructions */
   if(msg){
@@ -3932,38 +4080,77 @@ async function submitAppointment(){
   _addNotif('📅 Appointment Requested','Your '+area+' consultation request on '+date+' is pending confirmation.','pending');
 }
 
-function renderAppointments(){
+async function renderAppointments(){
   const el = document.getElementById('appointmentsList');
   if(!el) return;
-  const list = _lhGet('sokoniLegalAppointments');
-  if(!list.length){
+
+  /* Merge localStorage appointments with live CF consultations */
+  let combined = [..._lhGet('sokoniLegalAppointments')];
+
+  if (window._sokoniUser?.uid) {
+    try {
+      const r = await _lhCallCF('getMyLegalConsultations', {});
+      const cfList = (r?.consultations || []).map(c => ({
+        id:             c.consultationId,
+        consultationId: c.consultationId,
+        area:           (c.specializations||['Legal'])[0],
+        date:           c.dateTime ? new Date(c.dateTime).toLocaleDateString('en-KE',{day:'numeric',month:'long',year:'numeric'}) : '',
+        time:           c.dateTime ? new Date(c.dateTime).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}) : '',
+        type:           c.isOnline ? 'video' : 'office',
+        status:         c.status,
+        lawyerName:     c.providerName || '',
+        lawyerId:       c.providerId   || '',
+        matter:         c.matter       || '',
+        isCF:           true,
+      }));
+      /* CF is authoritative for status of shared entries; new CF entries prepended */
+      const lsConsultIds = new Set(combined.map(a=>a.consultationId).filter(Boolean));
+      for (const c of cfList) {
+        if (lsConsultIds.has(c.consultationId)) {
+          combined = combined.map(a => a.consultationId===c.consultationId ? {...a, status:c.status, isCF:true} : a);
+        } else {
+          combined.unshift(c);
+        }
+      }
+    } catch(e) { console.warn('[Legal Hub] getMyLegalConsultations:', e.message); }
+  }
+
+  if(!combined.length){
     el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:rgba(255,255,255,0.3);"><div style="font-size:36px;margin-bottom:12px;">📅</div><div style="font-size:13px;">No appointments yet. Book your first consultation above.</div></div>';
     return;
   }
-  el.innerHTML = list.map(a=>{
+  el.innerHTML = combined.map(a=>{
     const badgeClass = a.status==='confirmed'?'confirmed':a.status==='completed'?'completed':a.status==='cancelled'?'cancelled':'pending';
     const typeIcon = a.type==='video'?'📹':a.type==='phone'?'📞':'🏢';
+    const lawyer = a.lawyerName || (a.preferredLawyer&&a.preferredLawyer!=='Any'?a.preferredLawyer:'');
+    const idSafe = lhEsc(a.id||'');
+    const cIdSafe = lhEsc(a.consultationId||'');
     return `<div class="appt-card">
       <div class="appt-icon">${typeIcon}</div>
       <div class="appt-info">
-        <div class="appt-title">${lhEsc(a.area)} Consultation</div>
+        <div class="appt-title">${lhEsc(a.area||'Legal')} Consultation</div>
         <div class="appt-meta">${lhEsc(a.date)} • ${lhEsc(a.time)} • ${lhEsc(a.type||'')}</div>
-        ${a.preferredLawyer&&a.preferredLawyer!=='Any'?`<div class="appt-meta">With: ${lhEsc(a.preferredLawyer)}</div>`:''}
-        <div class="appt-badge ${badgeClass}">${a.status.toUpperCase()}</div>
+        ${lawyer?`<div class="appt-meta">With: ${lhEsc(lawyer)}</div>`:''}
+        ${a.matter?`<div class="appt-meta" style="color:rgba(255,255,255,0.4);">Matter: ${lhEsc(a.matter.slice(0,80))}${a.matter.length>80?'…':''}</div>`:''}
+        <div class="appt-badge ${badgeClass}">${(a.status||'pending').toUpperCase()}</div>
         <div class="appt-actions">
-          ${a.status==='pending'?`<button class="appt-btn" onclick="cancelAppointment('${a.id}')" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Cancel</button>`:''}
-          ${a.status==='confirmed'?`<a href="https://wa.me/254705726803?text=Appointment%20${encodeURIComponent(a.id)}%20query" target="_blank" class="appt-btn" style="border-color:rgba(37,211,102,0.3);color:#25d366;text-decoration:none;">WhatsApp Lawyer</a>`:''}
-          ${a.status==='completed'?`<button class="appt-btn" onclick="showReviewForm('${a.id}')" style="border-color:rgba(255,193,7,0.3);color:#ffc107;">Leave Review</button>`:''}
+          ${a.status==='pending'?`<button class="appt-btn" onclick="cancelAppointment('${idSafe}','${cIdSafe}',${a.isCF?'true':'false'})" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Cancel</button>`:''}
+          ${a.status==='confirmed'?`<a href="https://wa.me/254705726803?text=Appointment%20${encodeURIComponent(a.id||'')}%20query" target="_blank" class="appt-btn" style="border-color:rgba(37,211,102,0.3);color:#25d366;text-decoration:none;">WhatsApp Lawyer</a>`:''}
+          ${a.status==='completed'?`<button class="appt-btn" onclick="showReviewForm('${idSafe}')" style="border-color:rgba(255,193,7,0.3);color:#ffc107;">Leave Review</button>`:''}
         </div>
       </div>
     </div>`;
   }).join('');
 }
 
-function cancelAppointment(id){
+async function cancelAppointment(id, consultationId, isCF){
+  if (isCF && consultationId && window._sokoniUser?.uid) {
+    try { await _lhCallCF('updateConsultationStatus', { consultationId, status: 'cancelled' }); }
+    catch(e) { console.warn('[Legal Hub] cancelAppointment CF:', e.message); }
+  }
   const list = _lhGet('sokoniLegalAppointments').map(a=> a.id===id?{...a,status:'cancelled'}:a);
   _lhSet('sokoniLegalAppointments', list);
-  renderAppointments();
+  await renderAppointments();
 }
 
 /* ═══════════════════════════════════════
@@ -4173,16 +4360,55 @@ function _renderRequests(containerId, category){
    CLIENT DASHBOARD
 ═══════════════════════════════════════ */
 function renderClientDashboard(){
-  const appts   = _lhGet('sokoniLegalAppointments');
-  const reqs    = _lhGet('sokoniLegalServiceRequests');
-  const docs    = _lhGet('sokoniLegalDocHistory');
-  const saved   = _lhGet('sokoniSavedLawyers');
-  const notifs  = _lhGet('sokoniLegalNotifications');
+  /* Render synchronously from localStorage first, then hydrate with CF data */
+  let appts  = [..._lhGet('sokoniLegalAppointments')];
+  const reqs  = _lhGet('sokoniLegalServiceRequests');
+  const docs  = _lhGet('sokoniLegalDocHistory');
+  const saved = _lhGet('sokoniSavedLawyers');
+  const notifs= _lhGet('sokoniLegalNotifications');
 
   _setText('dStatAppts',   appts.length);
   _setText('dStatRequests',reqs.length);
   _setText('dStatDocs',    docs.length);
   _setText('dStatSaved',   saved.length);
+
+  /* Hydrate upcoming appointments from CF — runs in background, updates UI when ready */
+  if (window._sokoniUser?.uid) {
+    _lhCallCF('getMyLegalConsultations', {}).then(r => {
+      const cfList = (r?.consultations || []).map(c => ({
+        id: c.consultationId, consultationId: c.consultationId,
+        area: (c.specializations||['Legal'])[0],
+        date: c.dateTime ? new Date(c.dateTime).toLocaleDateString('en-KE') : '',
+        time: c.dateTime ? new Date(c.dateTime).toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}) : '',
+        type: c.isOnline ? 'video' : 'office', status: c.status,
+        lawyerName: c.providerName || '',
+      }));
+      /* Merge CF into local list, CF status wins */
+      const lsIds = new Set(appts.map(a=>a.consultationId).filter(Boolean));
+      for (const c of cfList) {
+        if (lsIds.has(c.consultationId)) appts = appts.map(a => a.consultationId===c.consultationId ? {...a, status:c.status} : a);
+        else appts.unshift(c);
+      }
+      _setText('dStatAppts', appts.length);
+      /* Re-render upcoming with live data */
+      const upEl = document.getElementById('dashUpcomingAppts');
+      if (upEl) {
+        const upcoming = appts.filter(a=>a.status!=='cancelled'&&a.status!=='completed').slice(0,3);
+        if (!upcoming.length) {
+          upEl.innerHTML='<div style="text-align:center;padding:16px;color:rgba(255,255,255,0.3);font-size:12px;">No upcoming appointments.</div>';
+        } else {
+          upEl.innerHTML = upcoming.map(a=>`<div class="appt-card">
+            <div class="appt-icon">${a.type==='video'?'📹':a.type==='phone'?'📞':'🏢'}</div>
+            <div class="appt-info">
+              <div class="appt-title">${lhEsc(a.area||'Legal')}</div>
+              <div class="appt-meta">${lhEsc(a.date)} • ${lhEsc(a.time)}</div>
+              ${a.lawyerName?`<div class="appt-meta">With: ${lhEsc(a.lawyerName)}</div>`:''}
+              <div class="appt-badge ${a.status==='confirmed'?'confirmed':'pending'}">${(a.status||'pending').toUpperCase()}</div>
+            </div></div>`).join('');
+        }
+      }
+    }).catch(()=>{}); // fail silently — localStorage version already shown
+  }
 
   /* Notifications */
   const unread = notifs.filter(n=>!n.read);
@@ -4290,39 +4516,59 @@ function showProDashLogin(){
 }
 
 async function loginProDashboard(){
-  const lsk  = ((document.getElementById('proLskId')||{}).value||'').trim();
-  const ph   = ((document.getElementById('proPhone')||{}).value||'').trim();
+  const lsk = ((document.getElementById('proLskId')||{}).value||'').trim();
+  const ph  = ((document.getElementById('proPhone')||{}).value||'').trim();
   if(!lsk||!ph){ _lhMsg('proLoginMsg','Please fill all fields.',false); return; }
+
+  /* Require Firebase Auth — provider must be signed in as themselves */
+  const user = window._sokoniUser;
+  if (!user) {
+    _lhMsg('proLoginMsg','Please sign in to your SOKONI account first, then return to access your dashboard.',false);
+    return;
+  }
   _lhMsg('proLoginMsg','Verifying…',true);
 
-  /* Check against registered lawyers in LS + Firestore */
+  /* Look up provider record in legalProviders by UID (primary) then by licenseNumber (migration) */
   let lawyer = null;
   try {
-    const db = await _lhGetDb();
-    if(db){
-      const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      const q = query(collection(db,'lawyers'), where('lskNumber','==',lsk));
-      const snap = await getDocs(q);
-      if(!snap.empty){ lawyer = snap.docs[0].data(); }
-    }
-  } catch(e){}
-
-  if(!lawyer){
-    /* Fallback: check local firm registrations */
+    const result = await _lhCallCF('getLegalProvider', { providerId: user.uid });
+    if (result) lawyer = result;
+  } catch(e) {
+    /* not-found is expected for unregistered UIDs — fall through */
+  }
+  if (!lawyer) {
+    try {
+      const db = await _lhGetDb();
+      if (db) {
+        const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+        const q    = query(collection(db,'legalProviders'), where('licenseNumber','==',lsk));
+        const snap = await getDocs(q);
+        if (!snap.empty) lawyer = snap.docs[0].data();
+      }
+    } catch(e){}
+  }
+  /* Fallback: local firm registrations (unverified, pending users) */
+  if (!lawyer) {
     const regs = _lhGet('sokoni_firm_registrations');
-    lawyer = regs.find(r=> (r.lskNumber||r.lsk||'').toLowerCase()===lsk.toLowerCase());
+    const local = regs.find(r=>(r.lskNumber||r.lsk||'').toLowerCase()===lsk.toLowerCase());
+    if (local) lawyer = local;
   }
 
-  if(!lawyer){
-    _lhMsg('proLoginMsg','No registered professional found with this LSK number. Please register first.',false);
+  if (!lawyer) {
+    _lhMsg('proLoginMsg','No registered professional found. Please complete your advocate registration first.',false);
     return;
   }
 
-  _proSession = { id: lawyer.id||lsk, name: lawyer.name||lawyer.fullName||'Professional',
-    spec: lawyer.specialisation||lawyer.spec||'Legal Professional', lsk };
+  _proSession = {
+    id:   user.uid,
+    name: lawyer.name || lawyer.fullName || 'Professional',
+    spec: Array.isArray(lawyer.specializations)
+      ? lawyer.specializations.map(s=>SPEC_LABELS[s]||s).join(', ')
+      : (lawyer.specialisation||lawyer.spec||'Legal Professional'),
+    lsk,
+  };
 
   localStorage.setItem('sokoniProSession', JSON.stringify(_proSession));
-
   document.getElementById('proDashLoginForm').style.display='none';
   _loadProDashContent();
 }
@@ -4330,6 +4576,12 @@ async function loginProDashboard(){
 function initProDashboard(){
   const stored = localStorage.getItem('sokoniProSession');
   if(stored){ try{ _proSession=JSON.parse(stored); }catch(e){} }
+  /* Invalidate session if Firebase Auth user changed or signed out */
+  const currentUid = window._sokoniUser?.uid;
+  if (_proSession && currentUid && _proSession.id !== currentUid) {
+    _proSession = null;
+    localStorage.removeItem('sokoniProSession');
+  }
   if(_proSession){
     document.getElementById('proDashGate').style.display='none';
     document.getElementById('proDashLoginForm').style.display='none';
@@ -4343,35 +4595,50 @@ function _loadProDashContent(){
   _setText('proDashName', _proSession.name);
   _setText('proDashSpec', _proSession.spec);
 
-  /* Load incoming appointment requests */
-  const allAppts = _lhGet('sokoniLegalAppointments');
-  const pending  = allAppts.filter(a=>a.status==='pending');
-  const confirmed= allAppts.filter(a=>a.status==='confirmed');
-  const completed= _lhGet('sokoniLegalCompletions');
-
-  _setText('proStatPending',   pending.length);
-  _setText('proStatConfirmed', confirmed.length);
-  _setText('proStatCompleted', completed.length);
-
-  /* Render incoming */
+  /* Load incoming consultations — CF (legalConsultations) + localStorage fallback */
   const el = document.getElementById('proIncomingRequests');
-  if(el){
-    if(!pending.length){
+  if(el) el.innerHTML='<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">Loading…</div>';
+
+  (async ()=>{
+    let cfConsultations = [];
+    try {
+      const result = await _lhCallCF('getProviderConsultations', { status: 'pending' });
+      cfConsultations = result?.consultations || [];
+    } catch(e){ console.warn('[Pro Dashboard] getProviderConsultations CF:', e.message); }
+
+    /* Merge with localStorage appointments */
+    const allAppts = _lhGet('sokoniLegalAppointments');
+    const pending  = allAppts.filter(a=>a.status==='pending');
+    const lsConfirmed = allAppts.filter(a=>a.status==='confirmed');
+    const completed= _lhGet('sokoniLegalCompletions');
+
+    const cfPending = cfConsultations.filter(c=>c.status==='pending');
+
+    _setText('proStatPending',   cfPending.length + pending.length);
+    _setText('proStatConfirmed', (cfConsultations.filter(c=>c.status==='confirmed').length) + lsConfirmed.length);
+    _setText('proStatCompleted', (cfConsultations.filter(c=>c.status==='completed').length) + completed.length);
+
+    if(!el) return;
+    const all = [
+      ...cfPending.map(c=>({ id:c.consultationId, title:c.matter, meta:new Date(c.dateTime).toLocaleString('en-KE'), desc:c.matter, isCF:true })),
+      ...pending.map(a=>({ id:a.id, title:(a.area||'')+(a.type?' – '+a.type:''), meta:(a.date||'')+(a.time?' • '+a.time:''), desc:a.desc||'', isCF:false })),
+    ];
+    if(!all.length){
       el.innerHTML='<div style="text-align:center;padding:20px;color:rgba(255,255,255,0.3);font-size:12px;">No pending requests.</div>';
     } else {
-      el.innerHTML = pending.map(a=>`<div class="appt-card">
+      el.innerHTML = all.map(a=>`<div class="appt-card">
         <div class="appt-icon">📨</div>
         <div class="appt-info">
-          <div class="appt-title">${lhEsc(a.area)} – ${lhEsc(a.type||'')}</div>
-          <div class="appt-meta">${lhEsc(a.date)} • ${lhEsc(a.time)}</div>
-          <div class="appt-meta" style="color:rgba(255,255,255,0.5);">${lhEsc(a.desc).substring(0,80)}…</div>
+          <div class="appt-title">${lhEsc(a.title)}</div>
+          <div class="appt-meta">${lhEsc(a.meta)}</div>
+          <div class="appt-meta" style="color:rgba(255,255,255,0.5);">${lhEsc((a.desc||'').substring(0,80))}…</div>
           <div class="appt-actions">
-            <button class="appt-btn" onclick="proConfirmAppt('${a.id}')" style="border-color:rgba(113,255,0,0.3);color:#71ff00;">Confirm</button>
-            <button class="appt-btn" onclick="proCancelAppt('${a.id}')" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Decline</button>
+            <button class="appt-btn" onclick="proConfirmAppt('${lhEsc(a.id)}',${a.isCF})" style="border-color:rgba(113,255,0,0.3);color:#71ff00;">Confirm</button>
+            <button class="appt-btn" onclick="proCancelAppt('${lhEsc(a.id)}',${a.isCF})" style="border-color:rgba(255,68,68,0.25);color:#ff6b6b;">Decline</button>
           </div>
         </div></div>`).join('');
     }
-  }
+  })();
 
   /* Availability */
   const avail = JSON.parse(localStorage.getItem('sokoniProAvailability')||'{}');
@@ -4392,16 +4659,28 @@ function _loadProDashContent(){
   _setPct('analyticsFam','analyticsBarFam',famPct);
 }
 
-function proConfirmAppt(id){
-  const list = _lhGet('sokoniLegalAppointments').map(a=>a.id===id?{...a,status:'confirmed'}:a);
-  _lhSet('sokoniLegalAppointments', list);
-  _addNotif('✅ Appointment Confirmed','Your consultation has been confirmed by the lawyer.','confirmed');
-  _loadProDashContent();
+function proConfirmAppt(id, isCF){
+  if (isCF) {
+    _lhCallCF('updateConsultationStatus', { consultationId: id, status: 'confirmed' })
+      .then(()=>{ _addNotif('✅ Consultation Confirmed','You confirmed the consultation.','confirmed'); _loadProDashContent(); })
+      .catch(e=>{ console.warn('[Pro Dashboard] updateConsultationStatus:', e.message); _loadProDashContent(); });
+  } else {
+    const list = _lhGet('sokoniLegalAppointments').map(a=>a.id===id?{...a,status:'confirmed'}:a);
+    _lhSet('sokoniLegalAppointments', list);
+    _addNotif('✅ Appointment Confirmed','Your consultation has been confirmed.','confirmed');
+    _loadProDashContent();
+  }
 }
-function proCancelAppt(id){
-  const list = _lhGet('sokoniLegalAppointments').map(a=>a.id===id?{...a,status:'cancelled'}:a);
-  _lhSet('sokoniLegalAppointments', list);
-  _loadProDashContent();
+function proCancelAppt(id, isCF){
+  if (isCF) {
+    _lhCallCF('updateConsultationStatus', { consultationId: id, status: 'cancelled' })
+      .then(()=>{ _loadProDashContent(); })
+      .catch(e=>{ console.warn('[Pro Dashboard] updateConsultationStatus:', e.message); _loadProDashContent(); });
+  } else {
+    const list = _lhGet('sokoniLegalAppointments').map(a=>a.id===id?{...a,status:'cancelled'}:a);
+    _lhSet('sokoniLegalAppointments', list);
+    _loadProDashContent();
+  }
 }
 
 function logoutProDashboard(){
@@ -4419,7 +4698,26 @@ function toggleAvailDay(btn, day){
 }
 
 function saveAvailability(){
-  _lhMsg('availMsg','Availability saved.', true);
+  const avail = JSON.parse(localStorage.getItem('sokoniProAvailability')||'{}');
+  if (_proSession?.id) {
+    (async()=>{
+      try {
+        const db = await _lhGetDb();
+        if (db) {
+          const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+          await setDoc(doc(db,'availabilityStatus',_proSession.id), {
+            providerId: _proSession.id,
+            schedule:   avail,
+            isOnline:   Object.values(avail).some(v=>v!==false),
+            updatedAt:  serverTimestamp(),
+          }, { merge: true });
+          _lhMsg('availMsg','✅ Availability saved & published.',true);
+        }
+      } catch(e){ _lhMsg('availMsg','Saved locally (sync pending).',true); }
+    })();
+  } else {
+    _lhMsg('availMsg','Availability saved.',true);
+  }
   setTimeout(()=>_lhMsg('availMsg','',true), 2000);
 }
 
@@ -4466,20 +4764,40 @@ async function submitLegalReview(){
   var list = _lhGet('sokoniLegalReviews');
   list.unshift(review);
   _lhSet('sokoniLegalReviews', list.slice(0,100));
-  try {
-    var db = await _lhGetDb();
-    if(db){
-      var mod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-      await mod.addDoc(mod.collection(db,'legalReviews'),{
-        apptId: _reviewApptId,
-        rating: _reviewRating,
-        text: text.trim(),
-        reviewerName: name.trim()||'Anonymous',
-        date: new Date().toISOString(),
-        uid: (window._sokoniUser||{}).uid||null
+
+  /* CF path — rateLegalProvider requires a real consultationId and auth */
+  const booking = (_lhGet('sokoniLegalBookings')||[]).find(b=>b.id===_reviewApptId || b.consultationId===_reviewApptId);
+  if (booking?.consultationId && booking?.lawyerId && window._sokoniUser?.uid) {
+    try {
+      await _lhCallCF('rateLegalProvider', {
+        providerId:     booking.lawyerId,
+        consultationId: booking.consultationId,
+        rating:         _reviewRating,
+        review:         text.trim(),
       });
+    } catch(e) {
+      if ((e.code||'')!=='already-exists') {
+        console.warn('[Legal Hub] rateLegalProvider CF:', e.message);
+        /* Fallback to legacy legalReviews write on CF failure */
+        try {
+          var db = await _lhGetDb();
+          if(db){ var mod=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+            await mod.addDoc(mod.collection(db,'legalReviews'),{ apptId:_reviewApptId, rating:_reviewRating,
+              text:text.trim(), reviewerName:name.trim()||'Anonymous', date:new Date().toISOString(),
+              uid:window._sokoniUser?.uid||null }); }
+        } catch(e2){}
+      }
     }
-  } catch(e){}
+  } else {
+    /* Legacy path — direct Firestore write when no real consultationId exists */
+    try {
+      var db2 = await _lhGetDb();
+      if(db2){ var mod2=await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
+        await mod2.addDoc(mod2.collection(db2,'legalReviews'),{ apptId:_reviewApptId, rating:_reviewRating,
+          text:text.trim(), reviewerName:name.trim()||'Anonymous', date:new Date().toISOString(),
+          uid:window._sokoniUser?.uid||null }); }
+    } catch(e){}
+  }
   closeLegalReviewModal();
   (window._skToast||alert)('Thank you for your review! ⭐');
 }

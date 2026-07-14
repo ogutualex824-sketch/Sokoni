@@ -62,6 +62,11 @@ const FROM = {
   legal:        '"SOKONI Legal" <legal@mysokoni.co.ke>',
   info:         '"SOKONI" <info@mysokoni.co.ke>',
   admin:        '"SOKONI Admin" <admin@mysokoni.co.ke>',
+  notifications:'"SOKONI" <notifications@mysokoni.co.ke>',
+  finance:      '"SOKONI Finance" <finance@mysokoni.co.ke>',
+  privacy:      '"SOKONI Privacy" <privacy@mysokoni.co.ke>',
+  compliance:   '"SOKONI Compliance" <compliance@mysokoni.co.ke>',
+  marketplace:  '"SOKONI Marketplace" <notifications@mysokoni.co.ke>',
 };
 module.exports.FROM = FROM;
 

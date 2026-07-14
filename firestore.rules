@@ -200,11 +200,18 @@ service cloud.firestore {
     }
 
     match /driverLocations/{driverId} {
-      allow read:   if isAuthed();
+      /* GPS privacy: scoped to the driver themselves, passengers in an active ride
+         (the dispatch CF populates `viewers` when a ride is assigned), and admins.
+         Until `viewers` is written, only the driver and admins can read. */
+      allow read:   if isAdmin()
+                    || (isAuthed() && request.auth.uid == driverId)
+                    || (isAuthed() && resource.data.viewers is list
+                        && request.auth.uid in resource.data.viewers);
       allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
-      allow update: if isAuthed()
-                    && resource.data.uid          == request.auth.uid
-                    && request.resource.data.uid  == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.uid         == request.auth.uid
+                        && request.resource.data.uid == request.auth.uid);
       allow delete: if isAdmin() || isOwner();
     }
 
@@ -515,10 +522,17 @@ service cloud.firestore {
                  .data.participants.hasAny([request.auth.uid]);
         }
         allow read: if inConvo();
-        // MSG-1: all writes go through the sendMessage CF (admin SDK, bypasses rules).
-        // Direct client writes are blocked to prevent senderId/senderName spoofing.
+        // MSG-1: creates go through the sendMessage CF (admin SDK, bypasses rules).
+        // Direct client creates are blocked to prevent senderId/senderName spoofing.
         allow create: if false;
-        allow update, delete: if isAdmin();
+        // Sender may soft-edit or soft-delete their own messages (limited fields only).
+        allow update: if isAdmin()
+                      || (isAuthed()
+                          && resource.data.senderId == request.auth.uid
+                          && request.resource.data.senderId == resource.data.senderId
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasOnly(['deleted','deletedAt','text','edited','editedAt','storageRef']));
+        allow delete: if isAdmin();
       }
     }
 
@@ -1180,14 +1194,14 @@ service cloud.firestore {
     }
 
     match /deliveryLocations/{riderId} {
-      /* P0-7 (Phase 4 audit): was `read: if true` — anonymous access to every rider's
-         real-time GPS (privacy/safety leak). Minimum baseline: require auth so live
-         location can't be scraped anonymously. TODO(P0-7 full): scope to the delivery's
-         participants (assigned rider + order buyer/seller + admin) by denormalizing a
-         `viewers` array onto this doc from the assignment path, then:
-           allow read: if isAdmin() || request.auth.uid == riderId
-                        || (isAuthed() && request.auth.uid in resource.data.viewers); */
-      allow read:   if isAuthed();
+      /* GPS privacy: scoped to the rider themselves, assigned delivery participants
+         (buyers/sellers whose order has this rider), and admins. The `viewers` array
+         is written by the dispatch CF when a rider is assigned to a delivery. Until
+         that array is present on a doc, only the rider and admins can read it. */
+      allow read:   if isAdmin()
+                    || (isAuthed() && request.auth.uid == riderId)
+                    || (isAuthed() && resource.data.viewers is list
+                        && request.auth.uid in resource.data.viewers);
       allow write:  if isAdmin()
                     || (isAuthed() && request.auth.uid == riderId);
     }
@@ -1766,8 +1780,28 @@ service cloud.firestore {
     match /posShifts/{shiftId} {
       allow create: if claimsPosOwner();
       allow read:   if isPosOwner() || isAdmin();
-      allow update: if isPosOwner() || isAdmin(); 
+      /* Only non-financial fields can be updated from a client — financial aggregates
+         (totalSales, cashSales, status, closingCash) are written by Cloud Functions
+         via Admin SDK and are therefore not covered by these rules. */
+      allow update: if (isPosOwner() || isAdmin())
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly(['notes', 'updatedAt']);
       allow delete: if isAdmin();
+    }
+
+    /* posRetailSales — all writes via Cloud Functions (Admin SDK bypasses rules).
+       Explicit deny prevents accidental exposure if a wildcard rule is added later. */
+    match /posRetailSales/{saleId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                   || (isAuthed() && resource.data.cashierUid == request.auth.uid);
+      allow write: if false; /* CF Admin SDK only */
+    }
+
+    /* posCashDrawerEvents — all writes via Cloud Functions. */
+    match /posCashDrawerEvents/{eventId} {
+      allow read:  if isPosOwner() || isAdmin();
+      allow write: if false; /* CF Admin SDK only */
     }
 
     match /posCustomers/{customerId} {
@@ -2713,6 +2747,7 @@ service cloud.firestore {
 
     match /availabilityStatus/{uid} {
       allow read:  if true;
+      allow write: if isAuthed() && request.auth.uid == uid;
     }
 
     match /priceAlerts/{alertId} {
@@ -3055,32 +3090,6 @@ service cloud.firestore {
       allow read:   if isAdmin();
     }
 
-    match /conversations/{conversationId} {
-      allow read:   if request.auth != null
-                    && request.auth.uid in resource.data.participants;
-
-      match /messages/{messageId} {
-        allow read: if request.auth != null
-                    && request.auth.uid in
-                       get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants;
-        allow create: if request.auth != null
-                      && request.auth.uid in
-                         get(/databases/$(database)/documents/conversations/$(conversationId)).data.participants
-                      && get(/databases/$(database)/documents/conversations/$(conversationId)).data.status == 'active'
-                      && request.resource.data.senderId == request.auth.uid
-                      && request.resource.data.keys().hasAll(['senderId','timestamp','type','status','deleted','edited'])
-                      && request.resource.data.type in ['text','image','pdf','voice']
-                      && (request.resource.data.type != 'text'
-                          || (request.resource.data.text is string && request.resource.data.text.size() <= 4000));
-
-        allow update: if request.auth != null
-                      && resource.data.senderId == request.auth.uid
-                      && request.resource.data.senderId == resource.data.senderId
-                      && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['deleted','deletedAt','text','edited','editedAt','storageRef']);
-      }
-    }
-
     match /userConversations/{uid} {
       allow read:  if request.auth != null && request.auth.uid == uid;
       match /items/{conversationId} {
@@ -3198,6 +3207,7 @@ service cloud.firestore {
     match /walletTransactions/{txId} {
 
       allow read:  if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
+      allow write: if false;
     }
     match /payoutRequests/{reqId} {
 
@@ -3259,28 +3269,6 @@ service cloud.firestore {
     }
     match /platformBroadcasts/{docId} {
       allow read: if isAdmin();
-      allow write: if false;
-    }
-
-    /* ── Foundation Charitable Giving Platform ──────────────────────── */
-    match /foundationStats/{docId} {
-      allow read: if true;
-      allow write: if false;
-    }
-    match /foundationDonations/{donId} {
-      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
-      allow write: if false;
-    }
-    match /foundationApplications/{appId} {
-      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
-      allow write: if false;
-    }
-    match /foundationCampaigns/{campId} {
-      allow read: if true;
-      allow write: if false;
-    }
-    match /foundationRecurring/{recId} {
-      allow read: if isAuthed() && resource.data.uid == request.auth.uid || isAdmin();
       allow write: if false;
     }
 
@@ -3727,7 +3715,8 @@ service cloud.firestore {
 
     /* ── Legal Services Hub v1.0 ─────────────────────────────────────────── */
     match /legalProviders/{providerId} {
-      allow read:  if resource.data.status == 'active' || isAdmin();
+      allow read:  if resource.data.status == 'active' || isAdmin()
+                   || (isAuthed() && request.auth.uid == providerId);
       allow write: if false; // CF-only
     }
     match /legalConsultations/{consultationId} {
@@ -3741,6 +3730,28 @@ service cloud.firestore {
     match /legalConsultIdempotency/{key} {
       allow read:  if false;
       allow write: if false;
+    }
+    match /legalCommissions/{commId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.providerUid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.providerUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['ref','providerUid','providerName','matter','serviceTotal','commissionOwed','status','hub'])
+                    && request.resource.data.status == 'invoiced'
+                    && request.resource.data.serviceTotal is number
+                    && request.resource.data.commissionOwed is number;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    match /legalDocDrafts/{draftId} {
+      allow read:   if isAuthed() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthed()
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['uid','docType','title','content'])
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() <= 100000; // 100KB max
+      allow update: if isAuthed() && resource.data.uid == request.auth.uid;
+      allow delete: if isAuthed() && resource.data.uid == request.auth.uid;
     }
 
     /* ── Legal Acceptance Framework — court-grade evidence, CF-only ────────
