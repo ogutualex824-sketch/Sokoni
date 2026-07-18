@@ -127,13 +127,27 @@ async function checkInfrastructure() {
                    : 'WRONG ISSUER: ' + (issuer.trim().slice(0, 70) || 'unknown') +
                      ' — a valid cert from a foreign origin, not Firebase Hosting');
 
-  /* Origin identity: Firebase Hosting must be the thing answering, not a parked/shared host. */
+  /* Origin identity — evaluated POSITIVELY, not merely by rejecting known-bad servers.
+     Firebase Hosting answers through Google Front End. Absence of a bad signature is not
+     evidence of the right stack. */
   const server = String(r.headers['server'] || '');
-  const parked = /litespeed|apache|nginx|cpanel/i.test(server);
-  rec('Infrastructure', 'Origin is Firebase Hosting (not a parked host)',
-      !parked && r.status < 400 ? 'PASS' : 'FAIL',
+  const parked = /litespeed|apache|nginx|cpanel|openresty/i.test(server);
+  const gfe    = /^(gfe|esf)/i.test(server) || /google/i.test(server) ||
+                 !!r.headers['x-served-by'] || !!r.headers['x-cache'] ||
+                 /firebase/i.test(String(r.headers['x-powered-by'] || ''));
+  rec('Infrastructure', 'Origin is expected production stack (Firebase/GFE)',
+      parked ? 'FAIL' : (gfe && r.status < 400 ? 'PASS' : (r.status < 400 ? 'PENDING' : 'FAIL')),
       'server=' + (server || 'n/a') + ' · HTTP ' + r.status +
-      (parked ? ' — foreign origin terminating traffic' : ''));
+      (parked ? ' — FOREIGN origin terminating traffic'
+              : gfe ? '' : ' — could not positively confirm Firebase/GFE'));
+
+  /* www + auth subdomain records — part of "correct DNS records", not just the apex. */
+  if (isApex) {
+    const www = await getFollow('https://www.' + APEX_HOST + '/');
+    rec('Infrastructure', 'www subdomain resolves and serves',
+        www.status && www.status < 400 ? 'PASS' : (www.status ? 'FAIL' : 'PENDING'),
+        www.status ? 'HTTP ' + www.status : (www.error || 'unreachable — check if www is configured'));
+  }
 
   rec('Infrastructure', 'HSTS enabled', r.headers['strict-transport-security'] ? 'PASS' : 'FAIL',
       r.headers['strict-transport-security'] || 'absent');
