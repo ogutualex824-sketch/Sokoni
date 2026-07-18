@@ -42,8 +42,20 @@ function extract(src, marker) {
 const fbJs = fs.readFileSync(path.join(ROOT, 'firebase.js'), 'utf8');
 const cfgJs = fs.readFileSync(path.join(ROOT, 'sokoni-config.js'), 'utf8');
 
+const modJs = fs.readFileSync(path.join(ROOT, 'sokoni-firebase-config.js'), 'utf8');
+
 const a = extract(fbJs, 'const firebaseConfig');
 const b = extract(cfgJs, 'window.SOKONI_FIREBASE_CONFIG');
+const c = extract(modJs, 'export const firebaseConfig');
+
+if (!c) bad('sokoni-firebase-config.js: could not locate exported firebaseConfig');
+if (a && c) {
+  for (const k of KEYS) {
+    if (a[k] && c[k] && a[k] !== c[k]) {
+      bad(`DRIFT on ${k}: firebase.js="${a[k]}" vs sokoni-firebase-config.js="${c[k]}"`);
+    }
+  }
+}
 
 if (!a) bad('firebase.js: could not locate firebaseConfig');
 if (!b) bad('sokoni-config.js: could not locate SOKONI_FIREBASE_CONFIG');

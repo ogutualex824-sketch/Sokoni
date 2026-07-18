@@ -170,11 +170,16 @@ tr:last-child td { border-bottom: none; }
 </main>
 
 <script type="module">
+/* Canonical Firebase config via ES module import — immune to the HTML parser restart
+   that drops classic <script> tags on these pages. See sokoni-firebase-config.js. */
+
+import { firebaseConfig } from './sokoni-firebase-config.js';
+
 import { initializeApp }  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
 
-const config = (window.SOKONI_FIREBASE_CONFIG || (()=>{ console.error('[SOKONI] Firebase config missing — sokoni-config.js must load first.'); throw new Error('SOKONI_FIREBASE_CONFIG unavailable'); })());   /* was window._sokoniConfig with a dynamic-import fallback; sokoni-config.js is a classic script that sets a global, so the import returned a module namespace, not the config */
+const config = firebaseConfig;   /* canonical ES-module import — see sokoni-firebase-config.js */
 const app    = initializeApp(config);
 const auth   = getAuth(app);
 const fn     = getFunctions(app);

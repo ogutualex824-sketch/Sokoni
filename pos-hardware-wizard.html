@@ -988,6 +988,11 @@
      FIREBASE + WIZARD LOGIC (ESM)
 ═══════════════════════════════════════════════════════════ -->
 <script type="module">
+/* Canonical Firebase config via ES module import — immune to the HTML parser restart
+   that drops classic <script> tags on these pages. See sokoni-firebase-config.js. */
+
+import { firebaseConfig } from './sokoni-firebase-config.js';
+
 import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
 import { getAuth, onAuthStateChanged }
                                from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
@@ -995,19 +1000,7 @@ import { getFirestore, doc, setDoc, getDoc }
                                from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
 
 /* ── Firebase init ── */
-const app  = initializeApp((() => {
-  /* Canonical config lives in sokoni-config.js (window.SOKONI_FIREBASE_CONFIG).
-     Previously this read window._sokoniConfig — a global that was NEVER defined anywhere — with
-     a `|| {}` fallback, so Firebase initialised with no apiKey and every Auth/Firestore/
-     Storage/callable operation on this page failed with auth/invalid-api-key. Fail loudly now:
-     a missing config is a deployment fault, not something to paper over at runtime. */
-  const cfg = window.SOKONI_FIREBASE_CONFIG;
-  if (!cfg || !cfg.apiKey) {
-    console.error('[SOKONI] Firebase config missing — sokoni-config.js must load before this module.');
-    throw new Error('SOKONI_FIREBASE_CONFIG unavailable');
-  }
-  return cfg;
-})());
+const app  = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 
