@@ -5673,9 +5673,54 @@ async function _processWebhook(req, res, opts) {
              || req.headers["x-mpesa-signature"]
              || "";
     if (!_verifyHmac(rawBody, sig, secretKey)) {
-      console.error("[Webhook:" + provider + "] Invalid signature for " + eventId);
+      /* DIAGNOSTIC CAPTURE (2026-07-19). Every real IntaSend delivery has been rejected here
+         since the integration went live — 13 of them — and the log recorded only the event id,
+         so the REASON was never observable. Same blind spot that hid the email 400s.
+
+         What is needed to fix this is the provider's actual authentication shape: which header
+         (if any) carries a signature, and whether the body carries a `challenge` field instead.
+         IntaSend's webhook auth is a challenge value in the payload, and this code has zero
+         handling for it (grep: 0 occurrences) — but that must be CONFIRMED from a real request
+         before the verification logic is changed. Guessing at a signature scheme is how an
+         endpoint ends up accepting unsigned webhooks.
+
+         SAFETY: header NAMES are recorded but their VALUES are redacted except for a length and
+         a 6-char prefix — enough to identify the scheme, never enough to replay it. The body is
+         captured with obvious secret-bearing keys stripped. Nothing here weakens verification:
+         the request is still rejected on the next line exactly as before. */
+      let _diag = null;
+      try {
+        const hdrNames = Object.keys(req.headers || {});
+        const interesting = hdrNames.filter(h => /sign|auth|hmac|token|challenge|digest|x-intasend/i.test(h));
+        _diag = {
+          headerNames: hdrNames.join(",").slice(0, 500),
+          signatureHeaders: interesting.map(h => {
+            const v = String(req.headers[h] || "");
+            return h + "=len:" + v.length + ":" + v.slice(0, 6);
+          }).join(" | ").slice(0, 400),
+          bodyKeys: (req.body && typeof req.body === "object") ? Object.keys(req.body).join(",").slice(0, 300) : null,
+          hasChallengeField: !!(req.body && (req.body.challenge !== undefined)),
+          challengeLen: (req.body && req.body.challenge !== undefined) ? String(req.body.challenge).length : null,
+          rawBodyLen: (rawBody || "").length,
+          contentType: String(req.headers["content-type"] || "").slice(0, 60),
+          userAgent: String(req.headers["user-agent"] || "").slice(0, 80),
+          sourceIp: String(req.headers["x-forwarded-for"] || "").split(",")[0].trim().slice(0, 45),
+          /* Body with anything secret-shaped removed. */
+          bodySample: (() => {
+            try {
+              const b = JSON.parse(JSON.stringify(req.body || {}));
+              ["challenge", "signature", "token", "secret", "api_key", "apikey"].forEach(k => { if (k in b) b[k] = "[REDACTED len:" + String(b[k]).length + "]"; });
+              return JSON.stringify(b).slice(0, 1200);
+            } catch (_) { return null; }
+          })(),
+        };
+      } catch (_) { /* diagnosis must never break rejection */ }
+
+      console.error("[Webhook:" + provider + "] Invalid signature for " + eventId,
+        JSON.stringify(_diag || {}));
       await db.collection("webhookLogs").add({
         provider, eventId, status: "invalid_signature",
+        diag: _diag,
         ts: admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
       return;
