@@ -4243,6 +4243,69 @@ var CarHubPro = (function(){
   }
 
   /* ── MECHANICS ── */
+  /* ── LIVE MECHANICS (Firestore) ──────────────────────────────────────────────
+     The Mechanics tab used to render DEMO_MECHS: ten fabricated garages carrying
+     dialable phone numbers (0712001001…) and verified:true. Real customers could call a
+     fake "verified" business. Meanwhile mechanics.html held the correct Firestore query
+     but was merged into this hub and now redirects on its line 8, so its code never ran —
+     genuine merchants were written to `mechanics` and displayed nowhere.
+
+     Same collection, same ordering as mechanics.html, so both stay in step. */
+  var _mechFsCache = null;                     /* null = not loaded yet            */
+  var _mechFsState = 'idle';                   /* idle | loading | ready | error   */
+
+  async function _loadMechanicsFs(){
+    if(_mechFsState === 'loading' || _mechFsState === 'ready') return _mechFsCache;
+    _mechFsState = 'loading';
+    try{
+      var appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+      var fsMod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var app = appMod.getApps()[0];
+      if(!app){ _mechFsState='error'; return null; }
+      /* orderBy createdAt desc — identical to mechanics.html. Note this EXCLUDES any
+         document without a createdAt field, which is why onboarding always sets it. */
+      var snap = await fsMod.getDocs(
+        fsMod.query(fsMod.collection(fsMod.getFirestore(app), 'mechanics'),
+                    fsMod.orderBy('createdAt','desc')));
+      _mechFsCache = snap.docs.map(function(d){
+        var o = d.data(); o.id = d.id; return o;
+      });
+      _mechFsState = 'ready';
+    }catch(e){
+      _mechFsState = 'error';
+      _mechFsCache = null;
+      try{ console.warn('[CarHub] mechanics load failed:', e && e.message); }catch(_){}
+    }
+    return _mechFsCache;
+  }
+
+  /* Live merchants + this device's locally-registered ones. DEMO_MECHS is deliberately
+     NOT included: showing invented businesses in a real marketplace is worse than showing
+     none, because the phone numbers get dialled. */
+  function _mechSource(){
+    var out = (_mechFsCache || []).slice();
+    try {
+      Object.keys(localStorage).forEach(function(k){
+        if(k.indexOf('sokoniMechReg_')===0){
+          var d=JSON.parse(localStorage.getItem(k));
+          if(d&&d.name&&d.phone){
+            out.push({id:k,name:d.name,type:'garage',spec:d.specs||'general',emoji:'🔧',
+              location:d.location||'nairobi',area:d.location||'',phone:d.phone,years:1,
+              rate:0,services:d.specs?d.specs.split(','):[],features:['mpesa'],
+              rating:5.0,jobs:0,verified:false,bio:'Newly registered mechanic on SOKONI.'});
+          }
+        }
+      });
+    } catch(e){}
+    return out;
+  }
+
+  /* Firestore documents are author-controlled and may omit fields that DEMO_MECHS always
+     had. Reading .features.includes() or .services.join() off undefined throws, and one
+     bad document would blank the ENTIRE grid — so every access below is defensive. */
+  function _mechStr(v){ return (v === undefined || v === null) ? '' : String(v); }
+  function _mechArr(v){ return Array.isArray(v) ? v : []; }
+
   function renderMechanicsGrid(){
     var grid = document.getElementById('mechGrid');
     if(!grid) return;
@@ -4252,36 +4315,35 @@ var CarHubPro = (function(){
     var verif= (document.getElementById('mechVerifiedFilter')||{}).checked;
     var spec = _mechSpecFilter;
 
-    var list = DEMO_MECHS.filter(function(m){
+    /* Loading + error states, preserved in the existing empty-state styling. */
+    if(_mechFsState === 'idle' || _mechFsState === 'loading'){
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);"><div style="font-size:48px;margin-bottom:12px;">🔧</div><div style="font-size:14px;font-weight:700;">Loading mechanics…</div></div>';
+      if(_mechFsState === 'idle') _loadMechanicsFs().then(renderMechanicsGrid);
+      return;
+    }
+    if(_mechFsState === 'error' && !_mechSource().length){
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);"><div style="font-size:48px;margin-bottom:12px;">⚠️</div><div style="font-size:14px;font-weight:700;">Could not load mechanics</div><div style="font-size:12px;margin-top:6px;">Check your connection and try again</div></div>';
+      return;
+    }
+
+    var list = _mechSource().filter(function(m){
       if(city && m.location !== city) return false;
-      if(emer && !m.features.includes('247')) return false;
+      if(emer && _mechArr(m.features).indexOf('247') === -1) return false;
       if(verif && !m.verified) return false;
       if(spec !== 'all'){
-        var hay = (m.spec+' '+m.type+' '+m.services.join(' ')+' '+m.bio).toLowerCase();
+        var hay = (_mechStr(m.spec)+' '+_mechStr(m.type)+' '+_mechArr(m.services).join(' ')+' '+_mechStr(m.bio)).toLowerCase();
         if(hay.indexOf(spec.toLowerCase()) === -1) return false;
       }
       if(q){
         var s = q.toLowerCase();
-        var hay2 = (m.name+' '+m.area+' '+m.services.join(' ')+' '+m.bio+' '+m.spec).toLowerCase();
+        var hay2 = (_mechStr(m.name)+' '+_mechStr(m.area)+' '+_mechArr(m.services).join(' ')+' '+_mechStr(m.bio)+' '+_mechStr(m.spec)).toLowerCase();
         if(hay2.indexOf(s) === -1) return false;
       }
       return true;
     });
 
-    /* also pull localStorage registered mechanics */
-    try {
-      Object.keys(localStorage).forEach(function(k){
-        if(k.indexOf('sokoniMechReg_')===0){
-          var d=JSON.parse(localStorage.getItem(k));
-          if(d&&d.name&&d.phone){
-            list.push({id:k,name:d.name,type:'garage',spec:d.specs||'general',emoji:'🔧',
-              location:d.location||'nairobi',area:d.location||'',phone:d.phone,years:1,
-              rate:0,services:d.specs?d.specs.split(','):[],features:['mpesa'],
-              rating:5.0,jobs:0,verified:false,bio:'Newly registered mechanic on SOKONI.'});
-          }
-        }
-      });
-    } catch(e){}
+    /* localStorage-registered mechanics are folded in by _mechSource() above, so they are
+       filtered on the same terms as everyone else rather than bypassing the filters. */
 
     if(!list.length){
       grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.25);"><div style="font-size:48px;margin-bottom:12px;">🔧</div><div style="font-size:14px;font-weight:700;">No mechanics found</div><div style="font-size:12px;margin-top:6px;">Try adjusting your search or filters</div></div>';
@@ -4289,17 +4351,19 @@ var CarHubPro = (function(){
     }
 
     grid.innerHTML = list.map(function(m){
-      var phone = m.phone.replace(/^0/,'254').replace(/\D/g,'');
-      var waMsg = encodeURIComponent('Hi '+m.name+'! I found you on SOKONI Car Hub. I need help with my vehicle. Can you assist?');
-      var stars = _stars(m.rating);
-      var featHtml = m.features.map(function(f){ return '<span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.18);color:#fb923c;">'+(FEAT_LBL[f]||f)+'</span>'; }).join('');
-      var svcHtml = m.services.slice(0,4).map(function(s){ return '<span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);">'+s+'</span>'; }).join('');
+      /* Defensive: a merchant who has not yet supplied a phone (onboarded but incomplete)
+         must not throw and take the whole grid down with them. */
+      var phone = _mechStr(m.phone).replace(/^0/,'254').replace(/\D/g,'');
+      var waMsg = encodeURIComponent('Hi '+_mechStr(m.name)+'! I found you on SOKONI Car Hub. I need help with my vehicle. Can you assist?');
+      var stars = _stars(m.rating || 0);
+      var featHtml = _mechArr(m.features).map(function(f){ return '<span style="font-size:10px;padding:2px 8px;border-radius:5px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.18);color:#fb923c;">'+(FEAT_LBL[f]||f)+'</span>'; }).join('');
+      var svcHtml = _mechArr(m.services).slice(0,4).map(function(s){ return '<span style="font-size:9px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);">'+s+'</span>'; }).join('');
       return '<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:20px;padding:18px;transition:all .2s;cursor:pointer;" onmouseover="this.style.borderColor=\'rgba(249,115,22,0.35)\';this.style.transform=\'translateY(-3px)\'" onmouseout="this.style.borderColor=\'rgba(255,255,255,0.07)\';this.style.transform=\'none\'">'
         +'<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">'
         +'<div style="width:52px;height:52px;border-radius:14px;background:linear-gradient(135deg,rgba(249,115,22,0.2),rgba(251,191,36,0.1));display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">'+m.emoji+'</div>'
         +'<div style="flex:1;min-width:0;">'
         +'<div style="font-size:15px;font-weight:800;color:white;margin-bottom:1px;">'+m.name+(m.verified?' <span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:800;padding:2px 7px;border-radius:20px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;vertical-align:middle;">✓ Verified</span>':'')+'</div>'
-        +'<div style="font-size:11px;color:#f97316;font-weight:700;margin-bottom:2px;">'+m.spec.charAt(0).toUpperCase()+m.spec.slice(1)+' · '+m.years+' yrs exp</div>'
+        +'<div style="font-size:11px;color:#f97316;font-weight:700;margin-bottom:2px;">'+(_mechStr(m.spec)?_mechStr(m.spec).charAt(0).toUpperCase()+_mechStr(m.spec).slice(1):'Mechanic')+(m.years?' · '+m.years+' yrs exp':'')+'</div>'
         +'<div style="font-size:11px;color:rgba(255,255,255,0.4);">📍 '+m.area+'</div>'
         +'</div></div>'
         +'<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:10px;"><span style="color:#fbbf24;">'+stars+'</span> '+m.rating+' &nbsp;·&nbsp; '+m.jobs+' jobs</div>'
@@ -4324,7 +4388,9 @@ var CarHubPro = (function(){
   }
 
   function openMechBooking(mechId){
-    var m = DEMO_MECHS.find(function(x){ return x.id===mechId; });
+    /* Book against the LIVE list — DEMO_MECHS is no longer rendered, so looking a booking
+       up there would fail for every real merchant. */
+    var m = _mechSource().find(function(x){ return x.id===mechId; });
     if(!m){ showFleetMsg('Mechanic not found.'); return; }
     _bookingMech = m;
     var phone = m.phone.replace(/^0/,'254').replace(/\D/g,'');
