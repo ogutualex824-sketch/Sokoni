@@ -3342,7 +3342,9 @@ async function approveApp(i){
   /* 4 — open WhatsApp so admin can send real notification */
   var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
   if(phone.length>=12){
-    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://sokoni-aeb26.web.app and start listing. Welcome aboard! — SOKONI Team');
+    /* Canonical public domain only — this is the first URL a new merchant ever receives.
+       sokoni-aeb26.web.app is engineering infrastructure and must never reach a merchant. */
+    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://mysokoni.co.ke and start listing. Welcome aboard! — SOKONI Team');
     window.open('https://wa.me/'+phone+'?text='+waMsg,'_blank','noopener');
   }
   toast('✅ Approved: '+a.name+(a.uid?' — roles updated':'')+' — WhatsApp opened');
@@ -3473,7 +3475,8 @@ async function approveDriver(fsId, idx){
 
   var phone = (a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
   if(phone.length>=12){
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI driver application has been approved. Log in at https://sokoni-aeb26.web.app/driver.html and start earning. Welcome aboard! — SOKONI Team');
+    /* Canonical public domain, extensionless (cleanUrls:true) to avoid a redirect hop. */
+    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI driver application has been approved. Log in at https://mysokoni.co.ke/driver and start earning. Welcome aboard! — SOKONI Team');
     window.open('https://wa.me/'+phone+'?text='+msg,'_blank','noopener');
   }
   toast('✅ Driver approved: '+(a.fullName||a.name));
