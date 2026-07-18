@@ -4153,68 +4153,10 @@ function mvDeleteVehicle(vehicleId, label,_c) {
 ══════════════════════════════════════════════ */
 var CarHubPro = (function(){
   /* ── DATA ── */
-  var DEMO_MECHS = [
-    { id:"MCH001", name:"Kamau Auto Garage", type:"garage", spec:"general", emoji:"🔧",
-      location:"nairobi", area:"Industrial Area, Nairobi", phone:"0712001001", years:15,
-      rate:1500, services:["Engine overhaul","Brake pads","Oil change","Suspension","Gearbox"],
-      features:["diag","mpesa","warranty"], rating:4.9, jobs:432, verified:true,
-      bio:"15 years in Industrial Area. Specialists in Toyota, Nissan & Subaru. OBD diagnostics on site." },
-    { id:"MCH002", name:"Patrick Mobile Mechanic", type:"mobile", spec:"mobile", emoji:"🔧",
-      location:"nairobi", area:"Westlands / CBD", phone:"0723002002", years:8,
-      rate:1000, services:["Roadside repair","Battery jump-start","Tyre change","Oil top-up","AC regas"],
-      features:["mpesa","247"], rating:4.8, jobs:287, verified:true,
-      bio:"Come to you anywhere in Nairobi within 30 mins. 24/7 emergency callout. No callout fee within 15 km." },
-    { id:"MCH003", name:"Coast Auto Electricals", type:"electrician", spec:"electrical", emoji:"⚡",
-      location:"mombasa", area:"Changamwe, Mombasa", phone:"0734003003", years:12,
-      rate:1200, services:["ECU repair","Wiring","Alternator","Starter motor","Central locking","Alarm"],
-      features:["diag","mpesa","warranty"], rating:4.8, jobs:198, verified:true,
-      bio:"Mombasa's top auto electrician. All makes. ECU reprogramming, anti-theft systems, full electrical diagnostics." },
-    { id:"MCH004", name:"Precision Wheel & Tyre", type:"tyre", spec:"tyres", emoji:"🔄",
-      location:"nairobi", area:"Mombasa Road, Nairobi", phone:"0745004004", years:10,
-      rate:800, services:["Tyre fitting","Wheel balancing","Alignment","Nitrogen inflation","Puncture repair"],
-      features:["mpesa","warranty"], rating:4.7, jobs:876, verified:true,
-      bio:"All tyre brands. Same-day fitment. Digital wheel alignment. Truck tyres available." },
-    { id:"MCH005", name:"Pro Body & Paint Shop", type:"bodyshop", spec:"bodywork", emoji:"🎨",
-      location:"nairobi", area:"South C, Nairobi", phone:"0756005005", years:14,
-      rate:2000, services:["Panel beating","Spray paint","Denting","Chrome work","Rust treatment"],
-      features:["mpesa","warranty"], rating:4.8, jobs:156, verified:true,
-      bio:"Professional panel beating and spray painting. Insurance approved. All paint types including metallic." },
-    { id:"MCH006", name:"Kisumu Motors Garage", type:"garage", spec:"general", emoji:"🔧",
-      location:"kisumu", area:"Kondele, Kisumu", phone:"0767006006", years:9,
-      rate:1200, services:["General repair","Engine","Clutch","Brakes","Exhaust","AC service"],
-      features:["mpesa","diag"], rating:4.6, jobs:312, verified:true,
-      bio:"Kisumu's trusted garage since 2015. All Japanese and European makes. Quick turnaround guaranteed." },
-    { id:"MCH007", name:"4x4 Safari Mechanics", type:"garage", spec:"4x4", emoji:"🛻",
-      location:"nairobi", area:"Karen, Nairobi", phone:"0778007007", years:18,
-      rate:2500, services:["Land Cruiser","Prado","Defender","Lift kits","Diff locks","Winch install","Snorkels"],
-      features:["diag","mpesa","warranty","tow"], rating:5.0, jobs:203, verified:true,
-      bio:"Kenya's #1 4x4 and offroad specialist. Land Cruiser, Defender, Pajero, Ranger. Safari prep packages." },
-    { id:"MCH008", name:"Nakuru AC & Cooling", type:"garage", spec:"aircon", emoji:"❄️",
-      location:"nakuru", area:"Section 58, Nakuru", phone:"0789008008", years:7,
-      rate:1000, services:["AC gas recharge","Compressor repair","Radiator flush","Coolant","Fan motor"],
-      features:["mpesa","warranty"], rating:4.7, jobs:445, verified:false,
-      bio:"AC specialists for all vehicles. Radiator and cooling system experts. Quick 2-hour service." },
-    { id:"MCH009", name:"Thika Road Auto Centre", type:"dealer", spec:"diagnosis", emoji:"🔍",
-      location:"nairobi", area:"Roasters, Thika Rd", phone:"0700009009", years:11,
-      rate:2000, services:["Full diagnostics","Engine management","ABS","Airbags","Transmission ECU","DPF cleaning"],
-      features:["diag","mpesa","warranty"], rating:4.9, jobs:167, verified:true,
-      bio:"Advanced diagnostics for all makes. BMW, Mercedes, Audi, VW specialists. ADAS calibration." },
-    { id:"MCH010", name:"Eldoret Diesel Specialists", type:"garage", spec:"transmission", emoji:"⚙️",
-      location:"eldoret", area:"Langas, Eldoret", phone:"0711010010", years:16,
-      rate:2000, services:["Gearbox rebuild","Differential","Transfer case","Propshaft","Engine rebuild"],
-      features:["mpesa","warranty","tow"], rating:4.8, jobs:289, verified:true,
-      bio:"Diesel engine and gearbox specialists. Trucks, pickups, matatus. 16 years rebuilding gearboxes." },
-    { id:"MCH011", name:"Machakos Roadside Help", type:"mobile", spec:"mobile", emoji:"🔧",
-      location:"machakos", area:"Machakos Town", phone:"0722011011", years:5,
-      rate:800, services:["Puncture","Battery boost","Fuel delivery","Tow hookup","Emergency repair"],
-      features:["mpesa","247","tow"], rating:4.5, jobs:134, verified:false,
-      bio:"24/7 roadside assistance in Machakos and along Mombasa highway. 30-minute response time." },
-    { id:"MCH012", name:"Nairobi Gearbox Centre", type:"garage", spec:"transmission", emoji:"⚙️",
-      location:"nairobi", area:"Enterprise Road, Industrial Area", phone:"0733012012", years:20,
-      rate:2200, services:["Auto gearbox","Manual gearbox","Clutch kit","Flywheel","CV joints","Driveshaft"],
-      features:["diag","mpesa","warranty"], rating:4.9, jobs:521, verified:true,
-      bio:"20 years rebuilding automatic and manual gearboxes. All makes. 6-month warranty on rebuilt gearboxes." }
-  ];
+  /* DEMO_MECHS (twelve fabricated garages) was deleted here. It carried dialable phone
+     numbers and verified:true on businesses that do not exist, so it must never come back.
+     The Mechanics tab reads Firestore via _loadMechanicsFs()/_mechSource() below. If the
+     collection is empty the grid shows its empty state — that is the correct behaviour. */
 
   var FEAT_LBL = { diag:"🔍 OBD Diag", mpesa:"💳 M-Pesa", warranty:"✅ Warranty", "247":"⏰ 24/7", tow:"🚗 Towing" };
 
@@ -4244,7 +4186,7 @@ var CarHubPro = (function(){
 
   /* ── MECHANICS ── */
   /* ── LIVE MECHANICS (Firestore) ──────────────────────────────────────────────
-     The Mechanics tab used to render DEMO_MECHS: ten fabricated garages carrying
+     The Mechanics tab used to render DEMO_MECHS: twelve fabricated garages carrying
      dialable phone numbers (0712001001…) and verified:true. Real customers could call a
      fake "verified" business. Meanwhile mechanics.html held the correct Firestore query
      but was merged into this hub and now redirects on its line 8, so its code never ran —
