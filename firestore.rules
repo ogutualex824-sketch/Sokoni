@@ -111,6 +111,19 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* Administrator invitations. Written EXCLUSIVELY by the inviteUser /
+       resendInvitation / reconcileInvitations Cloud Functions via the Admin SDK,
+       which bypasses these rules — so every client-side write is denied outright.
+       A client that could create an invitation could grant itself a role, and a
+       client that could edit one could mark itself accepted. Admins read the
+       dashboard through listInvitations, not by querying this collection. */
+    match /invitations/{inviteId} {
+      allow read:   if isAdmin();
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+
     match /providers/{providerId} {
       allow read:   if isAuthed();
       allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();

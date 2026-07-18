@@ -9667,3 +9667,13 @@ exports.profileSaveProfessional       = _profEng.profileSaveProfessional;
    lost. See functions/route-diag.js. */
 const _routeDiag = require("./route-diag");
 exports.routeDiag = _routeDiag.routeDiag;
+
+/* ── Administrator invitation system ───────────────────────────────────────────
+   Completes the onboarding subsystem: admin-created users automatically receive a
+   production invitation. Writes only canonical identity/role fields and hands off to
+   the existing onboarding UI. See docs/CANONICAL_ONBOARDING_SCHEMA.md. */
+const _adminInvites = require("./admin-invitations");
+exports.inviteUser            = _adminInvites.inviteUser;
+exports.resendInvitation      = _adminInvites.resendInvitation;
+exports.listInvitations       = _adminInvites.listInvitations;
+exports.reconcileInvitations  = _adminInvites.reconcileInvitations;
