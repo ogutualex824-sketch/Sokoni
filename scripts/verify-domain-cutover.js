@@ -88,14 +88,61 @@ function fetchPinned(host, ip, family) {
   if (seenAAAA.size === 0) FAIL('no AAAA record — IPv6 clients cannot reach the site');
   else PASS('AAAA records observed: ' + [...seenAAAA].join(', '));
 
-  /* ── 2. Legacy origin must be gone ── */
-  console.log('\n  [2] Legacy origin exposure');
+  /* ── 2. Legacy origin must be gone ──
+     PHASE 1 GATE. DNS no longer pointing at the legacy host is NOT sufficient: while that
+     host still answers for this Host header, any client with a stale resolver anywhere in
+     the world reaches it and gets its 404. Probe it directly, regardless of DNS. */
+  console.log('\n  [2] Legacy origin exposure  (PHASE 1 GATE)');
   const leaked = [...seenA].filter((ip) => LEGACY_IPS.includes(ip));
   if (leaked.length) FAIL('apex still resolves to the legacy host: ' + leaked.join(', '));
   else PASS('no legacy origin IP in DNS');
 
+  for (const ip of LEGACY_IPS) {
+    const r = await fetchPinned(APEX, ip, 4);
+    if (r.err) { PASS('legacy host ' + ip + ' no longer answers (' + r.err + ')'); continue; }
+    const server = r.headers.server || '(none)';
+    const loc = r.headers.location || '';
+    const redirectsHome = (r.status === 301 || r.status === 308) && /mysokoni\.co\.ke/i.test(loc);
+    if (redirectsHome) {
+      PASS('legacy host ' + ip + ' returns ' + r.status + ' -> ' + loc + ' (stale clients recover)');
+    } else {
+      FAIL('legacy host ' + ip + ' STILL SERVING: HTTP ' + r.status + '  server=' + server +
+           (loc ? '  -> ' + loc : ''));
+      INFO('   Any client with a stale resolver reaches this and sees the wrong site.');
+      INFO('   Disable the vhost, or make it 301/308 to https://' + APEX + '/');
+    }
+  }
+
+  /* www must not be answerable from the legacy host either. */
+  for (const ip of LEGACY_IPS) {
+    const r = await fetchPinned('www.' + APEX, ip, 4);
+    if (r.err) { PASS('legacy host does not answer for www (' + r.err + ')'); continue; }
+    const ok = (r.status === 301 || r.status === 308) && /mysokoni\.co\.ke/i.test(r.headers.location || '');
+    (ok ? PASS : FAIL)('legacy host for www.' + APEX + ': HTTP ' + r.status +
+      (r.headers.location ? ' -> ' + r.headers.location : '  server=' + (r.headers.server || '?')));
+  }
+
   const direct = [...seenA].filter((ip) => !isCloudflare(ip));
   if (direct.length) INFO('note: ' + direct.join(', ') + ' is not a Cloudflare range — confirm this is intended (Firebase A records are valid here)');
+
+  /* ── 2b. IPv6 parity with Firebase ──
+     PHASE 2 GATE. Firebase publishes AAAA for its own hosts; a custom domain only has it
+     if the AAAA record was actually added. Compare against Firebase's own answer rather
+     than assuming a value. */
+  console.log('\n  [2b] IPv6 records  (PHASE 2 GATE)');
+  const fbAAAA = await resolveWith(RESOLVERS[0][1], 'sokoni-aeb26.web.app', 'AAAA');
+  if (fbAAAA.recs && fbAAAA.recs.length) {
+    INFO('Firebase publishes AAAA for sokoni-aeb26.web.app: ' + fbAAAA.recs.join(', '));
+    if (!seenAAAA.size) {
+      FAIL('custom domain has NO AAAA — IPv6-only clients cannot reach the site');
+      INFO('   Confirm the expected record in the Firebase Console custom-domain panel,');
+      INFO('   then add it for ' + APEX + ' and www.' + APEX + '.');
+    } else {
+      PASS('custom domain publishes AAAA: ' + [...seenAAAA].join(', '));
+    }
+  } else {
+    INFO('could not read Firebase AAAA — skipping IPv6 comparison');
+  }
 
   /* ── 3. Every resolved IP must serve the app, on both families ──
      A host with no IPv6 stack cannot test IPv6. Reporting that as a site failure would be
