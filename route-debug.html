@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+<link rel="shortcut icon" href="/favicon.ico">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SOKONI — Route Diagnostic</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+  :root{--bg:#050505;--sur:#0d0d0d;--bor:#1e1e1e;--txt:#e8e8e8;--sub:#8a8a8a;--g:#71ff00;--r:#ff4d4d;--y:#ffb020}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+       padding:max(16px,env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom))}
+  h1{font-size:19px;font-weight:900;margin-bottom:2px}
+  .sub{font-size:12px;color:var(--sub);margin-bottom:16px;line-height:1.5}
+  .card{background:var(--sur);border:1px solid var(--bor);border-radius:12px;padding:13px;margin-bottom:10px}
+  .k{font-size:10px;font-weight:800;color:var(--sub);text-transform:uppercase;letter-spacing:.07em;margin-bottom:7px}
+  .row{display:flex;gap:10px;padding:5px 0;font-size:12.5px;line-height:1.45;border-bottom:1px solid rgba(255,255,255,.05)}
+  .row:last-child{border-bottom:none}
+  .row b{flex:0 1 auto;min-width:0;color:var(--sub);font-weight:600}
+  .row span{flex:1 1 auto;min-width:0;text-align:right;overflow-wrap:anywhere;font-family:ui-monospace,Menlo,monospace;font-size:11.5px}
+  .ok{color:var(--g)} .bad{color:var(--r)} .warn{color:var(--y)}
+  button{width:100%;min-height:48px;margin-top:12px;border-radius:12px;border:1px solid rgba(113,255,0,.35);
+         background:rgba(113,255,0,.08);color:var(--g);font-size:14px;font-weight:800;font-family:inherit;cursor:pointer}
+  pre{margin-top:10px;padding:10px;background:#000;border:1px solid var(--bor);border-radius:8px;
+      font-size:10px;color:#9ad;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto}
+</style>
+</head>
+<body>
+
+<h1>Route Diagnostic</h1>
+<p class="sub">Open this on the device that shows the wrong page, then tap <b>Copy report</b> and send it back.
+It records what actually happened on <i>this</i> device — the redirect chain, the service worker, what is
+cached under <code>/</code>, and any stored route state.</p>
+
+<div id="out"></div>
+<button id="copy">Copy report</button>
+<button id="rootTest" style="border-color:rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:var(--txt)">
+  Fetch “/” and show its real title
+</button>
+<pre id="raw"></pre>
+
+<script>
+'use strict';
+var R = {};   /* the report */
+
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function card(title, rows){
+  var h = '<div class="card"><div class="k">'+esc(title)+'</div>';
+  rows.forEach(function(r){
+    h += '<div class="row"><b>'+esc(r[0])+'</b><span class="'+(r[2]||'')+'">'+esc(r[1])+'</span></div>';
+  });
+  return h + '</div>';
+}
+
+(async function(){
+  var out = '';
+
+  /* ── 1. How did we arrive here? ─────────────────────────────────────────────
+     performance navigation entries record redirectCount and the navigation TYPE
+     (navigate / reload / back_forward). A back_forward with a stale entry is a very
+     different bug from a server redirect, and this is the only way to tell them apart
+     after the fact. */
+  var nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+  R.url = location.href;
+  R.referrer = document.referrer || '(none)';
+  R.navType = nav.type || '(unknown)';
+  R.redirectCount = nav.redirectCount != null ? nav.redirectCount : '(unknown)';
+  R.displayMode = (window.matchMedia && matchMedia('(display-mode: standalone)').matches)
+                  ? 'standalone (installed PWA)'
+                  : (navigator.standalone ? 'standalone (iOS home screen)' : 'browser tab');
+  out += card('This visit', [
+    ['URL', R.url],
+    ['Referrer', R.referrer],
+    ['Navigation type', R.navType, R.navType === 'back_forward' ? 'warn' : ''],
+    ['Redirects on the way here', R.redirectCount, (R.redirectCount > 0 ? 'warn' : 'ok')],
+    ['Launched as', R.displayMode],
+    ['User agent', navigator.userAgent.slice(0, 90)],
+  ]);
+
+  /* ── 2. Service worker ─────────────────────────────────────────────────────── */
+  var swRows = [];
+  try {
+    var ctrl = navigator.serviceWorker && navigator.serviceWorker.controller;
+    R.swController = ctrl ? ctrl.scriptURL : null;
+    swRows.push(['Controlling this page', ctrl ? 'YES' : 'no', ctrl ? 'ok' : 'warn']);
+    if (ctrl) swRows.push(['Script', ctrl.scriptURL.replace(location.origin, '')]);
+    var regs = navigator.serviceWorker ? await navigator.serviceWorker.getRegistrations() : [];
+    R.swRegistrations = regs.map(function(r){ return { scope:r.scope, active: r.active && r.active.scriptURL,
+                                                       waiting: !!r.waiting, installing: !!r.installing }; });
+    swRows.push(['Registrations', String(regs.length)]);
+    regs.forEach(function(r,i){
+      swRows.push(['#'+(i+1)+' scope', r.scope.replace(location.origin,'') || '/']);
+      if (r.waiting)    swRows.push(['#'+(i+1)+' waiting', 'YES — an update is queued', 'warn']);
+    });
+  } catch(e){ swRows.push(['error', e.message, 'bad']); }
+  out += card('Service worker', swRows);
+
+  /* ── 3. What is cached under "/"? ───────────────────────────────────────────
+     This is the decisive check for cache poisoning: if the SW has a store page stored
+     under the "/" key, every visit to the bare root will render that store page. */
+  var cRows = [];
+  try {
+    var names = await caches.keys();
+    R.cacheNames = names;
+    cRows.push(['Caches', String(names.length)]);
+    R.rootCached = [];
+    for (var i=0;i<names.length;i++){
+      var c = await caches.open(names[i]);
+      var hit = await c.match('/') || await c.match(location.origin + '/');
+      if (hit){
+        var txt = await hit.clone().text();
+        var m = txt.match(/<title>([^<]*)<\/title>/i);
+        var title = m ? m[1] : '(no title)';
+        var bad = /store|merchant|shop profile/i.test(title);
+        R.rootCached.push({ cache:names[i], title:title, bytes:txt.length, looksLikeStore:bad });
+        cRows.push(['“/” in ' + names[i].slice(-16), title.slice(0,44), bad ? 'bad' : 'ok']);
+        if (bad) cRows.push(['VERDICT', 'CACHE POISONED — “/” holds a store page', 'bad']);
+      }
+    }
+    if (!R.rootCached.length) cRows.push(['“/” cached', 'not cached', 'warn']);
+  } catch(e){ cRows.push(['error', e.message, 'bad']); }
+  out += card('Cache storage — what “/” resolves to', cRows);
+
+  /* ── 4. Stored route state ──────────────────────────────────────────────────── */
+  var sRows = [];
+  function keys(store, label){
+    try {
+      var all = Object.keys(store);
+      var interesting = all.filter(function(k){ return /store|shop|merchant|route|page|last|redirect|return/i.test(k); });
+      sRows.push([label + ' keys', String(all.length)]);
+      interesting.forEach(function(k){
+        var v = String(store.getItem(k) || '').slice(0, 70);
+        var suspicious = /\/(store|shop|merchant|@)/i.test(v);
+        sRows.push([k, v, suspicious ? 'bad' : '']);
+      });
+      return interesting.reduce(function(o,k){ o[k] = String(store.getItem(k)||'').slice(0,140); return o; }, {});
+    } catch(e){ sRows.push([label, 'blocked: ' + e.message, 'warn']); return {}; }
+  }
+  R.localStorage   = keys(localStorage, 'localStorage');
+  R.sessionStorage = keys(sessionStorage, 'sessionStorage');
+  out += card('Stored route state', sRows);
+
+  document.getElementById('out').innerHTML = out;
+  document.getElementById('raw').textContent = JSON.stringify(R, null, 1);
+})();
+
+/* Fetch the real "/" bypassing the SW, so we can compare what the NETWORK returns with
+   what the device is rendering. If these disagree, the problem is local to the device. */
+document.getElementById('rootTest').addEventListener('click', async function(){
+  var el = document.getElementById('raw');
+  el.textContent = 'fetching / …';
+  try {
+    var res = await fetch('/?__diag=' + Date.now(), { cache:'reload' });
+    var t = await res.text();
+    var m = t.match(/<title>([^<]*)<\/title>/i);
+    R.networkRootTitle = m ? m[1] : '(no title)';
+    R.networkRootStatus = res.status;
+    R.networkRootRedirected = res.redirected;
+    R.networkRootFinalUrl = res.url;
+    el.textContent = 'NETWORK “/” →\n  status: ' + res.status +
+      '\n  redirected: ' + res.redirected +
+      '\n  final URL: ' + res.url +
+      '\n  title: ' + R.networkRootTitle +
+      '\n\n(If this says Marketplace but your screen shows a store, the problem is on this ' +
+      'device — cache or service worker — not the server.)\n\n' + JSON.stringify(R, null, 1);
+  } catch(e){ el.textContent = 'fetch failed: ' + e.message; }
+});
+
+document.getElementById('copy').addEventListener('click', function(){
+  var txt = JSON.stringify(R, null, 2);
+  if (navigator.clipboard) navigator.clipboard.writeText(txt).then(function(){ alert('Report copied — paste it back.'); },
+                                                                  function(){ prompt('Copy:', txt); });
+  else prompt('Copy this report:', txt);
+});
+</script>
+</body>
+</html>
