@@ -1,0 +1,19 @@
+<!-- SOKONI / Bravilex premium divider.
+     Authored as SVG, not extracted: a gradient rule is vector by nature, so this is
+     genuinely resolution-independent at every size — sharper than any 4x PNG and ~1 KB.
+     Gold stops are MEASURED from assets/Bravilex identity.png, not eyeballed. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 8" width="1200" height="8"
+     role="presentation" aria-hidden="true" preserveAspectRatio="none">
+  <defs>
+    <linearGradient id="skDivider" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0"    stop-color="#a8761a" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#b88626" stop-opacity="0.65"/>
+      <stop offset="0.42" stop-color="#d8a639" stop-opacity="1"/>
+      <stop offset="0.5"  stop-color="#edbf50" stop-opacity="1"/>
+      <stop offset="0.58" stop-color="#d8a639" stop-opacity="1"/>
+      <stop offset="0.82" stop-color="#b88626" stop-opacity="0.65"/>
+      <stop offset="1"    stop-color="#a8761a" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="3.25" width="1200" height="1.5" fill="url(#skDivider)"/>
+</svg>

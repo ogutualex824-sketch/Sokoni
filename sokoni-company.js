@@ -70,8 +70,18 @@
     /* Reusable legal strings */
     footerCopyright:  '© 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved.',
     operatedBy:       'Operated by Bravilex International Co. Limited',   /* legal operator line */
-    poweredBy:        'Powered by SOKONI',                                /* brand statement (customer-facing) */
+    poweredBy:        'Powered by SOKONI',                                /* PRODUCT statement  */
     ownershipStatement: 'SOKONI is owned and operated by Bravilex International Co. Limited.',
+
+    /* ── Corporate attribution (Brand Architecture v2.0) ────────────────────────
+       SOKONI-first, Bravilex-attributed. These name the party the product is built
+       BY — never the party the user transacts WITH. Rendering Bravilex as the actor
+       in a transaction ("Bravilex Wallet", "Paid to Bravilex") stays forbidden and is
+       still guard-enforced, because a user could reasonably think their money sits
+       with a company they have no relationship with.
+       Must be visually SUBORDINATE to the SOKONI mark — see docs/BRAND_POLICY.md. */
+    poweredByBravilex: 'Powered by Bravilex',
+    aBravilexCompany:  'A Bravilex Company',
   };
 
   /* Organization JSON-LD (SEO / structured data). */

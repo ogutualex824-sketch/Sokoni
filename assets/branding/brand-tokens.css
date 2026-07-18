@@ -1,0 +1,89 @@
+/* ============================================================================
+   SOKONI × BRAVILEX — BRAND TOKENS v1.0
+   ----------------------------------------------------------------------------
+   Every colour here was MEASURED from assets/Bravilex identity.png by decoding the
+   PNG and clustering its saturated pixels — not sampled by eye and not invented.
+   The gold is a metallic gradient in the artwork, so it is expressed as a RAMP
+   (dark -> mid -> light -> highlight); a single flat gold cannot reproduce it.
+
+   Usage: import once, then reference the variables. Never hard-code these hexes
+   into a page — a token changed in one place must change everywhere.
+
+       <link rel="stylesheet" href="/assets/branding/brand-tokens.css">
+       border-bottom: 1px solid var(--bx-gold);
+
+   BRAND POLICY: these tokens are colour only. WHERE the Bravilex name and marks may
+   appear is governed by docs/BRAND_POLICY.md — customer-facing surfaces are SOKONI.
+   ============================================================================ */
+
+:root {
+  /* ── Bravilex gold ramp (measured) ─────────────────────────────────────────
+     Sampled across the metallic B, the wordmark and the rules beneath it. */
+  --bx-gold-900:  #a8761a;   /* deepest shadow tone            */
+  --bx-gold-700:  #b88626;   /* body of the metal              */
+  --bx-gold-500:  #c8952a;   /* mid                            */
+  --bx-gold:      #d8a639;   /* CANONICAL gold — use this one  */
+  --bx-gold-300:  #edbf50;   /* specular highlight             */
+
+  /* Metallic fill for large marks. A flat fill reads as mustard; the ramp is what
+     makes it read as gold. Use on text via background-clip, or as a rule/box fill. */
+  --bx-gold-metal: linear-gradient(135deg,
+                     var(--bx-gold-900) 0%,
+                     var(--bx-gold) 38%,
+                     var(--bx-gold-300) 52%,
+                     var(--bx-gold) 66%,
+                     var(--bx-gold-700) 100%);
+
+  /* ── Bravilex blue (measured — the globe + the swoosh) ─────────────────── */
+  --bx-blue-900:  #042e5c;
+  --bx-blue:      #063466;   /* CANONICAL blue */
+  --bx-blue-600:  #053b75;
+  --bx-blue-400:  #074688;
+
+  /* ── SOKONI green (measured — the basket mark) ─────────────────────────── */
+  --sk-green-900: #176602;
+  --sk-green-700: #277803;
+  --sk-green:     #378703;   /* CANONICAL brand green in the LOGO            */
+  --sk-green-400: #559628;
+  /* NOTE: the product UI accent (#71ff00) is a separate, brighter token that
+     already exists in sokoni-tokens.css. They are NOT interchangeable: #71ff00 is
+     the interface accent, --sk-green is the logo green. Do not swap them. */
+
+  /* ── Surfaces the marks are cleared against ────────────────────────────── */
+  --bx-surface-dark:  #0a0a0a;
+  --bx-surface-light: #ffffff;
+
+  /* ── Exclusion zone ────────────────────────────────────────────────────────
+     Clear space around any logo = 25% of its rendered height, on all four sides.
+     Nothing — text, rule, icon, edge — may enter it. */
+  --bx-logo-clearance: 0.25em;
+
+  /* ── Minimum legible sizes (below these the subtitle turns to mush) ─────── */
+  --bx-logo-min-height:     32px;  /* full lockup with "INTERNATIONAL CO. LIMITED" */
+  --bx-mark-min-height:     16px;  /* icon only                                   */
+  --bx-wordmark-min-height: 14px;  /* typography only                             */
+}
+
+/* Reusable gold text treatment — the correct way to render the wordmark in HTML
+   rather than shipping a raster of it. */
+.bx-gold-text {
+  background: var(--bx-gold-metal);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  /* Fallback for engines without background-clip:text — a flat gold beats invisible. */
+  @supports not (background-clip: text) { color: var(--bx-gold); }
+}
+
+/* Enforce the exclusion zone declaratively so it cannot be forgotten. */
+.bx-logo,
+.bx-mark,
+.bx-wordmark { display: block; padding: var(--bx-logo-clearance); box-sizing: content-box; }
+.bx-logo     { min-height: var(--bx-logo-min-height); }
+.bx-mark     { min-height: var(--bx-mark-min-height); }
+.bx-wordmark { min-height: var(--bx-wordmark-min-height); }
+
+.bx-divider {
+  width: 100%; height: 8px; border: 0;
+  background: url('/assets/branding/premium-divider.svg') center/100% 100% no-repeat;
+}

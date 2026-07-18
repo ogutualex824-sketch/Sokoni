@@ -71,6 +71,22 @@ const FORBIDDEN = [
    and the backend settlement account. These phrases put Bravilex in a
    customer-facing brand position (payment / wallet / checkout / subscription /
    merchant dashboard) and must NEVER appear anywhere in source. */
+/* Brand Architecture v2.0 (docs/BRAND_POLICY.md) — SOKONI-first, Bravilex-attributed.
+ *
+ * The line this guard enforces is ATTRIBUTION vs SUBSTITUTION:
+ *
+ *   "Powered by Bravilex"  names who BUILT the product   -> permitted (v2.0)
+ *   "Bravilex Wallet"      names who HOLDS YOUR MONEY    -> forbidden, always
+ *
+ * Every pattern below makes Bravilex the actor or counterparty in a transaction. A user
+ * reading "Bravilex Wallet" or "Paid to Bravilex" could reasonably believe their balance
+ * sits with a company they have no relationship with — that is a consumer-protection
+ * problem, not a branding preference, which is why this list does NOT relax with the
+ * brand architecture.
+ *
+ * v1.0 also banned "Powered by Bravilex". v2.0 permits it as corporate attribution: the
+ * parent company is real and may be credited. It must stay visually subordinate to the
+ * SOKONI mark (a rule for review, not something a regex can check). */
 const BRAND_FORBIDDEN = [
   /Bravilex\s+Payment\s+Confirmed/i,
   /Paid\s+to\s+Bravilex/i,
@@ -82,7 +98,6 @@ const BRAND_FORBIDDEN = [
   /Bravilex\s+(Earnings|Sales|Orders|Settlements)/i,
   /Subscribed\s+via\s+Bravilex/i,
   /Bravilex\s+Subscription/i,
-  /Powered\s+by\s+Bravilex/i,   // legal footer must read "Operated by …", not "Powered by"
 ];
 /* JSON-LD must brand as SOKONI (name) with Bravilex only in legalName. */
 const JSONLD_NAME_BRAVILEX = /"name"\s*:\s*"Bravilex\b/i;
@@ -126,10 +141,20 @@ for (const file of files) {
     if (text.includes(bad)) errors.push(`${rel}: contains obsolete literal "${bad}"`);
   }
 
-  // Customer-Facing Brand Policy: no Bravilex in a brand position.
+  /* Brand Architecture v2.0: Bravilex may be attributed, never substituted.
+     Scan CODE ONLY — comments are stripped first. A comment that quotes a forbidden
+     string in order to explain why it is forbidden is documentation, not a violation;
+     flagging it teaches people to delete the explanation instead of fixing the code.
+     (Same reasoning as the comment-stripping in scripts/test-overlays.js.) */
+  const code = text
+    .replace(/\/\*[\s\S]*?\*\//g, '')     /* block comments  */
+    .replace(/^\s*\/\/.*$/gm, '')         /* line comments   */
+    .replace(/<!--[\s\S]*?-->/g, '');     /* HTML comments   */
   for (const rx of BRAND_FORBIDDEN) {
-    const m = text.match(rx);
-    if (m) errors.push(`${rel}: brand-policy violation — "${m[0]}" (customer-facing brand must be SOKONI; Bravilex only in legal footer / tax issuer / settlement account)`);
+    const m = code.match(rx);
+    if (m) errors.push(`${rel}: brand-policy violation — "${m[0]}" names Bravilex as the party the user TRANSACTS WITH. ` +
+      `Corporate attribution ("Powered by Bravilex", "A Bravilex Company") is permitted; naming Bravilex as the ` +
+      `wallet/checkout/counterparty is not. Use the SOKONI equivalent. See docs/BRAND_POLICY.md v2.0.`);
   }
   if (JSONLD_NAME_BRAVILEX.test(text))
     errors.push(`${rel}: JSON-LD uses Bravilex as "name" — brand should be "SOKONI" with Bravilex in "legalName"`);
