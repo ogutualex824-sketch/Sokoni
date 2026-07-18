@@ -3,6 +3,17 @@
 Items deferred out of RC1 by explicit change-control decision. **None is implemented during
 RC1.** Each is a confirmed defect with evidence, not a speculative improvement.
 
+> **Formal deferral — 2026-07-17.** T-1 and T-2 were reviewed and explicitly deferred by change
+> control. Rationale on record: they are outside approved RC1 scope, they modify **financial
+> transaction behaviour**, neither is verified as pilot-blocking, and introducing runtime changes
+> during the release-candidate window would reduce confidence that RC1 behaves as validated.
+>
+> **Scheduled as the first engineering work after Phase 0**, subject to re-confirming they are
+> still relevant against production evidence gathered during the pilot.
+>
+> Governing principle: *the goal is no longer to maximise improvements before release — it is to
+> maximise confidence that the release candidate behaves exactly as expected in production.*
+
 Governing rule for both items: **invariant 10 (Read-ordered) / forbidden pattern F7** in
 [FINANCIAL_TRANSACTION_STANDARD.md](FINANCIAL_TRANSACTION_STANDARD.md) — every Firestore
 transaction completes all reads before the first write.
