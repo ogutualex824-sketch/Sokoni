@@ -2034,6 +2034,26 @@ async function sendStkPush(){
     }
   }
 
+  /* The payment SDK must exist BEFORE we tell the customer we are contacting M-PESA.
+     `new window.IntaSend(...)` sits outside the try block above, so when the SDK is absent it
+     threw an unhandled TypeError AFTER activateStkStep(1) and after the "Connecting" toast —
+     leaving the button stuck on "⏳ Connecting to M-PESA..." forever. The customer saw a frozen
+     checkout, not an error. Observed in production 2026-07-18: cdn.intasend.com returns NXDOMAIN,
+     so window.IntaSend is permanently undefined and every M-PESA attempt hung.
+
+     A blocked CDN, an ad-blocker or a flaky connection reproduce this identically, so the guard
+     is required regardless of the CDN outage. Fail closed, say so plainly, and leave the button
+     usable — never imply a payment is in flight when no processor was reachable. */
+  if (typeof window.IntaSend !== 'function') {
+    if (btn) { btn.disabled = false; btn.innerHTML = '⚠️ Retry Payment'; }
+    showPushToast(
+      "Payment unavailable",
+      "We couldn't reach our payment processor. You have NOT been charged and no order was placed. Please try again shortly.",
+      "orange"
+    );
+    return;
+  }
+
   activateStkStep(1);
   btn.innerHTML = '⏳ Connecting to M-PESA...';
   showPushToast("📲 Connecting", "Sending STK Push to 0" + phone.slice(3), "green");
@@ -2226,6 +2246,15 @@ function processCardPayment(){
 
   const btn = document.querySelector(".card-pay-btn");
   if(btn){ btn.disabled = true; btn.textContent = "⏳ Processing..."; }
+
+  /* Explicit SDK check. This path already failed closed via the catch below (the TypeError from
+     `new window.IntaSend` fell through to _cardFallback, which charges nothing and places no
+     order — correct behaviour). Checking directly is still better: it does not rely on an
+     exception for control flow, and it keeps the reason visible if the catch is ever narrowed. */
+  if(INTASEND_PUBLIC_KEY && typeof window.IntaSend !== 'function'){
+    _cardFallback(num, btn);
+    return;
+  }
 
   if(INTASEND_PUBLIC_KEY){
     /* IntaSend hosted card checkout — open IntaSend's secure page */
