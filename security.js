@@ -537,26 +537,76 @@ const SokoniSecurity = (() => {
 
            The element keeps its id (#_sokoniPrivacyBanner) — other code and the CI gates
            reference it. */
-        b.style.cssText = [
-          "position:fixed","inset:0",
-          "z-index:99997",
-          "display:flex","align-items:center","justify-content:center",
-          "padding:20px",
-          "padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px))",
-          "padding-top:calc(20px + env(safe-area-inset-top, 0px))",
-          "box-sizing:border-box",
-          "background:rgba(0,0,0,0.66)",
-          "backdrop-filter:blur(4px)",
-          "-webkit-backdrop-filter:blur(4px)",
-          "font-family:'Segoe UI',system-ui,sans-serif"
-        ].join(";");
-        b.setAttribute("role", "dialog");
-        b.setAttribute("aria-modal", "true");
-        b.setAttribute("aria-labelledby", "_sokoniPrivacyTitle");
+        /* ── AUTH PAGES ARE THE ONE EXCEPTION ─────────────────────────────────────
+           P0, 2026-07-18: on /signup and /login the full-screen backdrop covered the
+           form. Measured on production: elementFromPoint at the centre of
+           #signupPassword returned BUTTON#_sokoniPrivacyAcceptBtn, and Playwright's
+           click on the password field timed out. Users reported "password fields not
+           accepting input" and "cannot create accounts" — the form was rendered and
+           looked usable, but every tap hit the consent backdrop.
+
+           The modal is CORRECT everywhere else and must stay: the comment above records
+           why a bar was worse — a stray tap on a live control (POS, Revenue) silently
+           consented instead. That risk does not exist here. An auth page has no quick
+           actions to mis-tap; it has one form the user came specifically to fill.
+
+           So on auth routes only: a BOTTOM SHEET. No backdrop, no inset:0, so the form
+           stays visible and tappable, and the sheet reserves its own height as body
+           padding so it cannot cover the submit button at the foot of the form. Consent
+           is still required and still one tap away — it simply no longer blocks the
+           thing the user is trying to do. */
+        var _p = (location.pathname || "").replace(/\.html$/, "");
+        var _isAuthPage = /^\/(login|signup|register|forgot-password|reset-password)$/i.test(_p);
+
+        if (_isAuthPage) {
+          b.style.cssText = [
+            "position:fixed","left:0","right:0","bottom:0",
+            "z-index:99997",
+            "display:flex","justify-content:center",
+            "padding:12px",
+            "padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px))",
+            "box-sizing:border-box",
+            "background:transparent",          /* no backdrop — nothing is blocked */
+            "pointer-events:none",             /* only the sheet itself is interactive */
+            "font-family:'Segoe UI',system-ui,sans-serif"
+          ].join(";");
+          /* Not aria-modal: it does not trap the page, and claiming otherwise would tell
+             a screen reader the form behind is unavailable when it is fully usable. */
+          b.setAttribute("role", "region");
+          b.setAttribute("aria-label", "Privacy and cookies");
+        } else {
+          b.style.cssText = [
+            "position:fixed","inset:0",
+            "z-index:99997",
+            "display:flex","align-items:center","justify-content:center",
+            "padding:20px",
+            "padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px))",
+            "padding-top:calc(20px + env(safe-area-inset-top, 0px))",
+            "box-sizing:border-box",
+            "background:rgba(0,0,0,0.66)",
+            "backdrop-filter:blur(4px)",
+            "-webkit-backdrop-filter:blur(4px)",
+            "font-family:'Segoe UI',system-ui,sans-serif"
+          ].join(";");
+          b.setAttribute("role", "dialog");
+          b.setAttribute("aria-modal", "true");
+          b.setAttribute("aria-labelledby", "_sokoniPrivacyTitle");
+        }
         b.innerHTML = [
-          "<div style='width:100%;max-width:400px;box-sizing:border-box;",
+          /* pointer-events:auto — the auth-page wrapper is pointer-events:none so the form
+             behind stays tappable; the sheet itself must still receive taps. Harmless on
+             the modal variant, where the wrapper is already interactive.
+
+             On auth pages the card is also CAPPED: at full height it was 45% of an iPhone
+             viewport and still covered #signupPassword. Capping at 32vh with internal
+             scroll keeps the whole consent text available while leaving the form usable.
+             Same content, same controls — only the footprint changes. */
+          "<div style='width:100%;max-width:400px;box-sizing:border-box;pointer-events:auto;",
             "background:#0d0d0d;border:1px solid rgba(113,255,0,0.22);border-radius:18px;",
-            "padding:22px 20px;box-shadow:0 20px 60px rgba(0,0,0,0.7);'>",
+            (_isAuthPage
+              ? "padding:14px 16px;max-height:32vh;overflow-y:auto;-webkit-overflow-scrolling:touch;"
+              : "padding:22px 20px;"),
+            "box-shadow:0 20px 60px rgba(0,0,0,0.7);'>",
 
             "<div id='_sokoniPrivacyTitle' style='font-size:16px;font-weight:800;color:white;margin-bottom:8px;'>",
               "🍪 Privacy &amp; Cookies</div>",
@@ -586,8 +636,39 @@ const SokoniSecurity = (() => {
         ].join("");
         document.body.appendChild(b);
 
-        /* Keyboard users must be able to reach Accept without tabbing the page behind. */
-        try { document.getElementById("_sokoniPrivacyAcceptBtn").focus({ preventScroll: true }); } catch (_) {}
+        /* Keyboard users must be able to reach Accept without tabbing the page behind.
+           NOT on auth pages: the sheet does not trap the page there, and pulling focus out
+           of the signup form the moment it renders would fight the user for the caret —
+           a subtler version of the bug being fixed. Accept stays reachable by Tab. */
+        if (!_isAuthPage) {
+          try { document.getElementById("_sokoniPrivacyAcceptBtn").focus({ preventScroll: true }); } catch (_) {}
+        }
+
+        /* Reserve the sheet's height so it cannot sit over the submit button at the foot
+           of the form. The modal branch deliberately reserves nothing (see below). */
+        if (_isAuthPage) {
+          try {
+            /* Measure on the next frame: read before layout settles and the height comes
+               back short, which is exactly how a "reserved" strip ends up too small to
+               keep the submit button clear. */
+            var _prevPad = document.body.style.paddingBottom;
+            var _applyPad = function () {
+              var _h = Math.ceil(b.getBoundingClientRect().height || 0);
+              document.documentElement.style.setProperty("--sk-consent-h", _h + "px");
+              document.body.style.paddingBottom =
+                "calc(" + (_prevPad || "0px") + " + " + _h + "px)";
+            };
+            if (window.requestAnimationFrame) requestAnimationFrame(_applyPad);
+            else setTimeout(_applyPad, 0);
+            window.addEventListener("resize", _applyPad, { passive: true });
+            /* Released by the Accept handler below. */
+            b._skRestorePad = function () {
+              window.removeEventListener("resize", _applyPad);
+              document.body.style.paddingBottom = _prevPad;
+              document.documentElement.style.setProperty("--sk-consent-h", "0px");
+            };
+          } catch (_) {}
+        }
 
         /* The old bar was position:fixed at the foot of the page, so it reserved body
            padding to avoid overlaying the controls beneath it. A MODAL needs the opposite:
@@ -709,6 +790,9 @@ const SokoniSecurity = (() => {
 
         document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){
           localStorage.setItem("sokoniPrivacyAccepted", Date.now().toString());
+          /* Give back the space the bottom sheet reserved on auth pages, so the form does
+             not keep a strip of dead padding under it after consent. No-op elsewhere. */
+          try { if (b._skRestorePad) b._skRestorePad(); } catch (_) {}
           /* Fade the backdrop out. (The old slide-down belonged to a bottom bar; on a
              centred dialog it would have slid the modal off the bottom of the screen.) */
           b.style.setProperty('opacity', '0');
