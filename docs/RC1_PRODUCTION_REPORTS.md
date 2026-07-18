@@ -323,3 +323,59 @@ documented, none on the pilot trading path.
 
 *All findings derive from observed production behaviour. Nothing is inferred. Items lacking direct
 evidence are marked PENDING and are named explicitly above.*
+
+---
+
+# 5. RC1 Engineering Closure — 2026-07-18
+
+**The engineering phase of RC1 is CLOSED.** Operational acceptance is now the final release gate.
+
+## Final RC1 status
+
+| Area | Status |
+|---|---|
+| Infrastructure | **PASS** |
+| Application | **PASS** |
+| Security | **PASS** |
+| Composite indexes | **PASS** |
+| DNS propagation | **CONDITIONAL** |
+| Interactive validation | **PENDING** |
+
+## Governance in force
+
+**Infrastructure is frozen** unless new evidence demonstrates a genuine fault. No speculative
+changes while waiting for DNS cache expiry.
+
+All future reports must continue to distinguish four separate categories — conflating them is what
+produces false findings:
+
+| Category | Example from this cycle |
+|---|---|
+| **Infrastructure defect** | apex served by a foreign LiteSpeed origin; missing composite indexes |
+| **Resolver cache artifact** | `217.20.124.84` returned by a stale recursive cache while the authoritative zone was clean |
+| **Tooling artifact** | the `cleanUrls` 25-byte redirect stub, and a broken `lookup()` callback that reported 28 false FAILs |
+| **Operational validation** | interactive sign-in, live payment, receipt print — absence of evidence, not evidence of failure |
+
+## Operational Acceptance Checklist — the final release gate
+
+Complete **before** onboarding the first merchant. Capture logs and evidence for each step; a step
+without evidence is not complete.
+
+| # | Step | Evidence to capture |
+|---|---|---|
+| 1 | Interactive Google Sign-In on a production device | device + OS + browser; screenshot of an authenticated session; confirm no redirect loop and session survives a refresh |
+| 2 | One successful low-value M-PESA payment | STK prompt, M-PESA confirmation code, order state transition, commission-ledger entry |
+| 3 | One successful receipt print on supported hardware | printer make/model + transport (BT/USB/network); photograph of the printed receipt |
+| 4a | Real merchant account — **inventory** | product created via `posUpsertProduct`; confirm `price` + `stockQty` readable by checkout |
+| 4b | Real merchant account — **sale** | inventory decrements exactly once; `posStockMovements` audit row written |
+| 4c | Real merchant account — **wallet** | balance reads (exercises index I-1); deduct and refund each move value once |
+| 4d | Real merchant account — **accounting** | P&L / balance sheet / VAT return data (exercises I-2 and the `5773607` routing fix) |
+| 4e | Real merchant account — **reporting** | sales listing, customer history, shift report all return data |
+| 4f | Real merchant account — **settlement visibility** | settlement preview reconciles against the day's takings (payout is manual for the pilot) |
+
+Steps 4a–4f also close the outstanding **I-1…I-4 query-execution** gap, which could not be proven
+from the engineering environment (`invalid_client` — no production Admin credentials).
+
+## Go-live recommendation: **CONDITIONAL GO**
+
+Engineering work is complete. Operational acceptance remains outstanding and is the final gate.
