@@ -250,6 +250,54 @@ window.ManagerAuth = (() => {
       || 'default';
   }
 
+  /* ── Server-side authorization plumbing ──────────────────────────
+     PIN verification used to be performed entirely on the client: every manager's salted hash
+     lived in IndexedDB and _checkPIN() compared against it locally, so anyone with devtools
+     could approve their own refunds, voids, price overrides and stock adjustments.
+
+     Verification is now server-first via the deployed validateDeviceAccess callable, which
+     rate-limits (5 attempts / uid / 5 min), resolves the PIN against posStaff (a CF-only
+     collection) and logs every attempt. The local hash remains ONLY as an offline fallback —
+     see _checkPIN. High-risk operations refuse the fallback entirely. */
+  function _merchantId() {
+    return window._posMerchantId || localStorage.getItem('sokoni_merchant_id') || null;
+  }
+  function _branchId() {
+    return window._posBranchId || localStorage.getItem('sokoni_branch_id') || null;
+  }
+  function _online() {
+    return typeof navigator === 'undefined' ? true : navigator.onLine !== false;
+  }
+
+  /* Operations where a forged approval moves money or stock. These NEVER accept the offline
+     fallback — an unverifiable approval is worse than making the cashier wait for signal. */
+  const HIGH_RISK_OPS = ['refund', 'void', 'price_override', 'stock_adjustment', 'inventory_correction'];
+
+  /** Verify a PIN against the server. Returns {valid, employee} or null when unreachable. */
+  async function _verifyPinServer(pin) {
+    const merchantId = _merchantId();
+    const branchId   = _branchId();
+    if (!merchantId || !branchId) return null;            // not provisioned — cannot verify
+    let callable;
+    try {
+      if (!window.firebase?.functions) return null;
+      callable = firebase.functions().httpsCallable('validateDeviceAccess');
+    } catch (_) { return null; }
+
+    try {
+      const res = await callable({ merchantId, branchId, pin: String(pin) });
+      const d = res && res.data ? res.data : {};
+      return { valid: !!d.valid, employee: d.employee || null };
+    } catch (e) {
+      /* resource-exhausted = server rate limit tripped. Surface it rather than silently
+         falling back to the local check, which would defeat the limit entirely. */
+      if (e && (e.code === 'resource-exhausted' || e.code === 'functions/resource-exhausted')) {
+        return { valid: false, employee: null, rateLimited: true };
+      }
+      return null;                                        // network/transport failure -> offline path
+    }
+  }
+
   function _cashier() {
     const c = window.state?.currentCashier || {};
     return { id: c.id || 'unknown', name: c.name || 'Cashier' };
@@ -675,15 +723,64 @@ window.ManagerAuth = (() => {
   }
 
   async function _checkPIN() {
+    const pin = _pinDigits;
+    const op  = _currentOp || '';
+    const highRisk = HIGH_RISK_OPS.indexOf(op) !== -1;
+
+    /* ── 1. Server first — authoritative, rate-limited, audited ── */
+    let server = null;
+    if (_online()) {
+      _setStatus('Verifying…');
+      server = await _verifyPinServer(pin);
+    }
+
+    if (server && server.rateLimited) {
+      _pinDigits = ''; _flashDots();
+      _setStatus('Too many PIN attempts. Wait 5 minutes and try again.', 'err');
+      return;
+    }
+    if (server && server.valid) {
+      _pinDigits = '';
+      const e = server.employee || {};
+      _closeModal({
+        approved: true,
+        manager: { id: e.id, name: e.name || 'Manager', role: e.role || 'manager', permissions: e.permissions || [] },
+        method: 'pin',
+        verifiedBy: 'server',
+      });
+      return;
+    }
+    if (server && !server.valid) {                 // server reachable and said NO — authoritative
+      _rejectPIN();
+      return;
+    }
+
+    /* ── 2. Server unreachable ──
+       High-risk operations must not proceed on an unverifiable approval: a forged local hash
+       here would move money or stock. Everything else may fall back to the local hash so the
+       shop keeps trading through a connectivity drop. */
+    if (highRisk) {
+      _pinDigits = ''; _flashDots();
+      _setStatus('No connection. This action needs online manager approval.', 'err');
+      return;
+    }
+
     const managers = await listManagers();
     for (const mgr of managers) {
-      const hash = await _sha256(mgr.pinSalt + ':' + _pinDigits);
+      const hash = await _sha256(mgr.pinSalt + ':' + pin);
       if (hash === mgr.pinHash) {
         _pinDigits = '';
-        _closeModal({ approved: true, manager: mgr, method: 'pin' });
+        /* Queue a server-side audit record so the offline approval is reconciled on reconnect —
+           an offline approval must still be accountable. */
+        _queueOfflineAuthAudit(op, mgr);
+        _closeModal({ approved: true, manager: mgr, method: 'pin', verifiedBy: 'offline-fallback' });
         return;
       }
     }
+    _rejectPIN();
+  }
+
+  function _rejectPIN() {
     _pinAttempts++;
     _pinDigits = '';
     _flashDots();
@@ -693,6 +790,23 @@ window.ManagerAuth = (() => {
     } else {
       _setStatus(`Incorrect PIN — ${_cfg.maxPinAttempts - _pinAttempts} attempt(s) left`, 'err');
     }
+  }
+
+  /** Record an offline approval locally; flushed to the server audit trail on reconnect. */
+  function _queueOfflineAuthAudit(operation, mgr) {
+    try {
+      const q = JSON.parse(localStorage.getItem('sokoni_offline_auth_audit') || '[]');
+      q.push({
+        operation,
+        managerId:  mgr && mgr.id,
+        managerName: mgr && mgr.name,
+        merchantId: _merchantId(),
+        branchId:   _branchId(),
+        verifiedBy: 'offline-fallback',
+        at:         Date.now(),
+      });
+      localStorage.setItem('sokoni_offline_auth_audit', JSON.stringify(q.slice(-200)));
+    } catch (_) { /* audit queue must never block the sale */ }
   }
 
   function _flashDots() {

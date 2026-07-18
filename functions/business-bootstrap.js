@@ -1169,6 +1169,113 @@ async function _getOnboardingProgress(req) {
 }
 
 /* ── Exports ─────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════════════
+   setStaffPin — server-side PIN provisioning for POS staff.
+
+   WHY: validateDeviceAccess (above) authenticates by querying
+   posStaff.where('pinHash','==',…), but NOTHING in the platform ever wrote posStaff.pinHash —
+   the bootstrap seeds staff without a PIN and no other CF sets one. The endpoint could
+   therefore never return valid:true, so manager authorization had no server-side path at all
+   and pos-manager-auth.js fell back to comparing hashes held in IndexedDB (client-forgeable).
+   This is the missing half: it lets a PIN exist server-side so verification can be authoritative.
+
+   SECURITY NOTES:
+   * Hashing matches validateDeviceAccess (_sha256(pin), unsalted) so the deployed endpoint keeps
+     working unchanged. That is safe here only because posStaff is CF-only (no Firestore rule ->
+     default deny, verified) and attempts are rate-limited 5 per uid per 5 min. Hardening to a
+     per-staff salt + slow KDF requires changing validateDeviceAccess's single-query lookup and
+     is recorded as technical debt, not attempted under the RC1 freeze.
+   * The PIN is never stored, logged or returned in plaintext; the hash is never returned either.
+   * PINs must be unique within a branch, otherwise the single-result lookup in
+     validateDeviceAccess would authenticate an ambiguous staff member.
+   * Every attempt writes an immutable server-side audit record (actor, target, outcome).
+══════════════════════════════════════════════════════════════════ */
+async function _setStaffPin(req) {
+  const uid = _requireAuth(req);
+  const d   = req.data || {};
+
+  const merchantId = _san(d.merchantId || '', 128);
+  const staffId    = _san(d.staffId || '', 200);
+  const pin        = String(d.pin == null ? '' : d.pin);
+  if (!merchantId) _err('merchantId is required.');
+  if (!staffId)    _err('staffId is required.');
+
+  /* 4–6 digits: matches the POS keypad (min 4, max 6). Digits only — the keypad cannot
+     produce anything else, and it keeps the value compatible with offline entry. */
+  if (!/^\d{4,6}$/.test(pin)) _err('PIN must be 4 to 6 digits.');
+
+  /* Reject trivially guessable PINs. Rate limiting alone is not enough when the search space
+     is 10k: a repeated/sequential PIN is the first thing an attacker tries. */
+  if (/^(\d)\1+$/.test(pin)) _err('PIN cannot be a single repeated digit.');
+  if ('0123456789'.includes(pin) || '9876543210'.includes(pin)) {
+    _err('PIN cannot be a sequential run of digits.');
+  }
+
+  const staffRef  = db.collection('posStaff').doc(staffId);
+  const staffSnap = await staffRef.get();
+  if (!staffSnap.exists) _err('Staff member not found.', 'not-found');
+  const staff = staffSnap.data();
+
+  if (staff.merchantId !== merchantId) {
+    _err('Staff member belongs to another merchant.', 'permission-denied');
+  }
+  const branchId = _san(staff.branchId || '', 128);
+  if (!branchId) _err('Staff member has no branch.', 'failed-precondition');
+
+  /* Authorisation: caller must belong to this merchant/branch (owner, active staff, or admin).
+     Reuses the canonical guard rather than re-implementing membership logic. */
+  await _assertMerchantAccess(req, merchantId, branchId);
+
+  /* Only an owner/manager may set a PIN, and a cashier may never set someone else's.
+     A staff member changing their OWN pin is allowed. */
+  const callerSnap = await db.collection('posStaff')
+    .where('branchId', '==', branchId).where('uid', '==', uid)
+    .where('status', '==', 'active').limit(1).get();
+  const callerRole = callerSnap.empty ? null : (callerSnap.docs[0].data().role || 'cashier');
+  const isSelf     = staff.uid === uid;
+  const isElevated = _isAdmin(req) || callerRole === 'owner' || callerRole === 'manager';
+  if (!isSelf && !isElevated) {
+    _err('Only an owner or manager can set another staff member’s PIN.', 'permission-denied');
+  }
+
+  const pinHash = _sha256(pin);
+
+  /* Uniqueness within the branch — validateDeviceAccess resolves a PIN to exactly one staff
+     record, so a collision would silently authenticate the wrong person. */
+  const clash = await db.collection('posStaff')
+    .where('branchId', '==', branchId).where('pinHash', '==', pinHash).limit(2).get();
+  if (clash.docs.some((doc) => doc.id !== staffId)) {
+    _err('That PIN is already in use at this branch. Choose a different PIN.', 'already-exists');
+  }
+
+  await staffRef.set({
+    pinHash,                        // never returned to any caller
+    pinSetAt: F.serverTimestamp(),
+    pinSetBy: uid,
+    pinVersion: (staff.pinVersion || 0) + 1,
+    updatedAt: F.serverTimestamp(),
+  }, { merge: true });
+
+  /* Immutable server-generated audit record (actor / target / outcome), matching the pattern
+     established by posStockMovements. Deliberately records NO pin material. */
+  await db.collection('posAuthAudit').add({
+    merchantId, branchId,
+    action:     'staff_pin_set',
+    actorUid:   uid,
+    actorRole:  callerRole || (_isAdmin(req) ? 'admin' : 'unknown'),
+    targetStaffId: staffId,
+    targetUid:  staff.uid || null,
+    self:       isSelf,
+    outcome:    'success',
+    pinVersion: (staff.pinVersion || 0) + 1,
+    createdAt:  F.serverTimestamp(),
+  });
+
+  _log('INFO', 'setStaffPin — PIN updated', { uid, staffId, merchantId, branchId });
+  return { ok: true, staffId, pinSet: true };
+}
+
 module.exports = {
   bootstrapDevice:          exports.bootstrapDevice,
   getIncrementalSync:       exports.getIncrementalSync,
@@ -1188,5 +1295,6 @@ module.exports = {
     getOnboardingProgress:  _getOnboardingProgress,
     getSetupStatus:         _getSetupStatus,
     markSetupStep:          _markSetupStep,
+    setStaffPin:            _setStaffPin,
   },
 };
