@@ -444,12 +444,47 @@ exports.posLookupCustomer = onCall(cfg, async ({ data, auth }) => {
 /* ════════════════════════════════════════════════════════════════
    posProcessRefund — refund with inventory return
 ════════════════════════════════════════════════════════════════ */
+/* Manager-or-owner authority + merchant membership.
+
+   posProcessRefund previously called _assertAuth(), which only checks that SOMEONE is logged in.
+   Any authenticated user who knew a saleId could therefore refund it: there was no role gate and
+   no check that the caller belonged to the merchant (the only comparison was the client-supplied
+   merchantId against the sale's own merchantId, which an attacker simply supplies correctly).
+   Refunds move real money and return stock, so they now require manager/owner rank AND
+   membership of the merchant that owns the sale. */
+async function _assertRefundAuthority(auth, merchantId) {
+  if (!auth?.uid) _e('Authentication required', 'unauthenticated');
+  const uidStr = auth.uid;
+
+  const role = auth.token?.posRole || 'cashier';
+  const isAdmin = auth.token?.admin === true || auth.token?.superAdmin === true;
+  if (!isAdmin && role !== 'manager' && role !== 'owner') {
+    _e('Refunds require a manager or owner', 'permission-denied');
+  }
+  if (isAdmin) return uidStr;
+
+  /* Membership: business owner, or an active staff member of this merchant. */
+  const [bizSnap, staffSnap] = await Promise.all([
+    db.collection('businesses').doc(String(merchantId)).get(),
+    db.collection('posStaff')
+      .where('merchantId', '==', String(merchantId))
+      .where('uid', '==', uidStr)
+      .where('status', '==', 'active')
+      .limit(1).get(),
+  ]);
+  if (bizSnap.exists && bizSnap.data().ownerId === uidStr) return uidStr;
+  if (!staffSnap.empty) return uidStr;
+  _e('You do not belong to this merchant', 'permission-denied');
+}
+
 exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
-  const managerId = await _assertAuth(auth);
-  const { saleId, items, reason, refundMethod = 'cash', merchantId } = data || {};
-  if (!saleId)    _e('saleId required');
+  const { saleId, items, reason, refundMethod = 'cash', merchantId, idempotencyKey } = data || {};
+  if (!saleId)        _e('saleId required');
   if (!items?.length) _e('items required');
-  if (!reason)    _e('reason required');
+  if (!reason)        _e('reason required');
+  if (!merchantId)    _e('merchantId required');
+
+  const managerId = await _assertRefundAuthority(auth, merchantId);
 
   const saleRef  = db.collection('posRetailSales').doc(saleId);
   const saleSnap = await saleRef.get();
@@ -458,45 +493,66 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
   if (sale.merchantId !== merchantId) _e('Unauthorized', 'permission-denied');
   if (sale.status === 'refunded') _e('Sale already fully refunded');
 
-  const refundId = uid();
+  /* IDEMPOTENCY: refundId used to be a random id, so a double-tapped "Refund" created TWO
+     refund records and returned the stock TWICE. Derive it from the caller's key (falling back
+     to the saleId, since a sale can only be fully refunded once) and short-circuit inside the
+     transaction if it already exists. */
+  const rawKey   = String(idempotencyKey || saleId || '');
+  const refundId = 'rf_' + rawKey.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 100);
+  const refundRef = db.collection('posRefunds').doc(refundId);
+
   let refundTotal = 0;
+  const alreadyDone = await db.runTransaction(async txn => {
+    /* ── ALL READS FIRST ──
+       The original read each product INSIDE the write loop (txn.get after txn.update), which
+       Firestore rejects — every multi-item refund threw at runtime. */
+    const prodRefs = items.map(it => db.collection('posProducts').doc(it.productId));
+    const [refundSnap, ...prodSnaps] = await Promise.all([
+      txn.get(refundRef),
+      ...prodRefs.map(r => txn.get(r)),
+    ]);
 
-  await db.runTransaction(async txn => {
-    for (const refItem of items) {
+    if (refundSnap.exists) return true;            // idempotent replay — change nothing
+
+    refundTotal = 0;
+    /* Validate against the original sale BEFORE writing anything. */
+    const plan = items.map((refItem, idx) => {
       const orig = sale.items.find(i => i.productId === refItem.productId);
-      if (!orig) throw new Error(`Item ${refItem.productId} not in original sale`);
-      if (refItem.qty > orig.qty) throw new Error(`Cannot refund more than sold`);
-      refundTotal += orig.unitPrice * refItem.qty;
+      if (!orig) throw new Error('Item ' + refItem.productId + ' not in original sale');
+      const qty = Number(refItem.qty);
+      if (!Number.isFinite(qty) || qty <= 0) throw new Error('Refund qty must be positive');
+      if (qty > orig.qty) throw new Error('Cannot refund more than sold');
+      refundTotal += orig.unitPrice * qty;
+      return { qty, orig, snap: prodSnaps[idx], ref: prodRefs[idx] };
+    });
 
-      /* Return to inventory */
-      const prodRef = db.collection('posProducts').doc(refItem.productId);
-      const prodSnap = await txn.get(prodRef);
-      if (prodSnap.exists && prodSnap.data().trackInventory !== false) {
-        txn.update(prodRef, {
-          stockQty:       FieldValue.increment(refItem.qty),
-          totalUnitsSold: FieldValue.increment(-refItem.qty),
-          totalRevenue:   FieldValue.increment(-(orig.unitPrice * refItem.qty)),
+    /* ── WRITES ── */
+    plan.forEach(pItem => {
+      if (pItem.snap.exists && pItem.snap.data().trackInventory !== false) {
+        txn.update(pItem.ref, {
+          stockQty:       FieldValue.increment(pItem.qty),
+          totalUnitsSold: FieldValue.increment(-pItem.qty),
+          totalRevenue:   FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
         });
       }
-    }
+    });
 
-    /* Create refund record */
-    const refund = {
+    txn.set(refundRef, {
       id:          refundId,
       saleId,
       merchantId:  _sanitize(merchantId),
-      items,
+      items:       plan.map(x => ({ productId: x.orig.productId, qty: x.qty })),
       refundTotal,
       refundMethod,
       reason:      _sanitize(reason),
       processedBy: managerId,
       createdAt:   FieldValue.serverTimestamp(),
-    };
-    txn.set(db.collection('posRefunds').doc(refundId), refund);
+    });
     txn.update(saleRef, { status: 'refunded', refundId, refundedAt: FieldValue.serverTimestamp() });
+    return false;
   });
 
-  return { refundId, refundTotal };
+  return { refundId, refundTotal, idempotent: alreadyDone };
 });
 
 /* ════════════════════════════════════════════════════════════════

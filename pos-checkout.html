@@ -3123,13 +3123,71 @@ const Checkout = (() => {
   }
 
   /* ── Refund ── */
-  function openRefund() {
-    /* Refunds require manager override — handled in the dedicated POS dashboard */
-    if (_s.items.length) {
-      parkSale();
-      _toast('Cart parked — open POS dashboard to process refund', 'info');
+  async function openRefund() {
+    /* Was a stub: it parked the cart and bounced the cashier to pos.html with a toast, so a
+       refund could not be completed from the checkout screen at all. posProcessRefund existed
+       server-side but nothing ever reached it. Now wired behind a SERVER-VERIFIED manager
+       authorization (SokoniManagerAuth -> validateDeviceAccess) and sent with an idempotency
+       key so a double-tap cannot refund twice. */
+    const saleId = _s.lastSaleId || _s.refundSaleId;
+    if (!saleId) { _toast('Open the sale you want to refund first', 'info'); return; }
+
+    const merchantId = window._posMerchantId || localStorage.getItem('sokoni_merchant_id');
+    if (!merchantId) { _toast('Store not set up - cannot refund', 'error'); return; }
+
+    /* Manager approval is mandatory. 'refund' is a HIGH_RISK op, so manager-auth refuses the
+       offline fallback: no signal means no refund, rather than trusting a local hash. */
+    if (!window.SokoniManagerAuth) { _toast('Manager authorization unavailable', 'error'); return; }
+    let approval = null;
+    try {
+      approval = await window.SokoniManagerAuth.request('refund', {
+        amount: _s.lastSaleTotal || 0,
+        reference: saleId,
+      });
+    } catch (_) { approval = null; }
+    if (!approval || !approval.approved) {
+      _toast('Refund cancelled - manager approval required', 'info');
+      return;
     }
-    setTimeout(() => { window.location.href = 'pos.html'; }, _s.items.length ? 1200 : 0);
+
+    const items = (_s.refundItems && _s.refundItems.length)
+      ? _s.refundItems
+      : (_s.lastSaleItems || []).map(function (i) { return { productId: i.productId, qty: i.qty }; });
+    if (!items.length) { _toast('Nothing to refund', 'error'); return; }
+
+    const reason = String(_s.refundReason || 'Customer refund').slice(0, 200);
+    const idempotencyKey = 'rf_' + saleId;   /* stable across retries of THIS refund */
+
+    try {
+      _toast('Processing refund...', 'info');
+      const fn  = firebase.functions().httpsCallable('posProcessRefund');
+      const res = await fn({
+        saleId: saleId,
+        items: items,
+        reason: reason,
+        refundMethod: _s.refundMethod || 'cash',
+        merchantId: merchantId,
+        idempotencyKey: idempotencyKey,
+      });
+      const d = (res && res.data) || {};
+      _toast(
+        d.idempotent
+          ? 'Refund already processed'
+          : 'Refunded KES ' + Number(d.refundTotal || 0).toLocaleString(),
+        'success'
+      );
+      /* Preserve existing receipt behaviour - reprint via the same engine. */
+      try {
+        if (window.SokoniReceipt && !d.idempotent) {
+          window.SokoniReceipt.print({
+            type: 'refund', refundId: d.refundId, saleId: saleId,
+            total: d.refundTotal, reason: reason,
+          });
+        }
+      } catch (_) { /* a printer fault must never undo a completed refund */ }
+    } catch (e) {
+      _toast((e && e.message) ? e.message : 'Refund failed', 'error');
+    }
   }
 
   /* ── Note ── */
