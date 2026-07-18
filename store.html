@@ -242,17 +242,53 @@
     }
 
     /* ── BUSINESS HOURS ── */
+    /* ── Business hours ────────────────────────────────────────────────────────
+       The right column used to clip on a phone. Two causes, both in this block:
+
+       1. `.st-hour-day` was `flex: 0 0 110px` — a FIXED, non-shrinkable column. When the
+          day carries the OPEN/CLOSED pill, its content is wider than 110px; with
+          flex-shrink:0 the box cannot give way, so the pill spilled into (and over) the
+          time column. That is the "Saturday status is misaligned" symptom.
+
+       2. Neither column set `min-width: 0`. Flex items default to `min-width: auto`, which
+          REFUSES to shrink below the content's intrinsic width — so a long time string like
+          "8:00 AM – 6:00 PM" pushed past the card edge instead of fitting. This is the
+          actual root cause of the clipping, and it is why `overflow-x: hidden` on an
+          ancestor would only have hidden the evidence.
+
+       The row is still two columns, still space-between, still SOKONI styling. It can now
+       shrink to 320px, and a long localised string wraps instead of overflowing. */
     .st-hours-grid { margin-top: 10px; }
     .st-hour-row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 7px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
-      font-size: 13px;
+      gap: 12px;                       /* guarantees separation; space-between alone does not */
+      padding: 9px 0; border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 13px; line-height: 1.35;
     }
     .st-hour-row:last-child { border-bottom: none; }
-    .st-hour-day { color: rgba(255,255,255,0.45); font-weight: 600; display: flex; align-items: center; gap: 7px; flex: 0 0 110px; }
+    .st-hour-day {
+      color: rgba(255,255,255,0.45); font-weight: 600;
+      display: flex; align-items: center; gap: 7px;
+      flex: 0 1 auto;                  /* was 0 0 110px — may now shrink */
+      min-width: 0;                    /* the fix: permit shrinking below content width */
+    }
     .st-hour-day.today { color: white; font-weight: 800; }
-    .st-hour-time   { color: rgba(255,255,255,0.8); font-weight: 700; text-align: right; }
-    .st-hour-closed { color: rgba(255,77,77,0.65);  font-weight: 700; text-align: right; }
+    .st-hour-time, .st-hour-closed {
+      font-weight: 700; text-align: right;
+      flex: 0 1 auto;
+      min-width: 0;                    /* same fix on the right column */
+      overflow-wrap: anywhere;         /* wrap a long string rather than overflow the card */
+    }
+    .st-hour-time   { color: rgba(255,255,255,0.8); }
+    .st-hour-closed { color: rgba(255,77,77,0.65); }
+    /* The pill sits WITH the day, never floating: it is a flex sibling of the label inside
+       the left column, so it tracks the text at every width. flex-shrink:0 keeps the badge
+       itself legible while the label beside it absorbs the shrinking. */
+    .st-hour-day .st-today-pill { flex: 0 0 auto; }
+    @media (max-width: 360px) {
+      .st-hour-row  { gap: 8px; font-size: 12.5px; }
+      .st-hour-day  { letter-spacing: -0.1px; }
+    }
     .st-today-pill {
       font-size: 9px; font-weight: 900; padding: 1px 6px; border-radius: 4px;
       background: rgba(113,255,0,0.12); color: #71ff00; border: 1px solid rgba(113,255,0,0.25);
