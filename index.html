@@ -2,6 +2,14 @@
 <html lang="en" data-splash="1">
 
 <head>
+  <!-- ── CANONICAL TEMPLATE IDENTIFIER ─────────────────────────────────────────
+       The contract that makes the root route verifiable. The service worker reads this
+       out of cached HTML before serving "/", and sokoni-root-guard.js reads it from the
+       live DOM at startup. If the document rendered at "/" is not "marketplace-home",
+       something upstream (cache, SW, session restore) substituted a different template
+       and the guard self-heals rather than leaving the user on the wrong page.
+       MUST stay in the first 2 KB of <head> so a partial read can still find it. -->
+  <meta name="sokoni-page" content="marketplace-home">
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -11,6 +19,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI — Kenya's #1 Online Marketplace | Buy & Sell Products</title>
 
+  <!-- Canonical root guard — verifies this really is the marketplace shell and self-heals
+       if a different template ever renders at "/". Loads FIRST and synchronously so the
+       check runs before the user can interact with a wrong page. Fails open. -->
+  <script src="sokoni-root-guard.js"></script>
   <script src="security.js"></script>
   <script src="splash.js"></script>
   <script>/* Capture ?ref=CODE from referral links — runs before any other JS */

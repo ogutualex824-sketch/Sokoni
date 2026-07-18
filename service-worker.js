@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260718-firebase-config-p0-v80";
+const CACHE_VERSION = "sokoni-20260718-root-guard-v81";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
@@ -347,7 +347,53 @@ self.addEventListener("install", event => {
 /* Client sends SKIP_WAITING (or SW_SKIP_WAITING for back-compat) when safe */
 self.addEventListener("message", event => {
   if (event.data?.type === "SKIP_WAITING" || event.data?.type === "SW_SKIP_WAITING") self.skipWaiting();
+
+  /* Observability: sokoni-root-guard.js asks which cache version is live, so an anomaly
+     report can name the exact build that produced it without the user reproducing it. */
+  if (event.data?.type === "GET_VERSION" && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({ version: CACHE_VERSION });
+  }
 });
+
+/* ── ROOT TEMPLATE INTEGRITY ──────────────────────────────────────────────────
+   Before the SW hands back a CACHED "/", it verifies the document actually is the
+   marketplace shell. index.html declares:
+
+       <meta name="sokoni-page" content="marketplace-home">
+
+   If a cached root ever holds a merchant template — however it got there — serving it
+   would render a store page at the bare domain, which is the reported bug. The cached
+   entry is deleted and the caller falls through to the network instead.
+
+   Reading the body costs a clone + a text decode, so it runs ONLY for the root key, not
+   for every cached page. */
+const ROOT_TEMPLATE = "marketplace-home";
+
+async function rootCacheIsValid(response) {
+  try {
+    if (!response) return false;
+    /* The identifier is in the first 2 KB of <head>; no need to decode a 200 KB document. */
+    const head = (await response.clone().text()).slice(0, 4096);
+    const m = head.match(/<meta\s+name=["']sokoni-page["']\s+content=["']([^"']+)["']/i);
+    if (!m) return true;              /* older build without the tag — trust it, don't thrash */
+    return m[1].trim() === ROOT_TEMPLATE;
+  } catch (e) {
+    return true;                      /* fail OPEN: never withhold a page over a decode error */
+  }
+}
+
+/* Drop every cached spelling of the root so the next fetch repopulates from network. */
+async function purgeRootFromCaches() {
+  try {
+    const names = await caches.keys();
+    await Promise.all(names.map(async (n) => {
+      const c = await caches.open(n);
+      await Promise.all([
+        c.delete("/"), c.delete("/index.html"), c.delete("/?source=pwa"),
+      ].map((p) => p.catch(() => {})));
+    }));
+  } catch (e) { /* best effort */ }
+}
 const TILE_CACHE = "sokoni-tiles-v1";   /* shared constant — tiles survive SW version bumps */
 
 self.addEventListener("activate", event => {
@@ -580,6 +626,22 @@ async function networkFirstPage(request) {
          2. Root "/" cached page (safe fallback for any page in the same SPA)
          3. Offline shell  */
     const cached = await cache.match(request);
+    /* ROOT INTEGRITY: never serve a cached "/" that is not the marketplace shell.
+       A merchant template cached under the root key would render a store page at the
+       bare domain — the reported bug. Verify before serving; purge and fall through if
+       it fails. Only the root pays the decode cost. */
+    if (cached && (url.pathname === "/" || url.pathname === "/index.html")) {
+      if (!(await rootCacheIsValid(cached))) {
+        await purgeRootFromCaches();
+        try {
+          const fresh = await fetch("/", { cache: "reload" });
+          if (fresh && fresh.ok) { cache.put("/", fresh.clone()); return fresh; }
+        } catch (e) { /* offline — fall through to the offline shell below */ }
+        return (await caches.match("/offline")) ||
+               (await caches.match("/offline.html")) ||
+               new Response("Offline", { status: 503 });
+      }
+    }
     if (cached) return cached;
 
     /* Delete the bad cache entry so the next successful load replaces it */

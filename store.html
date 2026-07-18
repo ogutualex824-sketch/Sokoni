@@ -1,6 +1,14 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-splash="1">
 <head>
+  <!-- Canonical template identifier — see index.html. The SW and sokoni-root-guard.js
+       verify this before trusting a cached document. A merchant template must NEVER be
+       what renders at "/". -->
+  <meta name="sokoni-page" content="merchant-profile">
+  <!-- The guard must load on MERCHANT shells too: the failure mode is a merchant
+       template rendering at "/", so a guard living only in index.html could never
+       observe it. Inert unless this document is actually served at the root. -->
+  <script src="sokoni-root-guard.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
