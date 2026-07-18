@@ -6,6 +6,9 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
+<!-- Canonical Firebase config (window.SOKONI_FIREBASE_CONFIG). Classic blocking script:
+     must be defined before any initializeApp() on this page. -->
+<script src="sokoni-config.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -170,7 +173,7 @@ import { initializeApp }  from 'https://www.gstatic.com/firebasejs/11.0.1/fireba
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
 
-const config = window._sokoniConfig || (await import('./sokoni-config.js').then(m => m.default || m));
+const config = (window.SOKONI_FIREBASE_CONFIG || (()=>{ console.error('[SOKONI] Firebase config missing — sokoni-config.js must load first.'); throw new Error('SOKONI_FIREBASE_CONFIG unavailable'); })());   /* was window._sokoniConfig with a dynamic-import fallback; sokoni-config.js is a classic script that sets a global, so the import returned a module namespace, not the config */
 const app    = initializeApp(config);
 const auth   = getAuth(app);
 const fn     = getFunctions(app);

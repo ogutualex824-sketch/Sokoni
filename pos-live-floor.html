@@ -9,6 +9,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Live Floor — SOKONI SmartPOS</title>
 <script src="security.js"></script>
+<!-- Canonical Firebase config (window.SOKONI_FIREBASE_CONFIG). Classic blocking script:
+     must be defined before any initializeApp() on this page. -->
+<script src="sokoni-config.js"></script>
 <script src="shared-header.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -202,7 +205,7 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
 <script>
 'use strict';
 
-const app  = firebase.apps[0] || firebase.initializeApp(window.__sokoniConfig || {});
+const app  = firebase.apps[0] || firebase.initializeApp((window.SOKONI_FIREBASE_CONFIG || (()=>{ console.error('[SOKONI] Firebase config missing — sokoni-config.js must load first.'); throw new Error('SOKONI_FIREBASE_CONFIG unavailable'); })()));
 const auth = firebase.auth();
 const db   = firebase.firestore();
 const fn   = firebase.functions();

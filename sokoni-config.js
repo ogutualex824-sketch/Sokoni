@@ -6,6 +6,38 @@
    Run `firebase functions:secrets:set <KEY>` for server-side keys.
 ============================================================ */
 
+/* ══════════════════════════════════════════════════════════════════
+   CANONICAL FIREBASE CONFIG
+
+   WHY THIS IS HERE (P0, 2026-07-18).
+   Eleven POS/admin pages initialised Firebase with
+   `initializeApp(window._sokoniConfig || {})` — but **nothing anywhere ever defined
+   `_sokoniConfig`**. The `|| {}` fallback swallowed it, so every one of those pages ran
+   `initializeApp({})` with no apiKey and died with `auth/invalid-api-key`. Firebase Auth,
+   Firestore, Storage and every callable Cloud Function were dead on all eleven pages —
+   silently, because the fallback turned a missing config into an obscure auth error instead
+   of a loud failure at load.
+
+   Those pages do NOT load firebase.js, and they import a DIFFERENT SDK version (11.0.1 vs
+   firebase.js's 10.12.2), so they cannot safely share firebase.js's initialised app object.
+   What they can safely share is the config itself — plain data, version-agnostic. This file
+   is already loaded by all eleven as a blocking classic script before their module runs, so
+   it is the correct home.
+
+   VALUES MUST MATCH firebase.js:48-63 EXACTLY. firebase.js keeps its own literal because it
+   is loaded on pages that do not include this file; scripts/verify-firebase-config.js fails
+   the build if the two ever drift.
+══════════════════════════════════════════════════════════════════ */
+window.SOKONI_FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+  authDomain:        "auth.mysokoni.co.ke",
+  projectId:         "sokoni-aeb26",
+  storageBucket:     "sokoni-aeb26.firebasestorage.app",
+  messagingSenderId: "24799054989",
+  appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4",
+  measurementId:     "G-QT32H65TJS"
+};
+
 window.SOKONI_CONFIG = {
 
   /* ── 1. IntaSend M-Pesa (REQUIRED for live payments) ───────
