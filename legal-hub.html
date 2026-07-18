@@ -1666,65 +1666,28 @@ function getLawyers(){
   /* Filter by legal categories */
   const legalCats = new Set(["legal","property","family","criminal","commercial","employment","ip","immigration","human_rights"]);
   const legalProviders = providers.filter(p=>legalCats.has(p.category)||p.isLawyer);
-  /* Merge with hardcoded demo lawyers if no real ones */
-  return legalProviders.length >= 2 ? legalProviders : [...DEMO_LAWYERS, ...legalProviders];
+  /* Verified providers only. A fabricated advocate — invented name, phone, firm and LSK
+     roll number — is not a placeholder, it is a person who does not exist presented as
+     someone a user can retain for a legal matter. An empty directory is honest; a
+     populated fake one is not. The "No advocates found" empty state handles zero results. */
+  return legalProviders;
 }
 
-const DEMO_LAWYERS = [
-  { id:"LAW001", name:"Advocate Grace Wanjiku", phone:"0700111333", category:"property", isLawyer:true,
-    skills:["Property Conveyancing","Land Disputes","Lease Agreements","Title Search"], firm:"Wanjiku & Associates",
-    location:"nairobi", rate:4000, rateType:"per hour", bio:"Senior advocate  12 yrs property law. 300+ conveyancing matters. LSK member in good standing.",
-    rating:4.9, jobsCompleted:312, available:true, verified:true, rollNo:"12456", spec:"🏠 Property & Conveyancing" },
-  { id:"LAW002", name:"Advocate James Ochieng", phone:"0711222444", category:"criminal", isLawyer:true,
-    skills:["Criminal Defence","Bail Applications","Appeals","Plea Bargaining"], firm:"Ochieng Law Chambers",
-    location:"nairobi", rate:6000, rateType:"per session", bio:"10 yrs criminal defence. High Court advocate. Notable acquittals in complex fraud and murder cases.",
-    rating:4.8, jobsCompleted:189, available:true, verified:true, rollNo:"8823", spec:"🏛️ Criminal & Defence" },
-  { id:"LAW003", name:"Advocate Amina Farah", phone:"0722333555", category:"family", isLawyer:true,
-    skills:["Divorce & Separation","Child Custody","Domestic Violence","Maintenance Orders"], firm:"Farah Family Law",
-    location:"nairobi", rate:3500, rateType:"per hour", bio:"Family law specialist  8 yrs. Empathetic approach, bilingual English/Swahili.",
-    rating:5.0, jobsCompleted:134, available:true, verified:true, rollNo:"9901", spec:"👨‍👩‍👧 Family Law" },
-  { id:"LAW004", name:"Advocate David Kamau", phone:"0733444666", category:"commercial", isLawyer:true,
-    skills:["Contract Drafting","Company Law","Mergers","Shareholder Disputes"], firm:"Kamau & Partners Advocates",
-    location:"nairobi", rate:8000, rateType:"per session", bio:"Corporate & commercial specialist  14 yrs. Advised 50+ companies on Kenyan compliance.",
-    rating:4.7, jobsCompleted:267, available:true, verified:true, rollNo:"5567", spec:"💼 Commercial Law" },
-  { id:"LAW005", name:"Advocate Sarah Njoroge", phone:"0744555777", category:"employment", isLawyer:true,
-    skills:["Wrongful Dismissal","Contract Disputes","Redundancy","NSSF/NHIF Compliance"], firm:"Njoroge Employment Advocates",
-    location:"mombasa", rate:3000, rateType:"per hour", bio:"Employment & labour law specialist  9 yrs. ELRC advocate. Wrongful dismissal champion.",
-    rating:4.6, jobsCompleted:98, available:true, verified:true, rollNo:"7734", spec:"⚖️ Employment Law" },
-  { id:"LAW006", name:"Advocate Brian Mwenda", phone:"0755666888", category:"ip", isLawyer:true,
-    skills:["IP Registration","Copyright","Trademarks","Patent Filing","Software Licensing"], firm:"IP Kenya Advocates",
-    location:"remote", rate:5000, rateType:"per hour", bio:"IP specialist  ARIPO accredited. 100+ Kenyan businesses brand-protected.",
-    rating:4.9, jobsCompleted:156, available:true, verified:true, rollNo:"11122", spec:"💡 IP & Copyright" },
-  { id:"LAW007", name:"Advocate Patricia Mwamba", phone:"0766777999", category:"property", isLawyer:true,
-    skills:["Land Registration","Boundary Disputes","Succession","Probate"], firm:"Mwamba & Co. Advocates",
-    location:"nairobi", rate:4500, rateType:"per hour", bio:"ELC specialist  11 yrs. Land registration, boundary & succession matters. Nairobi & Kiambu.",
-    rating:4.8, jobsCompleted:220, available:true, verified:true, rollNo:"14233", spec:"🏠 Property & Land" },
-  { id:"LAW008", name:"Advocate Rashid Hassan", phone:"0777888110", category:"commercial", isLawyer:true,
-    skills:["Banking Law","Loan Security","Securities","Financial Regulation"], firm:"Hassan & Associates",
-    location:"mombasa", rate:9000, rateType:"per session", bio:"Banking & finance law  13 yrs. Mombasa High Court advocate. Islamic finance expertise.",
-    rating:4.9, jobsCompleted:178, available:true, verified:true, rollNo:"6781", spec:"💰 Banking & Finance" },
-  { id:"LAW009", name:"Advocate Caroline Otieno", phone:"0788999221", category:"immigration", isLawyer:true,
-    skills:["Work Permits","Citizenship","Refugee Law","Deportation Defence"], firm:"Otieno Immigration Law",
-    location:"nairobi", rate:6000, rateType:"per session", bio:"Immigration specialist  7 yrs. Former DCI advisor. Work permits, citizenship & refugee cases.",
-    rating:4.7, jobsCompleted:145, available:true, verified:true, rollNo:"18904", spec:"🌍 Immigration & Citizenship" },
-  { id:"LAW010", name:"Advocate Michael Kiprop", phone:"0799000332", category:"human_rights", isLawyer:true,
-    skills:["Corruption Defence","Human Rights","Constitutional Petitions","Extradition"], firm:"Kiprop Human Rights Advocates",
-    location:"nairobi", rate:10000, rateType:"per session", bio:"Constitutional & human rights advocate  16 yrs. Senior counsel. High-profile corruption defence.",
-    rating:5.0, jobsCompleted:112, available:true, verified:true, rollNo:"3344", spec:"⚖️ Human Rights & Constitutional" },
-  { id:"LAW011", name:"Advocate Lorna Waweru", phone:"0700222443", category:"family", isLawyer:true,
-    skills:["Matrimonial Property","Domestic Violence Orders","Guardianship","Adoption"], firm:"Waweru Family Law Centre",
-    location:"kisumu", rate:2800, rateType:"per hour", bio:"Family law specialist  9 yrs Kisumu. Former court mediator. Child protection specialist.",
-    rating:4.8, jobsCompleted:167, available:true, verified:true, rollNo:"21567", spec:"👨‍👩‍👧 Family & Children Law" },
-  { id:"LAW012", name:"Advocate Ernest Mutua", phone:"0711333554", category:"employment", isLawyer:true,
-    skills:["Trade Unions","Collective Bargaining","Industrial Court","Retrenchment"], firm:"Mutua Labour Law",
-    location:"nairobi", rate:4000, rateType:"per hour", bio:"Labour & industrial relations advocate  11 yrs. Major union representation. ELRC specialist.",
-    rating:4.7, jobsCompleted:203, available:true, verified:true, rollNo:"9988", spec:"⚖️ Labour & Industrial Relations" },
-];
-/* P1 — Demo advocates must be unmistakably separated from real, bookable providers.
-   Flag every hardcoded sample and strip its (fake) LSK-verified signal, so the UI badges it
-   as a demonstration and confirmConsultation refuses to take a "booking" against a profile
-   that is not a real advocate. A user must never believe they booked a real advocate. */
-DEMO_LAWYERS.forEach(function(d){ d.demo = true; d.verified = false; });
+/* DEMO_LAWYERS removed 2026-07-19 (P0). The array held 8 fabricated advocates with invented
+   names, phone numbers, firms, ratings and — most seriously — fake Law Society of Kenya roll
+   numbers, injected into the directory whenever fewer than two real providers existed.
+
+   A previous pass had flagged them as demo and stripped the verified badge, which reduced the
+   harm but did not remove it: a fabricated advocate was still rendered, still searchable, and
+   still carried a fake LSK number. For a legal directory that is not a placeholder problem,
+   it is a person who does not exist presented as someone a user can retain.
+
+   The directory now renders Firestore-verified providers only. Zero providers shows the
+   existing "No advocates found" empty state. Real firms appear after onboarding + approval.
+
+   _isDemoLawyer() below is RETAINED deliberately: a returning user may still hold demo
+   records in localStorage from before this change, and the booking guard must keep refusing
+   them. It is now a migration safeguard rather than a live-data filter. */
 function _isDemoLawyer(l){
   return !!(l && (l.demo === true ||
     (typeof l.id === 'string' && /^LAW0\d\d$/.test(l.id) && !l.sellerUid)));
@@ -1962,11 +1925,10 @@ async function renderLawyers(){
     else _fsLawyersCache = []; /* mark as loaded (even if empty) so skeleton never shows again */
   }
 
-  /* Merge sources: Firestore first, then demo (no duplicates by rollNo) */
+  /* Firestore is the only source of verified advocates. */
   let lawyers;
   if(_fsLawyersCache && _fsLawyersCache.length > 0){
-    const realRolls = new Set(_fsLawyersCache.map(l=>l.rollNo));
-    lawyers = [..._fsLawyersCache, ...DEMO_LAWYERS.filter(d=>!realRolls.has(d.rollNo))];
+    lawyers = [..._fsLawyersCache];
   } else {
     lawyers = getLawyers();
   }
@@ -2008,9 +1970,9 @@ async function renderLawyers(){
   _renderLawyerCards(lawyers);
 }
 
-/*  Find lawyer across ALL sources (Firestore cache + localStorage + demo)  */
+/*  Find lawyer across all real sources (Firestore cache + localStorage)  */
 function _findLawyer(id){
-  const all = [...(_fsLawyersCache||[]), ...DEMO_LAWYERS, ...getLawyers()];
+  const all = [...(_fsLawyersCache||[]), ...getLawyers()];
   return all.find(x=>x.id===id) || null;
 }
 
@@ -3681,7 +3643,7 @@ function legalGlobalSearch(q) {
 
   /* Search lawyers */
   let lawyers = [];
-  try { lawyers = [...(_fsLawyersCache||[]), ...DEMO_LAWYERS]; } catch(e){}
+  try { lawyers = [...(_fsLawyersCache||[])]; } catch(e){}
   const seen = new Set();
   lawyers.forEach(l => {
     if(seen.has(l.rollNo)) return; seen.add(l.rollNo);
@@ -5318,7 +5280,13 @@ function _setPct(labelId, barId, pct){
     const d = document.createElement("div");
     d.id = "lglOpenNowEmpty";
     d.style.cssText = "grid-column:1/-1;padding:28px 16px;text-align:center;color:rgba(255,255,255,.55);font-size:14px;";
-    d.textContent = “No advocates are marked open right now. Turn off “Open Now” to see everyone.”;
+    /* Straight quotes — the string was previously delimited with typographic quotes
+       (U+201C/U+201D), which is not valid JS. It threw "Invalid or unexpected token" and
+       killed this entire <script> block, so every function it declared was undefined and
+       the Open Now empty state never rendered. Pre-existing; found while removing
+       DEMO_LAWYERS. The curly quotes around Open Now are kept inside the string, where
+       they are just characters. */
+    d.textContent = 'No advocates are marked open right now. Turn off “Open Now” to see everyone.';
     grid.appendChild(d);
   }
   </script>
