@@ -31,6 +31,17 @@ const BASE = (() => {
 const AS_JSON = args.includes('--json');
 const APEX_HOST = BASE.replace(/^https?:\/\//, '');
 
+/* RESOLVER INDEPENDENCE.
+   A stale ISP recursive cache produced a false "total outage" on 2026-07-17: the local resolver
+   still held the pre-migration delegation and returned the legacy origin, while authoritative
+   DNS, every public resolver, TLS identity and the application all agreed the platform was
+   healthy. A client-side observation is not evidence of infrastructure failure.
+
+   --pin <ip>  pins HTTPS connections to a known-good edge address, bypassing the local resolver
+   --dns <ip>  runs the DNS checks against a trusted public recursive resolver (default 8.8.8.8) */
+const PIN = (() => { const i = args.indexOf('--pin'); return i >= 0 ? args[i + 1] : null; })();
+const DNS_SERVER = (() => { const i = args.indexOf('--dns'); return i >= 0 ? args[i + 1] : '8.8.8.8'; })();
+
 const results = [];
 const rec = (area, name, status, evidence) => results.push({ area, name, status, evidence });
 
@@ -38,7 +49,21 @@ const rec = (area, name, status, evidence) => results.push({ area, name, status,
 function get(url, { method = 'GET', timeout = 20000, headers = {} } = {}) {
   return new Promise((resolve) => {
     const started = Date.now();
-    const req = https.request(url, { method, timeout, headers }, (res) => {
+    /* When pinned, resolve every hostname to the supplied edge IP. TLS still validates against
+       the real hostname via SNI, so this proves the edge serves the right certificate too. */
+    const opts = { method, timeout, headers };
+    if (PIN) {
+      const family = PIN.includes(':') ? 6 : 4;
+      /* Node calls lookup with options.all=true in some paths, which requires the ARRAY form of
+         the callback. Returning the scalar form there yields "Invalid IP address: undefined". */
+      opts.lookup = (hostname, options, cb) => {
+        if (typeof options === 'function') { cb = options; options = {}; }
+        return options && options.all
+          ? cb(null, [{ address: PIN, family }])
+          : cb(null, PIN, family);
+      };
+    }
+    const req = https.request(url, opts, (res) => {
       let body = '';
       res.on('data', (c) => { if (body.length < 400000) body += c; });
       res.on('end', () => resolve({
@@ -69,8 +94,9 @@ async function checkInfrastructure() {
     rec('Infrastructure', 'DNS delegated to Cloudflare', 'PENDING', 'n/a — running against ' + APEX_HOST + ', not the production apex');
     rec('Infrastructure', 'DNS resolves', 'PENDING', 'n/a for a non-apex base URL');
   }
+  /* Query a TRUSTED PUBLIC resolver, never the local one — see the resolver-independence note. */
   let ns = '';
-  try { ns = execSync(`nslookup -type=NS ${APEX_HOST}`, { encoding: 'utf8', timeout: 20000 }); } catch (e) { ns = String(e.stdout || ''); }
+  try { ns = execSync(`nslookup -type=NS ${APEX_HOST} ${DNS_SERVER}`, { encoding: 'utf8', timeout: 25000 }); } catch (e) { ns = String(e.stdout || ''); }
   if (isApex) {
     const onCloudflare = /cloudflare/i.test(ns);
     rec('Infrastructure', 'DNS delegated to Cloudflare', onCloudflare ? 'PASS' : 'FAIL',
@@ -79,9 +105,16 @@ async function checkInfrastructure() {
   }
 
   let a = '';
-  try { a = execSync(`nslookup ${APEX_HOST}`, { encoding: 'utf8', timeout: 20000 }); } catch (e) { a = String(e.stdout || ''); }
-  const ips = [...a.matchAll(/Address:\s*([0-9.]+)/g)].map((m) => m[1]).filter((x) => !x.startsWith('192.168'));
-  if (isApex) rec('Infrastructure', 'DNS resolves', ips.length ? 'PASS' : 'FAIL', ips.join(', ') || 'no A record');
+  try { a = execSync(`nslookup -type=A ${APEX_HOST} ${DNS_SERVER}`, { encoding: 'utf8', timeout: 25000 }); } catch (e) { a = String(e.stdout || ''); }
+  const ips = [...a.matchAll(/(?:Address|Addresses):\s*([0-9.]+)/g)].map((m) => m[1])
+    .filter((x) => !x.startsWith('192.168') && x !== DNS_SERVER);
+  if (isApex) rec('Infrastructure', 'DNS resolves (public resolver)', ips.length ? 'PASS' : 'FAIL',
+      (ips.join(', ') || 'no A record') + ' · via ' + DNS_SERVER);
+
+  /* The legacy origin must be absent from authoritative public DNS. */
+  if (isApex) rec('Infrastructure', 'legacy origin 217.20.124.84 absent',
+      /217\.20\.124\.84/.test(a) ? 'FAIL' : 'PASS',
+      /217\.20\.124\.84/.test(a) ? 'STILL PRESENT in public DNS' : 'not present via ' + DNS_SERVER);
 
   /* ── SSL ──
      A valid certificate is NOT evidence that the intended production stack is serving traffic.
@@ -92,12 +125,15 @@ async function checkInfrastructure() {
   const r = await get(BASE + '/');
   rec('Infrastructure', 'TLS handshake succeeds', r.status ? 'PASS' : 'FAIL', r.error || ('HTTP ' + r.status));
 
+  /* Connect to the pinned edge IP when supplied, but keep SNI on the real hostname so the
+     certificate is still validated against the name we actually serve. */
+  const tlsTarget = (PIN || APEX_HOST) + ':443';
   let cert = '', verify = '';
   try {
-    cert = execSync(`echo | openssl s_client -connect ${APEX_HOST}:443 -servername ${APEX_HOST} 2>nul | openssl x509 -noout -subject -issuer -dates`, { encoding: 'utf8', timeout: 25000 });
+    cert = execSync(`echo | openssl s_client -connect ${tlsTarget} -servername ${APEX_HOST} 2>nul | openssl x509 -noout -subject -issuer -dates`, { encoding: 'utf8', timeout: 25000 });
   } catch (e) { cert = String(e.stdout || ''); }
   try {
-    verify = execSync(`echo | openssl s_client -connect ${APEX_HOST}:443 -servername ${APEX_HOST} -verify_return_error 2>&1 | findstr /C:"Verify return code"`, { encoding: 'utf8', timeout: 25000 });
+    verify = execSync(`echo | openssl s_client -connect ${tlsTarget} -servername ${APEX_HOST} -verify_return_error 2>&1 | findstr /C:"Verify return code"`, { encoding: 'utf8', timeout: 25000 });
   } catch (e) { verify = String(e.stdout || ''); }
 
   const subject  = (cert.match(/subject=(.+)/) || [])[1] || '';
