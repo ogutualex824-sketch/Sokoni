@@ -175,3 +175,43 @@ readers. **Expected performance gain: zero.** Do not schedule it as a performanc
 emits `.html`), so all 231 files need direct edits. Automation is appropriate: the move is
 mechanical, and each file can be verified byte-identical once the moved tag is normalised.
 Rollback is a single revert.
+
+---
+
+## P1-HOME-TBT — Home page warm TBT 755 ms (style/layout bound)
+
+**Deferred 2026-07-18. Confirmed with evidence. Does not meet RC1 freeze criteria.**
+
+Home is the platform's worst page on warm Total Blocking Time — **755 ms median**, 3.6× the next
+worst page and 3.8× the 200 ms threshold — on the highest-traffic surface. Its cold-start penalty
+is the smallest on the platform (3.4×), meaning the cost is **structural, not first-visit**.
+
+**Root cause is rendering, not JavaScript.** RecalcStyle 3527 ms + Layout 2699 ms = 6226 ms,
+against ScriptDuration 1811 ms — 3.4× the JS cost, across 314 style recalcs and 291 layout passes
+over a 3128-element DOM. Full analysis: [[HOME_PERFORMANCE_INVESTIGATION]].
+
+**Largest single verified win — `sokoni-sheet.js:343 promote()`.** It calls `getComputedStyle` on
+1081 elements to find the 13 that are `position:fixed` (98.8% wasted) and interleaves those reads
+with `getBoundingClientRect`, forcing synchronous layout. Browser-side ablation measured:
+
+| Metric | Baseline | Neutralized | Delta |
+|---|---|---|---|
+| TBT | 1471 ms | 1200 ms | **−271 ms** |
+| RecalcStyle | 3527 ms | 3216 ms | −311 ms |
+| Layout | 2699 ms | 2488 ms | −211 ms |
+
+**Risk: Medium.** `promote()` guarantees full-screen sheets layer above the header; a wrong
+narrowing renders modals *behind* it — visible on checkout and auth. A safe fix preserves which
+elements get promoted and only narrows the scan. Files: `sokoni-sheet.js` only. Rollback: single
+revert. Expected LCP benefit: **none** (LCP is hero/image-bound here). Preserve the intentional
+single-pass, no-polling design documented at `sokoni-sheet.js:332`.
+
+**Why deferred rather than shipped:** 271 ms is 18% of a 1471 ms problem, on a working page, at
+Medium risk to modal layering during a pilot where checkout must not break. The largest bottleneck
+is diffuse style/layout pressure from DOM size — `promote()` is the easiest slice of it, not the
+bottleneck itself. Attacking DOM size is the higher-value work and is too large for a freeze.
+
+**Secondary items** (same investigation, unproven as contributors — verify before acting):
+16 registered intervals including `kass-widget.js:152` @60 ms and `recaptcha` @100 ms; 475
+registered event listeners; `_writeSafeAreaVars` (`sokoni-form-engine.js:247`) forcing synchronous
+layout at ~303 ms per call, twice per load.
