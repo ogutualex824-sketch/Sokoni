@@ -38,6 +38,13 @@ const OPT    = {
   memory:          '512MiB',
 };
 
+/* ── Free-trial window ─────────────────────────────────────────────
+   Referenced by the subscription doc written in _createBusiness. Declared here (module scope)
+   because the trial boundaries are policy, not per-call state. TRIAL_GRACE_DAYS mirrors the
+   grace window sub-billing applies between currentPeriodEnd and graceEnd. */
+const TRIAL_DAYS       = 14;
+const TRIAL_GRACE_DAYS = 3;
+
 /* ── Cache TTL ─────────────────────────────────────────────────── */
 const CACHE_TTL_MS   = 5 * 60 * 1000;   // 5 minutes
 const CACHE_TTL_SECS = 300;
@@ -930,9 +937,39 @@ async function _createBusiness(req) {
     productionReady: false,
     provisionedBy: 'onboarding-v2', createdAt: now, updatedAt: now,
   });
-  /* Auto-activate a free trial (Step 7 — activates automatically where applicable). */
+  /* Auto-activate a free trial (Step 7 — activates automatically where applicable).
+   *
+   * The doc used to carry only { plan:'trial', status:'trialing', trialDays:14 } — and every
+   * expiry mechanism filters on fields it did NOT have, so the trial NEVER expired:
+   *   • sub-billing.subProcessExpirations reads `currentPeriodEnd.toMillis()` → undefined → skipped
+   *   • sub-engine renewals query `.where('currentPeriodEnd','<=',…)` → doc invisible to the query
+   *   • subscription-core.computeStatus needs `trial === true` + `trialEndsAt` (it had `plan:'trial'`)
+   *   • the expiry path then notifies `users/{sub.uid}` — `uid` was absent, so it would have thrown
+   * `trialDays: 14` was therefore decorative: every SmartPOS merchant got an unlimited free tier.
+   *
+   * Write the fields the engines actually read. `now` is a serverTimestamp sentinel and cannot
+   * be used in arithmetic, so the boundaries are explicit Timestamps off the server clock. */
+  const _trialMs   = Date.now();
+  const _trialEnd  = admin.firestore.Timestamp.fromMillis(_trialMs + TRIAL_DAYS * 86400000);
+  const _graceEnd  = admin.firestore.Timestamp.fromMillis(
+    _trialMs + (TRIAL_DAYS + TRIAL_GRACE_DAYS) * 86400000
+  );
   batch.set(db.collection('subscriptions').doc(merchantId), {
-    merchantId, plan: 'trial', status: 'trialing', trialDays: 14, autoActivated: true,
+    merchantId,
+    uid,                                  // required by the expiry notifier (users/{uid})
+    hubType:  'seller',                   // drives the post-trial downgrade to `${hubType}_free`
+    planId:   'seller_free',
+    planName: 'SmartPOS',
+    plan: 'trial',
+    status: 'trialing',
+    trial: true,                          // subscription-core.computeStatus gate
+    trialDays: TRIAL_DAYS,
+    trialStartsAt:      now,
+    currentPeriodStart: now,
+    trialEndsAt:      _trialEnd,          // subscription-core
+    currentPeriodEnd: _trialEnd,          // sub-billing sweep + sub-engine renewal query
+    graceEnd:         _graceEnd,
+    autoActivated: true,
     startedAt: now, createdAt: now,
   });
   batch.set(db.collection('merchants').doc(merchantId), {
