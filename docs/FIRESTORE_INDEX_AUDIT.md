@@ -130,3 +130,110 @@ Priority when authorized:
 
 **Verification method after deploying:** re-run this audit, and — because the emulator cannot
 prove index coverage — exercise each affected query against real Firestore.
+
+---
+
+## Ready-to-apply definitions (pilot-critical only)
+
+**Not applied.** `firestore.indexes.json` is deliberately untouched during the infrastructure
+hold. These are staged here so the deploy step is mechanical once authorized — append to the
+`indexes` array, then deploy **without `--force`** so nothing can be dropped.
+
+Field order matters: equality fields first, then the range/ordered field last.
+
+```jsonc
+// I-1 — getWalletBalance (pos-crm-pro.js:131). Highest value: one index, unblocks the
+// CRM wallet whose sellerId contract was fixed in cbade53.
+{
+  "collectionGroup": "posWalletTransactions",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "sellerId",  "order": "ASCENDING" },
+    { "fieldPath": "phone",     "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+},
+// I-2 — POS sales + accounting reporting
+{
+  "collectionGroup": "posSales",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "sellerId",  "order": "ASCENDING" },
+    { "fieldPath": "status",    "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+},
+{
+  "collectionGroup": "posSales",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "sellerId",  "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+},
+{
+  "collectionGroup": "posSales",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "sellerId",      "order": "ASCENDING" },
+    { "fieldPath": "customerPhone", "order": "ASCENDING" },
+    { "fieldPath": "createdAt",     "order": "DESCENDING" }
+  ]
+},
+{
+  "collectionGroup": "posRetailSales",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "sellerId",  "order": "ASCENDING" },
+    { "fieldPath": "createdAt", "order": "DESCENDING" }
+  ]
+},
+{
+  "collectionGroup": "posRetailSales",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "merchantId", "order": "ASCENDING" },
+    { "fieldPath": "createdAt",  "order": "DESCENDING" }
+  ]
+},
+// I-3 — incremental sync (getIncrementalSync). Initial bootstrapDevice does NOT need these.
+{
+  "collectionGroup": "posProducts",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "merchantId", "order": "ASCENDING" },
+    { "fieldPath": "status",     "order": "ASCENDING" },
+    { "fieldPath": "updatedAt",  "order": "DESCENDING" }
+  ]
+},
+{
+  "collectionGroup": "posStaff",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "branchId",  "order": "ASCENDING" },
+    { "fieldPath": "status",    "order": "ASCENDING" },
+    { "fieldPath": "updatedAt", "order": "DESCENDING" }
+  ]
+},
+{
+  "collectionGroup": "branches",
+  "queryScope": "COLLECTION",
+  "fields": [
+    { "fieldPath": "merchantId", "order": "ASCENDING" },
+    { "fieldPath": "status",     "order": "ASCENDING" },
+    { "fieldPath": "name",       "order": "ASCENDING" }
+  ]
+}
+```
+
+**Deploy sequence (per the readiness-state model):**
+
+1. Append the above to `firestore.indexes.json` (additive only — never remove an entry).
+2. `firebase deploy --only firestore:indexes` — **omit `--force`**. Firebase will list any
+   deployed-only indexes it would otherwise delete and skip them without the flag.
+3. **Deployment submitted ≠ ready.** Poll with `node scripts/firestore-index-status.js --pilot`.
+   If build state is not readable programmatically, confirm READY in the Firebase Console
+   (Firestore → Indexes) — do not infer it from the deploy exit code.
+4. Only once every listed index reports **READY**, re-run the affected checks. A BUILDING index
+   fails identically to a missing one, so testing early produces false defects.
+5. Re-run `node scripts/rc1-production-verify.js` and the index audit to confirm the gap closed.
