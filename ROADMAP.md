@@ -33,6 +33,50 @@
 
 ---
 
+## RC1 Stabilization — ARCHIVED COMPLETE (2026-07-18)
+
+| Track | Status |
+|-------|--------|
+| Engineering Stabilization | ✅ COMPLETE |
+| Performance Stabilization | ✅ COMPLETE |
+| Production Readiness | 🟡 **CONDITIONAL GO** |
+
+Change freeze remains in force. **No further performance optimization before the pilot** unless a
+verified production defect appears.
+
+Accepted conclusions: SmartPOS operationally healthy and representative in warm usage · measurement
+harness trustworthy · Firebase configuration resolved · CSP report storm resolved · Home bottleneck
+identified and root-caused · **no RC1 optimization justified**.
+
+- `docs/PERFORMANCE_SPRINT_CLOSURE.md` — [[Performance Sprint Closure]]
+- `docs/MEASUREMENT_VALIDITY_CORRECTION.md` — [[Measurement Validity Correction]]
+- `docs/HOME_PERFORMANCE_INVESTIGATION.md` — [[Home Performance Investigation]]
+- `scripts/perf-baseline.js` — URL-asserting cold+warm baseline harness
+
+---
+
+## Phase 1 — Post-Pilot Optimization Roadmap (Not RC1)
+
+Remaining performance work belongs here, not to RC1 release stabilization.
+
+| Initiative | Scope | Status |
+|-----------|-------|--------|
+| **Home Rendering Optimization** | Structural rendering efficiency — style recalc, layout, DOM size | 🔵 OPEN, gated |
+| P1-HOME-TBT | Home warm TBT 755 ms; `promote()` −271 ms verified | 🔴 Deferred |
+| P1-CHARSET | `<meta charset>` placement, 231 files — standards hygiene, **zero expected perf gain** | 🔴 Deferred |
+| T-1 / T-2 | Financial transaction behaviour (deferred 2026-07-17) | 🔴 Deferred |
+
+> **Mandatory gate.** The Home Rendering initiative may not implement any optimization until the
+> complete investigation is repeated on mid-range Android with CPU throttling, network simulation,
+> real touch interaction and a warm merchant session. Desktop findings are accepted as engineering
+> evidence but **must not be used alone to prioritize post-pilot work** — the ranking may reorder
+> under a mobile CPU.
+
+- `docs/INITIATIVE_HOME_RENDERING.md` — [[Initiative Home Rendering]]
+- `docs/PHASE1_POST_PILOT_BACKLOG.md` — [[Phase 1 Post Pilot Backlog]]
+
+---
+
 ## v2.0 Completed (2026-06-25)
 
 | Initiative | Status |
