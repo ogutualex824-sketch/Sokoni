@@ -64,6 +64,11 @@
         "region": "us-central1"
       },
       {
+        "source": "/api/diag",
+        "function": "routeDiag",
+        "region": "us-central1"
+      },
+      {
         "source": "/api/facebook/data-deletion",
         "function": "facebookDataDeletion",
         "region": "us-central1"

@@ -9615,3 +9615,10 @@ exports.profileUpdatePersonalization  = _profEng.profileUpdatePersonalization;
 exports.profileGetDocumentVault       = _profEng.profileGetDocumentVault;
 exports.profileGetProfessional        = _profEng.profileGetProfessional;
 exports.profileSaveProfessional       = _profEng.profileSaveProfessional;
+
+/* ── Routing diagnostics receiver ──────────────────────────────────────────────
+   POST /api/diag — the endpoint sokoni-root-guard.js has been beaconing to since it
+   shipped. It had no rewrite and no function, so every anomaly report 404d and was
+   lost. See functions/route-diag.js. */
+const _routeDiag = require("./route-diag");
+exports.routeDiag = _routeDiag.routeDiag;

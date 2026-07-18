@@ -544,7 +544,7 @@ async function _doSignup(name, email, password){
                   Welcome to SOKONI, <strong id="_authSuccessName" style="color:#71ff00;"></strong>!<br>
                   You're all set &mdash; let&#x27;s get started.
                 </p>
-                <button type="button" onclick="window.location.href='index.html'"
+                <button type="button" onclick="window.location.href='/'"
                   style="width:100%;padding:15px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:900;font-size:16px;border:none;border-radius:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;letter-spacing:.01em;">
                   🛍️ Go to Marketplace
                 </button>
@@ -567,7 +567,9 @@ async function _doSignup(name, email, password){
             card.scrollIntoView({behavior:'smooth', block:'start'});
         } else {
             showAuthMsg("Account created! Redirecting...", "success");
-            setTimeout(() => window.location.href = "index.html", 1500);
+            /* Root-relative: auth.js is shared, and a relative "index.html" would resolve
+               inside whatever route it is loaded on. Home always means the marketplace root. */
+            setTimeout(() => window.location.href = "/", 1500);
         }
 
     } catch(err){

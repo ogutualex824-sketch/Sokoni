@@ -367,7 +367,12 @@
 <script src="splash.js"></script>
 
 <nav class="st-nav">
-  <a href="index.html"><img loading="lazy" src="assets/sokoni-logo-dark.png" alt="Sokoni" class="st-nav-logo"></a>
+  <!-- Root-relative, NOT "index.html". A relative Home link resolves against the current
+       path, so on any multi-segment route it lands inside that route instead of at the
+       marketplace. /shop/index.html returns HTTP 200 and serves minishop.html (the /shop/**
+       rewrite catches it), so the merchant page reloads itself and Home appears broken.
+       The logo must always reach the marketplace root from anywhere. -->
+  <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" alt="Sokoni" class="st-nav-logo"></a>
   <a href="javascript:history.back()" class="st-nav-back">← Back</a>
 </nav>
 
@@ -996,7 +1001,7 @@ async function _stLoadFirestore(uid) {
   <script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item active-bnav"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
   <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
