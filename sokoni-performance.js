@@ -151,10 +151,37 @@
       /* Wrap jpg/png in <picture> + WebP <source> (only once, only raster)
          Skip local brand assets — they don't have .webp counterparts */
       var src = img.getAttribute('src') || '';
+
+      /* SAME-ORIGIN ONLY (fix 2026-07-19).
+         A .webp <source> is a promise that a .webp twin exists at that URL. We can only
+         make that promise for images we serve. This previously rewrote CROSS-ORIGIN images
+         too, and the visible casualty was the map: Leaflet renders tiles as <img> with a
+         .png src from tile.openstreetmap.org, so every tile gained a .webp <source>, the
+         browser preferred it, and OSM answered 400 "You requested an invalid tile."
+         Measured on /track: 30 of 34 failed requests were tiles — 6 retries x 5 tiles.
+         The map still rendered (the <img> fallback works) but every page with a map spent
+         its request budget on guaranteed-400s and filled the console.
+
+         The old `^assets/` check only ever matched relative local paths, so no absolute or
+         third-party URL was excluded. Any host that is not ours is now skipped: we cannot
+         know whether a .webp exists there, and guessing costs a failed request per image.
+
+         Also skips Leaflet's own tiles explicitly — belt and braces, since a future
+         self-hosted tile proxy would be same-origin and would otherwise re-enter this path. */
+      var _sameOrigin = true;
+      try {
+        if (src && /^(https?:)?\/\//i.test(src)) {
+          _sameOrigin = new URL(src, location.href).origin === location.origin;
+        }
+      } catch (_) { _sameOrigin = false; }
+      var _isMapTile = img.classList && img.classList.contains('leaflet-tile');
+
       if (
         src &&
         /\.(jpe?g|png)(\?[^#]*)?$/i.test(src) &&
         !/^assets\//i.test(src) &&
+        _sameOrigin &&
+        !_isMapTile &&
         img.parentElement &&
         img.parentElement.tagName !== 'PICTURE'
       ) {
