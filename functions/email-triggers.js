@@ -61,6 +61,18 @@ exports.emailOnUserCreate = onDocumentCreated(
     const data = event.data?.data() || {};
     const email = data.email || await emailForUid(uid);
     if (!email) return;
+
+    /* An admin-invited user already receives an invitation email that asks them to set a
+       password. This trigger would add a second message announcing "your account is
+       ready" — to someone who cannot sign in yet, because they have no password. Verified
+       end-to-end 2026-07-19: one invitation produced invite-<id>-0 AND welcome-<uid>.
+       The welcome belongs to self-registration, where the account genuinely is ready.
+       inviteUser stamps invitationSource on users/{uid}; skip those. */
+    if (data.invitationSource === "admin_invitation") {
+      console.log(`[emailOnUserCreate] skipping welcome for admin-invited user ${uid}`);
+      return;
+    }
+
     await trigger("welcome", { name: data.displayName || data.name || "there", email }, {
       uid, emailId: `welcome-${uid}`,
     });
