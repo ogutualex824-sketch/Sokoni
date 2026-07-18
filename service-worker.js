@@ -399,8 +399,20 @@ self.addEventListener("install", event => {
       .filter(Boolean);
 
     if (failed.length) {
-      /* Abort the update. Do NOT skipWaiting, do NOT let activate run. */
+      /* Abort the update. Do NOT skipWaiting, do NOT let activate run.
+         Tell any open client which asset failed BEFORE throwing — once this worker
+         goes redundant it can no longer report, and a silent failed install is exactly
+         the blind spot this whole exercise exists to remove. */
       console.error("[SW] Shell incomplete — aborting update:", failed);
+      try {
+        const cs = await self.clients.matchAll({ type: "window" });
+        cs.forEach(c => c.postMessage({
+          type: "SW_SHELL_FAILED",
+          asset: failed[0],
+          count: failed.length,
+          version: CACHE_VERSION,
+        }));
+      } catch (e) { /* reporting must never mask the real failure */ }
       throw new Error("App shell incomplete: " + failed.join("; "));
     }
 

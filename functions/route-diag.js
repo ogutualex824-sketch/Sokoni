@@ -78,6 +78,33 @@ function sanitiseDiag(d) {
     clientTs:      int(d.ts),
     collectError:  str(d.collectError, 200),
     anomaly:       str(d.anomaly, 120),
+
+    /* ── SW lifecycle telemetry (sokoni-sw-telemetry.js) ──
+       Same allowlist discipline: every field type-checked and length-capped, so a
+       hostile client cannot inflate documents or smuggle structure into Firestore. */
+    event: enumOf(d.event, [
+      'sw_install_started', 'sw_install_completed', 'sw_install_failed',
+      'sw_activate_started', 'sw_activate_completed', 'sw_activate_failed',
+      'sw_update_available', 'sw_update_applied',
+      'sw_no_controller', 'sw_version_mismatch',
+      'shell_asset_failed', 'offline_fallback_used',
+    ]),
+    buildCommit:           str(d.buildCommit, 40),
+    buildTime:             str(d.buildTime, 40),
+    expectedCacheVersion:  str(d.expectedCacheVersion, 128),
+    cacheVersionMatchesBuild: bool(d.cacheVersionMatchesBuild),
+    onlineStatus:          enumOf(d.onlineStatus, ['online', 'offline']),
+    servedFrom:            enumOf(d.servedFrom, ['cache', 'network']),
+    networkType:           str(d.networkType, 24),
+    downlink:              int(d.downlink),
+    rtt:                   int(d.rtt),
+    saveData:              bool(d.saveData),
+    installationDuration:  int(d.installationDuration),
+    activationDuration:    int(d.activationDuration),
+    sinceLoadMs:           int(d.sinceLoadMs),
+    shellAsset:            str(d.shellAsset, 200),
+    shellAssetStatus:      int(d.shellAssetStatus),
+    note:                  str(d.note, 200),
   };
 }
 
@@ -96,7 +123,7 @@ exports.routeDiag = onRequest(
       if (Buffer.isBuffer(body)) body = JSON.parse(body.toString('utf8'));
       else if (typeof body === 'string') body = JSON.parse(body);
 
-      const kind = enumOf(body && body.kind, ['root-route-anomaly']);
+      const kind = enumOf(body && body.kind, ['root-route-anomaly', 'sw-lifecycle']);
       const diag = sanitiseDiag(body && body.diag);
 
       /* Unknown shape: acknowledge and drop. Never echo why. */

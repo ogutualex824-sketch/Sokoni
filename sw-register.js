@@ -755,6 +755,11 @@
     "/sokoni-scale.js",
     "/sokoni-cache.js",
     "/sokoni-monitor.js",
+    /* SW lifecycle telemetry. Loaded here rather than added to 109 page templates:
+       one entry point, one place to remove it. Diagnostics only — it observes the
+       worker and reports to /api/diag, and never registers or updates anything.
+       sw-register.js above remains the sole owner of registration. */
+    "/sokoni-sw-telemetry.js",
   ];
 
   function _inject(src) {
