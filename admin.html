@@ -175,6 +175,25 @@ body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
 
 /* TABLE */
 .adm-table-wrap{overflow-x:auto;border-radius:14px;border:1px solid rgba(255,255,255,0.07);margin-bottom:20px;}
+/* ── Invitations pane ── */
+.inv-filter{padding:7px 13px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);
+  border-radius:999px;color:rgba(255,255,255,0.55);font-size:12px;font-weight:800;cursor:pointer;
+  font-family:inherit;transition:background .15s ease,color .15s ease,border-color .15s ease;}
+.inv-filter:hover{background:rgba(255,255,255,0.07);color:rgba(255,255,255,0.8);}
+.inv-filter.active{background:rgba(113,255,0,0.12);border-color:rgba(113,255,0,0.35);color:#71ff00;}
+/* Status is encoded in colour AND text — colour alone is not an accessible signal. */
+.inv-pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;}
+.inv-queued   {background:rgba(255,180,0,0.12);color:#ffb400;border:1px solid rgba(255,180,0,0.3);}
+.inv-sent     {background:rgba(90,160,255,0.12);color:#7ab4ff;border:1px solid rgba(90,160,255,0.3);}
+.inv-delivered{background:rgba(90,160,255,0.18);color:#a5cbff;border:1px solid rgba(90,160,255,0.4);}
+.inv-accepted {background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.32);}
+.inv-expired  {background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.45);border:1px solid rgba(255,255,255,0.14);}
+.inv-failed   {background:rgba(255,80,80,0.12);color:#ff8080;border:1px solid rgba(255,80,80,0.32);}
+.inv-msgid{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:rgba(255,255,255,0.45);}
+.inv-resend{padding:6px 12px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);
+  border-radius:8px;color:#71ff00;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.inv-resend:disabled{opacity:.45;cursor:default;}
+@media(max-width:760px){ .inv-form-grid{grid-template-columns:1fr !important;} }
 table.adm-table{width:100%;border-collapse:collapse;font-size:12px;}
 .adm-table th{padding:10px 12px;background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.4);
   font-weight:800;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
@@ -719,6 +738,7 @@ body.adm-light .adm-sec-h{color:#111;}
       <div class="adm-sidebar-group">
         <div class="adm-sidebar-group-header"><span class="adm-sidebar-group-icon">👥</span> Users</div>
         <button class="adm-sidebar-btn" id="sb-users" onclick="showPane('users',this)">🛒 Buyers</button>
+        <button class="adm-sidebar-btn" id="sb-invitations" onclick="showPane('invitations',this)">✉️ Invitations <span class="sb-badge" id="invite-badge"></span></button>
         <button class="adm-sidebar-btn" id="sb-drivers" onclick="showPane('drivers',this)">🚕 Driver Approval <span class="sb-badge" id="driver-badge"></span></button>
         <button class="adm-sidebar-btn" id="sb-team" onclick="showPane('team',this)">🧑‍💼 Platform Staff <span class="sb-badge" id="team-badge"></span></button>
       </div>
@@ -1093,6 +1113,77 @@ body.adm-light .adm-sec-h{color:#111;}
           <button class="mob-tab" id="team-tab-pending" onclick="teamSubTab('pending',this)">⏳ Pending Invites</button>
         </div>
         <div id="teamList"></div>
+      </div>
+
+      <!-- ═══ INVITATIONS ═══
+           Consumes ONLY the deployed callables: listInvitations, inviteUser,
+           resendInvitation, reconcileInvitations. No new backend endpoint. -->
+      <div id="adm-pane-invitations" class="adm-pane">
+        <div class="adm-sec-h">✉️ User Invitations</div>
+        <p style="font-size:13px;color:rgba(255,255,255,0.4);margin-bottom:20px;line-height:1.6;">
+          Invite merchants, providers, riders and testers. The recipient sets their own password and
+          completes their own profile &mdash; the account stays inactive until they accept.
+        </p>
+
+        <!-- Invite form -->
+        <div style="background:rgba(113,255,0,0.03);border:1px solid rgba(113,255,0,0.12);border-radius:16px;padding:18px;margin-bottom:20px;">
+          <div style="font-size:13px;font-weight:900;color:white;margin-bottom:14px;">+ Invite a user</div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px;margin-bottom:12px;" class="inv-form-grid">
+            <div>
+              <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);margin-bottom:6px;">Email address</div>
+              <input type="email" id="invEmail" placeholder="person@email.com" style="width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;">
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);margin-bottom:6px;">Name (optional)</div>
+              <input type="text" id="invName" placeholder="Full name" style="width:100%;padding:11px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;">
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:800;color:rgba(255,255,255,0.4);margin-bottom:6px;">Role</div>
+              <select id="invRole" style="width:100%;padding:11px 14px;background:rgba(20,20,20,0.9);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;font-family:inherit;">
+                <option value="merchant">🏪 Merchant</option>
+                <option value="business">🏢 Business</option>
+                <option value="artist">🎨 Artist</option>
+                <option value="professional">💼 Professional</option>
+                <option value="lawyer">⚖️ Advocate</option>
+                <option value="doctor">🩺 Healthcare Provider</option>
+                <option value="mechanic">🔧 Mechanic</option>
+                <option value="technician">🛠️ Technician</option>
+                <option value="rider">🛵 Rider</option>
+                <option value="driver">🚕 Driver</option>
+                <option value="landlord">🏘️ Landlord</option>
+                <option value="partner">🤝 Partner</option>
+                <option value="tester">🧪 Beta Tester</option>
+                <option value="customer">🛒 Customer</option>
+              </select>
+            </div>
+          </div>
+          <button id="invSendBtn" onclick="sendUserInvite()" style="padding:11px 20px;background:linear-gradient(135deg,#71ff00,#5ccc00);border:none;border-radius:10px;color:#050505;font-size:13px;font-weight:900;cursor:pointer;font-family:inherit;">Send Invitation</button>
+          <button onclick="reconcileInvites()" style="margin-left:8px;padding:11px 16px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:rgba(255,255,255,0.6);font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;">↻ Refresh statuses</button>
+          <div id="invResult" style="display:none;margin-top:14px;padding:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;font-size:12px;color:rgba(255,255,255,0.75);line-height:1.7;"></div>
+        </div>
+
+        <!-- Status filter -->
+        <div id="invFilters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;">
+          <button class="inv-filter active" data-status="all"       onclick="invFilter('all',this)">All</button>
+          <button class="inv-filter" data-status="queued"    onclick="invFilter('queued',this)">Pending</button>
+          <button class="inv-filter" data-status="sent"      onclick="invFilter('sent',this)">Sent</button>
+          <button class="inv-filter" data-status="delivered" onclick="invFilter('delivered',this)">Delivered</button>
+          <button class="inv-filter" data-status="accepted"  onclick="invFilter('accepted',this)">Accepted</button>
+          <button class="inv-filter" data-status="expired"   onclick="invFilter('expired',this)">Expired</button>
+          <button class="inv-filter" data-status="failed"    onclick="invFilter('failed',this)">Failed</button>
+        </div>
+
+        <div class="adm-table-wrap">
+          <table class="adm-table" style="width:100%;">
+            <thead><tr>
+              <th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Invited By</th>
+              <th>Invited</th><th>Last Sent</th><th>Accepted</th><th>Expiry</th>
+              <th>Message ID</th><th></th>
+            </tr></thead>
+            <tbody id="invTableBody"><tr><td colspan="11" style="padding:18px;color:rgba(255,255,255,0.35);font-size:12px;">Loading…</td></tr></tbody>
+          </table>
+        </div>
+        <div id="invDiag" style="margin-top:14px;"></div>
       </div>
 
       <!-- ═══ DRIVER APPROVAL ═══ -->
@@ -2942,6 +3033,8 @@ function setBadge(id,n){
    RENDER DISPATCHER
 ════════════════════════════════ */
 function renderPane(name){
+  /* Invitations load on demand — the list comes from a callable, not from D. */
+  if(name==='invitations')  loadInvitations();
   if(name==='attention')    renderAttention();
   if(name==='products')     renderProducts(D.products);
   if(name==='sellers')      renderSellers(D.sellers);
@@ -3591,6 +3684,160 @@ async function renderTeamPane(tab){
   }catch(err){
     el.innerHTML = '<div style="color:rgba(255,100,100,0.7);font-size:12px;">Unable to load data — please refresh.</div>';
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   INVITATIONS PANE
+   Consumes ONLY the deployed callables. No new backend endpoint, no direct
+   Firestore reads — invitations/{id} denies client reads by rule, and the
+   dashboard must not need a rule exemption to work.
+══════════════════════════════════════════════════════════════════════════ */
+var _invRows = [], _invFilter = 'all';
+
+function _invEsc(s){
+  return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function _invDate(ms){
+  if(!ms) return '<span style="color:rgba(255,255,255,0.2)">—</span>';
+  var d=new Date(Number(ms));
+  return d.toLocaleDateString('en-KE',{day:'numeric',month:'short'})+' '+
+         d.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'});
+}
+async function _invCall(name, data){
+  var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+  var fns = m.getFunctions(window.firebaseApp,'us-central1');
+  return (await m.httpsCallable(fns,name)(data||{})).data;
+}
+
+async function loadInvitations(){
+  var body=document.getElementById('invTableBody');
+  if(!body) return;
+  body.innerHTML='<tr><td colspan="11" style="padding:18px;color:rgba(255,255,255,0.35);font-size:12px;">Loading…</td></tr>';
+  try{
+    var res = await _invCall('listInvitations',{limit:200});
+    _invRows = (res && res.invitations) || [];
+    renderInvitations();
+    var badge=document.getElementById('invite-badge');
+    if(badge){
+      /* Badge counts what needs a human: not yet accepted and not expired. */
+      var open=_invRows.filter(function(r){return r.status!=='accepted' && !r.expired;}).length;
+      badge.textContent = open ? String(open) : '';
+      badge.style.display = open ? '' : 'none';
+    }
+  }catch(err){
+    body.innerHTML='<tr><td colspan="11" style="padding:18px;color:rgba(255,100,100,0.7);font-size:12px;">'+
+      _invEsc(err.message||'Unable to load invitations')+'</td></tr>';
+  }
+}
+
+function invFilter(status, btn){
+  _invFilter=status;
+  document.querySelectorAll('#invFilters .inv-filter').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  renderInvitations();
+}
+
+function renderInvitations(){
+  var body=document.getElementById('invTableBody');
+  if(!body) return;
+  var rows=_invRows.filter(function(r){
+    if(_invFilter==='all') return true;
+    if(_invFilter==='expired') return !!r.expired || r.status==='expired';
+    return r.status===_invFilter;
+  });
+  if(!rows.length){
+    body.innerHTML='<tr><td colspan="11" style="padding:18px;color:rgba(255,255,255,0.35);font-size:12px;">'+
+      (_invRows.length?'No invitations match this filter.':'No invitations yet.')+'</td></tr>';
+    return;
+  }
+  body.innerHTML=rows.map(function(r){
+    /* An expired invitation still carries its last real status; show expiry as the
+       effective state so an operator is not told "sent" about a dead link. */
+    var st = r.expired && r.status!=='accepted' ? 'expired' : (r.status||'queued');
+    return '<tr>'+
+      '<td style="font-size:12px;">'+_invEsc(r.email)+'</td>'+
+      '<td style="font-size:12px;color:rgba(255,255,255,0.6);">'+_invEsc(r.name||'—')+'</td>'+
+      '<td style="font-size:12px;">'+_invEsc(r.label||r.role||'—')+'</td>'+
+      '<td><span class="inv-pill inv-'+_invEsc(st)+'">'+_invEsc(st)+'</span></td>'+
+      '<td style="font-size:11px;color:rgba(255,255,255,0.4);">'+_invEsc((r.invitedBy||'').slice(0,10)||'—')+'</td>'+
+      '<td style="font-size:11px;">'+_invDate(r.invitedAt)+'</td>'+
+      '<td style="font-size:11px;">'+_invDate(r.lastSentAt)+'</td>'+
+      '<td style="font-size:11px;">'+_invDate(r.acceptedAt)+'</td>'+
+      '<td style="font-size:11px;">'+_invDate(r.expiresAt)+'</td>'+
+      '<td class="inv-msgid">'+_invEsc(r.messageId||'—')+'</td>'+
+      '<td><button class="inv-resend" '+(st==='accepted'?'disabled title="Already accepted"':'')+
+          ' onclick="resendInvite(\''+_invEsc(r.email)+'\',this)">Resend</button></td>'+
+    '</tr>';
+  }).join('');
+}
+
+async function sendUserInvite(){
+  var email=(document.getElementById('invEmail')?.value||'').trim().toLowerCase();
+  var name =(document.getElementById('invName')?.value||'').trim();
+  var role = document.getElementById('invRole')?.value;
+  var out  = document.getElementById('invResult');
+  if(!email){ if(typeof toast==='function') toast('Enter an email address','error'); return; }
+  var btn=document.getElementById('invSendBtn');
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  try{
+    var r = await _invCall('inviteUser',{ email:email, role:role, name:name });
+    if(out){
+      out.style.display='';
+      /* Phase 2 diagnostics — everything an operator needs to trace this invitation
+         without opening a console. A skipped duplicate says so plainly rather than
+         looking like a silent failure. */
+      out.innerHTML = r.skipped
+        ? '<strong style="color:#ffb400;">Skipped — '+_invEsc(r.skipped)+'</strong><br>'+
+          'Firebase UID: <code>'+_invEsc(r.uid||'—')+'</code><br>'+
+          'Invitation ID: <code>'+_invEsc(r.invitationId||'—')+'</code><br>'+
+          'No duplicate account or email was created.'
+        : '<strong style="color:#71ff00;">Invitation queued</strong><br>'+
+          'Firebase UID: <code>'+_invEsc(r.uid)+'</code><br>'+
+          'Invitation ID: <code>'+_invEsc(r.invitationId)+'</code><br>'+
+          'Queue doc: <code>'+_invEsc(r.queueId||'—')+'</code><br>'+
+          'Auth account created: <strong>'+(r.authAccountCreated?'yes':'no (reused)')+'</strong><br>'+
+          'Profile created: <strong>'+(r.userDocCreated?'yes':'no (existing)')+'</strong> &middot; '+
+          'Wallet created: <strong>'+(r.walletCreated?'yes':'no (existing)')+'</strong><br>'+
+          '<span style="color:rgba(255,255,255,0.45)">Password link was generated and emailed. '+
+          'The Message ID appears in the table once the queue sends — use “Refresh statuses”.</span>';
+    }
+    if(typeof toast==='function') toast(r.skipped?('Skipped: '+r.skipped):'Invitation queued','success');
+    document.getElementById('invEmail').value='';
+    document.getElementById('invName').value='';
+    await loadInvitations();
+  }catch(err){
+    if(out){ out.style.display=''; out.innerHTML='<strong style="color:#ff8080;">Failed</strong><br>'+_invEsc(err.message||'Unknown error'); }
+    if(typeof toast==='function') toast(err.message||'Invitation failed','error');
+  }finally{
+    if(btn){ btn.disabled=false; btn.textContent='Send Invitation'; }
+  }
+}
+
+async function resendInvite(email, btn){
+  if(btn){ btn.disabled=true; btn.textContent='Sending…'; }
+  try{
+    var r = await _invCall('resendInvitation',{ email:email });
+    if(typeof toast==='function'){
+      toast(r.skipped==='already_accepted' ? 'Already accepted — not resent'
+                                           : 'Fresh invitation sent','success');
+    }
+    await loadInvitations();
+  }catch(err){
+    if(typeof toast==='function') toast(err.message||'Resend failed','error');
+    if(btn){ btn.disabled=false; btn.textContent='Resend'; }
+  }
+}
+
+async function reconcileInvites(){
+  if(typeof toast==='function') toast('Refreshing statuses…','info');
+  try{
+    var r = await _invCall('reconcileInvitations',{});
+    if(typeof toast==='function') toast('Updated '+(r.updated||0)+' of '+(r.scanned||0),'success');
+  }catch(err){
+    if(typeof toast==='function') toast(err.message||'Refresh failed','error');
+  }
+  await loadInvitations();
 }
 
 async function sendPlatformInvite(){

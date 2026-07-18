@@ -255,7 +255,10 @@ async function issueInvitation({ adminUid, email, roleRaw, name, force }) {
 
     const prior = existing.exists ? existing.data() : null;
     await inviteRef.set({
-      email, uid: auth.uid, role: roleRaw, vertical: vertical.key, label: vertical.label,
+      /* `name` is stored so the dashboard can show who was invited without a second
+         lookup against users/{uid}. Without it the Name column can only ever render
+         a dash, which is how this was caught during dashboard integration. */
+      email, name: name || '', uid: auth.uid, role: roleRaw, vertical: vertical.key, label: vertical.label,
       status: 'queued',
       source: 'admin_invitation',
       invitedBy: adminUid,
@@ -343,7 +346,7 @@ exports.listInvitations = onCall({ timeoutSeconds: 30 }, async (request) => {
     const d = doc.data() || {};
     rows.push({
       invitationId: doc.id,
-      email: d.email || '', uid: d.uid || '', role: d.role || '', label: d.label || '',
+      email: d.email || '', name: d.name || '', uid: d.uid || '', role: d.role || '', label: d.label || '',
       status: d.status || 'pending',
       source: d.source || 'admin_invitation',
       invitedBy: d.invitedBy || '',
