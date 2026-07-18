@@ -4,7 +4,20 @@
 **Method:** `scripts/rc1-production-verify.js --pin 104.21.51.71 --dns 8.8.8.8` — resolver-independent,
 read-only, executed against live production.
 
-**Overall: 39 PASS · 1 FAIL · 11 PENDING**
+**Overall: 40 PASS · 0 FAIL · 11 PENDING** *(re-verified 2026-07-18 after resolver convergence)*
+
+## Status by area
+
+| Area | Status |
+|---|---|
+| Infrastructure | **PASS** |
+| Application | **PASS** |
+| Security | **PASS** |
+| Composite indexes | **PASS** |
+| **DNS propagation** | **CONDITIONAL** — authoritative correct, public resolvers converged, some ISP caches stale until TTL expiry |
+
+*The original run below recorded 39/1/11; the single FAIL was the intermittent stale answer from
+8.8.8.8, which has since cleared. Both runs are retained as the evidence trail.*
 
 | Area | PASS | FAIL | PENDING |
 |---|---|---|---|
@@ -42,7 +55,55 @@ read-only, executed against live production.
 | HSTS | `max-age=15552000` |
 | CSP present + allows auth domain | `frame-src` includes `auth.mysokoni.co.ke` |
 
-### The single FAIL — stale recursive DNS cache (not a configuration fault)
+### UPDATE 2026-07-18 — resolvers converged; suite now **40 PASS · 0 FAIL · 11 PENDING**
+
+Re-verified after the legacy-origin redirect was deployed.
+
+| Resolver | Answer | State |
+|---|---|---|
+| Cloudflare authoritative (`anuj`/`nina`) | `104.21.51.71` / `172.67.176.242` | ✅ correct |
+| `1.1.1.1` | `104.21.51.71` | ✅ **converged** |
+| `8.8.8.8` | `172.67.176.242` | ✅ **converged** (no longer intermittent) |
+| Local ISP resolver | `217.20.124.84` | ⚠️ still stale |
+
+The earlier intermittent FAIL on 8.8.8.8 has cleared. Remaining stale resolution is confined to
+individual ISP recursive caches and will expire with their TTLs.
+
+**DNS Propagation status: CONDITIONAL.** Authoritative DNS is correct; major public recursive
+resolvers have converged; a small number of ISP caches may temporarily continue serving the stale
+record until TTL expiry. This is an **external cache-propagation condition, not an infrastructure
+misconfiguration** — the Cloudflare zone contains no record for `217.20.124.84`.
+
+### Legacy-origin redirect — retained as best-effort HTTP fallback only
+
+A permanent redirect was deployed on the legacy LiteSpeed host
+(`public_html/.htaccess` → `https://mysokoni.co.ke/$1`). Measured behaviour:
+
+| Request to `217.20.124.84` | Result |
+|---|---|
+| `http://mysokoni.co.ke/` | **301** → `https://mysokoni.co.ke/` ✅ |
+| `http://mysokoni.co.ke/test` | **301** → `https://mysokoni.co.ke/test` ✅ (path preserved) |
+| `https://mysokoni.co.ke/` | **404 LiteSpeed** ❌ |
+| `https://mysokoni.co.ke/test` | **404 LiteSpeed** ❌ |
+
+**It is explicitly NOT the primary mitigation, for two measured reasons:**
+
+1. **Port 443 is unhandled.** The rule appears to exclude HTTPS to avoid an infinite loop —
+   correct logic, since it targets `https://` on the same hostname — leaving HTTPS requests to 404.
+2. **The redirect target is the same hostname.** Simulating a stale-resolver client with both
+   ports pinned to the legacy IP produced: `http://` → 301 → `https://mysokoni.co.ke/` → **404**.
+   The user is returned to a hostname their resolver still maps to the legacy origin.
+
+**HSTS compounds this:** we serve `max-age=15552000`, so any returning visitor who has previously
+loaded the site over HTTPS goes straight to 443 and never reaches the HTTP redirect at all.
+
+**Decision on record:** a cross-hostname redirect (e.g. to `sokoni-aeb26.web.app`) was considered
+and **rejected** — public resolvers have converged, the residual population is small and shrinking,
+and pointing at a different hostname introduces avoidable risk to authentication, cookies and UX
+for a condition that resolves itself. The `.htaccess` redirect is retained as a harmless
+best-effort fallback for HTTP clients.
+
+### Original finding — stale recursive DNS cache (not a configuration fault)
 
 `dns.google` intermittently returns the legacy origin `217.20.124.84`. Repeated queries alternate
 between Cloudflare IPs and the legacy address.
@@ -247,7 +308,11 @@ real transaction. Under the standing rule, they remain PENDING.
 
 **Conditions to satisfy before broader rollout:**
 
-5. DNS cache window fully expired — no resolver returning `217.20.124.84`.
+5. **DNS cache window fully expired** — no recursive resolver returning `217.20.124.84`.
+   *Status 2026-07-18: authoritative correct; `1.1.1.1` and `8.8.8.8` converged; residual limited
+   to individual ISP caches. Monitor only — make no further infrastructure change unless the
+   condition persists beyond the expected DNS cache lifetime, which would indicate a genuine
+   misconfiguration rather than propagation.*
 6. Cloud Run quota granted, restoring staff invitations (`wf*`).
 7. Settlement automated, or manual payout formally operationalised with an owner.
 
