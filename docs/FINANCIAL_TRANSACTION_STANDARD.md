@@ -24,7 +24,7 @@
 
 ---
 
-# THE EIGHT INVARIANTS
+# THE TEN INVARIANTS
 
 Every money-touching code path MUST be:
 
@@ -39,6 +39,7 @@ Every money-touching code path MUST be:
 | 7 | **Deterministic identifiers** | Ledger doc ids derive from the payment, never auto-generated |
 | 8 | **Atomic state transition** | `pending → final` is claimed by exactly one caller |
 | 9 | **Provider-attested** | **Only a payment provider may assert that money moved.** Not a timer, not the client, not the absence of an error |
+| 10 | **Read-ordered** | **All reads complete before the first write.** Gather refs → read together → validate → write. A read after a write throws (see F7) |
 
 > **Why invariant 9 had to be added (2026-07-13).**
 > Invariants 1–8 are all rigorous — and every one of them silently assumes *the payment was
@@ -131,6 +132,49 @@ was one blank config value, or one ad-blocker, away from giving stock away in pr
 
 > **A simulation path in payment code is a live weapon, not a dev convenience.**
 > Payment code gets no demo mode. If it cannot take money, it says so and stops.
+
+### F7 — a read after a write inside the same transaction
+**Caused: the multi-item refund failure (`posProcessRefund`), plus T-1 and T-2.**
+
+Firestore requires **every read before every write** in a transaction. A `get` after a
+`set/update/delete` throws at runtime — but only when that line is actually reached, which is why
+this class hides so well.
+
+```js
+/* ❌ throws on the SECOND item — single-item calls pass, so review missed it */
+await db.runTransaction(async (txn) => {
+  for (const item of items) {
+    const snap = await txn.get(prodRef(item));     // READ
+    txn.update(prodRef(item), { … });              // WRITE  -> next iteration's get throws
+  }
+});
+
+/* ❌ throws only for TODAY's bookings — a future-dated test passes */
+tx.update(slotRef, { status: 'cancelled' });       // WRITE (unconditional)
+if (booking.date === today) {
+  const cfg = await tx.get(configRef);             // READ AFTER WRITE
+}
+```
+
+**The rule:** gather every reference → read them **together** → validate → then write.
+
+```js
+/* ✅ */
+const refs = items.map(i => db.collection('posProducts').doc(i.productId));
+const [claim, ...snaps] = await Promise.all([txn.get(claimRef), ...refs.map(r => txn.get(r))]);
+if (claim.exists) return;                          // idempotent replay
+const plan = validate(items, snaps);               // throw before ANY write
+plan.forEach(p => txn.update(p.ref, p.patch));     // writes last
+```
+
+**Why it evades review:** the failure is *conditional*. It needs a second loop iteration, or a
+specific date, or a particular branch. The happy path a reviewer walks — one item, a future date —
+passes cleanly. Never assume a transaction is ordered correctly because it works once; check the
+read/write **sequence**, including inside loops and behind conditionals.
+
+**Verification note:** when auditing for this statically, a position-based scan will flag reads and
+writes in **mutually exclusive branches** (`if` / `else if`) as violations. They are not. Confirm
+the execution path before reporting — see `docs/TRANSACTION_INTEGRITY_AUDIT.md`.
 
 ---
 
