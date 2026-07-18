@@ -190,6 +190,30 @@ exports.topUpWallet = onCall(_CF, exports._h.topUpWallet = async (req) => {
  * deductWallet
  * Deducts funds from customer wallet for a POS sale.
  * Runs inside a Firestore transaction to guarantee balance safety.
+ *
+ * AUTHORIZATION MODEL — INTENTIONAL ASYMMETRY. DO NOT "FIX" THIS.
+ *
+ *   topUpWallet     -> _requireRole(auth, 'manager')
+ *   refundToWallet  -> _requireRole(auth, 'manager')
+ *   deductWallet    -> authenticated staff only  (NO manager gate)   <- this handler
+ *
+ * This is deliberate, not an oversight. deductWallet is the CHECKOUT path: a cashier must be
+ * able to take payment from a customer's wallet during an ordinary sale. Requiring manager
+ * approval here would interrupt every wallet-paid transaction at the till.
+ *
+ * The gated directions are the risky ones — money IN (top-up, which creates value) and money
+ * BACK (refund, which returns value). Deduction only moves value the customer already has, in
+ * exchange for goods, and is recorded against a saleId.
+ *
+ * Safe because all four hold; if any stops being true, revisit this decision:
+ *   1. sellerId is SERVER-DERIVED from the caller's token claim (_resolveSellerId), never taken
+ *      from the client — so a cashier can only ever touch their own merchant's wallets.
+ *   2. Tenant isolation: walletId is `${sellerId}_${phone}`, scoped by that derived sellerId.
+ *   3. Idempotent + audited: a deterministic txn id `{sellerId}_{phone}_{saleId}_deduct` means a
+ *      retry cannot double-deduct, and every movement leaves a posWalletTransactions row.
+ *   4. Authorization is enforced SERVER-SIDE; the client cannot assert its own role.
+ *
+ * Reviewed and confirmed 2026-07-17 — see docs/AUTHORIZATION_REVIEW.md.
  */
 exports.deductWallet = onCall(_CF, exports._h.deductWallet = async (req) => {
   _requireAuth(req);
