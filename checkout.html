@@ -16,7 +16,7 @@
   <meta name="color-scheme" content="dark">
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
   <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
-  <link rel="preconnect" href="https://cdn.intasend.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
   <link rel="preconnect" href="https://api.intasend.com" crossorigin>
   <link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
   <link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
@@ -824,7 +824,21 @@
 <!-- Site config (IntaSend key etc.) -->
 <script src="sokoni-config.js"></script>
 <!-- IntaSend M-Pesa SDK -->
-<script src="https://cdn.intasend.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"></script>
+<!-- P0 2026-07-18: cdn.intasend.com no longer resolves (ENOTFOUND from Google public DNS;
+     net::ERR_NAME_NOT_RESOLVED in a production browser), so window.IntaSend was permanently
+     undefined and NO M-Pesa payment could be initiated from this page at all.
+
+     Repointed to unpkg, SAME version 3.0.3. Verified byte-identical to the jsDelivr mirror
+     (both 44,384 bytes, sha256 f253cd4e…), so two independent mirrors agree on the artifact.
+     unpkg and cdn.jsdelivr.net were ALREADY present in the CSP script-src allowlist — the
+     policy was not loosened to accommodate this change.
+
+     SRI pins the exact build: if unpkg ever serves different bytes the script is refused,
+     window.IntaSend stays undefined, and the guard below fails closed with an honest
+     "Payment unavailable" instead of running unverified third-party payment code. -->
+<script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"
+        integrity="sha384-pCPVtxYA4nrrp9OU8Aaow61Mc7vLbjaVxxbUyfwHvpvItMottH1juZkJ+hTeimpo"
+        crossorigin="anonymous"></script>
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
