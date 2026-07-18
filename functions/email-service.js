@@ -128,7 +128,9 @@ function _buildHeaders(payload) {
 
 /* ── Send via SendGrid ─────────────────────────────────────── */
 async function _sendViaSendGrid(payload) {
-  const sgKey = SENDGRID_KEY.value();
+  /* Same BOM/CRLF hazard as MAIL_PASS — SENDGRID_API_KEY is clean today, but a future
+     re-paste from a Windows shell would silently 401 every send. Cheap to defend. */
+  const sgKey = _cleanSecret(SENDGRID_KEY.value());
   if (!sgKey) throw new Error("SENDGRID_API_KEY not set");
   const sgMail = require("@sendgrid/mail");
   sgMail.setApiKey(sgKey);
@@ -138,7 +140,24 @@ async function _sendViaSendGrid(payload) {
     replyTo:     payload.replyTo || "support@mysokoni.co.ke",
     subject:     payload.subject,
     html:        payload.html,
-    text:        payload.text || "",
+    /* THE BUG THAT BROKE EVERY TRANSACTIONAL EMAIL.
+       `payload.text || ""` sent an EMPTY text/plain part whenever a caller supplied only
+       html — which is every template on the platform. SendGrid rejects that outright:
+
+         400  "The content value must be a string at least one character in length."
+              field: content.1.value
+
+       Verified against the live API with the production key: html + text:"" -> 400,
+       html alone -> 202 Accepted.
+
+       Every send then fell through to the SMTP fallback, whose own credential is broken
+       (see MAIL_PASS), so the visible symptom was a misleading
+       "535 Authentication failed … grant is invalid, expired, or revoked" — which pointed
+       at credentials when the real fault was a malformed payload.
+
+       Omit the field entirely rather than send an empty one. A plain-text alternative is
+       still used whenever a caller actually provides one. */
+    ...(payload.text ? { text: payload.text } : {}),
     headers:     _buildHeaders(payload),
     trackingSettings: {
       clickTracking:  { enable: true, enableText: false },
@@ -172,10 +191,22 @@ function _assertSafeEmail(addr) {
 }
 
 /* ── Send via SMTP (nodemailer) ────────────────────────────── */
+/* Secrets written from a Windows shell or an editor pick up a UTF-8 BOM (EF BB BF) and a
+   trailing CRLF. MAIL_PASS was stored as 74 bytes: BOM + a perfectly valid 69-char SendGrid
+   key + CRLF. SMTP then authenticates with "﻿SG.xxx\r\n" and is rejected 535
+   "Authentication failed: The provided authorization grant is invalid, expired, or revoked"
+   — wording that sends you hunting for an expired OAuth grant when the credential is
+   actually fine and merely has three invisible bytes glued to it.
+
+   Trim at the point of use so a malformed secret cannot silently break auth again. */
+function _cleanSecret(v) {
+  return typeof v === "string" ? v.replace(/^﻿/, "").trim() : v;
+}
+
 async function _sendViaSmtp(payload) {
-  const host = MAIL_HOST.value();
-  const user = MAIL_USER.value();
-  const pass = MAIL_PASS.value();
+  const host = _cleanSecret(MAIL_HOST.value());
+  const user = _cleanSecret(MAIL_USER.value());
+  const pass = _cleanSecret(MAIL_PASS.value());
   if (!host || !user || !pass) throw new Error("MAIL_HOST / MAIL_USER / MAIL_PASS not set");
   _assertSafeEmail(payload.to);
   const nodemailer = require("nodemailer");
@@ -235,8 +266,77 @@ async function _checkPreferences(uid, category) {
   }
 }
 
-/* ── Log email result to Firestore ────────────────────────── */
-async function _log(payload, result, error) {
+/* ── Provider error extraction ─────────────────────────────
+   SendGrid throws a ResponseError carrying the ONLY useful diagnosis: response.body.errors
+   is an array of {message, field, help}. Previously the caller logged e.message alone, which
+   for a 400 is the literal string "Bad Request" — no field, no reason. Every rejection was
+   therefore unexplainable after the fact. Nothing here is summarised or truncated below 2KB;
+   the raw body is preserved as sent by the provider. */
+function _describeProviderError(err) {
+  const out = {
+    message: (err && err.message) || String(err),
+    code:    (err && (err.code || err.statusCode)) || null,
+    status:  (err && err.response && err.response.statusCode) || (err && err.code) || null,
+    body:    null,
+    headers: null,
+    errors:  null,
+    requestId: null,
+  };
+  try {
+    const r = err && err.response;
+    if (r) {
+      if (r.body !== undefined) {
+        out.body = typeof r.body === "string" ? r.body.slice(0, 2000)
+                                              : JSON.stringify(r.body).slice(0, 2000);
+        const parsed = typeof r.body === "string" ? JSON.parse(r.body) : r.body;
+        if (parsed && Array.isArray(parsed.errors)) {
+          /* The actionable part: which field SendGrid rejected and why. */
+          out.errors = parsed.errors.map(e => ({
+            message: String(e.message || "").slice(0, 300),
+            field:   e.field ? String(e.field).slice(0, 120) : null,
+            help:    e.help ? String(e.help).slice(0, 200) : null,
+          }));
+        }
+      }
+      if (r.headers) {
+        const h = r.headers;
+        out.requestId = h["x-message-id"] || h["x-request-id"] || null;
+        out.headers = JSON.stringify({
+          "x-message-id": h["x-message-id"] || null,
+          "x-request-id": h["x-request-id"] || null,
+          "retry-after":  h["retry-after"] || null,
+challenge:      h["www-authenticate"] || null,
+        }).slice(0, 500);
+      }
+    }
+  } catch (_) { /* never let diagnosis throw */ }
+  return out;
+}
+
+/* Retry classification. A 400/401/403 will fail identically on every retry — retrying
+   wastes quota and delays the operator noticing. Only transient conditions retry. */
+const _RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const _RETRYABLE_CODE = new Set([
+  "ETIMEDOUT", "ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND", "EBADNAME", "ESOCKET", "ECONNECTION",
+]);
+function _isRetryable(desc) {
+  if (!desc) return false;
+  const s = Number(desc.status);
+  if (Number.isFinite(s) && s >= 400) return _RETRYABLE_STATUS.has(s);
+  if (desc.code && _RETRYABLE_CODE.has(String(desc.code))) return true;
+  /* Unclassified (no status, no known code) — treat as transient once rather than
+     discarding a message that may simply have hit a blip. */
+  return !desc.status;
+}
+
+/* ── Log email result to Firestore ──────────────────────────
+   Both attempts are recorded SEPARATELY. Previously `error` held only the SMTP failure, so
+   a SendGrid 400 followed by an SMTP auth failure was logged as an SMTP problem — the real
+   cause was overwritten and lost. sendgridError and smtpError are now distinct fields and
+   neither can mask the other. Existing fields keep their names and meanings so current
+   dashboards and queries continue to work unchanged. */
+async function _log(payload, result, error, attempts) {
+  const a = attempts || {};
   const record = {
     emailId:   payload.emailId || "",
     to:        payload.to,
@@ -254,6 +354,29 @@ async function _log(payload, result, error) {
     openedAt:  null,
     clickedAt: null,
     bouncedAt: null,
+
+    /* ── Per-attempt detail (new) ── */
+    sendgridAttempted: !!a.sendgrid,
+    sendgridStatus:    a.sendgrid ? (a.sendgrid.ok ? "accepted" : "rejected") : null,
+    sendgridHttp:      a.sendgrid && a.sendgrid.err ? a.sendgrid.err.status : (a.sendgrid && a.sendgrid.statusCode) || null,
+    sendgridMessageId: (a.sendgrid && a.sendgrid.messageId) || null,
+    sendgridError:     a.sendgrid && a.sendgrid.err ? a.sendgrid.err.message : null,
+    sendgridBody:      a.sendgrid && a.sendgrid.err ? a.sendgrid.err.body : null,
+    sendgridErrors:    a.sendgrid && a.sendgrid.err ? a.sendgrid.err.errors : null,
+    sendgridHeaders:   a.sendgrid && a.sendgrid.err ? a.sendgrid.err.headers : null,
+    sendgridRequestId: a.sendgrid && a.sendgrid.err ? a.sendgrid.err.requestId : null,
+
+    smtpAttempted:     !!a.smtp,
+    smtpStatus:        a.smtp ? (a.smtp.ok ? "accepted" : "rejected") : null,
+    smtpError:         a.smtp && a.smtp.err ? a.smtp.err.message : null,
+    smtpCode:          a.smtp && a.smtp.err ? a.smtp.err.code : null,
+    smtpResponse:      a.smtp && a.smtp.err ? a.smtp.err.body : null,
+
+    /* Lifecycle + retry decision, so the queue processor and any human read the same verdict. */
+    outcome:     error ? (a.retryable ? "retry_scheduled" : "permanent_failure") : "delivered",
+    retryable:   error ? !!a.retryable : null,
+    queuedAt:    payload.queuedAt || null,
+    pickedUpAt:  a.pickedUpAt || null,
   };
   await db().collection("emailLogs").add(record).catch(() => {});
 }
@@ -288,22 +411,50 @@ async function send(payload) {
 
   let result = null;
   let error  = null;
+  const attempts = { pickedUpAt: new Date().toISOString() };
 
-  /* Try SendGrid first, SMTP as fallback */
+  /* SendGrid first, SMTP strictly as fallback. Both outcomes are captured independently
+     so neither attempt can overwrite the other's diagnosis. */
   try {
     result = await _sendViaSendGrid(payload);
+    attempts.sendgrid = { ok: true, statusCode: result.statusCode, messageId: result.messageId };
   } catch (e1) {
-    console.warn("[Email] SendGrid failed:", e1.message, "— trying SMTP");
+    const d = _describeProviderError(e1);
+    attempts.sendgrid = { ok: false, err: d };
+    /* Log the BODY, not just "Bad Request" — the body is the only part that says why. */
+    console.error("[Email] SendGrid rejected", JSON.stringify({
+      to: payload.to, subject: String(payload.subject || "").slice(0, 80),
+      template: payload.template || null,
+      status: d.status, message: d.message, errors: d.errors, requestId: d.requestId,
+      body: d.body,
+    }));
+
     try {
       result = await _sendViaSmtp(payload);
+      attempts.smtp = { ok: true, messageId: result.messageId };
     } catch (e2) {
-      error = e2;
-      console.error("[Email] Both transports failed:", e2.message);
+      const d2 = _describeProviderError(e2);
+      attempts.smtp = { ok: false, err: d2 };
+      /* Surface the ORIGINAL SendGrid failure as the thrown error. The SMTP failure is a
+         second symptom; reporting it as the cause is what hid this problem for weeks. */
+      error = e1;
+      error.smtpFallbackError = e2.message;
+      console.error("[Email] Both transports failed", JSON.stringify({
+        sendgrid: { status: d.status, message: d.message, errors: d.errors },
+        smtp:     { code: d2.code, message: d2.message },
+      }));
     }
   }
 
-  await _log(payload, result, error);
-  if (error) throw error;
+  /* Retry eligibility is decided by the PRIMARY provider's verdict: a 400 from SendGrid is
+     permanent no matter how many times SMTP is also down. */
+  attempts.retryable = error ? _isRetryable(attempts.sendgrid && attempts.sendgrid.err) : false;
+
+  await _log(payload, result, error, attempts);
+  if (error) {
+    error.retryable = attempts.retryable;
+    throw error;
+  }
   return result;
 }
 
@@ -372,11 +523,24 @@ async function processQueue() {
       sent++;
     } catch (e) {
       const retryCount = (item.retryCount || 0) + 1;
-      const failed = retryCount >= (item.maxRetries || 3);
+      /* send() marks the error non-retryable when the PRIMARY provider returned a verdict
+         that cannot change (400/401/403). Re-sending those burns quota, delays the queue
+         behind messages that will never succeed, and buries the real failure under retry
+         noise. Only transient conditions (429/5xx, timeouts, DNS) are retried.
+         `retryable === undefined` means the classifier did not run — retry, so this change
+         can never make a previously-retried message permanent by accident. */
+      const nonRetryable = e && e.retryable === false;
+      const failed = nonRetryable || retryCount >= (item.maxRetries || 3);
       await docRef.ref.update({
         status:      failed ? "failed" : "pending",
         retryCount,
         lastError:   e.message,
+        /* Preserve the primary provider's reason on the queue document too, so the queue
+           can be triaged without cross-referencing emailLogs. */
+        lastErrorDetail: (e && e.smtpFallbackError)
+          ? String(e.message) + " | smtp fallback: " + String(e.smtpFallbackError).slice(0, 200)
+          : null,
+        permanentFailure: !!nonRetryable,
         nextAttempt: admin.firestore.Timestamp.fromMillis(Date.now() + retryCount * 60_000),
       }).catch(() => {});
     }
