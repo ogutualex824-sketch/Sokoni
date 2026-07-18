@@ -58,19 +58,44 @@ increase lands (tracked as an RC1 infrastructure dependency).
 quota is granted**. Phase 0 can proceed because `createBusiness` seeds the owner into `posStaff`
 directly, and `setStaffPin` (shipped today) rides the already-deployed `smartPosDispatch`.
 
-## [C] Genuinely missing — 6 real (8 flagged)
+### Deployment backlog — release on Cloud Run quota resolution
 
-No handler and no export anywhere. `sokoni-test-suite.js` accounts for 2 of the 8
-(`unknownFunction_xyz` is a deliberate negative-test fixture) — excluded.
+These are **deployment-blocked, not code defects**. Do not redesign or duplicate the
+functionality. When the quota increase is granted, deploy in this order and re-run this audit to
+confirm the category empties.
 
-| Client | Op | Impact |
-|---|---|---|
-| `pos-checkout.html` | `posSendMpesa` | M-PESA **fallback** path hard-fails (primary `SokoniPay` path works) |
-| `pos-onboard.html` | `upsertProduct` | legacy onboarding wizard — superseded by `posUpsertProduct` on `smartPosDispatch` |
-| `returns.html` | `processReturn` | **customer returns dead** |
-| `scan.html` | `verifyPickupToken` | **pickup verification dead** |
-| `tenant-portal.html` | `initiateRentPayment` | **rent payment dead** |
-| `partner-portal.html` | `getProducts` | partner catalogue view dead |
+| Order | Function group | Count | Unblocks | Pilot-critical? |
+|---|---|---|---|---|
+| 1 | `wf*` — workforce identity (`wfInviteEmployee`, `wfClockIn`, `wfGetInvitation`, …) | 15 | Staff invitations, attendance/clock-in, workspace invites | **Yes** — needed the moment the merchant hires a second person |
+| 2 | `device*` — device/session management (`deviceRegister`, `deviceList`, `deviceTrust`, …) | 8 | Account-centre device trust, remote logout | Partly — security feature, not trading-critical |
+| 3 | `org*` — org structure & workflows (departments, teams, roles, approvals, delegations) | 28 | Enterprise org chart, approval workflows, temp access | No — enterprise tier, post-pilot |
+| 4 | `profileGetCompletion`, `wfGetProfessionalProfile` | 3 | Profile completion meters | No — cosmetic |
+
+**Verification after deployment:** re-run the phantom sweep; category B should drop to zero. Any
+name still absent means the deploy silently skipped it (check the Cloud Run service count against
+the per-project limit rather than assuming success).
+
+## [C] Genuinely missing — 5 real (8 flagged)
+
+No handler and no export anywhere. Three of the eight are **false positives**, verified by reading
+each call site:
+
+- `sokoni-test-suite.js` × 2 — `unknownFunction_xyz` is a deliberate negative-test fixture.
+- `partner-portal.html:360` — the `getProducts` call sits inside a `<pre>` block; it is **API
+  documentation** showing partners how to call the platform, not an executed call.
+
+### The 5 real dead flows
+
+| # | Module | Op | Business impact | Effort | Dependencies | Priority |
+|---|---|---|---|---|---|---|
+| C-1 | `returns.html:616` | `processReturn` | **Customer returns cannot be approved.** A buyer requests a return and staff can never action it — direct CX and refund-liability exposure. Returns policy is published, so this is a stated commitment the platform cannot honour. | **Medium** — needs a handler with state machine (requested→approved/rejected→refunded), inventory restock and an audit row. Refund money movement should reuse `posProcessRefund`'s now-idempotent pattern. | Refund engine; inventory restock; notification engine | **P1 — highest of category C.** Customer-facing and tied to a published policy |
+| C-2 | `tenant-portal.html:711` | `initiateRentPayment` | **Tenants cannot pay rent.** The property/tenant vertical has no payment path; the button fails. Revenue-blocking for that hub. | **Medium** — must route through the ONE payment rail (`fosInitiatePayment`/IntaSend STK), never a second payment engine. Needs lease→invoice→payment linkage. | Payment rail; commission engine (property category); lease records | **P2** — revenue-blocking but scoped to the property hub, not Phase 0 pilot |
+| C-3 | `scan.html:210` | `verifyPickupToken` | **Click-and-collect pickup cannot be verified.** Staff cannot confirm a collection token, so handover is unverified — goods could be released to the wrong person. | **Small–Medium** — token verify + single-use consumption, must be transactional so a token cannot be redeemed twice. | Order/collection records; QR engine | **P2** — becomes P1 the moment click-and-collect is enabled for a pilot merchant |
+| C-4 | `pos-checkout.html:2475` | `posSendMpesa` | M-PESA **fallback** path hard-fails. Low impact today because the primary `SokoniPay.platformBook` path works; only bites if `SokoniPay` fails to load. | **Small** — either implement the fallback against the existing rail or delete the dead branch and surface a clear error. | Payment rail | **P3** — remove or implement; do not leave a silent dead branch |
+| C-5 | `pos-onboard.html:1252` | `upsertProduct` | Legacy onboarding wizard. **Superseded** — `posUpsertProduct` now exists on `smartPosDispatch` (shipped 2026-07-17). This wizard also writes to `sellers/{uid}` instead of `businesses/{SOK-…}`, so it produces an un-bootstrappable POS. | **Small** — retire the page or repoint it at the v2 flow. Do **not** re-implement `upsertProduct`. | SmartPOS onboarding v2 | **P2 — retire, don't fix.** Leaving it reachable is an onboarding trap |
+
+**None of these is implemented during RC1**, per directive. C-1 and C-3 are the two that could
+affect a pilot merchant; C-5 should be closed by removing the route rather than writing code.
 
 ## Phantom dispatcher ops
 
