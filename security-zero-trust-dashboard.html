@@ -343,7 +343,7 @@ firebase.auth().onAuthStateChanged(function (user) {
     const role = tok.claims.role || tok.claims.admin || tok.claims.superAdmin;
     const isAdminOrSuper = tok.claims.admin === true || tok.claims.superAdmin === true
       || role === 4 || role === 5 || role === 'admin' || role === 'super_admin';
-    if (!isAdminOrSuper) { window.location.href = 'index.html'; return; }
+    if (!isAdminOrSuper) { window.location.href = "/"; return; }
     _initDashboard();
   }).catch(function () { window.location.href = 'login.html'; });
 });

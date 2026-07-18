@@ -151,7 +151,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060b06;color:white;
 <script src="splash.js"></script>
 
 <nav class="fh-nav">
-  <a href="index.html"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="fh-nav-logo" alt="SOKONI"></a>
+  <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="fh-nav-logo" alt="SOKONI"></a>
   <div class="fh-nav-tabs">
     <button type="button" class="fh-nav-tab active" onclick="showFhPanel('gyms',this)">🏋️ Gyms</button>
     <button type="button" class="fh-nav-tab" onclick="showFhPanel('coaches',this)">🏃 Coaches</button>
@@ -167,7 +167,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060b06;color:white;
   </div>
   <div style="display:flex;gap:6px;align-items:center;">
     <a href="notifications.html" title="Notifications" style="padding:8px 10px;border:1px solid rgba(57,255,20,0.2);border-radius:10px;color:#39ff14;font-size:14px;font-weight:700;text-decoration:none;position:relative;">🔔<span id="fhNotifBadge" style="position:absolute;top:-4px;right:-4px;background:#ef4444;color:white;border-radius:50%;font-size:9px;font-weight:900;width:16px;height:16px;display:none;align-items:center;justify-content:center;line-height:1;"></span></a>
-    <a href="index.html" style="padding:8px 14px;border:1px solid rgba(57,255,20,0.2);border-radius:10px;color:#39ff14;font-size:12px;font-weight:700;text-decoration:none;">🏠</a>
+    <a href="/" style="padding:8px 14px;border:1px solid rgba(57,255,20,0.2);border-radius:10px;color:#39ff14;font-size:12px;font-weight:700;text-decoration:none;">🏠</a>
   </div>
 </nav>
 <script>(function(){var n=parseInt(localStorage.getItem('_sokoniUnread')||'0');if(n>0){var b=document.getElementById('fhNotifBadge');if(b){b.textContent=n>99?'99+':String(n);b.style.display='flex';}}})()</script>
@@ -772,7 +772,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#060b06;color:white;
 
 <!-- BOTTOM NAV -->
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="sports-hub.html" class="bnav-item"><span class="bnav-emoji">⚽</span><span>Sports</span></a>
   <a href="fitness-hub.html" class="bnav-item active-bnav"><span class="bnav-emoji">💪</span><span>Fitness</span></a>

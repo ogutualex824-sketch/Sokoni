@@ -43,7 +43,7 @@ const statusLabels = { placed:"✅ Placed", processing:"⚙️ Processing", ship
 const ordersList = document.getElementById("profileOrdersList");
 if(ordersList){
     if(orders.length === 0){
-        ordersList.innerHTML = `<p style="color:rgba(255,255,255,0.3);font-size:14px;padding:12px 0;">No orders yet. <a href="index.html" style="color:#71ff00;">Start shopping →</a></p>`;
+        ordersList.innerHTML = `<p style="color:rgba(255,255,255,0.3);font-size:14px;padding:12px 0;">No orders yet. <a href="/" style="color:#71ff00;">Start shopping →</a></p>`;
     } else {
         ordersList.innerHTML = orders.slice(0,4).map(o => {
             const trackUrl = o.deliveryRef

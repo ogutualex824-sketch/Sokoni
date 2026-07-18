@@ -613,7 +613,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){location.href='login.html?redirect=admin-messages.html';return;}
   user.getIdTokenResult().then(function(t){
-    if(!t.claims.admin && !t.claims.superAdmin){location.href='index.html';return;}
+    if(!t.claims.admin && !t.claims.superAdmin){location.href='/';return;}
     _init();
   });
 });

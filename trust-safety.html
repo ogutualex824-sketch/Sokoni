@@ -311,7 +311,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 firebase.auth().onAuthStateChanged(function(u){
   if(!u){location.href='login.html?redirect=trust-safety.html';return;}
   u.getIdTokenResult().then(function(t){
-    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
     _isSuperAdmin=t.claims.superAdmin||false;
     if(!_isSuperAdmin){document.getElementById('rv-ban').parentElement.style.opacity='.4';document.getElementById('rv-ban').disabled=true;}
     _loadDashboard();

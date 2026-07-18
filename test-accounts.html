@@ -135,7 +135,7 @@
 <hr class="divider">
 <div class="section-title">Quick Links</div>
 <div class="link-row">
-  <a href="index.html" class="link-btn">🏠 Home</a>
+  <a href="/" class="link-btn">🏠 Home</a>
   <a href="login.html" class="link-btn">🔑 Login</a>
   <a href="sports-hub.html" class="link-btn">⚽ Fixtures</a>
   <a href="ministore.html" class="link-btn">🏪 Shops</a>
@@ -158,7 +158,7 @@ onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.replace('login.html'); return; }
   const token = await user.getIdTokenResult().catch(() => null);
   if (!token || !token.claims.admin) {
-    window.location.replace('index.html'); return;
+    window.location.replace("/"); return;
   }
   document.body.style.visibility = '';
 });
@@ -190,7 +190,7 @@ function autoLogin(email, name, roles, phone) {
     roles: roles, registeredAs: roles
   }));
   localStorage.setItem("loggedIn", "true");
-  window.location.href = "index.html";
+  window.location.href = "/";
 }
 </script>
 <script src="sw-register.js" defer></script>

@@ -595,7 +595,7 @@ function _cf(name) { return fn.httpsCallable(name); }
 firebase.auth().onAuthStateChanged(function(user) {
   if (!user) { location.href = 'admin.html'; return; }
   user.getIdTokenResult().then(function(r) {
-    if (!r.claims.admin && !r.claims.superAdmin) { location.href = 'index.html'; return; }
+    if (!r.claims.admin && !r.claims.superAdmin) { location.href = "/"; return; }
     AC.refresh();
   });
 });

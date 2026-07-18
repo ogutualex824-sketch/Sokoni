@@ -235,7 +235,7 @@ async function _handlePickup(orderId, token) {
         <div class="sc-title">Pickup Confirmed!</div>
         <div class="sc-sub">Order #${_esc(orderId.slice(-6).toUpperCase())} has been marked as collected.
           Thank you for shopping with SOKONI.</div>
-        <a href="index.html" class="sc-btn">Continue Shopping</a>
+        <a href="/" class="sc-btn">Continue Shopping</a>
         <a href="track.html?order=${encodeURIComponent(orderId)}" class="sc-btn sc-btn-ghost">View Receipt</a>
       </div>`;
   } catch (err) {
@@ -252,7 +252,7 @@ function _renderError(msg) {
       <p>${_esc(msg)}</p>
     </div>
     <br>
-    <button onclick="location.href='index.html'" class="sc-btn" style="max-width:380px;width:100%;">Go Home</button>`;
+    <button onclick="location.href='/'" class="sc-btn" style="max-width:380px;width:100%;">Go Home</button>`;
 }
 
 /* ── Scanner UI (no params — user opened page directly) ── */

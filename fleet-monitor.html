@@ -192,7 +192,7 @@ function _ago(ts){
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){ location.href='login.html'; return; }
   user.getIdTokenResult().then(function(r){
-    if(!r.claims.admin && !r.claims.superAdmin){ location.href='index.html'; return; }
+    if(!r.claims.admin && !r.claims.superAdmin){ location.href='/'; return; }
     _initMap();
     _refresh();
     _pollingTimer = setInterval(_refresh, 15000);

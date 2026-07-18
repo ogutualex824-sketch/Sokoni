@@ -301,7 +301,7 @@ firebase.auth().onAuthStateChanged(function(user) {
     var ok = tok.claims.admin === true || tok.claims.superAdmin === true
           || tok.claims.role === 'admin' || tok.claims.role === 'super_admin'
           || tok.claims.role === 4 || tok.claims.role === 5;
-    if (!ok) { window.location.href = 'index.html'; }
+    if (!ok) { window.location.href = "/"; }
   }).catch(function() { window.location.href = 'login.html'; });
 });
 </script>

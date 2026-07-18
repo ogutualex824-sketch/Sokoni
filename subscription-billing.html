@@ -427,7 +427,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
 firebase.auth().onAuthStateChanged(function(u){
   if(!u){location.href='login.html?redirect=subscription-billing.html';return;}
   u.getIdTokenResult().then(function(t){
-    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
     _init();
   });
 });

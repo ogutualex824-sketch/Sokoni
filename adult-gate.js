@@ -94,7 +94,7 @@ function requireAgeVerification(){
                         </div>
                     </div>
 
-                    <a href="index.html" class="age-leave-btn" id="agLeaveBtn">← Leave (Under 18)</a>
+                    <a href="/" class="age-leave-btn" id="agLeaveBtn">← Leave (Under 18)</a>
 
                     <p class="age-gate-legal">By entering, you confirm you are 18+ and comply with Kenyan law.
                        This site does not sell regulated products to minors.</p>

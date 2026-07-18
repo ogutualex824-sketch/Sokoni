@@ -643,7 +643,7 @@ body.adm-light .adm-sec-h{color:#111;}
   <!-- TOP NAV -->
   <nav class="adm-nav">
     <div class="adm-nav-left">
-      <a href="index.html" style="display:flex;align-items:center;text-decoration:none;">
+      <a href="/" style="display:flex;align-items:center;text-decoration:none;">
         <img src="assets/sokoni-logo-dark.png" class="adm-nav-logo" onerror="this.style.display='none'" alt="">
       </a>
       <span class="adm-nav-title">⚡ SOKONI Admin</span>
@@ -651,7 +651,7 @@ body.adm-light .adm-sec-h{color:#111;}
       <span class="nav-alert-dot" id="navAlertDot">0</span>
     </div>
     <div class="adm-nav-right">
-      <a href="index.html" class="adm-pill" style="background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);text-decoration:none;display:flex;align-items:center;gap:4px;">🏠 Home</a>
+      <a href="/" class="adm-pill" style="background:rgba(113,255,0,0.12);color:#71ff00;border:1px solid rgba(113,255,0,0.25);text-decoration:none;display:flex;align-items:center;gap:4px;">🏠 Home</a>
       <button class="adm-pill adm-pill-blue" onclick="exportAll()">📥 Export</button>
       <button class="adm-pill adm-pill-green" onclick="refreshAll()">🔄</button>
       <button class="adm-pill" id="darkModeBtn" onclick="toggleDarkMode()" title="Toggle dark/light mode" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.6);">🌙</button>
@@ -5291,7 +5291,7 @@ onAuthStateChanged(auth, async function(user) {
     /* Founder without claim yet — show page so they can bootstrap */
     document.body.style.visibility = '';
   } else {
-    window.location.replace('index.html');
+    window.location.replace("/");
   }
 });
 </script>

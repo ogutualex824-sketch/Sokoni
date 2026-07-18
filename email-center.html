@@ -628,7 +628,7 @@ onAuthStateChanged(auth, async (user) => {
   if (!user) { location.href = 'login.html'; return; }
   const token = await user.getIdTokenResult();
   if (!token.claims.isAdmin && !token.claims.isSuperAdmin) {
-    location.href = 'index.html'; return;
+    location.href = "/"; return;
   }
   window._ecUid = user.uid;
   loadAll();

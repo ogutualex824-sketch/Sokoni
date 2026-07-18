@@ -1790,7 +1790,7 @@ th .inv-sort-icon::before{content:'↕'}
   /* ── INIT ── */
   if (typeof firebase !== 'undefined' && firebase.auth) {
     firebase.auth().onAuthStateChanged(user => {
-      if (!user) { window.location.href = 'index.html'; return; }
+      if (!user) { window.location.href = "/"; return; }
       SokoniInventory.init?.().then(loadProducts).catch(() => loadProducts());
     });
   } else {

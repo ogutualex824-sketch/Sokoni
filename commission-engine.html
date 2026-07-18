@@ -452,7 +452,7 @@ textarea.form-input{resize:vertical;min-height:72px}
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){location.href='login.html?redirect=commission-engine.html';return;}
   user.getIdTokenResult().then(function(t){
-    if(!t.claims.admin&&!t.claims.superAdmin){location.href='index.html';return;}
+    if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
     _init();
   });
 });

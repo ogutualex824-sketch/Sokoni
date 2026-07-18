@@ -856,7 +856,7 @@
   </div>
   <div class="nav-actions">
     <a href="cart.html" class="cart-btn" style="text-decoration:none">🛒 Cart</a>
-    <a href="index.html" class="wishlist-nav-btn">🏠 Home</a>
+    <a href="/" class="wishlist-nav-btn">🏠 Home</a>
   </div>
 </nav>
 
@@ -1490,7 +1490,7 @@
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
       <a id="successTrackBtn" href="track.html" style="padding:12px 22px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;font-weight:800;border-radius:12px;text-decoration:none;font-size:13px;">📍 Track Order</a>
-      <a href="index.html" style="padding:12px 22px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-weight:700;border-radius:12px;text-decoration:none;font-size:13px;">🏠 Back to Home</a>
+      <a href="/" style="padding:12px 22px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);font-weight:700;border-radius:12px;text-decoration:none;font-size:13px;">🏠 Back to Home</a>
     </div>
     <a href="https://wa.me/254705726803" target="_blank" style="display:block;margin-top:14px;color:rgba(37,211,102,0.8);font-size:12px;font-weight:700;">💬 Questions? Chat on WhatsApp</a>
   </div>
@@ -1506,7 +1506,7 @@
 <div id="notificationContainer"></div>
 
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Categories</span></a>
   <a href="flashsale.html" class="bnav-item bnav-flash"><span class="bnav-emoji">⚡</span><span>Deals</span></a>
   <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
@@ -1553,7 +1553,7 @@ const cart = JSON.parse(localStorage.getItem("cart") || "[]");
 if(cart.length === 0 && !location.search.includes('order=')){
   const itemsContainer = document.getElementById("checkoutItems");
   if(itemsContainer){
-    itemsContainer.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div style="font-size:48px;margin-bottom:12px;">🛒</div><div style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;">Your cart is empty</div><div style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;">Add products before checking out</div><a href="index.html" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:14px;text-decoration:none;">Browse Products</a></div>';
+    itemsContainer.innerHTML = '<div style="text-align:center;padding:60px 20px;"><div style="font-size:48px;margin-bottom:12px;">🛒</div><div style="color:white;font-size:18px;font-weight:900;margin-bottom:8px;">Your cart is empty</div><div style="color:rgba(255,255,255,0.4);font-size:13px;margin-bottom:20px;">Add products before checking out</div><a href="/" style="display:inline-block;padding:14px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:14px;text-decoration:none;">Browse Products</a></div>';
   }
   /* Hide payment UI */
   var paySection = document.querySelector('.checkout-pay-col');

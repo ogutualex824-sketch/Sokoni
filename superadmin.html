@@ -463,7 +463,7 @@ function _showDenied(msg) {
   gCard.innerHTML = `<div class="sa-gate-denied">🚫</div>
     <div class="sa-gate-title">Access Denied</div>
     <div class="sa-gate-sub">${msg}</div>
-    <a href="index.html" style="display:inline-block;margin-top:20px;padding:10px 24px;
+    <a href="/" style="display:inline-block;margin-top:20px;padding:10px 24px;
        background:rgba(113,255,0,.2);border:1px solid rgba(113,255,0,.35);border-radius:10px;
        color:#c8ff80;font-weight:700;font-size:13px;text-decoration:none;">Back to Home</a>`;
 }
@@ -855,7 +855,7 @@ window.SAApp = {
 
   async signOut() {
     await signOut(auth);
-    window.location.href = 'index.html';
+    window.location.href = "/";
   },
 };
 </script>

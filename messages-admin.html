@@ -418,7 +418,7 @@ firebase.auth().onAuthStateChanged(function (user) {
   if (!user) { location.href = 'login.html?redirect=messages-admin.html'; return; }
   user.getIdTokenResult().then(function (result) {
     if (!result.claims.admin && !result.claims.superAdmin) {
-      location.href = 'index.html'; return;
+      location.href = "/"; return;
     }
     db  = firebase.firestore();
     fns = firebase.functions();

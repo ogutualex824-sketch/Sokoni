@@ -23,7 +23,7 @@ window.SokoniAOS = (() => {
       const tok = await user.getIdTokenResult(true);
       if (!tok.claims.admin && !tok.claims.superAdmin) {
         alert("Access denied: Admin privileges required.");
-        window.location.href = "index.html";
+        window.location.href = "/";
         return;
       }
       _currentUser = { uid: user.uid, email: user.email, name: user.displayName,

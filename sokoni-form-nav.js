@@ -97,7 +97,7 @@
     } else if (history.length > 1) {
       history.back();
     } else {
-      w.location.href = 'index.html';
+      w.location.href = "/";
     }
   }
 

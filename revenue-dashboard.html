@@ -248,7 +248,7 @@ firebase.auth().onAuthStateChanged(function(user){
   if(!user){ location.href='login.html?redirect=revenue-dashboard.html'; return; }
   user.getIdTokenResult().then(function(t){
     if(!t.claims.admin && !t.claims.superAdmin){
-      location.href='index.html'; return;
+      location.href='/'; return;
     }
     _load();
   }).catch(function(){ _load(); });

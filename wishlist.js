@@ -29,7 +29,7 @@ function renderWishlist(list){
                 <div style="font-size:72px;margin-bottom:20px;">❤️</div>
                 <h2>Your wishlist is empty</h2>
                 <p>Save products you love to buy later</p>
-                <a href="index.html" class="cart-shop-now-btn">Browse Products</a>
+                <a href="/" class="cart-shop-now-btn">Browse Products</a>
             </div>
         `;
         return;

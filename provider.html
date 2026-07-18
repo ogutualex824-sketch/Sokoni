@@ -348,7 +348,7 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
 
 <!-- ── NAV ── -->
 <nav class="pv-nav" id="mainNav" style="display:none;">
-  <a href="index.html"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="pv-nav-logo" alt="SOKONI"></a>
+  <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" class="pv-nav-logo" alt="SOKONI"></a>
   <div style="flex:1;padding:0 16px;">
     <div style="font-size:13px;font-weight:800;color:white;" id="navProviderName">Provider Dashboard</div>
     <div style="font-size:10px;color:rgba(255,255,255,0.4);" id="navProviderCat"></div>
@@ -358,7 +358,7 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
       <span class="pv-status-dot dot-available" id="statusDot"></span>
       <span id="statusLabel">Available</span>
     </button>
-    <a href="index.html" class="pv-nav-link">← SOKONI</a>
+    <a href="/" class="pv-nav-link">← SOKONI</a>
   </div>
 </nav>
 
@@ -1495,7 +1495,7 @@ window.copyBookingLink=copyBookingLink; window.shareToWhatsApp=shareToWhatsApp;
 function deleteProviderAccount(){
   if(!_c){_skConfirm('Delete your provider account? This removes your profile and services permanently.',()=>_doDelProvider(true));return;}
   ['sokoniProviderProfile','sokoniProviderBookings','sokoniProviderServices','sokoniProviderAvailability'].forEach(k=>localStorage.removeItem(k));
-  window.location.href='index.html';
+  window.location.href='/';
 }
 window.deleteProviderAccount=deleteProviderAccount;
 
@@ -1917,7 +1917,7 @@ window.showTab = function(name, btn){
   <script src="sw-register.js" defer></script>
 
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
   <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>

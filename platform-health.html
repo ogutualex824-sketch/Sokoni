@@ -293,7 +293,7 @@ function boot() {
   onAuthStateChanged(auth, user => {
     if (!user) { location.href = "login.html?next=platform-health.html"; return; }
     user.getIdTokenResult().then(r => {
-      if (!r.claims.admin) { location.href = "index.html"; return; }
+      if (!r.claims.admin) { location.href = "/"; return; }
       loadScores();
     });
   });

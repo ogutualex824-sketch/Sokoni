@@ -1539,8 +1539,8 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <!-- ── Top Nav ── -->
 <nav class="upn">
   <div class="upn-left">
-    <a href="index.html" class="upn-back" title="Back">&#8592;</a>
-    <a href="index.html"><img loading="lazy" src="assets/sokoni-logo-dark.png" alt="SOKONI" class="upn-logo"></a>
+    <a href="/" class="upn-back" title="Back">&#8592;</a>
+    <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" alt="SOKONI" class="upn-logo"></a>
     <span class="upn-title">My Profile</span>
   </div>
   <div class="upn-right">
@@ -1881,9 +1881,9 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     </div>
 
     <div class="up-card">
-      <div class="up-card-title">My Hubs <a href="index.html" class="up-card-link">Browse All</a></div>
+      <div class="up-card-title">My Hubs <a href="/" class="up-card-link">Browse All</a></div>
       <div class="up-quick-links" id="upQuickLinks">
-        <a class="up-ql" href="index.html"><span class="up-ql-emoji">&#128722;</span><span class="up-ql-label">Shop</span></a>
+        <a class="up-ql" href="/"><span class="up-ql-emoji">&#128722;</span><span class="up-ql-label">Shop</span></a>
         <a class="up-ql" href="seller.html"><span class="up-ql-emoji">&#128234;</span><span class="up-ql-label">Seller</span></a>
         <a class="up-ql" href="services.html"><span class="up-ql-emoji">&#128295;</span><span class="up-ql-label">Services</span></a>
         <a class="up-ql" href="delivery.html"><span class="up-ql-emoji">&#128666;</span><span class="up-ql-label">Delivery</span></a>
@@ -2526,7 +2526,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 
 <!-- Bottom Nav -->
 <nav class="bottom-nav">
-  <a href="index.html" class="bnav-item"><span class="bnav-emoji">&#127968;</span><span>Home</span></a>
+  <a href="/" class="bnav-item"><span class="bnav-emoji">&#127968;</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">&#128717;</span><span>Categories</span></a>
   <a href="flashsale.html" class="bnav-item"><span class="bnav-emoji">&#9889;</span><span>Deals</span></a>
   <a href="messages.html" class="bnav-item"><span class="bnav-emoji">&#128172;</span><span>Messages</span></a>
@@ -3112,7 +3112,7 @@ function loadOrders(){
   var _rendered = false;
   function _render(list){
     if(!list.length){
-      el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="index.html" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
+      el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="/" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
       return;
     }
     el.innerHTML = list.slice(0,10).map(function(o){
@@ -3146,7 +3146,7 @@ function loadOrders(){
       });
     }catch(e){}
   } else if(!_rendered){
-    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="index.html" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
+    el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#128230;</div>No orders yet. <a href="/" style="color:#71ff00;text-decoration:none;">Start shopping</a></div>';
   }
 }
 
@@ -3511,7 +3511,7 @@ async function deleteAccountPermanently(_c){
     var result = await deleteMyAccount();
     var purgeDate = result.data && result.data.purgeAfter ? new Date(result.data.purgeAfter).toLocaleDateString() : '30 days';
     (window._skToast||alert)('Your account has been deleted. Personal data will be permanently purged by ' + purgeDate + '.');
-    window.location.href = 'index.html';
+    window.location.href = "/";
   }catch(e){
     if(e.code === 'auth/requires-recent-login'){
       (window._skToast||alert)('For security, please sign out and sign back in before deleting your account.');
@@ -6052,7 +6052,7 @@ window.logoutUser = logoutUser;
     { p:["properties","rent","property","real estate"],   icon:'🏠', lbl:'Property Hub',        href:'property-hub.html' },
     { p:["legal","contracts","agreements","compliance"],   icon:'⚖️', lbl:'Legal Hub',           href:'legal-hub.html' },
     { p:["settings","account","preferences","profile"],   icon:'⚙️', lbl:'Account Settings',    href:'account-centre.html' },
-    { p:["log out","sign out","logout"],                   icon:'🚪', lbl:'Sign Out',            act:'if(firebase.auth)firebase.auth().signOut().then(function(){location.href="index.html";})' },
+    { p:["log out","sign out","logout"],                   icon:'🚪', lbl:'Sign Out',            act:'if(firebase.auth)firebase.auth().signOut().then(function(){location.href="/";})' },
     { p:["home","dashboard","overview"],                   icon:'🏠', lbl:'Home / Overview',     tab:'overview' },
     { p:["following","subscriptions","saved stores"],      icon:'❤️', lbl:'Following',           tab:'following' },
     { p:["employment","work history","experience"],        icon:'💼', lbl:'Employment',          tab:'employment' },

@@ -253,7 +253,7 @@ firebase.auth().onAuthStateChanged(function (user) {
   user.getIdTokenResult().then(function (r) {
     var role = r.claims.role || '';
     if (!['seller', 'admin', 'super_admin', 'manager', 'cashier', 'kitchen'].includes(role)) {
-      window.location.href = 'index.html'; return;
+      window.location.href = "/"; return;
     }
     _shopId = localStorage.getItem('activeShopId') || r.claims.shopId || '';
     if (!_shopId) { window.location.href = 'seller-dashboard.html'; return; }

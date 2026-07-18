@@ -216,7 +216,7 @@
       '</div>',
     '</div>',
 
-    '<a href="index.html">🏠 Home</a>',
+    '<a href="/">🏠 Home</a>',
 
     '<div class="mmenu-section">Shop</div>',
     '<a href="category.html?cat=all">🛍️ All Categories</a>',

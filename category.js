@@ -19,7 +19,7 @@ function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;'
 /* Age gate for adult categories */
 if(typeof isAdultCategory === "function" && isAdultCategory(category)){
     requireAgeVerification().then(verified => {
-        if(!verified){ window.location.href = "index.html"; return; }
+        if(!verified){ window.location.href = "/"; return; }
         /* Sync storage keys and remove any per-card blurs */
         sessionStorage.setItem('sokoniAgeVerified','true');
         localStorage.setItem('sokoniAgeVerified','true');

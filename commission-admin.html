@@ -807,7 +807,7 @@ auth.onAuthStateChanged(function(user){
   if(!user){ location.href='login.html?redirect=commission-admin.html'; return; }
   user.getIdTokenResult().then(function(t){
     if(!t.claims.admin && !t.claims.superAdmin){
-      location.href='index.html'; return;
+      location.href='/'; return;
     }
     document.getElementById('userEmail').textContent = user.email || user.uid;
     document.getElementById('avatarLetter').textContent =

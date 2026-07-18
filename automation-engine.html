@@ -477,7 +477,7 @@ firebase.auth().onAuthStateChanged(function(user) {
   user.getIdTokenResult().then(function(r) {
     var t = r.claims;
     if (!t.isAdmin && !t.isSuperAdmin && !t.isSupport && !t.isFinance)
-      { location.href = 'index.html'; return; }
+      { location.href = "/"; return; }
     _isSA = !!(t.isSuperAdmin || t.role === 'superAdmin');
     document.getElementById('sbUser').textContent = user.displayName || user.email;
     if (!_isSA) document.getElementById('seedBtn').style.display = 'none';

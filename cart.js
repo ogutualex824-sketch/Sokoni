@@ -162,7 +162,7 @@ function renderCart(){
                 <h2>Your cart is empty</h2>
                 <p>Add products or food to get started</p>
                 <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:16px;">
-                  <a href="index.html" class="cart-shop-now-btn">🛍️ Shop Products</a>
+                  <a href="/" class="cart-shop-now-btn">🛍️ Shop Products</a>
                   <a href="food.html" class="cart-shop-now-btn" style="background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.3);color:#22c55e;">🍔 Order Food</a>
                 </div>
             </div>`;

@@ -156,7 +156,7 @@
   firebase.auth().onAuthStateChanged(function(u){
     if(!u){ location.href='login.html?redirect=settlement-dashboard.html'; return; }
     u.getIdTokenResult().then(function(t){
-      if(!t.claims.admin && !t.claims.superAdmin){ location.href='index.html'; return; }
+      if(!t.claims.admin && !t.claims.superAdmin){ location.href='/'; return; }
       loadAll();
     });
   });
