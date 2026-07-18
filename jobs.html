@@ -6,6 +6,12 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
+  <!-- sokoni-jobs.js calls firebase.functions().httpsCallable(...) — the legacy compat API.
+       firebase.js publishes that shim as window.firebase (see firebase.js:322). Without it
+       every job feature failed with "ReferenceError: firebase is not defined" and the page
+       loaded no jobs at all. job-post.html, which shares sokoni-jobs.js, already loads this;
+       jobs.html was simply missing it. -->
+  <script type="module" src="firebase.js"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Jobs — SOKONI</title>

@@ -1420,12 +1420,12 @@ function updateJobStatus(id, status){
     const raw = prompt(
       "SOKONI Commission — Enter total service value received (KES):\n" +
       "Platform will invoice " +
-      (SokoniCommission.pct(bk.category):10))+
+      (typeof SokoniCommission !== "undefined" ? SokoniCommission.pct(bk.category) : 10) +
       "% of this.\n\nNon-payment will suspend your listing."
     );
     const total = raw ? Number(raw.replace(/[^0-9.]/g,"")) : 0;
     if(total > 0){
-      const pct  =SokoniCommission.pct(bk.category) : 10;
+      const pct  = (typeof SokoniCommission !== "undefined" ? SokoniCommission.pct(bk.category) : 10);
       const owed = Math.round(total * pct / 100);
       const ref  = bk.sokoniRef || ("BK"+id.slice(-6));
       if(typeof SokoniPay !== "undefined") SokoniPay.sendCommissionInvoice(ref, total);
