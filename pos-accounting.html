@@ -672,19 +672,31 @@ const app  = initializeApp(window._sokoniConfig || {});
 const auth = getAuth(app);
 const fns  = getFunctions(app);
 
-/* ── Cloud Function handles ── */
+/* ── Cloud Function handles ──
+   These eleven operations used to be standalone callables. The SmartPOS consolidation folded
+   pos-accounting.js into the single `smartPosDispatch` service (156 onCall -> 1 Cloud Run
+   service), which RETIRED the standalone names — but this page was never updated, so every
+   accounting report called a function that no longer exists and failed with `not-found`.
+   P&L, balance sheet, cash flow, VAT, expenses and journals were all dead for the merchant.
+
+   The handlers themselves are unchanged and already deployed on the dispatcher; only the
+   routing moves. `_op(name)` returns a function with the SAME signature and the SAME `{ data }`
+   response shape as httpsCallable, so no call site changes. */
+const _spDispatch = httpsCallable(fns, 'smartPosDispatch');
+const _op = (name) => (data) => _spDispatch({ op: name, ...(data || {}) });
+
 const cf = {
-  getPL:              httpsCallable(fns, 'getProfitAndLoss'),
-  getBS:              httpsCallable(fns, 'getBalanceSheet'),
-  getCF:              httpsCallable(fns, 'getCashFlow'),
-  getVAT:             httpsCallable(fns, 'getVATReport'),
-  createExpense:      httpsCallable(fns, 'createExpense'),
-  getExpenses:        httpsCallable(fns, 'getExpenses'),
-  updateExpense:      httpsCallable(fns, 'updateExpense'),
-  deleteExpense:      httpsCallable(fns, 'deleteExpense'),
-  getJournal:         httpsCallable(fns, 'getJournalEntries'),
-  createJournal:      httpsCallable(fns, 'createJournalEntry'),
-  initCOA:            httpsCallable(fns, 'initializeChartOfAccounts'),
+  getPL:              _op('getProfitAndLoss'),
+  getBS:              _op('getBalanceSheet'),
+  getCF:              _op('getCashFlow'),
+  getVAT:             _op('getVATReport'),
+  createExpense:      _op('createExpense'),
+  getExpenses:        _op('getExpenses'),
+  updateExpense:      _op('updateExpense'),
+  deleteExpense:      _op('deleteExpense'),
+  getJournal:         _op('getJournalEntries'),
+  createJournal:      _op('createJournalEntry'),
+  initCOA:            _op('initializeChartOfAccounts'),
 };
 
 /* ════════════════════════════════════════
