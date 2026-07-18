@@ -2,21 +2,34 @@
    CANONICAL FIREBASE CONFIG — ES MODULE
 
    WHY THIS FILE EXISTS (P0, 2026-07-18).
-   The POS/admin pages initialised Firebase from `window._sokoniConfig` — a global that was
-   NEVER defined anywhere. `initializeApp(window._sokoniConfig || {})` therefore ran with an
-   empty object, and Auth / Firestore / Storage / callable Functions were dead on all of them
-   with `auth/invalid-api-key`.
 
-   The first fix published the config as a global from sokoni-config.js (a classic script).
-   That worked on the three compat-SDK pages but NOT on the eight module-SDK pages: on those,
-   the `<script src="sokoni-config.js">` tag is FETCHED (HTTP 200) but never executed — it is
-   absent from document.outerHTML entirely. Those documents declare `<meta charset>` roughly
-   31KB in, long after the first script tag, which forces the HTML parser to restart; the
-   speculative preload has already issued the request, but the tag is discarded on re-parse.
+   CONFIRMED ROOT CAUSE. The POS/admin pages initialised Firebase from `window._sokoniConfig` —
+   a global that was NEVER defined anywhere. `initializeApp(window._sokoniConfig || {})`
+   (pos-hq.html:645 at 2cdbe8b~1) therefore ran with an empty object, and Auth / Firestore /
+   Storage / callable Functions were dead on all of them with `auth/invalid-api-key`.
+   Evidence: `git grep 'window._sokoniConfig ='` returns zero assignments, before the fix
+   and after. The global never existed. That defect is real and this file resolves it.
 
-   An ES module import does not depend on the HTML parser surviving that restart — it is
-   resolved by the module loader from inside the module graph. That is why the config lives
-   here as a module export.
+   CORRECTION, 2026-07-18 — a previous version of this comment claimed the config script was
+   "fetched but never executed" because a late `<meta charset>` forced an HTML parser restart
+   that discarded the speculatively-preloaded tag. THAT EXPLANATION IS WITHDRAWN. It rested on
+   a DOM probe that did not assert which URL it had landed on: the POS/admin pages are
+   RBAC-gated and redirect unauthenticated sessions to /login, so the probe inspected the login
+   page's DOM — which legitimately contains no sokoni-config.js tag — and misread that absence
+   as a parse failure. Controlled re-test: /pos-setup reached via redirect from /pos produced
+   82 aborted requests while the SAME file loaded directly produced 2, and document.characterSet
+   resolved to UTF-8 on every page tested. A byte-identical file cannot restart the parser in
+   one case and not the other; the aborts were navigation cancellation. pos.html and
+   checkout.html additionally begin with a UTF-8 BOM, which outranks <meta charset> entirely.
+
+   WHY THE MODULE FORM IS RETAINED. Not as a parser workaround — that premise is gone. It is
+   kept because a single exported constant, imported through the module graph, gives one
+   authoritative source with no load-order dependency between a classic script and the module
+   that consumes it. That property is worth keeping on its own merits.
+
+   NOT VERIFIED: whether the classic-script global form would also have worked on the eight
+   module-SDK pages. Confirming that needs an authenticated session on those RBAC-gated pages,
+   which has not been run. Do not restate the parser-restart claim without that evidence.
 
    VALUES MUST MATCH firebase.js:48-63 and sokoni-config.js EXACTLY.
    scripts/verify-firebase-config.js fails the build if any of the three ever drift.

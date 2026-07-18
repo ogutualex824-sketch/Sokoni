@@ -6,7 +6,7 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
-<script src="sokoni-config.js"></script>   <!-- MUST precede the late <meta charset>: a charset declared after scripts forces a parser restart that drops later head tags -->
+<script src="sokoni-config.js"></script>   <!-- Load order matters: this must define the config before any consumer runs. (The earlier note here blamed a <meta charset> parser restart; that claim was withdrawn 2026-07-18 - see sokoni-firebase-config.js.) -->
 <script src="shared-header.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -484,8 +484,10 @@
 </div>
 
 <script type="module">
-/* Canonical Firebase config via ES module import — immune to the HTML parser restart
-   that drops classic <script> tags on these pages. See sokoni-firebase-config.js. */
+/* Canonical Firebase config via ES module import — one authoritative source with no
+   classic-script load-order dependency. See sokoni-firebase-config.js.
+   (Previously described here as immune to an HTML parser restart; that explanation was
+    withdrawn 2026-07-18 as unsupported by evidence.) */
 
 import { firebaseConfig } from './sokoni-firebase-config.js';
 

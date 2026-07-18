@@ -143,3 +143,35 @@ conditional, preserving today's semantics exactly.
 **T-2**. Both are independent and can ship separately. Each should be verified on the Firestore
 emulator using the pattern established by the RC1 refund fix: write the test so it **reproduces
 the failure before the fix**, then passes after.
+
+
+---
+
+## P1-CHARSET — `<meta charset>` declared after the first `<script>`
+
+**Deferred 2026-07-18. Standards hygiene, not a defect. No measurable performance effect.**
+
+231 of 320 HTML files declare `<meta charset="UTF-8">` after the first `<script>` tag. The HTML
+spec asks for it within the first 1024 bytes and before any content.
+
+A 3-page pilot (`pos.html`, `pos-checkout.html`, `checkout.html`) was **authorized but not
+executed**: the premise — that late charset forced a parser restart producing ~85 aborted
+requests on SmartPOS — was disproven before any file was edited. See
+[[MEASUREMENT_VALIDITY_CORRECTION]].
+
+Evidence against any performance benefit:
+
+- `document.characterSet` resolves to UTF-8 on every page tested — no encoding failure exists.
+- `/pos-setup` produced 82 aborts reached via redirect and 2 loaded directly. Same file. The
+  aborts were navigation cancellation, not parsing.
+- `pos.html` and `checkout.html` begin with a UTF-8 BOM, which outranks `<meta charset>`
+  entirely — the proposed mechanism cannot apply to them.
+
+**Why still worth doing eventually:** spec conformance, and removing a documented trap for future
+readers. **Expected performance gain: zero.** Do not schedule it as a performance item.
+
+**If ever executed:** no generator exists (verified — no template engine or bundler in
+`package.json`, no `.ejs`/`.pug`/`.hbs`/`.njk` files, no SSG config, no script in `scripts/`
+emits `.html`), so all 231 files need direct edits. Automation is appropriate: the move is
+mechanical, and each file can be verified byte-identical once the moved tag is normalised.
+Rollback is a single revert.

@@ -1,4 +1,52 @@
-﻿## [2026-07-14] — P0 Fix: iOS Safari UI Non-Interactive
+﻿## [2026-07-18] — Correction: Measurement Validity (documentation only)
+
+### Summary
+
+Withdrew three reported findings from the Performance Stabilization Sprint and one root-cause
+explanation from P0-1. All four traced to one tooling defect: the browser measurement harness
+never asserted which URL it landed on, so RBAC-gated pages that redirect were measured as their
+redirect target and labelled with the requested page's name.
+
+Withdrawn: SmartPOS ~85 aborted requests (navigation cancellation, expected); 10 SmartPOS modules
+missing at runtime (measured on /pos-setup — no defect); SmartPOS 3 MB heap anomaly (heap tracks
+script payload — no defect); and the <meta charset> parser-restart mechanism attributed to P0-1.
+
+The P0-1 defect itself is confirmed and unchanged: initializeApp(window._sokoniConfig || {}) read
+a global with zero assignments repo-wide. The ES-module fix is retained and accepted.
+
+### Files affected
+
+| File | Change |
+|---|---|
+| sokoni-firebase-config.js | Header comment: withdrew parser-restart explanation, stated confirmed root cause with evidence |
+| 11 POS/admin HTML pages | Comment text only — verified byte-identical once comments are stripped |
+| docs/MEASUREMENT_VALIDITY_CORRECTION.md | New — full corrective record |
+| perf-baseline.js (harness) | Asserts final URL; discards redirected runs; reports UNMEASURED |
+
+### Database changes
+None.
+
+### API changes
+None.
+
+### Security changes
+None. No executable code was modified.
+
+### Breaking changes
+None.
+
+### Notes
+
+5 of 9 Phase 2 baseline rows were invalid — every one an authenticated page (SmartPOS, Checkout,
+Wallet, SellerDash, Admin). Those surfaces have never been performance-measured; this is now the
+sprint's largest open gap and requires an authenticated harness session.
+
+The 3-page charset pilot was authorized but NOT executed: its premise was disproven before any
+file was edited. Deferred to Phase 1 as standards hygiene.
+
+---
+
+## [2026-07-14] — P0 Fix: iOS Safari UI Non-Interactive
 
 ### Summary
 
