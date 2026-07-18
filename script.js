@@ -2634,9 +2634,53 @@ function startSokoniMarketing(){
                 showWelcomePopup();
             }
         };
-        window.addEventListener("scroll", _showOnScroll, {passive:true});
-        /* Fallback: show after 12s if user never scrolls */
-        setTimeout(() => { if(!_popShown){ _popShown=true; window.removeEventListener("scroll",_showOnScroll,{passive:true}); showWelcomePopup(); } }, 12000);
+
+        /* START THE ENGAGEMENT CLOCK ONLY ONCE THE USER CAN ACTUALLY ENGAGE.
+           The intent here — "show after the first scroll past the hero" — is right, but
+           the 12s fallback used to start at PAGE LOAD. On a first visit the consent modal
+           is up for those first seconds, so the timer burned down while the visitor was
+           reading a legal notice, not browsing. showWelcomePopup() then correctly deferred
+           until consent closed and fired 600 ms later — so accepting cookies was answered
+           immediately by a SECOND full-screen modal, before a single product had been seen.
+
+           Two modals back to back is not what "after the first scroll" was meant to mean.
+           Wait for consent to clear, THEN give the visitor a real 12 seconds (or a scroll)
+           of actual browsing. */
+        const _armEngagement = () => {
+            window.addEventListener("scroll", _showOnScroll, {passive:true});
+            setTimeout(() => {
+                if(!_popShown){
+                    _popShown = true;
+                    window.removeEventListener("scroll", _showOnScroll, {passive:true});
+                    showWelcomePopup();
+                }
+            }, 12000);
+        };
+
+        /* Gate on the STORAGE FLAG, not on the banner being in the DOM.
+           Testing the DOM is racy and I shipped that bug: security.js injects the consent
+           banner asynchronously, so this code ran BEFORE the banner existed, concluded
+           "no consent up", and armed the 12s clock anyway — reproducing the exact
+           double-modal it was meant to prevent.
+
+           security.js shows the banner iff localStorage.sokoniPrivacyAccepted is unset, so
+           that key answers "will consent appear?" deterministically, with no race. */
+        const _consentSettled = () => {
+            try { return !!localStorage.getItem("sokoniPrivacyAccepted"); }
+            catch(e) { return true; }   /* storage blocked — do not hold the popup hostage */
+        };
+
+        if(_consentSettled()){
+            _armEngagement();
+        } else {
+            /* Poll rather than observe: the flag is written by another script, and a
+               storage write fires no DOM mutation. 400ms is imperceptible here. */
+            const _wait = setInterval(() => {
+                if(_consentSettled()){ clearInterval(_wait); _armEngagement(); }
+            }, 400);
+            /* If consent is never answered the popup never shows — the correct failure
+               mode. An unanswered consent notice must not be interrupted. */
+        }
     }
 
     /* — Exit-intent pop-up — */

@@ -500,41 +500,12 @@
 
   <!-- FEATURES STRIP -->
 
-  <section class="features-strip p9-reveal">
-
-    <div class="feature-item">
-      <div class="feature-icon">🚚</div>
-      <div class="feature-text">
-        <h4>Fast Delivery</h4>
-        <p>Nairobi same-day</p>
-      </div>
-    </div>
-
-    <div class="feature-item">
-      <div class="feature-icon">🔒</div>
-      <div class="feature-text">
-        <h4>Secure Payments</h4>
-        <p>M-Pesa · Visa · PayPal</p>
-      </div>
-    </div>
-
-    <div class="feature-item">
-      <div class="feature-icon">✅</div>
-      <div class="feature-text">
-        <h4>Verified Sellers</h4>
-        <p>All sellers are vetted</p>
-      </div>
-    </div>
-
-    <div class="feature-item">
-      <div class="feature-icon">📦</div>
-      <div class="feature-text">
-        <h4>Easy Returns</h4>
-        <p>7-day return policy</p>
-      </div>
-    </div>
-
-  </section>
+  <!-- The .features-strip that used to sit here was removed: the trust strip below is a
+       strict SUPERSET of it. It repeated "Verified Sellers" and "Easy Returns" verbatim in
+       the very next row, and "Secure Payments" duplicated "M-Pesa Payments" — so a visitor
+       read the same three claims twice, back to back, which reads as padding rather than
+       reassurance. "Fast Delivery" was the one item unique to it and has been folded into
+       the strip below, so no claim was lost. -->
 
   <!-- ── TRUST BADGES STRIP ──────────────────────────────────────────────── -->
   <div class="sk-trust-strip" role="list" aria-label="Trust and safety badges">
@@ -567,6 +538,12 @@
       <span class="sk-trust-icon">💬</span>
       <span class="sk-trust-name">24/7 Support</span>
       <span class="sk-trust-detail">WhatsApp & live chat</span>
+    </div>
+    <!-- Folded in from the removed .features-strip so the claim survives the de-duplication. -->
+    <div class="sk-trust-item" role="listitem">
+      <span class="sk-trust-icon">🚚</span>
+      <span class="sk-trust-name">Fast Delivery</span>
+      <span class="sk-trust-detail">Nairobi same-day</span>
     </div>
   </div>
 
