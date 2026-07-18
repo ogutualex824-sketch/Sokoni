@@ -11,13 +11,57 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260718-root-guard-v82";
+const CACHE_VERSION = "sokoni-20260718-app-shell-v83";
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   APP SHELL — the ONLY assets fetched during install.
+
+   WHY (production incident, 2026-07-18). install used to precache 543 URLs
+   (306 PRECACHE_PAGES + 237 PRECACHE_STATIC), every one a separate network fetch
+   before the worker could activate. Measured on an iPhone 13 profile against
+   production: the registration sat at {installing:true, active:null} and never
+   activated across three consecutive visits. On Kenyan mobile it may never finish.
+
+   Worse, each entry used `.add(u).catch(() => {})` inside Promise.allSettled, so
+   EVERY failure was swallowed. install "succeeded" with an incomplete cache, and
+   activate then deleted the previous WORKING cache — leaving clients with neither.
+   That is why past deploys needed users to clear browser data by hand.
+
+   The shell is now the minimum needed to render the marketplace home. Everything
+   else — all other pages, images, media — caches lazily on first visit via the
+   normal fetch handlers. Nothing below is optional: if any one of these fails,
+   install REJECTS, the new worker never activates, and the previous worker keeps
+   serving its intact cache. A failed update must be a no-op, never a downgrade.
+
+   Keep this list SHORT. Every addition slows activation on the slowest network a
+   real user is on, and makes a failed update more likely.
+   ══════════════════════════════════════════════════════════════════════════════ */
+const APP_SHELL = [
+  "/",              /* marketplace home — the canonical root */
+  "/offline",       /* honest offline fallback */
+  "/style.css",
+  "/mobile.css",
+  "/script.js",
+  "/manifest.json",
+  "/favicon.ico",
+  "/assets/icons/icon-192.png",
+];
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGES_CACHE   = `${CACHE_VERSION}-pages`;
 const IMAGES_CACHE  = `${CACHE_VERSION}-images`;
 
 /* NOTE: Firebase cleanUrls:true redirects all .html URLs to clean URLs.
-   PRECACHE_PAGES must use the canonical (no .html) form so cache.add() succeeds. */
+   PRECACHE_PAGES must use the canonical (no .html) form so cache.add() succeeds.
+
+   ⚠ RETIRED 2026-07-18 — NO LONGER FETCHED AT INSTALL. These two lists (543 URLs
+   between them) are what made installation unreliable: the worker could not activate
+   until all 543 had been fetched. They are kept only as a record of which routes are
+   worth having offline; the fetch handlers cache these lazily on first visit, which
+   achieves the same result without blocking activation.
+
+   DO NOT wire these back into install(). If a route genuinely must survive a cold
+   offline start, add it to APP_SHELL — and accept that every entry there slows
+   activation on the slowest network a real user is on. */
 const PRECACHE_PAGES = [
   "/", "/?source=pwa", "/offline",
   "/login", "/signup", "/category", "/services",
@@ -324,22 +368,45 @@ self.addEventListener("unhandledrejection", event => {
 });
 /* â"€â"€ INSTALL â"€â"€ */
 self.addEventListener("install", event => {
-  /* SW Recovery Sprint v63: skipWaiting is now called unconditionally.
-     Session state (auth, cart, POS) lives in Firebase + localStorage — not in
-     the SW — so forced activation is safe. Old caches are wiped in activate. */
+  /* Fetch ONLY the app shell, and treat it as all-or-nothing.
+     If any shell asset fails, this promise rejects: the browser discards the new
+     worker, activate never runs, and the currently-installed worker keeps serving
+     its complete cache. A broken update leaves the user exactly where they were.
+
+     skipWaiting is called only AFTER the shell is fully cached, so a half-built
+     cache can never take control. Session state (auth, cart, POS) lives in
+     Firebase + localStorage, never in the SW, so forced activation stays safe. */
   event.waitUntil((async () => {
-    try {
-      const [sc, pc] = await Promise.all([
-        caches.open(STATIC_CACHE),
-        caches.open(PAGES_CACHE),
-      ]);
-      await Promise.allSettled(PRECACHE_STATIC.map(u => sc.add(u).catch(() => {})));
-      await Promise.allSettled(PRECACHE_PAGES.map(u  => pc.add(u).catch(() => {})));
-      const clients = await self.clients.matchAll({ type: "window" });
-      clients.forEach(c => c.postMessage({ type: "SW_UPDATE_READY", version: CACHE_VERSION }));
-    } catch (err) {
-      console.error("[SW] Install failed:", err);
+    const sc = await caches.open(STATIC_CACHE);
+    const pc = await caches.open(PAGES_CACHE);
+
+    /* Pages go in PAGES_CACHE so navigation lookups find them; assets in STATIC_CACHE. */
+    const isPage = (u) => u === "/" || !/\.[a-z0-9]+$/i.test(u);
+
+    const results = await Promise.allSettled(
+      APP_SHELL.map(async (u) => {
+        const res = await fetch(new Request(u, { cache: "reload" }));
+        /* A 404/500 still resolves the fetch — check explicitly or we would cache
+           an error page as the app shell. */
+        if (!res.ok) throw new Error(u + " -> HTTP " + res.status);
+        await (isPage(u) ? pc : sc).put(u, res.clone());
+        return u;
+      })
+    );
+
+    const failed = results
+      .map((r, i) => (r.status === "rejected" ? APP_SHELL[i] + " (" + r.reason.message + ")" : null))
+      .filter(Boolean);
+
+    if (failed.length) {
+      /* Abort the update. Do NOT skipWaiting, do NOT let activate run. */
+      console.error("[SW] Shell incomplete — aborting update:", failed);
+      throw new Error("App shell incomplete: " + failed.join("; "));
     }
+
+    const clients = await self.clients.matchAll({ type: "window" });
+    clients.forEach(c => c.postMessage({ type: "SW_UPDATE_READY", version: CACHE_VERSION }));
+
     await self.skipWaiting();
   })());
 });
