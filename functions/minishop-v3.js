@@ -253,7 +253,7 @@ function _buildBotHtml({ shopName, description, coverUrl, shopUrl, schemaStr, ha
   <meta property="og:image:height" content="630">
   <meta property="og:url" content="${eUrl}">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:site" content="@mysokoni">
+  <meta name="twitter:site" content="@mysokoni_ke">
   <meta name="twitter:title" content="${eName} — SOKONI">
   <meta name="twitter:description" content="${eDesc}">
   <meta name="twitter:image" content="${eCover}">
@@ -291,7 +291,7 @@ function _buildShellHtml({ shopName, description, coverUrl, shopUrl, schemaStr, 
   <meta property="og:image:height" content="630">
   <meta property="og:url" content="${eUrl}">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:site" content="@mysokoni">
+  <meta name="twitter:site" content="@mysokoni_ke">
   <meta name="twitter:title" content="${eName} — SOKONI">
   <meta name="twitter:description" content="${eDesc}">
   <meta name="twitter:image" content="${eCover}">
