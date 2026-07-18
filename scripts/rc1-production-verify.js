@@ -83,21 +83,57 @@ async function checkInfrastructure() {
   const ips = [...a.matchAll(/Address:\s*([0-9.]+)/g)].map((m) => m[1]).filter((x) => !x.startsWith('192.168'));
   if (isApex) rec('Infrastructure', 'DNS resolves', ips.length ? 'PASS' : 'FAIL', ips.join(', ') || 'no A record');
 
-  /* SSL: chain validity + issuer + expiry */
+  /* ── SSL ──
+     A valid certificate is NOT evidence that the intended production stack is serving traffic.
+     During the 2026-07-17 outage the apex presented a perfectly valid Let's Encrypt certificate
+     for mysokoni.co.ke — issued by the WRONG host (LiteSpeed), which 404'd every path. HTTPS
+     "worked" while the platform was entirely unreachable. These are therefore two separate
+     conclusions: (a) is the certificate sound, and (b) does it belong to our infrastructure. */
   const r = await get(BASE + '/');
   rec('Infrastructure', 'TLS handshake succeeds', r.status ? 'PASS' : 'FAIL', r.error || ('HTTP ' + r.status));
-  let cert = '';
+
+  let cert = '', verify = '';
   try {
     cert = execSync(`echo | openssl s_client -connect ${APEX_HOST}:443 -servername ${APEX_HOST} 2>nul | openssl x509 -noout -subject -issuer -dates`, { encoding: 'utf8', timeout: 25000 });
   } catch (e) { cert = String(e.stdout || ''); }
+  try {
+    verify = execSync(`echo | openssl s_client -connect ${APEX_HOST}:443 -servername ${APEX_HOST} -verify_return_error 2>&1 | findstr /C:"Verify return code"`, { encoding: 'utf8', timeout: 25000 });
+  } catch (e) { verify = String(e.stdout || ''); }
+
+  const subject  = (cert.match(/subject=(.+)/) || [])[1] || '';
+  const issuer   = (cert.match(/issuer=(.+)/) || [])[1] || '';
   const notAfter = (cert.match(/notAfter=(.+)/) || [])[1];
   const daysLeft = notAfter ? Math.round((new Date(notAfter) - Date.now()) / 86400000) : null;
-  rec('Infrastructure', 'SSL certificate valid', daysLeft && daysLeft > 14 ? 'PASS' : (daysLeft ? 'FAIL' : 'PENDING'),
-      cert.replace(/\s+/g, ' ').trim().slice(0, 120) + (daysLeft ? ` (${daysLeft}d left)` : ''));
+  const cn       = (subject.match(/CN\s*=\s*([^,\s]+)/) || [])[1] || '';
 
-  rec('Infrastructure', 'Served by Firebase Hosting (not a parked host)',
-      /firebase|google/i.test(String(r.headers['server'] || '')) || !!r.headers['x-served-by'] || r.status === 200 ? 'PASS' : 'FAIL',
-      'server=' + (r.headers['server'] || 'n/a'));
+  /* (a) is the certificate itself sound? */
+  const chainOk = /Verify return code:\s*0/.test(verify);
+  rec('Infrastructure', 'SSL — chain verifies', chainOk ? 'PASS' : (verify ? 'FAIL' : 'PENDING'),
+      (verify.trim() || 'could not read verify code').slice(0, 80));
+  rec('Infrastructure', 'SSL — hostname matches certificate',
+      cn && (cn === APEX_HOST || (cn.startsWith('*.') && APEX_HOST.endsWith(cn.slice(1)))) ? 'PASS' : 'FAIL',
+      'CN=' + (cn || 'unknown') + ' vs ' + APEX_HOST);
+  rec('Infrastructure', 'SSL — not near expiry (>14d)',
+      daysLeft === null ? 'PENDING' : (daysLeft > 14 ? 'PASS' : 'FAIL'),
+      daysLeft === null ? 'expiry unreadable' : daysLeft + ' days remaining');
+
+  /* (b) does it belong to the INTENDED production infrastructure?
+     Firebase Hosting certificates are issued by Google Trust Services. A Let's Encrypt (or any
+     other) issuer on the apex means some other origin is terminating TLS. */
+  const googleIssued = /Google Trust Services/i.test(issuer);
+  rec('Infrastructure', 'SSL — issued to OUR infrastructure (Google Trust Services)',
+      googleIssued ? 'PASS' : 'FAIL',
+      googleIssued ? issuer.trim().slice(0, 70)
+                   : 'WRONG ISSUER: ' + (issuer.trim().slice(0, 70) || 'unknown') +
+                     ' — a valid cert from a foreign origin, not Firebase Hosting');
+
+  /* Origin identity: Firebase Hosting must be the thing answering, not a parked/shared host. */
+  const server = String(r.headers['server'] || '');
+  const parked = /litespeed|apache|nginx|cpanel/i.test(server);
+  rec('Infrastructure', 'Origin is Firebase Hosting (not a parked host)',
+      !parked && r.status < 400 ? 'PASS' : 'FAIL',
+      'server=' + (server || 'n/a') + ' · HTTP ' + r.status +
+      (parked ? ' — foreign origin terminating traffic' : ''));
 
   rec('Infrastructure', 'HSTS enabled', r.headers['strict-transport-security'] ? 'PASS' : 'FAIL',
       r.headers['strict-transport-security'] || 'absent');
