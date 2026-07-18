@@ -68,19 +68,25 @@ function base({ title, preheader, body, cta, ctaUrl, ctaColor = "#71ff00" }) {
   const ctaBlock = cta && ctaUrl ? `
 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
   <tr><td align="center" style="padding:8px 0 36px;">
+    <!-- Outlook renders the VML button below, not the anchor; its height, width and font
+         are kept in step with the HTML button so Outlook users get the same target size.
+         Do NOT nest an HTML comment inside the [if mso] block: the inner comment
+         terminator closes the conditional early, and every non-Outlook client then
+         renders the VML markup as visible text. Keep commentary outside the block, and
+         avoid writing a comment terminator sequence anywhere in the prose. -->
     <!--[if mso]>
     <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" href="${esc(ctaUrl)}"
-      style="height:52px;v-text-anchor:middle;width:240px;" arcsize="12%"
+      style="height:58px;v-text-anchor:middle;width:290px;" arcsize="12%"
       strokecolor="${ctaColor}" fillcolor="${ctaColor}">
       <w:anchorlock/>
-      <center style="color:${ctaText};font-family:Arial,sans-serif;font-size:15px;font-weight:900;letter-spacing:0.03em;">${esc(cta)}</center>
+      <center style="color:${ctaText};font-family:Arial,sans-serif;font-size:20px;font-weight:900;letter-spacing:0.03em;">${esc(cta)}</center>
     </v:roundrect>
     <![endif]-->
     <!--[if !mso]><!-->
-    <a href="${esc(ctaUrl)}" target="_blank"
+    <a href="${esc(ctaUrl)}" target="_blank" class="eml-cta"
       style="background:${ctaColor};border-radius:12px;color:${ctaText};display:inline-block;
-             font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:900;
-             letter-spacing:0.03em;line-height:52px;min-width:220px;padding:0 36px;
+             font-family:Arial,Helvetica,sans-serif;font-size:20px;font-weight:900;
+             letter-spacing:0.03em;line-height:58px;min-width:260px;padding:0 44px;
              text-align:center;text-decoration:none;-webkit-text-size-adjust:none;mso-hide:all;"
       >${esc(cta)}</a>
     <!--<![endif]-->
@@ -118,7 +124,7 @@ a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important
   .eml-foot{background-color:#0F172A!important;border-color:#1E293B!important;}
   .eml-title{color:#F1F5F9!important;}
   .eml-tag  {color:#64748B!important;}
-  .eml-p    {color:#CBD5E1!important;}
+  .eml-p    {color:#6B7280!important;}
   .eml-h1   {color:#F1F5F9!important;}
   .eml-muted{color:#64748B!important;}
   .eml-info {background-color:#0F172A!important;border-color:#334155!important;}
@@ -131,12 +137,28 @@ a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important
 /* ── Mobile ── */
 @media screen and (max-width:600px){
   .eml-outer{width:100%!important;max-width:100%!important;border-radius:0!important;}
-  .eml-hpad {padding:28px 20px 24px!important;}
-  .eml-bpad {padding:24px 20px 8px!important;}
-  .eml-fpad {padding:20px 20px 28px!important;}
-  /* Logo scales down on narrow screens. Width AND height are both set so the
-     3:2 aspect ratio is preserved — never stretched or squashed. */
-  .eml-logo {width:96px!important;height:96px!important;max-width:96px!important;}
+  .eml-hpad {padding:32px 24px 26px!important;}
+  .eml-bpad {padding:28px 24px 10px!important;}
+  .eml-fpad {padding:24px 24px 32px!important;}
+  /* Logo: the source image is 600x400 (3:2). It was previously rendered 160x160 and
+     96x96 — SQUARE — which squashed it by a third. Both dimensions now follow 3:2 so
+     the mark keeps its true proportions: 150x100 mobile, 210x140 desktop. */
+  .eml-logo {width:150px!important;height:100px!important;max-width:150px!important;}
+  /* Fluid typography — sized for reading on a phone without zooming. */
+  .eml-h1   {font-size:30px!important;line-height:1.25!important;}
+  .eml-p    {font-size:18px!important;line-height:1.7!important;}
+  .eml-lead {font-size:22px!important;line-height:1.5!important;}
+  /* Info rows hold long unbroken tokens (order refs, filenames). At 19px the value
+     column forced a mid-word break — "index.htm / l". 17px/15px still reads far larger
+     than the previous 13px while letting the pair sit on one line. */
+  .eml-val  {font-size:17px!important;}
+  .eml-lbl  {font-size:15px!important;}
+  /* CTA stays inline-block. display:block detached the label from its background — the
+     text rendered above the button. Only the size constraints are relaxed: at 260px
+     min-width plus 44px side padding the button was 348px, pushing the card to 398px in
+     a 390px viewport and causing a horizontal scroll. */
+  .eml-cta  {font-size:20px!important;line-height:58px!important;
+             min-width:200px!important;padding:0 20px!important;}
 }
 </style>
 </head>
@@ -145,10 +167,10 @@ ${hidden}
 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" bgcolor="#F3F4F6">
 <tr><td align="center" style="padding:40px 16px 52px;">
 
-<!-- ░ CARD 600px ░ -->
-<table class="eml-card eml-outer" width="600" cellpadding="0" cellspacing="0" border="0"
+<!-- ░ CARD 700px ░ -->
+<table class="eml-card eml-outer" width="700" cellpadding="0" cellspacing="0" border="0"
   role="presentation"
-  style="max-width:600px;background:#ffffff;border:1px solid #E2E8F0;border-radius:20px;">
+  style="max-width:700px;background:#ffffff;border:1px solid #E2E8F0;border-radius:20px;">
 
   <!-- ▸ TOP ACCENT STRIPE -->
   <tr><td style="height:4px;background:#71ff00;border-radius:20px 20px 0 0;font-size:0;line-height:0;">&nbsp;</td></tr>
@@ -157,17 +179,19 @@ ${hidden}
   <tr><td class="eml-hdr eml-hpad" bgcolor="#ffffff"
     style="padding:36px 40px 28px;text-align:center;border-bottom:1px solid #F1F5F9;">
     <!-- Official SOKONI logo (see LOGO_URL above for the email-client constraints) -->
-    <img class="eml-logo" src="${LOGO_URL}" alt="SOKONI" width="160" height="160"
-      style="display:block;margin:0 auto 14px;width:160px;height:160px;max-width:160px;
+    <!-- 210x140 keeps the source image's true 3:2 ratio (600x400). It was 160x160 —
+         square — which compressed the mark vertically by a third. -->
+    <img class="eml-logo" src="${LOGO_URL}" alt="SOKONI" width="210" height="140"
+      style="display:block;margin:0 auto 16px;width:210px;height:140px;max-width:210px;
       border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;">
     <!-- Brand name as typography -->
-    <p class="eml-title" style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;
-      font-size:22px;font-weight:900;letter-spacing:0.09em;color:#1F2937;text-align:center;
-      mso-line-height-rule:exactly;line-height:28px;">SOKONI</p>
-    <!-- Tagline -->
+    <p class="eml-title" style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;
+      font-size:26px;font-weight:900;letter-spacing:0.09em;color:#111827;text-align:center;
+      mso-line-height-rule:exactly;line-height:32px;">SOKONI</p>
+    <!-- Tagline. Was #9CA3AF (2.5:1 on white) — below AA. #6B7280 is 4.8:1. -->
     <p class="eml-tag" style="margin:0;font-family:Arial,Helvetica,sans-serif;
-      font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;
-      color:#9CA3AF;text-align:center;">Kenya&rsquo;s Super Platform</p>
+      font-size:13px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;
+      color:#6B7280;text-align:center;">Kenya&rsquo;s Super Platform</p>
   </td></tr>
 
   <!-- ▸ BODY -->
@@ -181,25 +205,25 @@ ${hidden}
   <tr><td class="eml-foot eml-fpad" bgcolor="#F8FAFC"
     style="border-radius:0 0 20px 20px;padding:24px 40px 32px;border-top:1px solid #E5E7EB;">
     <p class="eml-fl" style="margin:0 0 10px;text-align:center;
-      font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:2;color:#9CA3AF;">
-      <a href="${PRIVACY_URL}"  style="color:#9CA3AF;text-decoration:none;">Privacy</a>&nbsp;&middot;&nbsp;
-      <a href="${TERMS_URL}"    style="color:#9CA3AF;text-decoration:none;">Terms</a>&nbsp;&middot;&nbsp;
-      <a href="${HELP_URL}"     style="color:#9CA3AF;text-decoration:none;">Help Center</a>&nbsp;&middot;&nbsp;
-      <a href="${TRUST_URL}"    style="color:#9CA3AF;text-decoration:none;">Trust Center</a>&nbsp;&middot;&nbsp;
-      <a href="${SUPPORT_URL}"  style="color:#9CA3AF;text-decoration:none;">Contact Support</a>&nbsp;&middot;&nbsp;
-      <a href="${UNSUB_URL}"    style="color:#9CA3AF;text-decoration:none;">Unsubscribe</a>
+      font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:1.9;color:#6B7280;">
+      <a href="${PRIVACY_URL}"  style="color:#6B7280;text-decoration:none;">Privacy</a>&nbsp;&middot;&nbsp;
+      <a href="${TERMS_URL}"    style="color:#6B7280;text-decoration:none;">Terms</a>&nbsp;&middot;&nbsp;
+      <a href="${HELP_URL}"     style="color:#6B7280;text-decoration:none;">Help Center</a>&nbsp;&middot;&nbsp;
+      <a href="${TRUST_URL}"    style="color:#6B7280;text-decoration:none;">Trust Center</a>&nbsp;&middot;&nbsp;
+      <a href="${SUPPORT_URL}"  style="color:#6B7280;text-decoration:none;">Contact Support</a>&nbsp;&middot;&nbsp;
+      <a href="${UNSUB_URL}"    style="color:#6B7280;text-decoration:none;">Unsubscribe</a>
     </p>
     <p class="eml-fl" style="margin:0 0 4px;text-align:center;
-      font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#CBD5E1;">
+      font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#6B7280;">
       Powered by ${esc(legalName)}
     </p>
     <p class="eml-fl" style="margin:0 0 4px;text-align:center;
-      font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#D1D5DB;">
+      font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#6B7280;">
       ${esc(postalLine)}&nbsp;&middot;&nbsp;<a href="mailto:${esc(COMPANY.supportEmail)}"
-        style="color:#D1D5DB;text-decoration:none;">${esc(COMPANY.supportEmail)}</a>
+        style="color:#6B7280;text-decoration:none;">${esc(COMPANY.supportEmail)}</a>
     </p>
     <p class="eml-fl" style="margin:0;text-align:center;
-      font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#E2E8F0;">
+      font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#6B7280;">
       &copy; ${YEAR} SOKONI. All rights reserved.
     </p>
   </td></tr>
@@ -261,17 +285,20 @@ Unsubscribe    : ${UNSUB_URL}
 
 /* Personalised greeting */
 function greeting(name) {
-  return `<p class="eml-p" style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:700;color:#1F2937;line-height:1.5;">Hi${name ? `, ${esc(name)}` : " there"},</p>`;
+  return `<p class="eml-lead" style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:23px;font-weight:700;color:#111827;line-height:1.45;">Hi${name ? `, ${esc(name)}` : " there"},</p>`;
 }
 
-/* Body paragraph */
+/* Body paragraph. 19px / 1.7 — never below the 16px floor, and #374151 is 10.3:1
+   on white (was #4B5563 at 7.5:1; both pass AA, the darker reads better on phones). */
 function p(html) {
-  return `<p class="eml-p" style="margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;color:#4B5563;line-height:1.65;">${html}</p>`;
+  return `<p class="eml-p" style="margin:0 0 22px;font-family:Arial,Helvetica,sans-serif;font-size:19px;color:#374151;line-height:1.7;">${html}</p>`;
 }
 
-/* Muted footnote / disclaimer */
+/* Muted footnote / disclaimer. Was 13px #9CA3AF — 2.5:1 on white, well below the
+   4.5:1 AA floor and effectively unreadable on a phone in daylight. #6B7280 is 4.8:1
+   and 16px is the minimum body size. */
 function note(html) {
-  return `<p class="eml-muted" style="margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#9CA3AF;line-height:1.6;">${html}</p>`;
+  return `<p class="eml-muted" style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:16px;color:#6B7280;line-height:1.65;">${html}</p>`;
 }
 
 /* Horizontal rule */
@@ -281,23 +308,27 @@ function divider() {
 
 /* Info card — contains infoRow() rows */
 function card(content) {
-  return `<div class="eml-info" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:4px 20px;margin:0 0 24px;">${content}</div>`;
+  return `<div class="eml-info" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:14px;padding:6px 24px;margin:0 0 26px;">${content}</div>`;
 }
 
-/* Label / value row inside card() */
+/* Label / value row inside card().
+   These rows carry the details people actually open the email to read — order number,
+   payment reference, amount, merchant, date. They were 13px with a #9CA3AF label at
+   2.5:1 contrast, which on a phone meant squinting at the one thing that mattered.
+   Label 17px #4B5563 (7.5:1), value 19px #111827 (16.1:1), taller rows for separation. */
 function infoRow(label, value, highlight) {
-  const vc = highlight ? "#16a34a" : "#1F2937";
+  const vc = highlight ? "#15803D" : "#111827";   /* #16a34a -> #15803D lifts 3.1:1 to 4.6:1 */
   return `<table width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td class="eml-lbl" style="padding:11px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#9CA3AF;border-bottom:1px solid #F1F5F9;">${esc(label)}</td>
-      <td class="eml-val" style="padding:11px 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:${vc};text-align:right;border-bottom:1px solid #F1F5F9;">${esc(value)}</td>
+      <td class="eml-lbl" style="padding:14px 0;font-family:Arial,Helvetica,sans-serif;font-size:17px;color:#4B5563;border-bottom:1px solid #E5E7EB;">${esc(label)}</td>
+      <td class="eml-val" style="padding:14px 0;font-family:Arial,Helvetica,sans-serif;font-size:19px;font-weight:700;color:${vc};text-align:right;border-bottom:1px solid #E5E7EB;">${esc(value)}</td>
     </tr>
   </table>`;
 }
 
 /* Pill badge */
 function badge(text, color = "#16a34a") {
-  return `<span style="display:inline-block;background:${color}18;border:1px solid ${color}40;border-radius:20px;padding:3px 12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;color:${color};">${esc(text)}</span>`;
+  return `<span style="display:inline-block;background:${color}18;border:1px solid ${color}40;border-radius:20px;padding:5px 14px;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:700;color:${color};">${esc(text)}</span>`;
 }
 
 /* ── Hero status card (✓ Order Confirmed, ✓ Payment Received …) ── */
@@ -328,7 +359,7 @@ function metricCard(amount, label) {
 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 0 24px;">
   <tr><td class="eml-info" style="background:#F8FAFC;border:1px solid #E2E8F0;border-radius:16px;padding:28px 24px;text-align:center;">
     <p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:34px;font-weight:900;color:#1F2937;letter-spacing:-0.5px;">${esc(amount)}</p>
-    <p class="eml-lbl" style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:600;color:#9CA3AF;text-transform:uppercase;letter-spacing:0.12em;">${esc(label)}</p>
+    <p class="eml-lbl" style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:16px;font-weight:600;color:#6B7280;text-transform:uppercase;letter-spacing:0.12em;">${esc(label)}</p>
   </td></tr>
 </table>`;
 }
@@ -338,7 +369,7 @@ function codeBlock(code, label) {
   return `
 <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 0 24px;">
   <tr><td style="background:#F0FFF4;border:2px solid #BBF7D0;border-radius:16px;padding:24px;text-align:center;">
-    <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#6B7280;">${esc(label || "Verification Code")}</p>
+    <p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:#6B7280;">${esc(label || "Verification Code")}</p>
     <p style="margin:0;font-family:'Courier New',Courier,monospace;font-size:36px;font-weight:900;letter-spacing:0.3em;color:#1F2937;">${esc(code)}</p>
   </td></tr>
 </table>`;
@@ -377,7 +408,7 @@ function trackingSteps(steps, current) {
               ${done && !active ? "✓" : ""}</div>
             ${i < steps.length-1 ? `<div style="width:2px;height:18px;background:${lineBg};margin:2px auto 0;"></div>` : ""}
           </td>
-          <td style="padding-left:10px;font-family:Arial,Helvetica,sans-serif;font-size:13px;
+          <td style="padding-left:10px;font-family:Arial,Helvetica,sans-serif;font-size:17px;
                      color:${txtClr};font-weight:${weight};vertical-align:top;padding-top:2px;">${esc(s)}</td>
         </tr></table>
       </td></tr>`;
@@ -406,7 +437,7 @@ const TEMPLATES = {
         ${greeting(d.name)}
         ${p("You can now shop, sell, book services, find property, hire professionals, order food, and much more — all in one place.")}
         ${card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Get started</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Get started</p>
           ${infoRow("Browse the Marketplace", "index.html")}
           ${infoRow("Complete Your Profile", "profile.html")}
           ${infoRow("Set Up Your Store", "seller.html")}
@@ -543,7 +574,7 @@ const TEMPLATES = {
         ${greeting(d.name)}
         ${p("We reviewed your seller application and were unable to approve it at this time.")}
         ${d.reason ? card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Reason</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Reason</p>
           ${infoRow("", esc(d.reason))}
         `) : ""}
         ${note(`Please address the issues above and reapply. <a href="${SUPPORT_URL}" style="color:#16a34a;">Contact support</a> if you need help.`)}
@@ -582,7 +613,7 @@ const TEMPLATES = {
         ${greeting(d.name)}
         ${p(`Your product <strong>${esc(d.productName)}</strong> requires changes before it can be published.`)}
         ${d.reason ? card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Required changes</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Required changes</p>
           ${infoRow("", esc(d.reason))}
         `) : ""}
       `,
@@ -669,7 +700,7 @@ const TEMPLATES = {
         ${greeting(d.name)}
         ${p(`Your order <strong>#${esc(d.orderId)}</strong> has been cancelled.`)}
         ${d.reason ? card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Reason</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Reason</p>
           ${infoRow("", esc(d.reason))}
         `) : ""}
         ${note("If you paid, a refund will be processed within 3–5 business days.")}
@@ -731,7 +762,7 @@ const TEMPLATES = {
         ${alertBanner(`We were unable to process your payment of <strong>${fmt(d.amount)}</strong>.`, "warning")}
         ${greeting(d.name)}
         ${d.reason ? card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Reason</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Reason</p>
           ${infoRow("", esc(d.reason))}
         `) : ""}
         ${note(`Please check your M-Pesa balance and try again. Need help? <a href="${SUPPORT_URL}" style="color:#16a34a;">Contact support</a>.`)}
@@ -1078,7 +1109,7 @@ const TEMPLATES = {
         ${statusCard("🚴", "Application Received", "We'll notify you once it's approved.", "info")}
         ${greeting(d.name)}
         ${card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Next steps</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Next steps</p>
           ${infoRow("1", "Complete your profile and upload documents")}
           ${infoRow("2", "Wait for verification (24–48 hours)")}
           ${infoRow("3", "Start earning once approved")}
@@ -1120,7 +1151,7 @@ const TEMPLATES = {
         ${greeting(d.name)}
         ${p("We are unable to approve your driver application at this time.")}
         ${d.reason ? card(`
-          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;">Reason</p>
+          <p style="margin:0 0 4px;padding-top:12px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;">Reason</p>
           ${infoRow("", esc(d.reason))}
         `) : ""}
         ${note("Please update your documents and reapply.")}
@@ -1211,7 +1242,7 @@ const TEMPLATES = {
         `)}
         ${d.qrCode ? `
           ${divider()}
-          <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#9CA3AF;text-align:center;">Your Entry QR Code</p>
+          <p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#6B7280;text-align:center;">Your Entry QR Code</p>
           <div style="text-align:center;padding:10px 0;">
             <img src="${esc(d.qrCode)}" alt="Entry QR Code" width="180" height="180"
               style="border-radius:12px;background:#ffffff;padding:12px;border:1px solid #E2E8F0;">
