@@ -226,6 +226,63 @@ window.PosInventory = (() => {
 
   async function getAllProducts() { return _all(S.PRODUCTS); }
 
+  /* ══ TILL ADAPTERS ═══════════════════════════════════════════════════════
+     pos-checkout.html calls byCategory(), recent() and search(), none of which
+     existed. Every call threw, and because the grid loader wraps them in a
+     try/catch the till simply showed "Could not load products" — the product
+     grid has never loaded at the counter.
+
+     These are ADAPTERS, not new logic: each delegates to searchProducts() or
+     getAllProducts() so filtering rules stay in one place. Adding a filter to
+     searchProducts continues to benefit all three.
+
+     search() exists because the call site passes a NUMBER as the second
+     argument — search(q, 20) — while searchProducts takes an options object.
+     Passing 20 as `opts` silently disabled every filter and the limit. Rather
+     than change the call site (and every other future caller that copies it),
+     this accepts the ergonomic form and normalises it. */
+
+  /* Products store `category` as a NAME ('General' by default, pos-inventory.js:148),
+     but the till's chips carry the category ID (chip.dataset.cat = c.id).
+     Matching only one of those would return an empty grid while looking correct,
+     so resolve the id to its name and accept either. */
+  async function byCategory(categoryRef, limit) {
+    if (!categoryRef) return recent(limit);
+    const key = String(categoryRef);
+
+    let name = key;
+    try {
+      const cats = await getCategories();
+      const hit = (cats || []).find(c => c.id === key || c.name === key);
+      if (hit) name = hit.name;
+    } catch (_) { /* fall back to matching the raw value */ }
+
+    const all = await _all(S.PRODUCTS);
+    const out = all.filter(p =>
+      p.category === name || p.category === key || p.categoryId === key
+    );
+    return out.slice(0, limit || 500);
+  }
+
+  /* Most recently touched first — what a cashier wants on an empty search. */
+  async function recent(limit) {
+    const all = await _all(S.PRODUCTS);
+    return all
+      .filter(p => p.status !== 'archived' && p.status !== 'deleted')
+      .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0))
+      .slice(0, limit || 48);
+  }
+
+  /* Ergonomic search: search(q, 20). Delegates to searchProducts so ranking and
+     field coverage are not duplicated. Also accepts an options object, so the
+     canonical form keeps working. */
+  async function search(query, limitOrOpts) {
+    const opts = (typeof limitOrOpts === 'number')
+      ? { limit: limitOrOpts }
+      : (limitOrOpts || {});
+    return searchProducts(query, opts);
+  }
+
   /* ══════════════════════════════════════════
      INVENTORY (stock levels)
   ══════════════════════════════════════════ */
@@ -683,6 +740,8 @@ window.PosInventory = (() => {
     /* Products */
     addProduct, updateProduct, deleteProduct, getProduct,
     getProductByBarcode, getProductBySKU, searchProducts, getAllProducts,
+    /* Till adapters — see the block above. Thin wrappers, no duplicate logic. */
+    byCategory, recent, search,
     /* Stock */
     getStock, getStockForBranch, adjustStock, transferStock,
     writeDamaged, deductSaleItems, receiveGoods, returnToSupplier, processReturn,
