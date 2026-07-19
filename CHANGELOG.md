@@ -1,4 +1,67 @@
-﻿## [2026-07-19] — P0: booking payments never initialized; sessions cannot exist for phone-only accounts
+﻿## [2026-07-19] — Phase 1 remediation: two exploitable money defects closed
+
+### CRITICAL-02 — buyer could credit themselves an arbitrary amount (FIXED, DEPLOYED)
+
+`initiateRefund` used the client's `amount` verbatim with no comparison against what was
+actually paid, then wrote a `paymentLedger` credit to `buyer:{uid}`. `index.js:6170` permits the
+buyer, not only an admin. Deployed and client-callable via `sokoni-endpoints.js:38`.
+
+Now: capped at the authoritative escrow amount; prior pending/processing/completed refunds are
+summed and deducted so N partials cannot exceed the original; escrow status asserted inside
+`runTransaction` so concurrent calls cannot both write a credit; ledger doc id is deterministic.
+
+The `orderId`-only path had **no ownership check at all** — any authenticated user could file a
+refund against any order. Ownership now mirrors `firestore.rules:265-268`
+(`uid|userId|buyerId|buyerUid`). That path writes no ledger and has no server-trusted amount, so
+the client figure is not honoured; it records `amountAuthority:'pending_admin_determination'`.
+
+Buyer authorisation deliberately retained — capping alone removes the exploit.
+
+### CRITICAL-01 — client-authoritative payment amount (STAGE 1a DEPLOYED)
+
+`initiateSTKPush:4965` takes `amount` from `request.data`, bounds-checks only, never re-derives
+it. `ref` is client-supplied too. Commission and settlement inherit the number.
+
+Staged deliberately: the client sends `{phone, amount, ref}` with **no order reference**
+(`sokoni-intasend.js:220`), so there is nothing to re-derive from yet, and callers include
+subscriptions, POS and every booking page. Failing closed today would trade an integrity bug for
+a total payment outage.
+
+Stage 1a consults `paymentIntents/{ref}` when present and enforces amount + ownership; when
+absent it logs `STK_NO_AUTHORITY`. Stage 1b flips that branch to throw once the log reaches zero.
+`paymentIntents` has no rule → default deny → Admin-SDK-only. Verified no global
+`match /{document=**}` exists.
+
+### HIGH-06 — rate limiting (DONE)
+
+Existing `redis-rate-limiter.checkRateLimit` applied to `initiateWalletTopUp`,
+`spendFromWallet`, `requestSellerPayout` (`payment`) and `setUserRole` (`admin`). No new limiter.
+Both actions are in `_SECURITY_ACTIONS` (`redis-rate-limiter.js:37`) so they fall back to a
+Firestore check rather than failing open while the Redis VPC connector is outstanding.
+
+### HIGH-07 — CSP: NOT DONE, and should not be done as specified
+
+Promoting the Report-Only policy would **break the site**. It drops `unsafe-inline` and adds
+`script-src-attr 'none'`. Measured: **7,154 inline event-handler attributes across 275 of 321
+pages**. The Report-Only policy is not "validated" — nothing was measuring whether it would pass.
+The real path is migrating handlers to `addEventListener`, then nonce/hash CSP. Weeks, not a
+header swap.
+
+### Files affected
+
+`functions/index.js`, `functions/wallet.js`, `functions/super-admin.js`.
+
+### Deployment
+
+6 functions updated in `us-central1`: initiateRefund, initiateSTKPush, initiateWalletTopUp,
+spendFromWallet, requestSellerPayout, setUserRole.
+
+### Not verified
+
+No live payment or refund was executed. Correctness is repository-verified and the deploy
+succeeded; behaviour under a real transaction is unproven.
+
+## [2026-07-19] — P0: booking payments never initialized; sessions cannot exist for phone-only accounts
 
 ### 1. Payment initialization — FIXED
 
