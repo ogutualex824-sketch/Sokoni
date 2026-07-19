@@ -62,7 +62,8 @@ service cloud.firestore {
        Admin SDK, which bypasses rules entirely. */
     function noSelfGrant() {
       return !request.resource.data.keys()
-                .hasAny(['betaStatus','featureFlags','permissions','role','trustScore']);
+                .hasAny(['betaStatus','accessLevel','featureFlags','permissions','role',
+                         'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus']);
     }
 
     function noPrivilegeEscalation() {
