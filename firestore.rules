@@ -1493,7 +1493,12 @@ service cloud.firestore {
     }
 
     match /escrows/{escrowId} {
-      allow create: if isAuthed() && request.resource.data.buyerUid == request.auth.uid;
+      /* Gate 1A 2026-07-19 — entitlement. Granted create on IDENTITY alone: any authed
+           user could write an escrow naming themselves buyer with any sellerNetCents,
+           straight from the browser, bypassing every CF. No layer verified the amount.
+           CF-only now; finosCreateEscrow uses the Admin SDK and is unaffected.
+           Behaviour-neutral: all client refs are .get() reads. */
+        allow create: if false;
       allow read:   if isAdmin()
                     || (isAuthed() && (resource.data.buyerUid  == request.auth.uid
                                     || resource.data.sellerUid == request.auth.uid));
@@ -3807,13 +3812,12 @@ service cloud.firestore {
     match /legalCommissions/{commId} {
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.providerUid == request.auth.uid);
-      allow create: if isAuthed()
-                    && request.resource.data.providerUid == request.auth.uid
-                    && request.resource.data.keys().hasAll(['ref','providerUid','providerName','matter','serviceTotal','commissionOwed','status','hub'])
-                    && request.resource.data.status == 'invoiced'
-                    && request.resource.data.serviceTotal is number
-                    && request.resource.data.commissionOwed is number;
-      allow update: if isAdmin();
+      /* Gate 1A 2026-07-19 — entitlement. The party OWING commission declared what it
+           owed: type checks only, never derived from the matter or the canonical
+           commission engine. Identity and authority proven; correctness not.
+           CF-only. Behaviour-neutral: zero client references repo-wide. */
+        allow create: if false;
+        allow update: if isAdmin();
       allow delete: if isAdmin();
     }
     match /legalDocDrafts/{draftId} {
