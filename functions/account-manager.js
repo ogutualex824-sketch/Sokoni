@@ -25,6 +25,43 @@ function _assertAuth(context) {
   return uid;
 }
 
+/* ── Session lookup, provider-agnostic ────────────────────────────────────
+   userSessions documents are written by session-manager.js:69 with a userEmail
+   field and NO uid field. Both call sites here previously queried
+   .where('uid','==',uid), which matches zero documents for every user that has
+   ever existed — so revokeAllSessions always reported 0 devices, and account
+   erasure never removed the session rows, leaving userEmail/deviceName/browser
+   behind after users/{uid} had been redacted. That is an incomplete erasure.
+
+   Queries both keys and unions the result, so this is correct before AND after
+   sessions are re-keyed on uid (RC1 Priority 2). A phone-only account has no
+   email and no session documents at all, so it correctly yields nothing. */
+async function _findUserSessions(uid, email, activeOnly) {
+  const col = db.collection('userSessions');
+  const queries = [col.where('uid', '==', uid)];
+  if (email) queries.push(col.where('userEmail', '==', String(email).toLowerCase().trim()));
+
+  const snaps = await Promise.all(queries.map((q) =>
+    (activeOnly ? q.where('active', '==', true) : q).get().catch(() => null)
+  ));
+
+  const byId = new Map();
+  for (const s of snaps) {
+    if (!s) continue;
+    for (const d of s.docs) byId.set(d.id, d);   /* union — a doc may match both */
+  }
+  return [...byId.values()];
+}
+
+/* Resolve the account's email even when the caller token lacks one. */
+async function _resolveEmail(uid, tokenEmail) {
+  if (tokenEmail) return tokenEmail;
+  try {
+    const s = await db.collection('users').doc(uid).get();
+    return (s.exists && s.data().email) || null;
+  } catch (_) { return null; }
+}
+
 function _assertAdmin(context) {
   const uid = _assertAuth(context);
   const claims = context.auth.token || {};
@@ -156,30 +193,34 @@ exports.requestDataExport = onCall({ region: 'us-central1' }, async (request) =>
 exports.revokeAllSessions = onCall({ region: 'us-central1' }, async (request) => {
   const uid = _assertAuth(request);
 
-  /* Revoke Firebase refresh tokens */
+  /* Revoke Firebase refresh tokens. This is the authoritative sign-out: it
+     invalidates every issued token regardless of what the session rows say. */
   await auth.revokeRefreshTokens(uid);
 
-  /* Mark all Firestore userSessions as inactive */
-  const sessionsSnap = await db.collection('userSessions')
-    .where('uid', '==', uid)
-    .where('active', '==', true)
-    .get();
+  /* Mark Firestore userSessions inactive (see _findUserSessions above). */
+  const email = await _resolveEmail(uid, request.auth.token && request.auth.token.email);
+  const docs  = await _findUserSessions(uid, email, true);
 
-  const batch = db.batch();
-  sessionsSnap.docs.forEach(d => batch.update(d.ref, { active: false, revokedAt: admin.firestore.FieldValue.serverTimestamp() }));
-  await batch.commit();
+  if (docs.length) {
+    const batch = db.batch();
+    docs.forEach(d => batch.update(d.ref, {
+      active:    false,
+      revokedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }));
+    await batch.commit();
+  }
 
   await db.collection('auditLog').add({
     action:       'all_sessions_revoked',
     uid,
-    sessionCount: sessionsSnap.size,
+    sessionCount: docs.length,
     ts:           admin.firestore.FieldValue.serverTimestamp(),
   });
 
   return {
     success:      true,
-    revokedCount: sessionsSnap.size,
-    message:      `Signed out from ${sessionsSnap.size} device(s).`,
+    revokedCount: docs.length,
+    message:      `Signed out from ${docs.length} device(s).`,
   };
 });
 
@@ -205,10 +246,27 @@ exports.finaliseExpiredDeletions = onSchedule(
       const data = userDoc.data();
 
       try {
-        /* 1. Delete Firebase Auth account */
-        await auth.deleteUser(uid);
+        /* Order matters. This previously deleted the Auth account FIRST; if the
+           redaction write below then failed, the next run's auth.deleteUser threw
+           user-not-found, hit the catch, and skipped redaction again — leaving the
+           account permanently stuck in pending_deletion with full PII intact.
 
-        /* 2. Soft-delete Firestore user document (preserve for legal auditing) */
+           Erasure now happens before the irreversible step, so a partial failure
+           leaves the record redacted and retryable rather than exposed and stuck. */
+
+        /* 1. Read the email BEFORE redacting it — needed to find session rows. */
+        const email = data.email || null;
+
+        /* 2. Delete session documents. They carry userEmail, deviceName and
+              browser, so leaving them behind would defeat the redaction below. */
+        const sessions = await _findUserSessions(uid, email, false);
+        if (sessions.length) {
+          const batch = db.batch();
+          sessions.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+        }
+
+        /* 3. Redact the Firestore user document (shell preserved for audit). */
         await db.collection('users').doc(uid).set({
           status:    'deleted',
           deletedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -218,11 +276,14 @@ exports.finaliseExpiredDeletions = onSchedule(
           photoURL:  '[redacted]',
         }, { merge: true });
 
-        /* 3. Revoke all active sessions */
-        const sessions = await db.collection('userSessions').where('uid', '==', uid).get();
-        const batch    = db.batch();
-        sessions.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+        /* 4. Delete the Firebase Auth account — the irreversible step, last.
+              Tolerate an already-deleted account so a retry can still complete. */
+        try {
+          await auth.deleteUser(uid);
+        } catch (authErr) {
+          if (!authErr || authErr.code !== 'auth/user-not-found') throw authErr;
+          console.warn('[AccountManager] Auth account already absent, continuing:', uid);
+        }
 
         /* 4. Audit */
         await db.collection('auditLog').add({
