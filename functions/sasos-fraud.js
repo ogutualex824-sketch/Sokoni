@@ -314,27 +314,54 @@ const sasosReportFraud = onCall(
     const now   = Date.now();
     const batch = db().batch();
 
-    batch.set(db().collection('sasosRiskEvents').doc(), {
-      uid: targetUid, type: signalType, weight,
-      reportedBy: callerUid, isAdminReport: isAdmin, notes,
-      ts: FieldValue.serverTimestamp(), resolved: false,
-    });
+      /* ── Gate 1A.5, 2026-07-19 — EVIDENCE IS NOT AUTHORITY ──────────────────
+         targetUid is client-chosen (see above). Until now a NON-ADMIN report
+         applied its weight immediately to sasosRiskProfiles AND entitlements in
+         this same batch. Risk feeds trust, trust feeds tiers, tiers feed
+         settlement timing, commission and search ranking -- so any authenticated
+         user could degrade any other account's standing, repeatedly, unreviewed.
 
-    /* Update risk score */
-    batch.set(db().collection('sasosRiskProfiles').doc(targetUid), {
-      uid: targetUid,
-      riskScore:    FieldValue.increment(weight),
-      lastSignalAt: now,
-      signalCount:  FieldValue.increment(1),
-      updatedAt:    FieldValue.serverTimestamp(),
-    }, { merge: true });
+         That contradicted this file's own documented design: "User reports are
+         weighted lower and queued for review." They were weighted lower. They
+         were never queued.
 
-    batch.set(db().collection('entitlements').doc(targetUid), {
-      riskScore:       FieldValue.increment(weight),
-      lastFraudEvent:  now,
-      needsRefresh:    true,
-      updatedAt:       now,
-    }, { merge: true });
+         A user report is EVIDENCE. Only an administrator is AUTHORITY.
+
+         Non-admin reports now write the event and nothing else. The profile and
+         entitlement writes are OMITTED, not zeroed: increment(0) would still
+         stamp lastFraudEvent and needsRefresh:true, perturbing entitlements on a
+         report meant to be inert.
+
+         Admin behaviour is unchanged. */
+      const applyWeight = isAdmin;
+
+      batch.set(db().collection('sasosRiskEvents').doc(), {
+        uid: targetUid, type: signalType,
+        weight: applyWeight ? weight : 0,
+        calculatedWeight: weight,   /* retained for review; never applied yet */
+        reportedBy: callerUid, isAdminReport: isAdmin, notes,
+        ts: FieldValue.serverTimestamp(), resolved: false,
+        pendingReview: !applyWeight,
+        reviewState:   applyWeight ? 'applied' : 'pending',
+      });
+
+      /* Risk score + entitlements — ADMIN REPORTS ONLY. */
+      if (applyWeight) {
+        batch.set(db().collection('sasosRiskProfiles').doc(targetUid), {
+          uid: targetUid,
+          riskScore:    FieldValue.increment(weight),
+          lastSignalAt: now,
+          signalCount:  FieldValue.increment(1),
+          updatedAt:    FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        batch.set(db().collection('entitlements').doc(targetUid), {
+          riskScore:       FieldValue.increment(weight),
+          lastFraudEvent:  now,
+          needsRefresh:    true,
+          updatedAt:       now,
+        }, { merge: true });
+      }
 
     await batch.commit();
     return { success: true, weight, signalType };
