@@ -179,13 +179,33 @@ async function getOrInitWallet(db, entityId, entityType) {
   return initial;
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   MONETARY UNITS — wallets/{id}
+
+   This module works in CENTS. wallet.js and wallet-engine.js work in whole KES,
+   and wallet.js:88 renders  straight to the user.
+
+   Until 2026-07-19 creditWalletTxn and debitWalletTxn also incremented    by amountCents. A FinOS credit of KES 500 therefore wrote balance += 50000 and
+   the wallet UI displayed KSh 50,000 — and spendFromWallet's sufficiency check
+   (wallet.js:328) passed against the inflated figure.
+
+   It had never fired in production: audited 2026-07-19, all 3 live wallets/ docs
+   were zero on every balance field, because no completed payment credits a wallet
+   yet. The collision was fixed while it was still free to fix.
+
+   RULE:  is owned solely by the KES engines (wallet.js, wallet-engine.js).
+   This module owns the *Cents fields only — availableBalance, withdrawableBalance,
+   lifetimeEarnings — all of which it already maintained. Do not reintroduce a
+    write here without first converting units and migrating live docs.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
 /* Credit: adds to availableBalance and lifetimeEarnings */
 function creditWalletTxn(txn, db, entityId, entityType, amountCents, { description, orderId, type }) {
   const ref  = _walletRef(db, entityId);
   txn.set(ref, {
     entityId, entityType: entityType || 'unknown', currency: 'KES',
     availableBalance:    admin.firestore.FieldValue.increment(amountCents),
-    balance:             admin.firestore.FieldValue.increment(amountCents),
+    /* NOT `balance`. See the unit note above _walletRef. */
     withdrawableBalance: admin.firestore.FieldValue.increment(amountCents),
     lifetimeEarnings:    admin.firestore.FieldValue.increment(amountCents),
     updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
@@ -211,7 +231,7 @@ async function debitWalletTxn(txn, db, entityId, amountCents, { description, ord
 
   txn.update(ref, {
     availableBalance:    admin.firestore.FieldValue.increment(-amountCents),
-    balance:             admin.firestore.FieldValue.increment(-amountCents),
+    /* NOT `balance`. See the unit note above _walletRef. */
     withdrawableBalance: admin.firestore.FieldValue.increment(-amountCents),
     updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
   });
@@ -229,7 +249,7 @@ function holdWalletTxn(txn, db, entityId, amountCents, { description }) {
   const ref = _walletRef(db, entityId);
   txn.update(ref, {
     availableBalance:    admin.firestore.FieldValue.increment(-amountCents),
-    balance:             admin.firestore.FieldValue.increment(-amountCents),
+    /* NOT `balance` — cents. See the unit note above creditWalletTxn. */
     heldBalance:         admin.firestore.FieldValue.increment(amountCents),
     withdrawableBalance: admin.firestore.FieldValue.increment(-amountCents),
     updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
@@ -247,7 +267,7 @@ function releaseHoldTxn(txn, db, entityId, amountCents, { description }) {
   const ref = _walletRef(db, entityId);
   txn.update(ref, {
     availableBalance:    admin.firestore.FieldValue.increment(amountCents),
-    balance:             admin.firestore.FieldValue.increment(amountCents),
+    /* NOT `balance` — cents. See the unit note above creditWalletTxn. */
     heldBalance:         admin.firestore.FieldValue.increment(-amountCents),
     withdrawableBalance: admin.firestore.FieldValue.increment(amountCents),
     updatedAt:           admin.firestore.FieldValue.serverTimestamp(),
