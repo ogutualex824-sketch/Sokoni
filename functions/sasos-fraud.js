@@ -574,12 +574,98 @@ const sasosGetFraudQueue = onCall(
   }
 );
 
+/* ================================================================
+   sasosApproveRiskEvent
+   Admin-only. THE approval authority for a pending sasosRiskEvents doc.
+
+   Why this exists (Gate 1A.5, 2026-07-19). sasosReportFraud writes evidence
+   for non-admin reports but deliberately applies no weight -- a user report is
+   evidence, only an administrator is authority. Repository search proved no
+   handler anywhere consumed sasosRiskEvents: one writer, zero readers. Without
+   this, an approved report could never take effect.
+
+   sasosResolveRisk(uid) is NOT this. It is user remediation -- it resets the
+   score, clears suspension and unsuspends subscriptions. Responsibilities are
+   deliberately NOT merged: this applies one event's weight and nothing else.
+
+   Contract follows the established repository convention for per-event
+   decisions: (eventId, decision, notes). See inventory-fraud.js:191 and
+   finos-admin.js:173. Promotion of an existing pattern, not a new one.
+
+   Idempotent: the transaction re-reads the event and refuses to act on any
+   event whose reviewState is not 'pending', so a double-approval applies the
+   weight once.
+================================================================ */
+const sasosApproveRiskEvent = onCall(
+  { region: 'us-central1', timeoutSeconds: 15, memory: '128MiB' },
+  async (req) => {
+    const adminUid = assertAdmin(req);
+    const eventId  = san(req.data.eventId, 128);
+    const decision = san(req.data.decision || '', 20).toLowerCase();
+    const notes    = san(req.data.notes || '', 500);
+
+    if (!eventId) throw new HttpsError('invalid-argument', 'eventId required.');
+    if (decision !== 'approve' && decision !== 'reject')
+      throw new HttpsError('invalid-argument', "decision must be 'approve' or 'reject'.");
+
+    const evRef = db().collection('sasosRiskEvents').doc(eventId);
+    const now   = Date.now();
+
+    /* Claim the decision transactionally. Weight is read from the stored event,
+       never from the request -- the reviewer decides YES/NO, not how much. */
+    const applied = await db().runTransaction(async (txn) => {
+      const snap = await txn.get(evRef);
+      if (!snap.exists) throw new HttpsError('not-found', 'Risk event not found.');
+      const ev = snap.data();
+      if (ev.reviewState && ev.reviewState !== 'pending') return null;   /* already decided */
+
+      const weight   = decision === 'approve' ? Number(ev.calculatedWeight || 0) : 0;
+      const targetUid = ev.uid;
+      if (decision === 'approve' && !targetUid)
+        throw new HttpsError('failed-precondition', 'Event has no target uid.');
+
+      txn.update(evRef, {
+        reviewState:   decision === 'approve' ? 'approved' : 'rejected',
+        pendingReview: false,
+        resolved:      true,
+        weight,
+        reviewedBy:    adminUid,
+        reviewedAt:    now,
+        reviewNotes:   notes,
+      });
+
+      /* Canonical risk mutation -- ONLY on approve, and only here. */
+      if (decision === 'approve' && weight > 0) {
+        txn.set(db().collection('sasosRiskProfiles').doc(targetUid), {
+          uid: targetUid,
+          riskScore:    FieldValue.increment(weight),
+          lastSignalAt: now,
+          signalCount:  FieldValue.increment(1),
+          updatedAt:    FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        txn.set(db().collection('entitlements').doc(targetUid), {
+          riskScore:      FieldValue.increment(weight),
+          lastFraudEvent: now,
+          needsRefresh:   true,
+          updatedAt:      now,
+        }, { merge: true });
+      }
+      return { targetUid, weight };
+    });
+
+    if (!applied) return { success: true, eventId, decision, alreadyDecided: true, weightApplied: 0 };
+    return { success: true, eventId, decision, weightApplied: applied.weight, uid: applied.targetUid };
+  }
+);
+
 /* ── Exports ─────────────────────────────────────────────── */
 module.exports = {
   sasosUpdateRiskScore,
   sasosGetRiskProfile,
   sasosReportFraud,
   sasosResolveRisk,
+  sasosApproveRiskEvent,
   sasosFraudScan,
   sasosGetFraudQueue,
   SIGNAL_WEIGHTS,

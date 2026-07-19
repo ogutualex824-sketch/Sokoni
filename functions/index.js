@@ -7617,6 +7617,7 @@ exports.sasosUpdateRiskScore          = sasosFraud.sasosUpdateRiskScore;
 exports.sasosGetRiskProfile           = sasosFraud.sasosGetRiskProfile;
 exports.sasosReportFraud              = sasosFraud.sasosReportFraud;
 exports.sasosResolveRisk              = sasosFraud.sasosResolveRisk;
+exports.sasosApproveRiskEvent         = sasosFraud.sasosApproveRiskEvent;
 exports.sasosFraudScan                = sasosFraud.sasosFraudScan;
 exports.sasosGetFraudQueue            = sasosFraud.sasosGetFraudQueue;
 
