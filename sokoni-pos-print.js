@@ -31,6 +31,12 @@ window.SokoniPosprint = (() => {
     margins: { top: 0, bottom: 30 },
     autoReconnect: true,
     printQueue: true,
+    /* Paperless fulfilment. `paperless:true` suppresses ALL printing; docPrint
+       disables individual documents. Suppressing a print never suppresses the
+       document itself — it is still generated and readable via the order QR. */
+    paperless: false,
+    docPrint: {},          /* e.g. { packing:false } — absent means print */
+    printerRoles: {},      /* { receipt, packing, kitchen, label, warehouse } */
     shopName: '',
     shopAddress: '',
     shopPhone: '',
@@ -669,6 +675,79 @@ window.SokoniPosprint = (() => {
     return print({ items, labelOpts: opts }, { type: 'label', ...opts });
   }
 
+  /* ════════════════════════════════════════════════════════════════════════
+     PAPERLESS FULFILMENT — one call produces every document an order needs.
+
+     SokoniReceiptEngine gained planDocuments()/resolvePrinter() but nothing
+     called them, so the smart-document work was inert. This is the seam: it
+     lives on the canonical print module, so pos-checkout, pos.html and the
+     seller dashboard all gain fulfilment printing without any of them learning
+     which documents a delivery order requires.
+
+     The engine decides WHICH documents; this decides WHERE they print and
+     WHETHER they print at all. Those are deliberately separate concerns —
+     document selection is a platform rule, printing is a merchant preference.
+
+     Routing falls back per document: role printer -> default printer. A merchant
+     with a single printer therefore receives every document sequentially on it,
+     which is the common case and must not silently drop documents.
+
+     Offline is already handled: print() enqueues via _addToQueue and the queue
+     drains on reconnect, so a fulfilment printed with the printer unplugged is
+     queued rather than lost.
+
+     PAPERLESS SETTINGS
+       settings.paperless = true         disable ALL printing
+       settings.docPrint  = { packing:false, ... }   disable individual documents
+
+     Suppressing a print does NOT suppress the document — the receipt and
+     dispatch records are written server-side regardless. A merchant operating
+     paperlessly still has every document; they simply read it on a screen or via
+     the order QR. Returned as `skipped` so the caller can show them digitally.
+     ════════════════════════════════════════════════════════════════════════ */
+  async function printFulfilment(order = {}, opts = {}) {
+    const engine = (typeof window !== 'undefined') && window.SokoniReceiptEngine;
+    if (!engine || typeof engine.planDocuments !== 'function') {
+      /* Degrade to a plain receipt rather than failing the sale. */
+      const jobId = await print(order, { type: 'receipt', ...opts });
+      return { printed: [{ type: 'receipt', jobId }], skipped: [], degraded: true };
+    }
+
+    const s        = getSettings();
+    const plan     = engine.planDocuments(order);
+    const docPrint = s.docPrint || {};
+    const roles    = s.printerRoles || {};
+    const printed  = [];
+    const skipped  = [];
+
+    for (const doc of plan) {
+      /* Explicit false disables; undefined means "not configured" = print. */
+      if (s.paperless === true || docPrint[doc.type] === false) {
+        skipped.push({ type: doc.type, reason: s.paperless === true ? 'paperless' : 'disabled' });
+        continue;
+      }
+
+      const printerId = engine.resolvePrinter(doc.printer, roles) || s.defaultPrinterId || null;
+
+      try {
+        const jobId = await print(order, {
+          type:     doc.type,
+          printerId,
+          copies:   doc.copies || 1,
+          immediate: opts.immediate === true,
+        });
+        printed.push({ type: doc.type, jobId, printerId, role: doc.printer });
+      } catch (e) {
+        /* One failed document must not abort the rest — a packing slip that
+           fails to print cannot be allowed to also lose the customer receipt. */
+        skipped.push({ type: doc.type, reason: 'error', error: e && e.message });
+      }
+    }
+
+    emit('fulfilment:printed', { orderNo: order.orderNo || order.orderId || null, printed, skipped });
+    return { printed, skipped };
+  }
+
   async function printTest(printerId) {
     const pid = printerId || getSettings().defaultPrinterId;
     return print({
@@ -798,7 +877,7 @@ window.SokoniPosprint = (() => {
     getPrinters, getPrinter, getDefaultPrinter,
     addPrinter, updatePrinter, removePrinter, setDefault,
     connectPrinter, disconnectPrinter, getConnectionStatus,
-    print, printLabel, printTest, openCashDrawer,
+    print, printLabel, printTest, printFulfilment, openCashDrawer,
     getQueue, clearQueue, cancelJob, retryJob,
     discover,
     on, off,

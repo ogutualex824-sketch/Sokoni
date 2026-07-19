@@ -98,3 +98,43 @@ for dispatch and cash reconciliation. These are not missing data; they are the p
 Samples: `docs/receipt-samples/` (each type at both widths).
 
 Related: [[SmartPOS]] · [[Delivery]] · [[Orders]] · [[Payments]]
+
+## Paperless fulfilment
+
+`SokoniPosprint.printFulfilment(order)` is the single call that produces every document an
+order needs. It lives on the canonical print module, so `pos-checkout`, `pos.html` and the
+seller dashboard all gain fulfilment printing without any of them learning which documents a
+delivery order requires.
+
+```js
+const { printed, skipped } = await SokoniPosprint.printFulfilment(order);
+```
+
+**Separation of concerns:** the receipt engine decides *which* documents (a platform rule);
+the print module decides *where* they print and *whether* they print (a merchant preference).
+
+### Merchant settings
+
+| Setting | Effect |
+|---|---|
+| `paperless: true` | suppresses **all** printing |
+| `docPrint: { packing:false }` | disables one document; absent means print |
+| `printerRoles: { kitchen:'KP-01' }` | routes a role to a device |
+
+Routing falls back **role → default printer**, so a merchant with one printer receives every
+document sequentially rather than silently losing some.
+
+**Suppressing a print never suppresses the document.** Receipt and dispatch records are written
+server-side regardless; a paperless merchant still has every document and reads it on screen or
+via the order QR. Suppressed documents are returned as `skipped` so the caller can display them.
+
+### Failure behaviour
+
+Offline printing is already handled — `print()` enqueues and the queue drains on reconnect, so a
+fulfilment printed with the printer unplugged is queued, not lost.
+
+A single failed document does not abort the rest: a packing slip that fails to print must not
+also lose the customer receipt. Failures appear in `skipped` with a reason.
+
+If the receipt engine is unavailable the call degrades to a plain receipt (`degraded: true`)
+rather than failing the sale.
