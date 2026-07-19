@@ -58,6 +58,26 @@ srv.listen(0, async () => {
 
     r.recov = { unavailable: A.isRecoverable('unavailable'), denied: A.isRecoverable('permission-denied'),
                 index: A.isRecoverable('failed-precondition') };
+
+    /* ── bindSection: the realtime lifecycle Vehicle Hub actually uses ── */
+    const mkSub = (mode) => (onData, onError) => {
+      if (mode === 'data')    onData([{id:1},{id:2}]);
+      if (mode === 'empty')   onData([]);
+      if (mode === 'denied')  onError(Object.assign(new Error('Missing or insufficient permissions'), {code:'permission-denied'}));
+      if (mode === 'index')   onError(Object.assign(new Error('query requires an index'), {code:'failed-precondition'}));
+      if (mode === 'network') onError(Object.assign(new Error('offline'), {code:'unavailable'}));
+      if (mode === 'throws')  onData([{id:1}]);
+      return () => {};
+    };
+    const bind = (mode, render, opts) => { const e = mk(); A.bindSection(e, mkSub(mode), render, opts||{}); return e.innerHTML; };
+    r.b_data    = bind('data',    (d,n)=>{ n.innerHTML='<b>'+d.length+' vehicles</b>'; });
+    r.b_empty   = bind('empty',   ()=>{}, { empty:'No vehicles registered' });
+    r.b_denied  = bind('denied',  ()=>{});
+    r.b_index   = bind('index',   ()=>{});
+    r.b_network = bind('network', ()=>{}, { retryAttr:'data-retry=\"1\"' });
+    r.b_throws  = bind('throws',  ()=>{ throw new Error('render blew up'); });
+    r.b_subThrew = (()=>{ const e=mk(); A.bindSection(e, ()=>{ throw new Error('subscribe failed'); }, ()=>{}); return e.innerHTML; })();
+
     r.missingTarget = await A.loadSection('does-not-exist', async () => [1], () => {});
     return r;
   });
@@ -79,6 +99,18 @@ srv.listen(0, async () => {
     ck('failed-precondition (index) is NOT', out.recov.index === false);
     ck('recoverable error offers Try again', /Try again/.test(out.networkHTML));
     ck('index error does NOT offer Try again', !/Try again/.test(out.failedHTML));
+
+    console.log('\n── bindSection: six simulated scenarios (Vehicle Hub lifecycle) ──');
+    ck('successful load renders',            /2 vehicles/.test(out.b_data));
+    ck('empty result renders empty state',   /No vehicles registered/.test(out.b_empty));
+    ck('permission error renders, no retry', out.b_denied.length > 20 && !/Try again/.test(out.b_denied));
+    ck('missing index renders, no retry',    out.b_index.length > 20 && !/Try again/.test(out.b_index));
+    ck('network failure renders WITH retry', /Try again/.test(out.b_network));
+    ck('renderer exception still paints',    out.b_throws.length > 20);
+    ck('subscribe() throwing still paints',  out.b_subThrew.length > 20);
+    ck('NO scenario leaves the section blank',
+       [out.b_empty, out.b_denied, out.b_index, out.b_network, out.b_throws, out.b_subThrew]
+         .every(h => h && h.length > 20));
 
     console.log('\n── Safety ──');
     ck('missing target fails safe, no throw', out.missingTarget.ok === false && out.missingTarget.reason === 'no-target');

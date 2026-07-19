@@ -89,7 +89,12 @@ const SokoniTracking = {
     try { await deleteDoc(doc(db, 'vehicleLocations', vehicleId)); } catch {}
   },
 
-  listenMyVehicles(callback) {
+  /* onError is OPTIONAL and additive: existing single-argument callers keep the
+     previous behaviour (callback([]) on failure, so they still paint an empty
+     state). Callers that pass it — SokoniAsync.bindSection — get the real error
+     and can distinguish "no vehicles" from "could not load vehicles", which the
+     old signature made impossible. */
+  listenMyVehicles(callback, onError) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
     const q = query(
@@ -117,6 +122,10 @@ const SokoniTracking = {
            than leaving a blank region. The error is still surfaced for
            diagnosis — but never as an absence of UI. */
         console.error('[SokoniTracking] myVehicles listener failed:', e && (e.code || e.message), e);
+        /* Prefer a real error arm when the caller supplied one — it can then
+           show "could not load" rather than "no vehicles", which are very
+           different messages to a user who just saved a vehicle. */
+        if (typeof onError === 'function') { try { onError(e); return; } catch (_) {} }
         try { callback([], { error: e && (e.code || e.message) || 'unknown' }); }
         catch (cbErr) { console.error('[SokoniTracking] callback threw:', cbErr && cbErr.message); }
       }

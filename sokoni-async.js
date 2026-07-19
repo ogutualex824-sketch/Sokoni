@@ -142,5 +142,58 @@ window.SokoniAsync = (() => {
     return { ok: true, empty: false };
   }
 
-  return { loadSection, report, isRecoverable, views: { skeleton, emptyView, errorView } };
+  /* ── bindSection ──────────────────────────────────────────────────────────
+     loadSection covers a one-shot fetch. Realtime listeners are a different
+     lifecycle: they emit repeatedly, and their failure arrives through an error
+     ARM rather than a rejected promise — which is exactly why the vehicle-hub
+     defect was invisible. An onSnapshot error handler that only logs leaves the
+     section in whatever state it was last painted, which on first load is
+     nothing at all.
+
+     subscribe(onData, onError) must wire both arms and return an unsubscribe.
+     This paints on every emission, including the first empty one, so a section
+     can never sit unpainted waiting for data that will not arrive.
+
+     Discovered while migrating Vehicle Hub — the abstraction was one-shot only,
+     and the module that motivated it does not use one-shot loads. */
+  function bindSection(el, subscribe, render, opts = {}) {
+    const node = typeof el === 'string' ? document.getElementById(el) : el;
+    if (!node) {
+      console.warn('[SokoniAsync] target not found:', el);
+      return () => {};
+    }
+    const component = opts.component || node.id || 'section';
+    const operation = opts.operation || 'listen';
+
+    node.innerHTML = skeleton(opts.loading);
+
+    const paint = (data) => {
+      const isEmpty = opts.isEmpty ? opts.isEmpty(data)
+                    : (data == null || (Array.isArray(data) && data.length === 0));
+      if (isEmpty) { node.innerHTML = emptyView(opts.empty); return; }
+      try {
+        if (render(data, node) === false) node.innerHTML = emptyView(opts.empty);
+      } catch (err) {
+        const d = report(component, operation + ':render', err);
+        node.innerHTML = errorView(opts.error || 'Could not display this content.', false, null);
+      }
+    };
+
+    const onError = (err) => {
+      const d = report(component, operation, err);
+      node.innerHTML = errorView(
+        opts.error || (d.recoverable ? 'Could not load right now.' : 'This content is unavailable.'),
+        d.recoverable, opts.retryAttr);
+    };
+
+    try {
+      const unsub = subscribe(paint, onError);
+      return typeof unsub === 'function' ? unsub : () => {};
+    } catch (err) {
+      onError(err);          /* subscribe() itself threw — still paint */
+      return () => {};
+    }
+  }
+
+  return { loadSection, bindSection, report, isRecoverable, views: { skeleton, emptyView, errorView } };
 })();

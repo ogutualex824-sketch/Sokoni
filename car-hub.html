@@ -3536,6 +3536,11 @@ window.testTrackerConnection = function(){
   }
 })();
 </script>
+<!-- Async section states (loading / success / empty / error). Classic script so
+     it is available before the deferred module below resolves — trkLoadMyVehicles
+     falls back to the legacy path if this is missing, so a failed asset load
+     cannot take the garage down. -->
+<script src="/sokoni-async.js"></script>
 <script type="module">import SokoniTracking from './sokoni-tracking.js'; window.SokoniTracking = SokoniTracking;</script>
 <script src="sokoni-carhub-pro.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
@@ -3669,20 +3674,83 @@ function trkInitMap() {
 }
 
 function trkLoadMyVehicles() {
-  if (!window.SokoniTracking) return;
+  /* ══ MIGRATED TO SokoniAsync (blank-section defect) ═══════════════════════
+     This previously did two things that could each leave the garage blank after
+     a successful save:
+
+       1. `if (!window.SokoniTracking) return;` — a silent return. The module is
+          loaded as an ES module (car-hub.html:3539) and is therefore DEFERRED,
+          so an early call found it undefined and exited without painting.
+       2. listenMyVehicles' error arm only console.warn'd, so when the query
+          failed (it had no composite index) the callback never ran, the renderer
+          never executed, and #mvVehiclesList kept the markup it shipped with:
+          empty. The user saw "Saved successfully", then nothing.
+
+     bindSection guarantees a paint on every path — loading, data, empty, error —
+     so neither failure can present as an absent UI again.
+
+     Firestore query, permissions, App Check and the renderers are UNCHANGED.
+     Only the orchestration around them moved. */
+  var list = document.getElementById('mvVehiclesList');
+
+  if (!window.SokoniTracking) {
+    if (list && window.SokoniAsync) {
+      list.innerHTML = window.SokoniAsync.views.errorView(
+        'Vehicle tracking is still starting up. Please refresh.', true, null);
+      window.SokoniAsync.report('vehicle-hub', 'load', new Error('SokoniTracking unavailable'));
+    }
+    return;
+  }
+
   _trkUnsubs.forEach(function(u) { try { u(); } catch {} });
   _trkUnsubs = [];
-  var unsub = window.SokoniTracking.listenMyVehicles(function(vehicles) {
+
+  /* The satellite widgets (pills, counter, selects) are driven from the same
+     emission, so they stay in step with the list rather than being updated
+     from a second source of truth. */
+  function paintSatellites(vehicles) {
     _trkVehicles = vehicles;
     trkRenderVehiclePills(vehicles);
-    document.getElementById('trkVehicleCount').textContent = vehicles.length;
-    document.getElementById('trkNoVehicles').style.display = vehicles.length ? 'none' : 'block';
+    var countEl = document.getElementById('trkVehicleCount');
+    if (countEl) countEl.textContent = vehicles.length;
+    var noneEl = document.getElementById('trkNoVehicles');
+    if (noneEl) noneEl.style.display = vehicles.length ? 'none' : 'block';
     trkPopulateVehicleSelects(vehicles);
     if (vehicles.length && !_trkActiveVehicleId) {
       trkSelectVehicle(vehicles[0].id || vehicles[0]._fsId);
     }
-    mvRenderVehiclesList(vehicles);
-  });
+  }
+
+  if (!window.SokoniAsync) {
+    /* Fallback to the original path if the helper is missing, so a failed asset
+       load cannot take the garage down. */
+    var unsub0 = window.SokoniTracking.listenMyVehicles(function(vehicles) {
+      paintSatellites(vehicles); mvRenderVehiclesList(vehicles);
+    });
+    _trkUnsubs.push(unsub0);
+    return;
+  }
+
+  var unsub = window.SokoniAsync.bindSection('mvVehiclesList',
+    function (onData, onError) {
+      return window.SokoniTracking.listenMyVehicles(onData, onError);
+    },
+    function (vehicles) {
+      paintSatellites(vehicles);
+      mvRenderVehiclesList(vehicles);
+    },
+    {
+      component: 'vehicle-hub',
+      operation: 'listenMyVehicles',
+      loading: 'Loading your vehicles…',
+      /* isEmpty is handled here so the satellites still update to zero rather
+         than keeping stale counts from a previous emission. */
+      isEmpty: function (v) { paintSatellites(v || []); return !v || !v.length; },
+      empty: 'No vehicles registered yet. Register one to start tracking it.',
+      error: 'Could not load your vehicles.',
+      retryAttr: 'onclick="trkLoadMyVehicles()"',
+    });
+
   _trkUnsubs.push(unsub);
 }
 
