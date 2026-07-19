@@ -13997,6 +13997,23 @@ body.light-mode .fs-rating{ color:#666; }
 @media(max-width:600px){
     .hub-spotlight-cta{flex-direction:column;text-align:center;}
     .hsc-perks{justify-content:center;}
+    /* .hub-spotlight-cta switches to flex-direction:column here but keeps
+       align-items:center. In a column flex container the cross axis is horizontal, and
+       align-items:center makes each child size to its CONTENT width instead of filling
+       the container. .hsc-body carries a heading, a paragraph and a perks row, so its
+       max-content width is far wider than the phone: measured 773px inside a 360px box
+       on /healthcare, with .hub-spotlight-cta{overflow:hidden} silently clipping 441px
+       and cutting off 5 of its 6 text elements. /services clipped 80px.
+
+       Nothing looked broken — the copy simply ended early, mid-sentence, with no scrollbar
+       and no visual seam, which is why it survived. min-width:0 releases the flex
+       automatic-minimum-size floor and width:100% makes it fill the column instead of
+       shrink-wrapping its content.
+
+       Mobile-only: the desktop row layout relies on flex:1 with min-width:200px and is
+       untouched. This is a SHARED component — the same fix covers car-hub,
+       entertainment and services. */
+    .hsc-body{min-width:0;width:100%;}
 }
 body.light-mode .hub-spotlight-cta{background:linear-gradient(135deg,rgba(245,166,35,0.06),rgba(247,201,72,0.02));border-color:rgba(245,166,35,0.2);}
 body.light-mode .hsc-body h3{color:#111;}

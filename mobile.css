@@ -4101,7 +4101,24 @@ button, .btn, [role="button"], a.btn { min-height: 44px; touch-action: manipulat
     padding-bottom: 4px !important; gap: 6px !important;
   }
   [class*="-tabs"]::-webkit-scrollbar { display: none !important; }
-  [class*="-tab"] { flex-shrink: 0 !important; white-space: nowrap !important; }
+  /* Substring selector, intended for tab ITEMS inside the strip above — keep them on one
+     line and stop them shrinking. But [class*="-tab"] is a substring match, so it also hit:
+         *-tab-panel   (75 in the repo)  — tab CONTENT containers
+         *-tab-content (23)              — ditto
+         *-table, -table-wrap, -table-container, -table-toolbar … (~630)
+     white-space INHERITS, so every paragraph inside every tab panel and every table cell
+     on the platform was forced onto a single line below 600px.
+
+     Measured on /healthcare: the Spotlight CTA paragraph rendered 773px wide inside a
+     332px box and was clipped mid-word by the container's overflow:hidden. Nothing looked
+     obviously broken — the copy just ended early, with no scrollbar and no seam — which is
+     how it survived. Tables additionally got flex-shrink:0, so they could not compress.
+
+     Excluding the content classes keeps the original behaviour for real tab items
+     (.hc-tab-btn, .bk-tab, .rd-tab …) and releases containers and tables. */
+  [class*="-tab"]:not([class*="-tab-panel"]):not([class*="-tab-content"]):not([class*="-table"]) {
+    flex-shrink: 0 !important; white-space: nowrap !important;
+  }
   .bk-grid, .hc-grid, .eh-grid, .rd-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 10px !important; padding: 0 12px 80px !important; }
 }
 @media (max-width: 380px) {

@@ -150,9 +150,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
+  /* 44x44 is the minimum touch target. This was 32px wide and measured 32x44 on every
+     device tested (iPhone SE/14, Android, portrait and landscape) — 12px short on the
+     horizontal axis, on the control that DISMISSES a full-screen drawer. A close button
+     that is hard to hit is the worst one to under-size: missing it keeps the user
+     trapped in the overlay. Height already resolved to 44 via a later rule; only the
+     width was short, so this widens the hit area without changing the drawer layout. */
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   border-radius: 8px;
