@@ -1116,6 +1116,23 @@
 
   // ─── Expose Public API ────────────────────────────────────────────────────
 
-  window.SokoniReceiptEngine = engine;
+  /* NAMESPACE COLLISION FIX (2026-07-19).
+     sokoni-receipt-engine.js also assigns window.SokoniReceiptEngine, and pos.html loads
+     BOTH — that file at line 1445, this one (deferred) at 2226. Deferred scripts run
+     last, so a bare assignment here replaced the object outright and destroyed every
+     ESC/POS method on it: buildBytes, buildReceiptBytes, buildReceiptHTML,
+     buildLabelHTML, buildShippingLabel, buildHTML.
+
+     Confirmed on production /pos: window.SokoniReceiptEngine exposed only
+     show/generate/print/downloadPDF/shareWhatsApp/copyText/close. sokoni-label-engine.js
+     is loaded on the same page and calls SokoniReceiptEngine.buildShippingLabel() at
+     line 413, so printing a shipping label threw TypeError.
+
+     The two engines are complementary, not competing — one builds thermal bytes, the
+     other drives the on-screen receipt. Merge rather than replace, so whichever loads
+     second keeps the other's methods. Also published under a distinct name so future
+     callers can target this API explicitly and never depend on load order. */
+  window.SokoniPosReceiptUI = engine;
+  window.SokoniReceiptEngine = Object.assign({}, window.SokoniReceiptEngine || {}, engine);
 
 })(window, document);
