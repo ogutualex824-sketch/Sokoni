@@ -55,7 +55,7 @@
       "tmp_*.png",
       "*.jsonl",
       "cf-*.html",
-      "email-preview.html"
+      "email-preview.html","assets/Bravilex identity.png"
     ],
     "rewrites": [
       {
