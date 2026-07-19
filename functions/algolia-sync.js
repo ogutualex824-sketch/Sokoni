@@ -107,6 +107,7 @@ const triggers = {
   ..._makeTriggers('products'),
   ..._makeTriggers('sellers'),
   ..._makeTriggers('providers'),
+  ..._makeTriggers('providerProfiles'),
   ..._makeTriggers('services'),
   ..._makeTriggers('events'),
   ..._makeTriggers('properties'),
