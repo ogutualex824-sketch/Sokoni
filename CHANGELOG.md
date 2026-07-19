@@ -1,4 +1,60 @@
-﻿## [2026-07-19] — Legal Hub is entirely non-functional: Cloud Run IAM, not code
+﻿## [2026-07-19] — Removed the Report-Only CSP header: 92% less console noise, zero security change
+
+### Root cause
+
+A `Content-Security-Policy-Report-Only` header ran alongside the enforced policy. It had **no
+`report-uri` and no `report-to`**, so its violations were never collected anywhere — they existed
+only as console output.
+
+Its sole substantive difference from the enforced policy was dropping `'unsafe-inline'` from
+`script-src` and adding `script-src-attr 'none'` — a live trial of one migration. That trial had
+already returned its answer: **7,154 inline event-handler attributes across 275 of 321 pages**, so
+the stricter policy cannot be adopted until those are migrated. It was re-deriving a known result
+on every page load, forever.
+
+It also carried `frame-ancestors`, which browsers **ignore in a report-only policy** and warn about
+— once per page, in addition to everything else.
+
+### Before / after (production, WebKit iPhone 13, 4 pages)
+
+| | frame-ancestors | other CSP | genuine errors | total |
+|---|---|---|---|---|
+| **Before** | 30 | 91 | 22 | **143** |
+| **After** | **0** | **10** | 20 | **30** |
+
+**CSP noise −92%. Total console −79%. Genuine errors preserved** (22 → 20, run-to-run variance).
+
+### Why this is not a security reduction
+
+- A Report-Only policy **enforces nothing** — that is its definition.
+- It had **no reporting endpoint**, so it monitored nothing either.
+- The **enforced** policy is untouched and verified to retain `frame-ancestors`, `object-src`,
+  `base-uri`, `form-action`, `upgrade-insecure-requests`, `report-uri`, `script-src` and
+  `connect-src`. The patch **aborts** if the enforced policy lacks `frame-ancestors` or
+  `report-uri`.
+
+Verified post-deploy: **enforced CSP violations are still reported (2 on the homepage)**,
+report-only messages are 0, and 10 genuine JavaScript errors remain visible.
+
+### What the noise was hiding
+
+The first clean console immediately exposed a real defect that had been buried:
+
+> `[SokoniRecs] Fetch error for mechanics — Missing or insufficient permissions.`
+
+A Firestore permission failure in homepage recommendations. Logged to the debt register; not fixed
+in this sprint.
+
+### Reinstating it
+
+One object in `firebase.json`. When the inline-handler migration begins it should be restored —
+**with a `report-uri`**, so it actually reports rather than only shouting at the console.
+
+### Files changed
+
+`firebase.json` — 4 deletions, 0 insertions. No reformatting.
+
+## [2026-07-19] — Legal Hub is entirely non-functional: Cloud Run IAM, not code
 
 ### Root cause: missing `allUsers` invoker binding (classification: infrastructure/IAM)
 
