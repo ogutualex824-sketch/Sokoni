@@ -2395,7 +2395,7 @@ function showAbandonedCartReminder(count){
   if("Notification" in window && Notification.permission === "granted"){
     new Notification("🛒 You left items in your cart!", {
       body: `You have ${count} item${count>1?"s":""} waiting. Complete your purchase before they sell out!`,
-      icon: "assets/logosokoni.png"
+      icon: "/assets/icons/icon-192.png"
     });
   }
 

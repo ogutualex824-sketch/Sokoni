@@ -79,7 +79,7 @@ const COMPANY = Object.freeze({
   website:          'mysokoni.co.ke',
   websiteUrl:       'https://mysokoni.co.ke',
   domain:           'mysokoni.co.ke',
-  logoUrl:          'https://mysokoni.co.ke/assets/Sokoni%20Logo.png',
+  logoUrl:          'https://mysokoni.co.ke/assets/logosokoni.png',
 
   /* Reusable legal strings (avoid drift across documents) */
   footerCopyright:  '© 2026 SOKONI · A product of Bravilex International Co. Limited · All Rights Reserved.',

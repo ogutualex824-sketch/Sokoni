@@ -52,8 +52,8 @@ const PosNotify = (() => {
     if (Notification.permission === 'granted') {
       try {
         const n = new Notification(`SOKONI: ${info.title}`, {
-          icon:  '/icons/icon-192.png',
-          badge: '/icons/icon-192.png',
+          icon:  '/assets/icons/icon-192.png',
+          badge: '/assets/icons/icon-96.png',
           body:  _formatBody(type, data),
           tag:   type,
           renotify: type === 'fraud_alert',

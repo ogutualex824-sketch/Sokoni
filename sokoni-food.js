@@ -399,7 +399,7 @@ window.SokoniFood = (function () {
       if('Notification' in window && Notification.permission==='granted'){
         new Notification('SOKONI Food 🍽️',{
           body:`Order #${order.id.slice(-6)} placed! ${data.deliveryMethod==='pickup'?'Ready in':'Estimated'} ${data.deliveryTime||'30-45 min'}`,
-          icon:'/assets/logosokoni.png',tag:'food-order-'+order.id,
+          icon:'/assets/icons/icon-192.png',tag:'food-order-'+order.id,
         });
       }
     }catch{}

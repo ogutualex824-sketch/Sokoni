@@ -28,7 +28,7 @@ if(product){
         "@type": "Product",
         "name": product.name,
         "description": product.description || '',
-        "image": product.image || 'https://mysokoni.co.ke/assets/Sokoni%20Logo.png',
+        "image": product.image || 'https://mysokoni.co.ke/assets/logosokoni.png',
         "sku": product.id || '',
         "brand": {"@type":"Brand","name": product.sellerName || 'SOKONI Seller'},
         "offers": {
