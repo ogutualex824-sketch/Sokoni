@@ -212,7 +212,7 @@ hr.rc-div { border: none; border-top: 1px dashed rgba(255,255,255,.08); margin: 
 </div>
 
 <!-- Scripts -->
-<script src="/firebase.js"></script>
+<script type="module" src="/firebase.js"></script>
 <script src="/sokoni-payment-trust.js"></script>
 <script>
 (async function () {
@@ -231,21 +231,74 @@ hr.rc-div { border: none; border-top: 1px dashed rgba(255,255,255,.08); margin: 
 
   document.title = 'Receipt ' + ref + ' — SOKONI';
 
-  /* Verify + fetch receipt from Firestore */
-  try {
-    const db   = firebase.firestore();
-    const snap = await db.collection('posReceipts').doc(ref).get();
+  /* ══ RECEIPT VERIFICATION (2026-07-19) ═══════════════════════════════════════
+     Was: firebase.firestore().collection('posReceipts').doc(ref).get()
 
-    if (!snap.exists) {
-      loading.textContent = 'Receipt not found.';
-      verifyRow.className = 'rc-verify-row invalid';
-      verifyRow.textContent = '✕ Receipt not found or may have been deleted';
+     That could never work, for two independent reasons:
+
+       1. `firebase` (the compat global) is not loaded on this page — it loads the
+          MODULAR /firebase.js. Runtime confirmed:
+          "Receipt load error: ReferenceError: Can't find variable: firebase",
+          so the read never even executed.
+
+       2. Even had it executed, firestore.rules:3471 restricts posReceipts to
+          `sellerId == request.auth.uid || isAdmin()`. The audience for a
+          verification QR is the CUSTOMER, who is neither. The rule is correct —
+          receipts carry PII and must not be world-readable — so the page was
+          using the wrong mechanism, not the rule being too strict.
+
+     verifyTrustReceipt (functions/payment-trust.js:302) is the canonical verifier
+     and is deployed. It runs on the Admin SDK, so it reads the receipt without
+     weakening any rule; it rejects voided receipts, which a raw read would have
+     happily rendered as genuine; and it records a 'verified' event in
+     receiptEvents so scans are auditable.
+
+     It returns a deliberately MINIMAL projection — receiptNo, merchantName, date,
+     total, paymentMethod — and no line items or customer identity. That is the
+     right shape for a public URL: anyone holding a receipt number can open this
+     page, so it must confirm authenticity without disclosing the basket or the
+     buyer. The markup below already hides absent fields, so it degrades cleanly.
+
+     No new verification system is introduced — this wires the page to the
+     existing canonical one. ═══════════════════════════════════════════════════ */
+  try {
+    /* /firebase.js is an ES module, and modules are deferred — so it executes
+       AFTER this classic inline script. window.firebaseApp does not exist yet at
+       this point, and reading it immediately would fail on every load. Wait for
+       it rather than assume it. */
+    const app = await (async () => {
+      for (let i = 0; i < 100; i++) {                 /* ~10s ceiling */
+        if (window.firebaseApp) return window.firebaseApp;
+        await new Promise(r => setTimeout(r, 100));
+      }
+      return null;
+    })();
+    if (!app) throw new Error('Firebase failed to initialise');
+
+    const { getFunctions, httpsCallable } =
+      await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+
+    const fns    = getFunctions(app, 'us-central1');
+    const verify = httpsCallable(fns, 'verifyTrustReceipt');
+    const res    = await verify({ receiptNo: ref });
+    const out    = (res && res.data) || {};
+
+    if (!out.valid) {
+      /* Distinguish a voided receipt from an unknown one. A voided receipt is a
+         fraud signal and must never read as "not found". */
+      const voided = /void/i.test(out.reason || '');
+      loading.textContent   = voided ? 'This receipt has been voided.' : 'Receipt not found.';
+      verifyRow.className   = 'rc-verify-row invalid';
+      verifyRow.textContent = voided
+        ? '✕ VOIDED — this receipt is no longer valid'
+        : '✕ Receipt not found or may have been deleted';
       return;
     }
 
-    const d = snap.data();
-    verifyRow.className = 'rc-verify-row valid';
-    verifyRow.textContent = '✓ Verified receipt — ' + d.merchantName + ' · ' + (d.date || new Date(d.createdAt?.seconds * 1000).toLocaleString('en-KE'));
+    const d = out;
+    verifyRow.className   = 'rc-verify-row valid';
+    verifyRow.textContent = '✓ Verified receipt — ' + (d.merchantName || 'SOKONI') +
+                            (d.date ? ' · ' + d.date : '');
 
     /* Render receipt */
     loading.style.display = 'none';
