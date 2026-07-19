@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260719-app-shell-v85";
+const CACHE_VERSION = "sokoni-20260719-app-shell-v86";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -476,6 +476,56 @@ async function rootCacheIsValid(response) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   WRITE-SIDE ROOT INTEGRITY
+
+   rootCacheIsValid() protects the READ. This protects the WRITE, which is where the
+   poisoning actually originated.
+
+   The write path that could do it (2026-07-19): in the page handler, a redirected
+   response was cached under the ORIGINAL request key whenever the final path differed
+   from the requested path —
+
+       if (!isSelf) cache.put(request, res.clone());
+
+   Navigations return early via Response.redirect(), so they were safe. A NON-navigate
+   fetch of "/" that redirected elsewhere — a prefetch, a warm-up, any fetch() from
+   page JS — stored the redirect target's document under the "/" key. That is a store
+   page becoming the homepage, written by the cache layer itself.
+
+   Rather than patch that one branch, every HTML write now goes through here. The rule
+   is narrow and total: a document may only be written under the root key if it
+   positively identifies as the root template. Anything else is dropped, silently and
+   safely — a missing cache entry costs one network fetch, a poisoned root costs the
+   homepage.
+   ══════════════════════════════════════════════════════════════════════════════ */
+function isRootKey(request) {
+  try {
+    const p = new URL(typeof request === "string" ? request : request.url, self.location.origin).pathname;
+    return p === "/" || p === "/index.html" || p === "/index";
+  } catch (e) { return false; }
+}
+
+/* The ONLY sanctioned way to put a document into a page cache. */
+async function safeCachePut(cache, request, response) {
+  try {
+    if (!response || !response.ok) return false;
+    if (isRootKey(request)) {
+      /* Reject a redirected response whose final path is not the root: whatever it is,
+         it is not the homepage, and it must never occupy the homepage's key. */
+      if (response.redirected) {
+        try {
+          const finalPath = new URL(response.url).pathname;
+          if (!(finalPath === "/" || finalPath === "/index.html" || finalPath === "/index")) return false;
+        } catch (e) { return false; }
+      }
+      if (!(await rootCacheIsValid(response.clone()))) return false;
+    }
+    await cache.put(request, response);
+    return true;
+  } catch (e) { return false; }
+}
+
 /* Drop every cached spelling of the root so the next fetch repopulates from network. */
 async function purgeRootFromCaches() {
   try {
@@ -536,12 +586,12 @@ self.addEventListener("fetch", event => {
       const cached = await cache.match(request);
       if (cached) {
         /* Background-refresh stale tiles (stale-while-revalidate) */
-        fetch(request).then(res => { if (res && res.ok) cache.put(request, res); }).catch(() => {});
+        fetch(request).then(res => { if (res && res.ok) safeCachePut(cache, request, res); }).catch(() => {});
         return cached;
       }
       try {
         const res = await fetch(request);
-        if (res && res.ok) cache.put(request, res.clone());
+        if (res && res.ok) await safeCachePut(cache, request, res.clone());
         return res;
       } catch (e) {
         return new Response('', { status: 503, statusText: 'Tile unavailable offline' });
@@ -649,7 +699,7 @@ async function cacheFirst(request, cacheName) {
   if (cached) return cached;
   try {
     const res = await fetch(request);
-    if (res.ok) cache.put(request, res.clone());
+    if (res.ok) await safeCachePut(cache, request, res.clone());
     return res;
   } catch {
     return new Response("Offline", { status: 503 });
@@ -661,7 +711,7 @@ async function networkFirst(request, cacheName) {
     const res = await fetch(request);
     if (res.ok) {
       const cache = await caches.open(cacheName);
-      cache.put(request, res.clone());
+      await safeCachePut(cache, request, res.clone());
     }
     return res;
   } catch {
@@ -707,9 +757,9 @@ async function networkFirstPage(request) {
         const reqUrl  = new URL(request.url);
         const resUrl  = new URL(res.url);
         const isSelf  = resUrl.pathname === reqUrl.pathname && resUrl.hostname === reqUrl.hostname;
-        if (!isSelf) cache.put(request, res.clone());
+        if (!isSelf) await safeCachePut(cache, request, res.clone());
       } else {
-        cache.put(request, res.clone());
+        await safeCachePut(cache, request, res.clone());
       }
     }
     return res;
@@ -729,7 +779,7 @@ async function networkFirstPage(request) {
         await purgeRootFromCaches();
         try {
           const fresh = await fetch("/", { cache: "reload" });
-          if (fresh && fresh.ok) { cache.put("/", fresh.clone()); return fresh; }
+          if (fresh && fresh.ok) { await safeCachePut(cache, "/", fresh.clone()); return fresh; }
         } catch (e) { /* offline — fall through to the offline shell below */ }
         return (await caches.match("/offline")) ||
                (await caches.match("/offline.html")) ||
@@ -820,8 +870,8 @@ async function networkFirstPage(request) {
 async function staleWhileRevalidate(request) {
   const cache  = await caches.open(STATIC_CACHE);
   const cached = await cache.match(request);
-  const fetchProm = fetch(request).then(res => {
-    if (res.ok) cache.put(request, res.clone());
+  const fetchProm = fetch(request).then(async res => {
+    if (res.ok) await safeCachePut(cache, request, res.clone());
     return res;
   }).catch(() => null);
   return cached || (await fetchProm) || new Response("Offline", { status: 503 });
@@ -836,7 +886,7 @@ async function cacheFirstImage(request) {
     if (res.ok) {
       const keys = await cache.keys();
       if (keys.length >= 300) cache.delete(keys[0]);
-      cache.put(request, res.clone());
+      await safeCachePut(cache, request, res.clone());
     }
     return res;
   } catch {
