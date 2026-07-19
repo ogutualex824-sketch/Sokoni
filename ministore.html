@@ -7,6 +7,12 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <meta charset="UTF-8">
   <script src="security.js"></script>
+  <!-- Identifies this document to the service worker's root-cache guard
+       (rootCacheIsValid in service-worker.js). Without it this page was
+       unidentified, and an unidentified document could occupy the "/" cache slot
+       and be served as the homepage. store.html and minishop.html already declared
+       'merchant-profile'; this one did not. -->
+  <meta name="sokoni-page" content="merchant-profile">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI MiniStore — Your Online Shop in Kenya</title>
   <meta name="description" content="Launch your own online mini store on SOKONI. Sell products and services to customers across Kenya.">

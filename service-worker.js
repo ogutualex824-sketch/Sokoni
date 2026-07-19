@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260719-app-shell-v84";
+const CACHE_VERSION = "sokoni-20260719-app-shell-v85";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -454,10 +454,25 @@ async function rootCacheIsValid(response) {
     /* The identifier is in the first 2 KB of <head>; no need to decode a 200 KB document. */
     const head = (await response.clone().text()).slice(0, 4096);
     const m = head.match(/<meta\s+name=["']sokoni-page["']\s+content=["']([^"']+)["']/i);
-    if (!m) return true;              /* older build without the tag — trust it, don't thrash */
+    /* P0 2026-07-19 — this used to `return true` when the tag was absent, on the
+       reasoning that an older build without the marker should be trusted rather than
+       thrashed. That default is what let the homepage render a Store Profile.
+
+       Absence of the tag was treated as evidence of validity. It is not. ANY cached
+       document lacking the marker could occupy the root slot and be served for "/"
+       forever — URL unchanged, store content rendered. ministore.html carried no tag,
+       which is precisely how a store page could masquerade as the homepage.
+
+       The root key now requires POSITIVE identification. An unidentified document is
+       not the homepage, so it is evicted and refetched. The cost of being wrong here
+       is one network request; the cost of the old default was a wrong homepage that
+       survived every reload. Fail CLOSED for the root, specifically. */
+    if (!m) return false;
     return m[1].trim() === ROOT_TEMPLATE;
   } catch (e) {
-    return true;                      /* fail OPEN: never withhold a page over a decode error */
+    /* A decode error is not evidence either way, but the root is the one URL where
+       serving the wrong document is unrecoverable for the user. Refetch instead. */
+    return false;
   }
 }
 
