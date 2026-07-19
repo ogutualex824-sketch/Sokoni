@@ -208,8 +208,17 @@
               onclick="if(window.SokoniTheme){SokoniTheme.toggle();}">
         <span id="sk-theme-icon" aria-hidden="true">🌙</span>
       </button>
+      <!-- Opens via _skOpenMenu (shared-header.js:383), the canonical opener.
+           Was an inline handler targeting #sk-menu-overlay -- an id that does not
+           exist in the DOM (the drawer is #sk-menu-drawer) and applying class .open
+           when sokoni-drawers.css opens on .is-open with a separate
+           #sk-drawer-backdrop.is-active. Three mismatches, and the if(_o) guard
+           swallowed the null lookup so the tap failed silently with no console error.
+           shared-header.js:1232 already emits _skOpenMenu(this); this page had a
+           hardcoded copy that predated it. _skOpenMenu also handles SokoniDrawer not
+           yet being loaded, which the inline version did not. -->
       <button type="button" class="sk-nav-icon-btn" id="sk-menu-btn" aria-label="Menu" aria-expanded="false"
-              onclick="var _o=document.getElementById('sk-menu-overlay');if(_o){_o.classList.add('open');this.setAttribute('aria-expanded','true');}">
+              onclick="_skOpenMenu(this);">
         <span aria-hidden="true" style="font-size:13px;font-weight:900;display:flex;flex-direction:column;gap:3px;">
           <span style="display:block;width:18px;height:2px;background:currentColor;border-radius:2px;"></span>
           <span style="display:block;width:14px;height:2px;background:currentColor;border-radius:2px;"></span>
