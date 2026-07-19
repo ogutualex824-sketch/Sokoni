@@ -1,6 +1,6 @@
 # Rider Earnings Authority — Architecture
 
-**Status:** DESIGN. Not implemented. Do not implement until §7 open questions are answered.
+**Status:** DESIGN — **BLOCKED**. §7 Q1 answered 2026-07-19: distance is client-controlled, so this design is INSUFFICIENT as written. A server-derived distance authority must land first.
 **Date:** 2026-07-19
 **Invariant established:** *No client value may ever determine money.*
 
@@ -167,7 +167,29 @@ explicitly. Ambiguity here is what produced the 100× collision.
 
 ## 7. Open questions — must be answered before implementation
 
-1. **Is `distanceKm` trustworthy?** — **UNKNOWN, and it decides the design.** If it is client-written,
+1. **Is `distanceKm` trustworthy? — ANSWERED 2026-07-19: NO. VERIFIED.**
+
+   > **No Cloud Function writes `distanceKm` anywhere.** Grep across `functions/` returns only
+   > readers (`email-triggers.js:345`, `navigation.js:969`, `sokoni-dispatch.js:312`) plus
+   > `security-fraud-engine.js`, which computes its own for login-geo checks and never touches a
+   > trip. The only producer is **`delivery-hub.js:168-192`, which is CLIENT-SIDE** (repo root, not
+   > `functions/`) — haversine or OSRM in the browser — and writes it at `:239`.
+   >
+   > `firestore.rules:1183` permits `deliveries` **create** by any authed user who sets
+   > `senderUid == request.auth.uid`, so the client supplies its own `distanceKm`.
+   > `logistics-plus.js:604` additionally reads `distanceKm` straight from `req.data` and prices
+   > it at `:612` (`KES 8/km beyond 50km`) — a second client-controlled money input.
+   >
+   > `trips/{tripId}` is read-only to clients (`firestore.rules:3210-3212`) and no CF writes the
+   > field, so **`trips.distanceKm` appears never to be populated at all** — consistent with
+   > `navigation.js:969` defaulting `t.distanceKm || 0`.
+   >
+   > **Consequence: the Rider Earnings Authority as designed MUST NOT be implemented.** Moving the
+   > fare server-side while distance arrives from the browser is security theatre — the client
+   > still sets the number that determines the money. A server-derived distance authority is a
+   > prerequisite, not a follow-up.
+
+   ~~UNKNOWN, and it decides the design.~~ If it is client-written,
    moving the fare calculation server-side changes nothing: the client still controls the input,
    and inflating distance inflates the fare. The authority is only as trustworthy as its least
    trusted input.
