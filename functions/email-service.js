@@ -126,6 +126,60 @@ function _buildHeaders(payload) {
   };
 }
 
+/* ── Click tracking ────────────────────────────────────────────────────────────
+ *
+ * P0, 2026-07-19: click tracking broke every activation link in production.
+ *
+ * The chain, each step verified:
+ *   1. generatePasswordResetLink() -> https://…firebaseapp.com/__/auth/action?oobCode=…
+ *   2. SendGrid click tracking rewrites it to  http://url5214.mysokoni.co.ke/ls/click?…
+ *      (link branding id 5512127, DNS-valid, CNAME -> sendgrid.net)
+ *   3. Firebase Hosting serves  Strict-Transport-Security: …; includeSubDomains
+ *      for mysokoni.co.ke, so any browser that has ever loaded the site force-upgrades
+ *      that http link to https.
+ *   4. SendGrid holds no certificate for url5214.mysokoni.co.ke — it serves *.sendgrid.net.
+ *      openssl: "verify error:num=62: hostname mismatch".
+ *   5. Safari blocks the navigation. The user cannot activate their account.
+ *
+ * Two independent reasons this stays off, not one:
+ *
+ *   a) The certificate. Until SendGrid provisions SSL for the branded link domain (or the
+ *      link brand is moved to a hostname NOT under the HSTS includeSubDomains umbrella),
+ *      EVERY click-tracked link in EVERY SOKONI email fails for any recipient whose browser
+ *      has cached our HSTS policy — which is every merchant we have onboarded. This is not
+ *      specific to password links; those are simply where it was caught.
+ *
+ *   b) Confidentiality. SendGrid rewrites to plaintext http. A Firebase oobCode is a
+ *      single-use credential that sets an account password. Routing it through an http
+ *      redirector exposes it to any network observer for recipients WITHOUT HSTS. Auth mail
+ *      must never be click-tracked even after the certificate is fixed.
+ *
+ * Re-enabling: set CLICK_TRACKING_ENABLED = true ONLY after confirming with
+ *   openssl s_client -servername <brand> -connect <brand>:443 -verify_hostname <brand>
+ * that the branded domain serves a certificate valid for its own name. Auth mail
+ * (_carriesAuthCredential) stays off regardless — that is deliberate and must not be relaxed.
+ */
+const CLICK_TRACKING_ENABLED = false;
+
+/* Categories that carry credentials or account-control links. */
+const NO_TRACK_CATEGORIES = new Set(["security", "account", "system", "support"]);
+
+/* Firebase auth action links and our own password/verify routes. Matched against the
+   rendered HTML so a credential link is caught no matter which caller sent it. */
+const AUTH_LINK_RE = /(__\/auth\/action|mode=(resetPassword|verifyEmail|signIn|recoverEmail)|oobCode=|\/reset-password|\/set-password|\/verify-email)/i;
+
+function _carriesAuthCredential(payload) {
+  if (NO_TRACK_CATEGORIES.has(String(payload.category || "").toLowerCase())) return true;
+  return AUTH_LINK_RE.test(String(payload.html || "")) || AUTH_LINK_RE.test(String(payload.text || ""));
+}
+
+/* Explicit per-send override wins over the global default, but never over auth detection. */
+function _clickTrackingFor(payload) {
+  if (_carriesAuthCredential(payload)) return false;
+  if (typeof payload.clickTracking === "boolean") return payload.clickTracking;
+  return CLICK_TRACKING_ENABLED;
+}
+
 /* ── Send via SendGrid ─────────────────────────────────────── */
 async function _sendViaSendGrid(payload) {
   /* Same BOM/CRLF hazard as MAIL_PASS — SENDGRID_API_KEY is clean today, but a future
@@ -159,8 +213,13 @@ async function _sendViaSendGrid(payload) {
        still used whenever a caller actually provides one. */
     ...(payload.text ? { text: payload.text } : {}),
     headers:     _buildHeaders(payload),
+    /* Per-message trackingSettings override the account-level setting (which is currently
+       Click Tracking = enabled). Sending this block explicitly is what actually suppresses
+       the rewrite — omitting it would inherit the account default and reintroduce the bug.
+       Open tracking is a 1x1 pixel on the same branded host: it fails silently to load
+       rather than blocking a navigation, so it is left on and does not gate activation. */
     trackingSettings: {
-      clickTracking:  { enable: true, enableText: false },
+      clickTracking:  { enable: _clickTrackingFor(payload), enableText: false },
       openTracking:   { enable: true },
     },
     categories:  payload.category ? [payload.category] : [],
