@@ -136,7 +136,11 @@ Each extends an existing module. **No parallel systems.**
 - `providerPayouts.amount` producer — `provider-onboarding.js:359` reads it; no writer found.
 - `leadFees` / `b2bFees` payload — `rules:1371,1379`; no client write site in repo.
 - `posVoids` amount authority.
-- Whether `invoker:'private'` is applied at deploy (item 1 above).
+- ~~Whether `invoker:'private'` is applied at deploy~~ — **RESOLVED 2026-07-19, VERIFIED (runtime).** It is **NOT** applied. Cloud Run Admin API reports `roles/run.invoker` granted to **`allUsers`** on `recordPayment`, `finosCreateEscrow`, `processRefund`, `subActivate` and `intasendWebhook`. Repository and runtime disagree: source declares `invoker:'private'` in 4 files; runtime grants public invoker.
+
+  > `allUsers` on `run.invoker` is the **normal** posture for Firebase callables — the callable protocol validates the Firebase ID token in-code, so this is not unauthenticated access. The consequence is narrower but still decisive: **the mint paths are reachable by any signed-in user, and are NOT mitigated by invoker configuration.** `recordPayment` (`finos.js:38-47`) carries only `_assertAuth` and reads no order document. Its matrix row stands as CLIENT AUTHORITATIVE and reachable.
+  >
+  > This also answers the second half of the dilemma: `recordPayment` is **not** dead code — it is live and callable.
 - Runtime behaviour of every finding — **all are source-read. No exploit was executed.**
 - Deployment snapshot for the matrix is 2026-07-12; the 1,446-function figure is 2026-07-19.
 
