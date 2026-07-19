@@ -1171,6 +1171,18 @@ const COLLECTION_INDEX_MAP = {
   /* ── Services ── */
   services:    { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
   providers:   { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
+  /* providerProfiles is the CANONICAL provider record, written by
+     providerPublish (provider-onboarding.js:226) with name, category,
+     subcategory, coverage and status:'active'. It was never registered here,
+     so enqueue() returned early at algolia-queue.js:84 and no onboarded
+     provider ever reached services_index -- invited providers completed
+     onboarding and remained unfindable.
+  
+     Mapped to the SAME index and transformer as `providers`, not a new one.
+     TRANSFORMERS.services already reads every field providerPublish writes
+     and resolves providerId || sellerId || uid, so no mapper change is needed.
+     `providers` is retained: it is a separate admin surface (index.js:484). */
+  providerProfiles: { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
 
   /* ── Jobs ── */
   jobs:        { index: 'jobs_index',       transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },

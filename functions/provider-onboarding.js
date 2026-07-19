@@ -285,6 +285,32 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   await _auth().setCustomUserClaims(uid, { ...(await _auth().getUser(uid)).customClaims, provider: true, providerId });
 
   await batch.commit();
+
+  /* Publish to search. providerProfiles is registered in COLLECTION_INDEX_MAP
+     (algolia-indexer.js) and maps to TRANSFORMERS.services -> services_index.
+     Before this call nothing ever enqueued a provider, so onboarded providers
+     completed publication and remained unfindable in search.
+  
+     Re-read after commit so the indexed payload is exactly what was persisted,
+     rather than a reconstruction that could drift from the stored document.
+  
+     Non-fatal by design, matching algolia-reconcile.js:213: a search-indexing
+     failure must not fail publication. The provider is published either way,
+     and algoliaReconcile/algoliaBackfill will pick up any missed record. */
+  try {
+    const { enqueue } = require('./algolia-queue');
+    const published = await _db().collection('providerProfiles').doc(uid).get();
+    if (published.exists) {
+      await enqueue({
+        collection: 'providerProfiles',
+        docId:      uid,
+        operation:  'upsert',
+        data:       published.data(),
+      }).catch(() => {});
+    }
+  } catch (e) {
+    logger.warn('[provider] search enqueue failed (non-fatal)', { uid, err: e && e.message });
+  }
   logger.info('[provider] profile published', { uid, providerId });
   return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider/${providerId}` };
 };
