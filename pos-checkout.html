@@ -1865,7 +1865,11 @@ const Checkout = (() => {
 
   /* ── Categories ── */
   async function _loadCategories() {
-    const cats = await PosInventory.categories() || [];
+    /* PosInventory exports getCategories (pos-inventory.js:514), never `categories`.
+       This threw "PosInventory.categories is not a function" on every load — before
+       the bar.innerHTML below, so the category chip bar never rendered at all, not
+       even the "All" chip. Returns [{id,name,color,icon}], which is what we consume. */
+    const cats = await PosInventory.getCategories() || [];
     const bar  = document.getElementById('cat-bar');
     bar.innerHTML = '<div class="cat-chip active" data-cat="">All</div>';
     cats.forEach(c => {
@@ -2021,7 +2025,10 @@ const Checkout = (() => {
     const perfHit = (window.PosPerf && PosPerf.ready) ? PosPerf.barcode(raw) : null;
     if (perfHit) { addItem(perfHit); return; }
     try {
-      const prod = await PosInventory.byBarcode(raw);
+      /* getProductByBarcode (pos-inventory.js:198) — `byBarcode` is not exported, so
+         this threw and the catch below swallowed it into "Unknown scan": every barcode
+         scan at the till failed, and failed looking like an unrecognised product. */
+      const prod = await PosInventory.getProductByBarcode(raw);
       if (prod) { addItem(prod); return; }
     } catch (_) {}
     _toast(`Unknown scan: ${raw.slice(0,20)}`, 'warning');
