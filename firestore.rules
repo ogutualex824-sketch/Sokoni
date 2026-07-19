@@ -1833,8 +1833,22 @@ service cloud.firestore {
     }
 
     /* Digital receipts — public verify, CF write */
+    /* PII, 2026-07-19. This was `allow read: if true`, justified as a "public
+       verification endpoint". That endpoint does not exist: /receipt/{id} returns
+       404, there is no receipt.html, and no client anywhere reads this collection.
+       The rule granted nothing and exposed everything.
+
+       Receipt documents carry customer.name, customer.phone, buyerId, sellerId and
+       full line items (payment-success.js), and the ids are guessable —
+       receiptId == paymentId == the client-supplied payment ref, which has no
+       format validation. Anyone could enumerate customer names and phone numbers.
+
+       Reads now go through the getReceipt Cloud Function, which already strips PII
+       (pos-retail-engine.js:449). Admin SDK bypasses rules, so server writes and
+       CF reads are unaffected. If a public verification page is built later, it
+       must call that CF — not read this collection directly. */
     match /receipts/{receiptId} {
-      allow read:  if true; /* public verification endpoint */
+      allow read:  if false;
       allow write: if false;
     }
 
