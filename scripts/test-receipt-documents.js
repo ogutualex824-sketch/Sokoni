@@ -142,7 +142,9 @@ const evil = E.buildHTML({ type:'packing', data: { ...ORDER, recipientName: '<im
 check('recipient name is escaped', !evil.includes('<img src=x') && evil.includes('&lt;img'));
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
-if (!fail) {
+/* Samples embed a timestamp, so regenerating them on every run dirties the
+   working tree. Opt in with SAMPLES=1 when the templates actually change. */
+if (!fail && process.env.SAMPLES === '1') {
   fs.mkdirSync('./docs/receipt-samples', { recursive: true });
   for (const ty of ['receipt','packing','pickup','kitchen','merchant']) {
     fs.writeFileSync('./docs/receipt-samples/' + ty + '-80mm.html',
