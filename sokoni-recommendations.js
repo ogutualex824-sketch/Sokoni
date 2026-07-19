@@ -133,10 +133,83 @@
         'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
       );
 
-      // Reuse existing app instance if already initialised
-      const existingApp = getApps().find(a => a.name === 'sk-recs');
-      const app = existingApp || initializeApp(FB_CONFIG, 'sk-recs');
+      /* ══ APP CHECK — the reason every recommendation query was denied ══════
+         This created a SECOND Firebase app ('sk-recs') and never initialised
+         App Check on it. App Check is ENFORCED on Firestore, so every request
+         from that app carried no App Check token and was rejected — surfacing
+         as "Missing or insufficient permissions" even though products and
+         mechanics are `allow read: if true` (firestore.rules:511, :493). The
+         rules were never the problem; the request never got far enough to be
+         evaluated against them.
+
+         All four collections failed identically, which is what pointed away
+         from a per-collection rules issue: products, services, providers and
+         mechanics were all dead, so the homepage recommendation engine had
+         never worked.
+
+         Prefer the MAIN app where a page provides one — it already has App
+         Check initialised (firebase.js:111), and reusing it avoids a second
+         Firebase app entirely. index.html loads neither firebase.js nor
+         sokoni-appcheck.js, so on the homepage we must initialise App Check
+         ourselves, which is what the fallback below does.
+
+         The site key is a reCAPTCHA v3 SITE key — public by design, and already
+         present in firebase.js:112 and sokoni-appcheck.js:6. It is not a secret. */
+      const APPCHECK_SITE_KEY = '6Lf93TktAAAAAIqCj8l3YM3dIoS1MIXpilsdnsxj';
+
+      let app = (typeof window !== 'undefined' && window.firebaseApp) || null;
+
+      if (!app) {
+        const existingApp = getApps().find(a => a.name === 'sk-recs');
+        app = existingApp || initializeApp(FB_CONFIG, 'sk-recs');
+
+        /* Only initialise App Check on an app WE created — calling it twice on
+           the same app throws, and a page-provided app already has it. */
+        if (!existingApp) {
+          try {
+            const { initializeAppCheck, ReCaptchaV3Provider } = await import(
+              'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js'
+            );
+            initializeAppCheck(app, {
+              provider: new ReCaptchaV3Provider(APPCHECK_SITE_KEY),
+              isTokenAutoRefreshEnabled: true,
+            });
+          } catch (e) {
+            /* Non-fatal: without a token the reads below fail and the caller
+               falls back to its static recommendations, which is the behaviour
+               that has been in production all along. Logged so a future App
+               Check change does not silently reinstate the original defect. */
+            console.warn('[SokoniRecs] App Check init failed — reads will be denied:', e && e.message);
+          }
+        }
+      }
+
       const db  = getFirestore(app);
+
+      /* ══ WHICH COLLECTIONS A VISITOR CAN ACTUALLY READ ═══════════════════
+         With App Check fixed above, `products` and `mechanics` load — both are
+         `allow read: if true` (firestore.rules:511, :493).
+
+         The other two remained denied, and the rules say that is CORRECT:
+
+           providers  firestore.rules:153  allow read: if isAuthed()
+                      Deliberately gated. An anonymous homepage visitor should
+                      not be able to enumerate providers. The rule is right; the
+                      unconditional query was wrong.
+           services   NO match block anywhere in firestore.rules, and no
+                      server-side use of collection('services') either. A
+                      phantom collection — the query could never have succeeded.
+
+         So this does NOT open the rules. Provider data is not anonymously
+         browsable by design, and `providerProfiles` (the canonical provider
+         record) is owner-only, so there is no public provider source to switch
+         to. Least privilege is preserved: the engine simply stops asking for
+         what the visitor may not have.
+
+         `providers` is still queried for SIGNED-IN visitors, who are entitled
+         to it — so no capability is lost, only failed requests. */
+      const _signedIn = !!(typeof window !== 'undefined'
+        && window.firebaseAuth && window.firebaseAuth.currentUser);
 
       const SPECS = [
         {
@@ -148,7 +221,7 @@
           sellerId: d => d.sellerId || d.uid || '',
         },
         {
-          col: 'services', type: 'service',
+          col: 'services', type: 'service', _skip: true,   /* phantom collection — no rule, no server-side use */
           title: d => d.name || d.title || '',
           category: d => d.category || '',
           location: d => d.location || d.city || '',
@@ -156,7 +229,7 @@
           sellerId: d => d.providerId || d.uid || '',
         },
         {
-          col: 'providers', type: 'provider',
+          col: 'providers', type: 'provider', _authOnly: true,  /* firestore.rules:153 — isAuthed() */
           title: d => d.name || '',
           category: d => d.category || '',
           location: d => d.location || '',
@@ -173,8 +246,12 @@
         },
       ];
 
+      /* Drop collections this visitor cannot read, rather than firing requests
+         that are guaranteed to be denied and logged as errors. */
+      const READABLE = SPECS.filter(s => !s._skip && (!s._authOnly || _signedIn));
+
       const results = await Promise.all(
-        SPECS.map(async spec => {
+        READABLE.map(async spec => {
           try {
             const snap = await getDocs(collection(db, spec.col));
             const items = [];

@@ -3877,14 +3877,32 @@ document.addEventListener('DOMContentLoaded',function(){
 <script src="sokoni-recommendations.js" defer></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
-  if (!window.SokoniRecs) return;
+  /* This chain had NO error handling: if init() or getForYou() rejected, the
+     .then() never ran, nothing rendered, and nothing was logged. Combined with
+     the App Check defect that denied every query, the section failed silently —
+     a visitor saw an empty gap and we saw nothing at all.
+
+     Failures are now surfaced (console + errorLog via logClientDiagnostic where
+     available) and the container is left in a known state rather than blank. */
+  if (!window.SokoniRecs) {
+    console.warn('[SokoniRecs] module not loaded — recommendations skipped');
+    return;
+  }
   SokoniRecs.init().then(function () {
-    SokoniRecs.getForYou(8).then(function (items) {
-      /* pass viewCount so the policy engine can score confidence correctly */
-      var viewHist = [];
-      try { viewHist = JSON.parse(localStorage.getItem('sokoni_recs_views') || '[]'); } catch(e){}
-      SokoniRecs.renderWidget('sk-recs-foryou', items, 'Picked For You', { viewCount: viewHist.length });
-    });
+    return SokoniRecs.getForYou(8);
+  }).then(function (items) {
+    /* pass viewCount so the policy engine can score confidence correctly */
+    var viewHist = [];
+    try { viewHist = JSON.parse(localStorage.getItem('sokoni_recs_views') || '[]'); } catch(e){}
+    SokoniRecs.renderWidget('sk-recs-foryou', items || [], 'Picked For You', { viewCount: viewHist.length });
+  }).catch(function (err) {
+    /* Never leave the section silently blank. renderWidget's own empty state is
+       a deliberate, styled message, so reuse it rather than inventing a second
+       one — the visitor sees an explanation instead of a gap. */
+    console.error('[SokoniRecs] recommendations failed:', err && (err.code || err.message), err);
+    try {
+      SokoniRecs.renderWidget('sk-recs-foryou', [], 'Picked For You', { viewCount: 0 });
+    } catch (_) {}
   });
 });
 </script>
