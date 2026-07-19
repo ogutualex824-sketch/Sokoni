@@ -50,10 +50,26 @@ service cloud.firestore {
                         'commissionRate']);
     }
 
+    /* Beta gate + entitlement fields are SERVER-OWNED on users/{uid}.
+       Added 2026-07-19 BEFORE the fields exist. `allow update` lets a user write
+       their own document, and these guards are the only value constraints -- so the
+       moment betaStatus were introduced without this, any user could set
+       betaStatus:"approved" and self-approve into the beta. Same for featureFlags,
+       permissions, role and trustScore.
+
+       Zero blast radius today precisely because none of these fields exist yet;
+       this closes the hole before it can be opened. Legitimate writers use the
+       Admin SDK, which bypasses rules entirely. */
+    function noSelfGrant() {
+      return !request.resource.data.keys()
+                .hasAny(['betaStatus','featureFlags','permissions','role','trustScore']);
+    }
+
     function noPrivilegeEscalation() {
-      return !request.resource.data.keys().hasAny(['registeredAs'])
-             || !request.resource.data.registeredAs.keys()
-                  .hasAny(['admin','superAdmin','moderator','isAdmin']);
+      return noSelfGrant()
+             && (!request.resource.data.keys().hasAny(['registeredAs'])
+                 || !request.resource.data.registeredAs.keys()
+                      .hasAny(['admin','superAdmin','moderator','isAdmin']));
     }
 
     function noProviderForgery() {
