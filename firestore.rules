@@ -63,7 +63,15 @@ service cloud.firestore {
     function noSelfGrant() {
       return !request.resource.data.keys()
                 .hasAny(['betaStatus','accessLevel','featureFlags','permissions','role',
-                         'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus']);
+                         'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus',
+                         /* Age verification is a REGULATORY control, not a profile
+                            preference. ageVerifySubmit (age-verification.js) writes
+                            these via the Admin SDK after computing the age
+                            server-side; a client that could set ageVerified:true
+                            on its own document would defeat the entire gate and
+                            leave us selling nicotine to an unverified buyer while
+                            believing otherwise. */
+                         'ageVerified','ageVerifiedAt','ageVerifiedMethod']);
     }
 
     function noPrivilegeEscalation() {

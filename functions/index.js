@@ -8932,6 +8932,15 @@ exports.fulfilmentScan    = _fulfilScan.fulfilmentScan;
 const _clientDiag = require('./client-diagnostics');
 exports.logClientDiagnostic = _clientDiag.logClientDiagnostic;
 
+/* ── Age verification (KASS Vapes / restricted categories) ─────────
+   adult-gate.js is client-side only and writes nothing to the server, so it
+   stops nobody and produces no evidence. These run the check server-side and
+   record the decision. assertAgeVerified() is the enforcement point for any
+   flow selling a restricted product. */
+const _ageVerify = require('./age-verification');
+exports.ageVerifySubmit = _ageVerify.ageVerifySubmit;
+exports.ageVerifyStatus = _ageVerify.ageVerifyStatus;
+
 
 /* ── Super Admin CFs v1.0 ──────────────────────────────────────── */
 const superAdmin = require('./super-admin');
