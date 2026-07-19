@@ -157,8 +157,15 @@ function showGateway(options){
         providerPhone, onSuccess(ref), onCancel
       }
     */
-    const commissionPct = SokoniCommission.pct(options.category)
-      SokoniCommission.pct("default");
+    /* Was written as a two-line fallback with the `||` missing:
+           SokoniCommission.pct(options.category)
+           SokoniCommission.pct("default");
+       ASI split that into an assignment plus a discarded no-op call, so the
+       "fallback" never ran. Harmless only by luck — resolve() in
+       sokoni-commission-rates.js:132-139 already returns RATES.default for any
+       unrecognised key, so pct() cannot return undefined. The fallback was
+       redundant as well as dead; one call is the correct expression. */
+    const commissionPct = SokoniCommission.pct(options.category);
 
     /* If caller provides the full service total, collect it all through SOKONI.
        Otherwise fall back to the small upfront deposit (legacy behaviour). */
