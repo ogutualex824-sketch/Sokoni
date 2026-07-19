@@ -1,0 +1,67 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Packing Slip</title>
+    <style>
+      @page { size: 58mm auto; margin: 0; }
+      body { width:58mm; margin:0; padding:4mm; font-family:'Courier New',monospace;
+             font-size:12px; line-height:1.45; color:#000; background:#fff; }
+      .c { text-align:center; } .r { text-align:right; } .b { font-weight:bold; }
+      .xl { font-size:20px; font-weight:bold; letter-spacing:.5px; }
+      .lg { font-size:15px; font-weight:bold; }
+      .sm { font-size:10px; }
+      .sep { border-top:1px dashed #000; margin:6px 0; }
+      .solid { border-top:2px solid #000; margin:6px 0; }
+      .row { display:flex; justify-content:space-between; gap:8px; }
+      .box { border:2px solid #000; padding:5px; margin:5px 0; }
+      .fill { border-bottom:1px solid #000; min-height:16px; margin-top:2px; }
+      table { width:100%; border-collapse:collapse; }
+      td { padding:2px 0; vertical-align:top; }
+      .qr { text-align:center; margin-top:8px; }
+    </style></head><body>
+      <div class="c xl">PACKING SLIP</div>
+      <div class="c sm">Mama Fua Cleaners</div>
+      <div class="solid"></div>
+
+      <div class="row b"><span>Order</span><span>SKN-88421</span></div>
+      <div class="row"><span>Package</span><span>1 of 2</span></div>
+      <div class="row"><span>Items</span><span>2</span></div>
+      <div class="row"><span>Weight</span><span>4.2kg</span></div>
+      <div class="box c b">FRAGILE · CASH ON DELIVERY</div>
+
+      <div class="sep"></div>
+      <div class="b">DELIVER TO</div>
+      <div class="box">
+        <div class="lg">Ann Momanyi</div>
+        <div class="b">0705726803</div>
+        <div class="sm">Alt: 0733444555</div>
+        <div style="margin-top:4px">Zamani Court, B4, Floor 2<br>3rd Ave<br>Parklands<br>Westlands<br>Nairobi</div>
+        <div class="sm" style="margin-top:3px">Landmark: Opp. Shell</div>
+      </div>
+      <div class="sm b">Notes:</div><div class="sm">Call on arrival, gate code 4417</div>
+
+      <div class="sep"></div>
+      <div class="b">CONTENTS</div>
+      <table><tr><td class="b">1×</td><td>Duvet Wash — King<div class="sm">SKU DW-K</div></td></tr><tr><td class="b">3×</td><td>Curtain Clean<div class="sm">SKU CC-STD</div></td></tr></table>
+
+      <div class="sep"></div>
+      <div class="b">FROM</div>
+      <div class="sm">Mama Fua Cleaners<br>0722000111<br>Ngong Rd, Nairobi</div>
+
+      <div class="solid"></div>
+      <div class="b">COURIER — complete at handover</div>
+      <div class="sm">Rider name</div><div class="fill"></div>
+      <div class="sm">Rider phone</div><div class="fill"></div>
+      <div class="sm">Dispatch time</div><div class="fill"></div>
+      <div class="sm">Delivery time</div><div class="fill"></div>
+      <div class="sm">Recipient signature</div><div class="fill"></div>
+
+      <div class="qr">
+        <canvas id="sk-doc-qr" width="110" height="110"></canvas>
+        <div class="sm">SKN-88421</div>
+        <script>(function(){var u="https://mysokoni.co.ke/payment-receipt.html?ref=RQ7M3X9";
+          var c=document.getElementById('sk-doc-qr');
+          if(window.QRCode&&c){try{window.QRCode.toCanvas(c,u,{width:110,margin:0});}catch(e){}}
+        })()</script>
+      </div>
+      <div class="c sm" style="margin-top:6px">Scan to verify order · confirm delivery · process return</div>
+    
+    <script>setTimeout(function(){window.print();},300)</script>
+    </body></html>

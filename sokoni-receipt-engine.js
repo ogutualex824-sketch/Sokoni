@@ -298,17 +298,110 @@ window.SokoniReceiptEngine = (() => {
   /* ================================================================
      HTML RECEIPT BUILDER — for browser print / A4 / PDF
   ================================================================ */
-  function buildHTML(job, settings = {}) {
-    const d    = job.data || {};
-    const type = job.type || 'receipt';
+  /* ════════════════════════════════════════════════════════════════════════
+     DOCUMENT REGISTRY
 
-    if (type === 'a4' || type === 'invoice' || type === 'quotation') {
-      return _buildA4HTML(job, settings);
-    }
-    if (type === 'label') {
-      return _buildLabelHTML(job, settings);
-    }
-    return _buildReceiptHTML(job, settings);
+     buildHTML() previously hardcoded an if-chain over three types, and
+     buildShippingLabel was never reachable through it at all — callers had to
+     know to invoke it directly. A registry replaces the chain so a new document
+     type is one entry here and NOTHING in checkout changes: checkout asks for a
+     document type (or a plan), and the engine resolves the template.
+
+     Each entry declares:
+       build   — (job, settings) => html
+       printer — logical printer role, for routing (see PRINTER_ROLES)
+       carries — what the document is ALLOWED to contain. This is the privacy
+                 contract, kept next to the template rather than in prose, so
+                 the rule is visible at the point it must be honoured:
+                   'money'    line prices and totals
+                   'pii'      recipient name, phone, address
+                   'internal' commission, settlement, margin
+
+     The dangerous combination is pii + internal on a document that travels with
+     a parcel. A packing slip is handled by couriers and customers, so it carries
+     pii but MUST NOT carry internal. A merchant receipt is the inverse: internal
+     is its purpose, and it never leaves the merchant.
+     ════════════════════════════════════════════════════════════════════════ */
+  const PRINTER_ROLES = ['receipt', 'packing', 'kitchen', 'label', 'warehouse'];
+
+  const DOC_TYPES = {
+    receipt:   { build: (j, s) => _buildReceiptHTML(j, s), printer: 'receipt',   carries: ['money'] },
+    customer:  { build: (j, s) => _buildReceiptHTML(j, s), printer: 'receipt',   carries: ['money'] },
+    a4:        { build: (j, s) => _buildA4HTML(j, s),      printer: 'receipt',   carries: ['money', 'pii'] },
+    invoice:   { build: (j, s) => _buildA4HTML(j, s),      printer: 'receipt',   carries: ['money', 'pii'] },
+    quotation: { build: (j, s) => _buildA4HTML(j, s),      printer: 'receipt',   carries: ['money', 'pii'] },
+    label:     { build: (j, s) => _buildLabelHTML(j, s),   printer: 'label',     carries: [] },
+    shipping:  { build: (j, s) => buildShippingLabel(j, s),printer: 'label',     carries: ['pii'] },
+    packing:   { build: (j, s) => _buildPackingSlip(j, s), printer: 'packing',   carries: ['pii'] },
+    pickup:    { build: (j, s) => _buildPickupSlip(j, s),  printer: 'receipt',   carries: ['pii'] },
+    kitchen:   { build: (j, s) => _buildKitchenTicket(j, s), printer: 'kitchen', carries: [] },
+    merchant:  { build: (j, s) => _buildMerchantReceipt(j, s), printer: 'receipt', carries: ['money', 'internal'] },
+    manifest:  { build: (j, s) => _buildCourierManifest(j, s), printer: 'warehouse', carries: ['pii'] },
+  };
+
+  /* Future-ready: register a document type at runtime without editing this file
+     or any checkout code. Refuses to silently replace an existing type. */
+  function registerDocument(type, def) {
+    if (!type || !def || typeof def.build !== 'function') throw new Error('registerDocument: type and def.build required');
+    if (DOC_TYPES[type]) throw new Error('registerDocument: "' + type + '" already registered');
+    DOC_TYPES[type] = {
+      build:   def.build,
+      printer: PRINTER_ROLES.includes(def.printer) ? def.printer : 'receipt',
+      carries: Array.isArray(def.carries) ? def.carries : [],
+    };
+    return true;
+  }
+
+  function buildHTML(job, settings = {}) {
+    const type = job.type || 'receipt';
+    const def  = DOC_TYPES[type] || DOC_TYPES.receipt;
+    return def.build(job, settings);
+  }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     DOCUMENT PLAN — the "smart" in Smart Receipts
+
+     Checkout does not decide which documents to print. It describes the ORDER
+     and asks for a plan; the engine decides. Adding a document type or changing
+     a fulfilment rule therefore never touches checkout.
+
+     Returns an ordered list of { type, printer, copies }.
+     ════════════════════════════════════════════════════════════════════════ */
+  function planDocuments(order = {}) {
+    const method   = String(order.fulfilment || order.deliveryMethod || order.method || 'walkin').toLowerCase();
+    const category = String(order.category || order.merchantCategory || '').toLowerCase();
+    const isFood   = /restaurant|food|kitchen|cafe|eatery/.test(category) || order.isFood === true;
+
+    const plan = [];
+    const add  = (type) => {
+      const def = DOC_TYPES[type];
+      if (def) plan.push({ type, printer: def.printer, copies: 1 });
+    };
+
+    /* The customer receipt is unconditional — every transaction produces proof
+       of payment regardless of how the goods reach the buyer. */
+    add('receipt');
+
+    if (/delivery|courier|ship/.test(method))      add('packing');
+    else if (/pickup|collect/.test(method))        add('pickup');
+
+    /* Food is orthogonal to fulfilment: a restaurant delivery needs BOTH a
+       packing slip and a kitchen ticket. */
+    if (isFood) add('kitchen');
+
+    if (order.merchantCopy === true) add('merchant');
+
+    return plan;
+  }
+
+  /* Resolve a logical printer role to a configured device. Falls back to the
+     receipt printer, then to whatever single printer exists — so a merchant with
+     one printer gets every document sequentially rather than losing some. */
+  function resolvePrinter(role, printerConfig = {}) {
+    return printerConfig[role]
+        || printerConfig.receipt
+        || printerConfig.default
+        || null;
   }
 
   function _e(s) {
@@ -560,6 +653,272 @@ window.SokoniReceiptEngine = (() => {
     </body></html>`;
   }
 
+  /* ════════════════════════════════════════════════════════════════════════
+     SHARED CHROME for the fulfilment documents below.
+     _thermal() wraps a body in the same 58/80mm page setup the receipt uses, so
+     these print on the merchant's existing paper without new configuration.
+     ════════════════════════════════════════════════════════════════════════ */
+  function _thermal(title, bodyHtml, settings = {}, d = {}) {
+    const pw = settings.paperWidth || d.paperWidth || 80;
+    const w  = pw >= 80 ? '80mm' : '58mm';
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${_e(title)}</title>
+    <style>
+      @page { size: ${w} auto; margin: 0; }
+      body { width:${w}; margin:0; padding:4mm; font-family:'Courier New',monospace;
+             font-size:12px; line-height:1.45; color:#000; background:#fff; }
+      .c { text-align:center; } .r { text-align:right; } .b { font-weight:bold; }
+      .xl { font-size:20px; font-weight:bold; letter-spacing:.5px; }
+      .lg { font-size:15px; font-weight:bold; }
+      .sm { font-size:10px; }
+      .sep { border-top:1px dashed #000; margin:6px 0; }
+      .solid { border-top:2px solid #000; margin:6px 0; }
+      .row { display:flex; justify-content:space-between; gap:8px; }
+      .box { border:2px solid #000; padding:5px; margin:5px 0; }
+      .fill { border-bottom:1px solid #000; min-height:16px; margin-top:2px; }
+      table { width:100%; border-collapse:collapse; }
+      td { padding:2px 0; vertical-align:top; }
+      .qr { text-align:center; margin-top:8px; }
+    </style></head><body>${bodyHtml}
+    <script>setTimeout(function(){window.print();},300)<\/script>
+    </body></html>`;
+  }
+
+  /* A labelled blank that a human fills in by hand after printing. */
+  function _blank(label) {
+    return `<div class="sm">${_e(label)}</div><div class="fill"></div>`;
+  }
+
+  /* ── PACKING SLIP ────────────────────────────────────────────────────────
+     Travels ON or IN the parcel. Handled by warehouse staff, couriers and the
+     customer, so it carries full recipient PII — that is its job — and MUST NOT
+     carry prices, commission, settlement or margin. It deliberately never reads
+     d.commission / d.settlement / d.total: an internal figure printed on a
+     package is visible to everyone who handles it, including the buyer, who
+     would then see the merchant's margin.
+
+     Rider name, phone, dispatch time, delivery time and signature are printed as
+     BLANKS, to be completed by hand at handover. */
+  function _buildPackingSlip(job, settings = {}) {
+    const d   = job.data || {};
+    const a   = d.address || d.deliveryAddress || {};
+    const nm  = d.recipientName || d.customerName || '';
+    const ph  = d.recipientPhone || d.customerPhone || d.deliveryPhone || '';
+    const alt = d.altPhone || d.alternativePhone || '';
+
+    /* Address may arrive as a structured object or a single string. */
+    const addrLines = typeof a === 'string' ? [a] : [
+      a.building && (a.building + (a.house ? ', ' + a.house : '') + (a.floor ? ', Floor ' + a.floor : '')),
+      a.street, a.area, a.town, a.county,
+    ].filter(Boolean);
+
+    const items = (d.items || []).map(i =>
+      `<tr><td class="b">${_e(String(i.qty || 1))}×</td><td>${_e(i.name || i.title || 'Item')}${
+        i.sku ? `<div class="sm">SKU ${_e(i.sku)}</div>` : ''}</td></tr>`).join('');
+
+    const flags = [
+      d.fragile ? 'FRAGILE' : '',
+      d.cod ? 'CASH ON DELIVERY' : (d.prepaid !== false ? 'PREPAID' : ''),
+    ].filter(Boolean);
+
+    return _thermal('Packing Slip', `
+      <div class="c xl">PACKING SLIP</div>
+      <div class="c sm">${_e(d.shopName || d.merchantName || settings.shopName || 'SOKONI')}</div>
+      <div class="solid"></div>
+
+      <div class="row b"><span>Order</span><span>${_e(d.orderNo || d.orderId || '')}</span></div>
+      <div class="row"><span>Package</span><span>${_e(String(d.packageNo || 1))} of ${_e(String(d.packageCount || 1))}</span></div>
+      <div class="row"><span>Items</span><span>${_e(String((d.items || []).length))}</span></div>
+      ${d.weight ? `<div class="row"><span>Weight</span><span>${_e(String(d.weight))}</span></div>` : ''}
+      ${flags.length ? `<div class="box c b">${flags.map(f => _e(f)).join(' · ')}</div>` : ''}
+
+      <div class="sep"></div>
+      <div class="b">DELIVER TO</div>
+      <div class="box">
+        <div class="lg">${_e(nm)}</div>
+        <div class="b">${_e(ph)}</div>
+        ${alt ? `<div class="sm">Alt: ${_e(alt)}</div>` : ''}
+        <div style="margin-top:4px">${addrLines.map(l => _e(l)).join('<br>')}</div>
+        ${a.landmark ? `<div class="sm" style="margin-top:3px">Landmark: ${_e(a.landmark)}</div>` : ''}
+      </div>
+      ${d.deliveryNotes ? `<div class="sm b">Notes:</div><div class="sm">${_e(d.deliveryNotes)}</div>` : ''}
+
+      <div class="sep"></div>
+      <div class="b">CONTENTS</div>
+      <table>${items || '<tr><td>—</td></tr>'}</table>
+
+      <div class="sep"></div>
+      <div class="b">FROM</div>
+      <div class="sm">${_e(d.merchantName || d.shopName || '')}<br>${_e(d.merchantPhone || '')}<br>${_e(d.merchantAddress || '')}</div>
+
+      <div class="solid"></div>
+      <div class="b">COURIER — complete at handover</div>
+      ${_blank('Rider name')}
+      ${_blank('Rider phone')}
+      ${_blank('Dispatch time')}
+      ${_blank('Delivery time')}
+      ${_blank('Recipient signature')}
+
+      ${d.verifyUrl || d.orderNo ? `<div class="qr">
+        <canvas id="sk-doc-qr" width="110" height="110"></canvas>
+        <div class="sm">${_e(d.deliveryOtp ? 'OTP ' + d.deliveryOtp : (d.orderNo || ''))}</div>
+        <script>(function(){var u=${JSON.stringify(String(d.verifyUrl || d.orderNo || ''))};
+          var c=document.getElementById('sk-doc-qr');
+          if(window.QRCode&&c){try{window.QRCode.toCanvas(c,u,{width:110,margin:0});}catch(e){}}
+        })()<\/script>
+      </div>` : ''}
+      <div class="c sm" style="margin-top:6px">Scan to verify order · confirm delivery · process return</div>
+    `, settings, d);
+  }
+
+  /* ── PICKUP / COLLECTION SLIP ────────────────────────────────────────────
+     No courier block and no address: nothing is being shipped. The pickup code
+     is the operative field, so it is the largest thing on the slip. */
+  function _buildPickupSlip(job, settings = {}) {
+    const d = job.data || {};
+    return _thermal('Pickup Slip', `
+      <div class="c xl">COLLECTION SLIP</div>
+      <div class="c sm">${_e(d.shopName || d.merchantName || settings.shopName || 'SOKONI')}</div>
+      <div class="solid"></div>
+
+      <div class="c sm">PICKUP CODE</div>
+      <div class="box c xl" style="letter-spacing:3px">${_e(d.pickupCode || d.collectionCode || d.orderNo || '')}</div>
+
+      <div class="row"><span>Order</span><span class="b">${_e(d.orderNo || d.orderId || '')}</span></div>
+      <div class="row"><span>Name</span><span class="b">${_e(d.customerName || d.recipientName || '')}</span></div>
+      <div class="row"><span>Phone</span><span>${_e(d.customerPhone || d.recipientPhone || '')}</span></div>
+      <div class="row"><span>Items</span><span>${_e(String((d.items || []).length))}</span></div>
+
+      <div class="sep"></div>
+      <div class="b">COLLECT FROM</div>
+      <div>${_e(d.pickupLocation || d.merchantAddress || d.shopAddress || '')}</div>
+      ${d.pickupHours ? `<div class="sm">${_e(d.pickupHours)}</div>` : ''}
+      ${d.pickupDeadline ? `<div class="box c b">Collect by ${_e(d.pickupDeadline)}</div>` : ''}
+
+      <div class="qr">
+        <canvas id="sk-doc-qr" width="110" height="110"></canvas>
+        <script>(function(){var u=${JSON.stringify(String(d.verifyUrl || d.pickupCode || d.orderNo || ''))};
+          var c=document.getElementById('sk-doc-qr');
+          if(window.QRCode&&c){try{window.QRCode.toCanvas(c,u,{width:110,margin:0});}catch(e){}}
+        })()<\/script>
+        <div class="sm">Present this code when collecting</div>
+      </div>
+    `, settings, d);
+  }
+
+  /* ── KITCHEN TICKET ──────────────────────────────────────────────────────
+     Production instruction, not a financial document. NO prices, NO totals, NO
+     customer contact details — kitchen staff need what to cook, and printing a
+     customer's phone number in a food-prep area is a needless PII exposure.
+     Large type: read at arm's length in a busy kitchen. */
+  function _buildKitchenTicket(job, settings = {}) {
+    const d = job.data || {};
+    const rows = (d.items || []).map(i => {
+      const mods = (i.modifiers || i.options || []);
+      return `<tr><td class="xl" style="width:36px">${_e(String(i.qty || 1))}×</td>
+        <td><span class="lg">${_e(i.name || i.title || 'Item')}</span>
+        ${mods.length ? `<div class="sm">${mods.map(m => '+ ' + _e(typeof m === 'string' ? m : (m.name || ''))).join('<br>')}</div>` : ''}
+        ${i.notes ? `<div class="sm b">** ${_e(i.notes)} **</div>` : ''}</td></tr>`;
+    }).join('');
+
+    const dest = d.tableNo ? ('TABLE ' + d.tableNo)
+               : /delivery/i.test(String(d.fulfilment || d.deliveryMethod || '')) ? 'DELIVERY'
+               : /pickup|collect/i.test(String(d.fulfilment || d.deliveryMethod || '')) ? 'PICKUP'
+               : 'COUNTER';
+
+    return _thermal('Kitchen Ticket', `
+      <div class="c xl">${_e(dest)}</div>
+      <div class="solid"></div>
+      <div class="row"><span class="b">Order</span><span class="lg">${_e(d.orderNo || d.orderId || '')}</span></div>
+      <div class="row sm"><span>Placed</span><span>${_e(d.time || new Date().toLocaleTimeString('en-KE'))}</span></div>
+      ${d.courseNo ? `<div class="row sm"><span>Course</span><span>${_e(String(d.courseNo))}</span></div>` : ''}
+      <div class="sep"></div>
+      <table>${rows || '<tr><td>—</td></tr>'}</table>
+      ${d.orderNotes ? `<div class="sep"></div><div class="b">NOTES</div><div class="lg">${_e(d.orderNotes)}</div>` : ''}
+      <div class="solid"></div>
+      <div class="c sm">No prices — kitchen copy</div>
+    `, settings, d);
+  }
+
+  /* ── MERCHANT RECEIPT ────────────────────────────────────────────────────
+     The inverse of the packing slip: this is the ONLY fulfilment document that
+     may carry commission, settlement and margin, and it never leaves the
+     merchant. Keep it off the parcel. */
+  function _buildMerchantReceipt(job, settings = {}) {
+    const d   = job.data || {};
+    const kes = n => 'KES ' + Number(n || 0).toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const row = (l, v, b) => `<div class="row${b ? ' b' : ''}"><span>${_e(l)}</span><span>${_e(v)}</span></div>`;
+
+    return _thermal('Merchant Copy', `
+      <div class="c xl">MERCHANT COPY</div>
+      <div class="c sm">NOT FOR CUSTOMER</div>
+      <div class="solid"></div>
+
+      ${row('Receipt', d.receiptNo || '')}
+      ${row('Order', d.orderNo || d.orderId || '')}
+      ${row('Date', d.date || new Date().toLocaleString('en-KE'))}
+      ${d.cashierName ? row('Cashier', d.cashierName) : ''}
+      ${d.registerNo ? row('Register', String(d.registerNo)) : ''}
+      ${d.shiftNo ? row('Shift', String(d.shiftNo)) : ''}
+
+      <div class="sep"></div>
+      ${row('Gross', kes(d.total || d.grandTotal))}
+      ${(d.discount || 0) > 0 ? row('Discount', '-' + kes(d.discount)) : ''}
+      ${(d.tax || 0) > 0 ? row('VAT', kes(d.tax)) : ''}
+      ${d.commission != null ? row('Platform commission', '-' + kes(d.commission)) : ''}
+      ${d.gatewayFee != null ? row('Gateway fee', '-' + kes(d.gatewayFee)) : ''}
+      <div class="solid"></div>
+      ${row('SETTLEMENT DUE', kes(d.settlementAmount != null ? d.settlementAmount : d.sellerNet), true)}
+      ${d.settlementStatus ? row('Status', d.settlementStatus) : ''}
+
+      <div class="sep"></div>
+      ${row('Paid via', d.paymentMethod || '')}
+      ${d.paymentRef || d.mpesaCode ? row('Reference', d.paymentRef || d.mpesaCode) : ''}
+      <div class="c sm" style="margin-top:6px">Retain for reconciliation</div>
+    `, settings, d);
+  }
+
+  /* ── COURIER MANIFEST ────────────────────────────────────────────────────
+     One document per TRIP, not per order — the rider's worksheet. Lists stops in
+     route order with contact numbers, COD amounts to collect, and a signature
+     column. COD is the one money figure a courier legitimately needs. */
+  function _buildCourierManifest(job, settings = {}) {
+    const d     = job.data || {};
+    const stops = d.stops || d.deliveries || [];
+    const kes   = n => Number(n || 0).toLocaleString('en-KE');
+    const codTotal = stops.reduce((s, x) => s + (Number(x.codAmount) || 0), 0);
+
+    const rows = stops.map((s, i) => `
+      <tr style="border-bottom:1px solid #000">
+        <td class="b" style="width:22px">${i + 1}</td>
+        <td>
+          <span class="b">${_e(s.recipientName || s.customerName || '')}</span>
+          <div class="sm">${_e(s.phone || s.recipientPhone || '')}</div>
+          <div class="sm">${_e(typeof s.address === 'string' ? s.address : [s.address && s.address.area, s.address && s.address.town].filter(Boolean).join(', '))}</div>
+          <div class="sm">Order ${_e(s.orderNo || '')}</div>
+        </td>
+        <td class="r" style="width:70px">
+          ${Number(s.codAmount) > 0 ? `<span class="b">COD<br>${kes(s.codAmount)}</span>` : '<span class="sm">PREPAID</span>'}
+          <div class="fill"></div>
+        </td>
+      </tr>`).join('');
+
+    return _thermal('Courier Manifest', `
+      <div class="c xl">COURIER MANIFEST</div>
+      <div class="c sm">${_e(d.tripId || d.manifestNo || '')} · ${_e(d.date || new Date().toLocaleDateString('en-KE'))}</div>
+      <div class="solid"></div>
+      ${d.riderName ? `<div class="row"><span>Rider</span><span class="b">${_e(d.riderName)}</span></div>` : _blank('Rider name')}
+      ${d.riderPhone ? `<div class="row"><span>Phone</span><span>${_e(d.riderPhone)}</span></div>` : ''}
+      <div class="row"><span>Stops</span><span class="b">${_e(String(stops.length))}</span></div>
+      ${codTotal > 0 ? `<div class="box c b">COD TO COLLECT: KES ${kes(codTotal)}</div>` : ''}
+      <div class="sep"></div>
+      <table>${rows || '<tr><td>No stops</td></tr>'}</table>
+      <div class="solid"></div>
+      ${_blank('Dispatched by / time')}
+      ${_blank('Cash reconciled by / time')}
+      <div class="c sm" style="margin-top:6px">Signature column: recipient signs on delivery</div>
+    `, settings, d);
+  }
+
   /* ================================================================
      PUBLIC API
   ================================================================ */
@@ -567,10 +926,22 @@ window.SokoniReceiptEngine = (() => {
     buildBytes,
     buildHTML,
     buildShippingLabel,
+    /* Smart document selection — checkout describes the order, engine decides */
+    planDocuments,
+    registerDocument,
+    resolvePrinter,
+    documentTypes: () => Object.keys(DOC_TYPES),
+    documentMeta:  (t) => DOC_TYPES[t] || null,
+    PRINTER_ROLES,
     /* Individual builders exposed for direct use */
     buildReceiptBytes: _buildReceipt,
     buildReceiptHTML:  _buildReceiptHTML,
     buildA4HTML:       _buildA4HTML,
     buildLabelHTML:    _buildLabelHTML,
+    buildPackingSlip:   _buildPackingSlip,
+    buildPickupSlip:    _buildPickupSlip,
+    buildKitchenTicket: _buildKitchenTicket,
+    buildMerchantReceipt: _buildMerchantReceipt,
+    buildCourierManifest: _buildCourierManifest,
   };
 })();

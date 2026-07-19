@@ -1,0 +1,37 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Kitchen Ticket</title>
+    <style>
+      @page { size: 80mm auto; margin: 0; }
+      body { width:80mm; margin:0; padding:4mm; font-family:'Courier New',monospace;
+             font-size:12px; line-height:1.45; color:#000; background:#fff; }
+      .c { text-align:center; } .r { text-align:right; } .b { font-weight:bold; }
+      .xl { font-size:20px; font-weight:bold; letter-spacing:.5px; }
+      .lg { font-size:15px; font-weight:bold; }
+      .sm { font-size:10px; }
+      .sep { border-top:1px dashed #000; margin:6px 0; }
+      .solid { border-top:2px solid #000; margin:6px 0; }
+      .row { display:flex; justify-content:space-between; gap:8px; }
+      .box { border:2px solid #000; padding:5px; margin:5px 0; }
+      .fill { border-bottom:1px solid #000; min-height:16px; margin-top:2px; }
+      table { width:100%; border-collapse:collapse; }
+      td { padding:2px 0; vertical-align:top; }
+      .qr { text-align:center; margin-top:8px; }
+    </style></head><body>
+      <div class="c xl">TABLE 12</div>
+      <div class="solid"></div>
+      <div class="row"><span class="b">Order</span><span class="lg">SKN-88421</span></div>
+      <div class="row sm"><span>Placed</span><span>17:30:54</span></div>
+      
+      <div class="sep"></div>
+      <table><tr><td class="xl" style="width:36px">1×</td>
+        <td><span class="lg">Duvet Wash — King</span>
+        <div class="sm">+ Extra rinse</div>
+        <div class="sm b">** Stain on corner **</div></td></tr><tr><td class="xl" style="width:36px">3×</td>
+        <td><span class="lg">Curtain Clean</span>
+        
+        </td></tr></table>
+      <div class="sep"></div><div class="b">NOTES</div><div class="lg">Allergy: nuts</div>
+      <div class="solid"></div>
+      <div class="c sm">No prices — kitchen copy</div>
+    
+    <script>setTimeout(function(){window.print();},300)</script>
+    </body></html>

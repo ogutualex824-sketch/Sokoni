@@ -1,0 +1,47 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Pickup Slip</title>
+    <style>
+      @page { size: 80mm auto; margin: 0; }
+      body { width:80mm; margin:0; padding:4mm; font-family:'Courier New',monospace;
+             font-size:12px; line-height:1.45; color:#000; background:#fff; }
+      .c { text-align:center; } .r { text-align:right; } .b { font-weight:bold; }
+      .xl { font-size:20px; font-weight:bold; letter-spacing:.5px; }
+      .lg { font-size:15px; font-weight:bold; }
+      .sm { font-size:10px; }
+      .sep { border-top:1px dashed #000; margin:6px 0; }
+      .solid { border-top:2px solid #000; margin:6px 0; }
+      .row { display:flex; justify-content:space-between; gap:8px; }
+      .box { border:2px solid #000; padding:5px; margin:5px 0; }
+      .fill { border-bottom:1px solid #000; min-height:16px; margin-top:2px; }
+      table { width:100%; border-collapse:collapse; }
+      td { padding:2px 0; vertical-align:top; }
+      .qr { text-align:center; margin-top:8px; }
+    </style></head><body>
+      <div class="c xl">COLLECTION SLIP</div>
+      <div class="c sm">Mama Fua Cleaners</div>
+      <div class="solid"></div>
+
+      <div class="c sm">PICKUP CODE</div>
+      <div class="box c xl" style="letter-spacing:3px">PK-4417</div>
+
+      <div class="row"><span>Order</span><span class="b">SKN-88421</span></div>
+      <div class="row"><span>Name</span><span class="b">Ann Momanyi</span></div>
+      <div class="row"><span>Phone</span><span>0705726803</span></div>
+      <div class="row"><span>Items</span><span>2</span></div>
+
+      <div class="sep"></div>
+      <div class="b">COLLECT FROM</div>
+      <div>Ngong Rd Branch</div>
+      
+      <div class="box c b">Collect by 22 Jul 2026, 6pm</div>
+
+      <div class="qr">
+        <canvas id="sk-doc-qr" width="110" height="110"></canvas>
+        <script>(function(){var u="https://mysokoni.co.ke/payment-receipt.html?ref=RQ7M3X9";
+          var c=document.getElementById('sk-doc-qr');
+          if(window.QRCode&&c){try{window.QRCode.toCanvas(c,u,{width:110,margin:0});}catch(e){}}
+        })()</script>
+        <div class="sm">Present this code when collecting</div>
+      </div>
+    
+    <script>setTimeout(function(){window.print();},300)</script>
+    </body></html>
