@@ -816,7 +816,34 @@ const SokoniSecurity = (() => {
           document.body.style.removeProperty('overflow');
           document.body.style.removeProperty('padding-bottom');
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
-          setTimeout(function(){ if(b.isConnected) b.remove(); }, 300);
+          /* ── Removal must not depend on a single timer ──────────────────────
+             This was `setTimeout(remove, 300)` and nothing else. The element
+             fades to opacity:0 above, and WebKit composites backdrop-filter EVEN
+             AT OPACITY 0 — so whenever that one timer failed to fire, the black
+             scrim stayed invisible while the blur kept rendering. The result was
+             an intermittent full-screen "glass" layer with no modal on it, which
+             is exactly what was reported on iPhone Safari.
+
+             The timer fails in ordinary conditions: Safari throttles timers in a
+             backgrounded tab, so switching apps during the 250ms fade can drop
+             it; and a bfcache restore reinstates a DOM that still contains the
+             element, with no timer pending at all.
+
+             So: kill the blur synchronously (it cannot render what is not
+             applied), then remove via whichever of transitionend / timer arrives
+             first, and sweep again on bfcache restore. */
+          b.style.setProperty('backdrop-filter', 'none', 'important');
+          b.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+
+          var _gone = false;
+          var _kill = function(){
+            if (_gone) return;
+            _gone = true;
+            b.style.setProperty('visibility', 'hidden', 'important');
+            if (b.isConnected) b.remove();
+          };
+          b.addEventListener('transitionend', _kill, { once: true });
+          setTimeout(_kill, 300);
         };
       };
       /* Show after DOM is ready, skip on legal/auth pages to avoid clutter */
@@ -829,6 +856,40 @@ const SokoniSecurity = (() => {
           setTimeout(_showBanner, 1500);
         }
       }
+    }
+
+    /* ── Stale-consent-layer sweeper ────────────────────────────────────────
+       Runs regardless of whether the banner was shown this page load.
+
+       Two cases the accept handler alone cannot cover:
+
+       1. bfcache. Safari restores the page with its DOM intact, so a banner that
+          was mid-fade when the user navigated away comes back at opacity:0 with
+          no pending timer. backdrop-filter still composites at opacity 0, so the
+          page renders blurred with nothing on it. pageshow(persisted) is the only
+          event that fires here — DOMContentLoaded does not.
+
+       2. Any earlier build that left the element behind, still cached on a device.
+
+       Consent is already stored, so removing the element cannot bypass consent —
+       it only clears a layer that is purely visual residue. */
+    var _sweepStaleConsent = function(){
+      if (!localStorage.getItem("sokoniPrivacyAccepted")) return;  /* never remove a live prompt */
+      var el = document.getElementById("_sokoniPrivacyBanner");
+      if (!el) return;
+      el.style.setProperty('backdrop-filter', 'none', 'important');
+      el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+      el.remove();
+    };
+
+    window.addEventListener('pageshow', function(e){
+      if (e.persisted) _sweepStaleConsent();
+    });
+    /* Also cover a normal load that inherited a stale element from the markup. */
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', _sweepStaleConsent);
+    } else {
+      _sweepStaleConsent();
     }
   }
 

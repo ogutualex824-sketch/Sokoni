@@ -17,7 +17,7 @@
    module writes userEmail with no uid — so a returning user on a stale service
    worker would have every session create denied. This bump is not cosmetic; it
    is what stops that. */
-const CACHE_VERSION = "sokoni-20260719-app-shell-v87";
+const CACHE_VERSION = "sokoni-20260719-app-shell-v88";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
