@@ -4994,7 +4994,7 @@ window.logoutUser = logoutUser;
       items.push({ icon: '🚗', text: 'Check active delivery assignments', href: 'driver-dashboard.html', badge: null });
     }
     if (roles.indexOf('buyer') !== -1 || !roles.length) {
-      items.push({ icon: '🛍️', text: 'Browse the marketplace', href: 'marketplace.html', badge: null });
+      items.push({ icon: '🛍️', text: 'Browse the marketplace', href: '/', badge: null });
     }
 
     /* Always add KASS as last item */
@@ -5138,7 +5138,7 @@ window.logoutUser = logoutUser;
     }
 
     /* Universal hubs */
-    links.push({ icon: '🛍️', label: 'Shop', href: 'marketplace.html' });
+    links.push({ icon: '🛍️', label: 'Shop', href: '/' });
     links.push({ icon: '🍔', label: 'Food', href: 'food-hub.html' });
     links.push({ icon: '🎭', label: 'Events', href: 'event-hub.html' });
     links.push({ icon: '💼', label: 'Jobs', href: 'jobs.html' });
@@ -5472,7 +5472,7 @@ window.logoutUser = logoutUser;
 
   /* ── Executive Commands ── */
   var EXEC_CMDS = {
-    buyer:      [ {i:'🛍️',l:'Shop Now',      href:'marketplace.html'},
+    buyer:      [ {i:'🛍️',l:'Shop Now',      href:'/'},
                   {i:'📦',l:'My Orders',     tab:'orders'},
                   {i:'💰',l:'Wallet',         tab:'wallet'},
                   {i:'❤️',l:'Wishlist',       href:'wishlist.html'},
@@ -5730,7 +5730,7 @@ window.logoutUser = logoutUser;
       return { text:'Reach Silver Trust (45+ pts) to unlock Priority Support and analytics.', tab:'identity', cta:'Boost Trust →' };
     if (sc < 70)
       return { text:'You\'re ' + (70 - sc) + ' pts from Gold status — verify KRA or add bank account.', tab:'identity', cta:'View Steps →' };
-    return { text:'Your profile looks great. Explore new growth opportunities on SOKONI.', href:'marketplace.html', cta:'Explore →' };
+    return { text:'Your profile looks great. Explore new growth opportunities on SOKONI.', href:'/', cta:'Explore →' };
   }
 
   function _renderMorningBrief(ov, comp) {
@@ -6056,7 +6056,7 @@ window.logoutUser = logoutUser;
     { p:["reviews","ratings","feedback"],                  icon:'⭐', lbl:'My Reviews',          tab:'reviews' },
     { p:["ask kass","kass","ai","assistant","help"],       icon:'🤖', lbl:'Ask KASS',            act:'if(window.piOpenKass)piOpenKass()' },
     { p:["jobs","hiring","employment","work"],             icon:'📋', lbl:'Jobs',                href:'jobs.html' },
-    { p:["shop","marketplace","buy","browse"],             icon:'🛍️', lbl:'Marketplace',         href:'marketplace.html' },
+    { p:["shop","marketplace","buy","browse"],             icon:'🛍️', lbl:'Marketplace',         href:'/' },
     { p:["food","delivery","order food","restaurant"],     icon:'🍔', lbl:'Food Hub',            href:'food-hub.html' },
     { p:["properties","rent","property","real estate"],   icon:'🏠', lbl:'Property Hub',        href:'property-hub.html' },
     { p:["legal","contracts","agreements","compliance"],   icon:'⚖️', lbl:'Legal Hub',           href:'legal-hub.html' },

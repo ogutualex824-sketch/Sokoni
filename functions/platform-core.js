@@ -36,7 +36,7 @@ const _audit = async (action, uid, data) => { try { await db().collection('finos
 const DEFAULT_HUBS = [
   {
     hubId:'marketplace', name:'Marketplace', icon:'🛍️', status:'live',
-    url:'/marketplace', adminUrl:'/admin-os', cfCount:62, description:'Multi-vendor marketplace for all product categories',
+    url:'/', adminUrl:'/admin-os', cfCount:62, description:'Multi-vendor marketplace for all product categories',
     config:{ commissionRate:5, settlementDays:3, escrowEnabled:false, kycRequired:false },
     integrations:{ financial:true, chat:true, notifications:true, search:true, ai:true, analytics:true, trust_safety:true, subscriptions:true, logistics:true, etims:true },
   },

@@ -1148,7 +1148,7 @@ const _PAGE_MAP = {
   'self catering':'short-stays.html', 'weekend':'short-stays.html',
   'hotel':'hotels.html', 'lodge':'hotels.html', 'resort':'hotels.html',
   'ride':'ride.html', 'boda':'ride.html', 'taxi':'ride.html', 'cab':'ride.html', 'lift':'ride.html',
-  'shop':'marketplace.html', 'marketplace':'marketplace.html', 'product':'marketplace.html', 'buy':'marketplace.html', 'shopping':'marketplace.html',
+  'shop':'/', 'marketplace':'/', 'product':'/', 'buy':'/', 'shopping':'/',
   'service':'services.html', 'plumber':'services.html', 'cleaner':'services.html', 'tutor':'services.html',
   'food':'food-hub.html', 'restaurant':'food-hub.html', 'grocery':'food-hub.html', 'delivery food':'food-hub.html',
   'property':'property-hub.html', 'house':'property-hub.html', 'land':'property-hub.html', 'apartment for sale':'property-hub.html',
@@ -1227,7 +1227,7 @@ async function _execChatTool(name, input, ctx) {
       }
 
       if (!rows.length) return { found: 0, message: "No listings found. The platform is growing — try different keywords or browse the marketplace." };
-      ctx.addAction({ label: "Browse Marketplace", url: "marketplace.html" });
+      ctx.addAction({ label: "Browse Marketplace", url: "/" });
       return { found: rows.length, listings: rows.map(r => ({ name:r.name, price:`KES ${Number(r.price||0).toLocaleString()}`, category:r.category, rating:r.rating?`${r.rating}★`:null })) };
     }
 
@@ -1334,7 +1334,7 @@ async function _execChatTool(name, input, ctx) {
       if (!ctx.uid) return _authRequired();
       const snap = await db.collection("carts").doc(ctx.uid).collection("items").limit(15).get().catch(() => ({ docs: [] }));
       if (snap.empty) {
-        ctx.addAction({ label: "🛍️ Browse Marketplace", url: "marketplace.html" });
+        ctx.addAction({ label: "🛍️ Browse Marketplace", url: "/" });
         return { empty: true, message: "Your cart is empty. Start shopping!" };
       }
       const items = snap.docs.map(d => d.data());
@@ -1546,7 +1546,7 @@ COMPLETE PLATFORM MAP
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 SHOPPING & PRODUCTS
-• Marketplace → marketplace.html
+• Marketplace → /
   Everything for sale: electronics, fashion, beauty, home & garden, sports, books, baby, pet supplies, office, tools, art, collectibles. Filter by category, price, location, seller rating. Cart → checkout → M-Pesa/card.
 • Digital / Tech Hub → digital-hub.html
   Software licences, e-books, templates, plugins, courses, app subscriptions, stock photos, fonts, digital art. Instant delivery to email.
