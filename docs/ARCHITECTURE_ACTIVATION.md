@@ -92,6 +92,34 @@ hard prerequisite for Gate 7, and it is not an engineering decision.
 
 ---
 
+## Verification registry
+
+> **The proof is the artifact, not the intent.** A verifier is not trusted because it exists.
+> It is trusted because there is a recorded, repeatable demonstration that it fails when the
+> defect it claims to detect is reintroduced. Until that demonstration exists, a verifier is
+> **Unvalidated** — and a passing Unvalidated verifier is an assumption wearing the costume
+> of evidence.
+
+| Verifier | Detects | Proven to fail? | Demonstration | Status |
+|---|---|---|---|---|
+| `scripts/verify-entitlement.js` | Client-supplied money reaching a CF | **Yes** | Injected a `request.data` money read → 83→84, build fails; removed → PASS | **Validated** |
+| `scripts/test-root-identity.js` | Store page served as the homepage | **Yes** | Reverted guard to fail-open → 2 failures; stripped `ministore` marker → 1 failure | **Validated** |
+| `scripts/test-seller-dashboard.js` | Dashboard tiles not resolving | Partial | Suite pre-dates this discipline; no recorded reinjection | **Unvalidated** |
+| `scripts/verify-commission-single-source.js` | Duplicate commission tables | **No** | **Known blind spot** — detects tables, not inline arithmetic. Reports PASS while `sokoni-orders.js:227` persists `commissionPct ?? 12` at 4× canonical | **Unvalidated — actively misleading** |
+| `reconcileLedger` (`finos.js:859-890`) | Ledger imbalance | **No — cannot fail** | Sums −x and +x per entry, asserts zero. Tautological by construction | **Invalid.** Provides no evidence |
+
+**Rule:** a verifier enters this table as *Unvalidated*. It becomes *Validated* only when the
+reinjection demonstration is recorded in the row. Two of the five above report PASS today
+while proving nothing — and `reconcileLedger` was presumably written by someone who believed
+it verified something. That is the failure mode this rule exists to catch.
+
+`verify-entitlement.js` failed its own demonstration on the first attempt: `[^}]*` bound to
+the outer arrow-function brace and the injected read went undetected. It was fixed and
+re-demonstrated. Had the demonstration been skipped, an unconditionally-passing verifier would
+have been committed as the Canonical Entitlement Authority.
+
+---
+
 ## Gate 9 release checklist
 
 Production activation is a controlled release event, not a configuration change. The IntaSend
