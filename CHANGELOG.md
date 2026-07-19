@@ -7,33 +7,38 @@ to production hosting. No payment, tax, wallet, settlement or commission logic w
 
 ### Files affected
 
--  — text fitting
--  — namespace merge (deployed earlier as 645f63f)
--  — CACHE_VERSION v83 -> v84
--  — exclude Bravilex source artwork from public hosting
--  — new
+- `sokoni-receipt-engine.js` — text fitting
+- `pos-receipt-engine.js` — namespace merge (deployed earlier as 645f63f)
+- `service-worker.js` — CACHE_VERSION v83 → v84
+- `firebase.json` — exclude Bravilex source artwork from public hosting
+- `docs/RECEIPT_ENGINE.md` — new
 
 ### Defects fixed
 
-1. **Namespace collision.**  assigned over ,
-   destroying every ESC/POS method on POS pages. Now merges.
+1. **Namespace collision.** `pos-receipt-engine.js` assigned over `window.SokoniReceiptEngine`,
+   destroying every ESC/POS method on POS pages. Now merges into it.
 2. **Identity fields clipped.** Customer, cashier and table fields were emitted through a single
-    call, which clips to the paper width. A 38-character name printed as 37 characters
-   with no indication. Now wrapped with a hanging indent, first row budgeted at (cols - label length).
-3. **Unbreakable tokens clipped.**  split on spaces only, so a token wider than the line
-   had no break point and was pushed out whole for  to clip. Long product SKUs and
-   verification URLs lost characters. Tokens wider than the line are now hard-broken.
+   `line()` call, which clips to the paper width. A 38-character name printed as 37 characters with
+   no indication of loss. Now wrapped with a hanging indent, the first row budgeted at
+   `cols - label.length` so the label cannot push it back over the limit.
+3. **Unbreakable tokens clipped.** `_wrap()` split on spaces only, so a token wider than the line had
+   no break point and was pushed out whole for `line()` to clip. Long product SKUs and verification
+   URLs lost characters. Tokens wider than the line are now hard-broken before wrapping.
 4. **Item names unwrapped.** Now wrapped at full width.
 
-The  fix also covers delivery address, delivery notes, warehouse note, footer and
-warranty text, which share the helper.
+The `_wrap()` fix also covers delivery address, delivery notes, warehouse note, footer and warranty
+text, which share the helper.
 
 ### Verification
 
-Runtime, against deployed production bytes at 58 mm (32 cols) and 80 mm (48 cols): no characters
-lost, no printable line exceeds the paper width, across names to 64 chars, item names to 88 chars,
-and unbroken tokens. Regressions pass: 120 line items, empty cart, zero-VAT. Label engine emits
-TSPL/ZPL/ESC-POS/HTML without error. No application JavaScript errors.
+Runtime, against the deployed production bytes, at 58 mm (32 cols) and 80 mm (48 cols): no characters
+lost and no printable line exceeds the paper width, across names to 64 characters, item names to 88
+characters, and unbroken tokens with no spaces. Regressions pass: 120 line items, empty cart, zero-VAT.
+Label engine emits TSPL, ZPL, ESC/POS and HTML without error. No application JavaScript errors.
+
+Two earlier reports were withdrawn as measurement error, not code defects: a "120 items never render"
+finding (called `buildReceiptBytes` with a flat object instead of `({data}, {paperWidth})`) and
+"lines exceed paper width" (the ESC/POS stripper missed `GS !`, counting control bytes as printable).
 
 ### Database changes
 
@@ -45,18 +50,24 @@ None.
 
 ### Security changes
 
- (1.4 MB, untracked) would have been published at a guessable URL
-by . Nothing loads it at runtime —  cites it only in a
-provenance comment. Excluded from hosting: customer-facing brand is always SOKONI.
+`assets/Bravilex identity.png` (1.4 MB, untracked) would have been published at a guessable URL by
+`public: "."`. Nothing loads it at runtime — `assets/branding/brand-tokens.css` cites it only in a
+provenance comment. Now excluded from hosting: customer-facing brand is always SOKONI, and Bravilex
+appears only in legal, tax and settlement contexts.
 
 ### Breaking changes
 
 None.
 
+### Deployment
+
+`firebase deploy --only hosting`. Requires the `CACHE_VERSION` bump, otherwise installed POS terminals
+keep serving the cached engine.
+
 ### Deferred
 
 Transaction ID, IntaSend reference, service fee, merchant earnings and verification code remain
-unimplemented pending the first live payment. See docs/RECEIPT_ENGINE.md.
+unimplemented pending the first live payment. See `docs/RECEIPT_ENGINE.md`.
 
 ---
 
