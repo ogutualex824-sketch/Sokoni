@@ -236,15 +236,12 @@ console.log('\nOverlay architecture — can every sheet beat the header?\n');
       }
     }
   }
-  /* Known pre-existing offenders. security.js is deliberately NOT here: it was the one
-     this check was written for and it is fixed. These three are the same class and the
-     same latent bug — a header punching through their scrim — but fixing them is a
-     separate change with its own verification, so they are pinned rather than silently
-     tolerated. The list may SHRINK freely; it must never grow. */
-  const KNOWN = new Set([
-    'sokoni-branch.js', 'sokoni-sasos.js', 'sokoni-subscriptions.js',
-    'hub-wiring.js', 'sokoni-barcode.js',
-  ]);
+  /* EMPTY, and it must stay that way. Every JS-injected full-screen overlay now uses a
+     platform token. This was briefly a pin-list of five (sokoni-branch, sokoni-sasos,
+     sokoni-subscriptions, hub-wiring, sokoni-barcode); all five were migrated to
+     --sk-z-sheet, so there is nothing left to tolerate. A new entry here means someone
+     hardcoded a z-index below the header again — fix the overlay, do not extend this. */
+  const KNOWN = new Set([]);
   const fresh = offenders.filter(o => !KNOWN.has(o.split(' ')[0]));
 
   if (fresh.length) {
@@ -254,6 +251,54 @@ console.log('\nOverlay architecture — can every sheet beat the header?\n');
     ok('no NEW JS-injected full-screen overlay sits below the header'
        + ` (${KNOWN.size - stale.length} known legacy pinned`
        + (stale.length ? `; ${stale.join(', ')} now fixed — remove from KNOWN` : '') + ')');
+  }
+}
+
+/* ── 4c. SCROLL-LOCK CONSISTENCY ───────────────────────────────────────────────
+   An audit found 15 independent scroll-lock implementations in root JS. Only three
+   use the iOS-safe pattern (position:fixed + negative top). The rest set
+   body{overflow:hidden} — which this codebase already documents as broken:
+
+     "iOS Safari bug: body{overflow:hidden} on a scrolled page offsets fixed-element
+      tap targets by window.scrollY, making the Accept button unreachable and
+      freezing the entire UI."                             — security.js
+
+   So an overlay opened after the user has scrolled can put its own close button out
+   of reach on iPhone. Only the canonical lock is refcounted, so nested overlays using
+   the others also unlock each other prematurely.
+
+   Migrating twelve files is twelve chances to break something and needs per-page
+   verification, so they are PINNED here as measured debt rather than rewritten blind.
+   The gate's job is to stop the divergence growing. */
+{
+  const CANON = 'SokoniLayout.lockScroll';
+  const LEGACY = new Set([
+    'adult-gate.js', 'hub-register.js', 'pos-scanner.js', 'script.js', 'seller.js',
+    'sokoni-branch.js', 'sokoni-education.js', 'sokoni-jobs.js',
+    'sokoni-payment-trust.js', 'sokoni-sheet.js', 'sokoni-ui-extras.js', 'sokoni-ui.js',
+    /* Calls SokoniLayout.lockScroll() AND sets body{overflow:hidden} itself — the
+       canonical lock plus a redundant legacy one on top of it. */
+    'sokoni-notif-center.js',
+  ]);
+  const found = [];
+  for (const f of fs.readdirSync(ROOT).filter(n => n.endsWith('.js'))) {
+    let src;
+    try { src = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    if (/body\.style\.overflow\s*=\s*['"]hidden['"]|setProperty\(\s*['"]overflow['"]\s*,\s*['"]hidden['"]/.test(code)) {
+      found.push(f);
+    }
+  }
+  const fresh = found.filter(f => !LEGACY.has(f));
+  const fixed = [...LEGACY].filter(f => !found.includes(f));
+
+  if (fresh.length) {
+    bad(`new body{overflow:hidden} scroll lock in: ${fresh.join(', ')} — use ${CANON}() `
+      + '(refcounted + iOS-safe). body{overflow:hidden} can put an overlay\'s close button '
+      + 'out of reach on iPhone Safari.');
+  } else {
+    ok(`no NEW body{overflow:hidden} scroll locks (${found.length} legacy pinned`
+      + (fixed.length ? `; ${fixed.join(', ')} migrated — remove from LEGACY` : '') + ')');
   }
 }
 

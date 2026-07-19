@@ -337,25 +337,54 @@
   var _scrollLockCount = 0;
   var _scrollY = 0;
 
+  /* This is the CANONICAL scroll lock for the platform — refcounted, so nested overlays
+     cannot unlock each other, and iOS-safe (position:fixed + negative top, never
+     body{overflow:hidden}, which on iOS Safari offsets fixed tap targets by scrollY and
+     can make an overlay's own close button unreachable).
+
+     Both halves used to assign body.style.cssText wholesale. That is destructive: it
+     does not set five properties, it REPLACES every inline style on <body>, and unlock
+     cleared the lot with cssText = ''. Any inline body style set by anything else — a
+     theme, another overlay's lock, a page-level tweak — was silently destroyed by an
+     unrelated overlay opening or closing. That made this implementation unsafe to adopt,
+     which is part of why twelve other files rolled their own instead.
+
+     Now it touches only the properties it owns, and removes only those on unlock. */
+  var _LOCK_PROPS = ['position', 'top', 'left', 'right', 'overflow-y'];
+
   function lockScroll() {
     _scrollLockCount++;
     if (_scrollLockCount !== 1) return;
     _scrollY = global.scrollY || document.documentElement.scrollTop;
-    document.body.style.cssText = [
-      'position:fixed',
-      'top:-' + _scrollY + 'px',
-      'left:0',
-      'right:0',
-      'overflow-y:scroll'
-    ].join(';');
+    var s = document.body.style;
+    s.setProperty('position', 'fixed');
+    s.setProperty('top', '-' + _scrollY + 'px');
+    s.setProperty('left', '0');
+    s.setProperty('right', '0');
+    s.setProperty('overflow-y', 'scroll');
   }
 
   function unlockScroll() {
     _scrollLockCount = Math.max(0, _scrollLockCount - 1);
     if (_scrollLockCount !== 0) return;
-    document.body.style.cssText = '';
+    for (var i = 0; i < _LOCK_PROPS.length; i++) {
+      document.body.style.removeProperty(_LOCK_PROPS[i]);
+    }
     global.scrollTo(0, _scrollY);
   }
+
+  /* A lock is page state, and a bfcache restore reinstates the DOM with the lock still
+     applied but every overlay's JS state gone — the page comes back permanently frozen.
+     Safari restores from bfcache on every back-navigation, so this is a routine path,
+     not an edge case. Release on restore. */
+  global.addEventListener('pageshow', function (e) {
+    if (!e.persisted) return;
+    if (_scrollLockCount === 0) return;
+    _scrollLockCount = 0;
+    for (var i = 0; i < _LOCK_PROPS.length; i++) {
+      document.body.style.removeProperty(_LOCK_PROPS[i]);
+    }
+  });
 
   /* ─────────────────────────────────────────────────────────────────────────
      RESPONSIVE HELPERS

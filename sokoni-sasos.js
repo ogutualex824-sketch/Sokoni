@@ -72,7 +72,7 @@
     overlay.setAttribute('aria-modal', 'true');
     overlay.setAttribute('aria-label', 'Feature requires upgrade');
     overlay.style.cssText = [
-      'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.6)',
+      'position:fixed;inset:0;z-index:var(--sk-z-sheet,100010);background:rgba(0,0,0,.6)',
       'display:flex;align-items:center;justify-content:center;padding:16px',
     ].join(';');
 

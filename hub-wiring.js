@@ -344,7 +344,7 @@
       modal = document.createElement('div');
       modal.id = 'hwGenericEditModal';
       modal.style.cssText = [
-        'position:fixed','inset:0','z-index:9999',
+        'position:fixed','inset:0','z-index:var(--sk-z-sheet,100010)',
         'background:rgba(0,0,0,.5)',
         'display:flex','align-items:center','justify-content:center',
       ].join(';');

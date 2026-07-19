@@ -99,7 +99,7 @@
     m.setAttribute('aria-modal', 'true');
     m.setAttribute('aria-label', 'Select branch');
     m.style.cssText = [
-      'display:none;position:fixed;inset:0;z-index:9600;',
+      'display:none;position:fixed;inset:0;z-index:var(--sk-z-sheet,100010);',
       'background:rgba(0,0,0,0.78);backdrop-filter:blur(8px);',
       'align-items:flex-end;justify-content:center;',
       'padding-bottom:env(safe-area-inset-bottom);'

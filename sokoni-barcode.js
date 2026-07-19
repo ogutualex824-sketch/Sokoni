@@ -115,7 +115,7 @@
       overlay.id    = '_sbc_modal';
       overlay.setAttribute('role','dialog');
       overlay.style.cssText = [
-        'position:fixed;inset:0;background:#000;z-index:10000',
+        'position:fixed;inset:0;background:#000;z-index:var(--sk-z-sheet,100010)',
         'display:flex;flex-direction:column;align-items:center',
       ].join(';');
 

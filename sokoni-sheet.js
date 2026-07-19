@@ -397,10 +397,30 @@
     }
   }
 
-  var _raf = 0;
+  var _raf = 0, _trail = 0;
   function schedulePromote() {
     if (_raf) cancelAnimationFrame(_raf);
     _raf = requestAnimationFrame(promote);
+
+    /* ── Why a SECOND, trailing pass ────────────────────────────────────────────
+       The rAF pass can run before the element has settled. promote() is entirely
+       geometric and skips anything with opacity < 0.05 or smaller than 92% of the
+       viewport — both true of an overlay that animates in (opacity 0 -> 1) or is
+       measured on the frame it was inserted, before layout gives it its size.
+
+       Skipping does NOT set __skPromoted, so the element stays eligible — but the
+       only triggers are insert, click and resize, and none of them fire again. The
+       overlay is then stranded below the header until the user taps something.
+
+       This was observed, not theorised: repeating the insert probe promoted the
+       overlay on some runs and left it at its hardcoded z-index on others. A fix
+       that works intermittently is not a fix.
+
+       So re-check once the transition has had time to finish. 260ms clears the
+       platform's .2s/.25s transitions with margin. Debounced, so a burst of
+       mutations still costs exactly one trailing pass. */
+    if (_trail) clearTimeout(_trail);
+    _trail = setTimeout(function () { _trail = 0; promote(); }, 260);
   }
 
   function watch() {
@@ -409,6 +429,35 @@
        cost is a layout read, not a listener storm. */
     doc.addEventListener('click', schedulePromote, { passive: true, capture: true });
     global.addEventListener('resize', schedulePromote, { passive: true });
+
+    /* ── The ASYNC-INJECTION GAP ────────────────────────────────────────────────
+       The three triggers above are DOMContentLoaded, a click and a resize. An overlay
+       injected asynchronously — after load, with no click — is therefore not promoted
+       on the frame the user first sees it.
+
+       That is not hypothetical. The privacy consent banner is injected by security.js
+       after load and sat at z-index 99997, under the header (100001). On the Restaurant
+       Portal that produced a crisp header over a blurred, unscrollable content area:
+       reported as "the page is broken", because nothing about it read as an open dialog.
+       The user had to tap the scrim to trigger the click pass that fixed it — and there
+       is no reason to tap something that looks broken.
+
+       promote() was already exposed "so a page that renders an overlay asynchronously
+       can force a pass". Nothing ever called it. An API that must be remembered is not
+       an architectural fix; the whole point of this module is to catch overlays nobody
+       will migrate.
+
+       So watch insertions — but narrowly. The comment above rightly rejects a
+       document-wide subtree MutationObserver on cost grounds. This observes childList
+       on <body> ONLY, with subtree:false: overlays are appended to body, and a direct
+       body-child mutation is rare and cheap. No subtree walking, no attribute watching.
+       Same rAF debounce as every other trigger, so a burst of appends costs one pass. */
+    if (global.MutationObserver && doc.body) {
+      try {
+        new MutationObserver(schedulePromote)
+          .observe(doc.body, { childList: true, subtree: false });
+      } catch (_) { /* never let the observer break the page */ }
+    }
   }
 
   if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', watch, { once: true });

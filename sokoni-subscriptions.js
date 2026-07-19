@@ -194,7 +194,7 @@
     const modal = document.createElement('div');
     modal.id = '_sokoniUpgradePrompt';
     modal.style.cssText = `
-      position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.7);
+      position:fixed;inset:0;z-index:var(--sk-z-sheet,100010);background:rgba(0,0,0,0.7);
       display:flex;align-items:center;justify-content:center;padding:20px;
     `;
     const planLabel = requiredPlan.charAt(0).toUpperCase() + requiredPlan.slice(1);
