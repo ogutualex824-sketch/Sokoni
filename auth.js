@@ -1210,7 +1210,61 @@ async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
     } catch (err) {
         document.querySelectorAll('.auth-social-btn').forEach(function(b) { b.disabled = false; });
         if (gBtn) { gBtn.disabled = false; _googleBtnLabel(gBtn, 'Continue with Google'); }
-        const msg = _googleAuthErr(err.code) || (providerLabel + ' sign-in failed. Please try again.');
+        /* ── Structured OAuth diagnostics ────────────────────────────────────
+           This branch previously produced only the mapped string. For
+           auth/internal-error that string is "An unexpected error occurred.
+           Please try again." — which tells the user nothing and, more
+           importantly, left no record at all. A production Facebook failure was
+           reported with no server-side trace of the provider or the error code.
+
+           _googleAuthErr is also provider-blind despite serving Facebook here
+           (its messages name Google), so a Facebook failure could surface Google
+           wording. Provider substitution below fixes the copy without touching
+           the flow or the mapping itself — this is a working auth path and the
+           directive is explicit that it must not be redesigned to compensate for
+           a provider-side outage.
+
+           Note on interpretation: auth/internal-error is Firebase's generic
+           wrapper and does NOT by itself indicate a SOKONI defect. Observed on
+           this build, Google and Facebook return it identically from a headless
+           browser that cannot complete a popup flow. Read it alongside the
+           provider's own error page, not on its own. */
+        const code = (err && err.code) || 'unknown';
+        let msg = _googleAuthErr(code) || (providerLabel + ' sign-in failed. Please try again.');
+        /* The mapper's copy is Google-worded; make it match the provider used. */
+        if (providerLabel && providerLabel !== 'Google') {
+            msg = msg.replace(/\bGoogle\b/g, providerLabel);
+        }
+
+        console.error('[auth] OAuth failure', {
+            provider: providerLabel, code,
+            message:  (err && err.message) || null,
+            /* Meta/Google return provider detail here when they supply one. */
+            customData: (err && err.customData) ? JSON.stringify(err.customData).slice(0, 300) : null,
+            authDomain: (window.firebaseApp && window.firebaseApp.options && window.firebaseApp.options.authDomain) || null,
+            online: navigator.onLine,
+        });
+
+        /* Report to errorLog via logClientDiagnostic so an auth failure is
+           visible in the monitor instead of dying in a user's console.
+           Fire-and-forget: a diagnostics failure must never be shown on top of a
+           sign-in failure. Unauthenticated callers are rejected by the CF, which
+           is expected here — the console line above remains the fallback. */
+        try {
+            import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js')
+              .then(function (m) {
+                  var fn = m.httpsCallable(m.getFunctions(window.firebaseApp, 'us-central1'), 'logClientDiagnostic');
+                  return fn({
+                      severity: 'error', code: code, message: (err && err.message) || 'oauth failure',
+                      surface: 'auth-' + String(providerLabel).toLowerCase(),
+                      appVersion: 'auth-1.0', userAgent: navigator.userAgent,
+                      viewport: innerWidth + 'x' + innerHeight, online: navigator.onLine,
+                      url: location.pathname,
+                      context: { provider: providerLabel, authDomain: (window.firebaseApp && window.firebaseApp.options || {}).authDomain },
+                  });
+              }).catch(function () {});
+        } catch (_) {}
+
         if (msg) showAuthMsg(msg, 'error');
     }
 }
