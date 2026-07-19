@@ -613,7 +613,17 @@ a { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
    BOTTOM NAV — premium
 ══════════════════════════════════════════════ */
 .bottom-nav {
-  height: 56px !important;
+  /* Was: height: 56px !important.
+     box-sizing is border-box globally (style.css:127), so a locked height
+     INCLUDES the safe-area padding on the line below. On an iPhone the inset
+     is 34px, so the bar stayed 56px tall while 34px of it became bottom
+     padding -- the icons were pushed up and a 34px dead band sat beneath
+     them, reading as the nav floating above the bottom edge. Devices with no
+     home indicator were unaffected, which is why it looked device-specific.
+     style.css:11711 is the canonical rule and already correct: height:auto +
+     min-height:66px + padding-bottom:env(safe-area-inset-bottom). Defer to it
+     so the bar grows by exactly the inset instead of absorbing it. */
+  min-height: 56px !important;
   padding: 5px 4px env(safe-area-inset-bottom, 4px) !important;
   background: rgba(5,5,5,0.97) !important;
   border-top: 1px solid rgba(255,255,255,0.055) !important;
