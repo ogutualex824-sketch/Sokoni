@@ -91,6 +91,34 @@ check('seller CAN move accepted -> packing',
 check('every offered transition would be accepted by canAdvance',
       S.CANONICAL.every(from => C.allowedTransitions(from).every(t => S.canAdvance(from, t.stage))));
 
+console.log('\n── notify.js ORDER_TIMELINE absorbed (the fifth vocabulary) ──');
+const TIMELINE = ['received', 'paid', 'accepted', 'preparing', 'ready', 'assigned',
+                  'picked_up', 'halfway', 'near', 'delivered', 'completed'];
+for (const k of TIMELINE) {
+  check('timeline key "' + k + '" resolves', S.normalize(k) !== S.UNKNOWN, S.normalize(k));
+}
+check('timeline keys agree client/server',
+      TIMELINE.every(k => S.normalize(k) === C.normalize(k)));
+check('halfway + near collapse to in_transit',
+      S.normalize('halfway') === 'in_transit' && S.normalize('near') === 'in_transit');
+
+console.log('\n── resolveStage takes the furthest-along field ──');
+const CASES = [
+  { o: { status: 'paid', timelineStage: 'picked_up' },                       want: 'picked_up' },
+  { o: { status: 'accepted', deliveryStatus: 'driver_assigned' },            want: 'assigned'  },
+  { o: { status: 'paid', deliveryStatus: 'in_transit', timelineStage: 'ready' }, want: 'in_transit' },
+  { o: { timelineStage: 'received' },                                        want: 'pending'   },
+  { o: { status: 'teleported' },                                             want: S.UNKNOWN   },
+  { o: {},                                                                   want: S.UNKNOWN   },
+];
+for (const c of CASES) {
+  check('resolveStage ' + JSON.stringify(c.o).slice(0, 52), S.resolveStage(c.o) === c.want, S.resolveStage(c.o));
+}
+check('resolveStage agrees client/server',
+      CASES.every(c => S.resolveStage(c.o) === C.resolveStage(c.o)));
+check('a stale field cannot drag an order backwards',
+      S.resolveStage({ status: 'pending', timelineStage: 'delivered' }) === 'delivered');
+
 console.log('\n── Stall detection ──');
 check('fresh order is not stalled', C.isStalled('pending', Date.now() - 60 * 1000) === false);
 check('old pending order is stalled', C.isStalled('pending', Date.now() - 60 * 60 * 1000) === true);

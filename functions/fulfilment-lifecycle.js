@@ -76,6 +76,28 @@ const ALIASES = {
   returned: 'returned', return_initiated: 'returned', refunded: 'returned',
   cancelled: 'returned', canceled: 'returned', failed: 'returned',
   exhausted: 'returned', suspended: 'returned',
+
+  /* ── notify.js ORDER_TIMELINE (notify.js:622) ──────────────────────────
+     A fifth vocabulary, found while wiring the seller board. advanceOrder()
+     writes these keys to `timelineStage` — NOT to `status` — and each one
+     drives a customer notification. orderAdvance is deployed and track.html
+     already renders from it.
+
+     So an order advanced through orderAdvance carries its true stage in
+     timelineStage while `status` sits stale. A board reading only `status`
+     would show the wrong column. Absorbed here rather than taught to each
+     consumer separately.
+
+     `halfway` and `near` are in-transit sub-states with no canonical
+     equivalent; both collapse to in_transit, which is what a merchant board
+     needs. The finer granularity stays available in `timeline` for the
+     customer tracking view, where it is genuinely useful. */
+  received:  'pending',
+  preparing: 'packing',
+  ready:     'ready_for_pickup',
+  halfway:   'in_transit',
+  near:      'in_transit',
+  /* paid, accepted, assigned, picked_up, delivered, completed already map above */
 };
 
 const UNKNOWN = 'unknown';
@@ -125,8 +147,29 @@ const LABELS = {
   completed: 'Completed', returned: 'Returned', unknown: 'Unknown',
 };
 
+/* ── Which field actually holds an order's current stage ──────────────────
+   Three fields can carry it and they disagree by design:
+
+     timelineStage   written by orderAdvance (notify.js) — the freshest signal
+                     for anything that has moved through the notification engine
+     deliveryStatus  written by the dispatch engine once a rider is involved
+     status          the original order status; often stale after dispatch
+
+   Rather than have every consumer guess, resolve to whichever is FURTHEST
+   along. Taking the max instead of a fixed priority means a field that lags
+   cannot drag an order backwards — the failure that would show a merchant an
+   in-transit order sitting in "Packing". */
+function resolveStage(order) {
+  if (!order) return UNKNOWN;
+  const candidates = [order.timelineStage, order.deliveryStatus, order.status]
+    .map(normalize)
+    .filter((s) => s !== UNKNOWN);
+  if (!candidates.length) return UNKNOWN;
+  return candidates.reduce((best, s) => (ORDER[s] > ORDER[best] ? s : best), candidates[0]);
+}
+
 module.exports = {
   CANONICAL, ALIASES, LABELS, UNKNOWN,
-  normalize, isRiderActive, isTerminal, canAdvance,
+  normalize, isRiderActive, isTerminal, canAdvance, resolveStage,
   index: (v) => ORDER[normalize(v)],
 };

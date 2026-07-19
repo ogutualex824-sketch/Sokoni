@@ -45,6 +45,10 @@ window.SokoniLifecycle = (() => {
     returned: 'returned', return_initiated: 'returned', refunded: 'returned',
     cancelled: 'returned', canceled: 'returned', failed: 'returned',
     exhausted: 'returned', suspended: 'returned',
+    /* notify.js ORDER_TIMELINE keys (notify.js:622) — written to timelineStage
+       by advanceOrder, not to status. See the server module for why. */
+    received: 'pending', preparing: 'packing', ready: 'ready_for_pickup',
+    halfway: 'in_transit', near: 'in_transit',
   };
 
   const LABELS = {
@@ -80,6 +84,17 @@ window.SokoniLifecycle = (() => {
     if (a === UNKNOWN) return true;
     if (b === 'returned') return !isTerminal(a);
     return ORDER[b] >= ORDER[a];
+  }
+
+  /* Resolve an order's true stage. timelineStage (orderAdvance), deliveryStatus
+     (dispatch) and status can disagree; take whichever is FURTHEST along so a
+     lagging field cannot drag an order backwards into the wrong column. */
+  function resolveStage(order) {
+    if (!order) return UNKNOWN;
+    const c = [order.timelineStage, order.deliveryStatus, order.status]
+      .map(normalize).filter(s => s !== UNKNOWN);
+    if (!c.length) return UNKNOWN;
+    return c.reduce((best, s) => (ORDER[s] > ORDER[best] ? s : best), c[0]);
   }
 
   /* ── UI-only helpers. These do NOT exist server-side and are excluded from
@@ -133,7 +148,7 @@ window.SokoniLifecycle = (() => {
 
   return {
     CANONICAL, ALIASES, LABELS, UNKNOWN, SELLER_ACTIONABLE, STALL_MINUTES,
-    normalize, isRiderActive, isTerminal, canAdvance,
+    normalize, isRiderActive, isTerminal, canAdvance, resolveStage,
     label, boardColumns, allowedTransitions, sellerActions, isStalled,
     index: (v) => ORDER[normalize(v)],
   };
