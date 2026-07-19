@@ -4087,6 +4087,93 @@ function mvRenderVehiclesList(vehicles) {
   }).join('');
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   [VehicleHub] DIAGNOSTICS
+
+   Every Vehicle Hub action reports through here, so a failure on a real phone
+   yields a root cause rather than a symptom. One namespace, one shape, so logs
+   can be read (and pasted) without knowing which function produced them.
+
+   Emits, per action: click received, each step, auth uid, App Check presence,
+   error code + stack, and total duration.
+
+   Deliberately NOT wrapped in try/catch suppression: if the tracer itself
+   fails it must be loud, because a silent tracer is worse than none. */
+window._vh = (function () {
+  var SEQ = 0;
+
+  function ctx() {
+    var u = null;
+    try { u = (window.firebaseAuth && window.firebaseAuth.currentUser) || null; } catch (e) {}
+    return {
+      uid: u ? u.uid : null,
+      signedIn: !!u,
+      appCheck: !!(window.firebaseApp),      /* app present => App Check initialised by firebase.js */
+      online: navigator.onLine,
+    };
+  }
+
+  function start(action, vehicle) {
+    var id = ++SEQ;
+    var t0 = (performance && performance.now) ? performance.now() : Date.now();
+    var c = ctx();
+    var tag = '[VehicleHub] #' + id + ' ' + action;
+
+    console.groupCollapsed
+      ? console.groupCollapsed(tag + (vehicle ? ' · ' + vehicle : ''))
+      : console.log(tag);
+    console.log('  click received  uid=' + (c.uid || 'ANONYMOUS') +
+                '  signedIn=' + c.signedIn + '  appCheck=' + c.appCheck + '  online=' + c.online);
+
+    var steps = [];
+    function dur() {
+      var t1 = (performance && performance.now) ? performance.now() : Date.now();
+      return Math.round(t1 - t0);
+    }
+    return {
+      step: function (label, detail) {
+        steps.push(label);
+        console.log('  ' + label + (detail !== undefined ? ': ' + detail : ''));
+        return this;
+      },
+      ok: function (detail) {
+        console.log('  SUCCESS' + (detail !== undefined ? ': ' + detail : '') + '  (' + dur() + 'ms)');
+        if (console.groupEnd) console.groupEnd();
+        return { ok: true, ms: dur() };
+      },
+      fail: function (err, userMessage) {
+        var code = (err && (err.code || err.name)) || 'unknown';
+        var msg  = (err && err.message) || String(err || 'unknown error');
+        console.error('  FAILED  code=' + code + '  message=' + msg + '  (' + dur() + 'ms)');
+        console.error('  steps completed: ' + (steps.join(' → ') || 'none'));
+        if (err && err.stack) console.error('  stack:', err.stack);
+        if (console.groupEnd) console.groupEnd();
+
+        /* Surface to the user — never leave the interface unchanged. */
+        if (userMessage !== false) {
+          try { showFleetMsg(userMessage || (msg || 'Something went wrong. Please try again.')); } catch (e) {}
+        }
+        /* Ship to errorLog where the diagnostics CF is reachable. */
+        try {
+          if (window.SokoniAsync && window.SokoniAsync.report) {
+            window.SokoniAsync.report('vehicle-hub', action, err, { vehicle: vehicle || null, steps: steps });
+          }
+        } catch (e) {}
+        return { ok: false, code: code, ms: dur() };
+      },
+      /* For guard clauses that previously returned silently. */
+      blocked: function (reason, userMessage) {
+        console.warn('  BLOCKED: ' + reason + '  (' + dur() + 'ms)');
+        if (console.groupEnd) console.groupEnd();
+        try { showFleetMsg(userMessage || reason); } catch (e) {}
+        return { ok: false, blocked: reason };
+      },
+    };
+  }
+
+  return { start: start, ctx: ctx };
+})();
+
 function mvOpenPerms(vehicleId, vehicleName) {
   _mvActiveVehicleId = vehicleId;
   var panel = document.getElementById('mvPermsPanel');
@@ -4125,7 +4212,10 @@ function mvOpenServicePanel(vehicleId, vehicleName) {
 }
 
 function mvSaveServiceRecord() {
-  if (!_mvActiveVehicleId || !window.SokoniTracking) return;
+  var t = window._vh.start('AddService', _mvActiveVehicleId || '(none)');
+  if (!_mvActiveVehicleId) return t.blocked('no active vehicle', 'Select a vehicle first.');
+  if (!window.SokoniTracking) return t.blocked('SokoniTracking not loaded', 'Vehicle tracking is still starting up. Please refresh.');
+  t.step('validated');
   var msg = document.getElementById('mvSvcMsg');
   var rec = {
     type:      document.getElementById('svcType').value,
@@ -4178,26 +4268,46 @@ function mvLoadServiceHistory(vehicleId, vehicleName) {
 }
 
 function mvEnableTheft(vehicleId,_c) {
-  if (!window.SokoniTracking) { showFleetMsg('Module not ready'); return; }
-  if(!_c){_skConfirm('Activate THEFT RECOVERY MODE for this vehicle?',()=>mvEnableTheft(vehicleId,true));return;}
+  var t = window._vh.start('TheftMode:ON', vehicleId);
+  if (!window.SokoniTracking) return t.blocked('SokoniTracking not loaded', 'Vehicle tracking is still starting up. Please refresh.');
+  if(!_c){ t.step('awaiting confirmation'); _skConfirm('Activate THEFT RECOVERY MODE for this vehicle?',()=>mvEnableTheft(vehicleId,true)); if(console.groupEnd)console.groupEnd(); return; }
+  t.step('confirmed'); t.step('firestore update started');
   window.SokoniTracking.enableTheftMode(vehicleId)
-    .then(function() { showFleetMsg('Theft recovery mode activated!'); trkLoadMyVehicles(); })
+    .then(function() { t.step('firestore success'); showFleetMsg('Theft recovery mode activated!'); trkLoadMyVehicles(); t.ok(); })
     .catch(function(e) { showFleetMsg(e.message); });
 }
 
 function mvDisableTheft(vehicleId) {
-  if (!window.SokoniTracking) { showFleetMsg('Module not ready'); return; }
+  var t = window._vh.start('TheftMode:OFF', vehicleId);
+  if (!window.SokoniTracking) return t.blocked('SokoniTracking not loaded', 'Vehicle tracking is still starting up. Please refresh.');
+  t.step('firestore update started');
   window.SokoniTracking.disableTheftMode(vehicleId)
-    .then(function() { showFleetMsg('Theft recovery mode disabled.'); trkLoadMyVehicles(); })
-    .catch(function(e) { showFleetMsg(e.message); });
+    .then(function() { t.step('firestore success'); showFleetMsg('Theft recovery mode disabled.'); trkLoadMyVehicles(); t.ok(); })
+    .catch(function(e) { t.fail(e, 'Could not disable theft mode: ' + (e && e.message ? e.message : 'unknown error')); });
 }
 
 function mvDeleteVehicle(vehicleId, label,_c) {
-  if (!window.SokoniTracking) { showFleetMsg('Module not ready'); return; }
-  if(!_c){_skConfirm('Remove vehicle from tracking? This cannot be undone.',()=>mvDeleteVehicle(vehicleId,label,true));return;}
+  var t = window._vh.start('Remove', label || vehicleId);
+  if (!window.SokoniTracking) return t.blocked('SokoniTracking not loaded', 'Vehicle tracking is still starting up. Please refresh.');
+  if (!vehicleId) return t.blocked('no vehicleId', 'Could not identify that vehicle.');
+  if (!_c) {
+    t.step('awaiting confirmation');
+    if (typeof _skConfirm !== 'function') return t.blocked('_skConfirm missing', 'Confirmation dialog unavailable.');
+    _skConfirm('Remove vehicle from tracking? This cannot be undone.', function(){ mvDeleteVehicle(vehicleId,label,true); });
+    if (console.groupEnd) console.groupEnd();
+    return;
+  }
+  t.step('confirmed');
+  t.step('firestore delete started', vehicleId);
   window.SokoniTracking.deleteVehicle(vehicleId)
-    .then(function() { trkLoadMyVehicles(); })
-    .catch(function(e) { showFleetMsg(e.message); });
+    .then(function() {
+      t.step('firestore delete success');
+      trkLoadMyVehicles();
+      t.step('refresh requested');
+      showFleetMsg('Vehicle removed.');
+      t.ok();
+    })
+    .catch(function(e) { t.fail(e, 'Could not remove this vehicle: ' + (e && e.message ? e.message : 'unknown error')); });
 }
 
 /* Init tracking if navigating directly via URL hash */
