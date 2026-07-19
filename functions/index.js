@@ -8917,6 +8917,13 @@ exports.generateSecureQR  = qr.generateSecureQR;
 exports.verifyQRCode      = qr.verifyQRCode;
 exports.getMyQRAssets     = qr.getMyQRAssets;
 
+/* ── Role-based fulfilment scan ────────────────────────────────────
+   One package QR; what it reveals depends on who scans it. Reads the same
+   qrTokens document as verifyQRCode but never consumes it, because a package
+   is scanned repeatedly by seller, rider and customer. */
+const _fulfilScan = require('./fulfilment-scan');
+exports.fulfilmentScan    = _fulfilScan.fulfilmentScan;
+
 
 /* ── Super Admin CFs v1.0 ──────────────────────────────────────── */
 const superAdmin = require('./super-admin');

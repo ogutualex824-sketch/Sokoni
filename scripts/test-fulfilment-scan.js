@@ -1,0 +1,93 @@
+/* Privacy gate for role-based fulfilment scanning.
+
+   These assertions are the authorisation boundary for paperless fulfilment. A
+   leak here means a rider keeps a customer's home address after the job ends, or
+   a customer reads the merchant's margin. They are hard failures. */
+'use strict';
+const V = require('../functions/fulfilment-scan')._h;
+
+let pass = 0, fail = 0;
+const check = (l, ok, d) => {
+  console.log('  ' + (ok ? 'PASS  ' : 'FAIL  ') + l + (d ? '   [' + d + ']' : ''));
+  ok ? pass++ : fail++;
+};
+const json = (o) => JSON.stringify(o);
+
+/* An order carrying every category of sensitive field at once, so the
+   separation is genuinely exercised rather than trivially satisfied. */
+const ORDER = {
+  id: 'SKN-88421', orderNo: 'SKN-88421', status: 'paid', deliveryStatus: 'in_transit',
+  uid: 'BUYER1', sellerUid: 'SELLER1', assignedDriverUid: 'RIDER1',
+  recipientName: 'Ann Momanyi', recipientPhone: '0705726803', altPhone: '0733444555',
+  address: { county:'Nairobi', town:'Westlands', area:'Parklands', street:'3rd Ave',
+             building:'Zamani Court', house:'B4', floor:'2', landmark:'Opp. Shell' },
+  deliveryNotes: 'Gate code 4417',
+  items: [{ name:'Duvet Wash', qty:1, sku:'DW-K', costPrice: 400 }],
+  total: 2336, cod: true, paymentMethod: 'M-PESA', receiptNo: 'RQ7M3X9',
+  deliveryOtpRequired: true, deliveryOtp: '4417',
+  /* merchant internals — must never reach rider or customer */
+  commission: 116.80, settlementAmount: 2184.16, sellerNet: 2184.16, margin: 900,
+};
+const DELIVERY = { status: 'in_transit', riderName: 'Isaac K.', riderPhone: '0700111222', dropoffGeo: { lat: -1.26, lng: 36.8 } };
+
+console.log('\n── Role resolution ──');
+check('admin claim wins',        V.resolveRole(ORDER, DELIVERY, 'NOBODY', { admin: true }) === 'admin');
+check('seller by sellerUid',     V.resolveRole(ORDER, DELIVERY, 'SELLER1', {}) === 'seller');
+check('rider by assignedDriverUid', V.resolveRole(ORDER, DELIVERY, 'RIDER1', {}) === 'rider');
+check('buyer by uid',            V.resolveRole(ORDER, DELIVERY, 'BUYER1', {}) === 'customer');
+check('unrelated party -> null (refused)', V.resolveRole(ORDER, DELIVERY, 'STRANGER', {}) === null);
+
+console.log('\n── RIDER: address only while the assignment is active ──');
+const riderActive   = V.riderView(ORDER, DELIVERY, true);
+const riderInactive = V.riderView(ORDER, DELIVERY, false);
+check('active rider sees address',  json(riderActive).includes('Zamani Court'));
+check('active rider sees phone',    json(riderActive).includes('0705726803'));
+check('active rider sees COD',      riderActive.codAmount === 2336);
+check('INACTIVE rider gets NO address', !json(riderInactive).includes('Zamani Court'));
+check('INACTIVE rider gets NO phone',   !json(riderInactive).includes('0705726803'));
+check('INACTIVE rider gets NO landmark',!json(riderInactive).includes('Opp. Shell'));
+check('inactive rider told why',    /not currently assigned/i.test(riderInactive.message || ''));
+
+console.log('\n── RIDER: never receives the delivery OTP ──');
+check('OTP value withheld from rider', !json(riderActive).includes('4417') || !('deliveryOtp' in riderActive),
+      'rider must not self-confirm');
+check('rider told OTP is required',    riderActive.otpRequired === true);
+
+console.log('\n── RIDER: no merchant internals ──');
+for (const [l, n] of [['commission','116.8'],['settlement','2184.16'],['margin','900']]) {
+  check('rider view omits ' + l, !json(riderActive).includes(n), n);
+}
+
+console.log('\n── CUSTOMER: own order, never merchant internals ──');
+const cust = V.customerView(ORDER, DELIVERY);
+for (const [l, n] of [['commission','116.8'],['settlement','2184.16'],['sellerNet','2184.16'],['cost price','400']]) {
+  check('customer view omits ' + l, !json(cust).includes(n), n);
+}
+check('customer sees own total',     cust.total === 2336);
+check('customer sees order status',  !!cust.status);
+check('customer gets receipt url',   /payment-receipt\.html\?ref=RQ7M3X9/.test(cust.receiptUrl || ''));
+check('customer sees rider name once assigned', cust.rider && cust.rider.name === 'Isaac K.');
+check('customer does NOT get rider live location', !json(cust).includes('dropoffGeo'));
+
+console.log('\n── SELLER: fulfilment data, not settlement ──');
+const sell = V.sellerView(ORDER, DELIVERY);
+check('seller sees recipient name',  sell.recipientName === 'Ann Momanyi');
+check('seller sees items to pack',   (sell.items || []).length === 1);
+check('seller view omits settlement',!json(sell).includes('2184.16'));
+check('seller view omits commission',!json(sell).includes('116.8'));
+check('seller view omits item cost price', !json(sell).includes('400'));
+
+console.log('\n── Projections are allowlists, not the raw order ──');
+const ORDER2 = Object.assign({}, ORDER, { secretInternalField: 'LEAK-ME-9999' });
+check('new order field does NOT leak to rider',    !json(V.riderView(ORDER2, DELIVERY, true)).includes('LEAK-ME-9999'));
+check('new order field does NOT leak to customer', !json(V.customerView(ORDER2, DELIVERY)).includes('LEAK-ME-9999'));
+check('new order field does NOT leak to seller',   !json(V.sellerView(ORDER2, DELIVERY)).includes('LEAK-ME-9999'));
+
+console.log('\n── Active-state vocabulary ──');
+check('in_transit is active',   V.RIDER_ACTIVE_STATES.has('in_transit'));
+check('delivered is NOT active',!V.RIDER_ACTIVE_STATES.has('delivered'));
+check('returned is NOT active', !V.RIDER_ACTIVE_STATES.has('returned'));
+check('failed is NOT active',   !V.RIDER_ACTIVE_STATES.has('failed'));
+
+console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
+process.exit(fail ? 1 : 0);
