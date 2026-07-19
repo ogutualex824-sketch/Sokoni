@@ -55,7 +55,12 @@
       "tmp_*.png",
       "*.jsonl",
       "cf-*.html",
-      "email-preview.html","assets/Bravilex identity.png"
+      "email-preview.html",
+      "assets/Bravilex identity.png",
+      "screenshots/**",
+      "*-preview.png",
+      "assets/branding/extracted/**",
+      "assets/sokoni footer.png"
     ],
     "rewrites": [
       {
