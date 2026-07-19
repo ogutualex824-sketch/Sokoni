@@ -83,11 +83,42 @@ check('new order field does NOT leak to rider',    !json(V.riderView(ORDER2, DEL
 check('new order field does NOT leak to customer', !json(V.customerView(ORDER2, DELIVERY)).includes('LEAK-ME-9999'));
 check('new order field does NOT leak to seller',   !json(V.sellerView(ORDER2, DELIVERY)).includes('LEAK-ME-9999'));
 
-console.log('\n── Active-state vocabulary ──');
-check('in_transit is active',   V.RIDER_ACTIVE_STATES.has('in_transit'));
-check('delivered is NOT active',!V.RIDER_ACTIVE_STATES.has('delivered'));
-check('returned is NOT active', !V.RIDER_ACTIVE_STATES.has('returned'));
-check('failed is NOT active',   !V.RIDER_ACTIVE_STATES.has('failed'));
+console.log('\n── Active-state vocabulary (canonical lifecycle) ──');
+const L = require('../functions/fulfilment-lifecycle');
+
+/* REGRESSION. The active window was a hand-written Set of 'assigned'/'accepted'.
+   dispatch.js writes 'driver_assigned'/'driver_accepted' and firestore.rules:99
+   uses 'rider_assigned' -- none matched, so a rider on a genuinely active
+   delivery was refused the customer's address. Every spelling any writer in the
+   codebase actually produces must resolve to active. */
+for (const v of ['driver_assigned', 'driver_accepted', 'rider_assigned', 'assigned',
+                 'picked_up', 'picking_up', 'in_transit', 'rider_en_route',
+                 'out_for_delivery', 'shipped', 'arriving']) {
+  check('ACTIVE: ' + v, L.isRiderActive(v) === true, L.normalize(v));
+}
+for (const v of ['delivered', 'completed', 'returned', 'refunded', 'cancelled',
+                 'failed', 'exhausted', 'suspended', 'pending', 'ready_for_pickup', 'offered']) {
+  check('not active: ' + v, L.isRiderActive(v) === false, L.normalize(v));
+}
+
+console.log('\n── Lifecycle normalisation fails closed ──');
+check('unrecognised value -> unknown', L.normalize('teleported') === L.UNKNOWN);
+check('unknown is NOT rider-active',  L.isRiderActive('teleported') === false);
+check('unknown is NOT terminal',      L.isTerminal('teleported') === false);
+check('empty/null -> unknown',        L.normalize(null) === L.UNKNOWN && L.normalize('') === L.UNKNOWN);
+check('case + spacing tolerated',     L.normalize('  In-Transit ') === 'in_transit');
+
+console.log('\n── Stage progression guards ──');
+check('forward advance allowed',      L.canAdvance('packing', 'in_transit') === true);
+check('backward advance refused',     L.canAdvance('in_transit', 'packing') === false);
+check('same stage idempotent',        L.canAdvance('packing', 'packing') === true);
+check('return can interrupt transit', L.canAdvance('in_transit', 'returned') === true);
+check('completed is terminal',        L.isTerminal('completed') === true);
+check('cannot leave a terminal state',L.canAdvance('completed', 'returned') === false);
+check('every canonical stage is self-aliasing',
+      L.CANONICAL.every(s => L.normalize(s) === s));
+check('every canonical stage has a label',
+      L.CANONICAL.every(s => !!L.LABELS[s]));
 
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

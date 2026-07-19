@@ -42,10 +42,19 @@ const SELLER_FIELDS = ['sellerUid', 'sellerId', 'merchantId'];
 const RIDER_FIELDS  = ['assignedDriverUid', 'riderId', 'driverId'];
 
 /* Delivery states in which a rider legitimately needs the customer's address.
-   Outside these, the rider projection omits address and phone entirely. */
-const RIDER_ACTIVE_STATES = new Set([
-  'assigned', 'accepted', 'picking_up', 'picked_up', 'in_transit', 'arriving',
-]);
+
+   DEFECT FIXED 2026-07-19: this was a hand-written Set containing 'assigned' and
+   'accepted'. dispatch.js actually writes 'driver_assigned' and
+   'driver_accepted' (dispatch.js status vocabulary), and firestore.rules:99 uses
+   'rider_assigned'. None of those matched, so a rider on a genuinely ACTIVE
+   delivery was judged inactive and refused the customer's address — the
+   authorisation boundary was reading a vocabulary nobody writes.
+
+   Now delegated to the canonical lifecycle, which normalises every observed
+   spelling and derives the active window from stage ORDER rather than a list.
+   Adding a stage between assigned and delivered can no longer silently fall out
+   of the window. Unknown values fail closed. */
+const LIFECYCLE = require('./fulfilment-lifecycle');
 
 const _any = (obj, fields, uid) => fields.some((f) => obj && obj[f] && obj[f] === uid);
 
@@ -196,9 +205,8 @@ exports.fulfilmentScan = onCall({ cors: true, enforceAppCheck: true, region: 'us
     else if (role === 'seller')   payload = _sellerView(order, delivery);
     else if (role === 'customer') payload = _customerView(order, delivery);
     else {
-      const state  = String((delivery && delivery.status) || order.deliveryStatus || '').toLowerCase();
-      const active = RIDER_ACTIVE_STATES.has(state);
-      payload = _riderView(order, delivery, active);
+      const state  = (delivery && delivery.status) || order.deliveryStatus || order.status;
+      payload = _riderView(order, delivery, LIFECYCLE.isRiderActive(state));
     }
 
     /* 5. Audit every scan. Who looked at what, and as whom. */
@@ -219,5 +227,5 @@ exports._h = {
   riderView:    _riderView,
   customerView: _customerView,
   adminView:    _adminView,
-  RIDER_ACTIVE_STATES,
+  isRiderActive: LIFECYCLE.isRiderActive,
 };
