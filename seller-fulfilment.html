@@ -138,6 +138,37 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
 
   let ORDERS = [], FILTER = null, UNKNOWNS = [], busy = false;
 
+  /* ── Automatic diagnostics ───────────────────────────────────────────────
+     The pilot directive is that merchants must never collect technical
+     information by hand. Every failure path below calls this, which attaches
+     device, viewport, version, connectivity and order context automatically and
+     posts it to logClientDiagnostic (-> errorLog, which post-launch-monitor
+     already reads).
+
+     Deliberately fire-and-forget and fully swallowed: telemetry must never break
+     the board it is observing, and a merchant must never see a diagnostics
+     error on top of the problem they already have. */
+  const APP_VERSION = 'board-1.0';
+  async function diag(severity, code, message, extra) {
+    try {
+      const { getFunctions, httpsCallable } =
+        await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const fn = httpsCallable(getFunctions(window.firebaseApp, 'us-central1'), 'logClientDiagnostic');
+      await fn({
+        severity, code, message,
+        surface:    'seller-board',
+        appVersion: APP_VERSION,
+        userAgent:  navigator.userAgent,
+        viewport:   innerWidth + 'x' + innerHeight,
+        online:     navigator.onLine,
+        url:        location.pathname,
+        merchantId: (window.firebaseAuth && window.firebaseAuth.currentUser || {}).uid || null,
+        orderId:    (extra && extra.orderId) || null,
+        context:    extra || {},
+      });
+    } catch (_) { /* never surfaced */ }
+  }
+
   function toast(msg) {
     const t = $('toast'); t.textContent = msg; t.style.display = 'block';
     clearTimeout(t._h); t._h = setTimeout(() => { t.style.display = 'none'; }, 2600);
@@ -243,6 +274,9 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
       $('board').innerHTML = '<div class="load">' + esc(msg) +
         '<br><span style="font-size:11px;color:#5a5a5a">' + esc(detail) + '</span></div>';
       $('sub').textContent = 'Not loaded';
+      diag(/permission-denied/.test(code) ? 'critical' : 'error',
+           code || 'board_load_failed', (e && e.message) || 'load failed',
+           { orderCount: ORDERS.length });
     }
   }
 
@@ -264,6 +298,10 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
       d.classList.add('on');
       d.innerHTML = '⚠ ' + UNKNOWNS.length + ' order' + (UNKNOWNS.length > 1 ? 's' : '') +
         ' could not be placed in the workflow and need review. Support has been given the details.';
+      diag('warn', 'unknown_lifecycle_value',
+           UNKNOWNS.length + ' order(s) with an unrecognised stage',
+           { ids: UNKNOWNS.slice(0,10).map(o => o.id),
+             raw: UNKNOWNS.slice(0,10).map(o => o.timelineStage || o.deliveryStatus || o.status) });
       console.warn('[board] unrecognised lifecycle values', UNKNOWNS.map(o => ({
         id: o.id, status: o.status, deliveryStatus: o.deliveryStatus, timelineStage: o.timelineStage,
       })));
@@ -370,6 +408,9 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
       load();
     } catch (err) {
       console.error('[board] advance failed', err);
+      diag('error', (err && err.code) || 'order_advance_failed',
+           (err && err.message) || 'orderAdvance failed',
+           { orderId, from, toStage, timelineKey: key });
       toast('Could not update: ' + ((err && err.message) || 'unknown error'));
     } finally { busy = false; if (btn) btn.disabled = false; }
   }
@@ -391,6 +432,7 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
       toast(parts.join(' · ') || 'Nothing to print');
     } catch (e) {
       console.error('[board] print failed', e);
+      diag('error', 'print_failed', (e && e.message) || 'print failed', { orderId });
       toast('Could not print. Documents are queued.');
     }
   }

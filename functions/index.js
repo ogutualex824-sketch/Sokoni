@@ -8924,6 +8924,14 @@ exports.getMyQRAssets     = qr.getMyQRAssets;
 const _fulfilScan = require('./fulfilment-scan');
 exports.fulfilmentScan    = _fulfilScan.fulfilmentScan;
 
+/* ── Client diagnostics intake ─────────────────────────────────────
+   post-launch-monitor.js:228 reads errorLog, but errorLog has no Firestore
+   rule and is default-deny, so nothing client-side has ever written to it.
+   The monitor reported zero client errors because nothing reported, not
+   because there were none. This is the write path. */
+const _clientDiag = require('./client-diagnostics');
+exports.logClientDiagnostic = _clientDiag.logClientDiagnostic;
+
 
 /* ── Super Admin CFs v1.0 ──────────────────────────────────────── */
 const superAdmin = require('./super-admin');
