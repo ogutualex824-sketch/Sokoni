@@ -43,7 +43,17 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .fhs-lbl{font-size:10px;color:rgba(255,255,255,0.4);font-weight:600;}
 .food-cats{display:flex;gap:8px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);}
 .food-cats::-webkit-scrollbar{display:none;}
-.food-cat{display:flex;align-items:center;gap:6px;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;}
+/* flex:0 0 auto is load-bearing, not cosmetic. .food-cats is an overflow-x:auto
+   horizontal scroller whose content is 480px wide in a 390px viewport. Without an
+   explicit flex-shrink the default of 1 applies, so flex compressed every chip down
+   to the global 44px touch-target min-width — while the labels stayed white-space:
+   nowrap with visible overflow. The text then painted straight out of its own 44px
+   box and across the neighbouring chips, rendering as
+   "RestauranFast FoodGroceriesHomeChefCatering".
+   Nothing geometrically overlapped, which is why it measured clean: the BOXES were
+   fine and only the painted text collided. In a horizontal scroller chips must keep
+   their natural width and let the row scroll — which it already does. */
+.food-cat{display:flex;flex:0 0 auto;align-items:center;gap:6px;padding:9px 16px;border-radius:20px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:inherit;}
 .food-cat:hover,.food-cat.active{background:rgba(34,197,94,0.12);border-color:rgba(34,197,94,0.35);color:#22c55e;}
 .food-body{max-width:1200px;margin:0 auto;padding:0 16px 60px;}
 .food-sh{font-size:15px;font-weight:800;color:white;margin:24px 0 14px;display:flex;align-items:center;gap:8px;}
