@@ -1,4 +1,66 @@
-﻿## [2026-07-18] — Correction: Measurement Validity (documentation only)
+﻿## [2026-07-19] — Receipt Engine: truncation and namespace fixes (deployed)
+
+### Summary
+
+Thermal receipts silently lost characters. Fixed four defects, all proven at runtime, and deployed
+to production hosting. No payment, tax, wallet, settlement or commission logic was touched.
+
+### Files affected
+
+-  — text fitting
+-  — namespace merge (deployed earlier as 645f63f)
+-  — CACHE_VERSION v83 -> v84
+-  — exclude Bravilex source artwork from public hosting
+-  — new
+
+### Defects fixed
+
+1. **Namespace collision.**  assigned over ,
+   destroying every ESC/POS method on POS pages. Now merges.
+2. **Identity fields clipped.** Customer, cashier and table fields were emitted through a single
+    call, which clips to the paper width. A 38-character name printed as 37 characters
+   with no indication. Now wrapped with a hanging indent, first row budgeted at (cols - label length).
+3. **Unbreakable tokens clipped.**  split on spaces only, so a token wider than the line
+   had no break point and was pushed out whole for  to clip. Long product SKUs and
+   verification URLs lost characters. Tokens wider than the line are now hard-broken.
+4. **Item names unwrapped.** Now wrapped at full width.
+
+The  fix also covers delivery address, delivery notes, warehouse note, footer and
+warranty text, which share the helper.
+
+### Verification
+
+Runtime, against deployed production bytes at 58 mm (32 cols) and 80 mm (48 cols): no characters
+lost, no printable line exceeds the paper width, across names to 64 chars, item names to 88 chars,
+and unbroken tokens. Regressions pass: 120 line items, empty cart, zero-VAT. Label engine emits
+TSPL/ZPL/ESC-POS/HTML without error. No application JavaScript errors.
+
+### Database changes
+
+None.
+
+### API changes
+
+None.
+
+### Security changes
+
+ (1.4 MB, untracked) would have been published at a guessable URL
+by . Nothing loads it at runtime —  cites it only in a
+provenance comment. Excluded from hosting: customer-facing brand is always SOKONI.
+
+### Breaking changes
+
+None.
+
+### Deferred
+
+Transaction ID, IntaSend reference, service fee, merchant earnings and verification code remain
+unimplemented pending the first live payment. See docs/RECEIPT_ENGINE.md.
+
+---
+
+## [2026-07-18] — Correction: Measurement Validity (documentation only)
 
 ### Summary
 
