@@ -164,6 +164,10 @@
       <li class="nav-item" onclick="showDashPage('products',this)">📦 Products</li>
       <li class="nav-item" onclick="showDashPage('analytics',this)">📊 Analytics</li>
       <li class="nav-item" onclick="showDashPage('orders',this)">🛒 Orders</li>
+      <!-- Fulfilment Board is a separate page, not a dash page, so it navigates
+           rather than calling showDashPage. Placed next to Orders because that is
+           where a merchant looks when work arrives. -->
+      <li class="nav-item" onclick="location.href='/seller-fulfilment'">🚚 Fulfilment</li>
       <li class="nav-item" onclick="showDashPage('customers',this)">👤 Customers</li>
       <li class="nav-item" onclick="showDashPage('receipts',this)">🧾 Receipts</li>
       <li class="nav-item" onclick="showDashPage('messages',this)">💬 Messages</li>

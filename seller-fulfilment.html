@@ -173,7 +173,30 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
       return;
     }
     const user = window.firebaseAuth.currentUser;
-    if (!user) { location.href = '/login.html?next=/seller-fulfilment.html'; return; }
+    if (!user) { location.href = '/login.html?next=/seller-fulfilment'; return; }
+
+    /* ── RBAC ────────────────────────────────────────────────────────────────
+       Firestore rules already guarantee a non-seller's query returns nothing,
+       so no data can leak. But rendering an empty merchant workspace to a buyer
+       or rider is wrong on its own terms: it implies they have a seller account.
+
+       This is a UX boundary layered ON TOP of the rules, never instead of
+       them — the authorisation of record stays server-side. Seller identity is
+       read the way auth.js:600 writes it (registeredAs.seller), with roles[] as
+       the fallback for accounts created before that shape existed. */
+    const cached = (() => { try { return JSON.parse(localStorage.getItem('sokoniUser') || '{}'); } catch (_) { return {}; } })();
+    const isSeller = !!(cached.registeredAs && cached.registeredAs.seller)
+                  || (Array.isArray(cached.roles) && cached.roles.includes('seller'))
+                  || cached.role === 'seller';
+    if (!isSeller) {
+      $('board').innerHTML =
+        '<div class="load">This workspace is for sellers.<br>' +
+        '<a href="/sell" style="color:var(--g);font-weight:700">Open a shop on SOKONI →</a></div>';
+      $('sub').textContent = 'Seller account required';
+      $('filters').innerHTML = '';
+      console.warn('[board] non-seller opened the fulfilment board', { uid: user.uid });
+      return;
+    }
 
     try {
       const fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
@@ -190,9 +213,36 @@ h1{font-size:19px;font-weight:900;letter-spacing:-.02em}
       ORDERS = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
       render();
     } catch (e) {
-      console.error('[board] load failed', e);
-      $('board').innerHTML = '<div class="load">Could not load orders.<br><span style="font-size:11px;color:#5a5a5a">' +
-        esc(e && e.message) + '</span></div>';
+      /* Distinguish the failure modes — they need different actions, and a
+         single "could not load" hides which one happened.
+
+         permission-denied  authorization, not connectivity. Almost always a
+                            query/rules mismatch (this is exactly how the
+                            sellerId-vs-sellerUid defect would present).
+         failed-precondition Firestore wants a composite index for
+                            sellerUid + createdAt. The console carries a
+                            create-index link; the merchant must not see it.
+         unavailable        offline. Recoverable, so say so. */
+      const code = String((e && e.code) || '');
+      console.error('[board] load failed', { code, message: e && e.message, uid: user.uid, e });
+
+      let msg, detail = '';
+      if (/permission-denied/.test(code)) {
+        msg = 'You do not have access to these orders.';
+        detail = 'If you believe this is wrong, contact support — this has been logged.';
+      } else if (/failed-precondition/.test(code)) {
+        msg = 'Orders are still being indexed.';
+        detail = 'Please try again shortly. Support has been notified.';
+      } else if (/unavailable|network/i.test(code + ' ' + (e && e.message))) {
+        msg = 'You appear to be offline.';
+        detail = 'The board will load when your connection returns.';
+      } else {
+        msg = 'Could not load orders.';
+        detail = 'Please refresh. If this continues, contact support.';
+      }
+      $('board').innerHTML = '<div class="load">' + esc(msg) +
+        '<br><span style="font-size:11px;color:#5a5a5a">' + esc(detail) + '</span></div>';
+      $('sub').textContent = 'Not loaded';
     }
   }
 

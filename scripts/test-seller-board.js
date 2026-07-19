@@ -107,6 +107,32 @@ server.listen(0, async () => {
   check('300-min-old pending flagged stalled', out.stalled[6] === true);
   check('5-min-old order not stalled',         out.stalled[0] === false);
 
+  /* ── RBAC: the board must not render a merchant workspace to a non-seller.
+     Firestore rules already guarantee no data leaks; this asserts the page also
+     refuses to imply the viewer has a seller account. ────────────────────── */
+  console.log('\n── RBAC ──');
+  const roleCase = async (label, cachedUser, expectSeller) => {
+    const c2 = await browser.newContext({ ...devices['iPhone 13'] });
+    const p2 = await c2.newPage();
+    await p2.addInitScript((u) => {
+      window.firebaseApp  = { __stub: true };
+      window.firebaseDB   = { __stub: true };
+      window.firebaseAuth = { currentUser: { uid: 'U1' }, onAuthStateChanged: (cb) => cb({ uid: 'U1' }) };
+      if (u) localStorage.setItem('sokoniUser', JSON.stringify(u));
+    }, cachedUser);
+    await p2.goto(BASE + '/seller-fulfilment.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await p2.waitForTimeout(2500);
+    const txt = await p2.evaluate(() => document.body.innerText);
+    const refused = /This workspace is for sellers/i.test(txt);
+    check(label, refused === !expectSeller, refused ? 'refused' : 'allowed');
+    await c2.close();
+  };
+  await roleCase('buyer is refused',            { roles: ['buyer'], registeredAs: { user: true } }, false);
+  await roleCase('rider is refused',            { roles: ['driver'] },                              false);
+  await roleCase('no cached profile is refused', null,                                              false);
+  await roleCase('registeredAs.seller allowed', { registeredAs: { seller: true } },                 true);
+  await roleCase('roles[] seller allowed',      { roles: ['buyer', 'seller'] },                     true);
+
   await browser.close(); server.close();
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);
