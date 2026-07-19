@@ -11,7 +11,13 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260719-app-shell-v86";
+/* v87 — session identity re-keyed to uid (RC1 Priority 2).
+   session-manager.js is precached (line ~254). The new Firestore rule requires
+   request.resource.data.uid == request.auth.uid on create, but the OLD cached
+   module writes userEmail with no uid — so a returning user on a stale service
+   worker would have every session create denied. This bump is not cosmetic; it
+   is what stops that. */
+const CACHE_VERSION = "sokoni-20260719-app-shell-v87";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
