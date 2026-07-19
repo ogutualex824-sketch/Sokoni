@@ -17,7 +17,7 @@ Evidence classes: **VERIFIED** (repository inspection or runtime evidence) · **
 | **CLIENT AUTHORITATIVE** | **58** | 55% |
 | **MIXED** | 17 | 16% |
 | **SERVER AUTHORITATIVE** | 26 | 25% |
-| **UNKNOWN** | 4 | 4% |
+| **UNKNOWN** | **0** | 0% — Gate 0 closed 2026-07-19 |
 
 The trust boundary does not exist as a boundary. It exists as roughly forty independent, inconsistent local checks.
 
@@ -131,7 +131,26 @@ Each extends an existing module. **No parallel systems.**
 
 ---
 
-## 8. Unknowns — must not be promoted
+## 8. Gate 0 — CLOSED 2026-07-19
+
+All four unknowns resolved. **Gate 1 is unblocked.**
+
+| # | Unknown | Resolution | Class |
+|---|---|---|---|
+| 1 | `invoker:'private'` applied? | **NO.** `roles/run.invoker` → `allUsers` on `recordPayment`, `finosCreateEscrow`, `processRefund`, `subActivate`, `intasendWebhook`. This is the normal posture for Firebase callables — the protocol validates the ID token in-code — so it is not unauthenticated access. But the mint paths are reachable by **any signed-in user** and are **not** invoker-mitigated. | **VERIFIED (deployment)** |
+| 2 | `providerPayouts.amount` producer | **SERVER AUTHORITATIVE.** `provider-ops.js:138-149` derives `gross`, `commission` and `net` from server state using the canonical commission engine's `effectiveRate`, then writes `amount: net` with a **deterministic doc id (= booking id)**, so it is idempotent by construction. **This is the reference implementation** — the one money path satisfying identity, authority, entitlement and atomic execution. | **VERIFIED (repository)** |
+| 3 | `leadFees` / `b2bFees` | **MIXED — two distinct defects.** (a) `firestore.rules:1371,1379` grant create on authentication alone — pattern R1, ownership-only, no value constraint. (b) **Worse:** `sokoni-pay.js:713` reads `sokoniLeadFees` from **localStorage**; `:800-807` **seeds fabricated records** (synthetic refs, "Buyer N"); `admin.html:3912-3921` computes `leadFeeRev` from that blob. **Admin revenue reporting is derived from client localStorage containing demo data** — two FORBIDDEN patterns at once. | **VERIFIED (repository)** |
+| 4 | `posVoids` authority | **CLIENT AUTHORITATIVE.** `firestore.rules:1882-1884` requires only `claimsPosOwner()` and that `originalTxnId` is a string. Identity and authority proven; **entitlement absent** — nothing verifies the void amount matches the original, that the original exists, or that it is not already voided. Written by the offline replay path `pos-sync.js:79`. | **VERIFIED (repository)** |
+
+**Control-hierarchy note.** Unknowns 3 and 4 are pattern **R1** again: the active enforcement point is *identity*, and no control at any layer enforces *entitlement*.
+
+Unknown 2 is the counter-example that matters most. It proves the target architecture is achievable **within this codebase, using modules that already exist** — server-derived figures, canonical commission engine, deterministic id. **Gate 5 (Financial Execution Engine) should be modelled on `provider-ops.js:138-149`, not designed from scratch.**
+
+**Revised classification:** CLIENT AUTHORITATIVE **59** · MIXED **18** · SERVER AUTHORITATIVE **27** · UNKNOWN **0**.
+
+---
+
+## 9. Superseded unknowns
 
 - `providerPayouts.amount` producer — `provider-onboarding.js:359` reads it; no writer found.
 - `leadFees` / `b2bFees` payload — `rules:1371,1379`; no client write site in repo.
