@@ -34,6 +34,15 @@ const _kassModes           = require("./kass-modes");       /* automatic experti
 const _kassMemory          = require("./kass-memory");      /* derived preferences only — no transcripts */
 const logger              = require("firebase-functions/logger");
 
+/* Brand layer + age enforcement. Required HERE, at the top, because
+   initiateSTKPush (~line 4956) reads both for the Stage 1B compliance gate.
+   _ageVerify is also re-required further down alongside its callable exports;
+   require() is cached, so this is the same module object, and having the
+   compliance dependencies visible at the top of the file is worth more than
+   relying on a const declared 4,000 lines below the code that uses it. */
+const _brands             = require("./brands");            /* consumer brands; Bravilex stays the legal entity */
+const _ageVerify          = require("./age-verification");  /* server-side age gate */
+
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
    requestId so all log lines for a single invocation can be correlated
@@ -5013,6 +5022,80 @@ exports.initiateSTKPush = onCall(
           throw new HttpsError("invalid-argument", "Payment amount does not match this order.");
         }
         _amountAuthority = "intent";
+
+        /* ══ STAGE 1B — BRAND-SCOPED AGE ENFORCEMENT ══════════════════════════
+           The compliance gate for KASS Vapes, and the reason it is HERE rather
+           than in the client or in checkout:
+
+           paymentIntents has no Firestore rule, so it is default-deny and
+           writable only by the Admin SDK. Everything read from `intent` below is
+           therefore SERVER-AUTHORED. The client may ask to pay, but it cannot
+           author the brand, and so cannot author whether a gate applies. That
+           property is what makes this enforceable — not the check itself.
+
+           KASS gates the whole storefront rather than per product: every
+           category it sells is restricted, so there is no basket that should
+           pass, and no category label to be trusted. Category-derived
+           enforcement for SOKONI's mixed catalogue is deliberately NOT attempted
+           here; it needs server-derived product categories and is separate work.
+
+           FAILURE POSTURE
+           A brand we do not recognise is REJECTED, not defaulted. getBrand()
+           falls back to SOKONI for display purposes, which is right for
+           rendering and wrong for enforcement — falling back here would turn an
+           unrecognised brand into a way past the gate.
+
+           An intent carrying NO brand is treated as SOKONI (unchanged during the
+           pilot, per policy) and logged. That is not a bypass: a client cannot
+           create or edit an intent, so a missing brand is a server-side
+           omission to fix, not an attacker's choice. It is logged loudly so it
+           cannot sit unnoticed. */
+        const _declaredBrand = intent.brand ? String(intent.brand).trim().toLowerCase() : null;
+
+        if (!_declaredBrand) {
+          logger.warn("STK_INTENT_NO_BRAND", {
+            ref, uid: request.auth.uid,
+            note: "server-authored intent carried no brand — defaulting to sokoni",
+          });
+        } else if (!_brands.brandIds().includes(_declaredBrand)) {
+          logger.error("[STK] unknown brand on payment intent — rejected", {
+            ref, brand: _declaredBrand, uid: request.auth.uid,
+          });
+          await db.collection("complianceAudit").add({
+            type: "age_gate", result: "rejected", reason: "unknown_brand",
+            brand: _declaredBrand, ref, uid: request.auth.uid,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+          throw new HttpsError("failed-precondition", "This payment could not be verified.");
+        } else if (_brands.requiresAgeVerification(_declaredBrand, null)) {
+          let _ageOk = false, _why = null;
+          try {
+            await _ageVerify.assertAgeVerified(request.auth.uid);
+            _ageOk = true;
+          } catch (ageErr) {
+            /* Any failure of a REQUIRED check is a refusal. A Firestore error
+               while reading verification status must not read as "verified" —
+               the outer catch below deliberately continues on non-HttpsError,
+               so this is converted here rather than allowed to fall through. */
+            _why = (ageErr && ageErr.message) || "verification_unavailable";
+          }
+
+          await db.collection("complianceAudit").add({
+            type: "age_gate",
+            result: _ageOk ? "approved" : "rejected",
+            reason: _ageOk ? null : _why,
+            brand: _declaredBrand, ref, uid: request.auth.uid,
+            amountKES,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+
+          if (!_ageOk) {
+            logger.warn("[STK] age gate refused payment", { ref, brand: _declaredBrand, uid: request.auth.uid });
+            throw new HttpsError("failed-precondition",
+              "Age verification is required before you can complete this purchase.");
+          }
+          logger.info("[STK] age gate passed", { ref, brand: _declaredBrand, uid: request.auth.uid });
+        }
       } else {
         /* STAGE 1b: replace this branch with
              throw new HttpsError("failed-precondition", "No payment authority record.");
@@ -8937,7 +9020,9 @@ exports.logClientDiagnostic = _clientDiag.logClientDiagnostic;
    stops nobody and produces no evidence. These run the check server-side and
    record the decision. assertAgeVerified() is the enforcement point for any
    flow selling a restricted product. */
-const _ageVerify = require('./age-verification');
+/* _ageVerify is required at the top of this file — it is read by the Stage 1B
+   compliance gate inside initiateSTKPush. Re-declaring it here would be a
+   duplicate const in the same scope. */
 exports.ageVerifySubmit = _ageVerify.ageVerifySubmit;
 exports.ageVerifyStatus = _ageVerify.ageVerifyStatus;
 
