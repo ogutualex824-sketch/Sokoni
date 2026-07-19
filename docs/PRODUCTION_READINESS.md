@@ -100,6 +100,7 @@ Evidence classes used throughout: **VERIFIED** (read from code or measured again
 | **Commission guard blind spot.** `verify-commission-single-source.js` passes while `driver.html`, `growth-dashboard.html`, `seller.js`, `admin.html` hardcode 12% / 8% / 5% against a canonical 3%. It detects duplicate *tables*, not inline arithmetic. Display figures only — no merchant mischarged | **OPEN** |
 | **`reconcileLedger` cannot fail.** Sums `−x` and `+x` per entry and asserts zero — tautological. Ledger integrity is unverified | **OPEN** |
 | **Payroll net pay wrong for every employee.** NHIF bands predate SHIF/SHA entirely; NSSF limits are Year-2. `approvePayrollRun` is a status flip — bank details never decrypted | **OPEN** |
+| **Rider earnings are client-supplied.** `navigation.js:563` reads `earnings` from `request.data` and credits it to the wallet with no server-side validation. A rider can claim any amount. Design: [[RIDER_EARNINGS_AUTHORITY]] | **OPEN — HIGH.** Gates the IntaSend repoint |
 | **Riders are never paid.** `navSubmitPOD` omits `amount`; `processDriverEarning` drops it behind `.catch(() => {})`. `rider-nav.html:485` uses the broken path; `navCompleteTrip` is correct | **OPEN** — one call site |
 | Four parallel payout stacks; four ledger collections never cross-reconciled; three escrow collections | **OPEN** — architectural debt |
 
