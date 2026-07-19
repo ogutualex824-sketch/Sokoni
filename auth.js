@@ -1077,21 +1077,42 @@ async function _handleOAuthResult(result, providerLabel) {
         localStorage.setItem('loggedIn', 'true');
     }
 
-    if (window.SokoniSync && window.firebaseDB) {
-        window.SokoniSync.init(window.firebaseDB, user.uid);
-        window.SokoniSync.pull(user.uid);
-    } else if (window.firebaseDB) {
-        window._sokoniSyncPending = { db: window.firebaseDB, uid: user.uid };
-    }
-
-    if (typeof sokoniTrackLogin === 'function') sokoniTrackLogin();
-    if (typeof SokoniAudit !== 'undefined') {
-        SokoniAudit.log(SokoniAudit.ACTIONS.LOGIN_SUCCESS, {
-            email: user.email, provider: (providerLabel || '').toLowerCase()
-        });
-    }
-    if (window.SokoniSessions && window.SokoniSessions.createSession && user.email) {
-        window.SokoniSessions.createSession(user.email).catch(function() {});
+    /* ── Post-authentication side effects ────────────────────────────────────
+       The user is ALREADY signed in by this point. Firebase has issued a
+       credential and the session is valid.
+    
+       These calls were unguarded. SokoniSync.init/pull, sokoniTrackLogin and
+       SokoniAudit.log could each throw -- SokoniAudit in particular guards that
+       the object exists, then dereferences SokoniAudit.ACTIONS.LOGIN_SUCCESS,
+       which is a TypeError if ACTIONS is undefined.
+    
+       Any throw propagated out of _handleOAuthResult into the OTP catch block,
+       which reported "Verification failed. Please try again." -- blaming the
+       one-time code for a failure that happened AFTER it verified correctly.
+       The user was authenticated and was told they were not.
+    
+       Telemetry, sync and audit are best-effort. They must never undo a
+       successful sign-in. Each is isolated so one failing cannot stop the
+       others, and failures are logged rather than swallowed silently. */
+    try {
+      if (window.SokoniSync && window.firebaseDB) {
+          window.SokoniSync.init(window.firebaseDB, user.uid);
+          window.SokoniSync.pull(user.uid);
+      } else if (window.firebaseDB) {
+          window._sokoniSyncPending = { db: window.firebaseDB, uid: user.uid };
+      }
+      
+      if (typeof sokoniTrackLogin === 'function') sokoniTrackLogin();
+      if (typeof SokoniAudit !== 'undefined') {
+          SokoniAudit.log(SokoniAudit.ACTIONS.LOGIN_SUCCESS, {
+              email: user.email, provider: (providerLabel || '').toLowerCase()
+          });
+      }
+      if (window.SokoniSessions && window.SokoniSessions.createSession && user.email) {
+          window.SokoniSessions.createSession(user.email).catch(function() {});
+      }
+    } catch (sideEffectErr) {
+      console.warn('[auth] post-login side effect failed (sign-in still valid):', sideEffectErr);
     }
 
     showAuthMsg('Signed in with ' + providerLabel + '! Taking you home…', 'success');
@@ -1305,9 +1326,20 @@ async function verifyPhoneOTP() {
     if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
 
     try {
-        const result = await _phoneConfirmResult.confirm(code);
+        const result = await _phoneConfirmResult.confirm(code);   /* OTP errors only */
         clearInterval(_otpTimerHandle);
-        await _handleOAuthResult(result, 'Phone');
+        /* Verification SUCCEEDED. Anything failing past this point is a post-auth
+           problem, never a bad code -- reporting it as "Verification failed" told
+           authenticated users their OTP was wrong. Side effects are now isolated
+           inside _handleOAuthResult, so this should not throw; if it ever does, the
+           user is still signed in and must not be told otherwise. */
+        try {
+            await _handleOAuthResult(result, 'Phone');
+        } catch (postAuthErr) {
+            console.error('[auth] post-verification failure (user IS signed in):', postAuthErr);
+            showAuthMsg('Signed in. Redirecting…', 'success');
+            setTimeout(function(){ location.href = 'index.html'; }, 800);
+        }
     } catch (err) {
         /* Label matches the button's own text — it used to reset to "Verify →" and
            silently rename itself the first time a code was rejected. */
