@@ -99,7 +99,27 @@ const SokoniTracking = {
     );
     return onSnapshot(q,
       s => callback(s.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
-      e => console.warn('[SokoniTracking] myVehicles:', e.message)
+      e => {
+        /* THE BLANK PAGE. This previously only warned, so on error the callback
+           never ran, the renderer never executed, and the list element was left
+           exactly as the page shipped it — empty. A user who had just saved a
+           vehicle saw "Saved successfully" and then nothing at all, with no
+           empty state and no error, because the UI was never told anything had
+           happened.
+
+           The trigger was a missing composite index: this query is
+           where(ownerUid) + orderBy(createdAt), and trackedVehicles had NO
+           composite indexes, so onSnapshot failed with failed-precondition on
+           every call. The index is now declared in firestore.indexes.json.
+
+           Invoking the callback on error is what makes the failure survivable:
+           the renderer runs, sees no vehicles, and draws its empty state rather
+           than leaving a blank region. The error is still surfaced for
+           diagnosis — but never as an absence of UI. */
+        console.error('[SokoniTracking] myVehicles listener failed:', e && (e.code || e.message), e);
+        try { callback([], { error: e && (e.code || e.message) || 'unknown' }); }
+        catch (cbErr) { console.error('[SokoniTracking] callback threw:', cbErr && cbErr.message); }
+      }
     );
   },
 
