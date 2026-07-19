@@ -1,4 +1,80 @@
-﻿## [2026-07-19] — Phase 1 remediation: two exploitable money defects closed
+﻿## [2026-07-19] — Legal Hub is entirely non-functional: Cloud Run IAM, not code
+
+### Root cause: missing `allUsers` invoker binding (classification: infrastructure/IAM)
+
+**No code defect. No code changed.**
+
+`getLegalProviders` returns **403 with an HTML body** from `Server: Google Frontend`:
+
+> 403 Forbidden — Your client does not have permission to get URL /getLegalProviders from this server.
+
+That is the Google Front End / Cloud Run IAM rejection page. Firebase callables **always**
+return JSON, so an HTML 403 proves the request never reached Firebase, App Check, or the
+function body.
+
+### Evidence — configuration diff against working callables
+
+| Function | OPTIONS | allow-origin | POST | Body |
+|---|---|---|---|---|
+| `getLegalProviders` | **403** | none | **403** | **HTML** |
+| `fulfilmentScan` | 204 | present | 401 | JSON |
+| `orderAdvance` | 204 | present | 401 | JSON |
+| `sokoniChat` | 204 | present | 400 | JSON |
+| `ageVerifyStatus` | 204 | present | 401 | JSON |
+
+The working callables reject at the *application* layer (JSON 401 = the function ran and
+refused). The legal-hub ones reject at the *infrastructure* layer.
+
+### Blast radius — larger than the reported symptom
+
+**All 9 legal-hub callables are blocked**, not just the one reported:
+`approveLegalProvider`, `bookLegalConsultation`, `getLegalProvider`, `getLegalProviders`,
+`getMyLegalConsultations`, `getProviderConsultations`, `rateLegalProvider`,
+`registerLegalProvider`, `updateConsultationStatus`.
+
+Plus `deviceHeartbeat`. So **the Legal Hub does not function at all in production** — no advocate
+listings, no consultation booking, no provider registration, no ratings.
+
+Also confirmed: `deviceRegister` and `deviceList` return **404** — still not deployed, consistent
+with the earlier exported-vs-deployed audit.
+
+### Ruled out, with evidence
+
+- **Missing deployment** — `getLegalProviders` is deployed; a redeploy succeeded.
+- **CORS config** — the function never runs, so it cannot set CORS headers. `legal-hub.js:12`
+  omits `cors: true` while `fulfilment-scan.js:159` includes it, but that is not the cause.
+- **App Check / Auth** — both would return JSON 401 from inside the function, as the working
+  callables do.
+- **Region mismatch** — same region (`us-central1`) as the working set.
+- **Browser behaviour** — reproduced with plain `fetch`, no browser involved.
+
+### Fix required (cannot be applied from here)
+
+```
+gcloud run services add-iam-policy-binding getlegalproviders \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker
+```
+…for each of the 10 affected services, or via Cloud Console → Cloud Run → service →
+Permissions → add `allUsers` as **Cloud Run Invoker**.
+
+**A `firebase deploy` does NOT restore it** — verified: redeploying `getLegalProviders` succeeded
+and the 403 persisted. The binding was explicitly removed or is blocked by an org policy.
+
+`gcloud` is unusable on this machine (missing Python) and application default credentials are
+stale, so this requires Console access or a working gcloud.
+
+### Corrections to earlier findings
+
+- An earlier probe reported `getLegalCases`/`createLegalCase` as 404 "not deployed". Those
+  functions **do not exist in the source** — the probe invented the names. Not a defect.
+- The cached `firebase functions:list` output used for deployment checks is **stale** (predates
+  the `fulfilmentScan` deploy). Re-capture before relying on it.
+
+### Files changed
+
+**None.** The code is correct.
+
+## [2026-07-19] — Phase 1 remediation: two exploitable money defects closed
 
 ### CRITICAL-02 — buyer could credit themselves an arbitrary amount (FIXED, DEPLOYED)
 
