@@ -5042,8 +5042,22 @@ exports.initiateSTKPush = onCall(
       throw new HttpsError("failed-precondition", "IntaSend not configured.");
     }
 
-    /* Call IntaSend STK Push API */
+    /* Call IntaSend STK Push API.
+
+       ── `method` (2026-07-19) ────────────────────────────────────────────────
+       The vendored vendor client injects TWO fields on every STK call
+       (node_modules/intasend-node/dist/collection.js:26-29):
+
+           payload['method']   = 'M-PESA';
+           payload['currency'] = 'KES';
+
+       This request sent `currency` but never `method`. A missing required field
+       makes Django REST Framework answer 400 with a field-keyed body such as
+       {"method":["This field is required."]} and NO `detail` key — which is
+       exactly the shape the failed production payment produced: the generic
+       fallback fired precisely because `detail` was absent. */
     const payload = JSON.stringify({
+      method:       "M-PESA",
       phone_number: phone,
       amount:       amountKES,
       currency:     "KES",
@@ -5062,7 +5076,16 @@ exports.initiateSTKPush = onCall(
         method:   "POST",
         headers:  {
           "Content-Type":   "application/json",
-          "Authorization":  `Token ${privateKey}`,
+          /* `Bearer`, not `Token`. Two independent authorities in this repository
+             agree and this call matched neither:
+               • the vendored vendor client —
+                 node_modules/intasend-node/dist/requests.js:21
+                 headers['Authorization'] = "Bearer ".concat(secret_key)
+               • this codebase's other IntaSend client —
+                 finos-utils.js:783  'Authorization': `Bearer ${privKey}`
+             Changing this carries no regression risk: the current scheme fails
+             100% of the time, so there is no working behaviour to protect. */
+          "Authorization":  `Bearer ${privateKey}`,
           "Content-Length": Buffer.byteLength(payload),
         },
       };
