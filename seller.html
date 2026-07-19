@@ -4419,8 +4419,13 @@ class="notification-container"
       </a>
       <!-- Surfaced here because the header hides its secondary controls below 768px
            (.seller-nav-secondary). These are the SAME destinations — nothing was removed. -->
+      <!-- This tile LEAVES the dashboard for the public storefront (ministore.html).
+           The "My Store" tile further down (sdSwitchTab('store')) opens the in-dashboard
+           store management tab. Both were labelled "My Store", which is the duplicate
+           merchants reported. Renamed to the wording the codebase already uses for this
+           destination — "Visit My Store" at seller.html:134 and :1989. -->
       <a href="ministore.html" onclick="event.preventDefault();goToMyStore()" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;text-decoration:none;">
-        <span style="font-size:26px;">🏪</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">My Store</span>
+        <span style="font-size:26px;">🏪</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">Visit Store</span>
       </a>
       <a href="community.html" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;text-decoration:none;">
         <span style="font-size:26px;">💬</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.8);">Community</span>
