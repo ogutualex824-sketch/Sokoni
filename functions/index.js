@@ -5080,7 +5080,42 @@ exports.initiateSTKPush = onCall(
     });
 
     if (intasendResponse.status !== 200 && intasendResponse.status !== 201) {
-      throw new HttpsError("internal", intasendResponse.data?.detail || "STK Push failed.");
+      /* ══ STK DIAGNOSTIC (2026-07-19) ══════════════════════════════════════════
+         A production payment (KES 499, ref SKNRSVOE3) failed here and left NO
+         server-side trace: this branch threw the generic fallback and discarded
+         both the HTTP status and IntaSend's response body. Cloud Function logs
+         ended at the preceding line, so the cause was undiagnosable.
+
+         The failure is provably in IntaSend's response, not upstream — the same
+         invocation logged {"app":"VALID","auth":"VALID"} (App Check and Auth both
+         passed), the function executed, and amount/ref/phone all cleared
+         validation. Nothing was wrong before this call.
+
+         What reached the user was the FALLBACK string, which means IntaSend
+         returned parseable JSON with a non-2xx status and NO `detail` key. DRF
+         emits {"detail": ...} for authentication failures, so its absence points
+         away from credentials and toward field-level validation — but that is an
+         inference, and this log is what will settle it.
+
+         Logging only. No behaviour change, no retry, no new payment path. */
+      logger.error("[STK] IntaSend rejected the request", {
+        httpStatus:   intasendResponse.status,
+        intasendBody: intasendResponse.data,     /* provider error, not a secret */
+        host:         intasendHost,
+        ref, amountKES,
+        phoneSuffix:  String(phone).slice(-4),   /* correlate without logging the MSISDN */
+        uid:          request.auth.uid,
+      });
+
+      /* Surface a field-level validation error when IntaSend supplies one, so the
+         caller sees the real reason instead of "STK Push failed." */
+      let detail = intasendResponse.data?.detail;
+      if (!detail && intasendResponse.data && typeof intasendResponse.data === "object") {
+        const firstField = Object.entries(intasendResponse.data)
+          .find(([, v]) => Array.isArray(v) && v.length && typeof v[0] === "string");
+        if (firstField) detail = `${firstField[0]}: ${firstField[1][0]}`;
+      }
+      throw new HttpsError("internal", detail || "STK Push failed.");
     }
 
     const checkoutId = intasendResponse.data?.checkout_id || intasendResponse.data?.id;
