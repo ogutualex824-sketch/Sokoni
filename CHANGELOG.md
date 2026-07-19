@@ -1,4 +1,66 @@
-﻿## [2026-07-19] — Two stale selectors, proven at runtime, silently disabling features
+﻿## [2026-07-19] — P0: booking payments never initialized; sessions cannot exist for phone-only accounts
+
+### 1. Payment initialization — FIXED
+
+`sokoni-pay.js:280` reads `window.SokoniIntaSend` and bails at `:281`. That global is assigned
+in exactly one place — `sokoni-intasend.js:310` — in a file only `checkout.html` loaded. 38 other
+pages loaded the payment UI without the engine, so the guard short-circuited permanently and the
+STK Push request never left the browser. The message told users to refresh; refreshing could
+never help. The dependency was declared only in a comment (`sokoni-intasend.js:181`).
+
+Added the engine script to all 38. Backend was never at fault: `initiateSTKPush`,
+`intasendWebhook` and `cancelPayment` are deployed and the IntaSend key is populated.
+
+Verified on WebKit/iPhone 13 across services, healthcare, bnb-hub, legal-hub, car-rental.
+**Not verified:** that an STK Push reaches a real handset — that needs a live payment.
+
+### 2. Sessions — ROOT CAUSE PROVEN, NOT YET FIXED
+
+The session store is keyed on **email**, and the reporting account signed in with **phone OTP**,
+which has no email. Three independent gates each block it alone:
+
+- `session-manager.js:63` — `if (!userEmail) return;` → no document is ever written
+- `firestore.rules:944` — `request.auth.token.email != null` → the write would be denied anyway
+- `session-manager.js:132` — query filters `userEmail == ''` → matches nothing
+
+`userSessions` documents carry **no `uid` field at all**, so a phone-only account is
+unrepresentable in this schema. This is a design gap, not a typo. Fix requires re-keying on uid
+(client writes + rules + backfill) and is pending approval.
+
+Related, found while tracing: `functions/account-manager.js:222` queries
+`userSessions.where('uid','==',uid)` — matches zero documents, always, for every user.
+
+### 3. Sign out other devices — PARTIALLY FIXED
+
+`deviceLogoutAll` is exported (`functions/index.js:9654`) but **not deployed**, so the call threw
+`functions/not-found`. It was awaited first and unguarded, so that failure aborted the legacy
+revoke too — one missing function disabled both mechanisms — and the catch swallowed the
+exception entirely, printing a generic message.
+
+Both paths now run independently via `Promise.allSettled`, each rejection is logged with its
+code, and failure is reported only when both fail. The underlying CF is still not deployed.
+
+### 4. Exported ≠ deployed — 115 functions
+
+`functions/index.js` exports 1413; production has 1297. **115 are exported but absent**
+(`COLLECTION_REGISTRY` is a 116th, a false positive — deleted at `index.js:7067`).
+
+org 32 · sfos 24 · walletV2 18 · wf 18 · profile 10 · device 7 · sasos 1
+
+**Compliance-relevant:** `scheduleAccountDeletion`, `cancelAccountDeletion`,
+`finaliseExpiredDeletions` and `revokeAllSessions` are all absent — **account deletion does not
+work in production.** That is a data-subject right under the Kenyan Data Protection Act, and
+ODPC registration was paid on 2026-07-17. Treating this as the highest-priority item in the set.
+
+### Files affected
+
+38 pages (engine script tag), `account-centre.html` (revoke diagnostics).
+
+### Security / breaking changes
+
+None. No payment processing, settlement, wallet, rules or webhook logic modified.
+
+## [2026-07-19] — Two stale selectors, proven at runtime, silently disabling features
 
 ### Summary
 
