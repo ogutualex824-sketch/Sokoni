@@ -9147,6 +9147,13 @@ exports.posUpdateCustomerDisplay    = posPeripherals.posUpdateCustomerDisplay;
 exports.posCleanupPeripheralSignals = posPeripherals.posCleanupPeripheralSignals;
 
 /* ── Redis Integrations v1.0 — Firestore → Redis event sync ────────────── */
+/* Post-payment orchestration: receipt record, customer + merchant notifications
+   and the audit entry, fired once on the canonical payment-success transition.
+   Deliberately does NOT send the customer email — emailOnPaymentSuccess already
+   listens on the same transition and would double it. */
+const paymentSuccess = require('./payment-success');
+exports.onPaymentSucceeded      = paymentSuccess.onPaymentSucceeded;
+
 const redisIntegrations = require('./redis-integrations');
 exports.onOrderCreated          = redisIntegrations.onOrderCreated;
 exports.onOrderStatusChangeRedisSync = redisIntegrations.onOrderStatusChange;
