@@ -498,10 +498,19 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 .up-empty-icon{font-size:34px;margin-bottom:10px;}
 
 /* ── Toast ── */
+/* Toast sits ABOVE the floating action stack, never over it.
+   Was bottom:90px with z-index 99999 while #kassBtn sits at
+   max(86px, env(sab)+86px) and is 52px tall with z-index 9999 -- the bands
+   overlapped and the toast painted on top, hiding the KASS button. On iPhone
+   Safari the safe-area inset pushed the FAB higher, worsening it.
+   The offset below reuses the SAME expression as the winning FAB rule
+   (sokoni-responsive.css:940) so the two cannot drift apart, then clears the
+   52px button plus 16px. white-space:nowrap also let a long message grow
+   sideways into the FAB column, so it now wraps within the viewport. */
 #upToast{
-  position:fixed;bottom:90px;left:50%;transform:translateX(-50%) translateY(30px);
+  position:fixed;bottom:calc(max(86px, env(safe-area-inset-bottom,0px) + 86px) + 68px);left:50%;transform:translateX(-50%) translateY(30px);
   background:#71ff00;color:#000;padding:10px 22px;border-radius:12px;
-  font-weight:800;font-size:13px;z-index:99999;white-space:nowrap;
+  font-weight:800;font-size:13px;z-index:99999;max-width:min(88vw, 420px);text-align:center;
   transition:transform .3s,opacity .3s;opacity:0;pointer-events:none;
 }
 
