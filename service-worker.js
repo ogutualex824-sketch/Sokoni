@@ -11,7 +11,7 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-const CACHE_VERSION = "sokoni-20260718-app-shell-v83";
+const CACHE_VERSION = "sokoni-20260719-app-shell-v84";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
