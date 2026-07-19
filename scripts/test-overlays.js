@@ -200,6 +200,63 @@ console.log('\nOverlay architecture — can every sheet beat the header?\n');
     : bad('the shared sheet is missing: ' + missing.join(', '));
 }
 
+/* ── 4b. JS-INJECTED full-screen overlays ──────────────────────────────────────
+   The checks above read CSS. That is a blind spot: an overlay built in JavaScript
+   and given its z-index as a string in cssText is invisible to them.
+
+   The privacy consent banner lived in exactly that blind spot. security.js injected
+   a full-screen blocking modal (position:fixed; inset:0; backdrop) with a hardcoded
+   z-index:99997 — BELOW --sk-z-header (100001). The header punched through the
+   scrim, so on iPhone Safari the Restaurant Portal showed a crisp header and bottom
+   nav over a blank, unscrollable content area. It did not look like an open dialog;
+   it looked like a broken page, and was reported as one.
+
+   Same rule as above, enforced one layer deeper: if it covers the screen, it must
+   out-rank the header. */
+{
+  const HEADER_Z = 100001;
+  const offenders = [];
+  for (const f of fs.readdirSync(ROOT).filter(n => n.endsWith('.js'))) {
+    let src;
+    try { src = fs.readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
+    /* Strip comments so prose describing the bug cannot trip its own gate. */
+    const code = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+    /* cssText arrays / template strings that are full-screen AND carry a literal z-index */
+    for (const m of code.matchAll(/cssText\s*=\s*(\[[\s\S]{0,900}?\]|`[\s\S]{0,900}?`)/g)) {
+      const blk = m[1];
+      const fullScreen = /inset\s*:\s*0/.test(blk) ||
+                         (/top\s*:\s*0/.test(blk) && /bottom\s*:\s*0/.test(blk));
+      if (!fullScreen) continue;
+      if (!/position\s*:\s*fixed/.test(blk)) continue;
+      /* Transparent, non-blocking bars are allowed to sit low — they block nothing. */
+      if (/pointer-events\s*:\s*none/.test(blk)) continue;
+      const z = blk.match(/z-index\s*:\s*(\d+)/);
+      if (z && parseInt(z[1], 10) < HEADER_Z) {
+        offenders.push(`${f} — full-screen blocking overlay at z-index:${z[1]}, below the header (${HEADER_Z})`);
+      }
+    }
+  }
+  /* Known pre-existing offenders. security.js is deliberately NOT here: it was the one
+     this check was written for and it is fixed. These three are the same class and the
+     same latent bug — a header punching through their scrim — but fixing them is a
+     separate change with its own verification, so they are pinned rather than silently
+     tolerated. The list may SHRINK freely; it must never grow. */
+  const KNOWN = new Set([
+    'sokoni-branch.js', 'sokoni-sasos.js', 'sokoni-subscriptions.js',
+    'hub-wiring.js', 'sokoni-barcode.js',
+  ]);
+  const fresh = offenders.filter(o => !KNOWN.has(o.split(' ')[0]));
+
+  if (fresh.length) {
+    bad('NEW JS-injected overlay(s) the header will cover:\n     ' + fresh.join('\n     '));
+  } else {
+    const stale = [...KNOWN].filter(k => !offenders.some(o => o.startsWith(k)));
+    ok('no NEW JS-injected full-screen overlay sits below the header'
+       + ` (${KNOWN.size - stale.length} known legacy pinned`
+       + (stale.length ? `; ${stale.join(', ')} now fixed — remove from KNOWN` : '') + ')');
+  }
+}
+
 /* ── 5. Documentation — the rule has to be findable ────────────────────────── */
 {
   fs.existsSync(path.join(ROOT, 'docs', 'OVERLAY_ARCHITECTURE.md'))

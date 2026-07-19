@@ -577,7 +577,23 @@ const SokoniSecurity = (() => {
         } else {
           b.style.cssText = [
             "position:fixed","inset:0",
-            "z-index:99997",
+            /* Was a hardcoded 99997 — BELOW --sk-z-header (100001). This is a full-screen
+               blocking modal, so the global header punched straight through it: the header
+               rendered crisp on top of the scrim while the page content sat behind 66%
+               black + blur, and body was position:fixed for the scroll lock.
+
+               The result did not read as "a dialog is open". It read as a BROKEN PAGE —
+               header and bottom nav visible, content area blank, nothing scrolls. That is
+               exactly how it was reported from iPhone Safari against the Restaurant Portal.
+
+               --sk-z-cookie (300001) is the platform token for precisely this element and
+               already sits above the header. The fallback keeps it correct if security.js
+               runs before the token stylesheet has loaded, which it usually does.
+
+               This is the bug class scripts/test-overlays.js exists to kill ("if it covers
+               the header, it must out-rank the header"). It slipped through because that
+               gate reads CSS, and this overlay is injected from JS as a hardcoded string. */
+            "z-index:var(--sk-z-cookie,300001)",
             "display:flex","align-items:center","justify-content:center",
             "padding:20px",
             "padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px))",
