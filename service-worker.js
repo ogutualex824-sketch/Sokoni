@@ -11,12 +11,17 @@
    PWA: fullscreen, fast, installable
 ============================================================ */
 
-/* v87 — session identity re-keyed to uid (RC1 Priority 2).
-   session-manager.js is precached (line ~254). The new Firestore rule requires
-   request.resource.data.uid == request.auth.uid on create, but the OLD cached
-   module writes userEmail with no uid — so a returning user on a stale service
-   worker would have every session create denied. This bump is not cosmetic; it
-   is what stops that. */
+/* Both of these bumps are load-bearing, not routine — each ships a precached
+   module whose OLD copy is now actively wrong:
+
+   v87 — session identity re-keyed to uid (RC1 Priority 2). session-manager.js is
+   precached. The new Firestore rule requires request.resource.data.uid ==
+   request.auth.uid on create, but the old cached module writes userEmail with no
+   uid, so a stale client would have every session create denied.
+
+   v88 — consent-layer removal (glass-overlay P0). security.js is precached. The
+   old copy removes the blurred backdrop with a single setTimeout, which WebKit
+   drops in a backgrounded tab, leaving a blur that renders at opacity 0. */
 const CACHE_VERSION = "sokoni-20260719-app-shell-v88";
 
 /* ══════════════════════════════════════════════════════════════════════════════
