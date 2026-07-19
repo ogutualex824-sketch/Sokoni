@@ -61,11 +61,19 @@ window.SokoniReceiptEngine = (() => {
 
   /* Wrap text at cols width */
   function _wrap(text, cols_) {
-    const words = String(text||'').split(' ');
+    const cols = Math.max(1, cols_ | 0);
+    /* A token longer than the paper width has no word boundary to break on, so it
+       was pushed whole and the caller's line() silently clipped it (product SKUs and
+       long URLs hit this). Hard-break anything wider than the line before wrapping. */
+    const words = [];
+    for (const w of String(text||'').split(' ')) {
+      if (w.length <= cols) { words.push(w); continue; }
+      for (let i = 0; i < w.length; i += cols) words.push(w.slice(i, i + cols));
+    }
     const lines = []; let cur = '';
     for (const w of words) {
       if (!cur) { cur = w; }
-      else if (cur.length + 1 + w.length <= cols_) { cur += ' ' + w; }
+      else if (cur.length + 1 + w.length <= cols) { cur += ' ' + w; }
       else { lines.push(cur); cur = w; }
     }
     if (cur) lines.push(cur);
@@ -88,6 +96,33 @@ window.SokoniReceiptEngine = (() => {
     const C  = cols(pw);
     const b  = Buf();
     const line  = s => { b.push(ENC.encode(String(s||'').slice(0, C))); b.push(LF); };
+    /* WRAPPING (fix 2026-07-19). line() hard-truncates at the paper width, which silently
+       cut identity fields off the receipt. Proven at runtime on 58mm/32 cols:
+         "Customer:  Chukwuemeka Oluwaseun"      surname lost
+         "Samsung Galaxy S24 Ult"                item cut mid-word
+       and on 80mm/48 cols likewise. _wrap() already existed in this file and was used for
+       free-text blocks (delivery address, notes, footer, warranty) but never for the
+       labelled identity lines or item names.
+
+       wrapLine keeps the label on the first row and indents continuation rows, so
+       "Customer: <long name>" stays readable rather than becoming two unrelated lines.
+       Truncation is never acceptable on a receipt: a half-printed customer name defeats
+       the document's purpose as a record. */
+    const wrapLine = (label, value) => {
+      const text = String(value == null ? '' : value);
+      if ((label + text).length <= C) { line(label + text); return; }
+      const indent = ' '.repeat(Math.min(label.length, 4));
+      /* The FIRST row must fit label+text within C, so it gets the narrower budget.
+         Wrapping the value at (C - indent) and then prepending a longer label pushed
+         row one back over the limit and line() truncated it again — which is how the
+         80mm case still lost a character after the first attempt at this fix. */
+      const first = _wrap(text, Math.max(8, C - label.length));
+      const head = first.shift() || '';
+      line(label + head);
+      /* Remaining words re-wrapped at the indent width. */
+      const rest = first.join(' ');
+      if (rest) _wrap(rest, Math.max(8, C - indent.length)).forEach(p => line(indent + p));
+    };
     const sep   = (c='-') => line(_sep(C, c));
     const ctr   = s => line(_ctr(s, C));
     const right  = s => line(_right(s, C));
@@ -123,18 +158,20 @@ window.SokoniReceiptEngine = (() => {
     if (d.receiptNo)     line('Receipt #: ' + d.receiptNo);
     if (d.orderNo)       line('Order #:   ' + d.orderNo);
     if (d.invoiceNo)     line('Invoice #: ' + d.invoiceNo);
-    if (d.cashierName)   line('Cashier:   ' + d.cashierName);
-    if (d.customerName)  line('Customer:  ' + d.customerName);
+    if (d.cashierName)   wrapLine('Cashier:   ', d.cashierName);
+    if (d.customerName)  wrapLine('Customer:  ', d.customerName);
     if (d.customerPhone) line('Phone:     ' + d.customerPhone);
-    if (d.tableName)     line('Table:     ' + d.tableName);
+    if (d.tableName)     wrapLine('Table:     ', d.tableName);
     sep();
 
     /* ── Items ── */
     if (d.items && d.items.length > 0) {
       (d.items).forEach(item => {
-        const name = String(item.name || 'Item').slice(0, C - 10);
+        /* Item names wrap rather than truncate — "Samsung Galaxy S24 Ult" is not a
+           record of what was sold. The price row below carries the amounts, so the
+           name is free to use the full width. */
         const total = KES(item.price * item.qty);
-        line(name);
+        _wrap(String(item.name || 'Item'), C).forEach(line);
         two('  ' + KES(item.price) + ' x' + (item.qty || 1), total);
         if (item.discount) two('  Disc: ' + (item.discountNote || ''), '-' + KES(item.discount));
         if (item.notes) { b.push(CMD.size(1)); line('  * ' + item.notes); b.push(CMD.size(0)); }
