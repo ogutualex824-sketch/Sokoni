@@ -194,40 +194,40 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 
     <div class="nav-section">Overview</div>
     <div class="nav-item active" data-panel="dashboard" onclick="_nav(this)">
-      <span class="material-icons">dashboard</span> Dashboard
+      <span class="material-icons" aria-hidden="true">&#xe871;</span> Dashboard
     </div>
 
     <div class="nav-section">Moderation</div>
     <div class="nav-item" data-panel="reports" onclick="_nav(this)">
-      <span class="material-icons">flag</span> Reports
+      <span class="material-icons" aria-hidden="true">&#xe153;</span> Reports
       <span class="nav-badge" id="badgeReports">…</span>
     </div>
     <div class="nav-item" data-panel="spam" onclick="_nav(this)">
-      <span class="material-icons">report_gmailerrorred</span> Spam
+      <span class="material-icons" aria-hidden="true">&#xf052;</span> Spam
     </div>
     <div class="nav-item" data-panel="conversations" onclick="_nav(this)">
-      <span class="material-icons">forum</span> Conversations
+      <span class="material-icons" aria-hidden="true">&#xe0bf;</span> Conversations
     </div>
 
     <div class="nav-section">Analytics</div>
     <div class="nav-item" data-panel="stats" onclick="_nav(this)">
-      <span class="material-icons">bar_chart</span> Statistics
+      <span class="material-icons" aria-hidden="true">&#xe26b;</span> Statistics
     </div>
     <div class="nav-item" data-panel="storage" onclick="_nav(this)">
-      <span class="material-icons">storage</span> Storage
+      <span class="material-icons" aria-hidden="true">&#xe1db;</span> Storage
     </div>
 
     <div class="nav-section">Settings</div>
     <div class="nav-item" data-panel="policy" onclick="_nav(this)">
-      <span class="material-icons">tune</span> Policy
+      <span class="material-icons" aria-hidden="true">&#xe429;</span> Policy
     </div>
     <div class="nav-item" data-panel="audit" onclick="_nav(this)">
-      <span class="material-icons">history</span> Audit Log
+      <span class="material-icons" aria-hidden="true">&#xe889;</span> Audit Log
     </div>
 
     <div style="margin-top:auto;padding:16px;border-top:1px solid var(--c-border)">
       <a href="admin.html" class="nav-item" style="margin:0">
-        <span class="material-icons">arrow_back</span> Back to Admin
+        <span class="material-icons" aria-hidden="true">&#xe5c4;</span> Back to Admin
       </a>
     </div>
   </aside>
@@ -237,9 +237,9 @@ textarea.field-input:focus{border-color:var(--c-primary)}
     <div class="topbar">
       <h1 id="pageTitle">Dashboard</h1>
       <div class="topbar-actions">
-        <button class="icon-btn" onclick="_refresh()" title="Refresh"><span class="material-icons">refresh</span></button>
+        <button class="icon-btn" onclick="_refresh()" title="Refresh"><span class="material-icons" aria-hidden="true">&#xe5d5;</span></button>
         <button class="btn btn-primary btn-sm" onclick="_nav(document.querySelector('[data-panel=policy]'))">
-          <span class="material-icons" style="font-size:15px">tune</span> Policy
+          <span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe429;</span> Policy
         </button>
       </div>
     </div>
@@ -280,7 +280,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
       <div id="panel-reports" class="panel">
         <div class="toolbar">
           <div class="search-box">
-            <span class="material-icons">search</span>
+            <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
             <input type="text" id="reportSearch" placeholder="Search reports…" oninput="_filterReports()">
           </div>
           <select class="filter-select" id="reportStatusFilter" onchange="_loadReports()">
@@ -290,7 +290,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
             <option value="">All</option>
           </select>
           <button class="btn btn-outline btn-sm" onclick="_loadReports()">
-            <span class="material-icons" style="font-size:14px">refresh</span> Refresh
+            <span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe5d5;</span> Refresh
           </button>
         </div>
 
@@ -351,7 +351,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
       <div id="panel-conversations" class="panel">
         <div class="toolbar">
           <div class="search-box">
-            <span class="material-icons">search</span>
+            <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
             <input type="text" id="convSearch" placeholder="Search by conversation ID or transaction…" oninput="_filterConvs()">
           </div>
           <select class="filter-select" id="convStatusFilter" onchange="_filterConvs()">
@@ -409,7 +409,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
           <div class="card-header"><h2>Daily Message Volume (last 7 days)</h2></div>
           <div class="card-body">
             <div class="chart-placeholder" id="volumeChart">
-              <span class="material-icons">bar_chart</span>
+              <span class="material-icons" aria-hidden="true">&#xe26b;</span>
               <span id="volumeChartText">Loading…</span>
             </div>
           </div>
@@ -429,12 +429,12 @@ textarea.field-input:focus{border-color:var(--c-primary)}
           <div class="card-header">
             <h2>Storage by Type</h2>
             <button class="btn btn-outline btn-sm" onclick="_triggerCleanup()">
-              <span class="material-icons" style="font-size:14px">delete_sweep</span> Run cleanup now
+              <span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe16c;</span> Run cleanup now
             </button>
           </div>
           <div class="card-body" id="storageBreakdown">
             <div class="storage-row">
-              <div class="storage-icon" style="background:#eff6ff;color:var(--c-primary)"><span class="material-icons">image</span></div>
+              <div class="storage-icon" style="background:#eff6ff;color:var(--c-primary)"><span class="material-icons" aria-hidden="true">&#xe3f4;</span></div>
               <div class="storage-info">
                 <div class="storage-name">Images</div>
                 <div class="storage-bar"><div class="storage-fill" id="bar-images" style="width:0%;background:var(--c-primary)"></div></div>
@@ -442,7 +442,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
               </div>
             </div>
             <div class="storage-row">
-              <div class="storage-icon" style="background:#f0fdf4;color:var(--c-green)"><span class="material-icons">mic</span></div>
+              <div class="storage-icon" style="background:#f0fdf4;color:var(--c-green)"><span class="material-icons" aria-hidden="true">&#xe029;</span></div>
               <div class="storage-info">
                 <div class="storage-name">Voice Notes</div>
                 <div class="storage-bar"><div class="storage-fill" id="bar-voice" style="width:0%;background:var(--c-green)"></div></div>
@@ -450,7 +450,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
               </div>
             </div>
             <div class="storage-row">
-              <div class="storage-icon" style="background:#fff7ed;color:var(--c-orange)"><span class="material-icons">picture_as_pdf</span></div>
+              <div class="storage-icon" style="background:#fff7ed;color:var(--c-orange)"><span class="material-icons" aria-hidden="true">&#xe415;</span></div>
               <div class="storage-info">
                 <div class="storage-name">PDFs</div>
                 <div class="storage-bar"><div class="storage-fill" id="bar-pdfs" style="width:0%;background:var(--c-orange)"></div></div>
@@ -458,7 +458,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
               </div>
             </div>
             <div class="storage-row">
-              <div class="storage-icon" style="background:#fef2f2;color:var(--c-red)"><span class="material-icons">hourglass_bottom</span></div>
+              <div class="storage-icon" style="background:#fef2f2;color:var(--c-red)"><span class="material-icons" aria-hidden="true">&#xea5c;</span></div>
               <div class="storage-info">
                 <div class="storage-name">Temp / Thumbnails</div>
                 <div class="storage-bar"><div class="storage-fill" id="bar-temp" style="width:0%;background:var(--c-red)"></div></div>
@@ -550,7 +550,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 
           <div style="display:flex;gap:10px;margin-top:4px">
             <button type="submit" class="btn btn-primary">
-              <span class="material-icons" style="font-size:15px">save</span> Save Policy
+              <span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe161;</span> Save Policy
             </button>
             <button type="button" class="btn btn-outline" onclick="_loadPolicy()">Reset to saved</button>
           </div>
@@ -561,7 +561,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
       <div id="panel-audit" class="panel">
         <div class="toolbar">
           <div class="search-box">
-            <span class="material-icons">search</span>
+            <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
             <input type="text" id="auditSearch" placeholder="Search audit log…" oninput="_filterAudit()">
           </div>
           <select class="filter-select" id="auditTypeFilter" onchange="_filterAudit()">
@@ -589,7 +589,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
     <div class="drawer-header">
       <h3>Report Detail</h3>
       <button class="icon-btn" onclick="document.getElementById('reportDrawer').classList.remove('open')">
-        <span class="material-icons">close</span>
+        <span class="material-icons" aria-hidden="true">&#xe5cd;</span>
       </button>
     </div>
     <div class="drawer-body" id="drawerBody"></div>
@@ -774,8 +774,8 @@ window._openReport=function(id){
 
   var actions='';
   if(r.status==='pending'){
-    actions='<button class="btn btn-danger btn-sm" onclick="_doReview(\'suspend\')"><span class="material-icons" style="font-size:14px">block</span> Suspend Chat</button>'+
-            '<button class="btn btn-sm" style="background:var(--c-yellow-light);color:var(--c-yellow)" onclick="_doReview(\'warn\')"><span class="material-icons" style="font-size:14px">warning</span> Warn Sender</button>'+
+    actions='<button class="btn btn-danger btn-sm" onclick="_doReview(\'suspend\')"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe14b;</span> Suspend Chat</button>'+
+            '<button class="btn btn-sm" style="background:var(--c-yellow-light);color:var(--c-yellow)" onclick="_doReview(\'warn\')"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe002;</span> Warn Sender</button>'+
             '<button class="btn btn-outline btn-sm" onclick="_doReview(\'dismiss\')">Dismiss</button>';
   } else {
     actions='<span style="font-size:13px;color:var(--c-sub)">Already reviewed — no further actions.</span>';

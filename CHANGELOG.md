@@ -1,4 +1,69 @@
-﻿## [2026-07-19] — Payment chain: success event never fired (P0, deployed)
+﻿## [2026-07-19] — Material Icons: ligature text can no longer leak into production
+
+### Summary
+
+A merchant reported a debug string (`row_ba…`) leaking into the Earnings UI, and a
+refresh control "appearing as raw text". Both were one defect, and neither was debug output.
+
+`<span class="material-icons">arrow_back</span>` resolves that word to a glyph via a font
+ligature. When the icon font is unavailable the browser falls back and paints the **literal
+word** — `arrow_back`, which clipped in a narrow topbar reads exactly as `row_ba…`. The
+`refresh` control rendered the word `refresh` for the same reason.
+
+Replaced ligature text with Unicode codepoints repo-wide, so a font failure now yields a
+blank glyph rather than a readable English word that looks like leaked internal state.
+
+### Files affected
+
+`admin-messages.html` (25), `financial-os.html` (27), `pos-inventory-intelligence.html` (23),
+`subscription-billing.html` (19), `commission-engine.html` (15), `trust-safety.html` (15),
+`seller-earnings.html` (12), `messages.html` (8), `revenue-dashboard.html` (7) — **151 replacements**.
+
+### Codepoints
+
+Taken from the authoritative `MaterialIcons-Regular.codepoints` and
+`MaterialIconsRound-Regular.codepoints` in `google/material-design-icons`, not from memory.
+61 distinct names, 0 missing, and 0 divergences between the Regular and Round tables — so the
+`material-icons-round` spans are unambiguous.
+
+Transform: ligature text → `&#xCODE;`, plus `aria-hidden="true"` only where no `aria-hidden`
+or `aria-label` already existed (they are decorative; the controls carry their own labels).
+All existing attributes, inline styles and ids preserved.
+
+### Known gap — NOT fixed
+
+**5 occurrences interpolate a runtime variable** and still carry the original failure mode:
+`messages.html:206`, `pos-inventory-intelligence.html:667`, `revenue-dashboard.html:300`,
+`seller-earnings.html:343`, `seller-earnings.html:377`.
+
+Converting them needs a name→codepoint lookup shipped to the client plus a change to every
+call site's data — a behaviour change, not a mechanical substitution, so it was left alone.
+A small `SokoniIcons.cp(name)` helper would close them.
+
+### Root cause still open
+
+**Why the icon font fails on the reporting device is unknown.** It loads correctly in WebKit
+against production (`fonts.gstatic.com` → 200, CSP permits it). Leading hypothesis is the
+service worker's cache-first font handling storing a bad or opaque response — **UNVERIFIED**.
+This change removes the ugly symptom; it does not restore missing icons.
+
+### Verification
+
+Remaining literal ligatures repo-wide: **0**. `<span>` open/close counts unchanged in all 9
+files. Byte deltas +141 to +531, consistent with entity + attribute insertion.
+`scripts/test-seller-dashboard.js` — 22 checks PASS.
+
+### Database / API / Security changes
+
+None.
+
+### Breaking changes
+
+None.
+
+---
+
+## [2026-07-19] — Payment chain: success event never fired (P0, deployed)
 
 ### Summary
 

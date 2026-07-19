@@ -337,12 +337,12 @@ body {
 <!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 <header class="pos-header">
   <a href="pos.html" class="back">
-    <span class="material-icons-round" style="font-size:18px">arrow_back</span>
+    <span class="material-icons-round" style="font-size:18px" aria-hidden="true">&#xe5c4;</span>
   </a>
   <h1>Inventory Intelligence</h1>
   <span class="badge-alert" id="alert-badge">0 urgent</span>
   <button class="refresh-btn" id="refresh-btn" onclick="loadIntelligence()">
-    <span class="material-icons-round">refresh</span>
+    <span class="material-icons-round" aria-hidden="true">&#xe5d5;</span>
     Refresh
   </button>
 </header>
@@ -358,7 +358,7 @@ body {
   <!-- Recommendations -->
   <div id="reco-section" style="display:none">
     <div class="section-title">
-      <span class="material-icons-round">auto_awesome</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe65f;</span>
       Action Required
     </div>
     <div class="reco-list" id="reco-list"></div>
@@ -367,37 +367,37 @@ body {
   <!-- Tabs -->
   <div class="tabs" id="tabs">
     <button class="tab-btn urgent-tab active" data-tab="low-stock">
-      <span class="material-icons-round">warning</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe002;</span>
       Low Stock
       <span class="count" id="cnt-low">â€”</span>
     </button>
     <button class="tab-btn" data-tab="expiry">
-      <span class="material-icons-round">schedule</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe8b5;</span>
       Expiry
       <span class="count" id="cnt-expiry">â€”</span>
     </button>
     <button class="tab-btn" data-tab="fast">
-      <span class="material-icons-round">trending_up</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe8e5;</span>
       Fast Movers
       <span class="count" id="cnt-fast">â€”</span>
     </button>
     <button class="tab-btn" data-tab="slow">
-      <span class="material-icons-round">trending_down</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe8e3;</span>
       Slow Movers
       <span class="count" id="cnt-slow">â€”</span>
     </button>
     <button class="tab-btn" data-tab="dead">
-      <span class="material-icons-round">inventory_2</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe1a1;</span>
       Dead Stock
       <span class="count" id="cnt-dead">â€”</span>
     </button>
     <button class="tab-btn" data-tab="overstock">
-      <span class="material-icons-round">warehouse</span>
+      <span class="material-icons-round" aria-hidden="true">&#xebb8;</span>
       Overstock
       <span class="count" id="cnt-overstock">â€”</span>
     </button>
     <button class="tab-btn" data-tab="reorder">
-      <span class="material-icons-round">shopping_cart</span>
+      <span class="material-icons-round" aria-hidden="true">&#xe8cc;</span>
       Reorder Queue
       <span class="count" id="cnt-reorder">â€”</span>
     </button>
@@ -418,7 +418,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-low-stock"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No low stock items</p></div></td></tr></tbody>
+        <tbody id="tb-low-stock"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No low stock items</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -437,7 +437,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-expiry"><tr><td colspan="6"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No expiry alerts</p></div></td></tr></tbody>
+        <tbody id="tb-expiry"><tr><td colspan="6"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No expiry alerts</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -457,7 +457,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-fast"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">trending_up</span><p>No fast movers detected yet â€” make more sales!</p></div></td></tr></tbody>
+        <tbody id="tb-fast"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe8e5;</span><p>No fast movers detected yet â€” make more sales!</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -477,7 +477,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-slow"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No slow movers detected</p></div></td></tr></tbody>
+        <tbody id="tb-slow"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No slow movers detected</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -497,7 +497,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-dead"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No dead stock â€” everything is selling</p></div></td></tr></tbody>
+        <tbody id="tb-dead"><tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No dead stock â€” everything is selling</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -516,7 +516,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-overstock"><tr><td colspan="6"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No overstock detected</p></div></td></tr></tbody>
+        <tbody id="tb-overstock"><tr><td colspan="6"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No overstock detected</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -535,7 +535,7 @@ body {
             <th>Action</th>
           </tr>
         </thead>
-        <tbody id="tb-reorder"><tr><td colspan="6"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>Reorder queue is empty</p></div></td></tr></tbody>
+        <tbody id="tb-reorder"><tr><td colspan="6"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>Reorder queue is empty</p></div></td></tr></tbody>
       </table>
     </div>
   </div>
@@ -695,7 +695,7 @@ function renderIntelligence(data) {
 function renderLowStock(items) {
   const tb = document.getElementById('tb-low-stock');
   if (!items.length) {
-    tb.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>All stock levels are healthy</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>All stock levels are healthy</p></div></td></tr>';
     return;
   }
   tb.innerHTML = items.map(p => `
@@ -715,7 +715,7 @@ function renderExpiry(critical, warning) {
   const tb = document.getElementById('tb-expiry');
   const all = [...critical, ...warning];
   if (!all.length) {
-    tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No expiry alerts</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No expiry alerts</p></div></td></tr>';
     return;
   }
   tb.innerHTML = all.map(b => {
@@ -742,7 +742,7 @@ function renderExpiry(critical, warning) {
 function renderFastSlow(items, tbId, isSlow) {
   const tb = document.getElementById(tbId);
   if (!items.length) {
-    tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">${isSlow ? 'check_circle' : 'trending_up'}</span><p>${isSlow ? 'No slow movers detected' : 'No fast movers yet â€” make more sales!'}</p></div></td></tr>`;
+    tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">${isSlow ? '&#xe86c;' : '&#xe8e5;'}</span><p>${isSlow ? 'No slow movers detected' : 'No fast movers yet â€” make more sales!'}</p></div></td></tr>`;
     return;
   }
   tb.innerHTML = items.map(p => {
@@ -775,7 +775,7 @@ function renderFastSlow(items, tbId, isSlow) {
 function renderDead(items) {
   const tb = document.getElementById('tb-dead');
   if (!items.length) {
-    tb.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>Every product has sold in the last 30 days</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="7"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>Every product has sold in the last 30 days</p></div></td></tr>';
     return;
   }
   tb.innerHTML = items.map(p => `
@@ -794,7 +794,7 @@ function renderDead(items) {
 function renderOverstock(items) {
   const tb = document.getElementById('tb-overstock');
   if (!items.length) {
-    tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>No overstock detected</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>No overstock detected</p></div></td></tr>';
     return;
   }
   tb.innerHTML = items.map(p => `
@@ -812,7 +812,7 @@ function renderOverstock(items) {
 function renderReorder(items) {
   const tb = document.getElementById('tb-reorder');
   if (!items.length) {
-    tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-icons-round">check_circle</span><p>Reorder queue is empty</p></div></td></tr>';
+    tb.innerHTML = '<tr><td colspan="6"><div class="empty-state"><span class="material-icons-round" aria-hidden="true">&#xe86c;</span><p>Reorder queue is empty</p></div></td></tr>';
     return;
   }
   const priorityLabel = n => n >= 8 ? 'critical' : n >= 5 ? 'high' : 'normal';

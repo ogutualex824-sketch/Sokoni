@@ -161,19 +161,19 @@ textarea.form-input{resize:vertical;min-height:72px}
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span class="material-icons" style="color:var(--g);font-size:22px">monetization_on</span>
+      <span class="material-icons" style="color:var(--g);font-size:22px" aria-hidden="true">&#xe263;</span>
       <span>Commission Engine</span>
     </div>
     <div class="nav-group">Engine</div>
-    <div class="nav-item active" data-panel="overview" onclick="_nav(this)"><span class="material-icons">dashboard</span>Overview</div>
-    <div class="nav-item" data-panel="rules" onclick="_nav(this)"><span class="material-icons">rule</span>Rules</div>
-    <div class="nav-item" data-panel="categories" onclick="_nav(this)"><span class="material-icons">category</span>Categories</div>
+    <div class="nav-item active" data-panel="overview" onclick="_nav(this)"><span class="material-icons" aria-hidden="true">&#xe871;</span>Overview</div>
+    <div class="nav-item" data-panel="rules" onclick="_nav(this)"><span class="material-icons" aria-hidden="true">&#xf1c2;</span>Rules</div>
+    <div class="nav-item" data-panel="categories" onclick="_nav(this)"><span class="material-icons" aria-hidden="true">&#xe574;</span>Categories</div>
     <div class="nav-group">Tools</div>
-    <div class="nav-item" data-panel="preview" onclick="_nav(this)"><span class="material-icons">calculate</span>Preview</div>
-    <div class="nav-item" data-panel="holidays" onclick="_nav(this)"><span class="material-icons">celebration</span>Campaigns</div>
+    <div class="nav-item" data-panel="preview" onclick="_nav(this)"><span class="material-icons" aria-hidden="true">&#xea5f;</span>Preview</div>
+    <div class="nav-item" data-panel="holidays" onclick="_nav(this)"><span class="material-icons" aria-hidden="true">&#xea65;</span>Campaigns</div>
     <div style="margin-top:auto;padding:12px 8px;border-top:1px solid var(--border)">
-      <a href="revenue.html" class="nav-item" style="margin:0"><span class="material-icons">bar_chart</span>Revenue</a>
-      <a href="admin.html"   class="nav-item" style="margin:0;margin-top:2px"><span class="material-icons">arrow_back</span>Admin</a>
+      <a href="revenue.html" class="nav-item" style="margin:0"><span class="material-icons" aria-hidden="true">&#xe26b;</span>Revenue</a>
+      <a href="admin.html"   class="nav-item" style="margin:0;margin-top:2px"><span class="material-icons" aria-hidden="true">&#xe5c4;</span>Admin</a>
     </div>
   </aside>
 
@@ -182,10 +182,10 @@ textarea.form-input{resize:vertical;min-height:72px}
     <div class="topbar">
       <h1 id="pageTitle">Commission Overview</h1>
       <button class="btn btn-primary btn-sm" onclick="_openRuleModal()">
-        <span class="material-icons" style="font-size:15px">add</span> New Rule
+        <span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe145;</span> New Rule
       </button>
-      <button class="btn btn-outline btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:15px">refresh</span></button>
-      <a href="revenue.html" class="btn btn-outline btn-sm"><span class="material-icons" style="font-size:15px">bar_chart</span>Revenue</a>
+      <button class="btn btn-outline btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5d5;</span></button>
+      <a href="revenue.html" class="btn btn-outline btn-sm"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe26b;</span>Revenue</a>
     </div>
 
     <div class="content">
@@ -232,7 +232,7 @@ textarea.form-input{resize:vertical;min-height:72px}
       <div id="panel-rules" class="panel">
         <div class="toolbar">
           <div class="search-box">
-            <span class="material-icons">search</span>
+            <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
             <input type="text" id="ruleSearch" placeholder="Search rulesâ€¦" oninput="_filterRules()">
           </div>
           <select class="form-select" style="width:auto;height:36px" id="ruleTypeFilter" onchange="_filterRules()">
@@ -250,7 +250,7 @@ textarea.form-input{resize:vertical;min-height:72px}
             <input type="checkbox" id="showInactive" onchange="_loadRules()"> Show inactive
           </label>
           <button class="btn btn-primary btn-sm" onclick="_openRuleModal()">
-            <span class="material-icons" style="font-size:14px">add</span> New Rule
+            <span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe145;</span> New Rule
           </button>
         </div>
         <div class="card">
@@ -305,7 +305,7 @@ textarea.form-input{resize:vertical;min-height:72px}
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
           <p style="font-size:13px;color:var(--sub)">Commission holidays set the rate to 0% for a category or seller during a time window.</p>
           <button class="btn btn-primary btn-sm" onclick="_openRuleModal('commission_holiday')">
-            <span class="material-icons" style="font-size:14px">add</span> New Campaign
+            <span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe145;</span> New Campaign
           </button>
         </div>
         <div class="card">
@@ -326,7 +326,7 @@ textarea.form-input{resize:vertical;min-height:72px}
     <div class="modal-header">
       <h2 id="modalTitle">New Commission Rule</h2>
       <button class="btn btn-outline btn-sm" onclick="document.getElementById('ruleModal').classList.remove('open')">
-        <span class="material-icons" style="font-size:16px">close</span>
+        <span class="material-icons" style="font-size:16px" aria-hidden="true">&#xe5cd;</span>
       </button>
     </div>
     <div class="modal-body">

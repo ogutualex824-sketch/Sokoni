@@ -142,28 +142,28 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="logo">
-      <span class="material-icons" style="color:var(--g);font-size:20px">subscriptions</span>
+      <span class="material-icons" style="color:var(--g);font-size:20px" aria-hidden="true">&#xe064;</span>
       <span>Subscription Engine</span>
     </div>
     <div class="ng">Engine</div>
-    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons">dashboard</span>Dashboard</div>
-    <div class="ni" onclick="_nav(this,'plans')"><span class="material-icons">layers</span>Plans</div>
-    <div class="ni" onclick="_nav(this,'subscribers')"><span class="material-icons">group</span>Subscribers</div>
-    <div class="ni" onclick="_nav(this,'billing')"><span class="material-icons">receipt_long</span>Billing</div>
+    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons" aria-hidden="true">&#xe871;</span>Dashboard</div>
+    <div class="ni" onclick="_nav(this,'plans')"><span class="material-icons" aria-hidden="true">&#xe53b;</span>Plans</div>
+    <div class="ni" onclick="_nav(this,'subscribers')"><span class="material-icons" aria-hidden="true">&#xe7ef;</span>Subscribers</div>
+    <div class="ni" onclick="_nav(this,'billing')"><span class="material-icons" aria-hidden="true">&#xef6e;</span>Billing</div>
     <div class="ng">Tools</div>
-    <div class="ni" onclick="_nav(this,'analytics')"><span class="material-icons">analytics</span>Analytics</div>
-    <div class="ni" onclick="_nav(this,'export')"><span class="material-icons">download</span>Export</div>
+    <div class="ni" onclick="_nav(this,'analytics')"><span class="material-icons" aria-hidden="true">&#xef3e;</span>Analytics</div>
+    <div class="ni" onclick="_nav(this,'export')"><span class="material-icons" aria-hidden="true">&#xf090;</span>Export</div>
     <div class="sidebar-foot">
-      <a href="revenue.html" class="ni" style="margin:0"><span class="material-icons">bar_chart</span>Revenue</a>
-      <a href="admin.html"   class="ni" style="margin:0;margin-top:2px"><span class="material-icons">arrow_back</span>Admin</a>
+      <a href="revenue.html" class="ni" style="margin:0"><span class="material-icons" aria-hidden="true">&#xe26b;</span>Revenue</a>
+      <a href="admin.html"   class="ni" style="margin:0;margin-top:2px"><span class="material-icons" aria-hidden="true">&#xe5c4;</span>Admin</a>
     </div>
   </aside>
 
   <div class="main">
     <div class="topbar">
       <h1 id="pageTitle">Dashboard</h1>
-      <button class="btn btn-b btn-sm" onclick="_nav(document.querySelector('.ni[onclick*=plans]'),'plans');setTimeout(_openCreatePlan,200)"><span class="material-icons" style="font-size:14px">add</span>New Plan</button>
-      <button class="btn btn-o btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px">refresh</span></button>
+      <button class="btn btn-b btn-sm" onclick="_nav(document.querySelector('.ni[onclick*=plans]'),'plans');setTimeout(_openCreatePlan,200)"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe145;</span>New Plan</button>
+      <button class="btn btn-o btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe5d5;</span></button>
     </div>
 
     <div class="content">
@@ -215,7 +215,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
             <option value="freelancer">Freelancer</option><option value="recruiter">Recruiter</option>
             <option value="buyer">Premium Buyer</option><option value="enterprise">Enterprise</option>
           </select>
-          <button class="btn btn-g btn-sm" onclick="_openCreatePlan()"><span class="material-icons" style="font-size:14px">add</span>New Plan</button>
+          <button class="btn btn-g btn-sm" onclick="_openCreatePlan()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe145;</span>New Plan</button>
         </div>
         <div class="plan-grid" id="planGrid"><div class="spin"></div></div>
       </div>
@@ -224,7 +224,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
       <div id="panel-subscribers" class="panel">
         <div class="toolbar">
           <div class="search-box">
-            <span class="material-icons">search</span>
+            <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
             <input type="text" id="subSearch" placeholder="Search by UIDâ€¦" oninput="_filterSubs()">
           </div>
           <select class="fs" style="width:auto;height:34px" id="subStatusFilter" onchange="_loadSubscribers()">
@@ -251,7 +251,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
       <div id="panel-billing" class="panel">
         <div class="toolbar">
           <div class="search-box">
-            <span class="material-icons">search</span>
+            <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
             <input type="text" id="billSearch" placeholder="Search UID or planâ€¦" oninput="_filterBilling()">
           </div>
           <select class="fs" style="width:auto;height:34px" id="billEventFilter" onchange="_loadBilling()">
@@ -300,7 +300,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
               <div class="fg"><label class="fl">Start Date</label><input type="date" class="fi" id="exportStart"></div>
               <div class="fg"><label class="fl">End Date</label><input type="date" class="fi" id="exportEnd"></div>
             </div>
-            <button class="btn btn-g" id="exportBtn" onclick="_runExport()"><span class="material-icons" style="font-size:15px">download</span>Export CSV</button>
+            <button class="btn btn-g" id="exportBtn" onclick="_runExport()"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xf090;</span>Export CSV</button>
           </div>
         </div>
         <div class="card" id="exportResultCard" style="display:none">
@@ -319,7 +319,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
 <!-- Plan create/edit modal -->
 <div class="overlay" id="planModal" onclick="_closeOverlay(event,'planModal')">
   <div class="modal">
-    <div class="mhd"><h2 id="planModalTitle">New Plan</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('planModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2 id="planModalTitle">New Plan</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('planModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <input type="hidden" id="pm-id-original">
       <div class="fg2">
@@ -365,7 +365,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
 <!-- Subscriber action modal -->
 <div class="overlay" id="subActionModal" onclick="_closeOverlay(event,'subActionModal')">
   <div class="modal">
-    <div class="mhd"><h2>Manage Subscription</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('subActionModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2>Manage Subscription</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('subActionModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <div id="subActionDetails" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.8"></div>
       <input type="hidden" id="sa-subId">
@@ -397,7 +397,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
 <!-- Refund modal -->
 <div class="overlay" id="refundModal" onclick="_closeOverlay(event,'refundModal')">
   <div class="modal">
-    <div class="mhd"><h2>Process Refund</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('refundModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2>Process Refund</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('refundModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <input type="hidden" id="rf-billId"><input type="hidden" id="rf-subId">
       <div id="refundDetails" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:14px;margin-bottom:16px;font-size:12px;line-height:1.8"></div>
@@ -830,7 +830,7 @@ window._runExport=function(){
     }
     _toast('Export ready â€” '+rows.length+' records','green');
   }).catch(function(e){_toast('Error: '+e.message,'red');})
-  .finally(function(){btn.disabled=false;btn.innerHTML='<span class="material-icons" style="font-size:15px">download</span>Export CSV';});
+  .finally(function(){btn.disabled=false;btn.innerHTML='<span class="material-icons" style="font-size:15px" aria-hidden="true">&#xf090;</span>Export CSV';});
 };
 
 /* â”€â”€ helpers â”€â”€ */

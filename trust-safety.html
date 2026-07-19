@@ -94,27 +94,27 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 <div class="shell">
   <aside class="sidebar">
     <div class="logo">
-      <span class="material-icons" style="color:var(--r);font-size:22px">shield</span>
+      <span class="material-icons" style="color:var(--r);font-size:22px" aria-hidden="true">&#xe9e0;</span>
       <div><div class="logo-text">Trust & Safety</div><div class="logo-sub">SOKONI v1.0</div></div>
     </div>
     <div class="ng">Monitor</div>
-    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons">dashboard</span>Dashboard</div>
-    <div class="ni" onclick="_nav(this,'reports')"><span class="material-icons">flag</span>Reports <span class="bc" id="sbReports">…</span></div>
+    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons" aria-hidden="true">&#xe871;</span>Dashboard</div>
+    <div class="ni" onclick="_nav(this,'reports')"><span class="material-icons" aria-hidden="true">&#xe153;</span>Reports <span class="bc" id="sbReports">…</span></div>
     <div class="ng">Actions</div>
-    <div class="ni" onclick="_nav(this,'banned')"><span class="material-icons">block</span>Banned Users</div>
-    <div class="ni" onclick="_nav(this,'risk')"><span class="material-icons">warning</span>Risk Scores</div>
-    <div class="ni" onclick="_nav(this,'terms')"><span class="material-icons">manage_search</span>Banned Terms</div>
-    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons">gavel</span>Disputes<span class="bc" id="sbDisputes">0</span></div>
+    <div class="ni" onclick="_nav(this,'banned')"><span class="material-icons" aria-hidden="true">&#xe14b;</span>Banned Users</div>
+    <div class="ni" onclick="_nav(this,'risk')"><span class="material-icons" aria-hidden="true">&#xe002;</span>Risk Scores</div>
+    <div class="ni" onclick="_nav(this,'terms')"><span class="material-icons" aria-hidden="true">&#xf02f;</span>Banned Terms</div>
+    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons" aria-hidden="true">&#xe90e;</span>Disputes<span class="bc" id="sbDisputes">0</span></div>
     <div class="sidebar-foot">
-      <a href="admin-os.html" class="ni" style="margin:0"><span class="material-icons">admin_panel_settings</span>Admin OS</a>
-      <a href="admin.html"    class="ni" style="margin:0;margin-top:2px"><span class="material-icons">arrow_back</span>Admin</a>
+      <a href="admin-os.html" class="ni" style="margin:0"><span class="material-icons" aria-hidden="true">&#xef3d;</span>Admin OS</a>
+      <a href="admin.html"    class="ni" style="margin:0;margin-top:2px"><span class="material-icons" aria-hidden="true">&#xe5c4;</span>Admin</a>
     </div>
   </aside>
 
   <div class="main">
     <div class="topbar">
       <h1 id="pageTitle">Trust & Safety</h1>
-      <button class="btn btn-o btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
+      <button class="btn btn-o btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe5d5;</span>Refresh</button>
     </div>
     <div class="content">
 
@@ -179,8 +179,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
       <!-- Banned Users -->
       <div id="panel-banned" class="panel">
         <div class="toolbar">
-          <div class="search-box"><span class="material-icons">search</span><input type="text" id="bannedSearch" placeholder="Search banned users…" oninput="_filterBanned()"></div>
-          <button class="btn btn-r btn-sm" onclick="_openBanModal(null,'ban')"><span class="material-icons" style="font-size:14px">block</span>Ban User</button>
+          <div class="search-box"><span class="material-icons" aria-hidden="true">&#xe8b6;</span><input type="text" id="bannedSearch" placeholder="Search banned users…" oninput="_filterBanned()"></div>
+          <button class="btn btn-r btn-sm" onclick="_openBanModal(null,'ban')"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe14b;</span>Ban User</button>
         </div>
         <div class="card">
           <table class="tbl">
@@ -215,7 +215,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
           <div class="card-hd"><span class="card-title">Banned Terms</span>
             <div style="display:flex;gap:8px">
               <input type="text" class="fi" id="newTerm" placeholder="New term…" style="height:32px;padding:0 10px;font-size:12px">
-              <button class="btn btn-r btn-sm" onclick="_addTerm()"><span class="material-icons" style="font-size:14px">add</span>Add</button>
+              <button class="btn btn-r btn-sm" onclick="_addTerm()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe145;</span>Add</button>
             </div>
           </div>
           <div class="card-body" id="termsList"><div class="spin"></div></div>
@@ -255,7 +255,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 <!-- Review modal -->
 <div class="overlay" id="reviewModal" onclick="_closeOv(event,'reviewModal')">
   <div class="modal">
-    <div class="mhd"><h2>Review Report</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('reviewModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2>Review Report</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('reviewModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <input type="hidden" id="rv-id">
       <div id="rv-detail" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.9"></div>
@@ -282,7 +282,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 <!-- Ban/suspend modal -->
 <div class="overlay" id="banModal" onclick="_closeOv(event,'banModal')">
   <div class="modal">
-    <div class="mhd"><h2 id="banModalTitle">Ban User</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('banModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2 id="banModalTitle">Ban User</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('banModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <input type="hidden" id="bm-action">
       <div class="fg"><label class="fl">User UID</label><input type="text" class="fi" id="bm-uid"></div>

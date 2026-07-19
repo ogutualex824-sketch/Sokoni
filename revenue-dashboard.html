@@ -126,11 +126,11 @@ h2.sec-title .material-icons{font-size:16px}
 <body>
 
 <div class="topbar">
-  <button class="icon-btn" onclick="history.back()"><span class="material-icons">arrow_back</span></button>
+  <button class="icon-btn" onclick="history.back()"><span class="material-icons" aria-hidden="true">&#xe5c4;</span></button>
   <h1>Revenue Dashboard</h1>
   <span class="badge-admin">ADMIN</span>
-  <button class="icon-btn" id="refreshBtn" onclick="_load()" title="Refresh"><span class="material-icons">refresh</span></button>
-  <button class="icon-btn" onclick="location.href='commission-engine.html'" title="Commission Rules"><span class="material-icons">tune</span></button>
+  <button class="icon-btn" id="refreshBtn" onclick="_load()" title="Refresh"><span class="material-icons" aria-hidden="true">&#xe5d5;</span></button>
+  <button class="icon-btn" onclick="location.href='commission-engine.html'" title="Commission Rules"><span class="material-icons" aria-hidden="true">&#xe429;</span></button>
 </div>
 
 <div class="period-tabs" id="periodTabs">
@@ -145,7 +145,7 @@ h2.sec-title .material-icons{font-size:16px}
 
   <!-- KPI Cards -->
   <section>
-    <h2 class="sec-title"><span class="material-icons">insights</span>Platform Revenue</h2>
+    <h2 class="sec-title"><span class="material-icons" aria-hidden="true">&#xf092;</span>Platform Revenue</h2>
     <div class="kpi-grid" id="kpiGrid">
       <div class="skeleton sk-kpi"></div>
       <div class="skeleton sk-kpi"></div>
@@ -159,7 +159,7 @@ h2.sec-title .material-icons{font-size:16px}
   <!-- Revenue Trend Chart -->
   <section>
     <div class="chart-wrap">
-      <div class="chart-title"><span class="material-icons" style="color:var(--primary)">bar_chart</span>Daily Revenue Trend</div>
+      <div class="chart-title"><span class="material-icons" style="color:var(--primary)" aria-hidden="true">&#xe26b;</span>Daily Revenue Trend</div>
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-dot" style="background:var(--primary)"></div>Revenue</div>
         <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Payouts</div>
@@ -173,7 +173,7 @@ h2.sec-title .material-icons{font-size:16px}
 
   <!-- Hub Breakdown -->
   <section>
-    <h2 class="sec-title"><span class="material-icons">hub</span>Revenue by Hub</h2>
+    <h2 class="sec-title"><span class="material-icons" aria-hidden="true">&#xe9f4;</span>Revenue by Hub</h2>
     <div class="hub-table-wrap">
       <table class="hub-table" id="hubTable">
         <thead>
@@ -197,7 +197,7 @@ h2.sec-title .material-icons{font-size:16px}
 
   <!-- Active Commission Rules -->
   <section>
-    <h2 class="sec-title"><span class="material-icons">percent</span>Active Commission Rules
+    <h2 class="sec-title"><span class="material-icons" aria-hidden="true">&#xeb58;</span>Active Commission Rules
       <a href="commission-engine.html" style="margin-left:auto;font-size:11px;color:var(--primary);text-decoration:none;font-weight:600;letter-spacing:0;text-transform:none">Manage →</a>
     </h2>
     <div class="rules-list" id="rulesList">

@@ -142,37 +142,37 @@ a{color:inherit;text-decoration:none}
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="logo">
-      <span class="material-icons" style="color:var(--g);font-size:22px">account_balance</span>
+      <span class="material-icons" style="color:var(--g);font-size:22px" aria-hidden="true">&#xe84f;</span>
       <div><div class="logo-text">Financial OS</div><div class="logo-sub">SOKONI v2.0</div></div>
     </div>
     <div class="ng">Live</div>
-    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons">dashboard</span>Dashboard</div>
-    <div class="ni" onclick="_nav(this,'analytics')"><span class="material-icons">analytics</span>Analytics</div>
+    <div class="ni active" onclick="_nav(this,'dashboard')"><span class="material-icons" aria-hidden="true">&#xe871;</span>Dashboard</div>
+    <div class="ni" onclick="_nav(this,'analytics')"><span class="material-icons" aria-hidden="true">&#xef3e;</span>Analytics</div>
     <div class="ng">Operations</div>
-    <div class="ni" onclick="_nav(this,'escrow')"><span class="material-icons">lock</span>Escrow <span class="badge-count" id="sbEscrow">…</span></div>
-    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons">gavel</span>Disputes <span class="badge-count" id="sbDisputes">…</span></div>
-    <div class="ni" onclick="_nav(this,'payouts')"><span class="material-icons">send</span>Payouts <span class="badge-count" id="sbPayouts">…</span></div>
-    <div class="ni" onclick="_nav(this,'refunds')"><span class="material-icons">replay</span>Refunds</div>
+    <div class="ni" onclick="_nav(this,'escrow')"><span class="material-icons" aria-hidden="true">&#xe897;</span>Escrow <span class="badge-count" id="sbEscrow">…</span></div>
+    <div class="ni" onclick="_nav(this,'disputes')"><span class="material-icons" aria-hidden="true">&#xe90e;</span>Disputes <span class="badge-count" id="sbDisputes">…</span></div>
+    <div class="ni" onclick="_nav(this,'payouts')"><span class="material-icons" aria-hidden="true">&#xe163;</span>Payouts <span class="badge-count" id="sbPayouts">…</span></div>
+    <div class="ni" onclick="_nav(this,'refunds')"><span class="material-icons" aria-hidden="true">&#xe042;</span>Refunds</div>
     <div class="ng">Config</div>
-    <div class="ni" onclick="_nav(this,'settlement')"><span class="material-icons">schedule</span>Settlement Rules</div>
-    <div class="ni" onclick="_nav(this,'promos')"><span class="material-icons">discount</span>Promotions</div>
-    <div class="ni" onclick="_nav(this,'wallets')"><span class="material-icons">account_balance_wallet</span>Wallets</div>
+    <div class="ni" onclick="_nav(this,'settlement')"><span class="material-icons" aria-hidden="true">&#xe8b5;</span>Settlement Rules</div>
+    <div class="ni" onclick="_nav(this,'promos')"><span class="material-icons" aria-hidden="true">&#xebc9;</span>Promotions</div>
+    <div class="ni" onclick="_nav(this,'wallets')"><span class="material-icons" aria-hidden="true">&#xe850;</span>Wallets</div>
     <div class="ng">Admin</div>
-    <div class="ni" onclick="_nav(this,'audit')"><span class="material-icons">history</span>Audit Log</div>
-    <div class="ni" onclick="_nav(this,'tools')"><span class="material-icons">build</span>Admin Tools</div>
+    <div class="ni" onclick="_nav(this,'audit')"><span class="material-icons" aria-hidden="true">&#xe889;</span>Audit Log</div>
+    <div class="ni" onclick="_nav(this,'tools')"><span class="material-icons" aria-hidden="true">&#xe869;</span>Admin Tools</div>
     <div class="sidebar-foot">
-      <a href="finos.html"    class="ni" style="margin:0"><span class="material-icons">bar_chart</span>FinOS v1</a>
-      <a href="commission-engine.html" class="ni" style="margin:0;margin-top:2px"><span class="material-icons">percent</span>Commission</a>
-      <a href="subscription-billing.html" class="ni" style="margin:0;margin-top:2px"><span class="material-icons">subscriptions</span>Billing</a>
-      <a href="admin.html"    class="ni" style="margin:0;margin-top:4px"><span class="material-icons">arrow_back</span>Admin</a>
+      <a href="finos.html"    class="ni" style="margin:0"><span class="material-icons" aria-hidden="true">&#xe26b;</span>FinOS v1</a>
+      <a href="commission-engine.html" class="ni" style="margin:0;margin-top:2px"><span class="material-icons" aria-hidden="true">&#xeb58;</span>Commission</a>
+      <a href="subscription-billing.html" class="ni" style="margin:0;margin-top:2px"><span class="material-icons" aria-hidden="true">&#xe064;</span>Billing</a>
+      <a href="admin.html"    class="ni" style="margin:0;margin-top:4px"><span class="material-icons" aria-hidden="true">&#xe5c4;</span>Admin</a>
     </div>
   </aside>
 
   <div class="main">
     <div class="topbar">
       <h1 id="pageTitle">Financial Dashboard</h1>
-      <button class="btn btn-b btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px">refresh</span>Refresh</button>
-      <button class="btn btn-o btn-sm" onclick="_nav(document.querySelector('.ni[onclick*=tools]'),'tools')"><span class="material-icons" style="font-size:14px">build</span></button>
+      <button class="btn btn-b btn-sm" onclick="_refresh()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe5d5;</span>Refresh</button>
+      <button class="btn btn-o btn-sm" onclick="_nav(document.querySelector('.ni[onclick*=tools]'),'tools')"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe869;</span></button>
     </div>
 
     <div class="content">
@@ -254,7 +254,7 @@ a{color:inherit;text-decoration:none}
       <!-- ═══ ESCROW ═══ -->
       <div id="panel-escrow" class="panel">
         <div class="toolbar">
-          <div class="search-box"><span class="material-icons">search</span><input type="text" id="escrowSearch" placeholder="Search transaction ID…" oninput="_filterEscrows()"></div>
+          <div class="search-box"><span class="material-icons" aria-hidden="true">&#xe8b6;</span><input type="text" id="escrowSearch" placeholder="Search transaction ID…" oninput="_filterEscrows()"></div>
           <select class="fs" style="height:34px;width:auto" id="escrowStatusFilter" onchange="_loadEscrows()">
             <option value="held">Held</option><option value="released">Released</option>
             <option value="disputed">Disputed</option><option value="refunded">Refunded</option>
@@ -319,7 +319,7 @@ a{color:inherit;text-decoration:none}
         <div class="card">
           <div class="card-hd">
             <span class="card-title">Rules by Hub Type</span>
-            <button class="btn btn-g btn-sm" onclick="_saveAllRules()"><span class="material-icons" style="font-size:14px">save</span>Save All</button>
+            <button class="btn btn-g btn-sm" onclick="_saveAllRules()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe161;</span>Save All</button>
           </div>
           <div class="card-body" id="settlementRulesList"><div class="spin"></div></div>
         </div>
@@ -328,7 +328,7 @@ a{color:inherit;text-decoration:none}
       <!-- ═══ PROMOTIONS ═══ -->
       <div id="panel-promos" class="panel">
         <div class="toolbar">
-          <button class="btn btn-g btn-sm" onclick="_openCreatePromo()"><span class="material-icons" style="font-size:14px">add</span>New Promo</button>
+          <button class="btn btn-g btn-sm" onclick="_openCreatePromo()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe145;</span>New Promo</button>
         </div>
         <div class="card">
           <table class="tbl">
@@ -341,8 +341,8 @@ a{color:inherit;text-decoration:none}
       <!-- ═══ WALLETS ═══ -->
       <div id="panel-wallets" class="panel">
         <div class="toolbar">
-          <div class="search-box"><span class="material-icons">search</span><input type="text" id="walletSearch" placeholder="Enter UID to look up wallet…" onkeydown="if(event.key==='Enter')_lookupWallet()"></div>
-          <button class="btn btn-b btn-sm" onclick="_lookupWallet()"><span class="material-icons" style="font-size:14px">search</span>Look Up</button>
+          <div class="search-box"><span class="material-icons" aria-hidden="true">&#xe8b6;</span><input type="text" id="walletSearch" placeholder="Enter UID to look up wallet…" onkeydown="if(event.key==='Enter')_lookupWallet()"></div>
+          <button class="btn btn-b btn-sm" onclick="_lookupWallet()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe8b6;</span>Look Up</button>
         </div>
         <div id="walletResult"></div>
         <div class="card">
@@ -359,7 +359,7 @@ a{color:inherit;text-decoration:none}
               </div>
             </div>
             <div class="fg"><label class="fl">Reason *</label><input type="text" class="fi" id="adj-reason" placeholder="Support ticket #1234 — duplicate charge"></div>
-            <button class="btn btn-r" onclick="_adjustWallet()"><span class="material-icons" style="font-size:14px">edit</span>Apply Adjustment</button>
+            <button class="btn btn-r" onclick="_adjustWallet()"><span class="material-icons" style="font-size:14px" aria-hidden="true">&#xe3c9;</span>Apply Adjustment</button>
           </div>
         </div>
       </div>
@@ -367,7 +367,7 @@ a{color:inherit;text-decoration:none}
       <!-- ═══ AUDIT LOG ═══ -->
       <div id="panel-audit" class="panel">
         <div class="toolbar">
-          <div class="search-box"><span class="material-icons">search</span><input type="text" id="auditSearch" placeholder="Filter by entity ID…" oninput="_filterAudit()"></div>
+          <div class="search-box"><span class="material-icons" aria-hidden="true">&#xe8b6;</span><input type="text" id="auditSearch" placeholder="Filter by entity ID…" oninput="_filterAudit()"></div>
         </div>
         <div class="card">
           <table class="tbl">
@@ -437,7 +437,7 @@ a{color:inherit;text-decoration:none}
 <!-- Dispute resolution modal -->
 <div class="overlay" id="resolveModal" onclick="_closeOverlay(event,'resolveModal')">
   <div class="modal">
-    <div class="mhd"><h2>Resolve Dispute</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('resolveModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2>Resolve Dispute</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('resolveModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <input type="hidden" id="rm-escrowId">
       <div id="rm-details" style="background:var(--sur2);border:1px solid var(--brd);border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;line-height:1.9"></div>
@@ -465,7 +465,7 @@ a{color:inherit;text-decoration:none}
 <!-- Promo create modal -->
 <div class="overlay" id="promoModal" onclick="_closeOverlay(event,'promoModal')">
   <div class="modal">
-    <div class="mhd"><h2>New Promo Code</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('promoModal').classList.remove('open')"><span class="material-icons" style="font-size:15px">close</span></button></div>
+    <div class="mhd"><h2>New Promo Code</h2><button class="btn btn-o btn-sm" onclick="document.getElementById('promoModal').classList.remove('open')"><span class="material-icons" style="font-size:15px" aria-hidden="true">&#xe5cd;</span></button></div>
     <div class="mbody">
       <div class="fg2">
         <div class="fg"><label class="fl">Code *</label><input type="text" class="fi" id="pm-code" placeholder="SOKONI20" style="text-transform:uppercase"></div>

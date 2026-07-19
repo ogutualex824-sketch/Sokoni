@@ -165,7 +165,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 </div>
 
 <button class="withdraw-btn" id="withdrawBtn" disabled onclick="_openWithdraw()">
-  <span class="material-icons">account_balance_wallet</span>Withdraw Earnings
+  <span class="material-icons" aria-hidden="true">&#xe850;</span>Withdraw Earnings
 </button>
 
 <div class="period-summary" id="periodSummary">
@@ -191,7 +191,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 <!-- Withdraw Modal -->
 <div class="modal-overlay" id="withdrawModal">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="withdrawTitle">
-    <button class="modal-close" onclick="_closeWithdraw()"><span class="material-icons">close</span></button>
+    <button class="modal-close" onclick="_closeWithdraw()"><span class="material-icons" aria-hidden="true">&#xe5cd;</span></button>
     <h3 id="withdrawTitle">Withdraw Earnings</h3>
     <p class="sub">Funds sent to M-Pesa within 24 hours. WHT 5% deducted per KRA regulations.</p>
     <div class="modal-msg" id="withdrawMsg"></div>
@@ -205,7 +205,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
       <p class="form-note" id="withdrawAvail">Available: —</p>
     </div>
     <button class="submit-btn" id="withdrawSubmit" onclick="_submitWithdraw()">
-      <span class="material-icons">send</span>Request Payout
+      <span class="material-icons" aria-hidden="true">&#xe163;</span>Request Payout
     </button>
   </div>
 </div>
@@ -213,10 +213,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 <div class="toast" id="toast"></div>
 
 <nav class="bottom-nav">
-  <a href="seller-dashboard.html" class="nav-item"><span class="material-icons">dashboard</span>Dashboard</a>
-  <a href="seller-orders.html"    class="nav-item"><span class="material-icons">receipt_long</span>Orders</a>
-  <a href="seller-earnings.html"  class="nav-item active"><span class="material-icons">account_balance_wallet</span>Earnings</a>
-  <a href="seller-products.html"  class="nav-item"><span class="material-icons">inventory_2</span>Products</a>
+  <a href="seller-dashboard.html" class="nav-item"><span class="material-icons" aria-hidden="true">&#xe871;</span>Dashboard</a>
+  <a href="seller-orders.html"    class="nav-item"><span class="material-icons" aria-hidden="true">&#xef6e;</span>Orders</a>
+  <a href="seller-earnings.html"  class="nav-item active"><span class="material-icons" aria-hidden="true">&#xe850;</span>Earnings</a>
+  <a href="seller-products.html"  class="nav-item"><span class="material-icons" aria-hidden="true">&#xe1a1;</span>Products</a>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -289,7 +289,7 @@ function _load(){
     document.getElementById('loadMoreBtn').style.display = _hasMore ? '' : 'none';
   }).catch(function(err){
     _loading = false;
-    document.getElementById('txnList').innerHTML = '<div class="empty"><span class="material-icons">error_outline</span><h3>Could not load earnings</h3><p>'+_esc(err.message||'Network error')+'</p></div>';
+    document.getElementById('txnList').innerHTML = '<div class="empty"><span class="material-icons" aria-hidden="true">&#xe001;</span><h3>Could not load earnings</h3><p>'+_esc(err.message||'Network error')+'</p></div>';
     _showToast('Failed to load earnings — please try again');
   });
 }
@@ -364,7 +364,7 @@ function _renderTxns(entries, append){
   var el  = document.getElementById('txnList');
   if(!append) el.innerHTML = '';
   if(!entries.length && !append){
-    el.innerHTML = '<div class="empty"><span class="material-icons">account_balance_wallet</span><h3>No transactions yet</h3><p>Your earnings history will appear here once you start selling.</p></div>';
+    el.innerHTML = '<div class="empty"><span class="material-icons" aria-hidden="true">&#xe850;</span><h3>No transactions yet</h3><p>Your earnings history will appear here once you start selling.</p></div>';
     return;
   }
   var html = entries.map(function(e){
@@ -426,7 +426,7 @@ function _submitWithdraw(){
   }
 
   btn.disabled = true;
-  btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite">refresh</span>Processing…';
+  btn.innerHTML = '<span class="material-icons" style="animation:spin 1s linear infinite" aria-hidden="true">&#xe5d5;</span>Processing…';
 
   firebase.functions().httpsCallable('requestSellerPayout')({
     amountKES:   amount,
@@ -434,12 +434,12 @@ function _submitWithdraw(){
   }).then(function(){
     _showModalMsg('Payout requested! You\'ll receive your funds within 24 hours.', 'success');
     btn.disabled = false;
-    btn.innerHTML = '<span class="material-icons">send</span>Request Payout';
+    btn.innerHTML = '<span class="material-icons" aria-hidden="true">&#xe163;</span>Request Payout';
     setTimeout(function(){ _closeWithdraw(); _load(); }, 2500);
   }).catch(function(err){
     _showModalMsg(err.message || 'Payout failed — please try again.', 'error');
     btn.disabled = false;
-    btn.innerHTML = '<span class="material-icons">send</span>Request Payout';
+    btn.innerHTML = '<span class="material-icons" aria-hidden="true">&#xe163;</span>Request Payout';
   });
 }
 window._submitWithdraw = _submitWithdraw;

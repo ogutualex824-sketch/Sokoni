@@ -97,12 +97,12 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 
 <div class="topbar">
   <h1>Messages</h1>
-  <button class="icon-btn" onclick="location.href='/'"><span class="material-icons">home</span></button>
+  <button class="icon-btn" onclick="location.href='/'"><span class="material-icons" aria-hidden="true">&#xe88a;</span></button>
 </div>
 
 <div class="search-wrap">
   <div class="search-box">
-    <span class="material-icons">search</span>
+    <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
     <input type="text" id="searchInput" placeholder="Search conversationsâ€¦" autocomplete="off">
   </div>
 </div>
@@ -130,10 +130,10 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 </div>
 
 <nav class="bottom-nav">
-  <a href="/"    class="nav-item"><span class="material-icons">home</span>Home</a>
-  <a href="services.html" class="nav-item"><span class="material-icons">home_repair_service</span>Services</a>
-  <a href="messages.html" class="nav-item active"><span class="material-icons">chat</span>Messages</a>
-  <a href="profile.html"  class="nav-item"><span class="material-icons">person</span>Profile</a>
+  <a href="/"    class="nav-item"><span class="material-icons" aria-hidden="true">&#xe88a;</span>Home</a>
+  <a href="services.html" class="nav-item"><span class="material-icons" aria-hidden="true">&#xf100;</span>Services</a>
+  <a href="messages.html" class="nav-item active"><span class="material-icons" aria-hidden="true">&#xe0b7;</span>Messages</a>
+  <a href="profile.html"  class="nav-item"><span class="material-icons" aria-hidden="true">&#xe7fd;</span>Profile</a>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
@@ -183,7 +183,7 @@ function _render(){
   });
   var el=document.getElementById('convList');
   if(!list.length){
-    el.innerHTML='<div class="empty"><span class="material-icons">chat_bubble_outline</span><h3>No conversations</h3><p>'+
+    el.innerHTML='<div class="empty"><span class="material-icons" aria-hidden="true">&#xe0cb;</span><h3>No conversations</h3><p>'+
       (_filter!=='all'||_search?'No matching conversations found.':
        'Your conversations appear here when you place an order, make a booking, or submit an inquiry.')+
       '</p></div>';return;
@@ -193,7 +193,7 @@ function _render(){
 
 function _renderErr(){
   document.getElementById('convList').innerHTML=
-    '<div class="empty"><span class="material-icons">error_outline</span><h3>Could not load messages</h3><p>Check your connection and try again.</p></div>';
+    '<div class="empty"><span class="material-icons" aria-hidden="true">&#xe001;</span><h3>Could not load messages</h3><p>Check your connection and try again.</p></div>';
 }
 
 function _convHtml(c){
