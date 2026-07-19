@@ -227,7 +227,14 @@ exports.onPaymentUpdated = onDocumentUpdated({ ...OPTS, document: 'payments/{pay
     expired:    'expired',
     cancelled:  'failed',
   };
-  const redisState = STATE_MAP[newStatus] || newStatus;
+  /* P0, 2026-07-19: STATE_MAP is keyed lowercase but the writers store 'COMPLETE'
+     /'PENDING'/'FAILED'. STATE_MAP['COMPLETE'] was undefined, so redisState fell
+     through to the raw 'COMPLETE' — the `redisState === 'completed'` branch below
+     never ran, and the event bus published `payment_COMPLETE` instead of
+     `payment_completed`, which no subscriber matches. Normalise first; the map is
+     kept for any spelling payment-status.js does not yet know about. */
+  const canonical  = require('./payment-status').normalize(newStatus);
+  const redisState = STATE_MAP[canonical] || canonical;
 
   await _safeRedis('payment_updated', async () => {
     await R.PaymentService.setState(after.orderId || paymentId, redisState, {

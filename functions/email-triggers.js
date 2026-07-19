@@ -17,6 +17,7 @@ const emailSvc = require("./email-service");
 const { getTemplate } = require("./email-templates");
 const { EMAIL_SECRETS } = emailSvc;
 const { assertAuth } = require("./shared/errors");
+const payStatus = require("./payment-status");
 
 const SENDGRID_WEBHOOK_KEY = defineSecret("SENDGRID_WEBHOOK_KEY");
 
@@ -131,13 +132,59 @@ exports.emailOnProductStatusChange = onDocumentUpdated(
 /* ═══════════════════════════════════════════════════════════
    PAYMENTS: Successful payment
 ═══════════════════════════════════════════════════════════ */
-exports.emailOnPaymentSuccess = onDocumentCreated(
+/* P0, 2026-07-19 — this never fired for a single real payment.
+ *
+ *   Trigger type: it was onDocumentCreated, but a payments doc is CREATED with
+ *   status 'PENDING' (financial-os.js:151, index.js:5032) and only reaches success
+ *   via a later UPDATE from the IntaSend webhook. A create trigger cannot observe
+ *   that transition.
+ *
+ *   Status vocabulary: even had it fired, it compared against 'completed'/'success'
+ *   while the writers store 'COMPLETE'. Two independent reasons for silence.
+ *
+ * Now fires on the transition INTO success, matching subAutoActivateOnPayment
+ * (sub-engine.js:289) — the established pattern for this collection — and reads
+ * the status through the canonical vocabulary in payment-status.js.
+ *
+ * Exactly-once: emailSvc dedups on emailId, but only within a 5-minute window
+ * (_isDuplicate / DEDUP_TTL_MS). IntaSend retries can fall outside it, so the send
+ * is claimed durably in finosIdempotency first — the same mechanism sub-engine uses.
+ * The claim is a transactional create: two concurrent retries cannot both win it. */
+exports.emailOnPaymentSuccess = onDocumentUpdated(
   { document: "payments/{paymentId}", secrets: EMAIL_SECRETS },
   async (event) => {
-    const p = event.data?.data() || {};
-    if (p.status !== "completed" && p.status !== "success") return;
+    const p      = event.data?.after?.data() || {};
+    const before = event.data?.before?.data() || {};
+
+    /* Only the PENDING -> COMPLETE edge. Later writes to an already-complete
+       payment (settlement stamps, reconciliation) must not re-send. */
+    if (!payStatus.becameSuccessful(before.status, p.status)) return;
+
     const email = p.email || await emailForUid(p.uid || "");
     if (!email) return;
+
+    /* Durable claim — survives beyond the 5-minute email dedup window. */
+    const claimId  = `payment_success_email_${event.params.paymentId}`;
+    const claimRef = admin.firestore().collection("finosIdempotency").doc(claimId);
+    try {
+      await admin.firestore().runTransaction(async (txn) => {
+        const s = await txn.get(claimRef);
+        if (s.exists) throw new Error("__already_sent__");
+        txn.create(claimRef, {
+          kind:      "payment_success_email",
+          paymentId: event.params.paymentId,
+          uid:       p.uid || "",
+          claimedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+    } catch (e) {
+      if (e && e.message === "__already_sent__") {
+        console.log(`[emailOnPaymentSuccess] already sent for ${event.params.paymentId} — skipping`);
+        return;
+      }
+      throw e;
+    }
+
     await trigger("payment-success", {
       name:   p.customerName || "Customer",
       amount: p.amount || 0,
