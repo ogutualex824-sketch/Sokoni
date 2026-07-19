@@ -1,4 +1,60 @@
-﻿## [2026-07-19] — Material Icons: ligature text can no longer leak into production
+﻿## [2026-07-19] — Two stale selectors, proven at runtime, silently disabling features
+
+### Summary
+
+The static audit flagged 33 pages with `getElementById` references to IDs defined nowhere.
+Runtime validation reduced that to **two genuine defects**; the rest of the high-risk set was
+false positives. No IDs were changed on elements that are created at runtime.
+
+**services.html — "Open Now" filter never filtered.** `toggleOpenNowFilter` read
+`#providerGrid`; the grid is `#providersGrid` (line 740), the one the renderer at line 1088
+writes `.pv-card[data-provider-id]` into. One missing character. The read returned `null` and
+`if (!grid) return;` exited silently — but the button had *already* toggled its own active
+styling, so it lit up green and filtered nothing. The UI reported a filter that was never
+applied.
+
+**legal-hub.html — search-result buttons threw on first statement.** Three inline handlers ran
+`document.getElementById('legalGlobalSearch').value=''`. `legalGlobalSearch` is a *function*
+(`window.legalGlobalSearch`), never an element; the input is `#heroLawyerSearch`. Unguarded, so
+the handler threw before reaching `legalGlobalSearch('')`, `showLawTab('documents')` or
+`showLawTab('court')` — the "Generate" and "View" buttons in search results did nothing at all.
+
+### Evidence
+
+Both confirmed on WebKit at iPhone 13 viewport against production, not inferred from grep.
+The legal-hub defect was proven by executing the button's own `onclick` source and capturing
+`null is not an object (evaluating 'document.getElementById('legalGlobalSearch').value='')`.
+An earlier click-based probe reported zero errors — `pageerror` does not surface exceptions
+thrown inside inline handlers, so that run was a false negative and was discarded.
+
+Post-fix: 10/10 checks pass against the patched files, including typing a query and executing
+the rendered clear handler (no throw, input cleared). `test-root-identity` 21 PASS,
+`test-seller-dashboard` 22 PASS.
+
+### Files affected
+
+`services.html` (1 read corrected), `legal-hub.html` (3 handlers corrected).
+
+### Not defects — verified, left unchanged
+
+- `sellerFsKpi` (seller.html:5965) and `_prd_qr_btn` (product.html:270) — each is a
+  *self-created* element; the lookup is the double-injection guard immediately preceding
+  `el.id = ...`. Changing these would break injection.
+- `productTitle` (seller.html:3987) — deliberate `?.` fallback alias behind `productName`.
+- `photoZone` / `imagePreviewZone` (seller.html:3916) — read only by `mobilePhotoZoneUpdate`,
+  which has **zero call sites**. Dead code, no user impact; deletion is a separate decision.
+
+### Not validated
+
+`seller.html` and `pos-checkout.html` are auth-gated; unauthenticated runs redirected to
+`/login` and `/pos-setup`, so those probes measured the wrong page and were discarded. Their
+remaining IDs are unverified and are **not** claimed as either defects or false positives.
+
+### Security / performance / breaking changes
+
+None. No schema, payment, wallet, settlement or webhook code touched.
+
+## [2026-07-19] — Material Icons: ligature text can no longer leak into production
 
 ### Summary
 

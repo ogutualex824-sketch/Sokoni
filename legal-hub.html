@@ -3685,7 +3685,7 @@ function legalGlobalSearch(q) {
 
   resultsEl.innerHTML = `
     <div style="font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:16px;">${hits.length} result${hits.length!==1?'s':''} for "<span style="color:#c8ff80;">${q}</span>"
-      <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');" style="margin-left:12px;padding:3px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.45);font-size:11px;cursor:pointer;font-family:inherit;">✕ Clear</button>
+      <button type="button" onclick="document.getElementById('heroLawyerSearch').value='';legalGlobalSearch('');" style="margin-left:12px;padding:3px 10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:rgba(255,255,255,0.45);font-size:11px;cursor:pointer;font-family:inherit;">✕ Clear</button>
     </div>
     ${hits.map(h => {
       if(h.type === 'lawyer') {
@@ -3707,7 +3707,7 @@ function legalGlobalSearch(q) {
       if(h.type === 'doc') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
         <div style="font-size:28px;">📄</div>
         <div style="flex:1;"><div style="font-size:13px;font-weight:800;color:white;">${h.title}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">Legal document template</div></div>
-        <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');showLawTab('documents',null);setTimeout(()=>selectDocType('${h.key}'),300);" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Generate  </button>
+        <button type="button" onclick="document.getElementById('heroLawyerSearch').value='';legalGlobalSearch('');showLawTab('documents',null);setTimeout(()=>selectDocType('${h.key}'),300);" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Generate  </button>
       </div>`;
       if(h.type === 'right') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;">
         <div style="font-size:13px;font-weight:800;color:white;margin-bottom:5px;">${h.data.icon} ${h.data.title}</div>
@@ -3717,7 +3717,7 @@ function legalGlobalSearch(q) {
       if(h.type === 'court') return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:14px;">
         <div style="font-size:28px;">🏛️</div>
         <div style="flex:1;"><div style="font-size:13px;font-weight:800;color:white;">${h.label}</div><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;">${h.desc}</div></div>
-        <button type="button" onclick="document.getElementById('legalGlobalSearch').value='';legalGlobalSearch('');showLawTab('court',null);" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View  </button>
+        <button type="button" onclick="document.getElementById('heroLawyerSearch').value='';legalGlobalSearch('');showLawTab('court',null);" style="padding:8px 14px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.25);color:#c8ff80;border-radius:9px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">View  </button>
       </div>`;
       return '';
     }).join('')}`;

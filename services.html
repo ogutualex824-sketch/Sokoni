@@ -2180,7 +2180,12 @@ document.addEventListener('DOMContentLoaded', function() {
     _openNowActive = !_openNowActive;
     btn.classList.toggle("active", _openNowActive);
     btn.style.background = _openNowActive ? "rgba(16,185,129,.15)" : "";
-    const grid = document.getElementById("providerGrid");
+    /* The grid is #providersGrid (line 740) — the renderer at line 1088 writes the
+       .pv-card[data-provider-id] nodes this filter walks. This read was "providerGrid",
+       one character off, so it resolved to null and the guard below returned silently.
+       The button still toggled its own active styling above, so "Open Now" lit up green
+       and filtered nothing — the UI reported a filter that was never applied. */
+    const grid = document.getElementById("providersGrid");
     if (!grid) return;
     if (!_openNowActive) {
       grid.querySelectorAll(".pv-card[data-provider-id]").forEach(c => c.style.display = "");
