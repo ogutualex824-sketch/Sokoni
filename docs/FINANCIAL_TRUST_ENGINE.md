@@ -165,6 +165,56 @@ Unknown 2 is the counter-example that matters most. It proves the target archite
 
 ---
 
+## 10. Two principles derived from this session's evidence
+
+Both were produced by verified findings, not preference. Recorded here because the
+Constitution permits amendment only when evidence proves it incomplete.
+
+### Authority Consistency Principle
+
+> Every server-owned invariant must be enforced by **every layer that can authoritatively
+> influence it** — Firestore Rules, Cloud Functions, and operational procedure alike.
+> Where layers disagree, the permissive one wins and the strict one becomes advisory.
+
+**Evidence.** `firestore.rules:80-89` `validOrderStatus()` permits a client to create an
+order with `'paid'`, `'completed'` or `'refunded'`. `finos-router.js:113` `_verifyPayment`
+then accepts `status == 'paid'` as **proof of payment**. A Cloud Function that validates
+what the rules already allowed a client to write is not an authority — it is an opinion.
+Gate 2 must therefore close the rule and the function together; either alone is theatre.
+
+The same shape appears in `manager-auth.js` (UI gate, no server verifier) and in the
+pre-existing beta gate (client-side check, zero deployed CFs, `betaStatus` nonexistent).
+Three instances, one principle.
+
+### Transition Authority Principle
+
+> No financially significant **state transition** may be authored by a client.
+> Clients request. Servers authorize. Rules enforce. Audit records.
+
+**Evidence.** The critical defect is not that a client can *create* an order — it is that a
+client can move one into a financially meaningful *state*. Ownership of state, not location
+of code, is the durable boundary. This reframes Gate 2 from "canonical order producer" to
+**canonical order state machine**, and generalises to payments, wallet, settlement, payroll,
+refunds, KYC and beta approval.
+
+Applies to the lifecycle: Draft → Validated → Payment Pending → Payment Authorized → Paid →
+Preparing → Assigned → Collected → Delivered → Completed. The financial transitions
+(Payment Pending → Paid, and any refund) are server-only in **both** the rule and the CF,
+per the Authority Consistency Principle above.
+
+### Naming convention for server-owned fields
+
+`noSelfGrant()` currently enumerates ten fields explicitly. That is correct while the set is
+small. If it approaches fifty, adopt an `svr_` prefix so a single rule expresses *"clients
+may not mutate any field beginning with `svr_`"* — which scales without migration.
+
+Do **not** restructure `users/{uid}` into nested sections to achieve this. That was proposed
+and withdrawn: `firebase.js:535` writes the flat shape, `CANONICAL_ONBOARDING_SCHEMA.md`
+documents it, `sokoni-permissions.js` consumes it, and flat-vs-nested is ergonomics, not a
+correctness defect. Migration cost without architectural gain.
+
+---
+
 ## Related
 
 [[PRODUCTION_READINESS]] · [[RIDER_EARNINGS_AUTHORITY]] · [[PLATFORM_CONSTITUTION]] · [[RELEASE_VALIDATION_STANDARD]]
