@@ -1,4 +1,85 @@
-﻿## [2026-07-19] — Receipt Engine: truncation and namespace fixes (deployed)
+﻿## [2026-07-19] — Payment chain: success event never fired (P0, deployed)
+
+### Summary
+
+No confirmation email has ever been sent for a real payment, and the Redis/event-bus
+`completed` branch never ran. One root cause: the `payments` collection carries two status
+vocabularies that never agreed. Only the event chain was repaired — no payment, pricing,
+wallet, settlement or commission arithmetic was touched.
+
+### Root cause
+
+| | value |
+|---|---|
+| Writers store | `'PENDING'` on create (`financial-os.js:151`, `index.js:5032`), `'COMPLETE'`/`'FAILED'` on update (`intasendWebhook`, `financial-os.js:258`) |
+| `emailOnPaymentSuccess` tested | `status !== 'completed' && status !== 'success'` → return |
+| `redis onPaymentUpdated` tested | `STATE_MAP` keyed `completed` / `paid` / `success` |
+
+`emailOnPaymentSuccess` failed for **two independent reasons**: it was `onDocumentCreated`,
+but a payments doc is *created* as `PENDING` and only reaches success via a later *update*,
+so a create trigger cannot observe the transition; and `'COMPLETE'` never equalled
+`'completed'` even if it had fired.
+
+`STATE_MAP['COMPLETE']` was `undefined`, so `redisState` fell through to the raw `'COMPLETE'`.
+The `redisState === 'completed'` branch never ran and the event bus published
+`payment_COMPLETE`, which no subscriber matches.
+
+### Files affected
+
+- `functions/payment-status.js` — **new**, pure module, no I/O. Canonical status vocabulary.
+- `functions/email-triggers.js` — `emailOnPaymentSuccess` rewritten
+- `functions/redis-integrations.js` — normalise before the `STATE_MAP` lookup
+
+Writers were deliberately **not** changed: that would touch live payment records and the
+settlement/commission paths. Consumers normalise instead — one vocabulary, one place to change it.
+
+### Trigger
+
+| | before | after |
+|---|---|---|
+| type | `onDocumentCreated` | `onDocumentUpdated` (verified live: `…firestore.document.v1.updated`) |
+| condition | `status === 'completed' \|\| 'success'` | `payStatus.becameSuccessful(before.status, after.status)` |
+
+Matches `subAutoActivateOnPayment` (`sub-engine.js:289`), the established pattern for this collection.
+
+### Idempotency
+
+`emailSvc._isDuplicate` dedups on `emailId` but only within `DEDUP_TTL_MS` (5 minutes);
+IntaSend retries can fall outside that window. The send is now claimed durably in
+`finosIdempotency` via a transactional `create`, the same mechanism `sub-engine` uses.
+
+Verified against a model of Firestore transaction semantics: 5 sequential retries → 1 email;
+8 concurrent retries → 1 email; redelivery after the dedup window → 1 email; 3 distinct
+payments → 3 emails. Transition detection verified across 10 edges, including
+`COMPLETE → COMPLETE` (retry), settlement re-stamp, and `COMPLETE → REFUNDED` — none re-send.
+
+### Database changes
+
+New idempotency documents `finosIdempotency/payment_success_email_{paymentId}`. No schema
+change, no migration, no existing document modified.
+
+### API changes
+
+None.
+
+### Security changes
+
+None.
+
+### Breaking changes
+
+None. `emailOnPaymentSuccess` changed trigger type; since it never fired successfully, there
+is no existing behaviour to preserve.
+
+### Known gaps (NOT fixed here)
+
+Receipt generation and push notification **do not exist anywhere in the payment-completion
+chain** — this is absence of implementation, not a broken trigger, and was not invented.
+Commission (`commissionLedger/{apiRef}`, deterministic id) and audit already fire exactly once.
+
+---
+
+## [2026-07-19] — Receipt Engine: truncation and namespace fixes (deployed)
 
 ### Summary
 
