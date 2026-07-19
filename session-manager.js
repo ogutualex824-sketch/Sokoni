@@ -58,17 +58,96 @@ function _safeEmail(email) {
   return (email || '').toLowerCase().trim();
 }
 
+/* ─── Canonical identity ──────────────────────────────────────────────────
+   UID is the identity. Email is optional metadata.
+
+   This module was previously keyed entirely on email: createSession() returned
+   early on a falsy email, documents carried userEmail and no uid, and every
+   query filtered on userEmail. Phone-authenticated accounts have no email, so
+   they could not be represented at all — a phone user had no session document,
+   an empty device list, and no way to sign other devices out. Google, Facebook
+   and Email/Password happened to work only because those providers supply an
+   email; the identity model was accidental, not designed.
+
+   firebaseAuth.currentUser is authoritative. The cached profile is a fallback
+   for the brief window before onAuthStateChanged fires on a page load. */
+function _getIdentity() {
+  const authUser = (typeof window !== 'undefined' && window.firebaseAuth)
+    ? window.firebaseAuth.currentUser : null;
+  const cached = _getUser() || {};
+  return {
+    uid:   (authUser && authUser.uid) || cached.uid || null,
+    email: _safeEmail((authUser && authUser.email) || cached.email) || null,
+  };
+}
+
+/* ─── Migration compatibility ─────────────────────────────────────────────
+   Documents written before this change carry userEmail and no uid. Queries
+   therefore run against BOTH keys and union the results, so a user mid-migration
+   sees their existing sessions alongside any new ones.
+
+   This is a migration-period affordance only. Every NEW document is written with
+   uid as the canonical field (createSession below), and _backfillUid() stamps uid
+   onto this device's legacy document on next load, so the email branch drains
+   naturally as users return. It can be deleted once legacy documents are gone. */
+async function _queryOwnSessions(activeOnly) {
+  const { uid, email } = _getIdentity();
+  if (!uid) return [];
+
+  const col = collection(db, 'userSessions');
+  const build = (field, value) => {
+    const parts = [where(field, '==', value)];
+    if (activeOnly) parts.push(where('active', '==', true));
+    return query(col, ...parts);
+  };
+
+  const queries = [build('uid', uid)];
+  if (email) queries.push(build('userEmail', email));   /* legacy documents */
+
+  const snaps = await Promise.all(
+    queries.map(q => getDocs(q).catch(() => null))
+  );
+
+  const byId = new Map();
+  for (const snap of snaps) {
+    if (!snap) continue;
+    for (const d of snap.docs) byId.set(d.id, d);       /* union — may match both */
+  }
+  return [...byId.values()];
+}
+
+/* Stamp uid onto this device's pre-migration document, if it lacks one. */
+async function _backfillUid() {
+  const sid = _getSessionId();
+  const { uid } = _getIdentity();
+  if (!sid || !uid) return;
+  try {
+    await setDoc(doc(db, 'userSessions', sid), { uid }, { merge: true });
+  } catch (_) { /* non-fatal: the union query still finds the document by email */ }
+}
+
 /* ─── Create session on login ─── */
-async function createSession(userEmail) {
-  if (!userEmail) return;
+/* The legacy signature was createSession(userEmail) and callers still pass an
+   email (auth.js:270, :858, :1112). That argument is now advisory only: identity
+   comes from _getIdentity(), so a phone account with no email creates a session
+   exactly like any other provider. The parameter is retained so existing call
+   sites keep working and is used only as an email fallback. */
+async function createSession(userEmailHint) {
+  const { uid, email } = _getIdentity();
+  if (!uid) {
+    console.warn('[SokoniSessions] createSession: no uid available, skipping');
+    return;
+  }
   let sid = _makeSessionId();
   localStorage.setItem('sokoniSessionId', sid);
 
   const device = _getDeviceInfo();
+  const resolvedEmail = email || _safeEmail(userEmailHint) || null;
   try {
     await setDoc(doc(db, 'userSessions', sid), {
       sessionId: sid,
-      userEmail: _safeEmail(userEmail),
+      uid,                                        /* canonical identity */
+      ...(resolvedEmail && { userEmail: resolvedEmail }),  /* optional metadata */
       ...device,
       createdAt:  serverTimestamp(),
       lastActive: serverTimestamp(),
@@ -122,17 +201,12 @@ async function deleteCurrentSession() {
 
 /* ─── Get all active sessions for current user ─── */
 async function getUserSessions() {
-  const user = _getUser();
-  if (!user?.email) return [];
   const currentSid = _getSessionId();
 
   try {
-    const q    = query(collection(db, 'userSessions'),
-                       where('userEmail', '==', _safeEmail(user.email)),
-                       where('active', '==', true));
-    const snap = await getDocs(q);
-    return snap.docs
-      .map(d => ({ ...d.data(), isCurrent: d.id === currentSid }))
+    const docs = await _queryOwnSessions(true);
+    return docs
+      .map(d => ({ ...d.data(), sessionId: d.data().sessionId || d.id, isCurrent: d.id === currentSid }))
       .sort((a, b) => {
         if (a.isCurrent) return -1;
         if (b.isCurrent) return 1;
@@ -155,16 +229,11 @@ async function revokeSession(sessionId) {
 
 /* ─── Revoke all OTHER sessions ─── */
 async function revokeOtherSessions() {
-  const user       = _getUser();
   const currentSid = _getSessionId();
-  if (!user?.email) return 0;
 
   try {
-    const q    = query(collection(db, 'userSessions'),
-                       where('userEmail', '==', _safeEmail(user.email)),
-                       where('active', '==', true));
-    const snap = await getDocs(q);
-    const others = snap.docs.filter(d => d.id !== currentSid);
+    const docs   = await _queryOwnSessions(true);
+    const others = docs.filter(d => d.id !== currentSid);
     await Promise.all(others.map(d => updateDoc(doc(db, 'userSessions', d.id), { active: false })));
     return others.length;
   } catch (e) {
@@ -217,13 +286,18 @@ function _forceLogout(reason) {
    • Touch session every 5 min to update lastActive
 ────────────────────────────────────────────────────────────── */
 (async function _autoInit() {
-  const user = _getUser();
-  if (!user?.email) return; /* not logged in */
+  /* Was `if (!user?.email) return;` — which silently excluded every
+     phone-authenticated account from session tracking entirely. */
+  const { uid } = _getIdentity();
+  if (!uid) return; /* not logged in */
 
   const sid = _getSessionId();
   if (!sid) {
     /* First visit after feature shipped — silently create session */
-    await createSession(user.email);
+    await createSession();
+  } else {
+    /* Existing device: stamp uid onto a pre-migration document. */
+    await _backfillUid();
   }
   /* Start real-time revocation watch */
   watchSession();

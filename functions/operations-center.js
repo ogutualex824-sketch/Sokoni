@@ -75,7 +75,9 @@ exports.getPlatformHealth = onCall({ enforceAppCheck: true }, async (request) =>
     _count('posSessions', [['status', '==', 'open']]), /* device count = session sum */
     _count('platformEvents', [['status', '==', 'pending']]),
     _count('platformEvents', [['status', '==', 'dead_letter']]),
-    _count('userSessions', [['lastSeen', '>', threshold5m]]),
+    /* lastActive, not lastSeen. session-manager.js:touchSession writes lastActive
+       and nothing has ever written lastSeen, so this counter always read zero. */
+    _count('userSessions', [['lastActive', '>', threshold5m]]),
     _count('deliveries', [['status', 'in', ['assigned','in_transit']]]),
     _count('products', [['stockAlert', '==', true]]),
   ]);

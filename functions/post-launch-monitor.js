@@ -232,10 +232,11 @@ async function _computeMetricsForBounds(start, end) {
       .limit(100)
       .get(),
 
-    /* Active sessions in the period (userSessions.lastSeen) */
+    /* Active sessions in the period. Was lastSeen, which session-manager.js has
+       never written — the heartbeat field is lastActive, so this always read 0. */
     firestore.collection("userSessions")
-      .where("lastSeen", ">=", start)
-      .where("lastSeen", "<=", end)
+      .where("lastActive", ">=", start)
+      .where("lastActive", "<=", end)
       .count().get(),
   ]);
 

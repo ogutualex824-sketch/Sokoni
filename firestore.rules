@@ -939,22 +939,37 @@ service cloud.firestore {
     match /userProgress/{uid}/{subcol}/{docId} {
       allow read, write: if isAdmin() || (isAuthed() && request.auth.uid == uid);
     }
+    /* UID is the canonical session identity; email is optional metadata.
+       Previously every operation required request.auth.token.email != null, so a
+       phone-authenticated account could not create, read or revoke a session at
+       all — the rule enforced an identity model that excluded a supported
+       provider. It also compared the raw token email against a value the client
+       lowercases, so a mixed-case address was denied on create.
+
+       ownsByEmail() is a MIGRATION affordance for documents written before uid
+       existed. New writes must carry uid == request.auth.uid, so legacy documents
+       drain as users return and this branch can then be removed.
+
+       .get(field, default) is used deliberately: legacy documents have no uid and
+       new phone-account documents have no userEmail, and a bare resource.data.uid
+       on a missing field errors and denies. */
     match /userSessions/{sessionId} {
+      function ownsByUid() {
+        return isAuthed() && resource.data.get('uid', '') == request.auth.uid;
+      }
+      function ownsByEmail() {
+        return isAuthed()
+               && request.auth.token.email != null
+               && resource.data.get('userEmail', '') == request.auth.token.email.lower();
+      }
+
+      /* Canonical: a session may only ever be created for the caller's own uid. */
       allow create: if isAuthed()
-                    && request.auth.token.email != null
-                    && request.resource.data.userEmail == request.auth.token.email;
-      allow read:   if isAdmin()
-                    || (isAuthed()
-                        && request.auth.token.email != null
-                        && resource.data.userEmail == request.auth.token.email);
-      allow update: if isAdmin()
-                    || (isAuthed()
-                        && request.auth.token.email != null
-                        && resource.data.userEmail == request.auth.token.email);
-      allow delete: if isAdmin()
-                    || (isAuthed()
-                        && request.auth.token.email != null
-                        && resource.data.userEmail == request.auth.token.email);
+                    && request.resource.data.get('uid', '') == request.auth.uid;
+
+      allow read:   if isAdmin() || ownsByUid() || ownsByEmail();
+      allow update: if isAdmin() || ownsByUid() || ownsByEmail();
+      allow delete: if isAdmin() || ownsByUid() || ownsByEmail();
     }
 
     match /bookingFees/{feeId} {
