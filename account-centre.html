@@ -2042,15 +2042,42 @@ window.acRevokeAll = async function() {
   if (!confirm('Sign out all other devices? You will remain signed in on this device.')) return;
   try {
     const currentDoc = _currentDocId || localStorage.getItem('sk_device_doc');
-    // Revoke from device engine
-    await _cfDeviceLogoutAll({ currentDeviceDocId: currentDoc || null });
-    // Also revoke legacy sessions
-    await SokoniSessions.revokeOtherSessions().catch(() => {});
+
+    /* Both revocation paths are attempted independently.
+       Previously deviceLogoutAll was awaited first and unguarded, so when that
+       Cloud Function was unavailable the throw aborted the handler before the
+       legacy revoke on line below could run — one missing function disabled
+       BOTH mechanisms, and the catch reported a generic failure either way.
+       deviceLogoutAll is exported (functions/index.js:9654) but is NOT deployed,
+       so this is the live path today: it always threw functions/not-found. */
+    const [devRes, legacyRes] = await Promise.allSettled([
+      _cfDeviceLogoutAll({ currentDeviceDocId: currentDoc || null }),
+      SokoniSessions.revokeOtherSessions(),
+    ]);
+
+    if (devRes.status === 'rejected') {
+      console.error('[AccountCentre] deviceLogoutAll failed:',
+                    devRes.reason && (devRes.reason.code || devRes.reason.message), devRes.reason);
+    }
+    if (legacyRes.status === 'rejected') {
+      console.error('[AccountCentre] revokeOtherSessions failed:',
+                    legacyRes.reason && legacyRes.reason.message, legacyRes.reason);
+    }
+
     _sessions = [];
     _devices  = [];
     await _loadSessions();
+
+    /* Only report failure when BOTH mechanisms failed. If either succeeded the
+       other devices are signed out, and claiming otherwise would be false. */
+    if (devRes.status === 'rejected' && legacyRes.status === 'rejected') {
+      const why = (devRes.reason && (devRes.reason.code || devRes.reason.message)) || 'unknown error';
+      alert('Could not sign out other devices (' + why + '). Please try again, ' +
+            'or contact support if this continues.');
+    }
   } catch (e) {
-    alert('Failed to sign out other devices. Please try again.');
+    console.error('[AccountCentre] acRevokeAll error:', e && e.message, e);
+    alert('Could not sign out other devices (' + ((e && e.message) || 'unknown error') + ').');
   }
 };
 
