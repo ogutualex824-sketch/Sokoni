@@ -2402,8 +2402,16 @@ service cloud.firestore {
 
     match /gipLocations/{assetId} {
       allow read:   if isAuthed();
+      /* GPS integrity, 2026-07-19: create validated the coordinate RANGES but never
+         bound the document to its writer, while update already did
+         (request.auth.uid == resource.data.uid, below). So any authenticated user
+         could CREATE a location doc for an arbitrary asset carrying an arbitrary
+         uid — poisoning fleet tracking and dispatch with spoofed positions, and
+         then being locked out of correcting it by the stricter update rule.
+         Bound to the writer on create, matching update. */
       allow create: if isAuthed()
                     && request.resource.data.assetId == assetId
+                    && request.resource.data.uid == request.auth.uid
                     && request.resource.data.lat  is number
                     && request.resource.data.lat  >= -90   && request.resource.data.lat  <= 90
                     && request.resource.data.lng  is number

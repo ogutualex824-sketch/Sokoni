@@ -37,7 +37,19 @@ async function _dispatch(webhookDoc, event, payload) {
   if (!wh.events.includes(event) && !wh.events.includes('*')) return;
 
   const fullPayload = { event, tenantId: wh.tenantId, data: payload, ts: new Date().toISOString() };
-  const signature   = _sign(fullPayload, wh.secret || 'sk_placeholder');
+
+  /* Fail CLOSED, 2026-07-19. This was `wh.secret || 'sk_placeholder'`. A webhook
+     registered without a secret was signed with a constant that is published in
+     this source file, so any recipient who knew it could forge signed deliveries
+     that the receiver would verify as genuine. A signature computed from a public
+     constant is worse than no signature: it carries the appearance of authenticity.
+     No secret means no delivery. */
+  if (!wh.secret) {
+    console.error(`[inventory-webhooks] refusing to send "${event}" to webhook ${wh.id || '(no id)'}` +
+                  ` for tenant ${wh.tenantId}: no signing secret configured`);
+    return;
+  }
+  const signature   = _sign(fullPayload, wh.secret);
 
   return new Promise(resolve => {
     try {
