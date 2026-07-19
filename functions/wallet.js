@@ -13,6 +13,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { defineSecret } = require('firebase-functions/params');
+const { checkRateLimit } = require('./redis-rate-limiter');   /* HIGH-06 — existing limiter, not a new one */
 
 const INTASEND_KEY = defineSecret('INTASEND_PRIVATE_KEY');
 
@@ -102,6 +103,8 @@ exports.initiateWalletTopUp = onCall(
   { cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] },
   async (request) => {
     _requireAuth(request);
+    /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
+    await checkRateLimit(request, 'payment');
 
     const db = getFirestore();
     const uid = request.auth.uid;
@@ -292,6 +295,8 @@ exports.confirmWalletTopUp = onCall(
 
 exports.spendFromWallet = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
+  /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
+  await checkRateLimit(request, 'payment');
 
   const db = getFirestore();
   const uid = request.auth.uid;
@@ -396,6 +401,8 @@ exports.getWalletTransactions = onCall({ cors: true, enforceAppCheck: true }, as
 
 exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
   _requireAuth(request);
+  /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
+  await checkRateLimit(request, 'payment');
 
   const db = getFirestore();
   const uid = request.auth.uid;

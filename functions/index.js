@@ -4969,6 +4969,64 @@ exports.initiateSTKPush = onCall(
     const amountKES = Math.round(Number(amount));
     if (!amountKES || amountKES < 1 || amountKES > 150000) throw new HttpsError("invalid-argument", "Invalid amount.");
 
+    /* ══ CRITICAL-01 REMEDIATION — STAGE 1a: OBSERVE ════════════════════════════
+       `amount` above arrives verbatim from request.data and is only bounds-checked.
+       Nothing re-derives it from an order, booking or cart, and `ref` is likewise
+       client-supplied, so an authenticated user can pay KES 1 for anything. Every
+       downstream commission and settlement figure inherits that number.
+
+       Why this is staged rather than fixed outright: the client sends
+       {phone, amount, ref} with NO order reference (sokoni-intasend.js:220), so
+       there is nothing to re-derive from yet. Callers include subscriptions, POS
+       and every booking page. Failing closed today would break all of them at once
+       — an availability incident traded for an integrity one.
+
+       So the authority record is consulted when it exists, and its absence is
+       recorded rather than punished:
+
+         Stage 1a (this change)  enforce when paymentIntents/{ref} exists;
+                                 log STK_NO_AUTHORITY when it does not.
+         Stage 1b (follow-up)    once telemetry shows every caller mints an intent,
+                                 flip the marked branch below to throw.
+
+       The intent is written SERVER-SIDE by whichever flow owns the price. The
+       client never names the amount — the same shape Stripe uses for PaymentIntents.
+       This adds no parallel payment path: it is an authority lookup on the existing
+       canonical one. ═══════════════════════════════════════════════════════════ */
+    let _amountAuthority = "none";
+    try {
+      const intentSnap = await db.collection("paymentIntents").doc(String(ref)).get();
+      if (intentSnap.exists) {
+        const intent = intentSnap.data() || {};
+        const expected = Math.round(Number(intent.amount));
+
+        if (intent.uid && intent.uid !== request.auth.uid) {
+          logger.error("[STK] intent ownership mismatch", {
+            ref, intentUid: intent.uid, caller: request.auth.uid,
+          });
+          throw new HttpsError("permission-denied", "This payment does not belong to you.");
+        }
+        if (Number.isFinite(expected) && expected !== amountKES) {
+          logger.error("[STK] AMOUNT MISMATCH — client figure rejected", {
+            ref, claimed: amountKES, expected, uid: request.auth.uid,
+          });
+          throw new HttpsError("invalid-argument", "Payment amount does not match this order.");
+        }
+        _amountAuthority = "intent";
+      } else {
+        /* STAGE 1b: replace this branch with
+             throw new HttpsError("failed-precondition", "No payment authority record.");
+           once STK_NO_AUTHORITY reaches zero in production logs. */
+        logger.warn("STK_NO_AUTHORITY", {
+          ref, amount: amountKES, uid: request.auth.uid,
+          note: "client-supplied amount accepted — no paymentIntents record",
+        });
+      }
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;      /* mismatches must surface */
+      logger.warn("[STK] authority lookup failed (open)", { ref, err: e && e.message });
+    }
+
     /* Idempotency — return existing checkoutId if payment is still pending */
     const existing = await db.collection("payments").doc(ref).get();
     if (existing.exists) {
@@ -6158,29 +6216,100 @@ exports.releaseEscrow = onCall({ timeoutSeconds: 30 }, async (request) => {
 exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
+  /* ══ CRITICAL-02 REMEDIATION (2026-07-19) ═══════════════════════════════════
+     Previously:
+         const refundAmt = amount ? Number(amount) : (escrow && escrow.amount) || 0;
+     The client's `amount` was used verbatim, with no comparison against what was
+     actually paid, and line 6170 permits the BUYER (not only an admin). The
+     function then wrote a paymentLedger credit to "buyer:{uid}". A buyer could
+     therefore credit themselves an arbitrary sum. Deployed and client-callable
+     via sokoni-endpoints.js:38.
+
+     Three separate holes are closed here:
+       1. Amount was unbounded          -> capped at the authoritative escrow amount
+       2. No cumulative ceiling         -> prior refunds are summed and deducted
+       3. Escrow could be refunded      -> status is asserted inside a transaction,
+          repeatedly (no idempotency)      so concurrent calls cannot both succeed
+
+     Buyer authorisation is deliberately RETAINED. Capping alone removes the
+     exploit, and requiring admin would break legitimate buyer-initiated refunds.
+     Smallest change that eliminates the financial risk. ══════════════════════ */
   const { orderId, escrowRef, amount, reason } = request.data || {};
   const refundReason = reason || "customer_request";
   if (!orderId && !escrowRef) throw new HttpsError("invalid-argument", "orderId or escrowRef required.");
+
+  const isAdminCaller = !!(request.auth.token && request.auth.token.admin);
 
   let escrow = null;
   if (escrowRef) {
     const snap = await db.collection("escrows").doc(escrowRef).get();
     if (!snap.exists) throw new HttpsError("not-found", "Escrow not found.");
     escrow = snap.data();
-    if (!request.auth.token.admin && request.auth.uid !== escrow.buyerId) {
+    if (!isAdminCaller && request.auth.uid !== escrow.buyerId) {
+      throw new HttpsError("permission-denied", "Only the buyer or admin can request a refund.");
+    }
+  } else {
+    /* orderId-only path. This previously performed NO ownership check at all, so
+       any authenticated user could file a refund request against any order. It
+       writes no ledger entry, but it does create a refunds record and an audit
+       entry that an operator may later action.
+
+       Ownership mirrors the canonical definition already in firestore.rules:265-268
+       (uid | userId | buyerId | buyerUid) rather than inventing a new one. */
+    const oSnap = await db.collection("orders").doc(String(orderId)).get();
+    if (!oSnap.exists) throw new HttpsError("not-found", "Order not found.");
+    const o = oSnap.data();
+    const owns = [o.uid, o.userId, o.buyerId, o.buyerUid].includes(request.auth.uid);
+    if (!isAdminCaller && !owns) {
       throw new HttpsError("permission-denied", "Only the buyer or admin can request a refund.");
     }
   }
 
   const refundRef = _genRef("RFD");
   const ts        = admin.firestore.FieldValue.serverTimestamp();
-  const refundAmt = amount ? Number(amount) : (escrow && escrow.amount) || 0;
+
+  /* Authoritative original. Only the escrow carries a server-trusted figure; we
+     do not infer an amount from the order document, because that would mean
+     guessing which of several total fields is canonical. */
+  const originalAmt = escrow ? Number(escrow.amount) || 0 : null;
+
+  let refundAmt;
+  if (escrow) {
+    /* Sum refunds already raised against this escrow. Cancelled/failed refunds
+       do not consume the ceiling. */
+    const priorSnap = await db.collection("refunds")
+      .where("escrowRef", "==", escrowRef)
+      .get();
+    const priorTotal = priorSnap.docs
+      .filter(d => ["pending", "processing", "completed"].includes(d.data().status))
+      .reduce((sum, d) => sum + (Number(d.data().amount) || 0), 0);
+
+    const remaining = Math.max(0, originalAmt - priorTotal);
+    if (remaining <= 0) {
+      throw new HttpsError("failed-precondition", "This payment has already been fully refunded.");
+    }
+
+    const requested = amount != null ? Number(amount) : remaining;
+    if (!Number.isFinite(requested) || requested <= 0) {
+      throw new HttpsError("invalid-argument", "Invalid refund amount.");
+    }
+    if (requested > remaining) {
+      throw new HttpsError("invalid-argument",
+        `Refund exceeds the refundable balance for this payment (${remaining}).`);
+    }
+    refundAmt = requested;
+  } else {
+    /* No authoritative amount is available on this path, so the client's figure
+       is NOT honoured. The request is recorded for an operator to determine. */
+    refundAmt = null;
+  }
 
   await db.collection("refunds").doc(refundRef).set({
     ref: refundRef,
     orderId: orderId || null,
     escrowRef: escrowRef || null,
     amount: refundAmt,
+    amountAuthority: escrow ? "escrow" : "pending_admin_determination",
     currency: (escrow && escrow.currency) || "KES",
     reason: refundReason,
     initiatedBy: request.auth.uid,
@@ -6189,17 +6318,31 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
   });
 
   if (escrowRef && escrow) {
-    await db.collection("escrows").doc(escrowRef).update({
-      status: "refunded", refundedAt: ts,
-      refundedBy: request.auth.uid, refundRef, reason: refundReason,
-    });
-    await db.collection("paymentLedger").add({
-      ref: refundRef, type: "escrow_refunded",
-      debitAccount: "escrow:holding",
-      creditAccount: "buyer:" + escrow.buyerId,
-      amount: refundAmt, currency: escrow.currency || "KES",
-      metadata: { orderId: orderId || null, reason: refundReason },
-      serverTs: ts,
+    /* Transactional: assert the escrow has not already been refunded, so two
+       concurrent calls cannot both pass the ceiling check above and both write a
+       ledger credit. The read-modify-write must be atomic. */
+    await db.runTransaction(async (t) => {
+      const eRef  = db.collection("escrows").doc(escrowRef);
+      const eSnap = await t.get(eRef);
+      if (!eSnap.exists) throw new HttpsError("not-found", "Escrow not found.");
+      if (eSnap.data().status === "refunded") {
+        throw new HttpsError("failed-precondition", "This payment has already been refunded.");
+      }
+
+      const fullyRefunded = refundAmt >= originalAmt;
+      t.update(eRef, {
+        status: fullyRefunded ? "refunded" : (eSnap.data().status || "held"),
+        refundedAt: ts, refundedBy: request.auth.uid, refundRef, reason: refundReason,
+      });
+
+      t.create(db.collection("paymentLedger").doc(refundRef), {
+        ref: refundRef, type: "escrow_refunded",
+        debitAccount: "escrow:holding",
+        creditAccount: "buyer:" + escrow.buyerId,
+        amount: refundAmt, currency: escrow.currency || "KES",
+        metadata: { orderId: orderId || null, reason: refundReason, originalAmount: originalAmt },
+        serverTs: ts,
+      });
     });
   }
 

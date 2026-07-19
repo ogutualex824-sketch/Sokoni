@@ -19,6 +19,7 @@
 const { onCall } = require('firebase-functions/v2/https');
 const { getAuth }                   = require('firebase-admin/auth');
 const { getFirestore, FieldValue }  = require('firebase-admin/firestore');
+const { checkRateLimit } = require('./redis-rate-limiter');   /* HIGH-06 — existing limiter, not a new one */
 
 /* ── Constants ──────────────────────────────────────────────────────────────── */
 
@@ -102,6 +103,8 @@ async function _auditLog({ actor, action, resource, details, severity }) {
 ═══════════════════════════════════════════════════════════════════════════════ */
 exports.setUserRole = onCall({ cors: true, region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, async (request) => {
   _requireSuperAdmin(request);
+  /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
+  await checkRateLimit(request, 'admin');
 
   const { uid, role } = request.data || {};
 
