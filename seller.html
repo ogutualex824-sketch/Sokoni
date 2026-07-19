@@ -4980,7 +4980,7 @@ class="notification-container"
         backBar.style.display = 'flex';
         document.body.classList.add('sdm-backbar-visible');
         if(titleEl) titleEl.textContent = TAB_LABELS[name] || name;
-        _sdmLock();
+        /* _sdmLock() removed 2026-07-19 (Gate: Beta Readiness T1). It applied position:fixed + top:-Npx to <body> on every non-home mobile tab, shifting the document up by the Home scroll offset -- short sections (Flash Sale) rendered off-screen and appeared blank, and KRA/Team became unscrollable. The lock was designed for drawer overlays where a separate panel scrolls; on inline sections nothing else scrolls. window.scrollTo(0,0) below could not rescue it: a fixed body ignores window scrolling. _sdmUnlock() below is kept as defensive cleanup for any stale lock. */
       }
     }
 
