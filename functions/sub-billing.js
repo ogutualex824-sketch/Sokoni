@@ -62,6 +62,18 @@ const PLANS = {
     features:{ services_limit:3,    calendar:false, online_booking:true,  analytics:false, priority_listing:false, team_members:1, ai_assistant:false }},
   provider_basic:    { id:'provider_basic',    hubType:'service_provider', tier:'basic', name:'Provider Basic',    price:{monthly:99900,   annual:999000   }, trial:{days:14}, grace:{days:3},  isActive:true,
     features:{ services_limit:20,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:false, team_members:3, ai_assistant:false }},
+  /* ── PROVIDER SUBSCRIPTION TIERS (migrated from subscriptions.html) ──
+     These are the plans customers actually purchase. They lived only in a
+     hardcoded array on the buying page, so nothing server-side could price,
+     validate or activate them. Prices are the page's figures converted to
+     cents; annual is the page's per-month annual rate x 12. */
+  starter:           { id:'starter',           hubType:'service_provider', tier:'starter',  name:'Starter',   price:{monthly:49900,   annual:478800   }, trial:{days:14}, grace:{days:3},  isActive:true,
+    features:{ services_limit:20,   leads_per_month:30,  commission_pct:10, calendar:true,  online_booking:true,  analytics:false, priority_listing:false, team_members:1,  badge_verified:true }},
+  pro:               { id:'pro',               hubType:'service_provider', tier:'pro',      name:'Pro',       price:{monthly:149900,  annual:1438800  }, trial:{days:14}, grace:{days:5},  isActive:true,
+    features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:7,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:5,  badge_verified:true, ai_assistant:true }},
+  business:          { id:'business',          hubType:'service_provider', tier:'business', name:'Business',  price:{monthly:499900,  annual:4798800  }, trial:{days:14}, grace:{days:7},  isActive:true,
+    features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:4,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
+
   provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:14}, grace:{days:5},  isActive:true,
     features:{ services_limit:-1,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:10,ai_assistant:true,  bulk_import:true }},
 

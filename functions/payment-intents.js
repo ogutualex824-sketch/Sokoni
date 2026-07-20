@@ -67,8 +67,12 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
   }
   const cycle = billingCycle === 'annual' ? 'annual' : 'monthly';
 
-  if (!phone || !/^254[17]\d{8}$/.test(String(phone))) {
-    throw new HttpsError('invalid-argument', 'A valid Kenyan phone number is required.');
+  /* Optional at mint time. SokoniPay.gateway collects the handset later, and a
+     phone number cannot change what is charged — only plan and amount carry
+     commercial authority, and both are derived below. Validated when supplied;
+     initiateSTKPush still requires a valid number at push time. */
+  if (phone && !/^254[17]\d{8}$/.test(String(phone))) {
+    throw new HttpsError('invalid-argument', 'Invalid phone number.');
   }
 
   /* ── Price resolution: catalogue first, built-in second ──────────────────
@@ -126,7 +130,7 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
     amount:       amountKES,          /* the figure initiateSTKPush enforces */
     amountCents:  cents,
     currency:     'KES',
-    phone:        String(phone),
+    phone:        phone ? String(phone) : null,
     hubType:      plan.hubType || null,
     merchantId:   (request.data || {}).merchantId || null,
     status:       'created',

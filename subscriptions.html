@@ -280,14 +280,48 @@ function renderPlans(){
   }).join("");
 }
 
-function subscribePlan(planKey, price){
+async function subscribePlan(planKey, price){
   if(price===0){ (window._skToast||alert)("✅ Free plan — you're already on it! Start listing now."); window.location.href="seller.html"; return; }
+
+  /* ── Server derives the price, not this page ────────────────────────────
+     `price` above comes from PLANS_DATA, a table hardcoded in this file. It
+     was the only place these plans existed, so the amount charged was whatever
+     the browser said — initiateSTKPush logged STK_NO_AUTHORITY on every one.
+
+     createPaymentIntent now resolves the plan against the canonical catalogue
+     and returns the authoritative figure plus a server-minted reference.
+     initiateSTKPush enforces that same intent, so a tampered amount is
+     rejected rather than charged. The local `price` is display only. */
+  let _intent = null;
+  try {
+    const _cf = firebase.functions().httpsCallable('createPaymentIntent');
+    const _r  = await _cf({ planId: planKey, billingCycle: 'monthly' });
+    _intent = _r && _r.data;
+  } catch(e){
+    /* already-exists is the server refusing a duplicate subscription — a real
+       answer for the user, not a failure to hide behind a generic message. */
+    const _code = (e && e.code) || '';
+    if (/already-exists/.test(_code)) {
+      (window._skToast||alert)("You're already subscribed to this plan.");
+      return;
+    }
+    (window._skToast||alert)("Could not start payment: " + ((e && e.message) || 'please try again.'));
+    return;
+  }
+  if (!_intent || !_intent.paymentIntentId) {
+    (window._skToast||alert)("Could not start payment. Please try again.");
+    return;
+  }
+
   if(typeof SokoniPay!=="undefined"){
     SokoniPay.gateway({
       providerName: "SOKONI "+PLANS_DATA.find(p=>p.key===planKey)?.name+" Plan",
       category: "subscription",
       serviceDesc: "Monthly subscription — lower commission, more leads, premium features",
-      depositAmount: price,
+      /* server figure and server reference — never the local table */
+      depositAmount: _intent.amount,
+      paymentIntentId: _intent.paymentIntentId,
+      ref: _intent.paymentIntentId,
       onSuccess: function(ref){
         const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
         const id = user?.phone||user?.email||"anonymous";
