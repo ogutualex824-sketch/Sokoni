@@ -2677,7 +2677,16 @@ async function initProvisionStep() {
   const branchId   = WIZ.selectedBranch ? WIZ.selectedBranch.id : null;
 
   if (!merchantId || !branchId) {
-    showProvError('Configuration error — please restart the setup.');
+    /* Name the missing half. "Configuration error" gave the operator nothing to
+       act on, and the two causes need different actions: no business means the
+       account owns none, no branch means one was never picked. */
+    const missing = !merchantId && !branchId ? 'No business or branch was selected'
+                  : !merchantId ? 'No business was selected'
+                  : 'No branch was selected for this business';
+    console.error('[POS setup] cannot provision', { merchantId, branchId });
+    showProvError(missing + '.\n\nGo back and choose one. If the list was empty, this ' +
+      'account does not own a business yet — create one first, or ask the owner to add ' +
+      'you as POS staff.');
     return;
   }
 
@@ -2708,7 +2717,12 @@ async function initProvisionStep() {
 
   } catch (err) {
     setProvTask(0, 'error');
-    showProvError('Could not download business configuration. Please check your connection and retry.');
+    /* The server tells us exactly why. This used to discard `err` and print
+       "check your connection", which is wrong for every cause except the one it
+       names — and it is the least likely one, because the app itself loaded
+       over that same connection. Diagnosing this took a full trace through the
+       provisioning pipeline that the error message should have made unnecessary. */
+    showProvError(_provDiagnose(err, { merchantId, branchId, deviceId }));
     return;
   }
 
@@ -2729,9 +2743,20 @@ async function initProvisionStep() {
     });
     setProvTask(1, 'done');
   } catch (err) {
-    // Non-fatal: registration may fail if CF doesn't exist yet
-    // Still mark done — device runs fine without registration on first install
-    document.getElementById('prov-label-1').textContent = 'Device ready (registration pending)';
+    /* Non-fatal by design — the device works without server-side registration
+       on first install, so setup continues. But it is still LOGGED: swallowing
+       it silently is how the whole device cluster could be undeployed without
+       anyone noticing, and the label now says which state it is really in. */
+    const code = (err && (err.code || err.name) || 'unknown').replace(/^functions\//, '');
+    console.warn('[POS setup] registerDevice failed (non-fatal)', { code, message: err && err.message });
+    try {
+      if (window.SokoniAsync) {
+        window.SokoniAsync.report('POSSetup', 'registerDevice', err, { merchantId, branchId, nonFatal: true });
+      }
+    } catch (_) {}
+    document.getElementById('prov-label-1').textContent =
+      code === 'permission-denied' ? 'Device not registered (permission denied)'
+                                   : 'Device ready (registration pending)';
     setProvTask(1, 'done');
   }
 
@@ -2783,9 +2808,81 @@ async function initProvisionStep() {
   goToStep(7);
 }
 
+/* Turn a callable failure into something the operator can act on.
+
+   bootstrapDevice fails for several distinct reasons and each needs a different
+   response from the person holding the device. Collapsing them into "check your
+   connection" sends a merchant to reboot their router when the real answer is
+   that their account is not attached to the business.
+
+   The mapping is driven by the error CODE the callable returns, and the raw
+   code and message are always shown underneath — a support conversation that
+   starts with the actual code is far shorter than one that starts with
+   "it says check your connection". */
+function _provDiagnose(err, ctx) {
+  const code = (err && (err.code || err.name) || '').replace(/^functions\//, '');
+  const raw  = (err && err.message) || String(err || 'unknown error');
+  ctx = ctx || {};
+
+  let msg;
+  switch (code) {
+    case 'permission-denied':
+      msg = 'This account is not attached to that business.\n\n' +
+            'POS setup requires you to be the business owner, or active POS staff on ' +
+            'the selected branch. If you have just been added as staff, sign out and ' +
+            'back in so your permissions refresh.';
+      break;
+    case 'unauthenticated':
+      msg = 'Your session expired during setup. Sign in again and restart POS setup.';
+      break;
+    case 'not-found':
+      msg = 'The selected business or branch no longer exists. Go back and pick it again.';
+      break;
+    case 'invalid-argument':
+      msg = 'Setup sent an incomplete request — business or branch was missing. ' +
+            'Restart the setup and reselect both.';
+      break;
+    case 'unavailable':
+    case 'deadline-exceeded':
+      msg = 'SOKONI servers did not respond in time. This one IS worth retrying — ' +
+            'tap Retry, and if it keeps failing check your connection.';
+      break;
+    case 'internal':
+      msg = 'The server hit an error building your configuration. This is not something ' +
+            'you can fix from here — please send support the reference below.';
+      break;
+    case 'failed-precondition':
+      msg = 'This business is not finished being set up. Complete the business profile ' +
+            'before provisioning a POS device.';
+      break;
+    default:
+      msg = 'Could not download business configuration.';
+  }
+
+  /* Always append the machine-readable part. */
+  const ref = [
+    'code: ' + (code || 'unknown'),
+    ctx.merchantId ? 'business: ' + String(ctx.merchantId).slice(0, 24) : null,
+    ctx.branchId ? 'branch: ' + String(ctx.branchId).slice(0, 24) : null,
+  ].filter(Boolean).join(' · ');
+
+  console.error('[POS setup] bootstrapDevice failed', { code, message: raw, ...ctx });
+  try {
+    if (window.SokoniAsync) {
+      window.SokoniAsync.report('POSSetup', 'bootstrapDevice', err, ctx);
+    }
+  } catch (_) {}
+
+  return msg + '\n\n' + ref + '\n' + raw;
+}
+
 function showProvError(msg) {
   const errBox = document.getElementById('prov-error');
+  /* textContent so a server-supplied message can never inject markup, with
+     white-space:pre-line to keep the paragraph breaks above readable. */
   errBox.textContent = msg;
+  errBox.style.whiteSpace = 'pre-line';
+  errBox.style.textAlign = 'left';
   errBox.classList.add('visible');
   document.getElementById('btn-prov-retry').style.display = 'flex';
   setLiveMsg('');
