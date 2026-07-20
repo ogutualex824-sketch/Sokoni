@@ -126,6 +126,26 @@ try {
    exchange outcome so a listener can report it instead of guessing. */
 window.__sokoniAppCheckState = _appCheck ? 'pending' : 'disabled';
 
+/* Readiness signal, so consumers await App Check instead of racing it.
+   getAppCheckToken IS the SDK's readiness mechanism — its promise resolves
+   exactly when a token has been exchanged — so this exposes that promise
+   rather than polling window state. It resolves to a status either way and
+   never rejects, so a consumer awaiting it can never hang: a real failure
+   still lets the catalogue proceed and surface the empty/denied result rather
+   than blocking the page. When App Check is disabled, it is already resolved.
+   The 12s ceiling bounds the wait so a stuck token exchange degrades to a
+   normal (unattested) read attempt instead of a blank page forever. */
+window.__sokoniAppCheckReady = _appCheck
+  ? new Promise((resolve) => {
+      let done = false;
+      const settle = (status) => { if (!done) { done = true; resolve(status); } };
+      getAppCheckToken(_appCheck, false)
+        .then(() => settle('exchanged'))
+        .catch(() => settle('rejected'));
+      setTimeout(() => settle('timeout'), 12000);
+    })
+  : Promise.resolve('disabled');
+
 if (_appCheck) {
   getAppCheckToken(_appCheck, false)
     .then(() => { window.__sokoniAppCheckState = 'exchanged'; if (IS_LOCALHOST) console.info('[SOKONI] App Check OK — token exchanged.'); })

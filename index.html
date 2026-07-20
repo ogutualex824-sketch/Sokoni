@@ -2758,12 +2758,24 @@
   <script src="script.js" defer>
 <script type="module">
 /* Real seller products from Firestore, merged into the home grid.
-   Same source category.html uses — one catalogue, two views. */
+   Same source category.html uses — one catalogue, two views.
+
+   The listener waits for App Check readiness before attaching. Firestore App
+   Check is ENFORCED, and a runtime probe proved the Listen transport was being
+   cancelled while the token was still pending — so an anonymous first paint got
+   only empty cached snapshots and demo data was never replaced. Awaiting the
+   SDK's own token promise (exposed as __sokoniAppCheckReady) makes the attach
+   deterministic without weakening App Check: the token is obtained first, then
+   the authoritative read begins. The wait is bounded in firebase.js, so a stuck
+   exchange degrades to a normal attempt rather than a blank grid. */
 import SokoniDB from "./sokoni-db.js";
-SokoniDB.listenProducts({}, function (fsProducts) {
-  if (typeof window._homeMergeFirestore === "function") window._homeMergeFirestore(fsProducts);
+(window.__sokoniAppCheckReady || Promise.resolve()).then(function (status) {
+  try { window.dispatchEvent(new CustomEvent("sokoni:catalogue", { detail: { phase: "appcheck-ready", status: status } })); } catch (e) {}
+  SokoniDB.listenProducts({}, function (fsProducts) {
+    if (typeof window._homeMergeFirestore === "function") window._homeMergeFirestore(fsProducts);
+  });
 });
-</script></script>
+</script>
   <script>
     function accessAdultCat(btn, cat) {
       requireAgeVerification().then(ok => {
