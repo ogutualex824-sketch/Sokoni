@@ -5322,12 +5322,37 @@ exports.initiateSTKPush = onCall(
           logger.info("[STK] age gate passed", { ref, brand: _declaredBrand, uid: request.auth.uid });
         }
       } else {
-        /* STAGE 1b: replace this branch with
-             throw new HttpsError("failed-precondition", "No payment authority record.");
-           once STK_NO_AUTHORITY reaches zero in production logs. */
+        /* ══ STAGE 1b — ENFORCED PER MIGRATED CALLER ═══════════════════════
+           Stage 1a logged and allowed. Flipping that to throw for EVERY caller
+           would fail closed on POS and every booking page at once — an
+           availability incident traded for an integrity one, which is exactly
+           what Stage 1a was written to avoid.
+
+           So enforcement follows migration rather than the calendar. A caller
+           is enforced once it mints an intent via createPaymentIntent;
+           everything else keeps the warning until its turn comes.
+
+           MIGRATED: subscriptions (subscriptions.html -> createPaymentIntent,
+           deployed 2026-07-20). A subscription payment without an intent is
+           now refused rather than charged at a browser-supplied figure.
+
+           To migrate the next caller: point it at createPaymentIntent, deploy
+           the client FIRST, then add its category here. Adding the category
+           before the client ships breaks that flow's payments. */
+        const _enforcedCategories = ["subscription"];
+        const _category = String((meta && meta.category) || "").toLowerCase();
+
+        if (_enforcedCategories.includes(_category)) {
+          logger.error("[STK] STAGE_1B_REFUSED — enforced caller sent no payment intent", {
+            ref, amount: amountKES, category: _category, uid: request.auth.uid,
+          });
+          throw new HttpsError("failed-precondition",
+            "This payment could not be verified. Please start the purchase again.");
+        }
+
         logger.warn("STK_NO_AUTHORITY", {
-          ref, amount: amountKES, uid: request.auth.uid,
-          note: "client-supplied amount accepted — no paymentIntents record",
+          ref, amount: amountKES, category: _category || "none", uid: request.auth.uid,
+          note: "client-supplied amount accepted — no paymentIntents record (caller not yet migrated)",
         });
       }
     } catch (e) {

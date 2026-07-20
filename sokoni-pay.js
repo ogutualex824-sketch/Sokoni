@@ -181,7 +181,15 @@ function showGateway(options){
     const depositAmount  = payAmount;
 
     /* Build modal */
-    const ref = genRef("SKN");
+    /* Honour a server-minted reference when the caller supplies one.
+
+       createPaymentIntent writes paymentIntents/{ref} and initiateSTKPush
+       enforces the amount against that document. Minting a fresh ref here
+       would orphan the intent — the push would arrive under a reference the
+       server has no authority record for, and an enforced caller would have
+       its payment refused. Callers that do not mint an intent keep the
+       generated ref exactly as before. */
+    const ref = (options && options.paymentIntentId) || (options && options.ref) || genRef("SKN");
     const modal = document.createElement("div");
     modal.id = "sokoniPayGateway";
     modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(16px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;";
