@@ -87,9 +87,40 @@ function phaseEnvironment() {
      SDK while every command that does anything fails. An earlier version of
      this script passed gcloud on that basis — a green tick on a tool that
      cannot run a single useful command. */
+  /* gcloud SHIPS ITS OWN PYTHON. If the system `python` is missing, gcloud only
+     fails because CLOUDSDK_PYTHON is unset — it never looks in its own install
+     directory. This cost this project two separate diagnoses ("gcloud absent",
+     then "install Python 3") before anyone looked in the SDK folder. Detect the
+     bundled interpreter and use it, rather than reporting a broken toolchain
+     that is one environment variable away from working. */
+  if (!process.env.CLOUDSDK_PYTHON) {
+    const candidates = [
+      path.join(process.env.LOCALAPPDATA || '', 'Google', 'Cloud SDK', 'google-cloud-sdk', 'platform', 'bundledpython', 'python.exe'),
+      path.join('C:', 'Program Files (x86)', 'Google', 'Cloud SDK', 'google-cloud-sdk', 'platform', 'bundledpython', 'python.exe'),
+    ];
+    const found = candidates.find((p) => { try { return fs.existsSync(p); } catch (_) { return false; } });
+    if (found) {
+      process.env.CLOUDSDK_PYTHON = found;
+      add('gcloud bundled Python', PASS, 'found and used — ' + found.slice(-46),
+        'Set CLOUDSDK_PYTHON permanently so gcloud works in every shell.');
+    }
+  }
+
   const gcVersion = tryExec('gcloud', ['--version']);
-  const gcWorks = tryExec('gcloud', ['config', 'list', '--format=none']) !== null ||
-                  tryExec('gcloud', ['auth', 'list', '--format=none']) !== null;
+
+  /* Exit code, not output. tryExec insists on version-like text — correct for a
+     --version probe, wrong here: `gcloud config list --format=none` succeeds
+     while printing nothing, so tryExec discarded a passing result and the
+     report claimed the SDK was broken when it had just been repaired. */
+  const gcWorks = (() => {
+    try {
+      execFileSync('gcloud', ['config', 'get-value', 'project'], {
+        encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'pipe'],
+        shell: process.platform === 'win32',
+      });
+      return true;
+    } catch (_) { return false; }
+  })();
   add('gcloud CLI', gcWorks ? PASS : WARN,
     gcWorks ? (gcVersion || 'ok').split('\n')[0]
             : gcVersion
@@ -100,8 +131,10 @@ function phaseEnvironment() {
               'refreshes ADC without needing a downloadable key.');
 
   const py = tryExec('python', ['--version']) || tryExec('python3', ['--version']);
-  add('Python', py ? PASS : WARN, py || 'not found — this is what breaks gcloud',
-    py ? null : 'Required by gcloud. Not required if you use a service-account key instead.');
+  add('Python (system)', py ? PASS : (gcWorks ? SKIP : WARN),
+    py ? py : (gcWorks ? 'absent, and not needed — gcloud uses its bundled interpreter'
+                       : 'absent, and gcloud has no bundled interpreter either'),
+    (py || gcWorks) ? null : 'Install Python 3 so gcloud can run.');
 }
 
 /* ── PHASE 3 — credential discovery ───────────────────────────────────────
@@ -185,8 +218,15 @@ async function phaseAdminSdk() {
   const classify = (e) => {
     const m = String((e && e.message) || e);
     if (/invalid_client/i.test(m)) {
+      /* Recommend the SAFER fix when it is actually available. gcloud working
+         means a scoped, revocable user credential is one command away, and a
+         downloadable full-project key is no longer the only option — which is
+         what earlier reports wrongly concluded when gcloud looked broken. */
+      const viaGcloud = !!process.env.CLOUDSDK_PYTHON || !!tryExec('gcloud', ['--version']);
       return ['Stored credentials are REVOKED (invalid_client). The file exists; the token behind it no longer works.',
-        'Generate a service-account key: Firebase Console -> Project Settings -> Service Accounts -> Generate new private key, then set GOOGLE_APPLICATION_CREDENTIALS to it.'];
+        viaGcloud
+          ? 'gcloud is working. Run: gcloud auth login  then  gcloud auth application-default login. Scoped, revocable, no key file. (Set CLOUDSDK_PYTHON to the bundled interpreter first if gcloud complains about Python.)'
+          : 'Generate a service-account key: Firebase Console -> Project Settings -> Service Accounts -> Generate new private key, then set GOOGLE_APPLICATION_CREDENTIALS to it.'];
     }
     if (/Could not load the default credentials|Unable to detect a Project Id|default credentials/i.test(m)) {
       return ['No credentials found at all.',
