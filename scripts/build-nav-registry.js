@@ -168,6 +168,24 @@ function classify(f, r, ws) {
 }
 
 /* ── parent ──────────────────────────────────────────────────────────────── */
+/* Distance from Home over the real link graph.
+   This is what makes the hierarchy a TREE. Choosing a parent by "most hub-like
+   inbound page" produced 41 pages in circular chains: two pages that link to
+   each other each nominated the other, and breadcrumbs on those pages would
+   have looped forever. Requiring the parent to be strictly closer to Home makes
+   a cycle impossible by construction rather than by a cycle-check afterwards. */
+const distFromHome = (() => {
+  const d = { 'index.html': 0 };
+  const queue = ['index.html'];
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const nx of (raw[cur] ? raw[cur].outbound : [])) {
+      if (d[nx] === undefined) { d[nx] = d[cur] + 1; queue.push(nx); }
+    }
+  }
+  return d;
+})();
+
 function inferParent(f, ws) {
   if (f === 'index.html') return 'Root';
 
@@ -185,18 +203,43 @@ function inferParent(f, ws) {
   const parents = inbound[f] || [];
   if (!parents.length) return null;                        /* orphan */
 
-  const rootParent = parents.find((p) => Object.values(WORKSPACE_ROOTS).includes(p));
+  /* Only pages strictly closer to Home may be a parent — this is the acyclicity
+     guarantee. Among those, prefer a workspace root, then the most hub-like. */
+  const mine = distFromHome[f];
+  const closer = (mine === undefined)
+    ? []
+    : parents.filter((p) => distFromHome[p] !== undefined && distFromHome[p] < mine);
+
+  const pool = closer.length ? closer : [];
+  if (!pool.length) return null;      /* reachable only via pages no closer than itself */
+
+  const rootParent = pool.find((p) => Object.values(WORKSPACE_ROOTS).includes(p));
   if (rootParent) return rootParent;
 
-  /* Otherwise the most hub-like inbound page. A page with MANY outbound links
-     is a directory; one with few is a sibling that happens to cross-link. The
-     first version sorted ascending and so picked the least hub-like candidate
-     every time. */
-  return parents.slice().sort((a, b) => (raw[b].outbound || []).length - (raw[a].outbound || []).length)[0];
+  /* A page with MANY outbound links is a directory; one with few is a sibling
+     that happens to cross-link. */
+  return pool.slice().sort((a, b) => (raw[b].outbound || []).length - (raw[a].outbound || []).length)[0];
 }
 
 /* ── build ───────────────────────────────────────────────────────────────── */
-const registry = { generated: 'run scripts/build-nav-registry.js to refresh', pages: {}, workspaces: {} };
+/* Versioned like an API, because consumers will encode assumptions about these
+   field names. schemaVersion changes only on a BREAKING field change (rename,
+   removal, or a changed meaning); adding an optional field does not bump it.
+   Regenerating from unchanged source must produce an identical file, so a diff
+   always means the platform changed — not that the generator ran again. */
+const registry = {
+  schemaVersion: '1.0.0',
+  generator: 'scripts/build-nav-registry.js',
+  regenerate: 'node scripts/build-nav-registry.js --write',
+  certify: 'node scripts/certify-nav-registry.js --write-review',
+  contract: {
+    workspaceConfidence: 'filename | inbound-consensus | none',
+    classification: 'Primary | Secondary | Admin | Authentication | Utility | Settings | Hidden/Internal | Deprecated',
+    backBehaviour: 'explicit-back | bottom-nav | header | none',
+    review: 'true when workspace is not confidently known — do not treat as canonical',
+  },
+  pages: {}, workspaces: {},
+};
 
 for (const f of pages) {
   const r = raw[f];
