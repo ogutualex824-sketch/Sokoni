@@ -9024,6 +9024,16 @@ exports.logClientDiagnostic = _clientDiag.logClientDiagnostic;
    compliance gate inside initiateSTKPush. Re-declaring it here would be a
    duplicate const in the same scope. */
 exports.ageVerifySubmit = _ageVerify.ageVerifySubmit;
+
+/* ── Beta access control ───────────────────────────────────────────
+   The invite-only authority layer. betaStatus is a CUSTOM CLAIM, so the same
+   decision reaches Firestore rules and every callable without each one
+   re-implementing it. firestore.rules:65 already blocks a client writing
+   betaStatus to its own user document; betaReview is the only grant path. */
+const _beta = require('./beta-access');
+exports.betaApply     = _beta.betaApply;
+exports.betaReview    = _beta.betaReview;
+exports.betaGetAccess = _beta.betaGetAccess;
 exports.ageVerifyStatus = _ageVerify.ageVerifyStatus;
 
 
