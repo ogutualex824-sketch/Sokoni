@@ -1663,12 +1663,38 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
         </div>
         <div class="up-field-row">
           <div class="up-field">
-            <label>Phone</label>
-            <input id="iePhoneInput" type="tel" placeholder="07XXXXXXXX">
+            <!-- Phone is the SIGN-IN CREDENTIAL for phone-auth accounts. Editing it here only
+                 rewrote the Firestore mirror, never Firebase Auth, so the two silently diverged
+                 and the field became a lie. Read-only until there is a real re-verification
+                 flow (OTP on the new number). -->
+            <label>Phone <span style="opacity:.5;font-weight:600;">· read-only</span></label>
+            <input id="iePhoneInput" type="tel" readonly aria-readonly="true" tabindex="-1"
+                   style="opacity:.55;cursor:not-allowed;"
+                   title="Your phone number is your sign-in credential and cannot be changed here.">
           </div>
           <div class="up-field">
             <label>Location</label>
             <input id="ieLocationInput" type="text" placeholder="e.g. Westlands, Nairobi">
+          </div>
+        </div>
+        <div class="up-field">
+          <label>Bio</label>
+          <textarea id="ieBioInput" rows="3" maxlength="300" placeholder="Tell customers about yourself or your business"
+                    style="width:100%;padding:13px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:13px;color:#fff;font-family:inherit;font-size:16px;resize:vertical;"></textarea>
+          <div style="font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px;"><span id="ieBioCount">0</span>/300</div>
+        </div>
+        <div class="up-field-row">
+          <div class="up-field">
+            <label>Profile Photo</label>
+            <input id="ieAvatarInput" type="file" accept="image/*"
+                   style="width:100%;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:13px;color:rgba(255,255,255,0.6);font-family:inherit;font-size:12px;">
+            <img id="ieAvatarPreview" alt="" style="display:none;margin-top:8px;width:64px;height:64px;border-radius:50%;object-fit:cover;border:1px solid rgba(255,255,255,0.12);">
+          </div>
+          <div class="up-field">
+            <label>Cover Photo</label>
+            <input id="ieCoverInput" type="file" accept="image/*"
+                   style="width:100%;padding:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:13px;color:rgba(255,255,255,0.6);font-family:inherit;font-size:12px;">
+            <img id="ieCoverPreview" alt="" style="display:none;margin-top:8px;width:100%;height:52px;border-radius:10px;object-fit:cover;border:1px solid rgba(255,255,255,0.12);">
           </div>
         </div>
         <div class="up-field">
@@ -2978,11 +3004,73 @@ function toggleInlineEdit(){
     document.getElementById('iePhoneInput').value = escHtml(_user.phone || '');
     document.getElementById('ieLocationInput').value = escHtml(_user.location || '');
     document.getElementById('ieTillInput').value = escHtml(_user.tillNumber || '');
+    var bio = document.getElementById('ieBioInput');
+    if(bio){ bio.value = _user.bio || ''; var bc=document.getElementById('ieBioCount'); if(bc) bc.textContent = bio.value.length; }
+    /* Staged photos live here until Save, so Cancel discards them. */
+    _ieAvatarData = null; _ieCoverData = null;
+    ['ieAvatarInput','ieCoverInput'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+    var ap=document.getElementById('ieAvatarPreview'), cp=document.getElementById('ieCoverPreview');
+    if(ap){ if(_user.avatarUrl){ ap.src=_user.avatarUrl; ap.style.display='block'; } else ap.style.display='none'; }
+    if(cp){ if(_user.coverUrl){ cp.src=_user.coverUrl; cp.style.display='block'; } else cp.style.display='none'; }
   }
   form.classList.toggle('open', !isOpen);
   var btn = document.querySelector('.up-edit-btn');
-  if(btn) btn.textContent = isOpen ? '&#9998; Edit Profile' : '&#10005; Close';
+  /* Was textContent with an HTML-ENTITY string, which renders the literal characters
+     "&#9998; Edit Profile" instead of the pencil glyph — the label turned to visible
+     mark-up the moment edit mode was toggled. innerHTML decodes the entity. */
+  if(btn) btn.innerHTML = isOpen ? '&#9998; Edit Profile' : '&#10005; Close';
 }
+
+/* Staged (unsaved) photo data URLs. */
+var _ieAvatarData = null, _ieCoverData = null;
+
+/* Downscale before storing. These are written into the users doc, and Firestore caps a
+   document at 1 MiB — a raw phone photo is several MB and the write would simply fail.
+   Canvas re-encode keeps avatars/covers a few tens of KB. */
+function _ieReadImage(file, maxW, cb){
+  if(!file){ cb(null); return; }
+  if(!/^image\//.test(file.type)){ upToast('That file is not an image', false); cb(null); return; }
+  var fr = new FileReader();
+  fr.onload = function(){
+    var img = new Image();
+    img.onload = function(){
+      var scale = Math.min(1, maxW / (img.width || maxW));
+      var w = Math.max(1, Math.round(img.width * scale));
+      var h = Math.max(1, Math.round(img.height * scale));
+      var c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      try { cb(c.toDataURL('image/jpeg', 0.82)); }
+      catch(e){ upToast('Could not process that image', false); cb(null); }
+    };
+    img.onerror = function(){ upToast('Could not read that image', false); cb(null); };
+    img.src = fr.result;
+  };
+  fr.onerror = function(){ upToast('Could not read that file', false); cb(null); };
+  fr.readAsDataURL(file);
+}
+
+function _ieBindPhoto(inputId, previewId, maxW, assign){
+  var input = document.getElementById(inputId);
+  if(!input || input._ieBound) return;
+  input._ieBound = true;
+  input.addEventListener('change', function(){
+    _ieReadImage(input.files && input.files[0], maxW, function(dataUrl){
+      if(!dataUrl){ input.value=''; return; }
+      assign(dataUrl);
+      var pv = document.getElementById(previewId);
+      if(pv){ pv.src = dataUrl; pv.style.display = 'block'; }
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function(){
+  _ieBindPhoto('ieAvatarInput','ieAvatarPreview', 256, function(d){ _ieAvatarData = d; });
+  _ieBindPhoto('ieCoverInput','ieCoverPreview', 900, function(d){ _ieCoverData = d; });
+  var bio = document.getElementById('ieBioInput');
+  if(bio) bio.addEventListener('input', function(){
+    var bc = document.getElementById('ieBioCount'); if(bc) bc.textContent = bio.value.length;
+  });
+});
 
 function saveInlineEdit(){
   var name     = (document.getElementById('ieNameInput').value||'').trim();
@@ -2993,16 +3081,32 @@ function saveInlineEdit(){
 
   if(!name){ upToast('Name cannot be empty', false); return; }
 
+  var bioEl = document.getElementById('ieBioInput');
+  var bio   = bioEl ? (bioEl.value||'').trim().slice(0,300) : (_user && _user.bio) || '';
+
   _user = getUser();
   _user.name = name;
   _user.username = username || slugify(name);
-  if(phone) _user.phone = phone;
+  /* phone deliberately NOT written — the field is read-only, and persisting it here only
+     ever updated the Firestore mirror while Firebase Auth kept the real credential. */
   if(location) _user.location = location;
   if(till) _user.tillNumber = till; else delete _user.tillNumber;
+  _user.bio = bio;
+  if(_ieAvatarData) _user.avatarUrl = _ieAvatarData;
+  if(_ieCoverData)  _user.coverUrl  = _ieCoverData;
   _user.updatedAt = new Date().toISOString();
   setUser(_user);
 
-  saveToFirestore({name:name, username:_user.username, phone:phone, location:location, tillNumber:till||null, updatedAt:_user.updatedAt});
+  /* Only send what changed. avatarUrl/coverUrl are omitted unless a new image was staged,
+     so saving a bio never blanks an existing photo. listenFirestoreProfile() already reads
+     bio/avatarUrl/coverUrl back, so every surface refreshes without a reload. */
+  var payload = {name:name, username:_user.username, location:location,
+                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt};
+  if(_ieAvatarData) payload.avatarUrl = _ieAvatarData;
+  if(_ieCoverData)  payload.coverUrl  = _ieCoverData;
+  saveToFirestore(payload);
+
+  _ieAvatarData = null; _ieCoverData = null;
   renderHeaderCard();
   toggleInlineEdit();
   upToast('Profile saved!', true);
