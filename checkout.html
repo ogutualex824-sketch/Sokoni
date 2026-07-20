@@ -1895,10 +1895,23 @@ function _placeOrderCore(){
                  || null;
     if (_sUid && window.SokoniMpesa) {
       const _sName = currentCart2[0]?.sellerName || 'SOKONI Seller';
-      const _ordId = 'SKN' + Date.now().toString().slice(-8).toUpperCase();
+      /* Deterministic, so a retry reuses the same order identity instead of
+         minting a new one that defeats the server's duplicate check. */
+      const _ordId = _ckOrderId();
+
+      /* Line items let the server price the cart from the catalogue. `amount`
+         is still sent for the mismatch audit trail, but the server discards it
+         as the charge basis — the client is not the pricing authority. */
+      const _items = currentCart2.map(i => ({
+        productId: i.id || i.productId,
+        qty:       Math.max(1, parseInt(i.qty, 10) || 1),
+      })).filter(i => i.productId);
+
       window.SokoniMpesa.pay({
         sellerUid:   _sUid,
         amount:      orderTotal,
+        items:       _items,
+        deliveryFee: (typeof deliveryFee === 'number' ? deliveryFee : 0),
         phone:       phone,
         orderId:     _ordId,
         hub:         'marketplace',

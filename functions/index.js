@@ -2964,7 +2964,7 @@ exports.darajaSTKPush = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
 
-    const { sellerUid, phone, amount, orderId, description, hub } = request.data;
+    const { sellerUid, phone, amount, orderId, description, hub, items } = request.data;
     if (!sellerUid || !phone || !amount) {
       throw new HttpsError("invalid-argument", "sellerUid, phone, and amount are required.");
     }
@@ -3000,6 +3000,88 @@ exports.darajaSTKPush = onCall(
           throw new HttpsError("resource-exhausted", "A payment is already in progress for this order. Please wait.");
         }
       }
+    }
+
+    /* ── Server pricing authority ──────────────────────────────────────────
+       The client used to be the only source of `amount`. It was passed to
+       Safaricom unchecked, so editing orderTotal in the browser console bought
+       a full cart for KES 1 and produced a genuine M-Pesa receipt.
+
+       When the caller supplies `items`, the server re-reads every price from
+       the products collection and the client's `amount` is discarded outright
+       — not compared, not tolerated, discarded.
+
+       `items` is optional on purpose. SmartPOS tills call this with an
+       operator-keyed amount and no catalogue line items; that is a legitimate
+       cash-register flow, not a marketplace checkout, and breaking it would
+       take working merchants offline. Those calls are recorded as
+       operator-entered so the two are distinguishable in audit. */
+    let authoritativeAmount = Math.round(Number(amount));
+    let pricingSource = "client_operator_entered";
+
+    if (Array.isArray(items) && items.length) {
+      if (items.length > 100) {
+        throw new HttpsError("invalid-argument", "Too many line items.");
+      }
+
+      let serverSubtotal = 0;
+      const priced = [];
+
+      for (const line of items) {
+        const pid = String(line && line.productId || "").trim();
+        const qty = Math.floor(Number(line && line.qty) || 0);
+        if (!pid) throw new HttpsError("invalid-argument", "Each item requires a productId.");
+        if (qty < 1 || qty > 1000) throw new HttpsError("invalid-argument", "Invalid quantity for " + pid + ".");
+
+        const pSnap = await db.collection("products").doc(pid).get();
+        if (!pSnap.exists) throw new HttpsError("not-found", "Product no longer available: " + pid);
+
+        const p = pSnap.data();
+        /* Cross-seller carts cannot be paid in one STK push — the money would
+           land in one seller's till. Reject rather than silently mis-settle. */
+        const owner = p.sellerUid || p.uid || null;
+        if (owner && owner !== sellerUid) {
+          throw new HttpsError("failed-precondition", "Cart contains items from another seller.");
+        }
+        if (p.status && p.status !== "active") {
+          throw new HttpsError("failed-precondition", "Product is not available for sale: " + pid);
+        }
+
+        const unit = Number(p.price);
+        if (!Number.isFinite(unit) || unit < 0) {
+          throw new HttpsError("failed-precondition", "Product has no valid price: " + pid);
+        }
+        serverSubtotal += unit * qty;
+        priced.push({ productId: pid, qty, unitPrice: unit });
+      }
+
+      /* Delivery is the one client-influenced input we accept, because it
+         depends on a destination the server cannot infer here. It is bounded
+         so it can never be used to inflate a charge arbitrarily. */
+      const clientDelivery = Math.round(Number(request.data.deliveryFee) || 0);
+      const deliveryFee = Math.min(Math.max(clientDelivery, 0), 5000);
+
+      authoritativeAmount = Math.round(serverSubtotal + deliveryFee);
+      pricingSource = "server_recomputed";
+
+      const clientAmount = Math.round(Number(amount) || 0);
+      if (clientAmount !== authoritativeAmount) {
+        /* Not necessarily an attack — a stale cart or a price change mid-
+           checkout looks identical. Recorded, never trusted, never fatal. */
+        await db.collection("auditLogs").add({
+          type: "payment_amount_mismatch",
+          severity: clientAmount < authoritativeAmount ? "high" : "low",
+          callerUid: request.auth.uid,
+          sellerUid, orderId: orderId || null,
+          clientAmount, serverAmount: authoritativeAmount,
+          items: priced,
+          ts: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+    }
+
+    if (!Number.isFinite(authoritativeAmount) || authoritativeAmount < 1) {
+      throw new HttpsError("invalid-argument", "Payment amount must be at least KES 1.");
     }
 
     /* Load seller's Daraja credentials from Firestore */
@@ -3041,7 +3123,7 @@ exports.darajaSTKPush = onCall(
       Password:          password,
       Timestamp:         timestamp,
       TransactionType:   darajaTransactionType,
-      Amount:            Math.round(Number(amount)),
+      Amount:            authoritativeAmount,
       PartyA:            normPhone,
       PartyB:            darajaShortCode,
       PhoneNumber:       normPhone,
@@ -3073,7 +3155,10 @@ exports.darajaSTKPush = onCall(
       orderId:     orderId  || null,
       hub:         hub      || "marketplace",
       phone:       normPhone,
-      amount:      Math.round(Number(amount)),
+      amount:      authoritativeAmount,
+      /* Provenance, so reconciliation can tell a catalogue-priced marketplace
+         sale from an operator-keyed till payment without inferring it. */
+      pricingSource,
       shortCode:   darajaShortCode,
       sellerName:  businessName,
       description: description || "SOKONI Payment",
@@ -3089,7 +3174,7 @@ exports.darajaSTKPush = onCall(
       sellerUid,
       callerUid:   request.auth.uid,
       hub:         hub || "marketplace",
-      amount:      Math.round(Number(amount)),
+      amount:      authoritativeAmount,
       phone:       normPhone,
       orderId:     orderId || null,
       env:         darajaEnv,

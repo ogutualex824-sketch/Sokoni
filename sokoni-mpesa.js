@@ -236,6 +236,10 @@
         orderId = null, hub = 'marketplace',
         description = 'SOKONI Payment', sellerName = 'SOKONI',
         onSuccess, onFailure,
+        /* Catalogue line items. When present the server prices the sale from
+           the products collection and ignores `amount` as the charge basis.
+           Absent for SmartPOS tills, where the operator keys the amount. */
+        items = null, deliveryFee = 0,
       } = opts;
 
       if (!sellerUid) throw new Error('SokoniMpesa: sellerUid required');
@@ -288,6 +292,7 @@
           sellerUid,
           phone: rawPhone,
           amount: Math.round(Number(amount)),
+          ...(Array.isArray(items) && items.length ? { items, deliveryFee } : {}),
           orderId,
           description,
           hub,
