@@ -117,7 +117,15 @@ srv.listen(0, async () => {
        /check your connection/i.test(out.denied.text) === false);
     ck('permission-denied disables Continue', out.denied.continueEnabled === false);
     ck('unavailable IS worth retrying',      /worth retrying/i.test(out.unavailable.text));
-    ck('raw code always included',           /code: permission-denied/.test(out.denied.text));
+    /* This previously asserted the opposite — that "code: permission-denied"
+       appeared in the visible message. That was removed deliberately: printing
+       Firebase's error identifier into the error box is how a merchant came to
+       read an internal code as a branch name. Diagnostics still capture the
+       code via console.error and SokoniAsync.report; the merchant no longer
+       sees it. Asserting the absence, so it cannot creep back. */
+    ck('no internal identifier leaked to the merchant',
+       /code:|permission-denied|unavailable|firestore/i.test(out.denied.text) === false,
+       out.denied.text.slice(0, 60));
 
     console.log('\n── The original defect cannot recur ──');
     ck('one branch never blocks the merchant',
