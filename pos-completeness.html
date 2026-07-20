@@ -519,7 +519,7 @@ firebase.auth().onAuthStateChanged(function (user) {
       window.location.href = "/"; return;
     }
     _shopId = localStorage.getItem('activeShopId') || r.claims.shopId || '';
-    if (!_shopId) { window.location.href = 'seller-dashboard.html'; return; }
+    if (!_shopId) { window.location.href = 'seller.html'; return; }
     document.getElementById('shopBadge').textContent = _shopId.slice(0, 8).toUpperCase();
     _loadGiftCards();
   });

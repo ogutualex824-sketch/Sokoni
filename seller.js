@@ -4853,10 +4853,36 @@ function showDashPage(page, navEl) {
   }
 }
 
-/* On load: default to overview, hiding everything else */
+/* On load: honour a deep link, otherwise default to overview.
+
+   Every DASH_PAGES key was reachable only by tapping the sidebar — the section
+   a user landed on was always "overview" regardless of the URL. That is why
+   other pages linked to invented targets like seller-products.html and
+   seller-orders.html: there was no way to address a section of this page, so
+   somebody wrote the URL they wished existed. Those files never existed, so the
+   Products and Dashboard items in seller-earnings.html's bottom nav were dead.
+
+   Reading the hash here makes seller.html#products a real, shareable address
+   and lets those navs point at something that resolves. Unknown keys fall back
+   to overview rather than rendering nothing. */
+function _sellerPageFromHash() {
+  const key = (location.hash || "").replace(/^#/, "").trim().toLowerCase();
+  return (key && DASH_PAGES[key]) ? key : "overview";
+}
+
 window.addEventListener("DOMContentLoaded", () => {
-  const firstNav = document.querySelector("#sidebarNav .nav-item");
-  showDashPage("overview", firstNav);
+  const page = _sellerPageFromHash();
+  const nav = document.querySelector('#sidebarNav .nav-item[onclick*="' + page + '"]')
+           || document.querySelector("#sidebarNav .nav-item");
+  showDashPage(page, nav);
+});
+
+/* Keep in sync when the hash changes without a reload — otherwise a link to a
+   different section of the page the user is already on does nothing. */
+window.addEventListener("hashchange", () => {
+  const page = _sellerPageFromHash();
+  const nav = document.querySelector('#sidebarNav .nav-item[onclick*="' + page + '"]');
+  showDashPage(page, nav);
 });
 
 window.showDashPage = showDashPage;

@@ -256,7 +256,7 @@ firebase.auth().onAuthStateChanged(function (user) {
       window.location.href = "/"; return;
     }
     _shopId = localStorage.getItem('activeShopId') || r.claims.shopId || '';
-    if (!_shopId) { window.location.href = 'seller-dashboard.html'; return; }
+    if (!_shopId) { window.location.href = 'seller.html'; return; }
     _startListener();
   });
 });

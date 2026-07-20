@@ -1010,7 +1010,7 @@ const db   = getFirestore(app);
 let _currentUser = null;
 onAuthStateChanged(auth, function (user) {
   if (!user) {
-    window.location.href = '/auth.html?redirect=' + encodeURIComponent(window.location.pathname);
+    window.location.href = 'login.html?next=' + encodeURIComponent(window.location.pathname);
     return;
   }
   _currentUser = user;

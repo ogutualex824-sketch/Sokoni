@@ -1872,7 +1872,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
         <a class="pi-qa-item" href="staff-management.html">
           <span class="pi-qa-icon">&#128101;</span><span class="pi-qa-lbl">Invite Staff</span>
         </a>
-        <a class="pi-qa-item" href="my-businesses.html">
+        <a class="pi-qa-item" href="account-centre.html">
           <span class="pi-qa-icon">&#127970;</span><span class="pi-qa-lbl">Businesses</span>
         </a>
       </div>
@@ -4914,7 +4914,7 @@ window.logoutUser = logoutUser;
     /* Role-specific additions */
     var roles = ov.roles || [];
     if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      _searchIndex.push({ icon: '🏬', text: 'My Business / Store', sub: 'Merchant', href: 'seller-dashboard.html' });
+      _searchIndex.push({ icon: '🏬', text: 'My Business / Store', sub: 'Merchant', href: 'seller.html' });
       _searchIndex.push({ icon: '📊', text: 'Sales Analytics', sub: 'Merchant', href: 'seller-analytics.html' });
     }
     if (roles.indexOf('driver') !== -1) {
@@ -5044,7 +5044,7 @@ window.logoutUser = logoutUser;
 
     /* Role-specific intelligence */
     if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      chips.push({ cls: 'action', icon: '🏪', text: 'View your store →', href: 'seller-dashboard.html' });
+      chips.push({ cls: 'action', icon: '🏪', text: 'View your store →', href: 'seller.html' });
     }
     if (roles.indexOf('driver') !== -1) {
       chips.push({ cls: 'action', icon: '🚗', text: 'Open Driver Hub →', href: 'driver-dashboard.html' });
@@ -5225,7 +5225,7 @@ window.logoutUser = logoutUser;
 
     /* Primary role-specific hubs */
     if (roles.indexOf('seller') !== -1 || roles.indexOf('vendor') !== -1) {
-      links.push({ icon: '🏬', label: 'My Store', href: 'seller-dashboard.html', primary: true });
+      links.push({ icon: '🏬', label: 'My Store', href: 'seller.html', primary: true });
       links.push({ icon: '📊', label: 'Analytics', href: 'seller-analytics.html' });
       links.push({ icon: '📦', label: 'Orders', href: null, tab: 'orders' });
     }
@@ -5243,7 +5243,7 @@ window.logoutUser = logoutUser;
 
     /* Universal hubs */
     links.push({ icon: '🛍️', label: 'Shop', href: '/' });
-    links.push({ icon: '🍔', label: 'Food', href: 'food-hub.html' });
+    links.push({ icon: '🍔', label: 'Food', href: 'food.html' });
     links.push({ icon: '🎭', label: 'Events', href: 'event-hub.html' });
     links.push({ icon: '💼', label: 'Jobs', href: 'jobs.html' });
     links.push({ icon: '💰', label: 'Wallet', href: null, tab: 'wallet' });
@@ -5605,7 +5605,7 @@ window.logoutUser = logoutUser;
                   {i:'✅',l:'Approvals',      href:'staff-management.html#approvals'},
                   {i:'📊',l:'Reports',        href:'seller-analytics.html'},
                   {i:'💰',l:'Payroll',        href:'pos.html#payroll'},
-                  {i:'🏢',l:'Business',       href:'my-businesses.html'} ],
+                  {i:'🏢',l:'Business',       href:'account-centre.html'} ],
     admin:      [ {i:'🖥️',l:'Admin OS',      href:'admin-os.html'},
                   {i:'🔒',l:'Security',       href:'security-center.html'},
                   {i:'📊',l:'Analytics',      href:'admin-os.html#analytics'},
@@ -6161,7 +6161,7 @@ window.logoutUser = logoutUser;
     { p:["ask kass","kass","ai","assistant","help"],       icon:'🤖', lbl:'Ask KASS',            act:'if(window.piOpenKass)piOpenKass()' },
     { p:["jobs","hiring","employment","work"],             icon:'📋', lbl:'Jobs',                href:'jobs.html' },
     { p:["shop","marketplace","buy","browse"],             icon:'🛍️', lbl:'Marketplace',         href:'/' },
-    { p:["food","delivery","order food","restaurant"],     icon:'🍔', lbl:'Food Hub',            href:'food-hub.html' },
+    { p:["food","delivery","order food","restaurant"],     icon:'🍔', lbl:'Food Hub',            href:'food.html' },
     { p:["properties","rent","property","real estate"],   icon:'🏠', lbl:'Property Hub',        href:'property-hub.html' },
     { p:["legal","contracts","agreements","compliance"],   icon:'⚖️', lbl:'Legal Hub',           href:'legal-hub.html' },
     { p:["settings","account","preferences","profile"],   icon:'⚙️', lbl:'Account Settings',    href:'account-centre.html' },

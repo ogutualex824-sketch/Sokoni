@@ -222,7 +222,7 @@
       const tok = await user.getIdTokenResult();
       currentRole = tok.claims.role || 0;
       document.getElementById('auth-btn').textContent = user.displayName || user.email || 'Profile';
-      document.getElementById('auth-btn').onclick = () => location.href = '/buyer.html';
+      document.getElementById('auth-btn').onclick = () => location.href = 'login.html';
       document.getElementById('my-tickets-btn').style.display = 'flex';
       if (currentRole >= 2) document.getElementById('organizer-link').style.display = 'inline-flex';
     }

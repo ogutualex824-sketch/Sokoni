@@ -316,7 +316,7 @@ let docDebounce    = null;
 /* ── Auth & hub list ────────────────────────────────────────────── */
 document.addEventListener("DOMContentLoaded", () => {
   firebase.auth().onAuthStateChanged(async user => {
-    if (!user) { location.href = "/auth.html?next=/hub-dashboard.html"; return; }
+    if (!user) { location.href = "login.html?next=/hub-dashboard.html"; return; }
     const tok = await user.getIdTokenResult();
     if (!tok.claims?.isAdmin && !tok.claims?.isHubManager) {
       location.href = "/index.html"; return;
