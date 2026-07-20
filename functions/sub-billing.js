@@ -187,7 +187,7 @@ async function _resolvePlan(planId) {
    1. subGetPlans — public: list available plans
 ════════════════════════════════════════════════════════ */
 exports.subGetPlans = onCall(
-  { region: REGION, timeoutSeconds: 15, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 15, memory: '256MiB' },
   async (req) => {
     const { hubType } = req.data || {};
 
@@ -211,7 +211,7 @@ exports.subGetPlans = onCall(
    2. subGetStatus — authenticated: all subscriptions + features
 ════════════════════════════════════════════════════════ */
 exports.subGetStatus = onCall(
-  { region: REGION, timeoutSeconds: 15, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 15, memory: '256MiB' },
   async (req) => {
     assertAuth(req);
     const uid = req.auth.uid;
@@ -363,7 +363,7 @@ exports.subActivate = onCall(
    4. subCancel
 ════════════════════════════════════════════════════════ */
 exports.subCancel = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
   async (req) => {
     assertAuth(req);
     const { subscriptionId, immediate } = req.data || {};
@@ -409,7 +409,7 @@ exports.subCancel = onCall(
    5. subReactivate — undo a cancelAtPeriodEnd
 ════════════════════════════════════════════════════════ */
 exports.subReactivate = onCall(
-  { region: REGION, timeoutSeconds: 15, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 15, memory: '256MiB' },
   async (req) => {
     assertAuth(req);
     const { subscriptionId } = req.data || {};
@@ -430,7 +430,7 @@ exports.subReactivate = onCall(
    6. subGetBillingHistory — authenticated
 ════════════════════════════════════════════════════════ */
 exports.subGetBillingHistory = onCall(
-  { region: REGION, timeoutSeconds: 15, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 15, memory: '256MiB' },
   async (req) => {
     assertAuth(req);
     const { limit: lim = 20 } = req.data || {};
@@ -446,7 +446,7 @@ exports.subGetBillingHistory = onCall(
    7. adminSubCreatePlan — admin: new custom plan
 ════════════════════════════════════════════════════════ */
 exports.adminSubCreatePlan = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
   async (req) => {
     assertAdmin(req);
     const { id, hubType, tier, name, price, features, trial, grace } = req.data || {};
@@ -472,7 +472,7 @@ exports.adminSubCreatePlan = onCall(
    Built-in plans are overridden in Firestore (not mutated).
 ════════════════════════════════════════════════════════ */
 exports.adminSubUpdatePlan = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
   async (req) => {
     assertAdmin(req);
     const { planId, ...updates } = req.data || {};
@@ -584,7 +584,7 @@ exports.adminSubGetAnalytics = onCall(
    11. adminSubManualAction — activate / expire / extend / trial
 ════════════════════════════════════════════════════════ */
 exports.adminSubManualAction = onCall(
-  { region: REGION, timeoutSeconds: 30, memory: '128MiB' },
+  { region: REGION, timeoutSeconds: 30, memory: '256MiB' },
   async (req) => {
     assertAdmin(req);
     const { subscriptionId, action, daysExtend, reason } = req.data || {};
