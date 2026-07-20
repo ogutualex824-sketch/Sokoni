@@ -1,4 +1,5 @@
 'use strict';
+const _ac = require('./admin-claim');
 /**
  * SOKONI Buyer Dispute Portal — Cloud Functions v1.0
  * 7 functions covering full dispute lifecycle for buyers, sellers, and admins.
@@ -127,7 +128,7 @@ exports.getDisputeDetail = onCall({ enforceAppCheck: true }, async request => {
   const data = snap.data();
 
   const t     = request.auth.token;
-  const admin = t.isAdmin || t.isSuperAdmin || t.isSupport;
+  const admin = _ac.isSupport(t);
   if (data.buyerId !== uid && data.sellerId !== uid && !admin)
     throw new HttpsError('permission-denied', 'Not authorised');
 
@@ -234,7 +235,7 @@ exports.getSellerDisputes = onCall({ enforceAppCheck: true }, async request => {
 exports.adminGetAllDisputes = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const t = request.auth.token;
-  if (!t.admin && !t.superAdmin && !t.isAdmin && !t.isSuperAdmin)
+  if (!_ac.isAdmin(t))
     throw new HttpsError('permission-denied', 'Admin access required');
 
   const { status, limit } = request.data || {};
@@ -251,7 +252,7 @@ exports.adminGetAllDisputes = onCall({ enforceAppCheck: true }, async request =>
 exports.adminResolveDispute = onCall({ enforceAppCheck: true }, async request => {
   _requireAuth(request.auth);
   const t = request.auth.token;
-  if (!t.admin && !t.superAdmin && !t.isAdmin && !t.isSuperAdmin)
+  if (!_ac.isAdmin(t))
     throw new HttpsError('permission-denied', 'Admin access required');
 
   const uid = request.auth.uid;

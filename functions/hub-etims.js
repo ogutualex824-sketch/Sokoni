@@ -1,4 +1,5 @@
 "use strict";
+const _ac = require('./admin-claim');
 /* ═══════════════════════════════════════════════════════════════════
    SOKONI  Hub eTIMS & Logistics Documents  v1.0
    functions/hub-etims.js
@@ -429,7 +430,7 @@ async function storeHtml(path, html) {
 
 /* ── RBAC helpers ──────────────────────────────────────────────────── */
 function requireAuth(req)  { if (!req.auth) throw new HttpsError("unauthenticated",  "Sign in required"); }
-function requireAdmin(req) { if (!req.auth?.token?.isAdmin) throw new HttpsError("permission-denied", "Admin only"); }
+function requireAdmin(req) { if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied", "Admin only"); }
 
 async function getHub(hubId) {
   const snap = await db.doc(`hubs/${hubId}`).get();
@@ -446,7 +447,7 @@ async function isHubManager(uid, hubId) {
 
 async function requireHubAccess(req, hubId) {
   requireAuth(req);
-  if (!req.auth.token?.isAdmin && !(await isHubManager(req.auth.uid, hubId)))
+  if (!_ac.isAdmin(req) && !(await isHubManager(req.auth.uid, hubId)))
     throw new HttpsError("permission-denied", "Hub manager or admin access required");
 }
 
@@ -763,7 +764,7 @@ exports.hubUpdate = onCall({ secrets: [] }, async req => {
   if (address)        u.address        = address;
   if (managerId)      u.managerId      = managerId;
   if (operationalDocs)u.operationalDocs= operationalDocs;
-  if (status && req.auth.token?.isAdmin) u.status = status;
+  if (status && _ac.isAdmin(req)) u.status = status;
 
   await db.doc(`hubs/${hubId}`).update(u);
   return { success: true };
@@ -779,7 +780,7 @@ exports.hubGetProfile = onCall({ secrets: [] }, async req => {
   if (!snap.exists) throw new HttpsError("not-found", "Hub not found");
 
   const hub     = snap.data();
-  const isAdmin = req.auth.token?.isAdmin;
+  const isAdmin = _ac.isAdmin(req);
   const isMgr   = await isHubManager(req.auth.uid, hubId);
   const safe    = { ...hub };
 
@@ -939,7 +940,7 @@ exports.hubGetDocuments = onCall({ secrets: [] }, async req => {
   requireAuth(req);
   const { hubId, docType, orderId, sellerId, buyerId, status, limit: lim = 30 } = req.data;
   const uid     = req.auth.uid;
-  const isAdmin = req.auth.token?.isAdmin;
+  const isAdmin = _ac.isAdmin(req);
 
   let q = db.collection("hubDocuments");
 
@@ -1096,7 +1097,7 @@ exports.hubGetAuditTrail = onCall({ secrets: [] }, async req => {
   if (!orderId) throw new HttpsError("invalid-argument", "orderId required");
 
   const uid     = req.auth.uid;
-  const isAdmin = req.auth.token?.isAdmin;
+  const isAdmin = _ac.isAdmin(req);
 
   const orderSnap = await db.doc(`orders/${orderId}`).get();
   if (!orderSnap.exists) throw new HttpsError("not-found", "Order not found");

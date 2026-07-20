@@ -1,4 +1,5 @@
 'use strict';
+const _ac = require('./admin-claim');
 /**
  * SOKONI Automation & Decision Engine (ADE) v1.0
  * Powers platform-wide intelligent automation, rules-based decisions,
@@ -30,11 +31,11 @@ const VALID_ACTIONS = ['auto_approve','auto_reject','escalate','request_info','h
 function _requireAdmin(auth) {
   if (!auth) throw new HttpsError('unauthenticated', 'Login required');
   const t = auth.token;
-  if (!t.isAdmin && !t.isSuperAdmin && !t.isSupport && !t.isFinance)
+  if (!_ac.isAdmin(t) && !_ac.isSupport(t) && !_ac.isFinance(t))
     throw new HttpsError('permission-denied', 'Admin access required');
 }
 function _isSA(auth) {
-  return auth && (auth.token.isSuperAdmin || auth.token.role === 'superAdmin');
+  return auth && _ac.isSuperAdmin(auth.token);
 }
 function _sanitize(v) {
   return typeof v === 'string' ? v.replace(/[<>"'&]/g, c => ({'<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#x27;','&':'&amp;'}[c])) : v;

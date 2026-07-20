@@ -1,4 +1,5 @@
 "use strict";
+const _ac = require('./admin-claim');
 /* ═══════════════════════════════════════════════════════════════════
    functions/scheduled-reports.js
    Automated daily ops report and weekly security digest.
@@ -20,7 +21,7 @@ const OPS_EMAIL         = "devops@mysokoni.co.ke";
 const SECURITY_EMAIL    = "security@mysokoni.co.ke";
 
 function requireAdmin(request) {
-  if (!request.auth?.token?.isAdmin && !request.auth?.token?.isSuperAdmin) {
+  if (!_ac.isAdmin(request)) {
     throw new HttpsError("permission-denied", "Admin access required");
   }
 }

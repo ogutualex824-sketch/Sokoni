@@ -1,4 +1,5 @@
 "use strict";
+const _ac = require('./admin-claim');
 /* ═══════════════════════════════════════════════════════════════════
    functions/feedback.js
    User feedback collection and admin triage.
@@ -17,7 +18,7 @@ const ALLOWED_STATUSES   = ["new", "reviewing", "resolved", "wontfix"];
 const ALLOWED_PRIORITIES = ["low", "medium", "high", "critical"];
 
 function requireAdmin(request) {
-  if (!request.auth?.token?.isAdmin && !request.auth?.token?.isSuperAdmin) {
+  if (!_ac.isAdmin(request)) {
     throw new HttpsError("permission-denied", "Admin access required");
   }
 }

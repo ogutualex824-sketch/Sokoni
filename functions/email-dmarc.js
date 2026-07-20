@@ -17,6 +17,7 @@
 
 "use strict";
 
+const _ac = require('./admin-claim');
 const { onCall, onRequest, HttpsError }   = require("firebase-functions/v2/https");
 const { onDocumentCreated }               = require("firebase-functions/v2/firestore");
 const admin                               = require("firebase-admin");
@@ -187,7 +188,7 @@ exports.processDmarcReport = onCall(
   { secrets: EMAIL_SECRETS, enforceAppCheck: true },
   async (req) => {
     const { uid, token } = req.auth || {};
-    if (!uid || !(token?.isAdmin || token?.isSuperAdmin)) {
+    if (!uid || !_ac.isAdmin(token)) {
       throw new HttpsError("permission-denied", "Admin only");
     }
 
@@ -354,7 +355,7 @@ exports.getDmarcSummary = onCall(
   { enforceAppCheck: true },
   async (req) => {
     const { uid, token } = req.auth || {};
-    if (!uid || !(token?.isAdmin || token?.isSuperAdmin)) {
+    if (!uid || !_ac.isAdmin(token)) {
       throw new HttpsError("permission-denied", "Admin only");
     }
 

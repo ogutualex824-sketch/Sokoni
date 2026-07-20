@@ -6,6 +6,7 @@
 ============================================================ */
 "use strict";
 
+const _ac = require('./admin-claim');
 const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { onSchedule }    = require("firebase-functions/v2/scheduler");
 const { onRequest }     = require("firebase-functions/v2/https");
@@ -924,7 +925,7 @@ exports.sendBroadcastEmail = onCall(
     /* Verify admin */
     const user = await admin.auth().getUser(uid);
     const claims = user.customClaims || {};
-    if (!claims.isAdmin && !claims.isSuperAdmin) throw new HttpsError("permission-denied", "Admin required");
+    if (!_ac.isAdmin(claims)) throw new HttpsError("permission-denied", "Admin required");
     const { subject, html, to, category } = req.data || {};
     if (!subject || !html || !to) throw new HttpsError("invalid-argument", "subject, html, to required");
     const targets = Array.isArray(to) ? to : [to];

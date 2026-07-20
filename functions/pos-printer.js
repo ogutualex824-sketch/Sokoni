@@ -1,5 +1,6 @@
 'use strict';
 
+const _ac = require('./admin-claim');
 /**
  * SOKONI SmartPOS — Printer Cloud Functions v5.0
  * Backend for Universal Printer Engine v5.0.
@@ -198,7 +199,7 @@ exports.setPrinterConfig = onCall(CF, async (req) => {
    Input: { startDay, endDay }
 ─────────────────────────────────────────────────────────────── */
 exports.posGetPrintStats = onCall(CF, async (req) => {
-  if (!req.auth?.token?.isAdmin && !req.auth?.token?.isSuperAdmin)
+  if (!_ac.isAdmin(req))
     throw new HttpsError('permission-denied', 'Admin access required');
 
   const { startDay, endDay } = req.data || {};
@@ -262,7 +263,7 @@ exports.posGetPrintTemplate = onCall(CF, async (req) => {
   const data = snap.data();
 
   /* Access control: caller must own the template or be admin */
-  if (data.uid !== uid && !req.auth?.token?.isAdmin && !req.auth?.token?.isSuperAdmin)
+  if (data.uid !== uid && !_ac.isAdmin(req))
     throw new HttpsError('permission-denied', 'Access denied');
 
   return {
@@ -292,7 +293,7 @@ exports.posSavePrintTemplate = onCall(CF, async (req) => {
   /* If templateId provided, verify ownership before overwriting */
   if (templateId) {
     const existing = await db().collection('posPrintTemplates').doc(docId).get();
-    if (existing.exists && existing.data().uid !== uid && !req.auth?.token?.isAdmin)
+    if (existing.exists && existing.data().uid !== uid && !_ac.isAdmin(req))
       throw new HttpsError('permission-denied', 'Cannot overwrite another seller\'s template');
   }
 

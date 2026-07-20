@@ -24,6 +24,7 @@
 ═══════════════════════════════════════════════════════════════════════ */
 "use strict";
 
+const _ac = require('./admin-claim');
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onDocumentWritten }             = require("firebase-functions/v2/firestore");
 const { onSchedule }                    = require("firebase-functions/v2/scheduler");
@@ -799,7 +800,7 @@ const etimsResubmitInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: tr
   if (!snap.exists) throw new HttpsError("not-found","Invoice not found");
   const inv = snap.data();
 
-  const isAdmin = req.auth.token?.isAdmin === true;
+  const isAdmin = _ac.isAdmin(req);
   if (inv.sellerUid !== req.auth.uid && !isAdmin)
     throw new HttpsError("permission-denied","Not your invoice");
   if (inv.status === "accepted") return { success: true, message: "Already accepted" };
@@ -941,7 +942,7 @@ const etimsBulkGenerate = onCall({ secrets: _ALL_SECRETS, timeoutSeconds:300, en
 
 /* 10 ─ SOKONI platform invoice (commissions, subscriptions, etc.) */
 const etimsPlatformInvoice = onCall({ secrets: _ALL_SECRETS, enforceAppCheck: true }, async req => {
-  if (!req.auth?.token?.isAdmin) throw new HttpsError("permission-denied","Admins only");
+  if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied","Admins only");
   const { sellerUid, feeType, amount, reference, description } = req.data;
 
   const FEE_LABELS = {
@@ -1140,7 +1141,7 @@ const etimsGetSellerStats = onCall({ enforceAppCheck: true }, async req => {
 
 /* 14 ─ Admin eTIMS stats */
 const etimsGetAdminStats = onCall({ enforceAppCheck: true }, async req => {
-  if (!req.auth?.token?.isAdmin) throw new HttpsError("permission-denied","Admins only");
+  if (!_ac.isAdmin(req)) throw new HttpsError("permission-denied","Admins only");
 
   const [acceptedSnap, failedSnap, queueSnap, profilesSnap, platSnap] = await Promise.all([
     db.collection("etimsInvoices").where("status","==","accepted").limit(1000).get(),

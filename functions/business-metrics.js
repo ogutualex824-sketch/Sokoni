@@ -1,4 +1,5 @@
 "use strict";
+const _ac = require('./admin-claim');
 /* ═══════════════════════════════════════════════════════════════════
    functions/business-metrics.js
    Executive KPI and order trend data for the business dashboard.
@@ -13,7 +14,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getFirestore, Timestamp } = require("firebase-admin/firestore");
 
 function requireAdmin(request) {
-  if (!request.auth?.token?.isAdmin && !request.auth?.token?.isSuperAdmin) {
+  if (!_ac.isAdmin(request)) {
     throw new HttpsError("permission-denied", "Admin access required");
   }
 }

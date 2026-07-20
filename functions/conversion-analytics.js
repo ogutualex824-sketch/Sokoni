@@ -1,4 +1,5 @@
 "use strict";
+const _ac = require('./admin-claim');
 /* ═══════════════════════════════════════════════════════════════════
    functions/conversion-analytics.js
    Conversion funnel tracking and platform reliability metrics.
@@ -20,7 +21,7 @@ const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestor
 const FUNNEL_STEPS = ["addToCart", "checkoutStarted", "paymentAttempted"];
 
 function requireAdmin(request) {
-  if (!request.auth?.token?.isAdmin && !request.auth?.token?.isSuperAdmin) {
+  if (!_ac.isAdmin(request)) {
     throw new HttpsError("permission-denied", "Admin access required");
   }
 }
