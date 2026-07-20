@@ -1,0 +1,289 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Every significant engineering claim about SOKONI, with the evidence behind it. State is DERIVED from sources by scripts/evidence-ledger.js — never declared here. A claim cannot promote itself.",
+  "stateRules": {
+    "ASSUMED": "no source of any kind. A belief.",
+    "OBSERVED": "one source. Usually the repository. Enough to act on, not enough to certify.",
+    "VERIFIED": "at least one EXECUTED source — a test run or a runtime observation. Reading code is not verification.",
+    "CERTIFIED": "two or more INDEPENDENT source types agree. Repository plus a passing test is not independence if the test only reads the same file.",
+    "REJECTED": "a contradicting source outweighs the supporting ones."
+  },
+  "sourceTypes": {
+    "repository": {
+      "executed": false,
+      "independent": true
+    },
+    "test": {
+      "executed": true,
+      "independent": true
+    },
+    "runtime": {
+      "executed": true,
+      "independent": true
+    },
+    "deployment": {
+      "executed": true,
+      "independent": true
+    },
+    "telemetry": {
+      "executed": true,
+      "independent": true
+    }
+  },
+  "claims": [
+    {
+      "id": "CLM-001",
+      "claim": "Products are indexed to the same Algolia index the live search reads.",
+      "sources": [
+        {
+          "type": "repository",
+          "ref": "functions/algolia-indexer.js:1163 == functions/search-sync.js:76",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "scripts/test-search-pipeline.js 12/12",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "Both sources inspect the same source files. The test proves the strings match; neither proves a document reaches the index. Runtime confirmation requires a live indexing observation.",
+      "sharedArtifact": true
+    },
+    {
+      "id": "CLM-002",
+      "claim": "An uploaded product is discoverable in production search.",
+      "sources": [],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "existing products carry no `status`; backfill never run",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "deployment",
+          "ref": "the index-name fix is committed but unpushed (RULE-010)",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "The fix exists. The outcome does not. This is the claim that matters commercially and it is currently REJECTED."
+    },
+    {
+      "id": "CLM-003",
+      "claim": "Authorisation guards accept a legitimate administrator.",
+      "sources": [
+        {
+          "type": "repository",
+          "ref": "functions/admin-claim.js, 24 guards migrated",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "scripts/test-admin-claim.js 32/32, weighted to denials",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "no administrator exists in production to test against",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "The logic is proven correct in isolation. It has never admitted a real administrator, because there is no real administrator."
+    },
+    {
+      "id": "CLM-004",
+      "claim": "A super administrator can be provisioned.",
+      "sources": [
+        {
+          "type": "repository",
+          "ref": "8f38864 — UID allowlist replaces the email gate",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "doctor.js reports BOOTSTRAP READINESS: NOT READY — Admin SDK credentials revoked",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "Blocked on credentials, not on code."
+    },
+    {
+      "id": "CLM-005",
+      "claim": "A customer can pay for an order with M-PESA.",
+      "sources": [],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "IntaSend returned 'Invalid api token' against a live key on the live host",
+          "date": "2026-07-19"
+        }
+      ],
+      "note": "No M-PESA transaction has ever completed end to end. For a marketplace this is the load-bearing claim, and it has zero supporting evidence."
+    },
+    {
+      "id": "CLM-006",
+      "claim": "The Banking Hub bottom navigation is reachable on a phone.",
+      "sources": [
+        {
+          "type": "repository",
+          "ref": "3eb36bc — keyframe ends at transform:none",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "runtime",
+          "ref": "measured y=608 on a 664px viewport after scrolling, WebKit iPhone 13 (was y=1157)",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "scripts/test-banking-hub.js 25/25",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "Three independent source types, one of them a direct measurement. This is what CERTIFIED should look like."
+    },
+    {
+      "id": "CLM-007",
+      "claim": "Every Banking Hub tile performs a visible action.",
+      "sources": [
+        {
+          "type": "runtime",
+          "ref": "17/17 tabs change active state and show exactly one matching pane; was 0 of 8",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "scripts/test-banking-hub.js 25/25",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "Measured before/after DOM state, not merely 'the handler did not throw' — which is what the first probe measured and got wrong."
+    },
+    {
+      "id": "CLM-008",
+      "claim": "POS provisioning completes for a real merchant.",
+      "sources": [],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "bootstrapDevice throws; root cause unconfirmed",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "Diagnostics and a preflight now exist, but they are instruments, not outcomes. Nothing has been pointed at a real account."
+    },
+    {
+      "id": "CLM-009",
+      "claim": "The seller dashboard shows the merchant's real products.",
+      "sources": [
+        {
+          "type": "repository",
+          "ref": "sokoni-seller-products.js hydrates the cache from the canonical collection",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "scripts/test-seller-products.js 25/25, weighted to destructive cases",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "the KASS VAPES product count has never been observed",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "The read path is fixed and tested. Whether three vapes appear on the owner's screen is unobserved."
+    },
+    {
+      "id": "CLM-010",
+      "claim": "Mobile layouts have no horizontal overflow and no tap target under 40px.",
+      "sources": [
+        {
+          "type": "runtime",
+          "ref": "measured on iPhone SE / 13 / 14 Pro Max across banking, healthcare, services",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "scripts/test-banking-hub.js responsive assertions",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "Scoped to the pages measured. Says nothing about the other 300+."
+    },
+    {
+      "id": "CLM-011",
+      "claim": "The platform is ready to launch.",
+      "sources": [],
+      "contradictions": [
+        {
+          "type": "repository",
+          "ref": "docs/LAUNCH_READINESS_REVIEW.md — NO LAUNCH, 4 critical findings",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "runtime",
+          "ref": "RULE-010: 213 commits ahead of origin; production runs the unrepaired code",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "Recorded so the ledger holds the uncomfortable claim as well as the flattering ones."
+    },
+    {
+      "id": "CLM-012",
+      "claim": "Cloud Functions are deployed and serving.",
+      "sources": [
+        {
+          "type": "deployment",
+          "ref": "firebase functions:list — 1,460 deployed on sokoni-aeb26",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [
+        {
+          "type": "repository",
+          "ref": "112 functions exported in index.js are absent from the deployed set",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "Deployed and CURRENT are different claims. The deployed code predates every fix from this cycle."
+    },
+    {
+      "id": "CLM-013",
+      "claim": "Search, payments and merchant activation are protected against regression.",
+      "sources": [
+        {
+          "type": "test",
+          "ref": "108 assertions across 7 suites, all passing",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "Tests run against the repository, not against production. They prevent a regression being written; they do not prove the feature works.",
+      "sharedArtifact": true
+    },
+    {
+      "id": "CLM-014",
+      "claim": "The platform meets WCAG 2.2 AA.",
+      "sources": [],
+      "contradictions": [],
+      "note": "No accessibility audit has ever been run. This is the honest shape of an UNKNOWN — no evidence for it and none against it."
+    },
+    {
+      "id": "CLM-015",
+      "claim": "The platform can serve a million users.",
+      "sources": [],
+      "contradictions": [],
+      "note": "No load test at any scale has ever been run. Any performance number quoted anywhere in this project is an estimate."
+    }
+  ]
+}
