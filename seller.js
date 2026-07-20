@@ -717,7 +717,7 @@ async function addProduct(){
         if(typeof SokoniPay !== "undefined"){
             const _u = JSON.parse(localStorage.getItem("sokoniUser")||"null");
             const _pid = _u ? (_u.uid||_u.phone||_u.email||"anon") : "anon";
-            const _plan = SokoniPay.getProviderPlan(_pid);
+            const _plan = await SokoniPay.getProviderPlan(_pid);
             const _planData = SokoniPay.PLANS[_plan] || SokoniPay.PLANS.free;
             const _activeCnt = sellerProducts.filter(function(p){ return !p.archived; }).length;
             if(_planData.listings !== 999 && _activeCnt >= _planData.listings){

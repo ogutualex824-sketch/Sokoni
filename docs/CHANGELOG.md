@@ -2,6 +2,62 @@
 
 ---
 
+## 2026-07-21 — Subscription Activation Fix — Plan Limit Bug
+
+**Scope:** Seller listing limit and subscription activation.  
+Two bugs caused every seller to be shown the Free-plan listing limit (3 listings)
+regardless of their actual paid plan.
+
+### Root Cause Analysis
+
+**Bug 1 — Missing `await` in `seller.js`**  
+`SokoniPay.getProviderPlan()` is `async` (reads Firestore). At `seller.js:720` it was
+called without `await`, so `_plan` was always a Promise object, `PLANS[Promise]` was
+`undefined`, and the free fallback (`PLANS.free`, listings: 3) fired for every seller.
+
+**Bug 2 — `activateSubscription` CF never called after payment**  
+The `onSuccess` callback in `subscriptions.html` called `SokoniPay.savePlanSubscription()`
+(explicitly disabled since a prior sprint — it is a no-op) and wrote to
+`localStorage.sokoniSubscription`. It never called `firebase.functions().httpsCallable('activateSubscription')`.
+As a result, `subscriptions/{uid}` was never written to Firestore. Every call to
+`getProviderPlan(uid)` found no document and returned `"free"`.
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `seller.js` | Line 720: added `await` before `SokoniPay.getProviderPlan(_pid)` |
+| `subscriptions.html` | `onSuccess` callback now calls `activateSubscription` CF after payment |
+| `subscriptions.html` | Added `_showBanner()` helper and page-load recovery hook for already-paid accounts |
+
+### Activation Flow (correct)
+
+1. User clicks "Upgrade to Starter" → `subscribePlan('starter', 499)`
+2. `createPaymentIntent` CF creates `paymentIntents/{ref}` with `purpose: 'subscription'`
+3. `SokoniPay.gateway` → `initiateSTKPush` → creates `payments/{ref}` (status PENDING)
+4. M-PESA STK push → user enters PIN → IntaSend confirms
+5. `intasendWebhook` updates `payments/{ref}.status = "COMPLETE"`
+6. `onSuccess(ref)` fires → calls `activateSubscription({ plan: 'starter', paymentRef: ref })`
+7. `activateSubscription` verifies `payments/{ref}.status === "COMPLETE"` → writes `subscriptions/{uid}`
+8. `getProviderPlan(uid)` reads `subscriptions/{uid}.plan` → returns `"starter"`
+9. `PLANS["starter"].listings` = 20 → limit check passes for up to 20 products
+
+### Recovery for Existing Paid Accounts
+
+A `window.addEventListener('load', ...)` recovery hook runs on `subscriptions.html` load.
+It checks if `localStorage.sokoniSubscription.ref` exists but `subscriptions/{uid}` does
+not exist in Firestore, and if so calls `activateSubscription` automatically.
+
+### Security
+
+No new attack surface. `activateSubscription` validates:
+- Caller is authenticated
+- `payments/{paymentRef}.uid === request.auth.uid` (ownership)
+- `payments/{paymentRef}.status === "COMPLETE"` (payment confirmed server-side)
+- Idempotency check prevents duplicate activation on retry
+
+---
+
 ## 2026-07-14 — SFOS Engine v1.1 — Security Hardening Sprint
 
 **Scope:** Financial Infrastructure. Surgical hardening of `sfos-engine.js` with four

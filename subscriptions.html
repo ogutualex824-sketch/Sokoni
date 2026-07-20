@@ -326,7 +326,7 @@ async function subscribePlan(planKey, price){
         const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
         const id = user?.phone||user?.email||"anonymous";
         SokoniPay.savePlanSubscription(id, planKey);
-        /* Persist plan so analytics pages can read it */
+        /* Persist plan locally so analytics pages can read it before CF confirms */
         try {
           localStorage.setItem('sokoniSubscription', JSON.stringify({
             plan: planKey, price: price, ref: ref,
@@ -335,7 +335,20 @@ async function subscribePlan(planKey, price){
         } catch(e){}
         /* Award loyalty points for subscribing */
         try { if(typeof window.onSokoniPurchase==='function') window.onSokoniPurchase(price); } catch(e){}
-        (function(msg){var b=document.createElement('div');b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#71ff00;color:black;padding:16px 20px;font-weight:900;font-size:14px;text-align:center;';b.textContent=msg;document.body.prepend(b);setTimeout(function(){b.remove();},4000);}("🎉 Subscribed to "+planKey+"! Ref: "+ref+" · Commission rate active now."));
+        /* Activate subscription record in Firestore — without this, getProviderPlan()
+           returns "free" for everyone regardless of payment status. */
+        (async function(){
+          try {
+            const _fn = firebase.functions().httpsCallable('activateSubscription');
+            await _fn({ plan: planKey, paymentRef: ref });
+            _showBanner('Your ' + PLANS_DATA.find(p=>p.key===planKey)?.name + ' plan is active! Ref: ' + ref);
+          } catch(activateErr){
+            /* Non-fatal: localStorage cache is set above. Ref is logged so support can
+               manually activate if the CF rejected the call. */
+            console.warn('[sub] activateSubscription failed — ref for support:', ref, activateErr.message);
+            _showBanner('Payment received! Plan activating — refresh this page in 30 seconds. Ref: ' + ref);
+          }
+        })();
       }
     });
   } else {
@@ -446,11 +459,52 @@ function renderFaqs(){
     </div>`).join("");
 }
 
+function _showBanner(msg){
+  var b=document.createElement('div');
+  b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#71ff00;color:black;padding:16px 20px;font-weight:900;font-size:14px;text-align:center;';
+  b.textContent=msg;
+  document.body.prepend(b);
+  setTimeout(function(){b.remove();},5000);
+}
+
 renderPlans();
 renderCommTable();
 renderBoosts();
 renderFaqs();
 window.setBilling=setBilling; window.subscribePlan=subscribePlan; window.buyBoost=buyBoost;
+
+/* ── Subscription recovery ─────────────────────────────────────────────────
+   If a user paid but activateSubscription was never called (pre-patch builds),
+   localStorage has a ref but Firestore has no subscription doc.
+   On page load we detect this and activate silently. */
+window.addEventListener('load', function(){
+  (async function _recoverSub(){
+    try {
+      const stored = JSON.parse(localStorage.getItem('sokoniSubscription')||'null');
+      if (!stored || !stored.ref || !stored.plan) return;
+
+      const db = window.firebaseDB;
+      const auth = typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null;
+      if (!db || !auth) return;
+
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
+      if (subSnap.exists()) return;   /* already activated */
+
+      /* Subscription doc missing but payment ref present — attempt activation */
+      const _fn = firebase.functions().httpsCallable('activateSubscription');
+      await _fn({ plan: stored.plan, paymentRef: stored.ref });
+      console.log('[sub-recovery] Activated plan:', stored.plan, 'ref:', stored.ref);
+      _showBanner('Your ' + stored.plan + ' plan has been activated! Your listing limit is now updated.');
+    } catch(e){
+      /* Silently ignore — auth not ready, payment still PENDING, or already activated */
+      console.log('[sub-recovery]', e.message);
+    }
+  })();
+});
 </script>
 <script src="seo.js" defer></script>
 <script src="nav-active.js" defer></script>
