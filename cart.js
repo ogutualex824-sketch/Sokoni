@@ -1,6 +1,30 @@
-let cart = [];
-try { cart = JSON.parse(localStorage.getItem("cart")) || []; }
-catch(e) { cart = []; }
+/* Read the cart without destroying it.
+
+   This used to be `catch(e) { cart = [] }`. That looks harmless and is not:
+   an unreadable cart rendered as empty, and the very next mutation — adding
+   an item, changing a quantity — persisted that empty array over the real
+   data. The customer's cart was silently deleted by the act of looking at it,
+   with no message and nothing left to recover.
+
+   Now the raw value is quarantined under its own key first, so support can
+   restore it and so the bug leaves evidence instead of a shrug. A non-array
+   is treated as corruption too: JSON.parse("5") succeeds and would otherwise
+   hand every downstream .map/.reduce a number. */
+function _readCart(){
+  const raw = localStorage.getItem("cart");
+  if (raw == null || raw === "") return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed;
+    throw new Error("cart was " + typeof parsed + ", expected an array");
+  } catch (e) {
+    try { localStorage.setItem("cart_corrupt_" + Date.now(), raw); } catch (_) {}
+    console.error("[SOKONI] Cart data unreadable — quarantined, not overwritten: " + e.message);
+    return [];
+  }
+}
+
+let cart = _readCart();
 
 const cartContainer = document.getElementById("cartContainer");
 

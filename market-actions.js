@@ -31,8 +31,24 @@ window.SokoniMarket = (function(){
   }
 
   /* ── Load / save helpers ── */
-  function _loadCart(){    try{ return JSON.parse(localStorage.getItem('cart')||'[]');     }catch(e){ return []; } }
-  function _loadWishlist(){ try{ return JSON.parse(localStorage.getItem('wishlist')||'[]'); }catch(e){ return []; } }
+  /* Returning [] on a parse failure meant the next _saveCart wrote that empty
+     array over the customer's real cart. Quarantine the raw value first so the
+     data survives and the failure is visible. */
+  function _readList(key){
+    const raw = localStorage.getItem(key);
+    if (raw == null || raw === '') return [];
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+      throw new Error(key + ' was ' + typeof parsed + ', expected an array');
+    } catch (e) {
+      try { localStorage.setItem(key + '_corrupt_' + Date.now(), raw); } catch (_) {}
+      console.error('[SOKONI] ' + key + ' unreadable — quarantined, not overwritten: ' + e.message);
+      return [];
+    }
+  }
+  function _loadCart(){     return _readList('cart');     }
+  function _loadWishlist(){ return _readList('wishlist'); }
   function _saveCart(arr){     localStorage.setItem('cart',     JSON.stringify(arr)); _syncBadges(); }
   function _saveWishlist(arr){ localStorage.setItem('wishlist', JSON.stringify(arr)); _syncBadges(); }
 
