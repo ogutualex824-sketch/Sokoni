@@ -29,8 +29,12 @@ function gcloud(args) {
      "gcloud unavailable" on a machine where gcloud is installed and working,
      which would be a tooling defect masquerading as a platform finding. */
   const win = process.platform === 'win32';
+  /* maxBuffer: `gcloud run services list` on this project exceeds Node's 1MB
+     default and dies with ENOBUFS, which surfaced as "could not list Cloud Run
+     services" — a tooling limit masquerading as a platform finding. */
   return execFileSync(win ? 'gcloud.cmd' : 'gcloud', args,
-    { encoding: 'utf8', env, timeout: 90000, stdio: ['ignore', 'pipe', 'pipe'], shell: win });
+    { encoding: 'utf8', env, timeout: 90000, stdio: ['ignore', 'pipe', 'pipe'],
+      shell: win, maxBuffer: 32 * 1024 * 1024 });
 }
 
 /* Read the Identity Platform config.
@@ -64,7 +68,13 @@ async function identityConfig(ctx) {
 
   const url = 'https://identitytoolkit.googleapis.com/admin/v2/projects/' + PROJECT + '/config';
   try {
-    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    /* x-goog-user-project is required. Without it the API rejects a user
+       credential with HTTP 403 "requires a quota project", which reads exactly
+       like a permissions failure and sent this check to SKIPPED even for an
+       owner. The header names the project to bill the quota to. */
+    const res = await fetch(url, {
+      headers: { Authorization: 'Bearer ' + token, 'x-goog-user-project': PROJECT },
+    });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       ctx._idpConfig = { error: 'HTTP ' + res.status + ' from ' + url + ' — ' +
