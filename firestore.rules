@@ -1962,8 +1962,32 @@ service cloud.firestore {
     }
 
     /* Branches */
+    /* Branch reads were denied for every merchant.
+
+       The rule guarded resource.data.sellerId, but branches created by
+       business-bootstrap carry merchantId and have no sellerId field at all —
+       confirmed against the live document branches/SOK-GL58F7-main, which has
+       {merchantId, status, name, isDefault} and nothing else. A comparison
+       against an absent field is never true, so every non-admin read failed
+       and the branch selector rendered its empty state. The UI was correct;
+       the rule was guarding a field that does not exist.
+
+       Ownership now resolves through the field the document actually has, by
+       following merchantId to the business and comparing its ownerId. The
+       sellerId clause is kept ahead of it so any legacy branch document keeps
+       working and no existing access is withdrawn.
+
+       Staff access is intentionally NOT granted here. Staff reach branch data
+       through Cloud Functions using the Admin SDK, which bypasses rules; a
+       membership lookup in this rule would cost a second document read on
+       every branch read for a path that does not need it. */
     match /branches/{branchId} {
-      allow read:  if isAuthed() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      allow read:  if isAuthed() && (
+                        resource.data.sellerId == request.auth.uid
+                     || ('merchantId' in resource.data
+                         && get(/databases/$(database)/documents/businesses/$(resource.data.merchantId))
+                              .data.ownerId == request.auth.uid)
+                     || isAdmin());
       allow write: if false;
     }
 
