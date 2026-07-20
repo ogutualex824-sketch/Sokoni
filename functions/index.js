@@ -3420,6 +3420,36 @@ exports.darajaSTKCallback = onRequest(
         ts,
       }).catch(() => {});
 
+      /* ── Financial records ──────────────────────────────────────────────
+         An audit of every confirmation path found that a successful payment
+         produced no invoice, no receipt, no journal entry and no tax record.
+         The modules existed; nothing called them. This is the call.
+
+         Deliberately after the audit log and outside the claiming transaction:
+         the money has already moved and the order is already marked paid, so
+         paperwork must never be able to fail the payment. recordConfirmedPayment
+         is idempotent on `ref` and swallows its own errors into
+         financialEngineFailures, so a retry is harmless and a failure is
+         queued for reconciliation rather than surfaced to the caller. */
+      if (resultCode === 0) {
+        try {
+          const _fin = require("./financial-engine");
+          await _fin.recordConfirmedPayment({
+            ref:         payData.orderId || checkoutId,
+            amountKES:   paidAmount || payData.amount,
+            uid:         payData.callerUid || null,
+            sellerUid:   payData.sellerUid || null,
+            orderId:     payData.orderId || null,
+            description: payData.description || "SOKONI payment",
+            method:      "mpesa",
+            providerRef: mpesaCode || checkoutId,
+            source:      "darajaSTKCallback",
+          });
+        } catch (_finErr) {
+          console.error("[darajaSTKCallback] financial engine threw:", _finErr && _finErr.message);
+        }
+      }
+
       console.log(`[darajaSTKCallback] ${checkoutId} → ${newStatus.toUpperCase()} (code:${mpesaCode || resultDesc})`);
     } catch (e) {
       console.error("[darajaSTKCallback] Error:", e.message);
