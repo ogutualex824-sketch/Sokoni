@@ -121,10 +121,16 @@ try {
 /* One-shot health probe. Verifies the token actually exchanges instead of
    discovering it later as an unexplained auth failure. Runs exactly once — no
    retry loop — so a bad token can never spin the browser. */
+/* Observable token state. The catalogue investigation needs to know whether an
+   anonymous read failed because App Check had no token yet — this records the
+   exchange outcome so a listener can report it instead of guessing. */
+window.__sokoniAppCheckState = _appCheck ? 'pending' : 'disabled';
+
 if (_appCheck) {
   getAppCheckToken(_appCheck, false)
-    .then(() => { if (IS_LOCALHOST) console.info('[SOKONI] App Check OK — token exchanged.'); })
+    .then(() => { window.__sokoniAppCheckState = 'exchanged'; if (IS_LOCALHOST) console.info('[SOKONI] App Check OK — token exchanged.'); })
     .catch((err) => {
+      window.__sokoniAppCheckState = 'rejected';
       if (!IS_LOCALHOST) {
         /* Production: generic, no internals. */
         console.error('[SOKONI] Security verification failed. Please refresh and try again.');

@@ -552,12 +552,40 @@ const SokoniDB = {
        the App Check token has normally arrived. A genuine rejection is
        reported and not retried, because retrying a denied read only hammers a
        wall. Neither weakens App Check. */
+    const t0 = Date.now();
+    const emit = (phase, detail) => {
+      const payload = { phase, ...detail, appCheck: (typeof window !== 'undefined' && window.__sokoniAppCheckState) || 'unknown', ms: Date.now() - t0 };
+      _log.warn('[SokoniDB] catalogue', payload);
+      try { window.dispatchEvent(new CustomEvent('sokoni:catalogue', { detail: payload })); } catch (_) {}
+    };
+
     const attach = (attempt) => {
       let q = collection(db, 'products');
       if (opts.category)  q = query(q, where('category', '==', opts.category));
       if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
+      emit('listener-attached', { attempt });
       return onSnapshot(q,
-        snap => callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; })),
+        snap => {
+          /* SUCCESS path — the case the earlier instrumentation could not see.
+             A zero-doc snapshot from cache is the shape that was leaving demo
+             data in place with no error. Report source and count so an empty
+             authoritative read is distinguishable from a cached empty one. */
+          emit('snapshot', {
+            attempt,
+            docs: snap.size,
+            fromCache: snap.metadata.fromCache,
+            pendingWrites: snap.metadata.hasPendingWrites,
+          });
+          /* An empty snapshot from cache with the App Check token not yet
+             exchanged is a not-ready read, not an authoritative empty catalogue
+             — retry once rather than accept it as the real state. */
+          if (snap.size === 0 && snap.metadata.fromCache && attempt < 2) {
+            emit('retry-empty-cache', { attempt });
+            setTimeout(() => attach(attempt + 1), 1500);
+            return;
+          }
+          callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }));
+        },
         err  => {
           const code = err && err.code || 'unknown';
           _log.warn('[SokoniDB] products listener failed', { code, message: err && err.message, attempt });
