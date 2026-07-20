@@ -339,7 +339,7 @@ body{background:var(--bg);color:var(--text);font-family:'Inter',-apple-system,Bl
 firebase.auth().onAuthStateChanged(function (user) {
   if (!user) { window.location.href = 'login.html?redirect=security-zero-trust-dashboard.html'; return; }
 
-  user.getIdTokenResult().then(function (tok) {
+  user.getIdTokenResult(true).then(function (tok) {
     const role = tok.claims.role || tok.claims.admin || tok.claims.superAdmin;
     const isAdminOrSuper = tok.claims.admin === true || tok.claims.superAdmin === true
       || role === 4 || role === 5 || role === 'admin' || role === 'super_admin';

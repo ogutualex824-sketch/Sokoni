@@ -670,7 +670,7 @@ let _comparePeriod = 'day', _hubPeriod = 'month';
 // Auth guard
 auth.onAuthStateChanged(async user => {
   if (!user) { location.href = 'login.html?redirect=finos-admin'; return; }
-  const tok = await user.getIdTokenResult();
+  const tok = await user.getIdTokenResult(true);
   if (!tok.claims.admin && !tok.claims.superAdmin) {
     document.getElementById('auth-gate').innerHTML = '<p style="color:var(--red)">Admin access required.</p>';
     return;

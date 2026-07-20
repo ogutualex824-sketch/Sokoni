@@ -191,7 +191,7 @@ function _ago(ts){
 /* ── Auth ── */
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){ location.href='login.html'; return; }
-  user.getIdTokenResult().then(function(r){
+  user.getIdTokenResult(true).then(function(r){
     if(!r.claims.admin && !r.claims.superAdmin){ location.href='/'; return; }
     _initMap();
     _refresh();

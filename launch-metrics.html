@@ -200,7 +200,7 @@ onAuthStateChanged(auth, async function(user) {
   document.getElementById('lmLoading').style.display = 'none';
   if (!user) { document.getElementById('lmAuth').style.display = 'flex'; return; }
   /* Check admin claim */
-  var tok = await user.getIdTokenResult();
+  var tok = await user.getIdTokenResult(true);
   if (!tok.claims.admin) { document.getElementById('lmAuth').style.display = 'flex'; return; }
   document.getElementById('lmMain').style.display = 'block';
   loadData();

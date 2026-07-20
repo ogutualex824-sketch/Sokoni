@@ -451,7 +451,7 @@ textarea.form-input{resize:vertical;min-height:72px}
 /* â”€â”€ Auth guard â”€â”€ */
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){location.href='login.html?redirect=commission-engine.html';return;}
-  user.getIdTokenResult().then(function(t){
+  user.getIdTokenResult(true).then(function(t){
     if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
     _init();
   });

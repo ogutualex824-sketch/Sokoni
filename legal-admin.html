@@ -374,7 +374,7 @@ $('apr-reject').addEventListener('click', (e) => {
    SERVER (_assertAdmin), so a user who forces this page open can still do nothing. */
 _auth.onAuthStateChanged(async (u) => {
   if (!u) { $('la-deny').textContent = 'Please sign in as an administrator.'; return; }
-  const tok = await u.getIdTokenResult().catch(() => null);
+  const tok = await u.getIdTokenResult(true).catch(() => null);
   const claims = (tok && tok.claims) || {};
   if (!claims.admin && !claims.superAdmin) {
     $('la-deny').textContent = 'Administrator access required.';

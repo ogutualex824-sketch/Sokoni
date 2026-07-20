@@ -592,7 +592,7 @@ auth.onAuthStateChanged(async user => {
     return;
   }
   try {
-    const token = await user.getIdTokenResult();
+    const token = await user.getIdTokenResult(true);
     const c = token.claims;
     if (!c.developer && !c.admin && !c.superAdmin) {
       authMsg.textContent = 'Developer access required. Contact your platform administrator to request developer credentials.';

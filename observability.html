@@ -374,8 +374,15 @@ const fn   = getFunctions(getApp(), 'us-central1');
 let _uid = null;
 onAuthStateChanged(auth, async user => {
   if (!user) { location.replace('login.html?redirect=' + encodeURIComponent(location.href)); return; }
-  const t = await user.getIdTokenResult();
-  if (!t.claims.role || !['admin','super_admin'].includes(t.claims.role)) {
+  /* force-refresh so a recently-granted claim is seen without re-login, and accept
+     the CANONICAL admin claims (admin/superAdmin booleans — what index.js actually
+     writes and firestore.rules trusts) in addition to this page's legacy
+     claims.role check. A top admin carrying {admin:true} was denied here because
+     this gate only looked at a role string they never had. */
+  const t = await user.getIdTokenResult(true);
+  const c = t.claims || {};
+  const _isAdmin = c.admin === true || c.superAdmin === true || ['admin','super_admin'].includes(c.role);
+  if (!_isAdmin) {
     document.body.innerHTML = '<div style="padding:60px;text-align:center;color:#ff4d6d;font-size:16px">🔒 Admin access required.</div>';
     return;
   }

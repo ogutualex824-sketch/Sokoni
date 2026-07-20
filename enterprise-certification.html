@@ -569,7 +569,7 @@ input[type="checkbox"] { width:16px; height:16px; accent-color:var(--g); cursor:
 
   auth.onAuthStateChanged(function (user) {
     if (!user) { window.location.href = '/login'; return; }
-    user.getIdTokenResult().then(function (token) {
+    user.getIdTokenResult(true).then(function (token) {
       var c = token.claims || {};
       if (!c.admin && !c.superAdmin) { window.location.href = '/login'; return; }
       var el = document.getElementById('bar-user');

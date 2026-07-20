@@ -236,7 +236,7 @@ body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSy
 document.addEventListener("DOMContentLoaded", () => {
   firebase.auth().onAuthStateChanged(async user => {
     if (!user) { location.href = "login.html?next=/etims-admin.html"; return; }
-    const tok = await user.getIdTokenResult();
+    const tok = await user.getIdTokenResult(true);
     if (!tok.claims?.isAdmin) { location.href = "/index.html"; return; }
     loadAll();
   });

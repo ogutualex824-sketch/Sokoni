@@ -474,7 +474,7 @@ var _isSA            = false;
 firebase.auth().onAuthStateChanged(function(user) {
   if (!user) { location.href = 'admin.html'; return; }
   _currentUser = user;
-  user.getIdTokenResult().then(function(r) {
+  user.getIdTokenResult(true).then(function(r) {
     var t = r.claims;
     if (!t.isAdmin && !t.isSuperAdmin && !t.isSupport && !t.isFinance)
       { location.href = "/"; return; }

@@ -310,7 +310,7 @@ let walletData={};
 // Auth guard
 auth.onAuthStateChanged(async user=>{
   if(!user){location.href='login.html?redirect=seller-wallet';return}
-  const token=await user.getIdTokenResult();
+  const token=await user.getIdTokenResult(true);
   if(!token.claims.seller&&!token.claims.admin&&!token.claims.superAdmin){
     document.getElementById('auth-gate').innerHTML='<p style="color:var(--red)">Access restricted to sellers.</p>';
     return;

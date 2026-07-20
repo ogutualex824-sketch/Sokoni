@@ -211,7 +211,7 @@ let _liveStates = {};
 /* ── Auth guard ── */
 auth.onAuthStateChanged(async u => {
   if (!u) { window.location.href = 'pos.html'; return; }
-  const token = await u.getIdTokenResult();
+  const token = await u.getIdTokenResult(true);
   if (!token.claims.admin && !token.claims.superAdmin && !token.claims.manager) {
     window.location.href = 'pos.html'; return;
   }

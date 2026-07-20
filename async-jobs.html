@@ -370,7 +370,7 @@ let _kpiTimer  = null;
 // ── Auth gate ─────────────────────────────────────────────────────────────────
 auth.onAuthStateChanged(async u => {
   if (!u) { location.href = '/login?next=/async-jobs'; return; }
-  const tok = await u.getIdTokenResult();
+  const tok = await u.getIdTokenResult(true);
   if (!tok.claims.admin && !tok.claims.superAdmin) {
     document.body.innerHTML =
       '<p style="color:#ff4d4d;text-align:center;padding:80px;font-size:15px">Admin access required.</p>';

@@ -416,7 +416,7 @@ var TX_ICON = {
 /* â”€â”€ Auth gate (admin/superAdmin claim required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 firebase.auth().onAuthStateChanged(function (user) {
   if (!user) { location.href = 'login.html?redirect=messages-admin.html'; return; }
-  user.getIdTokenResult().then(function (result) {
+  user.getIdTokenResult(true).then(function (result) {
     if (!result.claims.admin && !result.claims.superAdmin) {
       location.href = "/"; return;
     }

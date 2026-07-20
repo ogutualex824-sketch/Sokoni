@@ -560,7 +560,7 @@
   /* ── Auth gate ────────────────────────────────────────────── */
   onAuthStateChanged(auth, async user => {
     if (!user) { document.getElementById('rm-denied').style.display = 'flex'; return; }
-    const token = await user.getIdTokenResult();
+    const token = await user.getIdTokenResult(true);
     if (!token.claims.admin && !token.claims.superAdmin) {
       document.getElementById('rm-denied').style.display = 'flex'; return;
     }

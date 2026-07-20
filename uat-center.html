@@ -654,7 +654,7 @@ auth = firebase.auth();
 auth.onAuthStateChanged(async user => {
   if (!user) { location.href = '/login.html'; return; }
   try {
-    const tok = await user.getIdTokenResult();
+    const tok = await user.getIdTokenResult(true);
     if (!tok.claims.admin && !tok.claims.superAdmin) { location.href = '/login.html'; return; }
     currentUser = user;
     document.getElementById('auth-overlay').style.display = 'none';

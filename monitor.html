@@ -418,7 +418,7 @@ onAuthStateChanged(auth, async (user) => {
   }
 
   // Verify admin or superAdmin claim
-  const result = await user.getIdTokenResult();
+  const result = await user.getIdTokenResult(true);
   const claims = result.claims;
 
   if (!claims.admin && !claims.superAdmin && !claims.moderator) {

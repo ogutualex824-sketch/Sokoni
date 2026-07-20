@@ -506,7 +506,7 @@ auth.onAuthStateChanged(async user => {
   }
   // Finance KASS: admin, finance claim, or seller
   try {
-    const tok = await user.getIdTokenResult();
+    const tok = await user.getIdTokenResult(true);
     const c   = tok.claims || {};
     if (!c.admin && !c.superAdmin && !c.finance && !c.seller) {
       authMsg.textContent = 'KASS Finance Assistant requires admin, finance, or seller access.';

@@ -378,7 +378,7 @@ let _isManager  = false;
 /* ── Auth ── */
 auth.onAuthStateChanged(async u => {
   if (!u) { window.location.href = 'pos.html'; return; }
-  const token = await u.getIdTokenResult();
+  const token = await u.getIdTokenResult(true);
   _isManager  = !!(token.claims.admin || token.claims.superAdmin ||
                    token.claims.manager || token.claims.supervisor);
   if (!_isManager) { window.location.href = 'pos.html'; return; }

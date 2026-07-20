@@ -156,7 +156,7 @@ import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/f
 document.body.style.visibility = 'hidden';
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.replace('login.html'); return; }
-  const token = await user.getIdTokenResult().catch(() => null);
+  const token = await user.getIdTokenResult(true).catch(() => null);
   if (!token || !token.claims.admin) {
     window.location.replace("/"); return;
   }

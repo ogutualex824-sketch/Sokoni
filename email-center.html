@@ -626,7 +626,7 @@ const fns  = getFunctions(app, 'us-central1');
 /* ── Auth guard (admin only) ─────────────────────────── */
 onAuthStateChanged(auth, async (user) => {
   if (!user) { location.href = 'login.html'; return; }
-  const token = await user.getIdTokenResult();
+  const token = await user.getIdTokenResult(true);
   if (!token.claims.isAdmin && !token.claims.isSuperAdmin) {
     location.href = "/"; return;
   }

@@ -554,7 +554,7 @@ auth.onAuthStateChanged(async user => {
     return;
   }
   try {
-    const tok = await user.getIdTokenResult();
+    const tok = await user.getIdTokenResult(true);
     const c   = tok.claims || {};
     if (!c.support && !c.admin && !c.superAdmin && !c.seller) {
       authMsg.textContent = 'Access restricted to customer support agents.';

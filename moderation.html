@@ -731,7 +731,7 @@
         }
         /* Check custom claims */
         try {
-          var tokenResult = await user.getIdTokenResult();
+          var tokenResult = await user.getIdTokenResult(true);
           var claims = tokenResult.claims || {};
           var isAdmin = claims.admin || claims.moderator || claims.isAdmin || claims.isModerator;
           if(!isAdmin){ showAccessDenied(); return; }

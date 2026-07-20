@@ -612,7 +612,7 @@ textarea.field-input:focus{border-color:var(--c-primary)}
 /* ── Auth guard ── */
 firebase.auth().onAuthStateChanged(function(user){
   if(!user){location.href='login.html?redirect=admin-messages.html';return;}
-  user.getIdTokenResult().then(function(t){
+  user.getIdTokenResult(true).then(function(t){
     if(!t.claims.admin && !t.claims.superAdmin){location.href='/';return;}
     _init();
   });

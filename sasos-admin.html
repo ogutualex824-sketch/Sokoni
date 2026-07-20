@@ -1176,7 +1176,7 @@ firebase.auth().onAuthStateChanged(user => {
     window.location.href = '/login.html?redirect=sasos-admin.html';
     return;
   }
-  user.getIdTokenResult().then(tok => {
+  user.getIdTokenResult(true).then(tok => {
     if (!tok.claims.admin && !tok.claims.superAdmin && !tok.claims.moderator) {
       window.location.href = '/index.html';
       return;

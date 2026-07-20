@@ -805,7 +805,7 @@ var auth = firebase.auth();
 /* ── Auth guard ── */
 auth.onAuthStateChanged(function(user){
   if(!user){ location.href='login.html?redirect=commission-admin.html'; return; }
-  user.getIdTokenResult().then(function(t){
+  user.getIdTokenResult(true).then(function(t){
     if(!t.claims.admin && !t.claims.superAdmin){
       location.href='/'; return;
     }

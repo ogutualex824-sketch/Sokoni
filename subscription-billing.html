@@ -426,7 +426,7 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
 /* â”€â”€ Auth guard â”€â”€ */
 firebase.auth().onAuthStateChanged(function(u){
   if(!u){location.href='login.html?redirect=subscription-billing.html';return;}
-  u.getIdTokenResult().then(function(t){
+  u.getIdTokenResult(true).then(function(t){
     if(!t.claims.admin&&!t.claims.superAdmin){location.href='/';return;}
     _init();
   });

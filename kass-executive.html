@@ -503,7 +503,7 @@ auth.onAuthStateChanged(async user => {
     return;
   }
   try {
-    const tok = await user.getIdTokenResult();
+    const tok = await user.getIdTokenResult(true);
     const c   = tok.claims || {};
     if (!c.admin && !c.superAdmin) {
       authMsg.textContent = 'KASS Executive Advisor is restricted to platform administrators and founders.';
