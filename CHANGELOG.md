@@ -1,4 +1,85 @@
-﻿## [2026-07-20] — 29 of 45 booking-domain Cloud Functions were dead on arrival
+﻿## [2026-07-20] — The merchant dashboard and the storefront read different collections
+
+### Root cause
+
+| Surface | Reads |
+|---|---|
+| Merchant dashboard (`seller.js:814`) | `localStorage.sellerProducts` |
+| …hydrated only from (`sokoni-sync.js:255`) | `userSync/{uid}/products` — a private per-user mirror |
+| Storefront, checkout, homepage, product page | the canonical `products` collection |
+
+A product written straight to `products` — which is what an ownership migration, an admin tool, or
+any server-side create does — reaches the storefront and **never** reaches the dashboard. KASS VAPES
+shows three vapes to the public and zero to its owner, and both surfaces are behaving exactly as
+written.
+
+### Fix — make the cache honest rather than rewrite the page
+
+`sellerProducts` is read at **~50 sites** in `seller.js`: the product list, stats tiles,
+boost/feature flows, bulk edit, CSV export, POS seeding. Porting all of them to Firestore would
+rewrite the page's entire data layer — breaking working flows to fix a broken one.
+
+`sokoni-seller-products.js` hydrates that key from the canonical collection once per load, so all
+~50 read sites become correct **without being touched**. localStorage returns to being an offline
+cache rather than the source of truth.
+
+**Canonical wins on every field except images.** `seller.js:751` truncates oversized base64 before
+saving, so when the canonical copy is torn the cache holds the only intact image; letting canonical
+win there would replace a working image with a broken one on every page load.
+
+Queries union `sellerUid` and the legacy `uid` field (`seller.js:742-743` writes both) and dedupe by
+document id, so a product carrying both is one product, not two.
+
+### Fails safe
+
+If Firestore returns zero products while the cache holds some, **the cache is left untouched**. That
+shape is far more likely a rules denial, an offline read, or a wrong-account session than a merchant
+who deleted their catalogue — and overwriting would destroy the only copy of unsynced work.
+Local-only products survive, flagged `_pendingSync`.
+
+### Analytics and Revenue were not empty — they were forbidden
+
+`seller-analytics.html:396` fetched 500 orders **unscoped** and filtered in JavaScript.
+`seller-revenue.html:492` did the same on `commissionLedger`.
+
+Firestore evaluates rules against the **query**, not the results. `firestore.rules:277` and `:1329`
+permit a read only when `sellerUid` matches the caller, so both reads were refused outright — and
+both pages caught the denial and rendered "no data" instead of "not allowed to ask".
+
+Both now filter server-side. The required composite indexes (`orders` sellerUid+createdAt DESC,
+`commissionLedger` sellerUid+createdAt DESC) **already existed** — the correct query was anticipated
+and never written. **No index changes. No rules changes.**
+
+The revenue error path no longer advises "please refresh" for a permission failure, which fails
+identically and teaches merchants the message is noise.
+
+### Verification
+
+- **25/25** `scripts/test-seller-products.js`, weighted to the destructive cases: refuses to wipe the
+  cache on an empty result or a denial, never drops an unsynced product, never duplicates, never
+  lets a truncated image win.
+- Full suite **58/58** (products 25, merchant-diag 15, beta-gate 18).
+- `seller.html`, `seller-analytics.html`, `seller-revenue.html` load with no syntax or reference
+  errors on WebKit / iPhone 13.
+
+### Not covered
+
+No authenticated session is available from this environment, so **the KASS VAPES product count
+itself remains unconfirmed**. `sokoni-merchant-diag.js` prints `PRODUCTS_CANON` /`PRODUCTS_MIRROR` /
+`PRODUCTS_LOCAL` to settle it on a real device.
+
+`store.html:471` still matches storefronts by `sellerName` **string equality**, and `seller.js:673`
+still denormalises `sellerName` from `user.name` while store setup writes `user.storeName`. Both are
+real defects, both are untouched here, and neither is caused by the divergence fixed above.
+
+### Security / breaking changes
+
+None. No rules, no indexes, no schema, no API shape changed. No document is created, no ownership is
+modified.
+
+---
+
+## [2026-07-20] — 29 of 45 booking-domain Cloud Functions were dead on arrival
 
 ### Root cause
 
