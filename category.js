@@ -206,6 +206,32 @@ function renderProducts(list){
                     })()}
                     ${rating}
                 </div>
+                ${(function(){
+                    /* The handlers addToCart / addToWishlistCat / buyNowCat have
+                       existed and been exported on window since this page was
+                       written — nothing ever rendered controls to reach them, so
+                       category shoppers could not add to cart at all and had to
+                       tap through to the product page.
+
+                       These call those existing handlers rather than introducing
+                       a fifth add-to-cart implementation. stopPropagation is
+                       required because the whole card carries its own onclick to
+                       open the product; without it every add would also navigate
+                       away, which is the likely reason buttons were left out. */
+                    const pid = _esc(p.id);
+                    const dis = oos ? 'disabled' : '';
+                    const btn = 'flex:1;padding:7px 0;border-radius:9px;font-size:12px;font-weight:800;'
+                              + 'cursor:' + (oos ? 'not-allowed' : 'pointer') + ';font-family:inherit;'
+                              + 'transition:transform .12s,opacity .12s;opacity:' + (oos ? '0.35' : '1') + ';';
+                    return '<div class="pcard-actions" style="display:flex;gap:6px;margin-top:7px;">'
+                      + '<button type="button" ' + dis + ' aria-label="Add ' + _esc(p.name) + ' to cart" '
+                      +   'onclick="event.stopPropagation();addToCart(\'' + pid + '\')" '
+                      +   'style="' + btn + 'background:#71ff00;color:#050505;border:none;">🛒 Add</button>'
+                      + '<button type="button" ' + dis + ' aria-label="Save ' + _esc(p.name) + ' to wishlist" '
+                      +   'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')" '
+                      +   'style="' + btn + 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.22);flex:0 0 42px;">🤍</button>'
+                      + '</div>';
+                })()}
             </div>
         </div>
         `;
@@ -286,6 +312,21 @@ function showNotif(msg, type){
     setTimeout(() => n.remove(), 3000);
 }
 
+/* Persist through the platform's single synchronisation signal.
+
+   This page wrote localStorage directly and called its own updateCartCount(),
+   which only reaches badges on this page. The header pip is owned by
+   shared-header.js and listens for sokoni:cart-changed, so a category add
+   updated the cart correctly and left the header stale — the same defect
+   package 2 fixed everywhere else. Routing through here means the category
+   page needs no knowledge of which widgets exist. */
+function _saveCatCart(arr){
+  try { localStorage.setItem("cart", JSON.stringify(arr)); }
+  catch (e) { console.error("[SOKONI] Could not save cart: " + e.message); return false; }
+  try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: arr.length } })); } catch (_) {}
+  return true;
+}
+
 /* CART */
 async function addToCart(id){
     const product = allProducts.find(p => String(p.id) === String(id));
@@ -299,8 +340,15 @@ async function addToCart(id){
     }
 
     const cartData = JSON.parse(localStorage.getItem("cart") || "[]");
+    /* Match marketplace behaviour: adding the same product twice is a no-op
+       rather than a second line item. market-actions.js has always done this;
+       this path did not, so a double tap produced duplicate rows. */
+    if (cartData.some(c => String(c.id) === String(product.id))) {
+        showNotif("Already in cart 🛒", "info");
+        return;
+    }
     cartData.push(product);
-    localStorage.setItem("cart", JSON.stringify(cartData));
+    _saveCatCart(cartData);
     updateCartCount();
     showNotif("Added to cart 🛒", "success");
     try {
