@@ -1772,6 +1772,58 @@ const SOKONI_FUNCTIONS_URL = "https://us-central1-sokoni-aeb26.cloudfunctions.ne
   if(badge  &&  INTASEND_PUBLIC_KEY) badge.style.display  = "flex";
 })();
 
+/* ── Checkout session identity ────────────────────────────────────────────
+   These three were called from five places but never defined anywhere in the
+   repository, so every non-M-Pesa path threw ReferenceError inside
+   saveAndRedirect — after the customer had already been charged — and every
+   validation failure left the Place Order button permanently disabled.
+
+   _ckikey is the stable identity of ONE checkout attempt. It is created once,
+   survives retries and reloads (sessionStorage), and is cleared only when an
+   order completes. Everything else derives from it, which is what makes a
+   retry resolve to the same order instead of a second one. */
+function _ckSessionKey(){
+  let k = sessionStorage.getItem('_ckikey');
+  if (!k) {
+    /* crypto.randomUUID is unavailable on older Safari, which is a large share
+       of Kenyan mobile traffic — fall back rather than throw. */
+    k = (window.crypto && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : 'ck-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+    sessionStorage.setItem('_ckikey', k);
+  }
+  return k;
+}
+
+/* Deterministic order id for paths where the server does not mint one (bank,
+   PayPal, card, M-Pesa fallback). Same session key always yields the same id,
+   so a double-submit writes the SAME Firestore doc under { merge: true }
+   rather than creating a second order.
+
+   FNV-1a rather than SHA — this needs to be synchronous (crypto.subtle is
+   async and saveAndRedirect is not) and it is an idempotency key, not a
+   security boundary. Collision risk across one user's checkout attempts is
+   not a meaningful concern; forgery is prevented server-side. */
+function _ckOrderId(){
+  const key = _ckSessionKey();
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) {
+    h ^= key.charCodeAt(i);
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+  }
+  return 'SKN' + h.toString(36).toUpperCase().padStart(7, '0').slice(0, 7);
+}
+
+/* Restore the Place Order button after any aborted attempt. Without this the
+   button stays on "⏳ Processing..." forever and the customer cannot retry
+   without reloading — losing their entered delivery details. */
+function _resetPlaceBtn(){
+  const btn = document.querySelector('.co-place-btn');
+  if (!btn) return;
+  btn.disabled = false;
+  if (window._placeBtnOrigHTML) btn.innerHTML = window._placeBtnOrigHTML;
+}
+
 /* Place order — open the right modal */
 function placeOrder(){
   /* Prevent double-tap: capture original label then lock the button */
