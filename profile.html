@@ -1597,6 +1597,17 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
           <textarea class="up-bio-input" id="upBioInput" placeholder="Write a short bio..." rows="2" maxlength="200" onblur="saveBioEdit()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();saveBioEdit();}"></textarea>
         </div>
         <button type="button" class="up-edit-btn" onclick="toggleInlineEdit()">&#9998; Edit Profile</button>
+        <!-- Quick access to the seller's own storefront. A "My Store" entry already
+             existed, but only inside the adaptive hub GRID alongside Shop/Food/Events/
+             Jobs/Wallet/KASS AI — a merchant had to hunt for their own shop among a
+             dozen unrelated tiles. This surfaces it next to Edit Profile.
+             Hidden by default; revealed only for seller/vendor roles by
+             _syncMyStoreBtn(), so buyers never see a dead link. -->
+        <a href="seller.html" id="upMyStoreBtn" class="up-edit-btn"
+           style="display:none;text-decoration:none;align-items:center;justify-content:center;gap:6px;
+                  background:rgba(113,255,0,0.14);border-color:rgba(113,255,0,0.4);color:#71ff00;">
+          &#127978; My Store
+        </a>
       </div>
 
       <!-- Meta info -->
@@ -2815,9 +2826,23 @@ function initProfile(){
 /* ══════════════════════════════════════════════════════════════
    1. HEADER CARD
 ══════════════════════════════════════════════════════════════ */
+/* Show the My Store shortcut only to sellers. Mirrors the seller test used by
+   sokoni-nav-engine.js (roles[] 'seller'/'vendor', isSeller, or registeredAs.seller) so
+   the button and the workspace switcher can never disagree about who is a merchant. */
+function _syncMyStoreBtn(u){
+  var btn = document.getElementById('upMyStoreBtn');
+  if(!btn) return;
+  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
+  var isSeller = roles.indexOf('seller') > -1 || roles.indexOf('vendor') > -1 ||
+                 !!(u && u.isSeller) || !!(u && u.registeredAs && u.registeredAs.seller);
+  btn.style.display = isSeller ? 'inline-flex' : 'none';
+}
+
 function renderHeaderCard(){
   _user = getUser();
   if(!_user) return;
+
+  _syncMyStoreBtn(_user);
 
   /* Name */
   var nameEl = document.getElementById('upName');

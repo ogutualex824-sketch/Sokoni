@@ -1917,11 +1917,13 @@ window.showTab = function(name, btn){
 <script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>
 
+<!-- Home · Services · Orders · Profile. Listed in sokoni-nav-engine.js _KEEP_OWN_BOTTOM,
+     so the seller workspace can no longer replace this with Dashboard/Products/Earnings
+     while the user is part-way through the "What are you offering?" listing form. -->
 <nav class="bottom-nav">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item active-bnav"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
+  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script>

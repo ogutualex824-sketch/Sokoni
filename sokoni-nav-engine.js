@@ -29,8 +29,14 @@
     'monitor', 'moderation', 'verification-admin'
   ];
 
-  /* Pages that manage their own bottom nav — get sub-nav + back btn only */
-  var _KEEP_OWN_BOTTOM = ['seller', 'pos'];
+  /* Pages that manage their own bottom nav — get sub-nav + back btn only.
+     'provider' and 'services' are CUSTOMER-FACING: browsing services, and the
+     "What are you offering?" listing form. Once an account gains the seller role this
+     engine swapped their nav for the seller tabs (Dashboard / Products / Orders /
+     Earnings / More), so a merchant creating a service listing was handed their own
+     back-office nav mid-task with no way back to Home or Services. The pages keep their
+     own customer nav regardless of workspace. */
+  var _KEEP_OWN_BOTTOM = ['seller', 'pos', 'provider', 'services'];
 
   if (_SKIP.indexOf(_page) > -1) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
