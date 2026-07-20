@@ -1543,73 +1543,8 @@ function startLivePopup(){
     return;
 }
 
-/* =========================
-   QUICK VIEW
-========================= */
-
-function openQuickView(productId){
-
-    const product = products.find(
-
-        item =>
-        String(item.id) ===
-        String(productId)
-
-    );
-
-    if(!product) return;
-
-    const modal = document.getElementById(
-        "quickViewModal"
-    );
-
-    if(!modal) return;
-
-    const productImage =
-
-    product.images?.[0] ||
-
-    product.image ||
-
-    "assets/default-product.png";
-
-    document.getElementById(
-        "quickViewImage"
-    ).src = productImage;
-
-    document.getElementById(
-        "quickViewName"
-    ).innerText = product.name;
-
-    document.getElementById(
-        "quickViewPrice"
-    ).innerText =
-    "KES " + product.price;
-
-    document.getElementById(
-        "quickViewCartBtn"
-    ).onclick = ()=>{
-
-        buyProduct(product.id);
-
-    };
-
-    modal.style.display = "flex";
-
-}
-
-/* =========================
-   CLOSE QUICK VIEW
-========================= */
-
-function closeQuickView(){
-
-    document.getElementById(
-        "quickViewModal"
-    ).style.display = "none";
-
-}
-
+/* Quick View removed — see commit message. product.html is the single
+   authoritative product presentation. */
 /* =========================
    HERO SLIDER
 ========================= */
@@ -2468,8 +2403,6 @@ window.filterProducts = filterProducts;
 window.removeFromCart = removeFromCart;
 window.toggleChat = toggleChat;
 window.sendMessage = sendMessage;
-window.openQuickView = openQuickView;
-window.closeQuickView = closeQuickView;
 window.toggleTheme = toggleTheme;
 
 /* MOBILE MENU */
