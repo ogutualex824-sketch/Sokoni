@@ -26,6 +26,14 @@ function _readCart(){
 
 let cart = _readCart();
 
+/* Single write path for this page. Every mutation persists AND announces, so
+   the header badge can never disagree with stored state. */
+function _saveCartState(){
+  try { localStorage.setItem("cart", JSON.stringify(cart)); }
+  catch (e) { console.error("[SOKONI] Could not save cart: " + e.message); return; }
+  try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: cart.length } })); } catch (_) {}
+}
+
 const cartContainer = document.getElementById("cartContainer");
 
 function _esc(str){
@@ -204,7 +212,7 @@ function renderCart(){
 /* ── Mutations ── */
 function removeFromCart(index){
     cart.splice(index, 1);
-    localStorage.setItem("cart", JSON.stringify(cart));
+    _saveCartState();
     showNotif("Item removed from cart", "success");
     renderCart();
 }
@@ -212,7 +220,7 @@ function removeFromCart(index){
 function removeFoodItem(cartId){
     const idx = cart.findIndex(i => i.cartId === cartId);
     if(idx !== -1) cart.splice(idx, 1);
-    localStorage.setItem("cart", JSON.stringify(cart));
+    _saveCartState();
     showNotif("Item removed", "success");
     renderCart();
 }
@@ -221,14 +229,14 @@ function foodQty(cartId, qty){
     if(qty <= 0){ removeFoodItem(cartId); return; }
     const item = cart.find(i => i.cartId === cartId);
     if(item){ item.qty = qty; }
-    localStorage.setItem("cart", JSON.stringify(cart));
+    _saveCartState();
     renderCart();
 }
 
 function productQty(index, qty){
     if(qty <= 0){ removeFromCart(index); return; }
     if(cart[index]){ cart[index].qty = qty; }
-    localStorage.setItem("cart", JSON.stringify(cart));
+    _saveCartState();
     renderCart();
 }
 
@@ -248,7 +256,7 @@ function moveToWishlist(index){
 function clearCart(){
     if(cart.length === 0) return;
     cart = [];
-    localStorage.setItem("cart", JSON.stringify(cart));
+    _saveCartState();
     showNotif("Cart cleared", "success");
     renderCart();
 }

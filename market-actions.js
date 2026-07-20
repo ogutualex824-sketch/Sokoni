@@ -49,8 +49,14 @@ window.SokoniMarket = (function(){
   }
   function _loadCart(){     return _readList('cart');     }
   function _loadWishlist(){ return _readList('wishlist'); }
-  function _saveCart(arr){     localStorage.setItem('cart',     JSON.stringify(arr)); _syncBadges(); }
-  function _saveWishlist(arr){ localStorage.setItem('wishlist', JSON.stringify(arr)); _syncBadges(); }
+  function _saveCart(arr){     localStorage.setItem('cart',     JSON.stringify(arr)); _syncBadges(); _emitCartChanged(arr.length); }
+  function _saveWishlist(arr){ localStorage.setItem('wishlist', JSON.stringify(arr)); _syncBadges(); _emitCartChanged(_loadCart().length); }
+
+  /* _syncBadges only reaches badges matching its own selectors, which do NOT
+     include the header pip. The event is what covers everything else. */
+  function _emitCartChanged(count){
+    try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: count } })); } catch (_) {}
+  }
 
   /* ── Update any cart count badges visible on the current page ── */
   function _syncBadges(){

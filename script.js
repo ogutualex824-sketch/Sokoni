@@ -1157,9 +1157,18 @@ async function addToWishlist(productId){
 
    Saving now happens first and unconditionally. Rendering is what degrades
    when the DOM is absent, which is the correct way round. */
+/* The single synchronization signal. Every cart mutation dispatches this
+   after persisting; every cart indicator listens. One mutation, one event,
+   no page needing to know which widgets exist. */
+function _emitCartChanged(){
+  try { window.dispatchEvent(new CustomEvent("sokoni:cart-changed", { detail: { count: cart.length } })); }
+  catch (_) { /* pre-CustomEvent browsers: the badge stays stale, nothing breaks */ }
+}
+
 function _persistCart(){
   try {
     localStorage.setItem("cart", JSON.stringify(cart));
+    _emitCartChanged();
     return true;
   } catch (e) {
     /* Quota exceeded, or Safari private mode where setItem throws. The user

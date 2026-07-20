@@ -2117,12 +2117,24 @@
       _update(); /* run once immediately */
     }());
 
-    /* Listen for cart/auth changes from other tabs */
+    /* Cross-tab. The storage event fires in every OTHER tab but never in the
+       one that performed the write, so this alone could never update the
+       badge for the person who actually clicked Add to Cart. */
     window.addEventListener('storage', function (e) {
       if (e.key === 'cart' || e.key === 'sokoniUser') _refresh();
     });
 
-    /* Let pages call window.skNavRefresh() when they update the cart inline */
+    /* Same-tab. This is the authoritative signal: every cart mutation
+       dispatches sokoni:cart-changed after persisting, and the header listens
+       rather than each page remembering to call a refresh function. That
+       inversion is the fix — the previous design required every future
+       add-to-cart path to know about the header, and predictably they did
+       not: skNavRefresh existed but was called from exactly one page. */
+    window.addEventListener('sokoni:cart-changed', function () { _refresh(); });
+
+    /* Retained for the one existing caller (business.html) and for pages that
+       mutate the cart without going through a persist helper. Prefer
+       dispatching sokoni:cart-changed. */
     window.skNavRefresh = _refresh;
 
     /* ── Register with Layout Manager so it knows the header height ── */
