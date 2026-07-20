@@ -859,3 +859,7 @@ exports.subSendRenewalReminders = onSchedule(
     logger.info('[sub] Renewal reminders sent', { seven, one });
   }
 );
+
+/* Exported so payment-intents.js derives prices from THIS catalogue rather
+   than growing a second copy. One price, one source. */
+exports.PLANS = PLANS;

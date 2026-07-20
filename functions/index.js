@@ -8798,6 +8798,9 @@ exports.getAdminRevenueByHub      = commission.getAdminRevenueByHub;
 const subBilling = require('./sub-billing');
 
 exports.subGetPlans               = subBilling.subGetPlans;
+/* Server-authoritative commercial values — the source of truth that
+   initiateSTKPush enforces against. See functions/payment-intents.js. */
+exports.createPaymentIntent       = require("./payment-intents").createPaymentIntent;
 exports.subGetStatus              = subBilling.subGetStatus;
 exports.subActivate               = subBilling.subActivate;
 exports.subCancel                 = subBilling.subCancel;
