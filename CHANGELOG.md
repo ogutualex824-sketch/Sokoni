@@ -1,4 +1,54 @@
-﻿## [2026-07-19] — Removed the Report-Only CSP header: 92% less console noise, zero security change
+﻿## [2026-07-20] — 29 of 45 booking-domain Cloud Functions were dead on arrival
+
+### Root cause
+
+Commit  (2026-07-11, "Booking domain consolidation — 45 onCall → 1 bookingDispatch")
+renamed every handler's parameter from  to  in the signature, but did not rename
+the references inside the bodies.  was converted correctly.  and
+ were not.
+
+Each of those 29 handlers threw  on its **first
+statement** — before the auth check, before validation, before touching Firestore.
+
+### Why nobody noticed for nine days
+
+The read path never calls these functions. ,  and
+ read  directly from Firestore, so "Open Now" badges
+kept rendering from whatever the documents already held. **Only the write path was broken — and a
+subsystem nothing can write to still looks alive from the outside.**
+
+### Affected
+
+| File | Handlers | Examples |
+|---|---|---|
+|  | 12 | , , , ,  |
+|  | 17 | all  operations — create, book, cancel, check-in, calendar, stats |
+
+### Fix
+
+The parameter name, not the bodies: 29 lines, one per handler, kept minimal so the diff is
+auditable.  () is an  handler where
+ is correct and was deliberately left alone.
+
+### Verification
+
+- All 45 handlers invoked in-process: **ReferenceError count 0** (was 29).
+- Both files pass .
+- Dispatcher still merges 45 ops, no name collisions.
+
+### Not covered
+
+Deployment state is unverified —  is unavailable in this environment. If
+ is live, these 29 ops have been failing in production since 2026-07-11.
+
+### Security / breaking changes
+
+None. No rules, no schema, no API shape changed. Handlers that never executed now execute their
+existing auth and validation logic.
+
+---
+
+## [2026-07-19] — Removed the Report-Only CSP header: 92% less console noise, zero security change
 
 ### Root cause
 
