@@ -25,6 +25,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { PLANS } = require('./sub-billing');
+const timeline = require('./payment-timeline');
 
 const REGION = 'us-central1';
 const _OPTS = { region: REGION, timeoutSeconds: 20, memory: '256MiB', enforceAppCheck: true };
@@ -142,6 +143,9 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
 
   /* create(), not set(): a minted ref must never overwrite an existing intent. */
   await db().collection('paymentIntents').doc(ref).create(intent);
+
+  /* First stage of the timeline. Every later stage joins on this ref. */
+  timeline.mark(ref, 'intent_created', { uid, planId, cycle, amount: amountKES });
 
   logger.info('[intent] created', {
     ref, uid, planId, cycle, amount: amountKES, currency: 'KES',

@@ -3431,6 +3431,18 @@ exports.darajaSTKCallback = onRequest(
          is idempotent on `ref` and swallows its own errors into
          financialEngineFailures, so a retry is harmless and a failure is
          queued for reconciliation rather than surfaced to the caller. */
+      /* Timeline: the provider confirmed and the customer authorised. */
+      try {
+        const _tl = require("./payment-timeline");
+        const _tlRef = payData.orderId || checkoutId;
+        if (resultCode === 0) {
+          _tl.mark(_tlRef, "customer_authorized", { mpesaCode: mpesaCode || null, paidAmount: paidAmount || null });
+          _tl.mark(_tlRef, "payment_reconciled", { status: newStatus });
+        } else {
+          _tl.fail(_tlRef, "provider_result_" + resultCode + ": " + String(resultDesc || "").slice(0, 120));
+        }
+      } catch (_tlErr) { /* observability must never fail a payment */ }
+
       if (resultCode === 0) {
         try {
           const _fin = require("./financial-engine");

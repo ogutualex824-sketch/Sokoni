@@ -34,6 +34,7 @@
  */
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const timeline = require('./payment-timeline');
 
 const db = () => admin.firestore();
 const FV = () => admin.firestore.FieldValue;
@@ -219,6 +220,8 @@ async function recordConfirmedPayment(p) {
 
     await batch.commit();
 
+    timeline.mark(ref, 'financial_records_written', { invoiceNo, receiptNo, gross, vat });
+
     logger.info('[fin] recorded', {
       ref, invoiceNo, receiptNo, gross, vat, source: common.source,
     });
@@ -228,6 +231,7 @@ async function recordConfirmedPayment(p) {
     /* Money has already moved. Paperwork failure must never surface as a
        payment failure, so it is queued for reconciliation instead. */
     logger.error('[fin] FAILED to record confirmed payment', { ref, err: e && e.message });
+    timeline.fail(ref, 'financial_records_failed: ' + ((e && e.message) || 'unknown'));
     try {
       await db().collection('financialEngineFailures').doc(ref).set({
         ref, amountKES: gross, uid: p.uid || null, source: p.source || null,
