@@ -263,7 +263,30 @@
         }
 
       }, function (err) {
-        console.warn('[SokoniWorkspace] onSnapshot error:', err.message);
+        /* This used to be a bare console.warn, so a permission-denied read
+           looked identical to "this person has no jobs" — the business
+           switcher rendered empty and nothing said why. A denied read is a
+           configuration fault, not an empty result, and must not be
+           indistinguishable from one. */
+        if (err && err.code === 'permission-denied') {
+          console.error(
+            '[SokoniWorkspace] DENIED reading workspaceMemberships. The business ' +
+            'switcher will be empty. This is a Firestore rules problem, not an ' +
+            'absence of memberships.\n' +
+            '  uid: ' + uid + '\n' +
+            '  The query filters on uid and status; the rule must allow a read ' +
+            'where resource.data.uid == request.auth.uid.');
+        } else {
+          console.error('[SokoniWorkspace] workspaceMemberships subscription failed: ' +
+            (err && (err.code || err.message)));
+        }
+        /* Tell the UI the list is unknown rather than empty, so it can show a
+           problem state instead of silently implying no employment. */
+        try {
+          window.dispatchEvent(new CustomEvent('sokoni:workspaces-unavailable', {
+            detail: { reason: (err && err.code) || 'unknown' }
+          }));
+        } catch (_) {}
       });
 
     } catch (e) {

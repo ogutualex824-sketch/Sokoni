@@ -291,6 +291,29 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* Workspace memberships — a person's employment records.
+
+       There was no rule at all, so the collection defaulted to deny. That is
+       safe but it silently broke the workforce client: sokoni-workspace.js
+       subscribes to this collection to build the business switcher, and its
+       onSnapshot error handler only console.warn'd, so the failure surfaced as
+       an empty workspace list rather than an error.
+
+       A member may read ONLY documents that name them. The client query
+       already filters on uid, so it is satisfiable; a query without that
+       filter is rejected rather than silently truncated, which is what stops
+       anyone enumerating another organisation's staff.
+
+       No client write of any kind. Membership, role and permissions are set by
+       workforce-identity's Cloud Functions through the Admin SDK, which
+       bypasses these rules. Allowing a client write here would let a member
+       grant themselves capabilities — the escalation this collection exists to
+       prevent. */
+    match /workspaceMemberships/{membershipId} {
+      allow read:   if isAuthed() && resource.data.uid == request.auth.uid;
+      allow create, update, delete: if false;
+    }
+
     match /orders/{orderId} {
       allow create: if claimsOwner()
                     && validOrderStatus()
