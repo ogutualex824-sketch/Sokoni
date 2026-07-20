@@ -1159,9 +1159,30 @@ const _vendorAsStore = (id, data) => TRANSFORMERS.sellers(id, {
 ════════════════════════════════════════════════════════════════════════════ */
 
 const COLLECTION_INDEX_MAP = {
-  /* ── Products ── */
-  products:    { index: 'products_index',   transformer: TRANSFORMERS.products,    globalSearch: true  },
-  foods:       { index: 'products_index',   transformer: TRANSFORMERS.products,    globalSearch: true  },
+  /* ── Products ──
+     WRITES MUST LAND WHERE THE SEARCH ACTUALLY READS.
+
+     This mapped products to `products_index`, but nothing that serves a user
+     query reads that index. The live search UI (search.html loads
+     sokoni-search-engine.js, which declares its indexes at :38) queries
+     `sokoni_products`, as do functions/search-service.js, the SEARCH_SYNC
+     registry at functions/search-sync.js:76, and the repair/backfill tooling
+     that resolves index names through that registry.
+
+     So every product written since this mapping was introduced was indexed into
+     an index no query touches. The record existed; nothing could retrieve it.
+
+     `sokoni_products` is canonical on the weight of consumers — it is also the
+     index whose ranking, synonyms and settings are configured, in
+     functions/algolia-admin.js. `products_index` survives only in
+     algolia-settings.js and the standalone setup/backfill scripts, which are
+     the ones now out of step.
+
+     EXISTING DOCUMENTS ARE NOT MOVED BY THIS CHANGE. Products already written
+     to products_index stay there and stay unreachable until a backfill runs
+     (algoliaBackfill, functions/index.js:7146). */
+  products:    { index: 'sokoni_products',  transformer: TRANSFORMERS.products,    globalSearch: true  },
+  foods:       { index: 'sokoni_products',  transformer: TRANSFORMERS.products,    globalSearch: true  },
 
   /* ── Stores / Sellers ── */
   sellers:     { index: 'stores_index',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },

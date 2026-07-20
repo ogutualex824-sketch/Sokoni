@@ -687,7 +687,23 @@ async function addProduct(){
                 submittedAt:  Date.now(),
                 status:       "pending"
             } : null,
-            verificationStatus: VERIFY_CATS[productCategory] ? "pending" : "none"
+            verificationStatus: VERIFY_CATS[productCategory] ? "pending" : "none",
+
+            /* PUBLICATION STATE — without this the product is invisible.
+               Every retrieval path filters on a top-level `status`:
+                 sokoni-search-engine.js:1514   where('status','==','active')
+                 functions/search-service.js:1171  same, server-side
+                 functions/search-service.js:257   Typesense 'status:=active'
+               A Firestore equality filter does not match documents where the
+               field is ABSENT, so a product without it is excluded from every
+               one of them — it is not ranked low, it is not returned at all.
+
+               Note this is distinct from `ownership.status` above, which tracks
+               proof-of-ownership review for restricted categories, and from
+               `verificationStatus`. Neither is read by search. The name
+               collision is why the gap was easy to miss: the document looked
+               like it already carried a status. */
+            status: "active"
         };
 
         let sellerProducts;
