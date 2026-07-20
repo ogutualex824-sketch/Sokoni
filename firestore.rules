@@ -102,6 +102,31 @@ service cloud.firestore {
              && request.resource.data[field] > 0;
     }
 
+    /* Payment state is server-owned.
+
+       A client could previously create orders/{anyId} with status "paid" and
+       paymentVerified true — claimsOwner() checks only that uid matches, and
+       validOrderStatus() whitelists "paid". onNewOrderCreated gates seller
+       fulfilment on exactly those two fields, so a buyer could mint a paid
+       order and have a merchant ship against it without any payment.
+
+       Clients may now only OPEN an order. Every field that asserts money
+       moved, stock moved, or fulfilment may proceed is written exclusively by
+       the payment callback via the Admin SDK, which bypasses these rules.
+
+       This is create-only on purpose: the seller and driver update clauses
+       below still use validOrderStatus() for their legitimate transitions,
+       and are unchanged. */
+    function clientOrderInit() {
+      return (!request.resource.data.keys().hasAny(['status'])
+              || request.resource.data.status in ['pending', 'pending_payment', 'draft'])
+             && !request.resource.data.keys().hasAny([
+                  'paymentVerified', 'paidAt', 'paidAmount', 'paidPhone', 'mpesaCode',
+                  'settlementStatus', 'escrow', 'escrowStatus', 'payoutStatus',
+                  'receiptGenerated', 'inventoryApplied', 'fulfilmentStatus'
+                ]);
+    }
+
     function validOrderStatus() {
       return !request.resource.data.keys().hasAny(['status'])
              || request.resource.data.status in [
@@ -268,7 +293,8 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow create: if claimsOwner()
-                    && validOrderStatus();
+                    && validOrderStatus()
+                    && clientOrderInit();
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid              == request.auth.uid)
                     || (isAuthed() && resource.data.userId           == request.auth.uid)

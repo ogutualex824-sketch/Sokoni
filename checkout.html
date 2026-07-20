@@ -2484,8 +2484,14 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
     /* A provider said the money moved, or it did not. Nothing in between, and never
        the client's opinion. Firestore rules and the seller fulfilment view should
        both treat anything other than "paid" as DO NOT SHIP. */
-    status: _paid ? "paid" : "pending_payment",
-    paymentVerified: _paid,
+    /* Always pending_payment. The client no longer asserts payment state at
+       all — Firestore rules reject the key, not merely the value, and the
+       payment callback sets status/paymentVerified/paidAt server-side via the
+       Admin SDK once the provider has actually confirmed the money.
+
+       _paid is still computed above and still drives local UI (the success
+       overlay, the receipt render). It just no longer reaches Firestore. */
+    status: "pending_payment",
     location: window.deliveryLocation || null,
     serverVerified: !!serverOrderId,
     verificationToken: verificationToken || null,
@@ -2513,12 +2519,17 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
           {
             ...newOrder,
             createdAt:     serverTimestamp(),
-            /* Escrow holds MONEY, not intent. An unverified order has taken nothing, so
-               held is 0 — claiming otherwise would inflate the escrow ledger with funds
-               that do not exist and corrupt settlement. held is set when payment is
-               verified, never when it is merely hoped for. */
-            escrow:        { held: _paid ? total : 0, subtotal, deliveryFee, promoDiscount, released: 0, refunded: 0 },
-            statusHistory: [{ status: _paid ? "paid" : "pending_payment", at: Date.now(), by: _uid }],
+            /* Escrow holds MONEY, not intent, and it is no longer written from
+               here at all — the key itself is rejected by rules, because a
+               client that can set escrow.held can inflate the settlement
+               ledger with funds that never existed. The payment callback opens
+               escrow when the provider confirms the money.
+
+               The pricing breakdown stays: it is what the buyer was quoted,
+               it is useful for dispute evidence, and none of it asserts that
+               payment occurred. */
+            pricing:       { subtotal, deliveryFee, promoDiscount, total },
+            statusHistory: [{ status: "pending_payment", at: Date.now(), by: _uid }],
           },
           { merge: true }
         );
