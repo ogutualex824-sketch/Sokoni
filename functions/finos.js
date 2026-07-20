@@ -293,7 +293,15 @@ exports.processRefund = onCall(
           description: `Refund clawback for order ${orderId}`,
           orderId, type: 'refund_deduction', allowNegative: true,
         });
-        db.collection('wallets').doc(sellerId).update({
+        /* txn.update, not db...update. This previously wrote through `db`,
+           which put it OUTSIDE the transaction it sits inside: Firestore
+           retries a contended transaction callback, so each retry incremented
+           again, and an aborted transaction rolled back the debit on line 292
+           while leaving this increment applied. lifetimeRefunds is a display
+           statistic (one reader: commission.js:410 -> seller-earnings.html),
+           so the exposure was a wrong number on a dashboard rather than
+           spendable balance — but the write is now atomic with the debit. */
+        txn.update(db.collection('wallets').doc(sellerId), {
           lifetimeRefunds: admin.firestore.FieldValue.increment(sellerClawback),
         });
       });
