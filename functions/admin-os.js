@@ -1,6 +1,6 @@
 ﻿'use strict';
 
-const { onCall } = require('firebase-functions/v2/https');
+const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 const { getAuth } = require('firebase-admin/auth');
 
@@ -786,3 +786,105 @@ exports.adminGetAuditLogs = onCall({ region: 'us-central1', maxInstances: 10, en
   const snap = await q.get().catch(() => ({ docs: [] }));
   return { logs: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
 });
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Featured Shops — server-authoritative visibility (P4)
+
+   WHY A DEDICATED COLLECTION. The pre-existing "featured shop" mechanism
+   (sokoni-spotlight.js) queried `shopSettings where featuredOnHome==true`, but
+   shopSettings is per-owner readable ONLY and holds live M-Pesa/Daraja secrets
+   (darajaConsumerSecret, darajaPassKey). An anonymous homepage cannot read it,
+   and it must never be widened. `users/{uid}` is likewise self/admin-only (PII).
+   So featured state lives in `featuredShops/{merchantUid}` — a SECRETS-FREE
+   projection: public-readable only while actively featured (enforced in rules),
+   admin-writable only. This is infrastructure; no reader/UI is changed here. The
+   catalogue-convergence step will repoint sokoni-spotlight.js at this collection.
+
+   These handlers register in the `_h` registry only (no standalone onCall), so
+   they add NO new deployed function — they ride the already-invokable
+   adminOsDispatch. Call as adminOsDispatch({ op:'adminSetFeaturedShop', ... }).
+
+   NB: KASS SHOP is featured through this identical path (adminSetFeaturedShop
+   with its merchantUid) — never hardcoded, never special-cased.
+──────────────────────────────────────────────────────────────────────────── */
+
+/* Only these display fields are ever copied into the public projection. A strict
+   allow-list guarantees no shopSettings secret (daraja*) can leak into a
+   world-readable doc, regardless of what else the source docs carry. */
+const _FEATURED_SAFE_FIELDS = ['shopName', 'logo', 'logoUrl', 'category',
+  'categoryLabel', 'location', 'rating', 'totalSales', 'handle', 'shopHandle', 'storeUrl'];
+
+function _buildShopProjection(userData, settingsData) {
+  const src = Object.assign({}, userData || {}, settingsData || {});   // settings wins for display
+  const out = {};
+  for (const k of _FEATURED_SAFE_FIELDS) {
+    if (src[k] !== undefined && src[k] !== null) out[k] = src[k];
+  }
+  // Normalise the two logo spellings and business-name fallbacks into stable keys.
+  out.shopName = out.shopName || src.businessName || src.name || 'SOKONI Shop';
+  out.logo     = out.logo || out.logoUrl || src.photoURL || '';
+  delete out.logoUrl;
+  return out;
+}
+
+exports._h.adminSetFeaturedShop = async (req) => {
+  _requireAdmin(req);
+  const { merchantUid, featured = true, priority = 0, untilMs = null, reason = '' } = req.data || {};
+  if (!merchantUid || typeof merchantUid !== 'string') {
+    throw new HttpsError('invalid-argument', 'merchantUid is required');
+  }
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+
+  // Reuse existing records — confirm the merchant exists; never invent one.
+  const userSnap = await db.collection('users').doc(merchantUid).get();
+  if (!userSnap.exists) throw new HttpsError('not-found', 'No user record for that merchantUid');
+  const settingsSnap = await db.collection('shopSettings').doc(merchantUid).get().catch(() => null);
+
+  const projection = _buildShopProjection(userSnap.data(), settingsSnap && settingsSnap.exists ? settingsSnap.data() : null);
+  const until = (untilMs && Number(untilMs) > 0) ? Timestamp.fromMillis(Number(untilMs)) : null;
+
+  const doc = Object.assign({}, projection, {
+    merchantUid,
+    featuredOnHome: featured === true,
+    featuredPriority: Number(priority) || 0,
+    featuredUntil: until,
+    featuredReason: String(reason || '').slice(0, 500),
+    featuredBy: req.auth.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  // Preserve the original featuredAt across re-features; set it on first feature.
+  const existing = await db.collection('featuredShops').doc(merchantUid).get().catch(() => null);
+  if (!existing || !existing.exists) doc.featuredAt = FieldValue.serverTimestamp();
+
+  await db.collection('featuredShops').doc(merchantUid).set(doc, { merge: true });
+
+  // Audit trail, consistent with adminGetAuditLogs (reads adminAudit).
+  await db.collection('adminAudit').add({
+    action: featured ? 'featured_shop_set' : 'featured_shop_cleared',
+    merchantUid, priority: doc.featuredPriority, reason: doc.featuredReason,
+    actor: req.auth.uid, createdAt: FieldValue.serverTimestamp(),
+  }).catch(() => {});
+
+  return { ok: true, merchantUid, featuredOnHome: doc.featuredOnHome, projection };
+};
+
+exports._h.adminListFeaturedShops = async (req) => {
+  _requireAdmin(req);
+  const { activeOnly = false, limit: lim } = req.data || {};
+  const db = getFirestore();
+  let q = db.collection('featuredShops');
+  if (activeOnly) q = q.where('featuredOnHome', '==', true);
+  q = q.orderBy('featuredPriority', 'desc').limit(Math.min(Number(lim) || 100, 500));
+  const snap = await q.get().catch(() => ({ docs: [] }));
+  return {
+    shops: snap.docs.map((d) => {
+      const x = d.data();
+      return Object.assign({}, x, {
+        featuredUntil: x.featuredUntil?.toDate?.()?.toISOString() || null,
+        featuredAt: x.featuredAt?.toDate?.()?.toISOString() || null,
+        updatedAt: x.updatedAt?.toDate?.()?.toISOString() || null,
+      });
+    }),
+  };
+};

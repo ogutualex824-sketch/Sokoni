@@ -1670,6 +1670,20 @@
       ]
     },
     {
+      "collectionGroup": "featuredShops",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "featuredOnHome",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "featuredPriority",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "feedback",
       "queryScope": "COLLECTION",
       "fields": [

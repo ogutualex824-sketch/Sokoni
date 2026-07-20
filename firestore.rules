@@ -1478,6 +1478,24 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    /* Featured Shops (P4) — server-authoritative shop spotlight.
+       This collection holds ONLY a secrets-free display projection written by
+       adminSetFeaturedShop; the sensitive source (shopSettings, users) stays
+       locked down. Public read is allowed ONLY while a shop is actively featured
+       and not expired — so an anonymous homepage sees exactly the live spotlight
+       and nothing dormant. featuredUntil == null means indefinite. Admin-only
+       write; the CF uses the admin SDK, this rule guards direct client writes. */
+    match /featuredShops/{merchantUid} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && merchantUid == request.auth.uid)
+                   || (resource.data.featuredOnHome == true
+                       && (resource.data.featuredUntil == null
+                           || resource.data.featuredUntil > request.time));
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
     match /invoices/{invoiceId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerUid == request.auth.uid);
