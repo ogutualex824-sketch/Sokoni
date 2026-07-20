@@ -420,9 +420,35 @@ let _legalOk=false;
 const W=(()=>{
   let _r=null,_s=0,_fl=[],_bill='monthly',_pid=null,_t=null,_draft={};
   function start(r){_r=r;_s=0;_fl=FLOWS[r]||_gen;_draft={};_pid=null;_t=null;_legalOk=false;_loadDraft();showPh('phC');_q('progArea').classList.add('vis');_rnd()}
-  async function _loadDraft(){try{const d=await _sdk.getDraft(_r);if(d&&!d.completed){_draft=d.stepData||{};_s=d.currentStep||0;_t=_draft.tier||null;_rnd()}}catch(e){}}
+  /* currentStep comes back from Firestore and was applied unclamped. A draft saved when
+     the flow was longer — or under a flow definition that has since changed — put _s past
+     the end of _fl, and the merchant returned to a wizard whose Continue button did
+     nothing. _clampStep() (called inside _rnd) now pulls it back into range. */
+  async function _loadDraft(){try{const d=await _sdk.getDraft(_r);if(d&&!d.completed){_draft=d.stepData||{};_s=d.currentStep||0;_t=_draft.tier||null;_clampStep();_rnd()}}catch(e){}}
+  /* Keep _s inside the flow. Three call sites moved it without bounds-checking —
+     skip() (unguarded _s++), _loadDraft() (restores currentStep from Firestore) and
+     next() — and BOTH _rnd() and next() used to bail out silently on an out-of-range
+     index. The combination bricked the wizard: _rnd() returned before repainting so the
+     screen froze on the previous step with Continue still on it, and next() returned
+     before doing anything, so every tap did nothing at all — no error, no toast, no
+     console output. Reproduced by skipping once past the final step. */
+  function _clampStep(){
+    if(!_fl.length) return false;
+    const max=_fl.length-1;
+    if(_s>max){_s=max;return true}
+    if(_s<0){_s=0;return true}
+    return false;
+  }
   function _rnd(){
-    const s=_fl[_s];if(!s)return;
+    _clampStep();
+    const s=_fl[_s];
+    if(!s){
+      /* Only reachable with an empty flow, i.e. _rnd() before start(). Say so rather
+         than leaving a dead screen. */
+      const c=_q('sContent');
+      if(c) c.innerHTML='<div class="st-h">Something went wrong loading this step. Please reload and try again.</div>';
+      return;
+    }
     _q('sCur').textContent=_s+1;_q('sTot').textContent=_fl.length;_q('sTitle').textContent=s.t;
     _q('pFill').style.width=`${((_s+1)/_fl.length)*100}%`;
     _q('bSkip').style.display=s.skip?'inline-block':'none';
@@ -433,7 +459,18 @@ const W=(()=>{
     document.documentElement.scrollTop=0;
   }
   async function next(){
-    const s=_fl[_s];if(!s)return;
+    /* Never return silently from a tap. If the index drifted out of range, recover to a
+       real step and repaint rather than leaving the merchant tapping a dead button. */
+    if(!_fl.length){toast('Onboarding is still loading — please wait a moment and try again.','err');return}
+    if(_clampStep()){_rnd();toast('That step was no longer available, so we brought you back to the last one.','err');return}
+    const s=_fl[_s];
+    if(!s){toast('We could not open that step. Please reload and try again.','err');return}
+    /* _sdk is only constructed once onAuthStateChanged reports a user, so a null here
+       means the session went away — typically an expired token during a long onboarding.
+       Without this the very next line throws "null is not an object (evaluating
+       '_sdk.saveDraft')" straight into the toast: technically a message, but internal
+       detail the merchant cannot act on. */
+    if(!_sdk){toast('Your session has expired. Please sign in again to continue — your progress is saved.','err');return}
     if(s.f==='rLegalGate'&&!_legalOk){toast('Please review and accept the legal agreements to continue.','err');return}
     const data=_collect();if(data===null)return;
     showLoad('Saving…');
@@ -443,7 +480,17 @@ const W=(()=>{
     }catch(e){hideLoad();toast(e.message,'err')}
   }
   function back(){if(_s===0){showPh('phB');_q('progArea').classList.remove('vis');return}_s--;_rnd()}
-  function skip(){_draft['s'+_s]={};_s++;_rnd()}
+  /* skip() incremented _s with no bounds check and, unlike next(), no s.fin guard — so
+     skipping the FINAL step pushed _s past the end and permanently bricked the wizard.
+     The last step publishes; it is not skippable. */
+  function skip(){
+    const s=_fl[_s];
+    if(!s){_rnd();return}
+    if(s.fin){toast('This is the last step — tap Publish to finish.','err');return}
+    _draft['s'+_s]={};
+    if(_s<_fl.length-1)_s++;
+    _rnd();
+  }
   async function _activate(){
     showLoad('Activating your profile…');
     try{
