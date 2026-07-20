@@ -1,0 +1,196 @@
+{
+  "schemaVersion": "2.0.0",
+  "purpose": "Provenance for every Architecture Guardian rule. A rule with no incident record is rejected at load — see scripts/architecture-guardian.js. This file is the evidence, the guardian is the enforcement.",
+  "principle": "Rules must never exist because they sound like good practice. Every rule below traces to a defect that actually occurred in this repository, with the commit that fixed it.",
+
+  "precisionPolicy": {
+    "rationale": "A rule that cries wolf gets muted, and a muted rule protects nothing. Every rule records what its first run reported versus what survived scrutiny. A rule whose precision falls below 0.5 is marked NOISY and must be refined before it may block a deploy.",
+    "noisyThreshold": 0.5
+  },
+
+  "rules": {
+    "RULE-001": {
+      "title": "No hardcoded identity in an authorisation comparison",
+      "severity": "CRITICAL",
+      "incidentId": "INC-2026-07-20-A",
+      "date": "2026-07-20",
+      "rootCause": "bootstrapAdminClaim compared request.auth.token.email against an address hardcoded in functions/index.js. Phone sign-in carries no email claim, so the comparison failed for every phone-authenticated user regardless of which address was configured.",
+      "impact": "The platform owner could not become an administrator. No moderation, refunds, user management or incident response was possible on the live platform.",
+      "evidence": "functions/index.js:121 (pre-fix)",
+      "resolution": "8f38864 — authorisation moved to a UID allowlist in _systemConfig/bootstrap, seeded out of band",
+      "regressionTest": "scripts/test-admin-claim.js",
+      "risk": "CRITICAL",
+      "expectedLifetime": "permanent — an identity in source is never a valid authorisation gate",
+      "precision": {
+        "firstRunFindings": 4,
+        "survivedScrutiny": 0,
+        "refinedTo": "a COMPARISON against an identity from the auth token, not the mere presence of one",
+        "falsePositivesWere": "PLATFORM_ADMIN_EMAIL (a notification recipient), a console help string, two adminWA WhatsApp contact numbers",
+        "currentPrecision": null,
+        "note": "Precision is unmeasured until the rule fires again on real code. Zero findings is not evidence of accuracy."
+      }
+    },
+
+    "RULE-002": {
+      "title": "Search write index equals read index",
+      "severity": "CRITICAL",
+      "incidentId": "INC-2026-07-20-B",
+      "date": "2026-07-20",
+      "rootCause": "functions/algolia-indexer.js mapped products to `products_index`; the live search engine, the server search service and the sync registry all read `sokoni_products`.",
+      "impact": "Every product indexed since the mapping was introduced was written to an index no query touches. Merchants uploaded goods that no customer could find. No error was raised at any layer.",
+      "evidence": "functions/algolia-indexer.js:1163 vs functions/search-sync.js:76",
+      "resolution": "a5201c0 — write target changed to sokoni_products",
+      "regressionTest": "scripts/test-search-pipeline.js",
+      "risk": "CRITICAL",
+      "expectedLifetime": "permanent — a write/read target divergence is silent by construction",
+      "precision": { "firstRunFindings": 0, "survivedScrutiny": 0, "currentPrecision": null }
+    },
+
+    "RULE-003": {
+      "title": "No authorisation guard on a claim nothing sets",
+      "severity": "CRITICAL",
+      "incidentId": "INC-2026-07-20-C",
+      "date": "2026-07-20",
+      "rootCause": "Eleven modules guarded on token.isAdmin / token.isSuperAdmin. The only admin claims this codebase writes are `admin` and role-keyed entries; no isAdmin claim is set anywhere.",
+      "impact": "24 guards evaluated false for every caller including real administrators, returning a correct-looking permission-denied. The affected Cloud Functions were inaccessible to everyone.",
+      "evidence": "functions/ade.js:33, business-metrics.js:16, etims.js:944, hub-etims.js:432 and 20 others",
+      "resolution": "ab1dd7e — single canonical helper functions/admin-claim.js",
+      "regressionTest": "scripts/test-admin-claim.js",
+      "risk": "CRITICAL",
+      "expectedLifetime": "permanent",
+      "precision": {
+        "firstRunFindings": 5,
+        "survivedScrutiny": 0,
+        "refinedTo": "privilege-denoting claim names only, with hedging sought in a surrounding window rather than one line",
+        "falsePositivesWere": "isPartial (a queue flag), isSeller, and post-launch-monitor.js which hedges on t.admin three lines below inside a multi-line boolean",
+        "currentPrecision": null
+      }
+    },
+
+    "RULE-004": {
+      "title": "Product writes carry every field the read path filters on",
+      "severity": "CRITICAL",
+      "incidentId": "INC-2026-07-20-D",
+      "date": "2026-07-20",
+      "rootCause": "seller.js wrote ownership.status and verificationStatus but no top-level `status`, while every retrieval path filters where('status','==','active'). A Firestore equality filter never matches a document where the field is absent.",
+      "impact": "Uploaded products were excluded from search before ranking. Compounded INC-2026-07-20-B; either alone made a product invisible.",
+      "evidence": "seller.js:656-690 vs sokoni-search-engine.js:1514, functions/search-service.js:1171",
+      "resolution": "a5201c0 — status:'active' added to the upload payload",
+      "regressionTest": "scripts/test-search-pipeline.js",
+      "risk": "CRITICAL",
+      "expectedLifetime": "until the product schema is centrally validated at write time",
+      "precision": { "firstRunFindings": 0, "survivedScrutiny": 0, "currentPrecision": null }
+    },
+
+    "RULE-005": {
+      "title": "Navigation targets resolve to a real page",
+      "severity": "HIGH",
+      "incidentId": "INC-2026-07-20-E",
+      "date": "2026-07-20",
+      "rootCause": "Nothing could address a section of seller.html — the router hardcoded 'overview' regardless of URL — so other pages linked to filenames they wished existed.",
+      "impact": "18 dead links, including three of the four items in seller-earnings.html's bottom nav, and seven Profile controls.",
+      "evidence": "seller-earnings.html:217-219, profile.html:1875",
+      "resolution": "9b3498b — 24 links repaired, hash router added to seller.js",
+      "regressionTest": "scripts/test-nav-routes.js",
+      "risk": "HIGH",
+      "expectedLifetime": "permanent",
+      "precision": {
+        "firstRunFindings": 77,
+        "survivedScrutiny": 18,
+        "refinedTo": "runtime-built hrefs (template literals, string concatenation) treated as unresolvable rather than dead",
+        "falsePositivesWere": "${BASE}, '+r.href+' and similar placeholders inside JS that emits markup",
+        "currentPrecision": 0.23,
+        "note": "0.23 at first run. After refinement the rule reports 0 on a repository where all 18 are fixed; precision will be re-measured when it next fires."
+      }
+    },
+
+    "RULE-006": {
+      "title": "Every page is registered in navigation-registry.json",
+      "severity": "MEDIUM",
+      "incidentId": "INC-2026-07-20-F",
+      "date": "2026-07-20",
+      "rootCause": "Explore, breadcrumbs, global search and KASS routing all derive from the registry. A page absent from it is invisible to every one of them.",
+      "impact": "125 pages unreachable from anywhere; 9 with no exit at all.",
+      "evidence": "scripts/nav-audit.js output, 2026-07-20",
+      "resolution": "46dde96 — navigation-registry.json generated for all 323 pages",
+      "regressionTest": "scripts/certify-nav-registry.js",
+      "risk": "MEDIUM",
+      "expectedLifetime": "permanent",
+      "precision": { "firstRunFindings": 0, "survivedScrutiny": 0, "currentPrecision": null }
+    },
+
+    "RULE-007": {
+      "title": "A catch must not blame the network without reading the error",
+      "severity": "HIGH",
+      "incidentId": "INC-2026-07-20-G",
+      "date": "2026-07-20",
+      "rootCause": "pos-setup.html caught bootstrapDevice's failure, discarded the error object entirely, and printed 'check your connection' — the one cause it could not be, since the application had just loaded over that connection.",
+      "impact": "POS provisioning failures were undiagnosable from the device. Identifying a permission-denied required a full trace through the provisioning pipeline.",
+      "evidence": "pos-setup.html:2711 (pre-fix)",
+      "resolution": "74138b7 — _provDiagnose maps the error code to an actionable cause",
+      "regressionTest": "scripts/test-pos-provision-diag.js",
+      "risk": "HIGH",
+      "expectedLifetime": "permanent",
+      "precision": {
+        "firstRunFindings": 105,
+        "survivedScrutiny": 7,
+        "refinedTo": "only catches whose message blames the connection, rather than any catch that shows a message without reading the error",
+        "falsePositivesWere": "generic 'could not load, try again' messages, which are a fair thing to show",
+        "currentPrecision": 1.0,
+        "note": "All 7 survivors verified by reading the code they point at. Two are in pos-setup.html itself, in the business-loading path missed by the original fix."
+      }
+    },
+
+    "RULE-008": {
+      "title": "Page-entrance keyframes end at transform:none",
+      "severity": "MEDIUM",
+      "incidentId": "INC-2026-07-20-H",
+      "date": "2026-07-20",
+      "rootCause": "sk-page-in ended at translateY(0) with animation-fill-mode:both, leaving an identity matrix permanently. Any non-none transform makes an element the containing block for its position:fixed descendants.",
+      "impact": "banking.html's bottom nav sat at y=1157 on a 664px viewport — off-screen, unreachable, and indistinguishable from a nav whose buttons do not work. Two pages affected.",
+      "evidence": "sokoni-premium-v2.css:29, measured at iPhone 13 viewport",
+      "resolution": "3eb36bc — keyframes end at transform:none; animation removed from the two affected wrappers",
+      "regressionTest": "scripts/test-banking-hub.js",
+      "risk": "MEDIUM",
+      "expectedLifetime": "permanent — this is a CSS specification behaviour, not a browser bug",
+      "precision": { "firstRunFindings": 0, "survivedScrutiny": 0, "currentPrecision": null }
+    },
+
+    "RULE-009": {
+      "title": "No credentials inside the repository",
+      "severity": "CRITICAL",
+      "incidentId": "INC-PREVENTIVE-001",
+      "date": "2026-07-20",
+      "rootCause": "No incident. This is the single preventive rule in the set, admitted because the failure is irreversible: removing a committed key does not remove it from git history, and the key is a full-project credential.",
+      "impact": "None observed. functions/scripts/typesense-direct.js:10 documents a key path that once existed and has since been correctly deleted.",
+      "evidence": "policy — .gitignore:101-102",
+      "resolution": "n/a",
+      "regressionTest": "the rule itself",
+      "risk": "CRITICAL",
+      "expectedLifetime": "permanent",
+      "precision": { "firstRunFindings": 0, "survivedScrutiny": 0, "currentPrecision": null },
+      "policyException": "Admitted without an incident record because the cost of the first occurrence is unbounded and unrecoverable. Recorded explicitly so the exception is visible rather than silent."
+    },
+
+    "RULE-010": {
+      "title": "Repository is not ahead of its remote",
+      "severity": "CRITICAL",
+      "incidentId": "INC-2026-07-20-I",
+      "date": "2026-07-20",
+      "rootCause": "An entire engineering cycle of repairs was committed locally and never pushed.",
+      "impact": "212 commits existed only on one workstation while production ran the unrepaired code. A launch on that day would have shipped every defect the cycle had just fixed. This was the decisive finding of the launch readiness review.",
+      "evidence": "git status -sb: main...origin/main [ahead 212]",
+      "resolution": "unresolved — the gate blocks until the commits are pushed",
+      "regressionTest": "the rule itself",
+      "risk": "CRITICAL",
+      "expectedLifetime": "permanent",
+      "precision": { "firstRunFindings": 1, "survivedScrutiny": 1, "currentPrecision": 1.0 }
+    }
+  },
+
+  "notMeasured": [
+    "Runtime drift detection (repository vs deployment vs observed behaviour) requires an authenticated session against the live project. Not implemented rather than approximated.",
+    "Change impact / blast radius prediction requires a call graph this codebase does not expose. Not implemented rather than guessed.",
+    "Developer override tracking and average investigation time need a history of real usage. The precision figures above are the only measured data available."
+  ]
+}

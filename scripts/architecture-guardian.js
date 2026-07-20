@@ -29,13 +29,54 @@ const JSON_OUT = process.argv.includes('--json');
 const CRITICAL = 'CRITICAL', HIGH = 'HIGH', MEDIUM = 'MEDIUM';
 const findings = [];
 const results = [];
+const rejected = [];
+
+/* ── the compiler contract ───────────────────────────────────────────────────
+   A rule may only run if architecture.manifest.json holds an incident record
+   for it. This is the foundational principle made executable rather than
+   aspirational: without it, "every rule traces to a real incident" is a claim
+   in a comment that nothing checks, and the rule set silently fills with
+   plausible-sounding additions over time.
+
+   A rule without provenance is REJECTED, not merely warned about — and its
+   rejection is reported, so removing evidence is as visible as adding a rule. */
+let MANIFEST = { rules: {} };
+try {
+  MANIFEST = JSON.parse(fs.readFileSync('architecture.manifest.json', 'utf8'));
+} catch (e) {
+  console.error('\n  architecture.manifest.json is missing or unreadable — no rule can be trusted.');
+  console.error('  ' + e.message + '\n');
+  process.exit(2);
+}
+
+const REQUIRED_FIELDS = ['incidentId', 'date', 'rootCause', 'impact', 'evidence', 'risk'];
 
 function rule(id, severity, title, incident, fn) {
+  const prov = MANIFEST.rules[id];
+  if (!prov) {
+    rejected.push({ id, title, reason: 'no incident record in architecture.manifest.json' });
+    return;
+  }
+  const missing = REQUIRED_FIELDS.filter((k) => !prov[k]);
+  if (missing.length) {
+    rejected.push({ id, title, reason: 'incomplete provenance — missing ' + missing.join(', ') });
+    return;
+  }
+
   let violations = [];
   let error = null;
   try { violations = fn() || []; } catch (e) { error = e.message; }
-  results.push({ id, severity, title, incident, count: violations.length, error });
-  violations.forEach((v) => findings.push({ id, severity, title, ...v }));
+
+  /* A rule whose measured precision is below the manifest threshold may still
+     run and report, but must not block a deploy. Noise that halts delivery is
+     how a gate gets disabled wholesale. */
+  const p = prov.precision || {};
+  const noisy = typeof p.currentPrecision === 'number' &&
+                p.currentPrecision < (MANIFEST.precisionPolicy || {}).noisyThreshold;
+
+  results.push({ id, severity, title, incident, count: violations.length, error, noisy,
+    incidentId: prov.incidentId, precision: p.currentPrecision });
+  violations.forEach((v) => findings.push({ id, severity: noisy ? 'ADVISORY' : severity, title, ...v }));
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */
@@ -349,10 +390,54 @@ if (findings.length) {
   if (findings.length > 40) console.log('  … ' + (findings.length - 40) + ' more');
 }
 
+/* ── deployment certificate ──────────────────────────────────────────────────
+   A permanent, evidence-bearing record of what was true at deploy time. Its
+   value is retrospective: when something breaks in three months, the question
+   "did the gate know about this?" has a filed answer instead of a memory. */
+const certificate = {
+  generatedAt: new Date().toISOString(),
+  manifestVersion: MANIFEST.schemaVersion || 'unknown',
+  commit: (() => {
+    try { return execFileSync('git', ['rev-parse', '--short', 'HEAD'], { encoding: 'utf8' }).trim(); }
+    catch (_) { return 'unknown'; }
+  })(),
+  rulesEvaluated: results.length,
+  rulesRejected: rejected.length,
+  violations: { critical: crit, high, medium: med },
+  score,
+  gate: crit === 0 ? 'OPEN' : 'BLOCKED',
+  blockingRules: [...new Set(findings.filter((f) => f.severity === CRITICAL).map((f) => f.id))],
+  results: results.map((r) => ({ id: r.id, incidentId: r.incidentId, count: r.count, noisy: !!r.noisy })),
+  /* Named explicitly so the certificate cannot be read as a clean bill of
+     health for things it never examined. */
+  notCertified: MANIFEST.notMeasured || [],
+};
+
+if (rejected.length) {
+  console.log('\n' + '─'.repeat(80));
+  console.log('  RULES REJECTED — no evidence, so not run');
+  console.log('─'.repeat(80));
+  rejected.forEach((r) => console.log('  ' + r.id + '  ' + r.title + '\n        ' + r.reason));
+}
+
 console.log('\n' + '═'.repeat(80));
 console.log('  CRITICAL ' + crit + '  ·  HIGH ' + high + '  ·  MEDIUM ' + med);
+console.log('  rules evaluated ' + results.length + '  ·  rejected for lack of evidence ' + rejected.length);
 console.log('  ARCHITECTURE SCORE: ' + score + '/100');
 console.log('  DEPLOY GATE: ' + (crit === 0 ? 'OPEN' : 'BLOCKED — ' + crit + ' critical violation(s)'));
+if (certificate.notCertified.length) {
+  console.log('\n  NOT CERTIFIED (never examined — absence of findings is not evidence):');
+  certificate.notCertified.forEach((n) => console.log('    · ' + n.split('.')[0] + '.'));
+}
 console.log('═'.repeat(80) + '\n');
+
+try {
+  fs.mkdirSync('docs/certificates', { recursive: true });
+  const f = 'docs/certificates/' + certificate.commit + '.json';
+  fs.writeFileSync(f, JSON.stringify(certificate, null, 2));
+  console.log('  certificate: ' + f + '\n');
+} catch (e) {
+  console.log('  (certificate not written: ' + e.message + ')\n');
+}
 
 process.exit(GATE && crit > 0 ? 1 : 0);
