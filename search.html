@@ -664,20 +664,24 @@
 
 <!-- ===== FIREBASE + SEARCH LOGIC ===== -->
 <script type="module">
-import { initializeApp }  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, query, where, limit, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, query, where, limit, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-/* ── Firebase config ── */
-const FB = {
-  apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  authDomain: "auth.mysokoni.co.ke",
-  projectId:         "sokoni-aeb26",
-  storageBucket:     "sokoni-aeb26.firebasestorage.app",
-  messagingSenderId: "24799054989",
-  appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS",
-};
-const app = initializeApp(FB, "search-page");
-const db  = getFirestore(app);
+/* ── Firestore handle ──
+   This page used to call initializeApp(FB, "search-page") and read through that
+   private app. App Check is configured in exactly one place — firebase.js:111 —
+   and it attaches to the DEFAULT app, so a second app carries no attestation.
+   With App Check enforced on firestore.googleapis.com, every read from the
+   "search-page" app was rejected: one 403 on the shared channel failed all 14
+   collection queries at once, which surfaced as "Missing or insufficient
+   permissions" for `products` even though its rule is `allow read: if true`.
+   The home page never hit this because it does not create its own app.
+
+   firebase.js is already loaded by this page (line 10); ES modules are
+   singletons, so this import reuses that instance rather than adding a second.
+   Other pages that still spin up private apps (b2b-fee, bos-sync, ch-rt,
+   lh-lead, hs-write, th-read, revenue-dash, adm-flags, …) have the same latent
+   defect — tracked separately, not changed here. */
+import { db } from "./firebase.js";
 
 /* ── Tab definitions ── */
 const TABS = [
