@@ -26,9 +26,25 @@
 /* ══════════════════════════════════════════════════
    1.  KEYFRAME ANIMATIONS
 ══════════════════════════════════════════════════ */
+/* Ends at transform:none, not translateY(0).
+
+   The two render identically, but ANY non-none transform makes an element the
+   containing block for its position:fixed descendants. This animation runs with
+   fill-mode:both, so translateY(0) leaves an identity matrix behind forever —
+   and that silently converts a fixed child into one that scrolls away.
+
+   That is what put banking.html's bottom nav at y=1157 on a 664px viewport:
+   off-screen, unreachable, and indistinguishable from a nav whose buttons "do
+   not work". The rule at line ~89 already excludes .bottom-nav, but only as a
+   direct child of body; on banking.html and inventory.html it sits one div
+   deeper, so the WRAPPER was animated instead and became the containing block.
+
+   Fixing it here rather than restructuring those two pages: it removes the
+   whole class of bug for any fixed element nested under an animated wrapper,
+   and changes nothing visually. */
 @keyframes sk-page-in {
   from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 @keyframes sk-slide-up {
   from { opacity: 0; transform: translateY(20px); }
@@ -1521,3 +1537,31 @@ body.light-mode .testimonial-card{
     border-color:rgba(0,0,0,0.07);
 }
 /* END PREMIUM v3 GLOBAL */
+
+/* ══════════════════════════════════════════════════════════════
+   FIXED-POSITION RESCUE for wrappers that contain the bottom nav
+
+   The page-in animation at line ~105 excludes .bottom-nav, but only where it is
+   a direct child of <body> — true on 86 of 88 pages that have one. On
+   banking.html and inventory.html the nav sits one <div> deeper, so the WRAPPER
+   is animated instead and, with fill-mode:both, keeps a transform for the life
+   of the page. Any non-none transform makes an element the containing block for
+   its position:fixed descendants, so the nav stopped being fixed and scrolled
+   away: measured at y=1157 on a 664px viewport — off-screen, unreachable, and
+   indistinguishable from a nav whose buttons simply do not work.
+
+   Ending the keyframe at transform:none was tried first and is kept (it is
+   correct, and harmless), but WebKit still reports an identity matrix for a
+   filled animation, so it does not clear the containing block on its own.
+   Removing the animation from these two wrappers does.
+
+   Scoped to the two affected wrappers rather than applied broadly: every other
+   page keeps its entrance animation exactly as it was.
+══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  body > .bk-body,
+  body > .inv-body {
+    animation: none !important;
+    transform: none !important;
+  }
+}

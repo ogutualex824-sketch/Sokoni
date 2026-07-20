@@ -354,7 +354,11 @@
     'width:52px;height:52px;border-radius:50%;',
     'background:#0f0f0f;border:2px solid #71ff00;cursor:pointer;z-index:9999;',
     'display:flex;align-items:center;justify-content:center;overflow:visible;',
-    'box-shadow:0 4px 20px rgba(113,255,0,.3);transition:transform .2s,bottom .2s;}',
+    /* Neutral elevation, not a green halo. A 20px rgba(113,255,0,.3) glow around
+       a #0f0f0f button paints a soft green patch onto whatever is behind it,
+       which is the "floating green glow behind KASS AI". The button keeps its
+       green border, so the brand cue survives without bleeding into the page. */
+    'box-shadow:0 4px 18px rgba(0,0,0,.55);transition:transform .2s,bottom .2s;}',
     '#kassBtn:hover{transform:scale(1.08);}',
     '#kassBtn:focus-visible{outline:2px solid #71ff00;outline-offset:3px;}',
 

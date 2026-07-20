@@ -563,9 +563,13 @@ body {
 /* ═══════════════════════════════════════════════════════════════
    PAGE SHELL & ENTRANCE ANIMATION
 ═══════════════════════════════════════════════════════════════ */
+/* transform:none, not translateY(0) — see the matching note in
+   sokoni-premium-v2.css. Both files define a keyframe of this name, so leaving
+   one of them ending in an identity matrix would reintroduce the containing-
+   block bug wherever this copy happens to win the cascade. */
 @keyframes sk-page-in {
   from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  to   { opacity: 1; transform: none; }
 }
 .sk-page {
   animation: sk-page-in 0.35s cubic-bezier(0.34, 1.0, 0.64, 1) both;
