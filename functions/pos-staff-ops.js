@@ -3,6 +3,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const admin = require('firebase-admin');
+const { _assertBusinessPermission } = require('./workforce-identity');
 if (!admin.apps.length) admin.initializeApp();
 
 exports._h = {}; // handler registry — consumed by smartpos-dispatch.js
@@ -24,10 +25,27 @@ function _requireRole(auth, minRole) {
     throw new HttpsError('permission-denied', `Requires ${minRole} role`);
 }
 
-function _requireSeller(data) {
-  if (!data.sellerId || typeof data.sellerId !== 'string')
+/* PRIVILEGE ESCALATION FIX.
+
+   This took sellerId straight from req.data and returned it unverified. Every
+   handler below then operated on that business: opening shifts, clocking staff
+   in, setting commission rates, approving commissions. Any authenticated user
+   could pass another merchant's id and act as them.
+
+   Authorization now goes through workforce-identity's _assertBusinessPermission,
+   the canonical capability engine, rather than a second one grown here.
+
+   The uid === sellerId short-circuit covers a seller operating their own POS
+   without a Firestore read, and without depending on whether sellerId is a
+   businesses/{id} key — which is NOT uniform across this codebase. Staff go
+   through the membership check. */
+async function _requireSeller(auth, data) {
+  const sellerId = data && data.sellerId;
+  if (!sellerId || typeof sellerId !== 'string')
     throw new HttpsError('invalid-argument', 'sellerId is required');
-  return data.sellerId;
+  if (auth.uid === sellerId) return sellerId;
+  await _assertBusinessPermission(auth.uid, sellerId, 'pos');
+  return sellerId;
 }
 
 function _today() {
@@ -68,7 +86,7 @@ function _round2(n) {
 exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = auth.uid;
   const cashierName = data.cashierName || auth.token?.name || 'Unknown';
   const branchId = data.branchId || 'default';
@@ -129,7 +147,7 @@ exports.openShift = onCall(_CF, exports._h.openShift = async (req) => {
 exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = auth.uid;
   const closingCash = Number(data.closingCash ?? 0);
 
@@ -236,7 +254,7 @@ exports.closeShift = onCall(_CF, exports._h.closeShift = async (req) => {
 exports.getCurrentShift = onCall(_CF, exports._h.getCurrentShift = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = auth.uid;
 
   const snap = await db.collection('posShifts')
@@ -262,7 +280,7 @@ exports.getShiftHistory = onCall(_CF, exports._h.getShiftHistory = async (req) =
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
 
   let query = db.collection('posShifts')
     .where('sellerId', '==', sellerId);
@@ -299,7 +317,7 @@ exports.getShiftHistory = onCall(_CF, exports._h.getShiftHistory = async (req) =
 exports.clockIn = onCall(_CF, exports._h.clockIn = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = auth.uid;
   const cashierName = data.cashierName || auth.token?.name || 'Unknown';
   const today = _today();
@@ -360,7 +378,7 @@ exports.clockIn = onCall(_CF, exports._h.clockIn = async (req) => {
 exports.clockOut = onCall(_CF, exports._h.clockOut = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = auth.uid;
   const today = _today();
   const docId = `${sellerId}_${cashierUid}_${today}`;
@@ -403,7 +421,7 @@ exports.getAttendance = onCall(_CF, exports._h.getAttendance = async (req) => {
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
 
   let query = db.collection('posAttendance').where('sellerId', '==', sellerId);
   if (data.cashierUid) query = query.where('cashierUid', '==', data.cashierUid);
@@ -430,7 +448,7 @@ exports.getAttendanceSummary = onCall(_CF, exports._h.getAttendanceSummary = asy
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const period = data.period || _currentMonth();
 
   if (!/^\d{4}-\d{2}$/.test(period))
@@ -497,7 +515,7 @@ exports.setCommissionRate = onCall(_CF, exports._h.setCommissionRate = async (re
   const auth = _requireAuth(req);
   _requireRole(auth, 'owner');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const rate = Number(data.rate);
 
   if (isNaN(rate) || rate < 0 || rate > 100)
@@ -529,7 +547,7 @@ exports.getCommissionRate = onCall(_CF, exports._h.getCommissionRate = async (re
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = data.cashierUid || auth.uid;
 
   const specificDoc = await db.collection('posCommissionRates')
@@ -556,7 +574,7 @@ exports.calculateMonthlyCommission = onCall(_CF, exports._h.calculateMonthlyComm
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = data.cashierUid;
   const month = data.month || _currentMonth();
 
@@ -692,7 +710,7 @@ exports.getCommissionsSummary = onCall(_CF, exports._h.getCommissionsSummary = a
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const month = data.month || _currentMonth();
 
   const snap = await db.collection('posCommissions')
@@ -723,7 +741,7 @@ exports.getCommissionsSummary = onCall(_CF, exports._h.getCommissionsSummary = a
 exports.createApprovalRequest = onCall(_CF, exports._h.createApprovalRequest = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const requestedBy = auth.uid;
   const requestedByName = data.requestedByName || auth.token?.name || 'Unknown';
 
@@ -810,7 +828,7 @@ exports.getPendingApprovals = onCall(_CF, exports._h.getPendingApprovals = async
   const auth = _requireAuth(req);
   _requireRole(auth, 'supervisor');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
 
   const now = new Date();
 
@@ -878,7 +896,7 @@ exports.checkApproval = onCall(_CF, exports._h.checkApproval = async (req) => {
 exports.submitCashCount = onCall(_CF, exports._h.submitCashCount = async (req) => {
   const auth = _requireAuth(req);
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const cashierUid = auth.uid;
   const shiftId = data.shiftId;
   const countedAmount = Number(data.countedAmount);
@@ -959,7 +977,7 @@ exports.getCashReconciliation = onCall(_CF, exports._h.getCashReconciliation = a
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
 
   let query = db.collection('posCashReconciliation')
     .where('sellerId', '==', sellerId)
@@ -985,7 +1003,7 @@ exports.getCashVarianceSummary = onCall(_CF, exports._h.getCashVarianceSummary =
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
 
   const snap = await db.collection('posCashReconciliation')
     .where('sellerId', '==', sellerId)
@@ -1052,7 +1070,7 @@ exports.getStaffPerformanceDashboard = onCall(_CF, exports._h.getStaffPerformanc
   const auth = _requireAuth(req);
   _requireRole(auth, 'manager');
   const { data } = req;
-  const sellerId = _requireSeller(data);
+  const sellerId = await _requireSeller(auth, data);
   const period = data.period || _currentMonth();
 
   if (!/^\d{4}-\d{2}$/.test(period))

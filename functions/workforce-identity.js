@@ -1161,3 +1161,7 @@ exports.wfGetPendingInvitationsByEmail = onCall({ region: 'us-central1' }, async
 
   return { invitations };
 });
+
+/* Exported so other modules reuse THIS authorization engine rather than
+   growing their own. See functions/pos-staff-ops.js. */
+exports._assertBusinessPermission = _assertBusinessPermission;
