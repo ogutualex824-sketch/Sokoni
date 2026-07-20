@@ -370,6 +370,102 @@
     <button type="button" onclick="showTab('admin',this)"       class="bk-tab" id="tab-admin">🛡️ Admin</button>
   </div>
 
+  <!-- CONTENT PANES
+       sokoni-banking-pro.js renders into pane-{name}; every renderer begins
+       `if(!p) return`, so without these containers all of them exited
+       silently and every tile was inert. -->
+  <div class="bk-panes" id="bkPanes">
+    <div class="bk-pane" id="pane-wallet" role="tabpanel" aria-labelledby="tab-wallet"></div>
+    <div class="bk-pane" id="pane-dashboard" role="tabpanel" aria-labelledby="tab-dashboard"></div>
+    <div class="bk-pane" id="pane-bnpl" role="tabpanel" aria-labelledby="tab-bnpl"></div>
+    <div class="bk-pane" id="pane-merchant" role="tabpanel" aria-labelledby="tab-merchant"></div>
+    <div class="bk-pane" id="pane-invoices" role="tabpanel" aria-labelledby="tab-invoices"></div>
+    <div class="bk-pane" id="pane-payments" role="tabpanel" aria-labelledby="tab-payments"></div>
+    <div class="bk-pane" id="pane-notifs" role="tabpanel" aria-labelledby="tab-notifs"></div>
+    <div class="bk-pane" id="pane-admin" role="tabpanel" aria-labelledby="tab-admin"></div>
+    <div class="bk-pane" id="pane-loans" role="tabpanel" aria-labelledby="tab-loans">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Business Loans</div>
+        <p class="bk-pending-p">Compare lender terms and apply in one place.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-accounts" role="tabpanel" aria-labelledby="tab-accounts">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Bank Accounts</div>
+        <p class="bk-pending-p">Open and manage business accounts from SOKONI.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-saccos" role="tabpanel" aria-labelledby="tab-saccos">
+      <div class="bk-pending">
+        <div class="bk-pending-t">SACCOs</div>
+        <p class="bk-pending-p">Browse and join registered SACCOs.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-insurance" role="tabpanel" aria-labelledby="tab-insurance">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Insurance</div>
+        <p class="bk-pending-p">Compare business and personal cover.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-investments" role="tabpanel" aria-labelledby="tab-investments">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Investments</div>
+        <p class="bk-pending-p">Money market funds, bonds and treasury bills.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-mpesa" role="tabpanel" aria-labelledby="tab-mpesa">
+      <div class="bk-pending">
+        <div class="bk-pending-t">M-Pesa Business</div>
+        <p class="bk-pending-p">Paybill and Till onboarding.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-forex" role="tabpanel" aria-labelledby="tab-forex">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Forex</div>
+        <p class="bk-pending-p">Live rates and currency exchange.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-microfinance" role="tabpanel" aria-labelledby="tab-microfinance">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Microfinance</div>
+        <p class="bk-pending-p">Small-business lenders and group loans.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-chamas" role="tabpanel" aria-labelledby="tab-chamas">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Chamas</div>
+        <p class="bk-pending-p">Run a group savings circle with shared records.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+    <div class="bk-pane" id="pane-digital" role="tabpanel" aria-labelledby="tab-digital">
+      <div class="bk-pending">
+        <div class="bk-pending-t">Digital Loans</div>
+        <p class="bk-pending-p">Instant mobile lenders, compared side by side.</p>
+        <p class="bk-pending-s">Not available yet — we will let you know the moment it opens.</p>
+        <p class="bk-pending-s">Need a loan today? The USSD codes at the top of this page work right now.</p>
+      </div>
+    </div>
+  </div>
+
+
   
 
 <nav class="bottom-nav">
@@ -395,6 +491,133 @@
   }catch(e){}
 })();
 </script><script type="module" src="sokoni-init.js"></script>
+
+<style>
+  .bk-panes{padding:0 14px 26px;max-width:1200px;margin:0 auto;}
+  .bk-pane{display:none;}
+  .bk-pane.active{display:block;animation:bkFade .18s ease-out;}
+  @keyframes bkFade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+  .bk-pending{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);
+    border-radius:16px;padding:26px 20px;text-align:center;}
+  .bk-pending-t{font-size:17px;font-weight:800;color:#fff;margin-bottom:8px;}
+  .bk-pending-p{font-size:13.5px;color:rgba(255,255,255,.62);line-height:1.6;margin:0 0 12px;}
+  .bk-pending-s{font-size:12.5px;color:rgba(255,255,255,.42);line-height:1.6;margin:0 0 6px;}
+  .bk-search-empty{padding:18px 4px;color:rgba(255,255,255,.5);font-size:13px;text-align:center;}
+  @media (prefers-reduced-motion:reduce){.bk-pane.active{animation:none;}}
+</style>
+<script>
+/* Base tab switcher.
+   sokoni-banking-pro.js:736 wraps window.showTab and calls the original for the
+   visual switch. No original existed, so tabs never moved and the lazy
+   renderers drew into containers that were not there. This supplies it, and
+   must stay defined BEFORE that file's DOMContentLoaded init runs. */
+window.showTab = function (name, btn) {
+  if (!name) return;
+  document.querySelectorAll('.bk-tab').forEach(function (t) {
+    t.classList.toggle('active', t.id === 'tab-' + name);
+    t.setAttribute('aria-selected', t.id === 'tab-' + name ? 'true' : 'false');
+  });
+  var found = false;
+  document.querySelectorAll('.bk-pane').forEach(function (p) {
+    var on = p.id === 'pane-' + name;
+    p.classList.toggle('active', on);
+    if (on) found = true;
+  });
+  /* A tile that matches no pane must not look like it worked. */
+  if (!found) {
+    console.warn('[Banking] no pane for tab "' + name + '"');
+    return;
+  }
+  if (btn && btn.scrollIntoView) {
+    try { btn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' }); } catch (e) {}
+  }
+  var panes = document.getElementById('bkPanes');
+  if (panes && panes.scrollIntoView) {
+    try { panes.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {}
+  }
+};
+
+/* Filter the quick-action tiles and the tab row by label.
+   Was referenced by the search input and button and defined nowhere, so both
+   threw ReferenceError on every keystroke and click. */
+window.filterBankCards = function () {
+  var input = document.getElementById('bkSearch');
+  var q = (input && input.value || '').trim().toLowerCase();
+  var shown = 0;
+  document.querySelectorAll('.qa-tile').forEach(function (tile) {
+    var hit = !q || (tile.textContent || '').toLowerCase().indexOf(q) > -1;
+    tile.style.display = hit ? '' : 'none';
+    if (hit) shown++;
+  });
+  document.querySelectorAll('.bk-tab').forEach(function (tab) {
+    var hit = !q || (tab.textContent || '').toLowerCase().indexOf(q) > -1;
+    tab.style.display = hit ? '' : 'none';
+  });
+  var grid = document.querySelector('.qa-grid');
+  var empty = document.getElementById('bkSearchEmpty');
+  if (q && shown === 0) {
+    if (!empty && grid) {
+      empty = document.createElement('div');
+      empty.id = 'bkSearchEmpty';
+      empty.className = 'bk-search-empty';
+      grid.parentNode.insertBefore(empty, grid.nextSibling);
+    }
+    if (empty) { empty.textContent = 'Nothing matches "' + q + '".'; empty.style.display = ''; }
+  } else if (empty) { empty.style.display = 'none'; }
+};
+
+/* "Compare & Apply". Referenced by the emergency-loan CTA and defined nowhere.
+   There is no loan-application backend, so this surfaces the real USSD codes
+   already printed on this page rather than pretending to submit an application. */
+window.openApplyModal = function (product, bank) {
+  var old = document.getElementById('bkApplyModal');
+  if (old) old.remove();
+  var codes = [
+    ['M-Pesa Fuliza', '*234#'], ['KCB M-Pesa', '*522#'], ['Equity Eazzy Loan', '*247#'],
+    ['Timiza (Absa)', '*848#'], ['Loop (Co-op)', '*667#'],
+  ];
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  var m = document.createElement('div');
+  m.id = 'bkApplyModal';
+  m.setAttribute('role', 'dialog');
+  m.setAttribute('aria-modal', 'true');
+  m.setAttribute('aria-label', esc(product || 'Apply'));
+  m.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.72);' +
+    'display:flex;align-items:flex-end;justify-content:center;padding:0;';
+  m.innerHTML =
+    '<div style="background:#0b0b0b;border:1px solid rgba(255,255,255,.1);border-radius:18px 18px 0 0;' +
+    'width:100%;max-width:520px;padding:22px 18px calc(22px + env(safe-area-inset-bottom));">' +
+      '<div style="font-size:17px;font-weight:800;color:#fff;margin-bottom:4px;">' +
+        esc(product || 'Apply') + '</div>' +
+      '<div style="font-size:12.5px;color:rgba(255,255,255,.5);margin-bottom:16px;">' +
+        (bank && bank !== 'Any Bank' ? esc(bank) : 'Available lenders') + '</div>' +
+      '<p style="font-size:13px;color:rgba(255,255,255,.66);line-height:1.6;margin:0 0 14px;">' +
+        'Online applications are not open yet. These lenders accept requests by USSD right now — ' +
+        'dial from the phone number registered to your M-Pesa account.</p>' +
+      codes.map(function (c) {
+        return '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;' +
+          'padding:11px 0;border-top:1px solid rgba(255,255,255,.07);">' +
+          '<span style="font-size:13.5px;color:#fff;">' + esc(c[0]) + '</span>' +
+          '<a href="tel:' + encodeURIComponent(c[1]) + '" style="font-size:14px;font-weight:800;' +
+          'color:#71ff00;text-decoration:none;min-height:44px;display:flex;align-items:center;">' +
+          esc(c[1]) + '</a></div>';
+      }).join('') +
+      '<button type="button" onclick="document.getElementById(\'bkApplyModal\').remove()" ' +
+      'style="margin-top:18px;width:100%;min-height:48px;border-radius:12px;border:1px solid rgba(113,255,0,.3);' +
+      'background:rgba(113,255,0,.12);color:#71ff00;font-weight:800;font-size:14px;font-family:inherit;' +
+      'cursor:pointer;">Close</button>' +
+    '</div>';
+  m.addEventListener('click', function (ev) { if (ev.target === m) m.remove(); });
+  document.addEventListener('keydown', function esc2(ev) {
+    if (ev.key === 'Escape') { var n = document.getElementById('bkApplyModal'); if (n) n.remove();
+      document.removeEventListener('keydown', esc2); }
+  });
+  document.body.appendChild(m);
+};
+</script>
 <script src="sokoni-banking-pro.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>
