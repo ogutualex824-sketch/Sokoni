@@ -57,25 +57,70 @@ async function _taxConfig() {
   }
 }
 
+/* ── Document numbering: block allocation ──────────────────────────────────
+   A single counter document transacted once per invoice puts a Firestore hot
+   spot directly in the payment path. Firestore sustains roughly one write per
+   second to a single document; beyond that, transactions contend, retry, and
+   eventually fail. Numbering is now inside payment confirmation, so contention
+   there does not delay a report — it stalls money.
+
+   Sharding is the usual answer and is wrong here. Splitting the counter across
+   shards yields unique numbers but destroys the ordering an accountant and KRA
+   expect from an invoice series.
+
+   Block allocation gives both. One transaction reserves a contiguous run of
+   BLOCK numbers; the instance then serves them from memory with no Firestore
+   write at all. Counter writes drop by a factor of BLOCK, and numbers stay
+   strictly ascending within the series.
+
+   The trade is gaps. An instance that reserves 1..100 and is recycled after
+   issuing 40 leaves 41..100 unused, so the series is ascending and unique but
+   not gapless. That is the standard trade — Stripe and Xero both make it — and
+   it is the correct one: a gap is explainable to an auditor, a duplicate
+   invoice number is not, and a stalled payment is worse than either.
+
+   Memory is per-instance and lost on cold start, which is safe. A new instance
+   reserves a fresh block; two instances never share a range because the
+   reservation itself is transactional. */
+const BLOCK = 50;
+
+/** kind-year -> { next, end } for the block this instance currently holds. */
+const _blocks = new Map();
+
+async function _reserveBlock(kind, year) {
+  const counterRef = db().collection('_counters').doc(`${kind}-${year}`);
+
+  const start = await db().runTransaction(async (txn) => {
+    const snap = await txn.get(counterRef);
+    const current = (snap.exists && Number(snap.data().value)) || 0;
+    txn.set(counterRef, {
+      value: current + BLOCK,
+      kind, year, blockSize: BLOCK,
+      updatedAt: FV().serverTimestamp(),
+    }, { merge: true });
+    return current + 1;
+  });
+
+  return { next: start, end: start + BLOCK - 1 };
+}
+
 /**
- * Sequential document numbers, transactionally.
- *
- * Two payments confirming in the same instant must not receive the same
- * invoice number, so the counter is read and written inside a transaction.
- * Format SKN-INV-2026-000001: prefix, document class, year, zero-padded
- * sequence. The year resets the sequence, which is what accountants expect.
+ * Sequential document numbers.
+ * Format SKN-INV-2026-000001 — prefix, class, year, zero-padded sequence.
+ * The year resets the series, which is what accountants expect.
  */
 async function _nextNumber(kind /* 'INV' | 'RCT' | 'CRN' */) {
   const year = new Date().getUTCFullYear();
-  const counterRef = db().collection('_counters').doc(`${kind}-${year}`);
+  const key = `${kind}-${year}`;
 
-  const seq = await db().runTransaction(async (txn) => {
-    const snap = await txn.get(counterRef);
-    const next = ((snap.exists && Number(snap.data().value)) || 0) + 1;
-    txn.set(counterRef, { value: next, kind, year, updatedAt: FV().serverTimestamp() }, { merge: true });
-    return next;
-  });
+  let block = _blocks.get(key);
+  if (!block || block.next > block.end) {
+    block = await _reserveBlock(kind, year);
+    _blocks.set(key, block);
+    logger.info('[fin] reserved number block', { kind, year, from: block.next, to: block.end });
+  }
 
+  const seq = block.next++;
   return `SKN-${kind}-${year}-${String(seq).padStart(6, '0')}`;
 }
 
