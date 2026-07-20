@@ -176,7 +176,7 @@
       this._syncFirestore(envelope);
 
       this._emit('sent', envelope);
-    },
+    }
 
     async _syncFirestore(envelope) {
       if (!this._db) return;
@@ -184,7 +184,7 @@
         const ref = this._db.collection('posCustomerDisplays').doc(this._sessionId);
         await ref.set({ ...envelope, updatedAt: new Date() }, { merge: true });
       } catch {}
-    },
+    }
 
     _loadSessionId() {
       let id = sessionStorage.getItem('sokoni_display_session');
@@ -193,12 +193,12 @@
         sessionStorage.setItem('sokoni_display_session', id);
       }
       return id;
-    },
+    }
 
     _resetIdleTimer() {
       clearTimeout(this._idleTimer);
       this._idleTimer = setTimeout(() => this.sendIdle(), IDLE_MS);
-    },
+    }
 
     on(event, fn) { (this._listeners[event] = this._listeners[event] || []).push(fn); return this; }
     off(event, fn) { this._listeners[event] = (this._listeners[event] || []).filter(f => f !== fn); }

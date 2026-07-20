@@ -2,6 +2,7 @@
   "functions": {
     "source": "functions",
     "predeploy": [
+      "node \"$RESOURCE_DIR/../scripts/predeploy-syntax-gate.js\"",
       "node \"$RESOURCE_DIR/../scripts/verify-commission-single-source.js\""
     ],
     "runtime": "nodejs22",
@@ -458,6 +459,7 @@
       }
     ],
     "predeploy": [
+      "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js"
     ]
   },

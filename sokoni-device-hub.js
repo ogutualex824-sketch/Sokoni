@@ -435,7 +435,7 @@
       }
       this._saveRegistry();
       return discovered;
-    },
+    }
 
     /**
      * Show the browser's native device picker for a specific transport.
@@ -454,7 +454,7 @@
         if (err.name === 'NotFoundError') return null;  /* user cancelled */
         throw err;
       }
-    },
+    }
 
     /**
      * Add a network device by endpoint URL.
@@ -471,7 +471,7 @@
       this._saveRegistry();
       this._emit('discovered', profile);
       return profile;
-    },
+    }
 
     removeNetworkDevice(endpoint) {
       _removeNetworkDevice(endpoint);
@@ -481,7 +481,7 @@
         }
       }
       this._saveRegistry();
-    },
+    }
 
     /* ── Connection ────────────────────────────────────────── */
 
@@ -513,7 +513,7 @@
         this._emit('error', { device: profile, error: err.message });
         throw err;
       }
-    },
+    }
 
     /**
      * Disconnect a device gracefully.
@@ -535,7 +535,7 @@
       this._saveRegistry();
       this._emit('disconnected', profile);
       this._audit('disconnected', profile);
-    },
+    }
 
     async disconnectAll() {
       const ids = [...this._registry.keys()];
@@ -545,7 +545,7 @@
           await this.disconnect(id).catch(() => {});
         }
       }
-    },
+    }
 
     /**
      * Forget a device entirely from the registry.
@@ -555,7 +555,7 @@
       this._registry.delete(deviceId);
       this._saveRegistry();
       this._audit('removed', { id: deviceId });
-    },
+    }
 
     /* ── Registry ──────────────────────────────────────────── */
 
@@ -573,7 +573,7 @@
       const errors       = devices.filter(d => d.status === STATE.ERROR).length;
       const reconnecting = devices.filter(d => d.status === STATE.RECONNECTING).length;
       return { total: devices.length, connected, disconnected, errors, reconnecting };
-    },
+    }
 
     /* ── Health Monitoring ──────────────────────────────────── */
 
@@ -581,11 +581,11 @@
       if (this._healthTimer) return;
       this._healthTimer = setInterval(() => this._healthCheck(), HEALTH_TICK);
       this._healthCheck();   /* immediate first check */
-    },
+    }
 
     stopMonitoring() {
       if (this._healthTimer) { clearInterval(this._healthTimer); this._healthTimer = null; }
-    },
+    }
 
     async _healthCheck() {
       for (const profile of this._registry.values()) {
@@ -608,7 +608,7 @@
         }
       }
       this._saveRegistry();
-    },
+    }
 
     /* ── Auto-reconnect ─────────────────────────────────────── */
 
@@ -632,7 +632,7 @@
           this._scheduleReconnect(profile);
         }
       }, delay);
-    },
+    }
 
     /* ── Native browser events (USB/BT connect/disconnect) ──── */
 
@@ -662,7 +662,7 @@
         navigator.bluetooth.addEventListener &&
         navigator.bluetooth.addEventListener('advertisementreceived', () => {});
       }
-    },
+    }
 
     /* ── Persistence ─────────────────────────────────────────── */
 
@@ -675,32 +675,32 @@
           this._registry.set(p.id, p);
         }
       } catch {}
-    },
+    }
 
     _saveRegistry() {
       try {
         const data = this.getDevices().map(d => d.toJSON());
         localStorage.setItem(STORE_KEY, JSON.stringify(data));
       } catch {}
-    },
+    }
 
     /* ── Event system ───────────────────────────────────────── */
 
     on(event, fn) {
       (this._listeners[event] = this._listeners[event] || []).push(fn);
       return this;
-    },
+    }
 
     off(event, fn) {
       if (!this._listeners[event]) return this;
       this._listeners[event] = this._listeners[event].filter(f => f !== fn);
       return this;
-    },
+    }
 
     _emit(event, data) {
       (this._listeners[event] || []).forEach(fn => { try { fn(data); } catch {} });
       (this._listeners['all']  || []).forEach(fn => { try { fn(event, data); } catch {} });
-    },
+    }
 
     /* ── Audit log ──────────────────────────────────────────── */
 
@@ -708,9 +708,9 @@
       this._log.push({ ts: now(), action, deviceId: device.id, type: device.type,
                        name: device.name, transport: device.transport });
       if (this._log.length > 500) this._log.shift();
-    },
+    }
 
-    getAuditLog() { return [...this._log]; },
+    getAuditLog() { return [...this._log]; }
 
     /* ── Utility ─────────────────────────────────────────────── */
 
@@ -722,14 +722,14 @@
         network:   true,
         version:   HUB_VERSION,
       };
-    },
+    }
 
     /* Quick "first printer" / "first scanner" helpers for POS */
-    getPrinter()  { return this.getConnectedDevices().find(d => d.type === TYPE.PRINTER) || null; },
-    getScanner()  { return this.getConnectedDevices().find(d => d.type === TYPE.SCANNER) || null; },
-    getTerminal() { return this.getConnectedDevices().find(d => d.type === TYPE.PAYMENT_TERMINAL) || null; },
-    getCashDrawer() { return this.getConnectedDevices().find(d => d.type === TYPE.CASH_DRAWER) || null; },
-    getCustomerDisplay() { return this.getConnectedDevices().find(d => d.type === TYPE.CUSTOMER_DISPLAY) || null; },
+    getPrinter()  { return this.getConnectedDevices().find(d => d.type === TYPE.PRINTER) || null; }
+    getScanner()  { return this.getConnectedDevices().find(d => d.type === TYPE.SCANNER) || null; }
+    getTerminal() { return this.getConnectedDevices().find(d => d.type === TYPE.PAYMENT_TERMINAL) || null; }
+    getCashDrawer() { return this.getConnectedDevices().find(d => d.type === TYPE.CASH_DRAWER) || null; }
+    getCustomerDisplay() { return this.getConnectedDevices().find(d => d.type === TYPE.CUSTOMER_DISPLAY) || null; }
   }
 
   /* ── Singleton ──────────────────────────────────────────────── */

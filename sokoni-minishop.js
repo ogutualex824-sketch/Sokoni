@@ -1132,7 +1132,7 @@ body{margin:0;font-family:sans-serif;display:flex;justify-content:center;align-i
       phone ? 'TEL;TYPE=CELL:' + phone : '',
       email ? 'EMAIL:' + email : '',
       'URL:https://mysokoni.co.ke/shop/' + handle,
-      'NOTE:Find us on SOKONI - Kenya's marketplace',
+      "NOTE:Find us on SOKONI - Kenya's marketplace",
       'END:VCARD'
     ].filter(Boolean).join('\r\n');
     const blob = new Blob([vcard], { type: 'text/vcard' });
