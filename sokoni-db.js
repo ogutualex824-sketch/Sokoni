@@ -535,13 +535,47 @@ const SokoniDB = {
   },
 
   listenProducts(opts = {}, callback) {
-    let q = collection(db, 'products');
-    if (opts.category)  q = query(q, where('category', '==', opts.category));
-    if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
-    return onSnapshot(q,
-      snap => callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; })),
-      err  => _log.warn('[SokoniDB] products:', err.message)
-    );
+    /* The catalogue is public (products is `allow read: if true`), yet
+       anonymous first-load returned nothing and this handler swallowed the
+       reason into a warning with only err.message. App Check is ENFORCED on
+       firestore.googleapis.com (verified server-side), and its token is
+       acquired asynchronously and fire-and-forget in firebase.js while `db` is
+       created synchronously — so a listener attached at page load can fire
+       before the attestation token exists.
+
+       This now surfaces the Firestore error CODE, not just the message, and
+       distinguishes the two failure modes the codes separate:
+         permission-denied / unauthenticated  → App Check rejected the read
+         unavailable / deadline-exceeded       → token not ready yet, transient
+
+       A transient failure is retried once after a short delay, by which time
+       the App Check token has normally arrived. A genuine rejection is
+       reported and not retried, because retrying a denied read only hammers a
+       wall. Neither weakens App Check. */
+    const attach = (attempt) => {
+      let q = collection(db, 'products');
+      if (opts.category)  q = query(q, where('category', '==', opts.category));
+      if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
+      return onSnapshot(q,
+        snap => callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; })),
+        err  => {
+          const code = err && err.code || 'unknown';
+          _log.warn('[SokoniDB] products listener failed', { code, message: err && err.message, attempt });
+          try {
+            window.dispatchEvent(new CustomEvent('sokoni:catalogue-error', {
+              detail: { code, message: err && err.message, transient: /unavailable|deadline/.test(code), attempt }
+            }));
+          } catch (_) {}
+
+          const transient = /unavailable|deadline-exceeded|internal/.test(code);
+          if (transient && attempt < 2) {
+            _log.warn('[SokoniDB] retrying products listener (token likely not ready)', { attempt });
+            setTimeout(() => attach(attempt + 1), 1500 * attempt);
+          }
+        }
+      );
+    };
+    return attach(1);
   },
 
   async updateProductStock(productId, delta) {
