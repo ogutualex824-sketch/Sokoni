@@ -159,8 +159,13 @@ const ref = db.collection('_systemConfig').doc('bootstrap');
       console.error('  No Firebase Auth user matches that identifier. The account must');
       console.error('  have signed in at least once before it can be seeded.');
     }
-    if (/credential|default/i.test(e.message)) {
-      console.error('  Run `firebase login`, or set GOOGLE_APPLICATION_CREDENTIALS.');
+    if (/credential|default|invalid_client|metadata/i.test(e.message)) {
+      /* Point at the diagnostic rather than repeat a guess. `invalid_client`
+         in particular means credentials EXIST but are revoked, which reads as a
+         permissions problem and is not one. */
+      console.error('  This is a credentials problem, not a permissions one.');
+      console.error('  Run the doctor for the exact cause and fix:');
+      console.error('    node functions/scripts/doctor.js');
     }
     console.error('');
     process.exit(1);
