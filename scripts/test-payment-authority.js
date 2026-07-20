@@ -55,7 +55,7 @@ const BLOCK = SRC.slice(s, e);
 /* eslint-disable no-new-func */
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const priceIt = new AsyncFunction('db', 'admin', 'HttpsError', 'request', 'amount', 'items', 'sellerUid', 'orderId',
-  '"use strict";' + BLOCK + '; return { authoritativeAmount, pricingSource };');
+  '"use strict";' + BLOCK + '; return { authoritativeAmount, pricingSource, pricedItems };');
 
 const run = (o) => priceIt(db, admin, HttpsError,
   { auth: { uid: 'BUYER' }, data: { deliveryFee: o.deliveryFee } },
@@ -119,6 +119,24 @@ const run = (o) => priceIt(db, admin, HttpsError,
     ck('marked as operator-entered, not server-priced', r.pricingSource === 'client_operator_entered');
   }
   await throws('zero amount with no items still rejected', { amount: 0, items: null }, 'invalid-argument');
+
+  /* These exist because node --check passed while pricedItems was declared
+     inside the `if` block and read outside it — a ReferenceError on every
+     call that syntax checking cannot see. Scope is behaviour, so it is
+     asserted like behaviour. */
+  console.log('\n── Line items reach the callback (scope + payload) ──');
+  {
+    const r = await run({ amount: 0, items: [{ productId: 'vape1', qty: 2 }] });
+    ck('pricedItems is in scope outside the pricing block', r.pricedItems !== undefined);
+    ck('pricedItems carries productId and qty',
+       Array.isArray(r.pricedItems) && r.pricedItems[0].productId === 'vape1' && r.pricedItems[0].qty === 2,
+       JSON.stringify(r.pricedItems));
+    ck('unit price recorded for reconciliation', r.pricedItems[0].unitPrice === 2500);
+  }
+  {
+    const r = await run({ amount: 750, items: null });
+    ck('POS path leaves pricedItems null, not undefined', r.pricedItems === null);
+  }
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);

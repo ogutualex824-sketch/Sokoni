@@ -3017,6 +3017,7 @@ exports.darajaSTKPush = onCall(
        take working merchants offline. Those calls are recorded as
        operator-entered so the two are distinguishable in audit. */
     let authoritativeAmount = Math.round(Number(amount));
+    let pricedItems = null;
     let pricingSource = "client_operator_entered";
 
     if (Array.isArray(items) && items.length) {
@@ -3025,7 +3026,7 @@ exports.darajaSTKPush = onCall(
       }
 
       let serverSubtotal = 0;
-      const priced = [];
+      pricedItems = [];
 
       for (const line of items) {
         const pid = String(line && line.productId || "").trim();
@@ -3052,7 +3053,7 @@ exports.darajaSTKPush = onCall(
           throw new HttpsError("failed-precondition", "Product has no valid price: " + pid);
         }
         serverSubtotal += unit * qty;
-        priced.push({ productId: pid, qty, unitPrice: unit });
+        pricedItems.push({ productId: pid, qty, unitPrice: unit });
       }
 
       /* Delivery is the one client-influenced input we accept, because it
@@ -3074,7 +3075,7 @@ exports.darajaSTKPush = onCall(
           callerUid: request.auth.uid,
           sellerUid, orderId: orderId || null,
           clientAmount, serverAmount: authoritativeAmount,
-          items: priced,
+          items: pricedItems,
           ts: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => {});
       }
@@ -3159,6 +3160,10 @@ exports.darajaSTKPush = onCall(
       /* Provenance, so reconciliation can tell a catalogue-priced marketplace
          sale from an operator-keyed till payment without inferring it. */
       pricingSource,
+      /* Server-priced line items, persisted so the payment callback decrements
+         stock from what the SERVER charged for — never from whatever the
+         client later wrote onto the order document. */
+      items: pricingSource === "server_recomputed" ? pricedItems : null,
       shortCode:   darajaShortCode,
       sellerName:  businessName,
       description: description || "SOKONI Payment",
@@ -3313,18 +3318,89 @@ exports.darajaSTKCallback = onRequest(
         /* Deterministic ID — one credit per STK checkout request; idempotent by construction. */
         await db.collection("sellerPayments").doc(checkoutId).set(paymentRecord);
 
-        /* Update the linked order document if orderId provided */
+        /* ── Order authority + inventory ────────────────────────────────────
+           This block previously set only `paymentStatus`, which nothing else
+           reads: onNewOrderCreated gates on `status` and `paymentVerified`,
+           both of which the CLIENT wrote. So payment success and the fields
+           that actually drive fulfilment were never connected — the browser
+           was the only thing asserting an order was paid. It also ran as a
+           read-then-update outside the claiming transaction, and inventory was
+           never decremented on this path at all.
+
+           Now: one transaction sets the authoritative payment fields AND
+           decrements stock, so a verified payment and its stock movement
+           cannot diverge. Everything is keyed off the order document, which
+           makes webhook retries converge instead of double-applying. */
         if (payData.orderId) {
           const orderRef = db.collection("orders").doc(payData.orderId);
-          const orderSnap = await orderRef.get();
-          if (orderSnap.exists) {
-            await orderRef.update({
-              paymentStatus:  "paid",
-              mpesaCode:      mpesaCode  || null,
-              paidAmount:     paidAmount || null,
-              paidPhone:      paidPhone  || null,
-              paidAt:         ts,
+
+          try {
+            await db.runTransaction(async (txn) => {
+              const orderSnap = await txn.get(orderRef);
+
+              /* Safaricom can call back before the browser has written the
+                 order — or the browser may have died mid-checkout. Recording
+                 the payment against a missing order lets reconciliation find
+                 the money instead of it vanishing. */
+              if (!orderSnap.exists) {
+                txn.set(db.collection("orphanPayments").doc(checkoutId), {
+                  checkoutId, orderId: payData.orderId, sellerUid: payData.sellerUid,
+                  callerUid: payData.callerUid || null,
+                  amount: paidAmount || payData.amount, mpesaCode: mpesaCode || null,
+                  reason: "order_document_absent_at_callback", createdAt: ts,
+                });
+                return;
+              }
+
+              const o = orderSnap.data();
+
+              /* Idempotency: a retried webhook must not decrement stock twice.
+                 The flag lives on the order and is read inside this
+                 transaction, so concurrent retries serialise on it. */
+              if (o.inventoryApplied === true) return;
+
+              txn.update(orderRef, {
+                status:          "paid",
+                paymentStatus:   "paid",
+                /* Server-asserted. The client can no longer be the source of
+                   this, which is what makes the rules change in item 2 safe. */
+                paymentVerified: true,
+                paymentMethod:   "mpesa_daraja",
+                mpesaCode:       mpesaCode  || null,
+                paidAmount:      paidAmount || null,
+                paidPhone:       paidPhone  || null,
+                paidAt:          ts,
+                inventoryApplied: true,
+                settlementStatus: "queued",
+                updatedAt:       ts,
+              });
+
+              /* Stock. Prefer the server-priced line items recorded at STK
+                 time over anything the client later wrote onto the order. */
+              const lines = Array.isArray(payData.items) && payData.items.length
+                ? payData.items
+                : (Array.isArray(o.items) ? o.items : []);
+
+              for (const line of lines) {
+                const pid = line && (line.productId || line.id);
+                const qty = Math.floor(Number(line && line.qty) || 0);
+                if (!pid || qty < 1) continue;
+                txn.update(db.collection("products").doc(pid), {
+                  stock: admin.firestore.FieldValue.increment(-qty),
+                });
+              }
             });
+          } catch (e) {
+            /* The payment is real and already recorded in sellerPayments. If
+               the order/stock update fails we must not lose that fact, so this
+               is surfaced for reconciliation rather than swallowed. */
+            console.error(`[darajaSTKCallback] order/inventory txn failed for ${payData.orderId}: ${e.message}`);
+            db.collection("auditLogs").add({
+              type: "order_finalisation_failed", severity: "critical",
+              checkoutId, orderId: payData.orderId, sellerUid: payData.sellerUid,
+              amount: paidAmount || payData.amount, mpesaCode: mpesaCode || null,
+              error: e.message, ts,
+            }).catch(() => {});
           }
         }
       }
