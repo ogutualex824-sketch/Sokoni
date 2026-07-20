@@ -160,7 +160,8 @@ srv.listen(0, async () => {
      HEAD with no clicks at all (verified by stashing the patch and re-running).
      Asserting zero errors would fail on a defect this sprint did not introduce;
      ignoring errors wholesale would hide one it did. So it is excluded by name
-     and everything else still has to be zero. */
+     and everything else still has to be zero.
+
      The second exclusion is a harness artifact rather than a page defect:
      clicking tabs makes sokoni-observability.js POST to the live recordMetric
      Cloud Function, and this suite serves from 127.0.0.1, which that function's
