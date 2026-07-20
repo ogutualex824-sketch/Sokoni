@@ -257,10 +257,16 @@ for (const f of PUSH) {
   const p = path.join(ROOT, f);
   if (!fs.existsSync(p)) continue;
   const s = fs.readFileSync(p, 'utf8');
+  /* The master logo is the notification icon by product decision, so /assets/logosokoni.png
+     is accepted alongside the derived /assets/icons/* set. Both ARE the same mark — the
+     icons/ files are logosokoni.png resized. What still fails is anything OUTSIDE that
+     pair, which is what let /icons/icon-192.png, /assets/badge-96.png and
+     /assets/logo/icon-192.png ship pointing at files that do not exist. */
+  const ALLOWED = /^\/assets\/(icons\/|logosokoni\.png$)/;
   for (const m of s.matchAll(/(?:icon|badge)\s*:\s*["']([^"']+\.(?:png|jpe?g))["']/gi)) {
     const href = m[1];
-    if (!/^\/assets\/icons\//.test(href)) {
-      fail(f + ': push icon is not from the official set — ' + href);
+    if (!ALLOWED.test(href)) {
+      fail(f + ': push icon is not the SOKONI logo or an official icon — ' + href);
       pushOk = false;
     } else if (!fs.existsSync(path.join(ROOT, href.replace(/^\//, '')))) {
       fail(f + ': push icon 404s — ' + href);

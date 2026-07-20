@@ -1414,7 +1414,7 @@ const SokoniInventoryV2 = (() => {
     await _iPut('notifications', n);
     EVT.dispatchEvent(new CustomEvent('notification', { detail: { notification: n } }));
     if (Notification?.permission === 'granted') {
-      try { new Notification(`SOKONI Inventory: ${title}`, { body: message, icon: '/assets/icons/icon-192.png' }); } catch (_) {}
+      try { new Notification(`SOKONI Inventory: ${title}`, { body: message, icon: '/assets/logosokoni.png' }); } catch (_) {}
     }
     return n;
   }

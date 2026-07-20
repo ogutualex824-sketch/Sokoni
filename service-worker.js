@@ -913,7 +913,7 @@ async function cacheFirstImage(request) {
 /* â"€â"€ PUSH NOTIFICATIONS â"€â"€ */
 self.addEventListener("push", event => {
   if (!event.data) return;
-  let data = { title: "SOKONI", body: "You have a new notification!", icon: '/assets/icons/icon-192.png' };
+  let data = { title: "SOKONI", body: "You have a new notification!", icon: '/assets/logosokoni.png' };
   try { data = { ...data, ...event.data.json() }; } catch {}
 
   /* The notification engine nests its payload under `data` and names the target
@@ -928,7 +928,7 @@ self.addEventListener("push", event => {
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: data.icon || '/assets/icons/icon-192.png',
-      badge: '/assets/icons/icon-96.png',
+      badge: '/assets/logosokoni.png',
       ...(img ? { image: img } : {}),
       ...(tag ? { tag, renotify: true } : {}),   /* one thread per order, not eleven */
       vibrate: [200, 100, 200],
@@ -984,21 +984,21 @@ async function _checkScheduledNotifications() {
         title: "⚡ Daily Deals on SOKONI",
         body:  "New products & flash sales added today - check what's new!",
         url:   "/flashsale",
-        icon:  '/assets/icons/icon-192.png',
+        icon:  '/assets/logosokoni.png',
       },
       {
         id:    "sell-reminder",
         title: "🏪 Got something to sell?",
         body:  "List it on SOKONI for FREE and reach thousands of Kenyan buyers today.",
         url:   "/seller",
-        icon:  '/assets/icons/icon-192.png',
+        icon:  '/assets/logosokoni.png',
       },
       {
         id:    "cart-reminder",
         title: "🛒 Items waiting in your cart!",
         body:  "Complete your purchase before items sell out.",
         url:   "/cart",
-        icon:  '/assets/icons/icon-192.png',
+        icon:  '/assets/logosokoni.png',
       },
     ];
 
@@ -1008,7 +1008,7 @@ async function _checkScheduledNotifications() {
     await self.registration.showNotification(n.title, {
       body:    n.body,
       icon:    n.icon,
-      badge:   '/assets/icons/icon-96.png',
+      badge:   '/assets/logosokoni.png',
       vibrate: [100, 50, 100],
       tag:     "sokoni-" + n.id,
       data:    { url: n.url },

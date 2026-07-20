@@ -124,7 +124,7 @@ exports.testPushNotification = onCall(
       webpush: {
         notification: {
           icon:  "/assets/sokoni logoo.jpeg",
-          badge: "/assets/icons/icon-96.png",
+          badge: "/assets/logosokoni.png",
           vibrate: [200, 100, 200],
         },
       },

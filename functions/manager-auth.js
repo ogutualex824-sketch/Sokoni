@@ -73,8 +73,8 @@ exports.managerAuthNotify = onDocumentCreated(
         notification: {
           title:  `🔐 ${opLabel}`,
           body:   `From: ${cashier}${ctxStr ? ' · ' + ctxStr : ''}`,
-          icon:   '/assets/icons/icon-192.png',
-          badge:  '/assets/icons/icon-96.png',
+          icon:   '/assets/logosokoni.png',
+          badge:  '/assets/logosokoni.png',
           requireInteraction: true,
           data:   { url: 'manager-auth.html?req=' + reqId },
         },

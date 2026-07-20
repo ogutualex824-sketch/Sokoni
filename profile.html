@@ -1583,7 +1583,11 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
     <div class="up-header-body">
       <!-- Avatar -->
       <div class="up-avatar-wrap" title="Change photo">
-        <img id="upAvatar" class="up-avatar" src="assets/sokoni-logo-dark.png" alt="Avatar" onerror="this.src='assets/sokoni logoo.jpeg'">
+        <!-- Placeholder shown until the member uploads a real photo. logosokoni.png is the
+             single icon source; the previous default (sokoni-logo-dark.png) is the HEADER
+             brand mark, so the avatar and the app icon disagreed. onerror keeps the old
+             file as a last-resort fallback rather than rendering a broken image. -->
+        <img id="upAvatar" class="up-avatar" src="/assets/logosokoni.png" alt="Avatar" onerror="this.src='assets/sokoni-logo-dark.png'">
         <div class="up-verified-badge" id="upVerifiedBadge" style="display:none;" title="Verified">&#10003;</div>
         <input type="file" id="avatarUpload" class="up-avatar-upload" accept="image/*" onchange="handleAvatarUpload(event)">
       </div>
@@ -2063,7 +2067,9 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
         <div class="pi-section-title">Digital Identity Card</div>
         <div class="pi-id-card">
           <div class="pi-id-card-top">
-            <img class="pi-id-avatar" id="piIdAvatar" src="" alt="Avatar">
+            <!-- src was empty: the fill only assigns when data.photoURL exists, so a member
+                 without a photo got a broken-image icon on their identity card. -->
+            <img class="pi-id-avatar" id="piIdAvatar" src="/assets/logosokoni.png" alt="Avatar">
             <div class="pi-id-meta">
               <div class="pi-id-name" id="piIdName">Loading&hellip;</div>
               <div class="pi-id-sub" id="piIdSub"></div>
@@ -2245,7 +2251,9 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <!-- The card itself -->
       <div class="pi-bcard" id="piBcard">
         <div class="pi-bcard-top">
-          <img class="pi-bcard-avatar" id="piBcardAvatar" src="" alt="">
+          <!-- Same as the identity card above: empty src rendered a broken image
+               whenever the member had no photo. -->
+          <img class="pi-bcard-avatar" id="piBcardAvatar" src="/assets/logosokoni.png" alt="">
           <div>
             <div class="pi-bcard-name" id="piBcardName">Loading&hellip;</div>
             <div class="pi-bcard-hl" id="piBcardHl"></div>

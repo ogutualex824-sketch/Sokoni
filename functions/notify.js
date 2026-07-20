@@ -287,8 +287,8 @@ async function sendPush(uid, payload) {
         /* The official icon set, generated from assets/logosokoni.png. The badge is the
            monochrome-able silhouette Android draws in the status bar — it must be small and
            square, so it is NOT the same file as the icon. */
-        icon: '/assets/icons/icon-192.png',
-        badge: '/assets/icons/icon-96.png',
+        icon: '/assets/logosokoni.png',
+        badge: '/assets/logosokoni.png',
         ...(payload.image ? { image: payload.image } : {}),
         /* tag collapses successive updates for the same order into ONE notification
            instead of stacking eleven. renotify still alerts on each change. */
