@@ -142,6 +142,11 @@
           "type": "test",
           "ref": "scripts/test-banking-hub.js 25/25",
           "date": "2026-07-20"
+        },
+        {
+          "type": "deployment",
+          "ref": "live fetch sokoni-aeb26.web.app: sokoni-premium-v2.css contains transform:none",
+          "date": "2026-07-20"
         }
       ],
       "contradictions": [],
@@ -159,6 +164,11 @@
         {
           "type": "test",
           "ref": "scripts/test-banking-hub.js 25/25",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "deployment",
+          "ref": "live fetch: /banking serves bkPanes + window.showTab",
           "date": "2026-07-20"
         }
       ],
@@ -253,6 +263,11 @@
           "type": "repository",
           "ref": "112 functions exported in index.js are absent from the deployed set",
           "date": "2026-07-20"
+        },
+        {
+          "type": "deployment",
+          "ref": "functions deploy blocked; 54 changed function files remain undeployed",
+          "date": "2026-07-20"
         }
       ],
       "note": "Deployed and CURRENT are different claims. The deployed code predates every fix from this cycle."
@@ -284,6 +299,43 @@
       "sources": [],
       "contradictions": [],
       "note": "No load test at any scale has ever been run. Any performance number quoted anywhere in this project is an estimate."
+    },
+    {
+      "id": "CLM-016",
+      "claim": "The repository is synchronized with its remote.",
+      "sources": [
+        {
+          "type": "repository",
+          "ref": "git rev-parse: origin/main == main == a5107a7",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "test",
+          "ref": "architecture-guardian RULE-010 PASS; DEPLOY GATE OPEN; score 57->72",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "sharedArtifact": true,
+      "note": "Was the single blocking finding of the launch review. 216 commits pushed, fast-forward, no conflict."
+    },
+    {
+      "id": "CLM-017",
+      "claim": "Frontend fixes from this cycle are live in production.",
+      "sources": [
+        {
+          "type": "deployment",
+          "ref": "firebase deploy --only hosting: release complete, 82 files uploaded",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "runtime",
+          "ref": "10/10 direct fetches against sokoni-aeb26.web.app confirm each fix present",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "File-level verification only. Confirms the code is served; does not confirm behaviour in a real browser session — production browser automation was not permitted."
     }
   ]
 }
