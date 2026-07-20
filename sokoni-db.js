@@ -529,8 +529,14 @@ const SokoniDB = {
     if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
     if (opts.status)    q = query(q, where('status', '==', opts.status));
     q = query(q, limit(opts.limit || 100));
-    const snap = await getDocs ? getDocs(q) : null;
-    if (!snap) return [];
+    /* Was `await getDocs ? getDocs(q) : null`, which parses as
+       `(await getDocs) ? getDocs(q) : null` — it awaited the imported function
+       (truthy), then called getDocs(q) WITHOUT awaiting, so snap was an
+       unresolved Promise, snap.docs was undefined, and the read returned
+       nothing. The storefront convergence caught it: a seller with 7 live
+       products showed an empty store because this one-shot read silently
+       failed. Await the query itself. */
+    const snap = await getDocs(q);
     return snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; });
   },
 
