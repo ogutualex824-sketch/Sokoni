@@ -33,6 +33,51 @@ function gcloud(args) {
     { encoding: 'utf8', env, timeout: 90000, stdio: ['ignore', 'pipe', 'pipe'], shell: win });
 }
 
+/* Read the Identity Platform config.
+
+   `gcloud beta identity-platform config describe` was removed from the SDK —
+   it now fails with "Invalid choice: 'identity-platform'", which the rules
+   below reported as SKIPPED (correct, but for the wrong reason: the tool was
+   gone, not the access).
+
+   The supported replacement is the Identity Toolkit Admin REST API, which is
+   what that command wrapped. gcloud is still used, but only to mint an OAuth
+   token — a stable interface that is not going to be reorganised the way
+   surface commands are.
+
+   Cached on ctx: both rules below need this document and it should be fetched
+   once per run. */
+async function identityConfig(ctx) {
+  if (ctx._idpConfig !== undefined) return ctx._idpConfig;
+
+  let token;
+  try {
+    token = gcloud(['auth', 'print-access-token']).trim();
+  } catch (e) {
+    ctx._idpConfig = { error: 'could not mint an access token: ' + String(e.message).split('\n')[0].slice(0, 120) };
+    return ctx._idpConfig;
+  }
+  if (!token) {
+    ctx._idpConfig = { error: 'gcloud returned an empty access token' };
+    return ctx._idpConfig;
+  }
+
+  const url = 'https://identitytoolkit.googleapis.com/admin/v2/projects/' + PROJECT + '/config';
+  try {
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      ctx._idpConfig = { error: 'HTTP ' + res.status + ' from ' + url + ' — ' +
+        ((body.error && body.error.message) || 'no message') };
+      return ctx._idpConfig;
+    }
+    ctx._idpConfig = { config: body };
+  } catch (e) {
+    ctx._idpConfig = { error: 'request failed: ' + String(e.message).slice(0, 120) };
+  }
+  return ctx._idpConfig;
+}
+
 /* Shared prerequisite: is there a credentialed account at all? Cached on ctx so
    we shell out once per run rather than once per rule. */
 function requiresGcloud(ctx) {
@@ -89,18 +134,18 @@ module.exports = [
     title: 'Every registered blocking function resolves to a live service',
     severity: 'critical',
     requires: requiresGcloud,
-    run: async () => {
-      let raw;
-      try {
-        raw = gcloud(['beta', 'identity-platform', 'config', 'describe', '--project=' + PROJECT, '--format=json']);
-      } catch (e) {
+    run: async (ctx) => {
+      const r = await identityConfig(ctx);
+      if (r.error) {
         return { status: STATUS.SKIPPED,
-          evidence: 'could not read Identity Platform config: ' + String(e.message).split('\n')[0].slice(0, 160),
-          remediation: 'Needs the beta component and Identity Platform read access. ' +
-                       'Equivalent: GET https://identitytoolkit.googleapis.com/admin/v2/projects/' + PROJECT + '/config' };
+          evidence: 'could not read Identity Platform config: ' + r.error,
+          remediation: 'Requires an authenticated account with Identity Platform read access ' +
+                       '(firebaseauth.viewer / owner). Manual equivalent:\n' +
+                       '  curl -H "Authorization: Bearer $(gcloud auth print-access-token)" \\\n' +
+                       '    https://identitytoolkit.googleapis.com/admin/v2/projects/' + PROJECT + '/config' };
       }
 
-      const cfg = JSON.parse(raw);
+      const cfg = r.config;
       const triggers = (cfg.blockingFunctions && cfg.blockingFunctions.triggers) || {};
       const names = Object.keys(triggers);
 
@@ -141,13 +186,11 @@ module.exports = [
     requires: requiresGcloud,
     run: async (ctx) => {
       const expected = ctx.expectedDomains || ['mysokoni.co.ke', 'www.mysokoni.co.ke', 'sokoni-aeb26.web.app'];
-      let cfg;
-      try {
-        cfg = JSON.parse(gcloud(['beta', 'identity-platform', 'config', 'describe', '--project=' + PROJECT, '--format=json']));
-      } catch (e) {
-        return { status: STATUS.SKIPPED, evidence: 'could not read Identity Platform config: ' + String(e.message).split('\n')[0].slice(0, 120) };
+      const r = await identityConfig(ctx);
+      if (r.error) {
+        return { status: STATUS.SKIPPED, evidence: 'could not read Identity Platform config: ' + r.error };
       }
-      const got = cfg.authorizedDomains || [];
+      const got = r.config.authorizedDomains || [];
       const missing = expected.filter((d) => !got.includes(d));
       return missing.length
         ? { status: STATUS.FAIL, evidence: 'missing authorized domains: ' + missing.join(', ') + ' (present: ' + got.join(', ') + ')',
