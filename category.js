@@ -10,26 +10,12 @@ var _activeOffers = new Map();
 
 const params = new URLSearchParams(window.location.search);
 const _rawCat = params.get("cat") || "all";
-const _allowedCats = new Set(["all","fashion","electronics","accessories","printing","beauty","cars","luxury","vape","alcohol","tobacco","adult","food","home","sports","books","health","kids","pets","garden","office","art","music","travel","services"]);
-const category = _allowedCats.has(_rawCat) ? _rawCat : "all";
+/* `category` is derived below, once categoryMeta exists — see the comment
+   there for why this is no longer a second hand-maintained list. */
 const _sortParam = params.get("sort") || "";
 
 function _esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
-/* Age gate for adult categories */
-if(typeof isAdultCategory === "function" && isAdultCategory(category)){
-    requireAgeVerification().then(verified => {
-        if(!verified){ window.location.href = "/"; return; }
-        /* Sync storage keys and remove any per-card blurs */
-        sessionStorage.setItem('sokoniAgeVerified','true');
-        localStorage.setItem('sokoniAgeVerified','true');
-        /* Dismiss the simple fallback gate modal if it fired first */
-        const simpleGate = document.getElementById('ageGate');
-        if(simpleGate) simpleGate.style.display='none';
-        document.body.style.overflow='';
-        if(typeof _unblurCards === 'function') _unblurCards();
-    });
-}
 
 const categoryMeta = {
     all:           { title:"All Products",        icon:"🛍️" },
@@ -75,6 +61,37 @@ const categoryMeta = {
     bakery:     { title:"Bakery & Bread",          icon:"🍞" },
     adult:      { title:"Adult Lifestyle Products",icon:"🌹" },
 };
+
+/* The valid categories ARE the keys of categoryMeta. Previously a separate
+   hand-written _allowedCats Set guarded this, and the two drifted: the Set
+   listed 25 categories while categoryMeta defined 36. The eleven that existed
+   only in the metadata — shoes, computers, appliances, furniture, meat, fish,
+   poultry, dairy, bakery, agriculture, digital — are linked from category.html
+   pills and index.html, so every one of those deep links silently fell through
+   to unfiltered "All Products" with the wrong page title.
+
+   Worse, it was inconsistent for the SAME url: switchCategory() never applied
+   the whitelist, so clicking a pill in-page filtered correctly while reloading
+   or sharing that url did not.
+
+   Deriving the guard from the metadata removes the second list entirely, so
+   adding a category in one place cannot desynchronise it again. */
+const category = Object.prototype.hasOwnProperty.call(categoryMeta, _rawCat) ? _rawCat : "all";
+
+/* Age gate for adult categories */
+if(typeof isAdultCategory === "function" && isAdultCategory(category)){
+    requireAgeVerification().then(verified => {
+        if(!verified){ window.location.href = "/"; return; }
+        /* Sync storage keys and remove any per-card blurs */
+        sessionStorage.setItem('sokoniAgeVerified','true');
+        localStorage.setItem('sokoniAgeVerified','true');
+        /* Dismiss the simple fallback gate modal if it fired first */
+        const simpleGate = document.getElementById('ageGate');
+        if(simpleGate) simpleGate.style.display='none';
+        document.body.style.overflow='';
+        if(typeof _unblurCards === 'function') _unblurCards();
+    });
+}
 
 const meta = categoryMeta[category] || categoryMeta.all;
 const _sortLabels = { newest:"New Arrivals", bestselling:"Fastest Selling", discount:"Big Discounts", picks:"Today's Picks" };
