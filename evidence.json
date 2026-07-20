@@ -256,6 +256,11 @@
           "type": "deployment",
           "ref": "firebase functions:list — 1,460 deployed on sokoni-aeb26",
           "date": "2026-07-20"
+        },
+        {
+          "type": "deployment",
+          "ref": "bookingDispatch, 3 algolia sync functions updated to a5107a7",
+          "date": "2026-07-20"
         }
       ],
       "contradictions": [
@@ -270,7 +275,7 @@
           "date": "2026-07-20"
         }
       ],
-      "note": "Deployed and CURRENT are different claims. The deployed code predates every fix from this cycle."
+      "note": "Backend is PARTIALLY current. 4 functions carry this cycle's fixes; ~108 more carrying the auth-guard change are identified and not yet deployed."
     },
     {
       "id": "CLM-013",
@@ -336,6 +341,43 @@
       ],
       "contradictions": [],
       "note": "File-level verification only. Confirms the code is served; does not confirm behaviour in a real browser session — production browser automation was not permitted."
+    },
+    {
+      "id": "CLM-018",
+      "claim": "The 29 dead booking-domain handlers execute in production.",
+      "sources": [
+        {
+          "type": "deployment",
+          "ref": "firebase deploy functions:bookingDispatch — Successful update operation",
+          "date": "2026-07-20"
+        },
+        {
+          "type": "runtime",
+          "ref": "live probe: venueGetStats, setLiveStatus, getAvailabilitySlots, bookingSearch all return UNAUTHENTICATED (401), not INTERNAL",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [],
+      "note": "Decisive signature. Before the fix each handler threw ReferenceError on line 1, surfacing as INTERNAL. UNAUTHENTICATED proves the handler reached its own auth check. Four ops sampled of 29."
+    },
+    {
+      "id": "CLM-019",
+      "claim": "Newly uploaded products index to the collection search reads.",
+      "sources": [
+        {
+          "type": "deployment",
+          "ref": "algoliaSync_products_create, _update and processAlgoliaQueue updated in production",
+          "date": "2026-07-20"
+        }
+      ],
+      "contradictions": [
+        {
+          "type": "runtime",
+          "ref": "no product has been uploaded and observed reaching sokoni_products",
+          "date": "2026-07-20"
+        }
+      ],
+      "note": "The write path now targets sokoni_products. EXISTING products remain in products_index and are still unreachable until the backfill and reindex run, which need Admin SDK credentials."
     }
   ]
 }
