@@ -340,7 +340,8 @@ async function _lrAuth() {
       _lrGrant();
     }
   } catch(e) {
-    err.textContent = 'Verification error — check connection.';
+    console.error('[launch-readiness] verification failed', e);
+    err.textContent = _skWhy(e, 'Verification could not run.');
   }
 }
 
@@ -691,6 +692,21 @@ document.addEventListener('sokoniFirebaseReady', function(){
 setTimeout(function(){
   if (_lrCheckSession() && Object.keys(_results).length === 0) _lrLoad();
 }, 2500);
+
+</script>
+<script>
+/* Turn a caught error into advice that matches its cause. Blaming the
+   connection for a permission failure sends people to reboot a router while the
+   real answer sits unread in the exception. */
+function _skWhy(e, fallback) {
+  var c = String((e && (e.code || e.name)) || '').replace(/^functions\//, '');
+  if (/permission-denied/.test(c)) return 'You do not have access to do that.';
+  if (/unauthenticated/.test(c))   return 'Your session expired. Sign in again.';
+  if (/not-found/.test(c))         return 'That item no longer exists.';
+  if (/unavailable|deadline-exceeded/.test(c)) return 'Server did not respond. Worth retrying.';
+  if (/failed-precondition/.test(c)) return 'Something needs setting up first.';
+  return fallback + (c ? ' (' + c + ')' : '');
+}
 </script>
 </body>
 </html>

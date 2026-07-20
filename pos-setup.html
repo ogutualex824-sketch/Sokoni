@@ -2322,7 +2322,8 @@ async function initBizStep() {
   } catch (err) {
     document.getElementById('biz-loading').style.display = 'none';
     const errBox = document.getElementById('biz-error');
-    errBox.textContent = 'Could not load your businesses. Please check your connection and try again.';
+    console.error('[POS setup] business list failed', err);
+    errBox.textContent = _skWhy(err, 'Could not load your businesses.');
     errBox.classList.add('visible');
   }
 }
@@ -3208,6 +3209,21 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
   });
 })();
 </script>
-<script src="sokoni-activation-preflight.js" defer></script>
+<script src="sokoni-activation-preflight.js" defer>
+<script>
+/* Turn a caught error into advice that matches its cause. Blaming the
+   connection for a permission failure sends people to reboot a router while the
+   real answer sits unread in the exception. */
+function _skWhy(e, fallback) {
+  var c = String((e && (e.code || e.name)) || '').replace(/^functions\//, '');
+  if (/permission-denied/.test(c)) return 'You do not have access to do that.';
+  if (/unauthenticated/.test(c))   return 'Your session expired. Sign in again.';
+  if (/not-found/.test(c))         return 'That item no longer exists.';
+  if (/unavailable|deadline-exceeded/.test(c)) return 'Server did not respond. Worth retrying.';
+  if (/failed-precondition/.test(c)) return 'Something needs setting up first.';
+  return fallback + (c ? ' (' + c + ')' : '');
+}
+</script>
+</script>
 </body>
 </html>

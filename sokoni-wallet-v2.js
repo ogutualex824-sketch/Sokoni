@@ -1,3 +1,17 @@
+
+/* Turn a caught error into advice that matches its cause. Blaming the
+   connection for a permission failure sends people to reboot a router while the
+   real answer sits unread in the exception. */
+function _skWhy(e, fallback) {
+  var c = String((e && (e.code || e.name)) || '').replace(/^functions\//, '');
+  if (/permission-denied/.test(c)) return 'You do not have access to do that.';
+  if (/unauthenticated/.test(c))   return 'Your session expired. Sign in again.';
+  if (/not-found/.test(c))         return 'That item no longer exists.';
+  if (/unavailable|deadline-exceeded/.test(c)) return 'Server did not respond. Worth retrying.';
+  if (/failed-precondition/.test(c)) return 'Something needs setting up first.';
+  return fallback + (c ? ' (' + c + ')' : '');
+}
+
 /**
  * sokoni-wallet-v2.js — SOKONI Wallet 2.0 Client SDK
  *
@@ -621,7 +635,8 @@ window.SokoniWalletV2 = (function () {
       }
     } catch (e) {
       document.getElementById('sndStep1Searching').style.display = 'none';
-      toast('Could not search user. Check connection.', 'error');
+      console.error('[wallet] recipient search failed', e);
+      toast(_skWhy(e, 'Could not search right now.'), 'error');
     }
   }
 

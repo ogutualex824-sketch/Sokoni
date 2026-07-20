@@ -444,7 +444,7 @@ async function submitPost(){
       document.getElementById("cmPostBody").value    = "";
       document.getElementById("cmPostProduct").value = "";
       postStar = 0; buildStarBtns();
-    }catch(e){ _cmToast('Failed to post. Please check your connection.','error'); }
+    }catch(e){ console.error('[community] post failed', e); _cmToast(_skWhy(e, 'Could not post right now.'), 'error'); }
   }
 
   if(result.wasBlocked){
@@ -518,7 +518,7 @@ async function deletePost(id, _c){
   try{
     const { doc, deleteDoc } = await import(FS_URL);
     await deleteDoc(doc(_db,'communityPosts',id));
-  }catch(e){ _cmToast('Could not delete. Please check your connection.','error'); }
+  }catch(e){ console.error('[community] delete failed', e); _cmToast(_skWhy(e, 'Could not delete right now.'), 'error'); }
 }
 
 function renderFeed(){
@@ -1385,7 +1385,22 @@ document.getElementById('cmReportModal')?.addEventListener('click', function(e){
     <p style="color:rgba(255,255,255,.25);font-size:12px;text-align:center;">&copy; <span id="comm-footer-year">2026</span> SOKONI &middot; A product of Bravilex International Co. Limited &middot; All Rights Reserved. &nbsp;&bull;&nbsp; 🔒 SSL &nbsp;&bull;&nbsp; 🛡 IntaSend &nbsp;&bull;&nbsp; 📋 KDPA 2019</p>
   </div>
 </footer>
-<script>document.getElementById('comm-footer-year').textContent=new Date().getFullYear();</script>
+<script>document.getElementById('comm-footer-year').textContent=new Date().getFullYear();
+</script>
+<script>
+/* Turn a caught error into advice that matches its cause. Blaming the
+   connection for a permission failure sends people to reboot a router while the
+   real answer sits unread in the exception. */
+function _skWhy(e, fallback) {
+  var c = String((e && (e.code || e.name)) || '').replace(/^functions\//, '');
+  if (/permission-denied/.test(c)) return 'You do not have access to do that.';
+  if (/unauthenticated/.test(c))   return 'Your session expired. Sign in again.';
+  if (/not-found/.test(c))         return 'That item no longer exists.';
+  if (/unavailable|deadline-exceeded/.test(c)) return 'Server did not respond. Worth retrying.';
+  if (/failed-precondition/.test(c)) return 'Something needs setting up first.';
+  return fallback + (c ? ' (' + c + ')' : '');
+}
+</script>
 </body>
 </html>
 
