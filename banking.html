@@ -468,11 +468,15 @@
 
   
 
+<!-- Standard site bottom nav — Home / Market / Services / Orders / Profile.
+     Targets match index.html and sokoni-nav-engine.js so each tab means the same
+     thing everywhere (Orders → profile.html#orders). Banking is reached from the
+     hub link/top nav; it is not itself a bottom-nav destination. -->
 <nav class="bottom-nav">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Market</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="banking.html" class="bnav-item active-bnav"><i class="fas fa-landmark"></i><span>Banking</span></a>
+  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script src="scroll-memory.js" defer></script>
