@@ -227,7 +227,7 @@ function _clamp(v, min, max, def) {
    Save the provider's complete availability configuration.
    Writes to providerAvailability/{uid} and denormalises into availabilityStatus/{uid}.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvailability = async (req) => {
+exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvailability = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid = request.auth.uid;
   const d = request.data;
@@ -319,7 +319,7 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
    Instantly change a provider's live status. Takes effect across the
    platform within seconds via Firestore real-time listeners.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.setLiveStatus = onCall(CF_OPTIONS, exports._h.setLiveStatus = async (req) => {
+exports.setLiveStatus = onCall(CF_OPTIONS, exports._h.setLiveStatus = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid = request.auth.uid;
   const { status, until, providerId } = request.data;
@@ -361,7 +361,7 @@ exports.setLiveStatus = onCall(CF_OPTIONS, exports._h.setLiveStatus = async (req
    No composite index required: bookings stored with deterministic doc IDs
    that allow range queries on the document ID itself.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlots = async (req) => {
+exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlots = async (request) => {
   const { providerId, startDate, days = 7 } = request.data;
   if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
 
@@ -476,7 +476,7 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
    Prevents double-booking via deterministic document IDs.
    Slot doc ID format: {YYYY-MM-DD}_{HHmm}  →  "2026-07-15_0900"
 ══════════════════════════════════════════════════════════════════════════ */
-exports.reserveSlot = onCall(CF_OPTIONS, exports._h.reserveSlot = async (req) => {
+exports.reserveSlot = onCall(CF_OPTIONS, exports._h.reserveSlot = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const customerUid = request.auth.uid;
   const { providerId, date, startTime, endTime, hubType, serviceNote, idempotencyKey } = request.data;
@@ -554,7 +554,7 @@ exports.reserveSlot = onCall(CF_OPTIONS, exports._h.reserveSlot = async (req) =>
    CF 5 — releaseSlot
    Cancel a booking and free the slot. Decrements capacity counter.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.releaseSlot = onCall(CF_OPTIONS, exports._h.releaseSlot = async (req) => {
+exports.releaseSlot = onCall(CF_OPTIONS, exports._h.releaseSlot = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const callerUid = request.auth.uid;
   const isAdmin   = Boolean(request.auth.token?.admin);
@@ -767,7 +767,7 @@ exports.scheduledAvailabilityMaintenance = onSchedule(
    Enable or disable vacation mode. Blocks all bookings while active.
    Vacation is automatically deactivated on endDate by the maintenance job.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.setVacationMode = onCall(CF_OPTIONS, exports._h.setVacationMode = async (req) => {
+exports.setVacationMode = onCall(CF_OPTIONS, exports._h.setVacationMode = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid = request.auth.uid;
   const { active, startDate, endDate, message, autoReactivate, reason } = request.data || {};
@@ -807,7 +807,7 @@ exports.setVacationMode = onCall(CF_OPTIONS, exports._h.setVacationMode = async 
    Add a day-specific schedule override: holiday, special hours, or closure.
    Stored at: providerAvailability/{uid}/overrides/{YYYY-MM-DD}
 ══════════════════════════════════════════════════════════════════════════ */
-exports.addAvailabilityOverride = onCall(CF_OPTIONS, exports._h.addAvailabilityOverride = async (req) => {
+exports.addAvailabilityOverride = onCall(CF_OPTIONS, exports._h.addAvailabilityOverride = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid = request.auth.uid;
   const { date, closed, periods, label } = request.data || {};
@@ -836,7 +836,7 @@ exports.addAvailabilityOverride = onCall(CF_OPTIONS, exports._h.addAvailabilityO
    CF 10 — removeAvailabilityOverride
    Remove a day override and restore the normal weekly schedule for that date.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.removeAvailabilityOverride = onCall(CF_OPTIONS, exports._h.removeAvailabilityOverride = async (req) => {
+exports.removeAvailabilityOverride = onCall(CF_OPTIONS, exports._h.removeAvailabilityOverride = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid  = request.auth.uid;
   const date = String(request.data?.date || "");
@@ -856,7 +856,7 @@ exports.removeAvailabilityOverride = onCall(CF_OPTIONS, exports._h.removeAvailab
    List upcoming day overrides (from today, next 365 days, max 100).
    Callers can only read their own overrides or an admin can read any.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.listAvailabilityOverrides = onCall(CF_OPTIONS, exports._h.listAvailabilityOverrides = async (req) => {
+exports.listAvailabilityOverrides = onCall(CF_OPTIONS, exports._h.listAvailabilityOverrides = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const targetUid = String(request.data?.providerId || request.auth.uid);
 
@@ -886,7 +886,7 @@ exports.listAvailabilityOverrides = onCall(CF_OPTIONS, exports._h.listAvailabili
 const VALID_STOCK_STATUSES    = new Set(["in_stock","low_stock","out_of_stock","pre_order","backorder","discontinued"]);
 const VALID_DELIVERY_STATUSES = new Set(["same_day","next_day","pickup_only","unavailable"]);
 
-exports.setMarketplaceAvailability = onCall(CF_OPTIONS, exports._h.setMarketplaceAvailability = async (req) => {
+exports.setMarketplaceAvailability = onCall(CF_OPTIONS, exports._h.setMarketplaceAvailability = async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const uid = request.auth.uid;
   const d   = request.data || {};
@@ -921,7 +921,7 @@ exports.setMarketplaceAvailability = onCall(CF_OPTIONS, exports._h.setMarketplac
 ══════════════════════════════════════════════════════════════════════════ */
 exports.checkProviderAvailability = onCall(
   { ...CF_OPTIONS, timeoutSeconds: 15 },
-  exports._h.checkProviderAvailability = async (req) => {
+  exports._h.checkProviderAvailability = async (request) => {
     const providerId = String(request.data?.providerId || "");
     if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
 
@@ -982,7 +982,7 @@ exports.checkProviderAvailability = onCall(
    Finds the earliest bookable appointment slot from a given date.
    Searches up to 30 days ahead. Respects notices, capacity, and overrides.
 ══════════════════════════════════════════════════════════════════════════ */
-exports.getNextAvailableSlot = onCall(CF_OPTIONS, exports._h.getNextAvailableSlot = async (req) => {
+exports.getNextAvailableSlot = onCall(CF_OPTIONS, exports._h.getNextAvailableSlot = async (request) => {
   const providerId = String(request.data?.providerId || "");
   const fromDate   = request.data?.fromDate || _nairobiNow().date;
   if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
