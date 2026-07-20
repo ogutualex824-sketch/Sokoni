@@ -45,6 +45,25 @@
       anonymize_ip:   true,
       send_page_view: true,
       cookie_flags:   "SameSite=None;Secure",
+
+      /* ── Google Signals OFF ────────────────────────────────────────────────
+         MEASURED COST. With signals enabled, GA additionally calls
+         stats.g.doubleclick.net and google.<tld>/ads/ga-audiences. Neither is in
+         our CSP connect-src/img-src, so the browser BLOCKS both and then POSTs a
+         violation report to cspReportCollect — which awaits a Firestore write
+         with no minInstances, so each report took ~6s. Two reports per page load
+         were costing ~12s on the homepage. Analytics we do not use was the single
+         largest item in the load profile.
+
+         Turning them off removes the requests, the violations and the reports in
+         one change, and it is the correct default for us regardless of speed:
+         these calls share behavioural data with Google's advertising network,
+         which is not something SOKONI needs and not something we should be doing
+         quietly under the Kenyan Data Protection Act.
+
+         Ordinary GA measurement is unaffected — only the ad-network signals are. */
+      allow_google_signals: false,
+      allow_ad_personalization_signals: false,
     });
 
   } else if (!GA_ID) {

@@ -22,7 +22,7 @@
    v88 — consent-layer removal (glass-overlay P0). security.js is precached. The
    old copy removes the blurred backdrop with a single setTimeout, which WebKit
    drops in a backgrounded tab, leaving a blur that renders at opacity 0. */
-const CACHE_VERSION = "sokoni-20260719-app-shell-v97";
+const CACHE_VERSION = "sokoni-20260719-app-shell-v98";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
