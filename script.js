@@ -256,17 +256,27 @@ function loadProducts(){
 
        This does not make the page empty in practice: the Firestore listener
        added to index.html calls _homeMergeFirestore below with the real
-       catalogue, mirroring what category.html has always done. */
-    const _allowDemo = (function () {
-        try {
-            if (localStorage.getItem('sokoniAllowDemoData') === 'true') return true;
-            return /localhost|127\.0\.0\.1/.test(location.hostname);
-        } catch (e) { return false; }
+       catalogue, mirroring what category.html has always done.
+
+       REVISED after deploying the strict version. Suppressing the fallback
+       outright emptied the production homepage: real products exist in
+       Firestore and are publicly readable, but the listener returned nothing
+       within 14 seconds and SokoniDB swallows its onSnapshot error into a
+       console warning. Until that read is proven, an empty storefront is a
+       worse regression than demo data — so the fallback stays as a placeholder
+       and the Firestore listener replaces it the moment real products arrive.
+
+       The flag is retained and inverted: set sokoniSuppressDemoData to opt OUT
+       once the Firestore path is verified. That makes the eventual removal a
+       one-line change rather than another deploy-and-hope. */
+    const _suppressDemo = (function () {
+        try { return localStorage.getItem('sokoniSuppressDemoData') === 'true'; }
+        catch (e) { return false; }
     })();
 
     products = savedProducts.length > 0
         ? savedProducts
-        : (_allowDemo ? FALLBACK_PRODUCTS : []);
+        : (_suppressDemo ? [] : FALLBACK_PRODUCTS);
 
     /* EMPTY */
 
