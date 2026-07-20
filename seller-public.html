@@ -542,7 +542,13 @@
 </div>
 
 <script>
-(function(){
+/* ── Storefront init ── extracted from an IIFE so it can run AFTER the real
+   catalogue is loaded. This page read localStorage["sellerProducts"] only, so
+   a fresh anonymous visitor saw an empty store even when the seller had live
+   products. It now prefetches the canonical Firestore catalogue (the same
+   SokoniDB source home and category use) into that cache first, then runs
+   unchanged — orders, achievements and the grid all read one consistent set. */
+function _spInitStorefront(){
 
   /* ── helpers ── */
   function qs(id){ return document.getElementById(id); }
@@ -1009,7 +1015,19 @@
   /* ── render achievements tab ── */
   renderAchievements(spAch, totalSales, avgRating, deliveryRate, spFollowers);
 
-})();
+}
+
+/* Load the authoritative catalogue before rendering. loadProducts is a one-shot
+   read (not a live listener) — a storefront is viewed, not watched — and it is
+   gated on App Check readiness so the attested read is not raced. localStorage
+   stays the instant-paint cache; Firestore is the source of truth. On any
+   failure the storefront still runs on whatever cache exists, never blank. */
+(window.__sokoniAppCheckReady || Promise.resolve()).then(function(){
+  var pre = (window.SokoniDB && SokoniDB.loadProducts) ? SokoniDB.loadProducts({}) : Promise.resolve(null);
+  pre.then(function(fs){
+    if (fs && fs.length) { try { localStorage.setItem("sellerProducts", JSON.stringify(fs)); } catch(e){} }
+  }).catch(function(){}).finally(_spInitStorefront);
+});
 
 /* ── tab switching ── */
 function switchTab(name, btn){
