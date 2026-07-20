@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Beta Control — SOKONI</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+<script src="security.js"></script>
+<style>
+:root{
+  --bg:#050505; --sur:#0d0d0d; --sur2:#141414; --sur3:#1c1c1c;
+  --g:#71ff00; --ga:rgba(113,255,0,.12); --bor:#1c1c1c;
+  --txt:#e8e8e8; --sub:#8a8a8a; --dim:#5a5a5a;
+  --warn:#ffb020; --bad:#ff5c5c; --info:#4da3ff;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);color:var(--txt);min-height:100vh;
+  font-family:'Inter','Segoe UI',system-ui,-apple-system,sans-serif;
+  padding:14px 12px calc(28px + env(safe-area-inset-bottom,0px));
+  -webkit-font-smoothing:antialiased;
+}
+h1{font-size:18px;font-weight:900;letter-spacing:-.02em}
+.sub{font-size:12px;color:var(--sub);margin-top:2px}
+.hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.btn{
+  min-height:40px;padding:9px 14px;border-radius:10px;border:1px solid var(--bor);
+  background:var(--sur2);color:var(--txt);font-size:12.5px;font-weight:700;
+  font-family:inherit;cursor:pointer;white-space:nowrap;
+}
+.btn.p{background:var(--g);color:#000;border-color:var(--g)}
+.btn.d{background:rgba(255,92,92,.12);color:var(--bad);border-color:rgba(255,92,92,.3)}
+.btn:disabled{opacity:.45}
+input.search{
+  width:100%;min-height:46px;padding:12px 14px;border-radius:12px;
+  background:var(--sur2);border:1px solid var(--bor);color:var(--txt);
+  font-size:16px;font-family:inherit;outline:none;margin-bottom:10px;
+}
+input.search:focus{border-color:rgba(113,255,0,.35)}
+.tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:10px;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
+.tab{
+  display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:99px;
+  background:var(--sur2);border:1px solid var(--bor);font-size:12px;font-weight:700;
+  color:var(--sub);cursor:pointer;white-space:nowrap;font-family:inherit;min-height:38px;
+}
+.tab.on{background:var(--ga);border-color:rgba(113,255,0,.35);color:var(--g)}
+.tab .n{background:var(--sur3);border-radius:99px;padding:1px 7px;font-size:11px;color:var(--txt)}
+.card{background:var(--sur);border:1px solid var(--bor);border-radius:14px;padding:14px;margin-bottom:10px}
+.row{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.nm{font-size:14.5px;font-weight:800;letter-spacing:-.01em}
+.meta{font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.6;word-break:break-word}
+.chip{font-size:10px;font-weight:800;letter-spacing:.04em;padding:3px 8px;border-radius:6px;text-transform:uppercase;white-space:nowrap}
+.c-pending{background:rgba(255,176,32,.14);color:var(--warn)}
+.c-approved,.c-founder,.c-internal{background:var(--ga);color:var(--g)}
+.c-waitlisted{background:rgba(77,163,255,.14);color:var(--info)}
+.c-suspended,.c-rejected{background:rgba(255,92,92,.14);color:var(--bad)}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:12px}
+.state{text-align:center;padding:38px 16px;color:var(--dim);font-size:13px;line-height:1.6}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);
+  bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  background:var(--sur3);border:1px solid var(--bor);color:var(--txt);
+  padding:11px 18px;border-radius:10px;font-size:13px;z-index:999;display:none;max-width:88vw;text-align:center;
+}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div>
+    <h1>Beta Control</h1>
+    <div class="sub" id="sub">Checking access…</div>
+  </div>
+  <button class="btn" id="refresh" type="button">↻ Refresh</button>
+</div>
+
+<input class="search" id="q" type="search" placeholder="Search name, email, phone or uid…" autocomplete="off">
+<div class="tabs" id="tabs"></div>
+<div id="list"><div class="state">⟳ Loading…</div></div>
+<div class="toast" id="toast"></div>
+
+<script type="module" src="/firebase.js"></script>
+<script src="/sokoni-async.js"></script>
+<script>
+(function () {
+  'use strict';
+  /* Approvals are MANUAL and Super-Admin only, per the beta model. This page is
+     an operator console over betaList/betaReview — it holds no authority of its
+     own. betaReview asserts admin server-side; if this page were opened by a
+     non-admin every action would simply fail, which is the correct posture for a
+     console: the UI is a convenience, the CF is the control. */
+  var STATES = ['pending','waitlisted','approved','founder','internal','suspended','rejected'];
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;'); };
+
+  var FILTER = 'pending', ROWS = [], COUNTS = {}, busy = false, _fns = null;
+
+  function toast(m) { var t = $('toast'); t.textContent = m; t.style.display = 'block';
+    clearTimeout(t._h); t._h = setTimeout(function(){ t.style.display='none'; }, 2600); }
+
+  function ago(ms) {
+    if (!ms) return '';
+    var m = Math.floor((Date.now() - ms) / 60000);
+    if (m < 60) return m + 'm ago';
+    var h = Math.floor(m / 60);
+    return h < 24 ? h + 'h ago' : Math.floor(h / 24) + 'd ago';
+  }
+
+  async function fns() {
+    if (_fns) return _fns;
+    for (var i = 0; i < 100 && !window.firebaseApp; i++) await new Promise(function(r){ setTimeout(r,100); });
+    if (!window.firebaseApp) throw new Error('Firebase failed to initialise');
+    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    _fns = { m: m, f: m.getFunctions(window.firebaseApp, 'us-central1') };
+    return _fns;
+  }
+  async function call(name, data) {
+    var x = await fns();
+    return (await x.m.httpsCallable(x.f, name)(data || {})).data;
+  }
+
+  function renderTabs() {
+    $('tabs').innerHTML = STATES.map(function (s) {
+      return '<button type="button" class="tab' + (FILTER === s ? ' on' : '') + '" data-s="' + s + '">' +
+             esc(s) + ' <span class="n">' + (COUNTS[s] || 0) + '</span></button>';
+    }).join('');
+  }
+
+  function renderList() {
+    var el = $('list');
+    var rows = ROWS.filter(function (r) { return r.betaStatus === FILTER; });
+    if (!rows.length) {
+      el.innerHTML = '<div class="state">No <b>' + esc(FILTER) + '</b> accounts in this page of results.</div>';
+      return;
+    }
+    el.innerHTML = rows.map(function (r) {
+      /* Actions offered depend on current state — a suspended user is restored,
+         not "approved"; an approved user is not approved twice. */
+      var acts = [];
+      if (r.betaStatus === 'pending' || r.betaStatus === 'waitlisted') {
+        acts.push(['approved','Approve','p'], ['waitlisted','Waitlist',''],
+                  ['founder','Founder',''],  ['rejected','Reject','d']);
+      } else if (r.betaStatus === 'approved' || r.betaStatus === 'founder' || r.betaStatus === 'internal') {
+        acts.push(['suspended','Suspend','d'], ['founder','Make founder','']);
+      } else {
+        acts.push(['approved','Restore','p'], ['rejected','Reject','d']);
+      }
+      return '<div class="card">' +
+        '<div class="row"><div style="flex:1;min-width:0;">' +
+          '<div class="nm">' + esc(r.name || r.email || r.uid.slice(0,10)) + '</div>' +
+          '<div class="meta">' +
+            (r.email ? esc(r.email) + '<br>' : '') +
+            (r.phone ? esc(r.phone) + ' · ' : '') +
+            (r.userType ? esc(r.userType) : 'buyer') +
+            (r.county ? ' · ' + esc(r.county) : '') +
+            (r.appliedAt ? '<br>applied ' + esc(ago(r.appliedAt)) : '') +
+            '<br><span style="color:#3a3a3a">' + esc(r.uid) + '</span>' +
+          '</div>' +
+        '</div><span class="chip c-' + esc(r.betaStatus) + '">' + esc(r.betaStatus) + '</span></div>' +
+        (r.motivation ? '<div class="meta" style="margin-top:8px;color:var(--sub)">“' + esc(r.motivation.slice(0,180)) + '”</div>' : '') +
+        '<div class="acts">' + acts.map(function (a) {
+          return '<button type="button" class="btn ' + a[2] + '" data-uid="' + esc(r.uid) +
+                 '" data-d="' + a[0] + '">' + a[1] + '</button>';
+        }).join('') + '</div></div>';
+    }).join('');
+  }
+
+  async function load() {
+    var el = $('list');
+    el.innerHTML = '<div class="state">⟳ Loading…</div>';
+    try {
+      var res = await call('betaList', { search: $('q').value.trim(), limit: 200 });
+      ROWS = res.rows || []; COUNTS = res.counts || {};
+      $('sub').textContent = ROWS.length + ' account' + (ROWS.length === 1 ? '' : 's') +
+        (res.truncated ? ' (first 200)' : '');
+      renderTabs(); renderList();
+    } catch (e) {
+      var code = (e && e.code) || '';
+      /* permission-denied here means "you are not an admin", which is a
+         different problem from "it broke" and deserves different words. */
+      /* Three outcomes needing three different words. Collapsing them into one
+         "could not load" is how an admin ends up debugging a connection problem
+         that is actually a missing sign-in. */
+      var body, sub;
+      if (/unauthenticated/i.test(code + ' ' + ((e && e.message) || ''))) {
+        body = 'Sign in to manage the beta.<br><a href="/login.html?next=/beta-control" ' +
+               'style="color:var(--g);font-weight:700;display:inline-block;margin-top:10px">Sign in →</a>';
+        sub  = 'Not signed in';
+      } else if (/permission-denied/.test(code)) {
+        body = 'This console is for platform administrators.';
+        sub  = 'Admin access required';
+      } else {
+        body = 'Could not load the beta queue.<br><span style="color:#3a3a3a">' + esc(e && e.message) + '</span>';
+        sub  = 'Not loaded';
+      }
+      el.innerHTML = '<div class="state">' + body + '</div>';
+      $('sub').textContent = sub;
+      console.error('[BetaControl] load failed', code, e);
+    }
+  }
+
+  async function review(uid, decision, btn) {
+    if (busy) return;
+    /* Withdrawing access is not a one-tap action — confirm the destructive ones. */
+    if ((decision === 'suspended' || decision === 'rejected') &&
+        !confirm('Set this account to ' + decision + '? Their marketplace access will be removed immediately.')) return;
+    busy = true; if (btn) btn.disabled = true;
+    try {
+      await call('betaReview', { uid: uid, decision: decision });
+      toast('Set to ' + decision);
+      await load();
+    } catch (e) {
+      console.error('[BetaControl] review failed', e);
+      toast('Failed: ' + ((e && e.message) || 'unknown error'));
+    } finally { busy = false; if (btn) btn.disabled = false; }
+  }
+
+  document.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-s]');
+    if (t) { FILTER = t.getAttribute('data-s'); renderTabs(); renderList(); return; }
+    var a = e.target.closest('[data-uid]');
+    if (a) review(a.getAttribute('data-uid'), a.getAttribute('data-d'), a);
+  });
+
+  var _t;
+  $('q').addEventListener('input', function () { clearTimeout(_t); _t = setTimeout(load, 350); });
+  $('refresh').addEventListener('click', load);
+  load();
+})();
+</script>
+</body>
+</html>

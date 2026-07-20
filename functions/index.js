@@ -9034,6 +9034,7 @@ const _beta = require('./beta-access');
 exports.betaApply     = _beta.betaApply;
 exports.betaReview    = _beta.betaReview;
 exports.betaGetAccess = _beta.betaGetAccess;
+exports.betaList      = _beta.betaList;   /* the queue betaReview needs a uid from */
 exports.ageVerifyStatus = _ageVerify.ageVerifyStatus;
 
 

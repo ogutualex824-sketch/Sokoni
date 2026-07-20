@@ -186,5 +186,71 @@ exports.betaGetAccess = onCall(
     };
   });
 
+/* ── betaList — the queue the Super Admin actually works from ──────────────
+   betaReview needs a uid. Without this there is no way to discover one, so the
+   approval path existed but was unreachable — an admin would have had to read
+   Firestore by hand.
+
+   Reads the USERS collection rather than betaApplications, because a user's
+   status changes after review while their original application does not. The
+   queue must reflect current state, not what someone asked for weeks ago. */
+exports.betaList = onCall(
+  { cors: true, enforceAppCheck: true, region: 'us-central1' },
+  async (request) => {
+    _assertAdmin(request);
+
+    const { status, search, limit } = request.data || {};
+    const db = getFirestore();
+    const take = Math.min(Number(limit) || 50, 200);
+
+    let q = db.collection('users');
+    if (status && STATES.includes(status)) q = q.where('betaStatus', '==', status);
+    else q = q.where('betaStatus', 'in', STATES);   /* anyone who has applied */
+
+    /* No orderBy: pairing it with the filters above needs a composite index per
+       status, and a queue of this size does not justify ten indexes. Sorted in
+       memory below — revisit if the pending queue ever exceeds a few hundred. */
+    const snap = await q.limit(take).get();
+
+    let rows = snap.docs.map((d) => {
+      const v = d.data() || {};
+      return {
+        uid: d.id,
+        name:   v.name || v.displayName || null,
+        email:  v.email || null,
+        phone:  v.phoneNumber || null,
+        betaStatus:   v.betaStatus || 'none',
+        userType:     v.betaUserType || null,
+        county:       v.betaCounty || null,
+        appliedAt:    v.betaAppliedAt  ? v.betaAppliedAt.toMillis()  : null,
+        reviewedAt:   v.betaReviewedAt ? v.betaReviewedAt.toMillis() : null,
+        motivation:   v.betaMotivation || null,
+      };
+    });
+
+    /* Server-side search so an admin on a phone is not filtering 200 rows in a
+       browser. Deliberately simple substring matching — this is an operator
+       queue, not the product search engine. */
+    if (search) {
+      const s = String(search).toLowerCase().trim();
+      rows = rows.filter((r) =>
+        (r.name || '').toLowerCase().includes(s) ||
+        (r.email || '').toLowerCase().includes(s) ||
+        (r.phone || '').includes(s) ||
+        r.uid.toLowerCase().includes(s));
+    }
+
+    rows.sort((a, b) => (b.appliedAt || 0) - (a.appliedAt || 0));
+
+    /* Counts drive the queue tabs. Computed from the same page of results, so
+       they are exact only up to `take` — labelled as such in the UI rather than
+       implying a full census. */
+    const counts = {};
+    STATES.forEach((s) => { counts[s] = 0; });
+    rows.forEach((r) => { if (counts[r.betaStatus] !== undefined) counts[r.betaStatus]++; });
+
+    return { rows, counts, truncated: snap.size >= take };
+  });
+
 exports.BETA_STATES = STATES;
 exports.BETA_ADMITTED = ADMITTED;
