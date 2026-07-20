@@ -309,6 +309,80 @@ service cloud.firestore {
        bypasses these rules. Allowing a client write here would let a member
        grant themselves capabilities — the escalation this collection exists to
        prevent. */
+    /* ══ FINANCIAL RECORDS ══════════════════════════════════════════════════
+       Written exclusively by the financial engine through the Admin SDK, which
+       bypasses these rules. Nothing here is client-writable: an invoice a
+       customer can edit is not an invoice, and a journal a client can post to
+       is not a ledger.
+
+       These collections were created without rules, which meant default-deny
+       and a customer portal that could never read its own invoices — the same
+       defect diagnosed in workspaceMemberships earlier the same day. Reads are
+       therefore granted narrowly rather than left absent.
+
+       The split is deliberate: customer-facing documents are readable by the
+       person they belong to; internal accounting is admin-only. A buyer has a
+       right to their own receipt and no business reading the double-entry
+       book. */
+
+    /* Tax invoices — the customer's own document. */
+    match /financialDocuments/{ref} {
+      allow read:   if isAuthed() && (resource.data.uid == request.auth.uid
+                                   || resource.data.sellerUid == request.auth.uid
+                                   || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    /* Receipts — same audience as the invoice they settle. */
+    match /financialReceipts/{ref} {
+      allow read:   if isAuthed() && (resource.data.uid == request.auth.uid
+                                   || resource.data.sellerUid == request.auth.uid
+                                   || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    /* Double-entry journal — internal accounting. Exposing debit/credit legs
+       would leak platform revenue and commission structure to any buyer. */
+    match /financialJournal/{entryId} {
+      allow read:   if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* Tax ledger — the rows a KRA return is built from. Finance only. */
+    match /taxLedger/{ref} {
+      allow read:   if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* Payment timeline — a customer may see where their own payment reached;
+       support and finance may see any. Diagnostic, never authoritative. */
+    match /paymentTimeline/{ref} {
+      allow read:   if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    /* Payment intents — the commercial authority record. A client that could
+       write one could name its own price, which is the exact vulnerability the
+       intent model closed. Read-own only, so a page can confirm what it is
+       about to be charged. */
+    match /paymentIntents/{ref} {
+      allow read:   if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
+    /* Reconciliation queue — payments whose paperwork failed. Operational. */
+    match /financialEngineFailures/{ref} {
+      allow read:   if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    /* Sequential document counters. Readable by nobody: the next invoice
+       number is not information a client needs, and exposing it reveals
+       transaction volume. */
+    match /_counters/{counterId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /workspaceMemberships/{membershipId} {
       allow read:   if isAuthed() && resource.data.uid == request.auth.uid;
       allow create, update, delete: if false;

@@ -76,6 +76,11 @@ async function mark(ref, stage, data) {
     const now = Date.now();
     await db().collection('paymentTimeline').doc(key).set({
       ref: key,
+      /* Top-level uid so the Firestore rule can authorise a read. Nested only
+         inside stages.*.data it would be invisible to resource.data.uid, and a
+         customer could never see their own payment's progress. Written on the
+         first stage that knows it and preserved thereafter. */
+      ...(data && data.uid ? { uid: String(data.uid) } : {}),
       currentStage: stage,
       updatedAt: FV().serverTimestamp(),
       updatedAtMs: now,
