@@ -2632,14 +2632,22 @@ function _branchFailure(err, kind) {
   } else if (/unavailable|deadline-exceeded/.test(code)) {
     msg = 'SOKONI did not respond in time. This one IS worth retrying — check your connection if it persists.';
   } else if (/internal|data-mismatch/.test(code)) {
-    msg = (err && err.message) || 'The server hit an error loading branches. Please send support the code below.';
+    /* Was: msg = err.message — the RAW SERVER ERROR string, rendered straight into the
+       page. Server messages are written for logs, not merchants. */
+    msg = 'We could not load your branches just now. Please try again in a moment — ' +
+          'if it keeps happening, contact SOKONI support.';
   } else {
     msg = 'Could not load branches.';
   }
+  /* The code stays in the console and in telemetry, where it is useful. */
   console.error('[POS setup] branch load failed', { code, message: err && err.message });
   try { if (window.SokoniAsync) window.SokoniAsync.report('POSSetup', 'branches', err, { code }); } catch (_) {}
   const box = document.getElementById('branch-error');
-  box.textContent = msg + '\n\ncode: ' + (code || 'unknown');
+  /* Was: box.textContent = msg + '\n\ncode: ' + code — which printed Firebase's internal
+     error identifier into the UI. A merchant seeing "code: internal" reads it as a branch
+     called "internal" and has no idea what to do with it. Implementation identifiers
+     belong in logs; the line above already records it. */
+  box.textContent = msg;
   box.classList.add('visible');
   document.getElementById('btn-branch-continue').disabled = true;
 }
@@ -2983,21 +2991,26 @@ function _provDiagnose(err, ctx) {
       msg = 'Could not download business configuration.';
   }
 
-  /* Always append the machine-readable part. */
-  const ref = [
-    'code: ' + (code || 'unknown'),
-    ctx.merchantId ? 'business: ' + String(ctx.merchantId).slice(0, 24) : null,
-    ctx.branchId ? 'branch: ' + String(ctx.branchId).slice(0, 24) : null,
-  ].filter(Boolean).join(' · ');
+  /* This used to append a "machine-readable part" to the MESSAGE SHOWN ON SCREEN:
+       code: <firebase code> · business: <Firestore doc id> · branch: <Firestore doc id>
+     followed by the raw server message. Firestore document IDs and internal error codes
+     are implementation detail — they mean nothing to a merchant, they invite them to read
+     an identifier as a name (which is how "code: internal" got reported as a branch called
+     "internal"), and printing database keys into the UI is a needless disclosure.
 
-  console.error('[POS setup] bootstrapDevice failed', { code, message: raw, ...ctx });
+     Everything below is still captured in full, in the two places it is actually useful:
+     the console and the SokoniAsync telemetry report. */
+  console.error('[POS setup] bootstrapDevice failed', {
+    code, message: raw,
+    merchantId: ctx.merchantId, branchId: ctx.branchId, ...ctx,
+  });
   try {
     if (window.SokoniAsync) {
       window.SokoniAsync.report('POSSetup', 'bootstrapDevice', err, ctx);
     }
   } catch (_) {}
 
-  return msg + '\n\n' + ref + '\n' + raw;
+  return msg;
 }
 
 function showProvError(msg) {
