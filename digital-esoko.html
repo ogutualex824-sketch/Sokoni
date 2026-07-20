@@ -340,7 +340,7 @@ function purchaseProduct(id){
   if(!p||hasPurchased(id)) return;
   if(!window.SokoniPay?.platformBook){ deNotif('Payment module loading…','info'); return; }
   const user = _user();
-  if(!user){ deNotif('Sign in to purchase','error'); window.location.href='auth.html'; return; }
+  if(!user){ deNotif('Sign in to purchase','error'); window.location.href='login.html'; return; }
   closeProductModal();
   SokoniPay.platformBook({
     providerName: p.sellerName||'Digital Seller',

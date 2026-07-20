@@ -1740,14 +1740,14 @@
     let authTimeout = null;
     authTimeout = setTimeout(() => {
       if (!currentUser) {
-        window.location.href = 'auth.html?redirect=pos-workspace.html';
+        window.location.href = 'login.html?redirect=pos-workspace.html';
       }
     }, 3000);
 
     onAuthStateChanged(auth, user => {
       clearTimeout(authTimeout);
       if (!user) {
-        window.location.href = 'auth.html?redirect=pos-workspace.html';
+        window.location.href = 'login.html?redirect=pos-workspace.html';
         return;
       }
       currentUser = user;

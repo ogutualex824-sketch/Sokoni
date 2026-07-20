@@ -294,7 +294,7 @@ firebase.auth().onAuthStateChanged(function(u) { S.user = u; });
 function requireAuth(fn) {
   if (S.user) { fn(); return; }
   toast('Please sign in to continue', 'err');
-  setTimeout(function() { window.location.href = 'auth.html'; }, 1300);
+  setTimeout(function() { window.location.href = 'login.html'; }, 1300);
 }
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */
@@ -747,7 +747,7 @@ function mkAuthPrompt() {
   var h3 = document.createElement('h3'); h3.textContent = 'Sign in to view your bookings';
   var p = document.createElement('p'); p.textContent = 'Log in to see your upcoming and past venue bookings.';
   var btn = document.createElement('button'); btn.className = 'btn-primary'; btn.textContent = 'Sign In';
-  btn.onclick = function() { window.location.href = 'auth.html'; };
+  btn.onclick = function() { window.location.href = 'login.html'; };
   wrap.appendChild(h3); wrap.appendChild(p); wrap.appendChild(btn); return wrap;
 }
 

@@ -416,7 +416,7 @@ let currentShiftId = null;
 let approvalInterval = null;
 
 onAuthStateChanged(auth, user => {
-  if (!user) { window.location.href = 'auth.html'; return; }
+  if (!user) { window.location.href = 'login.html'; return; }
   currentUser = user;
   init();
 });

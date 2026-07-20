@@ -751,7 +751,7 @@ function hideLoading(prefix) {
    AUTH GUARD
 ════════════════════════════════════════ */
 onAuthStateChanged(auth, async user => {
-  if (!user) { window.location.href = 'auth.html'; return; }
+  if (!user) { window.location.href = 'login.html'; return; }
 
   // Basic role guard — require manager+ claim
   const token = await user.getIdTokenResult();

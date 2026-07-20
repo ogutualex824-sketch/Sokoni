@@ -1846,6 +1846,11 @@ const WIZ = {
 /* ═══════════════════════════════════════════════════════════════
    STEP NAVIGATION
 ════════════════════════════════════════════════════════════════ */
+/* Handle for the pending activation frame. Activation is deferred to rAF (below), so a
+   panel can be SCHEDULED to become active without yet carrying .active. Without this
+   handle there is no way to cancel that pending frame, which is what stacked the wizard. */
+let _stepActivateRAF = 0;
+
 function goToStep(n) {
   if (n === WIZ.currentStep) return;
 
@@ -1853,8 +1858,25 @@ function goToStep(n) {
   const toEl    = document.getElementById('step-' + n);
   const forward = n > WIZ.currentStep;
 
-  /* Guarantee exactly one active step — no two panels can ever render together. */
-  document.querySelectorAll('.step-panel.active').forEach((p) => { if (p !== toEl) p.classList.remove('active'); });
+  /* ── Cancel any activation still queued from a previous call ──────────────────
+     THE STACKING BUG. Activation happens inside requestAnimationFrame, but the
+     "exactly one active" sweep below only clears panels that ALREADY carry .active.
+     A panel scheduled but not yet activated was invisible to that sweep, so its frame
+     still fired afterwards and added .active on top of the new step.
+
+     goToStep(4) has FIVE call sites in this file (auth success, session restore,
+     resume, skip, retry). When two of them ran in the same tick — routine during
+     sign-in — each queued its own activation and every one landed.
+
+     Reproduced: goToStep(3); goToStep(4); goToStep(5) in one tick left step-3,
+     step-4 and step-5 all .active AND visibility:visible — Sign In, Select Business
+     and Select Branch rendered on top of one another, so the wizard could not be
+     completed. */
+  if (_stepActivateRAF) { cancelAnimationFrame(_stepActivateRAF); _stepActivateRAF = 0; }
+
+  /* Sweep EVERY panel, not just the ones currently .active. A panel whose activation
+     frame was just cancelled may still carry .active from an earlier transition. */
+  document.querySelectorAll('.step-panel').forEach((p) => { if (p !== toEl) p.classList.remove('active'); });
 
   // Update dots
   const dots = document.querySelectorAll('.step-dot');
@@ -1868,7 +1890,17 @@ function goToStep(n) {
   // Animate out
   if (fromEl) {
     fromEl.classList.remove('active');
-    fromEl.classList.add(forward ? 'exit-left' : '');
+    /* Was: classList.add(forward ? 'exit-left' : '') — and classList.add('') THROWS
+       ("SyntaxError: the token provided must not be empty"). So every BACKWARD
+       navigation threw here and aborted goToStep before it could add .active to the
+       target, before WIZ.currentStep = n, and before onStepEnter(n).
+
+       The result: the outgoing panel had already lost .active on the line above and the
+       incoming one never gained it, so the wizard went completely BLANK — and because
+       currentStep was never updated, the next goToStep to that same number hit the
+       `n === WIZ.currentStep` early-return and did nothing at all. Reproduced going
+       3 -> 2: exception thrown, currentStep stuck at 3, zero active panels. */
+    if (forward) fromEl.classList.add('exit-left');
     // Clean up after transition
     setTimeout(() => {
       if (fromEl) fromEl.classList.remove('exit-left');
@@ -1883,7 +1915,8 @@ function goToStep(n) {
     } else {
       toEl.style.transform = '';
     }
-    requestAnimationFrame(() => {
+    _stepActivateRAF = requestAnimationFrame(() => {
+      _stepActivateRAF = 0;
       toEl.classList.add('active');
       toEl.style.transform = '';
     });

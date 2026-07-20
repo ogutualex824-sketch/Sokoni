@@ -309,7 +309,7 @@ window.refresh = refresh;
 
 onAuthStateChanged(auth, user => {
   if (!user) {
-    window.location.href = 'auth.html?redirect=ops-center.html';
+    window.location.href = 'login.html?redirect=ops-center.html';
     return;
   }
   refresh();

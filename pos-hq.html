@@ -656,7 +656,7 @@ const fns  = getFunctions(app);
 
 // ─── Auth guard ───────────────────────────────────────────────────────────────
 onAuthStateChanged(auth, async user => {
-  if (!user) { location.href = 'auth.html'; return; }
+  if (!user) { location.href = 'login.html'; return; }
   try {
     const token = await user.getIdTokenResult();
     const role  = token.claims?.role || '';
@@ -668,7 +668,7 @@ onAuthStateChanged(auth, async user => {
     init();
   } catch (e) {
     console.error('Token check failed:', e);
-    location.href = 'auth.html';
+    location.href = 'login.html';
   }
 });
 
