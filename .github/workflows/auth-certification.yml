@@ -1,0 +1,109 @@
+# Authentication Certification — CI gate.
+#
+# Runs on every PR and before every deploy. Layer 1 always runs. Layer 2 runs
+# only when GCP credentials are configured for the repository; without them its
+# checks report SKIPPED, and --gate turns that into a blocking exit code rather
+# than a silent pass.
+#
+# Exit codes consumed here:
+#   0  CERTIFIED
+#   1  FAILED      — a check ran and did not hold
+#   2  INCOMPLETE  — checks could not run; platform state unknown
+#
+# Both 1 and 2 block. "We could not verify" is not permission to deploy.
+
+name: Authentication Certification
+
+on:
+  pull_request:
+    paths:
+      - 'auth.js'
+      - 'firebase.js'
+      - 'sokoni-config.js'
+      - 'sokoni-appcheck.js'
+      - 'functions/**'
+      - 'scripts/auth-cert/**'
+      - '.github/workflows/auth-certification.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write        # required for keyless auth to Google Cloud
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Layer 2 needs a Google Cloud identity. Workload Identity Federation is
+      # used rather than a service-account key so no long-lived credential is
+      # stored in the repository. If the secrets are absent this step is
+      # skipped and Layer 2 degrades to SKIPPED — visibly, not silently.
+      - name: Authenticate to Google Cloud
+        id: gcp
+        if: vars.GCP_WORKLOAD_IDENTITY_PROVIDER != ''
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        if: steps.gcp.outcome == 'success'
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: beta
+
+      # Layers 1 and 2. Layer 3 is excluded from PR runs: it drives a real
+      # browser against production, which is a poor fit for pre-merge CI.
+      - name: Run certification (static + cloud)
+        env:
+          SOKONI_GCP_PROJECT: sokoni-aeb26
+        run: node scripts/auth-cert/index.js --layers 1,2 --offline --gate
+
+      - name: Upload certification reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-certification
+          path: docs/certificates/auth-certification.*
+          retention-days: 30
+
+  # Post-deploy verification. Layer 3 answers the only question that matters to
+  # a user — can a human actually sign in — so it runs against the deployed
+  # origin AFTER release, not against a preview build.
+  smoke:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: certify
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install browser
+        run: npx --yes playwright install --with-deps webkit
+
+      - name: Authentication smoke tests
+        env:
+          SOKONI_SMOKE_ORIGIN: https://mysokoni.co.ke
+        run: node scripts/auth-cert/index.js --layers 3 --gate
+
+      - name: Upload smoke reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-smoke
+          path: docs/certificates/auth-certification.*
+          retention-days: 30
