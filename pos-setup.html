@@ -2153,6 +2153,11 @@ document.getElementById('btn-send-otp').addEventListener('click', async () => {
     try {
       const result = await _confirmationResult.confirm(otp);
       WIZ.user = result.user;
+      /* Dismiss the spinner BEFORE leaving the step. The success path never did,
+         relying on step-3 hiding to take the spinner with it — fragile: any hitch
+         that leaves step-3 mounted shows a spinner that never stops, which reads
+         as "stuck on sign-in after the OTP". Turning it off here is unconditional. */
+      showAuthSpinner(false);
       goToStep(4);
     } catch (err) {
       showAuthSpinner(false);
@@ -2273,6 +2278,7 @@ document.getElementById('password-input').addEventListener('keydown', e => {
 _auth.onAuthStateChanged(user => {
   if (user && WIZ.currentStep === 3) {
     WIZ.user = user;
+    showAuthSpinner(false);   // clear the sign-in spinner on any auth-driven advance
     goToStep(4);
   }
 });
@@ -3345,7 +3351,13 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
   });
 })();
 </script>
-<script src="sokoni-activation-preflight.js" defer>
+<!-- This external script had NO closing tag: <script src=... defer> then <script>
+     on the next line. A src'd <script> ignores inline content but STILL consumes
+     everything up to the first </script>, so the _skWhy block below became dead
+     text and _skWhy was never defined. initBizStep's error path calls _skWhy
+     (line ~2362); with it undefined that call threw ReferenceError and left step
+     4 blank. Closing the tag properly restores _skWhy. -->
+<script src="sokoni-activation-preflight.js" defer></script>
 <script>
 /* Turn a caught error into advice that matches its cause. Blaming the
    connection for a permission failure sends people to reboot a router while the
@@ -3359,7 +3371,6 @@ function _skWhy(e, fallback) {
   if (/failed-precondition/.test(c)) return 'Something needs setting up first.';
   return fallback + (c ? ' (' + c + ')' : '');
 }
-</script>
 </script>
 </body>
 </html>
