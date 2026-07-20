@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Catalogue Doctor — SOKONI</title>
+<!--
+  PRODUCTION CATALOGUE GATE — on-device diagnostic.
+
+  Purpose: prove, on a REAL browser with a REAL App Check token, whether the
+  public `products` catalogue is readable and returns real merchant listings.
+  Automated/headless probes cannot pass reCAPTCHA v3, so they always land in the
+  ~15% DENY bucket; only a real device settles the question. This page does that.
+
+  It reuses the DEFAULT, App-Check-attested Firebase app (firebase.js) — the same
+  correction applied to search.html. It NEVER swallows an error: every read
+  reports its exact Firestore error code, latency and document count. Demo data
+  is not consulted; only real Firestore results count as success.
+
+  This page reads only public data (products: allow read: if true) and writes
+  nothing. Safe to leave deployed behind noindex; delete after the gate closes.
+-->
+<style>
+  :root { --bg:#050505; --card:#0e0e0e; --line:#1c1c1c; --accent:#71ff00; --dim:#8a8a8a; --bad:#ff5252; --warn:#ffb020; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:#f3f3f3;
+         font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+         padding:16px; -webkit-text-size-adjust:100%; }
+  h1 { font-size:20px; margin:4px 0 2px; letter-spacing:-.02em; }
+  .sub { color:var(--dim); font-size:13px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+          padding:14px 16px; margin-bottom:12px; }
+  .row { display:flex; justify-content:space-between; gap:12px; padding:5px 0;
+         border-bottom:1px solid rgba(255,255,255,.05); font-size:14px; }
+  .row:last-child { border-bottom:0; }
+  .k { color:var(--dim); }
+  .v { text-align:right; word-break:break-word; }
+  .pill { display:inline-block; padding:2px 10px; border-radius:999px; font-weight:700;
+          font-size:12px; letter-spacing:.02em; }
+  .ok  { background:rgba(113,255,0,.14); color:var(--accent); }
+  .no  { background:rgba(255,82,82,.16); color:var(--bad); }
+  .wait{ background:rgba(255,176,32,.16); color:var(--warn); }
+  .verdict { font-size:17px; font-weight:800; padding:14px 16px; border-radius:14px;
+             margin-bottom:14px; display:flex; align-items:center; gap:10px; }
+  .verdict.ok { background:linear-gradient(135deg,rgba(113,255,0,.16),rgba(113,255,0,.05)); border:1px solid rgba(113,255,0,.35); }
+  .verdict.no { background:linear-gradient(135deg,rgba(255,82,82,.16),rgba(255,82,82,.05)); border:1px solid rgba(255,82,82,.35); }
+  .verdict.wait { background:rgba(255,176,32,.10); border:1px solid rgba(255,176,32,.3); }
+  ul.names { margin:8px 0 0; padding-left:18px; }
+  ul.names li { padding:2px 0; font-size:13px; color:#dcdcdc; }
+  .muted { color:var(--dim); font-size:12px; margin-top:6px; }
+  code { background:#000; border:1px solid var(--line); border-radius:6px; padding:1px 6px; font-size:12px; }
+  button { -webkit-appearance:none; background:var(--accent); color:#022; border:0;
+           border-radius:10px; padding:11px 16px; font-weight:800; font-size:15px; width:100%;
+           margin-top:6px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.06em; color:var(--dim); margin:18px 0 8px; }
+</style>
+</head>
+<body>
+  <h1>🩺 Catalogue Doctor</h1>
+  <div class="sub">Proving the public catalogue on this exact device, with a real App Check token. No demo data.</div>
+
+  <div id="verdict" class="verdict wait"><span>⏳</span><span>Running diagnostics…</span></div>
+
+  <h2>Environment</h2>
+  <div class="card" id="env"></div>
+
+  <h2>App Check token</h2>
+  <div class="card" id="token"></div>
+
+  <h2>Catalogue reads (real Firestore)</h2>
+  <div class="card" id="reads"></div>
+
+  <h2>Real merchant products returned</h2>
+  <div class="card" id="names"><span class="muted">waiting…</span></div>
+
+  <button onclick="location.reload()">Re-run</button>
+  <div class="muted" style="margin-top:12px">
+    A pass means real Firestore products rendered above. If this device passes but the
+    home/search page shows demo or nothing, the fault is client-side (service-worker cache
+    or the page's own listener), not the catalogue's readability.
+  </div>
+
+<script type="module">
+  const $ = (id) => document.getElementById(id);
+  const rowEl = (k, v, cls) =>
+    `<div class="row"><span class="k">${k}</span><span class="v">${cls ? `<span class="pill ${cls}">${v}</span>` : v}</span></div>`;
+  const t0 = performance.now();
+  const now = () => Math.round(performance.now() - t0);
+
+  const env = [], tok = [], reads = [];
+  let realCount = 0, anyDenied = false, sample = [];
+
+  try {
+    // 1) Reuse the DEFAULT, App-Check-attested app — the whole point.
+    const fb = await import('./firebase.js');
+    const { app, db } = fb;
+    const { collection, query, limit, getDocsFromServer } =
+      await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    /* getDocsFromServer, NOT getDocs: forces a network round-trip so an App Check
+       denial surfaces as a thrown error instead of resolving empty from local
+       cache. A cache-served empty result would masquerade as "0 products". */
+
+    env.push(rowEl('Firebase app', app?.name || '(none)', app?.name === '[DEFAULT]' ? 'ok' : 'no'));
+    env.push(rowEl('Project', app?.options?.projectId || '?'));
+    env.push(rowEl('App ID', (app?.options?.appId || '?').slice(-14)));
+    env.push(rowEl('Origin', location.origin));
+    env.push(rowEl('Standalone/PWA', window.matchMedia('(display-mode: standalone)').matches ? 'yes' : 'no'));
+    env.push(rowEl('Service worker', ('serviceWorker' in navigator) &&
+      (await navigator.serviceWorker.getRegistrations()).length ? 'registered' : 'none',
+      ('serviceWorker' in navigator) && (await navigator.serviceWorker.getRegistrations()).length ? 'wait' : 'ok'));
+    $('env').innerHTML = env.join('');
+
+    // 2) App Check token — try to obtain one and time it. A real browser should succeed.
+    try {
+      const { getToken, getAppCheck } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-check.js')
+        .then(m => ({ getToken: m.getToken, getAppCheck: m.getAppCheck || null }));
+      let ac = null;
+      try { ac = getAppCheck ? getAppCheck(app) : null; } catch (_) { ac = null; }
+      if (ac) {
+        const tk0 = now();
+        const res = await getToken(ac, false);
+        tok.push(rowEl('reCAPTCHA v3 token', 'acquired', 'ok'));
+        tok.push(rowEl('token length', String((res.token || '').length)));
+        tok.push(rowEl('acquire latency', (now() - tk0) + ' ms'));
+      } else {
+        tok.push(rowEl('App Check handle', 'not exposed by SDK build', 'wait'));
+        tok.push(rowEl('note', 'read result below is the real proof', ''));
+      }
+    } catch (e) {
+      tok.push(rowEl('reCAPTCHA v3 token', 'FAILED', 'no'));
+      tok.push(rowEl('error', (e && (e.code || e.message) || 'unknown')));
+    }
+    $('token').innerHTML = tok.join('');
+
+    // 3) The actual catalogue reads. Mirror what production queries do.
+    //    (a) home/category style: whole products collection (capped).
+    //    (b) search style: products, limit(200), no filter.
+    const runRead = async (label, q) => {
+      const s = now();
+      try {
+        const snap = await getDocsFromServer(q);
+        reads.push(rowEl(label, snap.size + ' docs · ' + (now() - s) + ' ms',
+          snap.size > 0 ? 'ok' : 'no'));
+        return snap;
+      } catch (e) {
+        anyDenied = true;
+        const code = (e && e.code) || 'unknown';
+        reads.push(rowEl(label, code, 'no'));
+        reads.push(rowEl('↳ message', (e && e.message || '').slice(0, 90)));
+        return null;
+      }
+    };
+
+    const snapHome = await runRead('products (home style)',
+      query(collection(db, 'products'), limit(50)));
+    await runRead('products (search style · limit 200)',
+      query(collection(db, 'products'), limit(200)));
+    $('reads').innerHTML = reads.join('');
+
+    // 4) Prove they are REAL merchant products, by name.
+    if (snapHome && snapHome.size) {
+      snapHome.forEach(d => {
+        const x = d.data() || {};
+        const nm = x.name || x.title || '(unnamed)';
+        const who = x.sellerName || x.businessName || 'Unknown seller';
+        if (sample.length < 12) sample.push(nm + '  —  ' + who);
+      });
+      realCount = snapHome.size;
+      $('names').innerHTML = '<ul class="names">' +
+        sample.map(s => `<li>${s.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</li>`).join('') +
+        '</ul><div class="muted">' + realCount + ' total returned to this device.</div>';
+    } else {
+      $('names').innerHTML = '<span class="pill no">no products returned</span>';
+    }
+
+    // 5) Verdict.
+    const v = $('verdict');
+    if (realCount > 0 && !anyDenied) {
+      v.className = 'verdict ok';
+      v.innerHTML = '<span>✅</span><span>CATALOGUE READABLE — ' + realCount +
+        ' real products loaded on this device.</span>';
+    } else if (anyDenied) {
+      v.className = 'verdict no';
+      v.innerHTML = '<span>⛔</span><span>DENIED on this device — App Check or rules blocked the read. ' +
+        'Note the error code above.</span>';
+    } else {
+      v.className = 'verdict no';
+      v.innerHTML = '<span>⚠️</span><span>Reads succeeded but returned 0 products — the collection query, ' +
+        'not readability, is the problem.</span>';
+    }
+  } catch (fatal) {
+    $('verdict').className = 'verdict no';
+    $('verdict').innerHTML = '<span>💥</span><span>Diagnostic could not run: ' +
+      (fatal && (fatal.message || fatal.code) || 'unknown') + '</span>';
+    $('reads').innerHTML = rowEl('fatal', String(fatal && fatal.stack || fatal).slice(0, 200));
+  }
+</script>
+</body>
+</html>
