@@ -1410,6 +1410,12 @@ function displayNewArrivals(){
     }).slice(0, 20);
     section.style.display = "block";
     grid.innerHTML = newest.map(p => buildProductCard(p, "compact")).join("");
+    /* Without this every card in New Arrivals was inert: cart, wishlist, buy,
+       share and the card-tap that opens the product all rely on one delegated
+       listener, and it was attached only to #productsContainer. Both sections
+       populate on first paint, so the dead buttons were visible immediately.
+       _attachPcardDelegation removes before adding, so this is safe to repeat. */
+    _attachPcardDelegation(grid);
 }
 
 /* =========================
@@ -1424,7 +1430,8 @@ function displayRecommendedProducts(){
     // Recommended = shuffle products, show 6 on home page
     const shuffled = [...products].sort(() => Math.random() - 0.5).slice(0, 6);
     section.style.display = "block";
-    container.innerHTML = shuffled.map(p => buildProductCard(p, "large")).join("")
+    container.innerHTML = shuffled.map(p => buildProductCard(p, "large")).join("");
+    _attachPcardDelegation(container)
       + (products.length > 6
           ? `<div style="grid-column:1/-1;text-align:center;padding:8px 0 12px;">
                <a href="category.html?cat=all"
