@@ -863,6 +863,16 @@
     /* ══════════════════════════════════════════════════
        STEP 5 — SELECT BRANCH
     ══════════════════════════════════════════════════ */
+    /* Skeleton rows while branches load. Sized to the real card so the layout
+       does not jump when content replaces them. */
+    .branch-skel {
+      height: 68px; border-radius: 14px;
+      background: linear-gradient(90deg, rgba(255,255,255,.04) 25%, rgba(255,255,255,.08) 37%, rgba(255,255,255,.04) 63%);
+      background-size: 400% 100%; animation: branchShimmer 1.4s ease infinite;
+    }
+    @keyframes branchShimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+    @media (prefers-reduced-motion: reduce) { .branch-skel { animation: none; } }
+
     .branch-list {
       width: 100%;
       display: flex;
@@ -1524,21 +1534,47 @@
     <section id="step-5" class="step-panel" aria-label="Select your branch">
       <div class="step-inner">
 
-        <h2 class="wiz-title" style="margin-top:0">Select Branch</h2>
+        <h2 class="wiz-title" style="margin-top:0" id="step5-title">Select Branch</h2>
         <p class="wiz-sub" id="step5-sub">Choose a branch to operate from.</p>
 
         <div style="width:100%;margin-top:24px;">
 
-          <!-- Loading state -->
-          <div id="branch-loading" style="display:none;align-items:center;justify-content:center;padding:40px 0;gap:12px;">
-            <div class="spinner spinner-lg"></div>
+          <!-- Loading — skeletons, not a spinner. A spinner tells the merchant
+               nothing is happening; skeletons show the shape of what is coming
+               and stop the layout jumping when it arrives. -->
+          <div id="branch-loading" style="display:none;flex-direction:column;gap:10px;">
+            <div class="branch-skel"></div>
+            <div class="branch-skel"></div>
           </div>
 
-          <!-- Branch list -->
+          <!-- Case 2: exactly one branch — read-only confirmation, no selector -->
+          <div id="branch-single" style="display:none;">
+            <div style="border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:16px 18px;background:rgba(255,255,255,.03);">
+              <div id="branch-single-name" style="font-size:15.5px;font-weight:700;color:#fff;"></div>
+              <div id="branch-single-addr" style="font-size:12.5px;color:rgba(255,255,255,.5);margin-top:3px;"></div>
+              <div style="font-size:12px;color:#71ff00;margin-top:10px;display:flex;align-items:center;gap:6px;">
+                <span aria-hidden="true">✓</span><span>Selected automatically</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Case 3: multiple branches -->
           <div class="branch-list" id="branch-list" role="list" aria-label="Available branches"></div>
 
-          <!-- Error -->
-          <div class="error-box" id="branch-error" role="alert" style="margin-top:12px;"></div>
+          <!-- Case 1: no branches yet — onboarding, NOT an error -->
+          <div id="branch-empty" style="display:none;text-align:center;padding:22px 16px;
+               border:1px dashed rgba(255,255,255,.14);border-radius:14px;">
+            <div style="font-size:15px;font-weight:700;color:#fff;margin-bottom:6px;">No branch found yet</div>
+            <p style="font-size:13px;color:rgba(255,255,255,.55);line-height:1.6;margin:0 0 14px;">
+              Create your first branch to continue. Most businesses start with one — your main location.
+            </p>
+            <button type="button" id="btn-branch-create" class="btn-secondary" style="min-height:46px;">
+              + Create first branch
+            </button>
+          </div>
+
+          <!-- Genuine backend failure only -->
+          <div class="error-box" id="branch-error" role="alert" style="margin-top:12px;white-space:pre-line;text-align:left;"></div>
 
         </div>
 
@@ -2506,41 +2542,106 @@ async function initBranchStep() {
       'Choose a branch for ' + (WIZ.selectedBiz.name || 'your business') + '.';
   }
 
-  // If we already have branches from step 4, use them
-  if (WIZ._bizBranches && WIZ._bizBranches.length > 0) {
+  /* Five distinct states, five distinct UIs. The previous version collapsed
+     "you have no branches" and "the server failed" into one error box, so a
+     brand-new merchant with a perfectly healthy account was told something had
+     gone wrong and was then blocked from continuing. Owning one branch is the
+     normal case, not a fault. */
+  const $ = (id) => document.getElementById(id);
+  const show = (id, on, disp) => { $(id).style.display = on ? (disp || 'block') : 'none'; };
+
+  show('branch-single', false); show('branch-empty', false);
+  $('branch-list').innerHTML = '';
+
+  /* Array.isArray, not length > 0. An EMPTY array means "loaded, and this
+     business has none" — a real answer. null/undefined means "not loaded yet".
+     The previous check treated both as unknown, so a business with genuinely
+     zero branches triggered a needless fetch and, when that fetch failed, the
+     merchant saw a server error instead of the create-your-first-branch flow. */
+  if (Array.isArray(WIZ._bizBranches)) {
     _branches = WIZ._bizBranches;
   } else {
-    // Fetch via CF
-    document.getElementById('branch-loading').style.display = 'flex';
+    show('branch-loading', true, 'flex');
     try {
-      const mid = WIZ.selectedBiz.id;
-      const res = await CF('getBusinessConfig')({ merchantId: mid });
-      _branches = res.data.branches || [];
-      document.getElementById('branch-loading').style.display = 'none';
+      const res = await CF('getBusinessConfig')({ merchantId: WIZ.selectedBiz.id });
+      const d = res.data || {};
+      /* Prefer server-declared shape over client inference. branchCount is
+         authoritative when present: an empty branches[] because of a filter is
+         a different thing from a business that genuinely has none. */
+      _branches = d.branches || [];
+      if (typeof d.branchCount === 'number' && d.branchCount > 0 && _branches.length === 0) {
+        show('branch-loading', false);
+        return _branchFailure(new Error(
+          'The server reports ' + d.branchCount + ' branch(es) but returned none. ' +
+          'This is a data problem, not something you can fix here.'), 'data-mismatch');
+      }
+      if (d.selectedBranch || d.defaultBranch) {
+        const pref = d.selectedBranch || d.defaultBranch;
+        const i = _branches.findIndex((b) => b.id === (pref.id || pref));
+        if (i > 0) _branches.unshift(_branches.splice(i, 1)[0]);
+      }
+      show('branch-loading', false);
     } catch (err) {
-      document.getElementById('branch-loading').style.display = 'none';
-      const errBox = document.getElementById('branch-error');
-      errBox.textContent = 'Could not load branches. Please try again.';
-      errBox.classList.add('visible');
-      return;
+      show('branch-loading', false);
+      return _branchFailure(err);
     }
   }
 
+  /* CASE 1 — none. Onboarding, not an error. Continue stays disabled. */
   if (_branches.length === 0) {
-    const errBox = document.getElementById('branch-error');
-    errBox.textContent = 'No active branches found for this business.';
-    errBox.classList.add('visible');
+    $('step5-title').textContent = 'Add a Branch';
+    $('step5-sub').textContent = 'A branch is the physical location this POS device will operate from.';
+    show('branch-empty', true);
+    $('btn-branch-continue').disabled = true;
     return;
   }
 
-  // Auto-select if only 1
+  /* CASE 2 — exactly one. Select it, show it read-only, no selector, no
+     extra click. The step is still SHOWN rather than skipped: this device is
+     about to be bound to that location, and the merchant should see which. */
   if (_branches.length === 1) {
     WIZ.selectedBranch = _branches[0];
-    goToStep(6);
+    $('step5-title').textContent = 'Branch';
+    $('step5-sub').textContent = 'This POS device will operate from:';
+    $('branch-single-name').textContent = _branches[0].name || 'Main Branch';
+    $('branch-single-addr').textContent = _branches[0].address || _branches[0].location || '';
+    show('branch-single', true);
+    $('btn-branch-continue').disabled = false;
     return;
   }
 
+  /* CASE 3 — several. Selector, Continue disabled until one is chosen. */
+  $('step5-title').textContent = 'Select Branch';
+  $('step5-sub').textContent = 'Choose a branch for ' + ((WIZ.selectedBiz && WIZ.selectedBiz.name) || 'your business') + '.';
   renderBranchList(_branches);
+}
+
+/* Genuine backend failure only — never used for "you have no branches".
+   Reuses the same code-to-cause mapping as provisioning so the merchant gets
+   one consistent vocabulary across the wizard. */
+function _branchFailure(err, kind) {
+  const code = String((err && (err.code || err.name)) || kind || '').replace(/^functions\//, '');
+  let msg;
+  if (/permission-denied/.test(code)) {
+    msg = 'You do not have access to this business.\n\nAsk the owner to add you as staff, ' +
+          'or pick a different business. If you were added recently, sign out and back in.';
+  } else if (/unauthenticated/.test(code)) {
+    msg = 'Your session expired. Sign in again and restart setup.';
+  } else if (/not-found/.test(code)) {
+    msg = 'That business no longer exists. Go back and choose another.';
+  } else if (/unavailable|deadline-exceeded/.test(code)) {
+    msg = 'SOKONI did not respond in time. This one IS worth retrying — check your connection if it persists.';
+  } else if (/internal|data-mismatch/.test(code)) {
+    msg = (err && err.message) || 'The server hit an error loading branches. Please send support the code below.';
+  } else {
+    msg = 'Could not load branches.';
+  }
+  console.error('[POS setup] branch load failed', { code, message: err && err.message });
+  try { if (window.SokoniAsync) window.SokoniAsync.report('POSSetup', 'branches', err, { code }); } catch (_) {}
+  const box = document.getElementById('branch-error');
+  box.textContent = msg + '\n\ncode: ' + (code || 'unknown');
+  box.classList.add('visible');
+  document.getElementById('btn-branch-continue').disabled = true;
 }
 
 function renderBranchList(branches) {
@@ -2578,8 +2679,30 @@ function selectBranch(idx) {
 }
 
 document.getElementById('btn-branch-continue').addEventListener('click', () => {
-  if (!WIZ.selectedBranch) return;
+  /* A silent return leaves the merchant tapping a button that does nothing.
+     The button is disabled in every state where this could be reached, so if
+     it IS reached, say why rather than absorbing the tap. */
+  if (!WIZ.selectedBranch) {
+    const box = document.getElementById('branch-error');
+    box.textContent = 'Select a branch first.';
+    box.classList.add('visible');
+    return;
+  }
   goToStep(6);
+});
+
+/* Case 1 — first branch. Routed through the existing business registration
+   flow rather than a new one: creating a branch is already implemented there,
+   and a second creation path would be a second thing to keep correct. */
+document.getElementById('btn-branch-create').addEventListener('click', () => {
+  const mid = WIZ.selectedBiz && WIZ.selectedBiz.id;
+  if (window.HubRegister && typeof window.HubRegister.open === 'function') {
+    window.HubRegister.open({ hub: 'branch', merchantId: mid });
+    return;
+  }
+  /* No registration widget on this build — send them somewhere real rather
+     than failing silently. */
+  window.location.href = 'seller.html#settings' + (mid ? '?merchant=' + encodeURIComponent(mid) : '');
 });
 
 /* ═══════════════════════════════════════════════════════════════
