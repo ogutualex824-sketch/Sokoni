@@ -11,7 +11,6 @@ const { onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/
 const { onSchedule }    = require("firebase-functions/v2/scheduler");
 const { onRequest }     = require("firebase-functions/v2/https");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
-const { beforeUserCreated } = require("firebase-functions/v2/identity");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const emailSvc = require("./email-service");
