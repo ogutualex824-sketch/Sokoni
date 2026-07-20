@@ -489,9 +489,19 @@ window.loadMyCommissions = async function() {
   const total  = document.getElementById("myCommTotal");
   body.innerHTML = "<tr><td colspan='6' class='no-data'>Loading...</td></tr>";
   try {
-    const q = query(collection(_db,"commissionLedger"), orderBy("createdAt","desc"), limit(200));
+    /* Scoped server-side. This previously read commissionLedger unscoped and
+       filtered locally; firestore.rules:1329 requires a sellerUid match and
+       Firestore applies rules to the QUERY, so the read was denied and the
+       table showed "no commission records" regardless of the real figures.
+       Index (sellerUid ASC, createdAt DESC) already exists. `period` stays a
+       client-side filter — adding it to the query would need a third composite
+       index per period value for no benefit at this row count. */
+    const q = query(collection(_db,"commissionLedger"),
+                    where("sellerUid","==",_uid),
+                    orderBy("createdAt","desc"),
+                    limit(200));
     const _snap = await getDocs(q);
-    const snap = { docs: _snap.docs.filter(d => d.data().sellerUid===_uid && d.data().period===period), empty: false };
+    const snap = { docs: _snap.docs.filter(d => d.data().period===period), empty: false };
     snap.empty = snap.docs.length === 0;
     let sum = 0;
     if (snap.empty) { body.innerHTML="<tr><td colspan='6' class='no-data'>No commission records this period</td></tr>"; total.textContent=""; return; }
@@ -509,7 +519,19 @@ window.loadMyCommissions = async function() {
     }).join("");
     total.textContent = "Total owed: " + fmtKES(sum);
   } catch(e) {
-    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>Unable to load data — please refresh.</td></tr>`;
+    /* "Please refresh" is wrong advice for a permission failure — refreshing
+       fails identically and teaches the merchant the message is noise. Name the
+       two cases separately. Two sibling handlers in this file still carry the
+       generic copy; they are untouched because their queries were not changed
+       here and blind edits would be speculative. */
+    const code = (e && e.code) || "";
+    const msg = /permission-denied/.test(code)
+      ? "You do not have access to these records. If seller access was granted recently, sign out and back in to refresh your permissions."
+      : "Could not load commission records right now. Please try again.";
+    console.error("[Revenue] commissionLedger query failed:", code, e && e.message);
+    try { if (window.SokoniAsync) window.SokoniAsync.report("Revenue","commissionLedger",e,{uid:_uid}); } catch(_){}
+    body.innerHTML = `<tr><td colspan='6' style='color:#ff4444;padding:20px'>${msg}</td></tr>`;
+    total.textContent = "";
   }
 };
 

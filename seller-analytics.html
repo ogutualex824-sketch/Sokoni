@@ -393,11 +393,28 @@ input,select,textarea,button{font-size:16px;font-family:inherit;}
         messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"};
       var app = getApps().length?getApps()[0]:initializeApp(cfg);
       var db  = getFirestore(app);
-      var q   = query(collection(db,'orders'),orderBy('createdAt','desc'),limit(500));
+      /* Scoped server-side, not filtered client-side.
+         This previously fetched 500 orders unscoped and kept the seller's own
+         with .filter(). Firestore evaluates rules against the QUERY, not the
+         results, and firestore.rules:277 only permits an order read when
+         sellerUid matches the caller — so the unscoped read was refused
+         outright and the catch below returned [], rendering as "no sales"
+         when the truth was "not allowed to ask".
+         The composite index (sellerUid ASC, createdAt DESC) already exists. */
+      var q   = query(collection(db,'orders'),
+                      where('sellerUid','==',uid),
+                      orderBy('createdAt','desc'),
+                      limit(500));
       var snap = await getDocs(q);
-      return snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }).filter(function(o){ return o.sellerUid===uid; });
+      return snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
     } catch(e){
-      console.warn('[Analytics] Firestore orders:', e.message);
+      /* Surfaced, not swallowed. An empty chart and a denied query look
+         identical to a merchant; only one of them means zero sales. */
+      console.error('[Analytics] orders query failed:', e.code || '', e.message);
+      try {
+        if (window.SokoniAsync) window.SokoniAsync.report('Analytics','orders',e,{uid:uid});
+      } catch(_){}
+      window._analyticsLoadError = { code: e.code || 'unknown', message: e.message };
       return [];
     }
   }
