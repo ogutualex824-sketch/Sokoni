@@ -2885,6 +2885,46 @@ function showProvError(msg) {
   errBox.style.textAlign = 'left';
   errBox.classList.add('visible');
   document.getElementById('btn-prov-retry').style.display = 'flex';
+
+  /* Offer the preflight at the point of failure. Retry alone repeats whatever
+     just failed; this reports WHICH prerequisite is missing, which is the
+     difference between "try again" and knowing what to fix. */
+  let diag = document.getElementById('btn-prov-diagnose');
+  if (!diag) {
+    diag = document.createElement('button');
+    diag.id = 'btn-prov-diagnose';
+    diag.type = 'button';
+    diag.textContent = 'Run diagnostics';
+    diag.style.cssText = 'margin-top:10px;width:100%;min-height:48px;border-radius:12px;' +
+      'border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;' +
+      'font-weight:700;font-size:14px;font-family:inherit;cursor:pointer;';
+    document.getElementById('btn-prov-retry').insertAdjacentElement('afterend', diag);
+    diag.addEventListener('click', async () => {
+      if (!window.SokoniActivationPreflight) {
+        showProvError('Diagnostics unavailable on this build.');
+        return;
+      }
+      diag.disabled = true;
+      diag.textContent = 'Checking…';
+      try {
+        const r = await window.SokoniActivationPreflight.runAndLog({
+          merchantId: WIZ.selectedBiz ? WIZ.selectedBiz.id : null,
+          branchId:   WIZ.selectedBranch ? WIZ.selectedBranch.id : null,
+        });
+        const box = document.getElementById('prov-error');
+        box.textContent = window.SokoniActivationPreflight.format(r);
+        box.style.whiteSpace = 'pre-wrap';
+        box.style.textAlign = 'left';
+        box.style.fontFamily = 'ui-monospace,Menlo,monospace';
+        box.style.fontSize = '11.5px';
+      } catch (e) {
+        showProvError('Diagnostics could not run: ' + ((e && e.message) || e));
+      }
+      diag.disabled = false;
+      diag.textContent = 'Run diagnostics again';
+    });
+  }
+  diag.style.display = 'flex';
   setLiveMsg('');
 }
 
@@ -3168,5 +3208,6 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
   });
 })();
 </script>
+<script src="sokoni-activation-preflight.js" defer></script>
 </body>
 </html>
