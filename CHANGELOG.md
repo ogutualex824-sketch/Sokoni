@@ -2,44 +2,44 @@
 
 ### Root cause
 
-Commit  (2026-07-11, "Booking domain consolidation — 45 onCall → 1 bookingDispatch")
-renamed every handler's parameter from  to  in the signature, but did not rename
-the references inside the bodies.  was converted correctly.  and
- were not.
+Commit `fa010df` (2026-07-11, "Booking domain consolidation — 45 onCall → 1 bookingDispatch")
+renamed every handler's parameter from `request` to `req` in the signature, but did not rename the
+references inside the bodies. `booking.js` was converted correctly. `availability.js` and
+`venue-booking.js` were not.
 
-Each of those 29 handlers threw  on its **first
-statement** — before the auth check, before validation, before touching Firestore.
+Each of those 29 handlers threw `ReferenceError: request is not defined` on its **first statement**
+— before the auth check, before validation, before touching Firestore.
 
 ### Why nobody noticed for nine days
 
-The read path never calls these functions. ,  and
- read  directly from Firestore, so "Open Now" badges
-kept rendering from whatever the documents already held. **Only the write path was broken — and a
-subsystem nothing can write to still looks alive from the outside.**
+The read path never calls these functions. `services.html`, `healthcare.html` and `legal-hub.html`
+read `availabilityStatus/{id}` directly from Firestore, so "Open Now" badges kept rendering from
+whatever the documents already held. **Only the write path was broken — and a subsystem nothing can
+write to still looks alive from the outside.**
 
 ### Affected
 
 | File | Handlers | Examples |
 |---|---|---|
-|  | 12 | , , , ,  |
-|  | 17 | all  operations — create, book, cancel, check-in, calendar, stats |
+| `functions/availability.js` | 12 | `setProviderAvailability`, `setLiveStatus`, `reserveSlot`, `setVacationMode`, `setMarketplaceAvailability` |
+| `functions/venue-booking.js` | 17 | all `venue*` operations — create, book, cancel, check-in, calendar, stats |
 
 ### Fix
 
-The parameter name, not the bodies: 29 lines, one per handler, kept minimal so the diff is
-auditable.  () is an  handler where
- is correct and was deliberately left alone.
+The parameter name, not the bodies: 29 lines, one per handler, kept minimal so the diff stays
+auditable. `availability.js:619` (`getProviderAvailability`) is an `onRequest` handler where
+`req.query` is correct, and was deliberately left alone.
 
 ### Verification
 
 - All 45 handlers invoked in-process: **ReferenceError count 0** (was 29).
-- Both files pass .
+- Both files pass `node --check`.
 - Dispatcher still merges 45 ops, no name collisions.
 
 ### Not covered
 
-Deployment state is unverified —  is unavailable in this environment. If
- is live, these 29 ops have been failing in production since 2026-07-11.
+Deployment state is unverified — `gcloud` is unavailable in this environment. If `bookingDispatch`
+is live, these 29 ops have been failing in production since 2026-07-11.
 
 ### Security / breaking changes
 
