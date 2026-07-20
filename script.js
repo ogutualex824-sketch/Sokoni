@@ -242,8 +242,31 @@ function loadProducts(){
         return bB - aB;
     });
 
-    /* Use fallback products when localStorage is empty so page always looks alive */
-    products = savedProducts.length > 0 ? savedProducts : FALLBACK_PRODUCTS;
+    /* ── Demo data is not production data ──────────────────────────────────
+       A production probe found the homepage rendering 30 products, 100% of
+       them Unsplash stock photos: no real merchant listing appeared at all.
+       The homepage read localStorage only and fell back to FALLBACK_PRODUCTS
+       whenever that cache was empty — which it is for every first-time
+       visitor. So new buyers saw a catalogue of things nobody sells, and the
+       "images don't load" report was those demo URLs lazy-pending.
+
+       The fallback is now opt-in rather than automatic. Production shows the
+       real catalogue, or an honest empty state until Firestore arrives.
+       Development keeps the demo set by setting the flag.
+
+       This does not make the page empty in practice: the Firestore listener
+       added to index.html calls _homeMergeFirestore below with the real
+       catalogue, mirroring what category.html has always done. */
+    const _allowDemo = (function () {
+        try {
+            if (localStorage.getItem('sokoniAllowDemoData') === 'true') return true;
+            return /localhost|127\.0\.0\.1/.test(location.hostname);
+        } catch (e) { return false; }
+    })();
+
+    products = savedProducts.length > 0
+        ? savedProducts
+        : (_allowDemo ? FALLBACK_PRODUCTS : []);
 
     /* EMPTY */
 
@@ -4013,3 +4036,30 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
 })();
 
 
+
+/* ── Canonical catalogue: merge Firestore into the home feed ───────────────
+   The homepage read localStorage only, so a first-time visitor saw demo data
+   and never a real listing. category.html has always loaded the real catalogue
+   via SokoniDB.listenProducts; this is the same pattern, so home and category
+   converge on one source instead of maintaining two.
+
+   Local-only products are preserved: a listing uploaded but not yet synced to
+   Firestore must not vanish from its own seller's view. */
+window._homeMergeFirestore = function (fsProducts) {
+    if (!fsProducts || !fsProducts.length) return;
+
+    const fsIds = new Set(fsProducts.map(p => String(p.id)));
+    const localOnly = (Array.isArray(products) ? products : []).filter(p =>
+        !FALLBACK_PRODUCTS.some(d => d.id === p.id) && !fsIds.has(String(p.id))
+    );
+    products = [...fsProducts, ...localOnly];
+
+    try { localStorage.setItem("sellerProducts", JSON.stringify(products)); } catch (e) {}
+
+    const trendCountEl = document.getElementById("pTrendCount");
+    if (trendCountEl) trendCountEl.textContent = products.length + "+ products";
+
+    displayProducts(products.slice(0, 20));
+    if (typeof displayNewArrivals === "function") displayNewArrivals();
+    if (typeof displayRecommendedProducts === "function") displayRecommendedProducts();
+};

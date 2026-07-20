@@ -2755,7 +2755,15 @@
 
   <script src="adult-gate.js"></script>
   <!-- demo-seed.js intentionally removed from production -->
-  <script src="script.js" defer></script>
+  <script src="script.js" defer>
+<script type="module">
+/* Real seller products from Firestore, merged into the home grid.
+   Same source category.html uses — one catalogue, two views. */
+import SokoniDB from "./sokoni-db.js";
+SokoniDB.listenProducts({}, function (fsProducts) {
+  if (typeof window._homeMergeFirestore === "function") window._homeMergeFirestore(fsProducts);
+});
+</script></script>
   <script>
     function accessAdultCat(btn, cat) {
       requireAgeVerification().then(ok => {
