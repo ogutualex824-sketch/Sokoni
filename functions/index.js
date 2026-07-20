@@ -5677,6 +5677,16 @@ exports.intasendWebhook = onRequest(
               });
               console.log("[intasendWebhook] Subscription auto-activated",
                 { uid: intent.uid, plan: intent.planId, ref: apiRef });
+              /* Audit trail for webhook-path activations */
+              db.collection("subscriptionAuditLog").add({
+                uid:       intent.uid,
+                plan:      intent.planId,
+                paymentRef: apiRef,
+                action:    "ACTIVATED",
+                source:    "intasend_webhook",
+                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              }).catch(e => console.error("[intasendWebhook] Sub-audit log failed:", e.message));
             }
           }
         }
@@ -5731,21 +5741,42 @@ exports.activateSubscription = onCall({ timeoutSeconds: 30 }, async (request) =>
   if (payData.uid !== request.auth.uid) throw new HttpsError("permission-denied", "Payment belongs to different user.");
   if (payData.status !== "COMPLETE") throw new HttpsError("failed-precondition", "Payment not confirmed.");
 
-  /* Prevent replay */
-  const dupe = await db.collection("subscriptions").where("paymentRef", "==", paymentRef).limit(1).get();
-  if (!dupe.empty) return { success: true, plan, message: "Already activated." };
-
+  const uid       = request.auth.uid;
+  const subDocRef = db.collection("subscriptions").doc(uid);
   const expiresAt = new Date(Date.now() + 30 * 86400000);
-  await db.collection("subscriptions").doc(request.auth.uid).set({
-    uid:         request.auth.uid,
-    plan,
-    status:      "active",
-    paymentRef,
-    activatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
-    updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
+
+  /* Atomic dedup-check + write — prevents TOCTOU race where two concurrent
+     calls for the same paymentRef both pass the dedup query and both write. */
+  let alreadyActive = false;
+  await db.runTransaction(async (txn) => {
+    const existing = await txn.get(subDocRef);
+    if (existing.exists && existing.data().paymentRef === paymentRef) {
+      alreadyActive = true;
+      return; /* idempotent — same payment already activated */
+    }
+    txn.set(subDocRef, {
+      uid,
+      plan,
+      status:      "active",
+      paymentRef,
+      activatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
+      updatedAt:   admin.firestore.FieldValue.serverTimestamp(),
+    });
   });
 
+  if (alreadyActive) return { success: true, plan, message: "Already activated." };
+
+  /* Audit trail — one entry per activation */
+  db.collection("subscriptionAuditLog").add({
+    uid, plan, paymentRef,
+    action:     "ACTIVATED",
+    source:     "activateSubscription_cf",
+    expiresAt:  admin.firestore.Timestamp.fromDate(expiresAt),
+    timestamp:  admin.firestore.FieldValue.serverTimestamp(),
+  }).catch(e => console.error("[activateSubscription] Audit log write failed:", e.message));
+
+  console.log("[activateSubscription] Plan activated", { uid, plan, paymentRef });
   return { success: true, plan, expiresAt: expiresAt.toISOString() };
 });
 

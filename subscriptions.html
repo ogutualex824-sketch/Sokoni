@@ -71,6 +71,9 @@
     .plan-cta-free:hover{background:rgba(255,255,255,0.1);color:white;}
     .plan-cta-paid{background:linear-gradient(135deg,#71ff00,#4fc800);color:black;}
     .plan-cta-paid:hover{filter:brightness(1.08);}
+    .plan-cta-current{background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.35);color:#71ff00;cursor:default;}
+    .plan-card-active{border-color:rgba(113,255,0,0.5)!important;box-shadow:0 0 40px rgba(113,255,0,0.12)!important;}
+    .active-plan-badge{position:absolute;top:-12px;right:16px;background:rgba(113,255,0,0.15);border:1px solid rgba(113,255,0,0.4);color:#71ff00;font-size:10px;font-weight:900;padding:4px 12px;border-radius:999px;white-space:nowrap;text-transform:uppercase;letter-spacing:.06em;}
     .plan-commission{font-size:22px;font-weight:900;color:#71ff00;margin-bottom:4px;}
     .plan-commission-lbl{font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:12px;}
     .plan-divider{height:1px;background:rgba(255,255,255,0.06);margin:14px 0;}
@@ -256,13 +259,21 @@ const PLANS_DATA = [
     features:["Everything in Pro","4% platform commission","🏠 Homepage feature slot","Dedicated account manager","Custom WhatsApp catalogue","Bulk broadcast to your clients","API access for integrations","Monthly performance report","Boost credits: KES 2,000/mo"] },
 ];
 
-function renderPlans(){
+async function renderPlans(){
+  /* Resolve the user's active plan before rendering so the correct card
+     is highlighted — never hardcode isCurrentPlan to false. */
+  let _activePlan = 'free';
+  try {
+    if (window.SokoniSubscriptions) _activePlan = await window.SokoniSubscriptions.getMyPlan();
+  } catch(_) {}
+
   document.getElementById("plansGrid").innerHTML = PLANS_DATA.map(p=>{
     const price = _billing==="annual" ? p.annual : p.monthly;
-    const isCurrentPlan = false; // could check subscription
+    const isCurrentPlan = _activePlan === p.key;
     return `
-    <div class="plan-card${p.popular?" popular":""}">
-      ${p.popular?`<div class="popular-badge">⭐ Most Popular</div>`:""}
+    <div class="plan-card${p.popular?" popular":""}${isCurrentPlan?" plan-card-active":""}">
+      ${p.popular&&!isCurrentPlan?`<div class="popular-badge">&#11088; Most Popular</div>`:""}
+      ${isCurrentPlan?`<div class="active-plan-badge">&#10003; Active Plan</div>`:""}
       <div class="plan-name">${p.name}</div>
       <div class="plan-price"><sup>KES</sup>${price===0?"0":(price).toLocaleString()}</div>
       <div class="plan-period">${price===0?"Free forever":_billing==="annual"?"/month (billed annually)":"/month"}</div>
@@ -270,15 +281,21 @@ function renderPlans(){
       <div class="plan-commission-lbl">Platform commission on sales</div>
       <div class="plan-divider"></div>
       <ul class="plan-features">
-        ${p.features.map(f=>`<li><span class="fi">✓</span> ${f}</li>`).join("")}
-        ${(p.missing||[]).map(f=>`<li><span class="fx">✗</span> <span style="color:rgba(255,255,255,0.25);">${f}</span></li>`).join("")}
+        ${p.features.map(f=>`<li><span class="fi">&#10003;</span> ${f}</li>`).join("")}
+        ${(p.missing||[]).map(f=>`<li><span class="fx">&#10007;</span> <span style="color:rgba(255,255,255,0.25);">${f}</span></li>`).join("")}
       </ul>
-      <button type="button" class="plan-cta ${price===0?"plan-cta-free":"plan-cta-paid"}" onclick="subscribePlan('${p.key}',${price})">
-        ${price===0?"Get Started Free":"Upgrade to "+p.name+" →"}
-      </button>
+      ${isCurrentPlan
+        ? `<button type="button" class="plan-cta plan-cta-current" disabled>&#10003; Active Plan</button>`
+        : `<button type="button" class="plan-cta ${price===0?"plan-cta-free":"plan-cta-paid"}" onclick="subscribePlan('${p.key}',${price})">
+            ${price===0?"Get Started Free":"Upgrade to "+p.name+" &rarr;"}
+           </button>`
+      }
     </div>`;
   }).join("");
 }
+
+/* Re-render plan cards whenever Firestore confirms a subscription change */
+window.addEventListener('sokoni:subscription:changed', function(){ renderPlans(); });
 
 async function subscribePlan(planKey, price){
   if(price===0){ (window._skToast||alert)("✅ Free plan — you're already on it! Start listing now."); window.location.href="seller.html"; return; }
@@ -341,7 +358,13 @@ async function subscribePlan(planKey, price){
           try {
             const _fn = firebase.functions().httpsCallable('activateSubscription');
             await _fn({ plan: planKey, paymentRef: ref });
-            _showBanner('Your ' + PLANS_DATA.find(p=>p.key===planKey)?.name + ' plan is active! Ref: ' + ref);
+            /* Invalidate local cache so the next plan read hits Firestore,
+               then re-render plan cards to show the active plan badge. */
+            if (window.SokoniSubscriptions) {
+              window.SokoniSubscriptions.invalidateCache();
+              renderPlans(); /* async — shows Active Plan badge immediately */
+            }
+            _showBanner('Your ' + (PLANS_DATA.find(p=>p.key===planKey)?.name||planKey) + ' plan is active! Ref: ' + ref);
           } catch(activateErr){
             /* Non-fatal: localStorage cache is set above. Ref is logged so support can
                manually activate if the CF rejected the call. */

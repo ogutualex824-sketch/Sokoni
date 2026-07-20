@@ -278,7 +278,7 @@ exports.subActivate = onCall(
       if (!paymentRef) throw new HttpsError('invalid-argument', 'paymentRef required for paid plans');
 
       const paySnap = await fsdb.collection('payments').doc(paymentRef).get();
-      if (!paySnap.exists || paySnap.data().status !== 'completed') {
+      if (!paySnap.exists || paySnap.data().status !== 'COMPLETE') {
         /* Also check orders collection (verifyIntasendPayment path) */
         const ordSnap = await fsdb.collection('orders')
           .where('trackingId', '==', paymentRef)

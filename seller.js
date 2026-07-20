@@ -4902,3 +4902,27 @@ window.addEventListener("hashchange", () => {
 });
 
 window.showDashPage = showDashPage;
+
+/* ── Subscription plan change listener ──────────────────────────────────────
+   sokoni-subscriptions.js dispatches this event whenever Firestore confirms a
+   plan change (real-time snapshot or post-activation fetch).  Invalidate the
+   SokoniPay cache so that the next addProduct() call reads the fresh plan from
+   Firestore rather than the stale 5-minute cache.
+*/
+window.addEventListener('sokoni:subscription:changed', function (e) {
+  const plan = e.detail && e.detail.plan ? e.detail.plan : 'unknown';
+  /* Cache is already invalidated by sokoni-subscriptions.js before this fires.
+     Call invalidateCache() defensively in case the event came from another source. */
+  if (window.SokoniSubscriptions && typeof window.SokoniSubscriptions.invalidateCache === 'function') {
+    window.SokoniSubscriptions.invalidateCache();
+  }
+  /* Refresh the premium plans UI if it is currently visible */
+  if (typeof renderPremiumPlans === 'function') {
+    try { renderPremiumPlans(); } catch (_) {}
+  }
+  /* Surface plan change to the user when they're on the dashboard */
+  if (plan !== 'free' && typeof showNotification === 'function') {
+    const label = plan.charAt(0).toUpperCase() + plan.slice(1);
+    showNotification('Your ' + label + ' plan is now active. Listing limit updated.', 'success');
+  }
+});

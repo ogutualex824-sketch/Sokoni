@@ -1,9 +1,16 @@
 /**
- * SOKONI Subscription Manager  v2.0  (Production)
+ * SOKONI Subscription Manager  v3.0  (Production — OMEGA Certified)
  *
  * All subscription state is Firestore-backed and Cloud Function-validated.
  * Users CANNOT self-upgrade via DevTools — all plan changes require a real
  * IntaSend-confirmed payment before the Cloud Function activates the plan.
+ *
+ * v3.0 additions (OMEGA certification):
+ *   • Real-time onSnapshot listener on subscriptions/{uid} — no page reload needed
+ *   • Dispatches 'sokoni:subscription:changed' CustomEvent on any plan change
+ *   • activateSubscription() re-reads from Firestore after CF call (never trusts client arg)
+ *   • _fetchFromFirestore() now also checks status === 'cancelled'
+ *   • Auth-state listener auto-starts/stops the snapshot on sign-in/sign-out
  *
  * Firestore schema:
  *   /subscriptions/{uid}  {
@@ -20,6 +27,7 @@
  *   await SokoniSubscriptions.checkFeature(feature) → true|false
  *   SokoniSubscriptions.isFeatureAllowed(feature)   → true|false (sync, cached)
  *   SokoniSubscriptions.PLANS                        → plan definitions
+ *   window event 'sokoni:subscription:changed'       → { detail: { plan, listings } }
  */
 
 (function (window) {
@@ -27,11 +35,12 @@
 
   const log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
 
-  /* Cache TTL: 5 minutes.  Role changes need a page reload to reflect anyway. */
-  const CACHE_TTL_MS = 5 * 60 * 1000;
-  let _cache = null; /* { plan, ts } */
+  /* Cache TTL: 5 minutes. */
+  const CACHE_TTL_MS  = 5 * 60 * 1000;
+  let _cache          = null; /* { plan, ts } */
+  let _snapshotUnsub  = null; /* Firestore onSnapshot unsubscribe handle */
 
-  /* ── Plan definitions (read-only; same as sokoni-pay.js PLANS) ── */
+  /* ── Plan definitions (read-only; mirrors sokoni-pay.js PLANS) ── */
   const PLANS = {
     free:     { level:0, listings:3,   badge:false, featured:false, leads:5   },
     starter:  { level:1, listings:20,  badge:true,  featured:false, leads:30  },
@@ -55,8 +64,18 @@
     return (PLANS[planName] || PLANS.free).level;
   }
 
+  /* Dispatch a window event when the active plan changes. */
+  function _dispatchPlanChange(plan) {
+    try {
+      window.dispatchEvent(new CustomEvent('sokoni:subscription:changed', {
+        detail: { plan, listings: (PLANS[plan] || PLANS.free).listings },
+        bubbles: false,
+      }));
+    } catch (_) {}
+  }
+
   /* ══════════════════════════════════════════════════════════════
-     READ SUBSCRIPTION FROM FIRESTORE
+     READ SUBSCRIPTION FROM FIRESTORE  (one-shot)
   ══════════════════════════════════════════════════════════════ */
   async function _fetchFromFirestore(uid) {
     const db = window.firebaseDB;
@@ -72,18 +91,90 @@
       const data = snap.data();
       const now  = Date.now();
 
+      /* Cancelled subscription — treat as free immediately */
+      if (data.status === 'cancelled' || data.status === 'CANCELLED') {
+        log.log('[SokoniSubscriptions] Subscription cancelled — returning free');
+        return { plan: 'free', cancelled: true };
+      }
+
       /* Validate expiry on the client — server is authoritative but this prevents
-         showing expired features in the UI */
+         showing expired features in the UI before the next auth token refresh */
       const expiresMs = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : (data.expiresAt || 0);
       if (expiresMs && expiresMs < now) {
-        log.log('Subscription expired:', data.plan);
+        log.log('[SokoniSubscriptions] Subscription expired:', data.plan);
         return { plan: 'free', expired: true };
       }
 
       return { plan: data.plan || 'free', status: data.status, expiresAt: expiresMs };
     } catch (err) {
-      log.warn('Subscription fetch failed:', err.message);
+      log.warn('[SokoniSubscriptions] Firestore fetch failed:', err.message);
       return null;
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     REAL-TIME LISTENER
+     Sets up onSnapshot on subscriptions/{uid}.  Auto-started by
+     DOMContentLoaded → onAuthStateChanged.  Updates cache and
+     dispatches 'sokoni:subscription:changed' on every server write.
+  ══════════════════════════════════════════════════════════════ */
+  async function _setupRealtimeListener(uid) {
+    /* Tear down any stale listener first (e.g. uid changed) */
+    if (_snapshotUnsub) {
+      try { _snapshotUnsub(); } catch (_) {}
+      _snapshotUnsub = null;
+    }
+    if (!uid) return;
+
+    const db = window.firebaseDB;
+    if (!db) return;
+
+    try {
+      const { doc, onSnapshot } = await import(
+        'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
+      );
+      _snapshotUnsub = onSnapshot(
+        doc(db, 'subscriptions', uid),
+        (snap) => {
+          if (!snap.exists()) {
+            _cache = { plan: 'free', ts: Date.now() };
+            _dispatchPlanChange('free');
+            return;
+          }
+          const data = snap.data();
+          const now  = Date.now();
+
+          /* Cancelled → downgrade to free */
+          if (data.status === 'cancelled' || data.status === 'CANCELLED') {
+            _cache = { plan: 'free', ts: Date.now() };
+            _dispatchPlanChange('free');
+            return;
+          }
+          /* Expired → downgrade to free */
+          const exp = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : (data.expiresAt || 0);
+          if (exp && exp < now) {
+            _cache = { plan: 'free', ts: Date.now() };
+            _dispatchPlanChange('free');
+            return;
+          }
+
+          const plan     = data.plan || 'free';
+          const prevPlan = _cache?.plan;
+          /* Always refresh the cache TTL on every snapshot */
+          _cache = { plan, ts: Date.now() };
+          /* Only dispatch if the plan value actually changed */
+          if (plan !== prevPlan) {
+            log.log('[SokoniSubscriptions] Plan changed via snapshot:', prevPlan, '→', plan);
+            _dispatchPlanChange(plan);
+          }
+        },
+        (err) => {
+          log.warn('[SokoniSubscriptions] Snapshot error — will retry on next getMyPlan():', err.message);
+        }
+      );
+      log.log('[SokoniSubscriptions] Real-time listener active, uid:', uid);
+    } catch (err) {
+      log.warn('[SokoniSubscriptions] Could not start real-time listener:', err.message);
     }
   }
 
@@ -93,7 +184,7 @@
      Falls back to 'free' if unauthenticated or Firestore unreachable.
   ══════════════════════════════════════════════════════════════ */
   async function getMyPlan() {
-    /* Use cache if fresh */
+    /* Use cache if fresh (real-time listener also keeps this updated) */
     if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS) {
       return _cache.plan;
     }
@@ -101,11 +192,11 @@
     const auth = window.firebaseAuth;
     if (!auth?.currentUser) return 'free';
 
-    const sub = await _fetchFromFirestore(auth.currentUser.uid);
+    const sub  = await _fetchFromFirestore(auth.currentUser.uid);
     const plan = (sub && sub.plan) || 'free';
 
     _cache = { plan, ts: Date.now() };
-    log.log('Subscription plan:', plan);
+    log.log('[SokoniSubscriptions] Plan fetched:', plan);
     return plan;
   }
 
@@ -126,8 +217,10 @@
       const snap = await getDoc(doc(db, 'subscriptions', providerId));
       if (!snap.exists()) return 'free';
       const data = snap.data();
-      const now  = Date.now();
-      const exp  = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
+      /* Respect cancelled status */
+      if (data.status === 'cancelled' || data.status === 'CANCELLED') return 'free';
+      const now = Date.now();
+      const exp = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
       if (exp && exp < now) return 'free';
       return data.plan || 'free';
     } catch (_) { return 'free'; }
@@ -144,7 +237,8 @@
     return _planLevel(plan) >= _planLevel(reqPlan);
   }
 
-  /* Synchronous version using cached plan (may be stale for up to 5 min) */
+  /* Synchronous version using cached plan (may be stale for up to 5 min).
+     The real-time listener keeps the cache fresh, so stale reads are rare. */
   function isFeatureAllowed(featureName) {
     const plan    = _cache ? _cache.plan : 'free';
     const reqPlan = FEATURE_REQUIREMENTS[featureName];
@@ -154,9 +248,9 @@
 
   /* ══════════════════════════════════════════════════════════════
      PUBLIC: activateSubscription(plan, paymentRef)
-     Called by Cloud Function webhook — not directly by client.
-     Client calls the CF, which writes to Firestore, which triggers
-     this to refresh the cache.
+     Calls the activateSubscription Cloud Function, then re-reads
+     Firestore to verify the plan — never trusts the client-supplied
+     plan argument as the source of truth.
   ══════════════════════════════════════════════════════════════ */
   async function activateSubscription(plan, paymentRef) {
     const auth = window.firebaseAuth;
@@ -170,12 +264,16 @@
       const fn  = httpsCallable(fns, 'activateSubscription');
       const result = await fn({ plan, paymentRef });
 
-      /* Refresh local cache after activation */
-      _cache = { plan, ts: Date.now() };
-      log.log('Subscription activated:', plan, 'ref:', paymentRef);
+      /* Invalidate stale cache and re-read from Firestore.
+         The real-time listener will also fire when Firestore updates,
+         but we dispatch immediately to minimise visible latency. */
+      invalidateCache();
+      const freshPlan = await getMyPlan();
+      _dispatchPlanChange(freshPlan);
+      log.log('[SokoniSubscriptions] Activated — Firestore confirmed plan:', freshPlan);
       return result.data;
     } catch (err) {
-      log.error('Subscription activation failed:', err.message);
+      log.error('[SokoniSubscriptions] Activation failed:', err.message);
       throw err;
     }
   }
@@ -226,11 +324,11 @@
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
 
-  /* Invalidate cache (e.g., after plan upgrade) */
+  /* Invalidate cache (forces next getMyPlan() to re-read Firestore) */
   function invalidateCache() { _cache = null; }
 
   /* ══════════════════════════════════════════════════════════════
-     BACKWARDS COMPAT — replaces sokoni-pay.js getProviderPlan/savePlanSubscription
+     BACKWARDS COMPAT — replaces sokoni-pay.js getProviderPlan / savePlanSubscription
   ══════════════════════════════════════════════════════════════ */
   window.SokoniSubscriptions = {
     PLANS,
@@ -244,13 +342,32 @@
     invalidateCache,
   };
 
-  /* Override the legacy sokoni-pay.js functions if SokoniPay is already loaded */
+  /* ── DOMContentLoaded: patch legacy SokoniPay API + start real-time listener ── */
   document.addEventListener('DOMContentLoaded', function () {
+    /* Override legacy sokoni-pay.js stubs */
     if (window.SokoniPay) {
-      window.SokoniPay.getProviderPlan  = getProviderPlan;
-      window.SokoniPay.savePlanSubscription = function (providerId, plan) {
-        log.warn('savePlanSubscription() via localStorage is disabled in production. Use activateSubscription().');
+      window.SokoniPay.getProviderPlan      = getProviderPlan;
+      window.SokoniPay.savePlanSubscription = function () {
+        log.warn('[SokoniSubscriptions] savePlanSubscription() is disabled — use activateSubscription() CF.');
       };
+    }
+
+    /* Start real-time Firestore listener when user is authenticated.
+       Tears down automatically on sign-out and restarts on sign-in. */
+    const auth = window.firebaseAuth;
+    if (auth && typeof auth.onAuthStateChanged === 'function') {
+      auth.onAuthStateChanged(function (user) {
+        if (user) {
+          _setupRealtimeListener(user.uid);
+        } else {
+          /* User signed out — tear down listener and clear cache */
+          if (_snapshotUnsub) {
+            try { _snapshotUnsub(); } catch (_) {}
+            _snapshotUnsub = null;
+          }
+          invalidateCache();
+        }
+      });
     }
   });
 

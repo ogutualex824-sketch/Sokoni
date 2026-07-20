@@ -2845,7 +2845,10 @@ service cloud.firestore {
     }
 
     match /platformSubscriptions/{subId} {
-      allow read:  if isAuthed();
+      /* Restrict to the owner of the subscription or platform admins.
+         Previously allowed any authenticated user to read any subscription — FIXED. */
+      allow read:  if isAdmin()
+                   || (isAuthed() && resource.data.uid == request.auth.uid);
     }
 
     match /platformFanOut/{taskId} {

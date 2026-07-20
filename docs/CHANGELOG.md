@@ -2,6 +2,83 @@
 
 ---
 
+## 2026-07-21 — OMEGA Certification — Subscription Authority & Entitlement Engine
+
+**Scope:** Complete subscription and entitlement engine audit and hardening.  
+Eight-phase OMEGA certification covering real-time plan state, race-condition hardening,
+audit observability, edge-case expiry/cancellation, server-side enforcement, and
+Firestore security rule tightening.
+
+### What Changed
+
+#### Real-Time Plan State (Phase 2 — No Manual Refresh)
+- `sokoni-subscriptions.js` upgraded to v3.0:
+  - Sets up `onSnapshot` listener on `subscriptions/{uid}` after `onAuthStateChanged` resolves
+  - Dispatches `sokoni:subscription:changed` CustomEvent on every Firestore plan change
+  - Listener auto-starts on sign-in, auto-stops on sign-out
+  - Cache refreshed by every snapshot (5-min TTL becomes a maximum staleness floor, not the norm)
+- `seller.js`: Listens for `sokoni:subscription:changed` — invalidates cache, refreshes premium UI, notifies user
+
+#### Entitlement Re-Read on Activation (Phase 2)
+- `sokoni-subscriptions.js activateSubscription()`: After CF call, calls `invalidateCache()` + `getMyPlan()` from Firestore (never trusts client plan arg), then dispatches event immediately
+
+#### Cancelled Subscription Handling (Phase 6 — Edge Cases)
+- `sokoni-subscriptions.js _fetchFromFirestore()`: Now checks `status === 'cancelled'` before checking expiry — treats cancelled subs as free immediately
+- Same check added to `getProviderPlan()` and the real-time snapshot handler
+
+#### Race-Condition Hardening (Phase 4 — activateSubscription CF)
+- `functions/index.js activateSubscription`: Dedup check + `subscriptions/{uid}` write wrapped in `db.runTransaction()` — prevents two concurrent calls for the same paymentRef both passing the dedup query
+
+#### Audit Observability (Phase 7)
+- `functions/index.js activateSubscription`: Writes `subscriptionAuditLog` entry on every new activation (`action: "ACTIVATED", source: "activateSubscription_cf"`)
+- `functions/index.js intasendWebhook`: Writes `subscriptionAuditLog` entry on every webhook-path activation (`source: "intasend_webhook"`)
+- Both entries include: `uid, plan, paymentRef, action, source, expiresAt, timestamp`
+
+#### sub-billing.js Case Bug (Phase 6 — Confirmed Defect)
+- `functions/sub-billing.js:281`: `'completed'` → `'COMPLETE'` — previously `subActivate` always threw `failed-precondition: Payment not confirmed` because the status it checked (`"completed"`) never matched what `intasendWebhook` writes (`"COMPLETE"`)
+
+#### subscriptions.html Plan Display (Phase 3)
+- `renderPlans()` is now `async` — fetches `SokoniSubscriptions.getMyPlan()` before rendering
+- Active plan card shows a green "Active Plan" badge and a disabled button; replaces `isCurrentPlan = false` hardcode
+- After `activateSubscription` CF returns: `invalidateCache()` + `renderPlans()` called immediately
+- `sokoni:subscription:changed` listener also calls `renderPlans()` for real-time card refresh
+
+#### Firestore Security Rule — platformSubscriptions (Phase 5)
+- `firestore.rules platformSubscriptions/{subId}`: Changed from `allow read: if isAuthed()` (any user reads any doc) to `allow read: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid)` — ownership-gated
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `sokoni-subscriptions.js` | v3.0: onSnapshot, CustomEvent, cancelled check, activateSubscription re-fetch, auth listener |
+| `functions/sub-billing.js` | Line 281: `'completed'` → `'COMPLETE'` |
+| `functions/index.js` | `activateSubscription`: transaction + audit log; `intasendWebhook`: audit log |
+| `subscriptions.html` | Async `renderPlans()` with active plan badge; post-activation re-render; event listener |
+| `seller.js` | `sokoni:subscription:changed` listener: cache invalidate + UI refresh + notification |
+| `firestore.rules` | `platformSubscriptions` read rule: ownership-gated instead of open |
+
+### Known Gaps (Documented, Not Yet Closed)
+
+| Gap | Impact | Mitigation |
+|-----|--------|-----------|
+| `subActivate` writes `subscriptions/{autoId}` not `subscriptions/{uid}` | Hub-type subscriptions invisible to `getMyPlan()` | Marketplace plans use `activateSubscription` CF; hub billing is a separate engine |
+| `isFeatureAllowed()` synchronous path defaults to 'free' on cold cache | Feature gates may temporarily block on first page load | Real-time listener populates cache within ~1s of auth resolution; async `checkFeature()` is always accurate |
+| No server-side listing limit for core marketplace `products` collection | A user who bypasses the JS guard can write directly to Firestore | Firestore Rules enforce field/schema validation; listing count enforcement is a Phase 5 backlog item (needs a server-side count CF) |
+
+### Regression Test Checklist
+
+- [ ] Purchase Starter plan → plan cards refresh without page reload → "Active Plan" badge appears on Starter card
+- [ ] Visit seller.html after purchase → "Add Product" succeeds for product #4 (above free limit)
+- [ ] Cancel subscription (admin) → real-time listener fires → plan reverts to free within seconds
+- [ ] Expire subscription (set expiresAt to past) → plan reads as free on next getMyPlan() call
+- [ ] Sign out → real-time listener tears down → sign in → listener restarts on same uid
+- [ ] Call activateSubscription twice with same paymentRef → second call returns {success:true, message:"Already activated."} with no duplicate doc
+- [ ] subscriptionAuditLog → verify entries exist for both CF and webhook activation paths
+- [ ] platformSubscriptions → verify user cannot read another user's doc (should receive permission-denied)
+- [ ] subActivate with a completed payment → verify it no longer throws 'failed-precondition'
+
+---
+
 ## 2026-07-21 — P0 Subscription Pipeline Fix — Complete Activation Hardening
 
 **Scope:** Subscription activation, plan enforcement, and seller listing limit.  
