@@ -1497,9 +1497,12 @@
                    aria-label="Search businesses" autocomplete="off">
           </div>
 
-          <!-- Loading state -->
-          <div id="biz-loading" style="display:flex;align-items:center;justify-content:center;padding:40px 0;gap:12px;">
+          <!-- Loading state. A bare spinner reads as "frozen" during a Cloud
+               Function cold start; the label and the delayed reassurance (set in
+               initBizStep) explain the wait instead of leaving it unexplained. -->
+          <div id="biz-loading" style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 0;gap:14px;">
             <div class="spinner spinner-lg"></div>
+            <p id="biz-loading-msg" style="margin:0;font-size:13px;color:var(--sk-text-dim,#8a8a8a);text-align:center;">Loading your businesses…</p>
           </div>
 
           <!-- Business list -->
@@ -2294,6 +2297,16 @@ async function initBizStep() {
 
   document.getElementById('btn-biz-continue').disabled = true;
   document.getElementById('biz-loading').style.display  = 'flex';
+  const _loadMsg = document.getElementById('biz-loading-msg');
+  if (_loadMsg) _loadMsg.textContent = 'Loading your businesses…';
+  /* smartPosDispatch can cold-start. If the spinner is still up after 6s, explain
+     the wait rather than let it read as frozen. Self-guarding: only updates while
+     the loader is still visible, so it needs no timer bookkeeping on completion. */
+  setTimeout(() => {
+    if (_loadMsg && document.getElementById('biz-loading').style.display !== 'none') {
+      _loadMsg.textContent = 'Still setting up — the first load can take a few seconds.';
+    }
+  }, 6000);
   document.getElementById('biz-list').style.display     = 'none';
   document.getElementById('biz-empty').style.display    = 'none';
   document.getElementById('biz-error').classList.remove('visible');
