@@ -239,16 +239,34 @@
     })();
 
     /* ── Visit My Store — opens the seller's own MiniStore public storefront ── */
+    /* This used to send the merchant to ministore.html?store=<email or display name>.
+       Two things were wrong with that:
+
+         1. ministore.html is a localStorage-only storefront BUILDER. getProds() reads
+            localStorage.sellerProducts and getStoreSettings() reads
+            localStorage.msStoreSettings — it never touches Firestore, and it ignores
+            ?store= for data. A merchant whose shop lives in Firestore (KASS VAPES) found
+            nothing locally, so the page opened its SETUP flow. That is the reported
+            "it takes me to a new page where you create another shop".
+
+         2. The store was keyed by email-or-display-name. Phone-auth accounts have no
+            email, so the key became the display name — not an identifier anything else
+            in the platform resolves by.
+
+       The real public storefront is minishop.html (/shop/<handle>), which is Firestore
+       backed via the getMinishopPublic CF and resolves shopHandles/<handle> -> shops/<id>.
+       Neither collection exists yet for any merchant, so there is no published storefront
+       to open. Until one is published, send the merchant to the in-dashboard store tab,
+       which is real and already built, instead of a builder that cannot see their shop. */
     function goToMyStore(){
       try {
         const user = JSON.parse(localStorage.getItem("sokoniUser") || "null");
-        const storeId = (user && (user.email || user.name)) ? (user.email || user.name) : null;
-        window.location.href = storeId
-          ? "ministore.html?store=" + encodeURIComponent(storeId)
-          : "ministore.html";
-      } catch(e) {
-        window.location.href = "ministore.html";
-      }
+        const handle = user && (user.shopHandle || user.merchantSlug || user.handle);
+        if (handle) { window.location.href = "/shop/" + encodeURIComponent(handle); return; }
+      } catch(e) { /* fall through to the dashboard tab */ }
+      if (typeof sdSwitchTab === 'function') { sdSwitchTab('store'); return; }
+      if (typeof showDashPage === 'function') { showDashPage('store'); return; }
+      window.location.href = "seller.html#store";
     }
     window.goToMyStore = goToMyStore;
   </script>
@@ -4380,38 +4398,31 @@ class="notification-container"
 
 <!-- ══ SELLER DASHBOARD MOBILE TAB BAR ══ -->
 <nav id="sdmTabBar" style="display:none;">
-  <button type="button" class="sdm-tab active" id="sdmtab-home"     onclick="sdSwitchTab('home')">
-    🏠<span>Dashboard</span>
-  </button>
-  <button type="button" class="sdm-tab" id="sdmtab-products"  onclick="sdSwitchTab('products')">
-    📦<span>Products</span>
-  </button>
-  <button type="button" class="sdm-tab" id="sdmtab-orders"    onclick="sdSwitchTab('orders')">
+  <!-- Global navigation, matching index.html / services.html / provider.html so the bar
+       means the same thing everywhere: Home · Market · Services · Orders · Profile.
+       It previously held the dashboard's OWN sections (Dashboard/Products/Orders/
+       Analytics/Earnings/More), which left a seller with no way out of the dashboard.
+       Those sections did not go away — they are in the Seller Tools grid in the body
+       (#sdmToolsGrid), which is the same list the More drawer used to show. -->
+  <a class="sdm-tab" href="/">🏠<span>Home</span></a>
+  <a class="sdm-tab" href="category.html?cat=all">🛍️<span>Market</span></a>
+  <a class="sdm-tab" href="services.html">🛠️<span>Services</span></a>
+  <button type="button" class="sdm-tab" id="sdmtab-orders" onclick="sdSwitchTab('orders')">
     🛒<span>Orders</span>
   </button>
-  <button type="button" class="sdm-tab" id="sdmtab-analyse"   onclick="sdSwitchTab('analyse')">
-    📈<span>Analytics</span>
-  </button>
-  <button type="button" class="sdm-tab" id="sdmtab-kra"       onclick="sdSwitchTab('kra')">
-    💰<span>Earnings</span>
-  </button>
-  <button type="button" class="sdm-tab" id="sdmtab-more"      onclick="sdSwitchTab('more')">
-    ⋯<span>More</span>
-  </button>
+  <a class="sdm-tab" href="profile.html">👤<span>Profile</span></a>
 </nav>
 
 <!-- More drawer (slides up when More tab is tapped) -->
-<div id="sdmMoreDrawer" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.6);backdrop-filter:blur(8px);" onclick="this.style.display='none';document.getElementById('sdmMorePanel').style.transform='translateY(100%)'">
-  <div id="sdmMorePanel" onclick="event.stopPropagation()" style="position:absolute;bottom:0;left:0;right:0;background:#111;border-radius:24px 24px 0 0;padding:20px 20px calc(env(safe-area-inset-bottom,0px) + 100px);transform:translateY(100%);transition:transform .3s cubic-bezier(0.34,1.1,0.64,1);">
-    <!-- drag pill -->
-    <div style="width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,0.15);margin:0 auto 14px;"></div>
+<!-- Was a fixed z-index:9998 overlay opened by the "More" tab. The tab bar is now global
+     navigation, so these tools live in the BODY of the dashboard home instead of behind a
+     drawer. data-sdtab="home" hands visibility to the existing section machinery. -->
+<section id="sdmMoreDrawer" class="sdm-tab-section" data-sdtab="home" style="display:none;padding:0 16px 20px;">
+  <div id="sdmMorePanel" style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:18px;padding:16px;">
     <!-- header: title + close -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-      <span style="font-size:14px;font-weight:800;color:white;letter-spacing:-.01em;">⋯ More</span>
-      <button type="button"
-        onclick="document.getElementById('sdmMoreDrawer').style.display='none';document.getElementById('sdmMorePanel').style.transform='translateY(100%)';"
-        style="width:32px;height:32px;min-width:32px;border-radius:8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.55);font-size:15px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;"
-        aria-label="Close">&#10005;</button>
+      <span style="font-size:14px;font-weight:800;color:white;letter-spacing:-.01em;">🧰 Seller Tools</span>
+      
     </div>
     <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Quick Access</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
@@ -4452,22 +4463,22 @@ class="notification-container"
     </div>
     <div style="font-size:10px;font-weight:800;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">Seller Tools</div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;">
-      <button type="button" onclick="sdSwitchTab('market');document.getElementById('sdmMoreDrawer').style.display='none';" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:16px;cursor:pointer;font-family:inherit;">
+      <button type="button" onclick="sdSwitchTab('market');" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:16px;cursor:pointer;font-family:inherit;">
         <span style="font-size:26px;">📣</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">Marketing</span>
       </button>
-      <button type="button" onclick="sdSwitchTab('flash');document.getElementById('sdmMoreDrawer').style.display='none';" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,152,0,0.07);border:1px solid rgba(255,152,0,0.2);border-radius:16px;cursor:pointer;font-family:inherit;">
+      <button type="button" onclick="sdSwitchTab('flash');" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,152,0,0.07);border:1px solid rgba(255,152,0,0.2);border-radius:16px;cursor:pointer;font-family:inherit;">
         <span style="font-size:26px;">⚡</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">Flash Sale</span>
       </button>
-      <button type="button" onclick="sdSwitchTab('store');document.getElementById('sdmMoreDrawer').style.display='none';" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;cursor:pointer;font-family:inherit;">
+      <button type="button" onclick="sdSwitchTab('store');" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:16px;cursor:pointer;font-family:inherit;">
         <span style="font-size:26px;">🏪</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">My Store</span>
       </button>
-      <button type="button" onclick="sdSwitchTab('inbox');document.getElementById('sdmMoreDrawer').style.display='none';" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);border-radius:16px;cursor:pointer;font-family:inherit;">
+      <button type="button" onclick="sdSwitchTab('inbox');" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(37,211,102,0.07);border:1px solid rgba(37,211,102,0.2);border-radius:16px;cursor:pointer;font-family:inherit;">
         <span style="font-size:26px;">📩</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">Inbox</span>
       </button>
-      <button type="button" onclick="sdSwitchTab('team');document.getElementById('sdmMoreDrawer').style.display='none';" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.12);border-radius:16px;cursor:pointer;font-family:inherit;">
+      <button type="button" onclick="sdSwitchTab('team');" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.12);border-radius:16px;cursor:pointer;font-family:inherit;">
         <span style="font-size:26px;">👥</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">Team</span>
       </button>
-      <button type="button" onclick="sdSwitchTab('kra');document.getElementById('sdmMoreDrawer').style.display='none';" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:16px;cursor:pointer;font-family:inherit;">
+      <button type="button" onclick="sdSwitchTab('kra');" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:16px;cursor:pointer;font-family:inherit;">
         <span style="font-size:26px;">🏛️</span><span style="font-size:11px;font-weight:700;color:rgba(255,255,255,0.75);">KRA Tax</span>
       </button>
       <a href="subscriptions.html" style="display:flex;flex-direction:column;align-items:center;gap:7px;padding:14px 8px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:16px;text-decoration:none;">
@@ -4475,7 +4486,7 @@ class="notification-container"
       </a>
     </div>
   </div>
-</div>
+</section>
 
 <style>
 /* ── Mobile section back bar ── */
