@@ -82,15 +82,23 @@ Last updated: 2026-07-21. Related: [[APP_CHECK]] · [[DEFECT_REGISTER]]
 
 ## P4 — Featured Shops
 
-**Status: 🔎 OPEN (design agreed)** · Owner: sokoni-spotlight.js + a server writer
+**Status: 🟡 INFRA BUILT–UNDEPLOYED** · Owner: admin-os.js + rules/indexes · Commit `9a408c9`
 
-- 4 implementations; 3 render hardcoded/demo data. The one dynamic query filters
-  `shopSettings.featuredOnHome==true` — **no code writes that field** (single repo
-  reference is the read at `sokoni-spotlight.js:137`), so it always returns zero.
-- The paid boost (`seller.js:1873 featureShopOnHome`) writes only to the seller's
-  own `localStorage` — visible to nobody else.
-- Plan (agreed): server-authoritative `featuredOnHome` writer; register KASS via
-  the existing mechanism; no hardcoded merchants. Gated behind P0/P3.
+- **Backend infrastructure done** (server-authoritative). New secrets-free
+  `featuredShops/{merchantUid}` collection; admin ops `adminSetFeaturedShop` /
+  `adminListFeaturedShops` registered in `admin-os.js._h` (no new function — rides
+  the invokable `adminOsDispatch`). Public read only while actively featured
+  (rules-enforced expiry); admin-only write.
+- **Why not shopSettings:** it holds live Daraja secrets and is owner-only; users/
+  is PII/self-only. The projection copies a strict display allow-list — verified
+  15/15 that zero secret/PII fields reach the public doc. Rules COMPILE against the
+  live Rules API.
+- **Not yet consumed:** the reader (`sokoni-spotlight.js`, currently querying the
+  broken `shopSettings.featuredOnHome`) is untouched by design — catalogue
+  convergence (P3) will repoint it at `featuredShops`.
+- **Migration:** deploy rules + indexes + functions, then once —
+  `adminOsDispatch({op:'adminSetFeaturedShop', merchantUid:'<KASS uid>', priority:100, reason:'Pilot'})`.
+  KASS goes through this identical path; never hardcoded.
 
 ## P5 — Observability
 
