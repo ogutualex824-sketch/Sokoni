@@ -164,23 +164,35 @@
         }
       }).catch(() => {});
 
-      /* Always reload when a new SW takes control — ensures the page HTML
-         and inline scripts are always in sync with the active SW version.
-         Without this, users run old page content under a new SW.
+      /* Reload when a NEW SW REPLACES an existing one — so the page HTML and
+         inline scripts stay in sync with the active SW version. Without this,
+         users run old page content under a new SW.
 
-         EXCEPTION: OAuth redirect round-trips.
-         signInWithRedirect() → Google → back to app is a multi-page navigation.
-         If a new SW installs during the round-trip and fires controllerchange,
-         reloading the page here abandons getRedirectResult() mid-exchange.
-         Firebase already consumed the IndexedDB pending credential; the reload
-         gets null from getRedirectResult() and the user sees an auth error.
+         FIRST-INSTALL EXCEPTION (the fix). A fresh visitor has no controller.
+         When service-worker.js installs and clients.claim() takes control,
+         controllerchange fires even though nothing was replaced — the page is
+         already the current version. Reloading here was proven to cancel the
+         first-load Firestore Listen channel and abandon the App Check token
+         exchange, so anonymous visitors kept seeing demo data while the real
+         catalogue read was interrupted every load. Runtime evidence: two
+         navigations to the same URL on a fresh visit, App Check stuck pending,
+         SokoniDB never finishing.
 
-         auth.js sets sokoniAuthRedirectPending in sessionStorage before every
-         signInWithRedirect call and clears it when the result is handled.
-         sessionStorage survives in-tab navigations, so the flag is still set
-         when Google redirects back. We skip the reload in that window only. */
+         So we reload only when a controller EXISTED at page load — a genuine
+         update — and never on first acquisition. Captured now, before the new
+         worker can claim the page.
+
+         OAUTH EXCEPTION (unchanged). signInWithRedirect → Google → back is a
+         multi-page navigation; a controllerchange mid-round-trip must not
+         reload, or getRedirectResult() is abandoned. auth.js sets
+         sokoniAuthRedirectPending for that window. */
+      const _hadControllerAtLoad = !!navigator.serviceWorker.controller;
       let refreshing = false;
       navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (!_hadControllerAtLoad) {
+          console.info('[SOKONI SW] first controller acquired — no reload (page already current)');
+          return;
+        }
         try {
           if (sessionStorage.getItem('sokoniAuthRedirectPending')) {
             console.info('[SOKONI SW] controllerchange skipped — OAuth redirect in flight');
