@@ -1288,3 +1288,67 @@ body.light-mode select option { background: #fff !important; color: #111 !import
     gap: 10px !important;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   HEALTHCARE HERO — compact search row
+
+   WHY THIS RULE LIVES IN premium.css
+   Not preference — cascade fact, established by inspecting document.styleSheets
+   at runtime rather than by reading link order in the HTML.
+
+   shared-header.js:363 injects a SECOND <link href="premium.css"> because its
+   guard tests for id="sk-premium-link" and the static tag on 75 pages carries
+   no id. The injected copy is appended to <head> after every other sheet, so
+   premium.css is the last word on this page regardless of where its static tag
+   sits. Rules written in healthcare.html's own <style> (head line 20) and in
+   mobile.css (line 290) both lost to it silently — an earlier attempt in each
+   place had no effect at all, and one of them made the hero taller.
+
+   The duplicate injection is a real defect worth fixing at source, but it
+   changes cascade order on 75 pages and is not safe to land inside this sprint.
+   Recorded rather than quietly worked around.
+
+   WHAT THIS CHANGES
+   .hc-search-bar is stacked to three full-width rows (147px) by rules in
+   mobile.css and premium.css. Measured cost of the hero on iPhone SE was 294px
+   — 52% of the viewport — pushing the provider list below the fold.
+
+   The Search button is hidden on mobile because the input already carries
+   oninput="filterProviders()" (healthcare.html:312): results filter on every
+   keystroke, so the button spent a full 44px row duplicating behaviour the user
+   gets for free. "Open Now" is a genuine filter with no keyboard equivalent and
+   keeps its place beside the field.
+
+   Scoped to .hc-search-bar only — the shared stacking rule stays intact for the
+   banking, food and services hubs, which were not measured and are not in scope.
+══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .hc-hero { padding: 10px 14px 12px !important; }
+  .hc-hero h1 { font-size: clamp(16px, 4.4vw, 20px) !important; margin: 0 0 1px !important; }
+  /* Two lines, not one. Clamping to a single line at this column width cuts the
+     sentence mid-phrase, which reads as a rendering bug rather than a summary —
+     the ~20px saved is not worth it. */
+  .hc-hero p  { font-size: 11.5px !important; line-height: 1.4 !important; margin: 0 !important; }
+  .hc-hero-top { margin-bottom: 8px !important; gap: 9px !important; }
+  .hc-hero-icon { font-size: 22px !important; }
+
+  .hc-search-bar {
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  .hc-search-bar input {
+    width: auto !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    font-size: 16px !important;   /* 16px stops iOS Safari zooming on focus */
+  }
+  .hc-search-btn { display: none !important; }
+  #hcOpenNowBtn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-height: 44px !important;
+    white-space: nowrap !important;
+  }
+}
