@@ -4212,6 +4212,11 @@ class="notification-container"
   <script src="adult-gate.js"></script>
   <script type="module" src="sokoni-upload.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" defer></script>
+  <!-- Required: patches SokoniPay.getProviderPlan with the Firestore-backed
+       version on DOMContentLoaded. Without this, getProviderPlan() always returns
+       "free" because window.SokoniSubscriptions is undefined and sokoni-pay.js
+       falls to its "free" fallback before querying Firestore. -->
+  <script defer src="sokoni-subscriptions.js"></script>
   <script src="seller.js" defer></script>
   <!-- Fills the localStorage cache seller.js renders from with the CANONICAL
        products collection. Must load after seller.js so displaySellerProducts

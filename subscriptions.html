@@ -476,34 +476,38 @@ window.setBilling=setBilling; window.subscribePlan=subscribePlan; window.buyBoos
 /* ── Subscription recovery ─────────────────────────────────────────────────
    If a user paid but activateSubscription was never called (pre-patch builds),
    localStorage has a ref but Firestore has no subscription doc.
-   On page load we detect this and activate silently. */
+   Uses onAuthStateChanged so recovery runs even if Firebase auth is still
+   initializing when the load event fires (currentUser is null until the SDK
+   completes its token verification round-trip). */
 window.addEventListener('load', function(){
-  (async function _recoverSub(){
-    try {
-      const stored = JSON.parse(localStorage.getItem('sokoniSubscription')||'null');
-      if (!stored || !stored.ref || !stored.plan) return;
+  const stored = JSON.parse(localStorage.getItem('sokoniSubscription')||'null');
+  if (!stored || !stored.ref || !stored.plan) return;
 
-      const db = window.firebaseDB;
-      const auth = typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null;
-      if (!db || !auth) return;
+  const db   = window.firebaseDB;
+  const auth = typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null;
+  if (!db || !auth) return;
 
-      const user = auth.currentUser;
-      if (!user) return;
+  const _unsub = auth.onAuthStateChanged(function(user){
+    _unsub();   /* one-shot: unsubscribe immediately after first resolution */
+    if (!user) return;
 
-      const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
-      if (subSnap.exists()) return;   /* already activated */
+    (async function _recoverSub(){
+      try {
+        const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        const subSnap = await getDoc(doc(db, 'subscriptions', user.uid));
+        if (subSnap.exists()) return;   /* already activated */
 
-      /* Subscription doc missing but payment ref present — attempt activation */
-      const _fn = firebase.functions().httpsCallable('activateSubscription');
-      await _fn({ plan: stored.plan, paymentRef: stored.ref });
-      console.log('[sub-recovery] Activated plan:', stored.plan, 'ref:', stored.ref);
-      _showBanner('Your ' + stored.plan + ' plan has been activated! Your listing limit is now updated.');
-    } catch(e){
-      /* Silently ignore — auth not ready, payment still PENDING, or already activated */
-      console.log('[sub-recovery]', e.message);
-    }
-  })();
+        /* Doc missing but payment ref present — activate now */
+        const _fn = firebase.functions().httpsCallable('activateSubscription');
+        await _fn({ plan: stored.plan, paymentRef: stored.ref });
+        console.log('[sub-recovery] Activated plan:', stored.plan, 'ref:', stored.ref);
+        _showBanner('Your ' + stored.plan + ' plan is now active. Listing limit updated.');
+      } catch(e){
+        /* Silently ignore — payment still PENDING, ref mismatch, or already activated */
+        console.log('[sub-recovery]', e.message);
+      }
+    })();
+  });
 });
 </script>
 <script src="seo.js" defer></script>

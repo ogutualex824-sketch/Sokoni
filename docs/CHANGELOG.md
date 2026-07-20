@@ -2,6 +2,72 @@
 
 ---
 
+## 2026-07-21 — P0 Subscription Pipeline Fix — Complete Activation Hardening
+
+**Scope:** Subscription activation, plan enforcement, and seller listing limit.  
+Three compounding bugs caused every seller to show "Free plan (3 listings)" regardless
+of payment. Fixed across frontend, backend, and the webhook activation path.
+
+### Pipeline Audit Results
+
+| Stage | Status | Finding |
+|-------|--------|---------|
+| Payment document (payments/{ref}) | PASS | Created correctly by initiateSTKPush |
+| IntaSend webhook (intasendWebhook) | FAIL → FIXED | Was subscription-blind; now auto-activates subscriptions/{uid} |
+| subAutoActivateOnPayment trigger | FAIL | Dead — meta.purpose never set; subActivate has 'completed'/'COMPLETE' case bug |
+| activateSubscription CF | CONDITIONAL → HARDENED | Client-side call in onSuccess was the only path; now backed by webhook |
+| subscriptions/{uid} document | MISSING → CREATED | Never written; now written by webhook on payment COMPLETE |
+| getProviderPlan() in seller.html | FAIL → FIXED | sokoni-subscriptions.js was missing from seller.html; always returned "free" |
+| Plan resolution (SokoniPay.PLANS) | PASS | Correct data once plan string is resolved |
+| Listing limit calculation | PASS (pending plan fix) | PLANS.starter.listings = 20 is correct |
+
+### Root Cause Chain
+
+```
+Payment succeeds (M-Pesa STK push confirmed)
+    ↓
+intasendWebhook fires → sets payments/{ref}.status = "COMPLETE"
+    ↓ [BREAK 1] webhook never writes subscriptions/{uid}
+    ↓
+onSuccess() fires in browser → calls activateSubscription CF  [BREAK 2: pre-0b747f3 builds never called this]
+    ↓
+subscriptions/{uid} NOT written to Firestore
+    ↓
+User opens seller.html
+    ↓ [BREAK 3] sokoni-subscriptions.js not loaded → window.SokoniSubscriptions undefined
+    ↓
+SokoniPay.getProviderPlan() → if(window.SokoniSubscriptions) FALSE → return "free"
+    ↓
+PLANS["free"].listings = 3 → "Plan limit: 3 listings on Free plan"
+```
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `seller.html` | Added `<script defer src="sokoni-subscriptions.js">` before seller.js (P0 fix) |
+| `functions/index.js` | `intasendWebhook`: after commission write, reads paymentIntents/{ref} and auto-activates subscriptions/{uid} if purpose==="subscription" |
+| `subscriptions.html` | Recovery hook: replaced `auth.currentUser` with `onAuthStateChanged` one-shot to fix auth-not-ready race |
+
+### Recovery Path for Existing Paid Accounts
+
+For accounts that paid before this patch was deployed:
+1. Visit `subscriptions.html` while signed in
+2. `onAuthStateChanged` recovery hook fires once Firebase auth is ready
+3. It detects: `localStorage.sokoniSubscription.ref` exists + `subscriptions/{uid}` missing
+4. Calls `activateSubscription({ plan: "starter", paymentRef: ref })`
+5. CF validates `payments/{ref}.status === "COMPLETE"` (set by webhook) and writes doc
+6. Banner confirms activation; `seller.html` now enforces 20-listing limit
+
+### Security
+
+- Webhook activation is idempotent: `!subData || subData.paymentRef !== apiRef` guard prevents duplicate writes
+- The CF path still validates ownership: `payments/{ref}.uid === request.auth.uid`
+- No client-controlled fields (amount, planId) are used without server verification
+- `paymentIntents/{ref}.purpose` is server-written and cannot be tampered by clients
+
+---
+
 ## 2026-07-21 — Subscription Activation Fix — Plan Limit Bug
 
 **Scope:** Seller listing limit and subscription activation.  

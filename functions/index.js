@@ -5645,6 +5645,47 @@ exports.intasendWebhook = onRequest(
         confirmedAt:   admin.firestore.FieldValue.serverTimestamp(),
         createdAt:     admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true }).catch(err => console.error("Commission write failed:", err));
+
+      /* Subscription auto-activation — server-authoritative path.
+         paymentIntents/{ref} (written by createPaymentIntent) carries purpose,
+         planId, and uid. The client-side onSuccess path is fragile (tab close,
+         network drop); this webhook is the authoritative signal that payment
+         completed. Idempotent: same apiRef → same subscriptions/{uid} doc. */
+      try {
+        const intentSnap = await db.collection("paymentIntents").doc(apiRef).get();
+        if (intentSnap.exists) {
+          const intent = intentSnap.data();
+          if (intent.purpose === "subscription" && intent.planId && intent.uid) {
+            const subRef  = db.collection("subscriptions").doc(intent.uid);
+            const subSnap = await subRef.get();
+            const subData = subSnap.exists ? subSnap.data() : null;
+            /* Only write if no active subscription exists for this payment ref */
+            if (!subData || subData.paymentRef !== apiRef) {
+              const expiresAt = new Date(Date.now() + 30 * 86400000);
+              await subRef.set({
+                uid:          intent.uid,
+                plan:         intent.planId,
+                planName:     intent.planName || intent.planId,
+                billingCycle: intent.billingCycle || "monthly",
+                status:       "active",
+                paymentRef:   apiRef,
+                amountPaid:   amount,
+                source:       "intasend_webhook",
+                activatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
+                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log("[intasendWebhook] Subscription auto-activated",
+                { uid: intent.uid, plan: intent.planId, ref: apiRef });
+            }
+          }
+        }
+      } catch (subErr) {
+        /* Non-fatal: commission is already ledgered. Log ref so support can
+           manually activate via activateSubscription CF if needed. */
+        console.error("[intasendWebhook] Subscription auto-activation failed",
+          { ref: apiRef, err: subErr.message });
+      }
     }
 
     res.status(200).send("OK");
