@@ -1145,7 +1145,38 @@ async function addToWishlist(productId){
    UPDATE CART
 ========================= */
 
+/* Persistence is not rendering.
+
+   updateCart() used to save the cart on its LAST line, below an early return
+   that fires when #cartItems is absent. So whether a customer's cart survived
+   navigation depended on whether a particular <ul> existed on the page. It
+   worked only because index.html carries a hidden <ul id="cartItems"> kept
+   alive by a comment explaining it is "still needed for navbar count" —
+   deleting that presentation element would have silently stopped every add
+   from persisting, and the toast would still have said success.
+
+   Saving now happens first and unconditionally. Rendering is what degrades
+   when the DOM is absent, which is the correct way round. */
+function _persistCart(){
+  try {
+    localStorage.setItem("cart", JSON.stringify(cart));
+    return true;
+  } catch (e) {
+    /* Quota exceeded, or Safari private mode where setItem throws. The user
+       must know the item did not stick — the old code could not tell them,
+       because it never looked. */
+    console.error("[SOKONI] Could not save cart: " + e.message);
+    if (typeof showPushToast === "function") {
+      showPushToast("⚠️ Cart not saved", "Your device is out of storage space. Free some space and try again.", "orange");
+    }
+    return false;
+  }
+}
+
 function updateCart(){
+
+    /* Save before anything can return early. */
+    _persistCart();
 
     const cartItems =
     document.getElementById(
@@ -1245,14 +1276,8 @@ function updateCart(){
       badge.addEventListener('animationend', function(){ badge.classList.remove('p9-badge-pop'); }, { once: true });
     }
 
-    localStorage.setItem(
-
-        "cart",
-
-        JSON.stringify(cart)
-
-    );
-
+    /* The save that used to live here now runs at the top of this function,
+       above every early return. Nothing is persisted below this point. */
 }
 
 /* =========================
