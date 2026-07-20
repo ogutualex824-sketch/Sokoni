@@ -103,23 +103,66 @@ function assertMFA(decodedToken, role = "admin") {
    revokeAdminClaim — removes the claim.
 
    Bootstrap sequence (run once):
-     1. Admin signs in via Firebase Auth (email/password).
-     2. Call grantAdminClaim({ targetUid: "<their own UID>" }).
-        The BOOTSTRAP_EMAIL check allows this one time.
-     3. Sign out and sign back in so the JWT refreshes with the claim.
-     4. Firestore isAdmin() now uses request.auth.token.admin == true.
-══════════════════════════════════════════════════════════════ */
-/* ── BOOTSTRAP  (one-time only — self-grant for the founder) ── */
-const BOOTSTRAP_EMAIL = "admin@mysokoni.co.ke";
+     1. The account signs in — by phone, email or a linked provider. The method
+        does not matter; the UID is the identity.
+     2. An operator with project credentials seeds that UID:
+          node functions/scripts/seed-bootstrap.js --phone +2547XXXXXXXX
+        This writes _systemConfig/bootstrap.allowedUids, which firestore.rules
+        :2867 makes unwritable by any client.
+     3. That account calls bootstrapAdminClaim() once. It grants admin AND
+        superAdmin — no other code path can mint the first superAdmin — then
+        locks itself permanently.
+     4. Sign out and back in so the JWT is reissued with the new claims.
+     5. Firestore isAdmin() (firestore.rules:9) reads token.admin / superAdmin.
 
+   Every later role change requires an existing superAdmin. To grant claims
+   directly instead, use functions/scripts/set-admin-claim.js --super.
+══════════════════════════════════════════════════════════════ */
+/* ── BOOTSTRAP  (one-time only — establishes the first administrator) ──────────
+   AUTHORISATION IS BY UID, NOT EMAIL.
+
+   This previously compared request.auth.token.email against a hardcoded
+   address. Two defects followed, and they locked the platform owner out of
+   their own system:
+
+     1. Authorisation depended on the AUTHENTICATION METHOD. Under phone
+        sign-in there is no `email` claim at all, so the comparison failed for
+        every phone-authenticated user regardless of which address was
+        configured. A super administrator who signs in by phone could never
+        satisfy it.
+     2. It granted only `admin`. Every function that can grant `superAdmin`
+        already requires `superAdmin` from its caller, so the highest privilege
+        on the platform was structurally unreachable — the system could not
+        produce its own first super administrator.
+
+   The allowlist now lives in _systemConfig/bootstrap.allowedUids and is seeded
+   out of band by the Admin SDK (functions/scripts/seed-bootstrap.js). That
+   satisfies both halves of the problem: a UID is the canonical identity and is
+   identical under phone, email or a linked account, and the deadlock is broken
+   without hardcoding an identity into application code.
+
+   This is not a weaker gate. firestore.rules denies all client writes to
+   _systemConfig, so the allowlist can only be written by a principal holding
+   Google credentials for this project — a stronger boundary than an email
+   string in a source file, which anyone who could create that mailbox could
+   have claimed. All three original locks are retained below. */
 exports.bootstrapAdminClaim = onCall(
   { timeoutSeconds: 30, enforceAppCheck: true },
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Must be signed in.");
 
-    /* Only the founder email may call this */
-    if (request.auth.token?.email !== BOOTSTRAP_EMAIL) {
-      throw new HttpsError("permission-denied", "Not authorised for bootstrap.");
+    /* Allowlisted by UID — seeded server-side, never by a client. */
+    const bootstrapCfg = await db.collection("_systemConfig").doc("bootstrap").get();
+    const allowedUids = (bootstrapCfg.exists && Array.isArray(bootstrapCfg.data().allowedUids))
+      ? bootstrapCfg.data().allowedUids : [];
+
+    if (!allowedUids.includes(request.auth.uid)) {
+      /* Deliberately specific. "Not authorised" sent the owner hunting through
+         their own account settings for an hour; the real answer is that a
+         server-side seed step has not been run. */
+      throw new HttpsError("permission-denied",
+        "This account is not on the bootstrap allowlist. An operator with project " +
+        "credentials must run functions/scripts/seed-bootstrap.js --uid " + request.auth.uid);
     }
 
     /* ── Triple-layer bootstrap guard ────────────────────────────────────────
@@ -150,18 +193,39 @@ exports.bootstrapAdminClaim = onCall(
     }
 
     const existingClaims = await admin.auth().getUser(uid).then(u => u.customClaims || {}).catch(() => ({}));
-    await admin.auth().setCustomUserClaims(uid, { ...existingClaims, admin: true });
+
+    /* The FIRST administrator is granted superAdmin as well as admin.
+       Every other path to superAdmin (grantAdminClaim, grantPlatformRole,
+       setUserRole) requires the caller to already hold it, so if bootstrap does
+       not mint it, nothing ever can — the platform cannot produce its own
+       highest privilege. This is the one place where granting it is correct:
+       it runs exactly once, only for a UID an operator seeded out of band, and
+       then permanently locks itself. */
+    await admin.auth().setCustomUserClaims(uid, {
+      ...existingClaims,
+      admin: true,
+      superAdmin: true,
+      role: "superAdmin",
+    });
     await db.collection("users").doc(uid).set(
-      { role: "admin", adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { role: "superAdmin", adminGrantedAt: admin.firestore.FieldValue.serverTimestamp() },
       { merge: true }
     );
 
-    /* Set the permanent lock — Firestore rules prevent non-admins from clearing this */
+    /* Permanent lock. merge:true so the allowlist and any prior audit fields
+       survive — a plain set() would erase allowedUids, destroying the record of
+       who was authorised to run this. */
     await lockRef.set({
       locked:       true,
       adminUid:     uid,
       completedAt:  admin.firestore.FieldValue.serverTimestamp(),
-    });
+    }, { merge: true });
+
+    await db.collection("auditLog").add({
+      action: "bootstrap_super_admin", uid, actor: uid,
+      note: "First administrator established via allowlisted bootstrap.",
+      ts: admin.firestore.FieldValue.serverTimestamp(),
+    }).catch(() => {});
 
     console.log(`[bootstrapAdminClaim] Bootstrap completed by uid=${uid} — lock set.`);
     return { success: true, message: "Admin claim granted. Sign out and back in to activate." };

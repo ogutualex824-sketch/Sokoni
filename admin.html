@@ -5527,19 +5527,39 @@ if(sessionStorage.getItem(SESS_KEY)) loadAll();
    Exception: the founder email may enter for first-time bootstrap. */
 import { auth } from './firebase.js';
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-const FOUNDER_EMAIL = 'admin@mysokoni.co.ke';
+/* Claims only. The hardcoded FOUNDER_EMAIL escape hatch that used to sit here
+   revealed this page to anyone signed in with one specific address, before any
+   claim existed — an identity hardcoded into shipped client code, which is
+   exactly the pattern the server-side bootstrap was just rebuilt to remove.
+
+   It is not needed any more: bootstrap eligibility is now a UID allowlist in
+   _systemConfig/bootstrap, seeded out of band, so the founder reaches this page
+   the same way every other administrator does — by holding the claim. */
 document.body.style.visibility = 'hidden';
 onAuthStateChanged(auth, async function(user) {
   if (!user) { window.location.replace('login.html'); return; }
   const token = await user.getIdTokenResult(true).catch(() => null);
   if (token && (token.claims.admin || token.claims.superAdmin)) {
-    /* Admin or superAdmin — show page */
-    document.body.style.visibility = '';
-  } else if (user.email === FOUNDER_EMAIL) {
-    /* Founder without claim yet — show page so they can bootstrap */
     document.body.style.visibility = '';
   } else {
-    window.location.replace("/");
+    /* Say why, rather than bouncing to "/" with no explanation — a silent
+       redirect is indistinguishable from a broken link, and cost real time
+       diagnosing this exact lockout. */
+    document.body.style.visibility = '';
+    document.body.innerHTML =
+      '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;' +
+      'padding:32px;background:#050505;color:#fff;font-family:system-ui,sans-serif;text-align:center;">' +
+      '<div style="max-width:420px;">' +
+      '<div style="font-size:17px;font-weight:800;margin-bottom:10px;">Administrator access required</div>' +
+      '<p style="font-size:13.5px;line-height:1.6;color:rgba(255,255,255,.6);margin:0 0 8px;">' +
+      'This account is signed in but does not hold an admin claim.</p>' +
+      '<p style="font-size:12.5px;line-height:1.6;color:rgba(255,255,255,.42);margin:0 0 18px;">' +
+      'If admin rights were granted recently, sign out and back in — the token on ' +
+      'this device still carries the old claims until it is reissued.</p>' +
+      '<a href="/" style="display:inline-flex;align-items:center;min-height:44px;padding:0 20px;' +
+      'border-radius:11px;border:1px solid rgba(113,255,0,.3);background:rgba(113,255,0,.12);' +
+      'color:#71ff00;font-weight:700;font-size:13px;text-decoration:none;">Back to SOKONI</a>' +
+      '</div></div>';
   }
 });
 </script>
@@ -5600,7 +5620,12 @@ async function _checkBootstrapNeeded(){
   if(!fbUser) return;
   try{
     const tok = await fbUser.getIdTokenResult(true);
-    if(tok.claims?.admin !== true && fbUser.email === 'admin@mysokoni.co.ke'){
+    /* Offer bootstrap to anyone without a claim, not to one hardcoded address.
+       Showing the control is harmless — bootstrapAdminClaim checks the caller's
+       UID against the server-side allowlist and refuses everyone else, so the
+       authority lives on the server where it belongs. Gating the BUTTON on an
+       email meant a phone-authenticated owner never saw it at all. */
+    if(tok.claims?.admin !== true){
       document.getElementById('bootstrapSection').style.display = 'block';
     }
   }catch(e){}
