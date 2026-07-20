@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-07-20T05:09:08.681Z",
+  "manifestVersion": "2.0.0",
+  "commit": "a5107a7",
+  "rulesEvaluated": 10,
+  "rulesRejected": 0,
+  "violations": {
+    "critical": 0,
+    "high": 7,
+    "medium": 0
+  },
+  "score": 72,
+  "gate": "OPEN",
+  "blockingRules": [],
+  "results": [
+    {
+      "id": "RULE-001",
+      "incidentId": "INC-2026-07-20-A",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-002",
+      "incidentId": "INC-2026-07-20-B",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-003",
+      "incidentId": "INC-2026-07-20-C",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-004",
+      "incidentId": "INC-2026-07-20-D",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-005",
+      "incidentId": "INC-2026-07-20-E",
+      "count": 0,
+      "noisy": true
+    },
+    {
+      "id": "RULE-006",
+      "incidentId": "INC-2026-07-20-F",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-007",
+      "incidentId": "INC-2026-07-20-G",
+      "count": 7,
+      "noisy": false
+    },
+    {
+      "id": "RULE-008",
+      "incidentId": "INC-2026-07-20-H",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-009",
+      "incidentId": "INC-PREVENTIVE-001",
+      "count": 0,
+      "noisy": false
+    },
+    {
+      "id": "RULE-010",
+      "incidentId": "INC-2026-07-20-I",
+      "count": 0,
+      "noisy": false
+    }
+  ],
+  "notCertified": [
+    "Runtime drift detection (repository vs deployment vs observed behaviour) requires an authenticated session against the live project. Not implemented rather than approximated.",
+    "Change impact / blast radius prediction requires a call graph this codebase does not expose. Not implemented rather than guessed.",
+    "Developer override tracking and average investigation time need a history of real usage. The precision figures above are the only measured data available."
+  ]
+}
