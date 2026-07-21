@@ -1164,9 +1164,25 @@ function renderCategoryCards(summary) {
     btn.addEventListener('click', () => autoRegisterCategory(btn.dataset.category, summary));
   });
 
-  // Add manual (from card)
+  /* Add manual (from card).
+     The addEventListener wrapper was missing here, so openAddModal() ran
+     immediately for every card during render instead of on click. Two failures
+     followed from that one omission.
+
+     The crash: renderCategoryCards(null) is called at module top level, which
+     is far above `let _modalCategoryPreset`. openAddModal is a function
+     declaration and therefore hoisted, so the call itself succeeded — but its
+     first statement assigns _modalCategoryPreset, and a `let` binding is
+     hoisted WITHOUT being initialised. Reading or writing it before its
+     declaration executes is the Temporal Dead Zone, hence
+     "Cannot access '_modalCategoryPreset' before initialization".
+
+     The behaviour bug underneath it: even with the declaration moved, this
+     would have opened the Add Device modal once per category card on every
+     render. Binding the handler fixes both, and matches the .btn-register-cat
+     block directly above. */
   container.querySelectorAll('.btn-add-cat').forEach(btn => {
-    openAddModal(btn.dataset.category);
+    btn.addEventListener('click', () => openAddModal(btn.dataset.category));
   });
 }
 
