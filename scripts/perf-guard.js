@@ -81,6 +81,37 @@ function findStaleDelivery() {
   return precached.filter((f) => !fresh.includes(f)).map((f) => ({ file: f, reason: 'precached but not network-first' }));
 }
 
+/* ── Architecture-duplication ratchet (ADR-0001, ADR-0002) ────────────────
+   The platform repeatedly grew a SECOND engine for a subsystem that already
+   had one — eleven print engines, two receipt engines assigning the same
+   global on the same page. These counts baseline the current (bad) state and
+   fail the build only when it gets WORSE. That blocks the next duplicate at
+   the point of the mistake without demanding the whole convergence land first
+   — a gate that failed on today's reality would be disabled by tomorrow. */
+function countGlobalAssigners(globalName) {
+  const re = new RegExp('(window|global|root)\\.' + globalName + '\\s*=', '');
+  return files.filter((f) => {
+    if (!/\.js$/.test(f)) return false;
+    try { return re.test(fs.readFileSync(f, 'utf8')); } catch (_) { return false; }
+  }).length;
+}
+
+/* Max independent printer-engine <script> tags on any single HTML page.
+   Loading more than one means more than one ESC/POS encoder parses per page. */
+function maxPrinterEnginesPerPage() {
+  const ENGINES = ['sokoni-universal-printer', 'sokoni-print-engine', 'sokoni-pos-print',
+    'sokoni-pos-print-service', 'sokoni-printer-manager', 'sokoni-printer-drivers',
+    'sokoni-printer-driver', 'pos-printer', 'sokoni-printer-providers'];
+  let max = 0, worst = null;
+  for (const f of files) {
+    if (!/\.html$/.test(f)) continue;
+    let t = ''; try { t = fs.readFileSync(f, 'utf8'); } catch (_) { continue; }
+    const n = ENGINES.filter((e) => new RegExp('src="' + e + '\\.js"').test(t)).length;
+    if (n > max) { max = n; worst = path.relative(ROOT, f).replace(/\\/g, '/'); }
+  }
+  return { max, worst };
+}
+
 const files = walk(ROOT);
 const report = { amplification: {}, fanOut: {}, staleDelivery: [], totals: {} };
 
@@ -95,10 +126,18 @@ for (const f of files) {
 }
 report.staleDelivery = findStaleDelivery();
 
+const printerPages = maxPrinterEnginesPerPage();
+report.worstPrinterPage = printerPages.worst;
+
 report.totals = {
   amplification: Object.values(report.amplification).reduce((s, a) => s + a.length, 0),
   fanOut:        Object.values(report.fanOut).reduce((s, a) => s + a.length, 0),
   staleDelivery: report.staleDelivery.length,
+  /* ADR-0002: exactly one module may own each singular global. */
+  receiptEngines: countGlobalAssigners('SokoniReceiptEngine'),
+  printerDriverGlobals: countGlobalAssigners('SokoniPrinterDrivers'),
+  /* ADR-0001: no page may load more than one printer engine. */
+  printerEnginesPerPage: printerPages.max,
   filesScanned:  files.length,
 };
 
@@ -115,7 +154,16 @@ if (AS_JSON) { console.log(JSON.stringify({ report, baseline }, null, 2)); }
 
 const fails = [];
 if (baseline) {
-  for (const k of ['amplification', 'fanOut', 'staleDelivery']) {
+  /* Derive the ratcheted keys from the baseline rather than hardcoding them.
+     A hardcoded list silently stopped enforcing the duplication metrics the
+     moment they were added — the gate reported PASS on a seventh printer
+     engine. Anything numeric in the baseline is now ratcheted by construction,
+     so a future metric cannot be added and left unenforced. filesScanned is
+     excluded: it grows as the repo grows and is context, not a budget. */
+  const RATCHET_EXEMPT = new Set(['filesScanned']);
+  for (const k of Object.keys(baseline)) {
+    if (RATCHET_EXEMPT.has(k)) continue;
+    if (typeof baseline[k] !== 'number' || typeof report.totals[k] !== 'number') continue;
     if (report.totals[k] > baseline[k]) {
       fails.push(`${k}: ${report.totals[k]} > baseline ${baseline[k]}`);
     }
@@ -125,6 +173,9 @@ if (baseline) {
 if (!AS_JSON) {
   console.log('\n[perf-guard] scanned ' + report.totals.filesScanned + ' client files');
   console.log('  getAll() inside a loop      : ' + report.totals.amplification + (baseline ? '   (baseline ' + baseline.amplification + ')' : ''));
+  console.log('  SokoniReceiptEngine owners  : ' + report.totals.receiptEngines + (baseline && baseline.receiptEngines != null ? '   (baseline ' + baseline.receiptEngines + ', ADR-0002 target 1)' : ''));
+  console.log('  SokoniPrinterDrivers owners : ' + report.totals.printerDriverGlobals + (baseline && baseline.printerDriverGlobals != null ? '   (baseline ' + baseline.printerDriverGlobals + ', target 1)' : ''));
+  console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', ADR-0001 target 1)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
   console.log('  forEach(async …) fan-out    : ' + report.totals.fanOut + (baseline ? '   (baseline ' + baseline.fanOut + ')' : ''));
   console.log('  precached but not fresh     : ' + report.totals.staleDelivery + (baseline ? '   (baseline ' + baseline.staleDelivery + ')' : ''));
 

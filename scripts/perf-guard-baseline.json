@@ -3,7 +3,10 @@
     "amplification": 7,
     "fanOut": 3,
     "staleDelivery": 2,
-    "filesScanned": 633
+    "receiptEngines": 2,
+    "printerDriverGlobals": 2,
+    "printerEnginesPerPage": 6,
+    "filesScanned": 650
   },
   "recorded": "manual"
 }
