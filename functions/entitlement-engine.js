@@ -246,6 +246,58 @@ async function activate(paymentRef, opts = {}) {
   return result;
 }
 
+/* ── simulate (shadow mode) ───────────────────────────────────────────────
+   Runs the REAL validation and the REAL adapter, but against a transaction
+   that records writes instead of performing them, and never opens a Firestore
+   transaction at all. There is therefore no code path by which a simulation
+   can grant an entitlement — the safety is structural, not a flag someone
+   could mis-set.
+
+   This is what makes dual-run trustworthy: the shadow result is produced by
+   the same adapter code that would run for real, so a match means the engine
+   would have behaved identically — not that a separate mock agreed. */
+async function simulate(paymentRef) {
+  const started = Date.now();
+  const out = { paymentRef: null, ok: false, writes: [], ledger: null, error: null, code: null, ms: 0 };
+  try {
+    const { ref, intent, payment } = await _load(paymentRef);
+    out.paymentRef = ref;
+    const spec = assertPaymentHonourable(intent, payment);
+    const ctx  = _ctx(ref, intent, payment);
+
+    if (typeof spec.handler.validate === 'function') await spec.handler.validate(ctx);
+
+    /* Capture-only transaction. get() performs a real (read-only) fetch so the
+       adapter sees true state; every mutation is recorded, never applied. */
+    const ops = [];
+    const capture = {
+      get:    async (r) => r.get(),
+      set:    (r, v, o) => ops.push({ op: 'set', path: r.path, data: v, merge: !!(o && o.merge) }),
+      create: (r, v)    => ops.push({ op: 'create', path: r.path, data: v }),
+      update: (r, v)    => ops.push({ op: 'update', path: r.path, data: v }),
+      delete: (r)       => ops.push({ op: 'delete', path: r.path }),
+    };
+
+    const domain = await spec.handler.activate(capture, ctx);
+
+    const existing = await _db().collection(LEDGER).doc(ref).get();
+    out.ok      = true;
+    out.writes  = ops;
+    out.ledger  = {
+      wouldCreate:  !existing.exists,
+      alreadyExists: existing.exists,
+      purpose: ctx.purpose, ownerUid: ctx.ownerUid,
+      amount: ctx.amount, currency: ctx.currency,
+      domainRef: (domain && domain.ref) || null,
+    };
+  } catch (e) {
+    out.error = e.message;
+    out.code  = e.code || 'unknown';
+  }
+  out.ms = Date.now() - started;
+  return out;
+}
+
 /* ── revoke ───────────────────────────────────────────────────────────────
    Refund / chargeback / expiry. Idempotent: revoking twice is a no-op. */
 async function revoke(paymentRef, reason, opts = {}) {
@@ -375,6 +427,6 @@ module.exports = {
   STATUS, TERMINAL_PAID, REVERSED,
   registerPurpose, getPurpose, registeredPurposes,
   assertPaymentHonourable,
-  activate, revoke, status, reconcile,
+  activate, simulate, revoke, status, reconcile,
   _internals: { ledgerId: _ledgerId, ctx: _ctx },
 };

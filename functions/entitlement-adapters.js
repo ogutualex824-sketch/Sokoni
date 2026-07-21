@@ -117,6 +117,85 @@ const subscription = {
   },
 };
 
+/* ── Shadow comparison ────────────────────────────────────────────────────
+   Runs the engine in simulate mode beside the legacy activation and records
+   what each WOULD write. Writes only to entitlementComparison — a collection
+   that exists solely for certification and that no production reader consumes.
+
+   Server timestamps are sentinels at write time, so comparison is on field
+   NAMES plus the values that carry meaning (plan, status, paymentRef, uid).
+   Comparing sentinel objects would produce noise, not signal.
+
+   MUST NEVER THROW INTO THE CALLER. The webhook's job is to acknowledge a
+   payment; a diagnostic that could 500 it would be strictly worse than having
+   no diagnostic. Every failure is swallowed and recorded. */
+const COMPARE_COL = 'entitlementComparison';
+const SIGNIFICANT = ['uid', 'plan', 'status', 'paymentRef'];
+
+function _diffSubscription(legacyDoc, engineWrite) {
+  const differences = [];
+  const engineData  = (engineWrite && engineWrite.data) || null;
+  if (!legacyDoc && !engineData) return { differences, verdict: 'both_absent' };
+  if (!legacyDoc)  return { differences: ['legacy_absent'],  verdict: 'legacy_missing' };
+  if (!engineData) return { differences: ['engine_absent'],  verdict: 'engine_missing' };
+
+  const lk = Object.keys(legacyDoc).sort();
+  const ek = Object.keys(engineData).sort();
+  if (JSON.stringify(lk) !== JSON.stringify(ek)) {
+    differences.push(`fields: legacy=[${lk}] engine=[${ek}]`);
+  }
+  for (const f of SIGNIFICANT) {
+    if (String(legacyDoc[f]) !== String(engineData[f])) {
+      differences.push(`${f}: legacy=${legacyDoc[f]} engine=${engineData[f]}`);
+    }
+  }
+  return { differences, verdict: differences.length ? 'mismatch' : 'match' };
+}
+
+async function shadowCompareSubscription(paymentRef, legacyMeta = {}) {
+  try {
+    const started = Date.now();
+    const sim = await engine.simulate(paymentRef);
+
+    const uid = legacyMeta.uid || (sim.ledger && sim.ledger.ownerUid) || null;
+    let legacyDoc = null;
+    if (uid) {
+      const s = await _db().collection('subscriptions').doc(uid).get();
+      legacyDoc = s.exists ? s.data() : null;
+    }
+
+    const engineWrite = (sim.writes || []).find((w) => /^subscriptions\//.test(w.path)) || null;
+    const cmp = sim.ok
+      ? _diffSubscription(legacyDoc, engineWrite)
+      : { differences: [`engine_error:${sim.code}`], verdict: 'engine_error' };
+
+    await _db().collection(COMPARE_COL).doc(String(paymentRef).replace(/\//g, '_')).set({
+      paymentRef:        String(paymentRef),
+      domain:            'subscription',
+      legacyResult:      legacyDoc ? { present: true, plan: legacyDoc.plan || null, status: legacyDoc.status || null,
+                                       paymentRef: legacyDoc.paymentRef || null } : { present: false },
+      engineResult:      sim.ok ? { present: !!engineWrite, path: engineWrite && engineWrite.path,
+                                    plan: engineWrite && engineWrite.data.plan,
+                                    status: engineWrite && engineWrite.data.status,
+                                    wouldCreateLedger: sim.ledger && sim.ledger.wouldCreate }
+                                : { present: false, error: sim.error, code: sim.code },
+      fieldDifferences:  cmp.differences,
+      comparisonStatus:  cmp.verdict,
+      engineDurationMs:  sim.ms,
+      legacyDurationMs:  Number(legacyMeta.durationMs) || null,
+      comparisonMs:      Date.now() - started,
+      shadowOnly:        true,          /* nothing here granted an entitlement */
+      at:                FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return cmp.verdict;
+  } catch (e) {
+    /* Diagnostics must never destabilise the payment path. */
+    console.error('[shadowCompare] non-fatal', { paymentRef, err: e && e.message });
+    return 'compare_failed';
+  }
+}
+
 /* ── Registration ─────────────────────────────────────────────────────────
    Adding a future paid feature should require exactly this — one entry, zero
    engine modification. Guarded so a double-require cannot throw. */
@@ -134,4 +213,7 @@ function registerAll() {
 
 registerAll();
 
-module.exports = { registerAll, isEngineEnabled, subscription, FLAG_DOC, PLAN_DAYS };
+module.exports = {
+  registerAll, isEngineEnabled, subscription, FLAG_DOC, PLAN_DAYS,
+  shadowCompareSubscription, COMPARE_COL, _diffSubscription,
+};

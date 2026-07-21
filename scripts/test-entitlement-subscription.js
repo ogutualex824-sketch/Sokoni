@@ -18,10 +18,14 @@ const TS = {
   fromMillis: (m) => ({ toMillis: () => m }),
   fromDate:   (d) => ({ toMillis: () => d.getTime(), _d: d }),
 };
-const snapOf = (c, id) => ({ exists: !!store[c][id], data: () => store[c][id], id });
-const coll = (name) => ({
-  doc: (id) => ({ _c: name, _id: id, get: async () => snapOf(name, id) }),
-  add: async (v) => { store[name]['a' + (++seq)] = v; return { id: 'a' + seq }; },
+/* Collections are created on first touch, exactly as Firestore does — a stub
+   that only knows a fixed set would fail on any collection the code adds. */
+const ensure = (n) => (store[n] = store[n] || {});
+const snapOf = (c, id) => ({ exists: !!ensure(c)[id], data: () => ensure(c)[id], id });
+const coll = (name) => (ensure(name), {
+  doc: (id) => ({ _c: name, _id: id, path: name + '/' + id, get: async () => snapOf(name, id),
+                  set: async (v, o) => { ensure(name)[id] = (o && o.merge) ? Object.assign({}, ensure(name)[id], v) : v; } }),
+  add: async (v) => { ensure(name)['a' + (++seq)] = v; return { id: 'a' + seq }; },
   where() { return this; }, orderBy() { return this; }, limit() { return this; },
   get: async () => ({ docs: [] }),
 });
@@ -150,6 +154,45 @@ const ents = () => Object.keys(store.entitlements).length;
   try { await engine.activate('R6', { source: 'webhook' }); } catch (e) { blocked3 = e.code === 'plan_invalid'; }
   t('unknown plan rejected by adapter.validate', () => blocked3);
   t('no entitlement from unknown plan', () => ents() === 0);
+
+  console.log('\n=== shadow mode (Phase 2A+) — must never grant ===');
+  reset(); seed('S1');
+  const sim = await engine.simulate('S1');
+  t('simulate succeeds', () => sim.ok === true);
+  t('simulate WROTE NOTHING to subscriptions', () => Object.keys(store.subscriptions).length === 0);
+  t('simulate WROTE NOTHING to entitlements', () => ents() === 0);
+  t('simulate reports the intended write', () =>
+    sim.writes.length === 1 && sim.writes[0].path === 'subscriptions/u1');
+  t('simulated write has the 7 canonical fields', () =>
+    JSON.stringify(Object.keys(sim.writes[0].data).sort()) === JSON.stringify(CANON));
+  t('simulate reports it would create the ledger', () => sim.ledger.wouldCreate === true);
+  t('simulate records duration', () => typeof sim.ms === 'number');
+
+  /* Shadow beside a real legacy activation → must agree. */
+  reset(); seed('S2');
+  await engine.activate('S2', { source: 'legacy-equivalent' });   /* stand-in for legacy write */
+  const v1 = await adapters.shadowCompareSubscription('S2', { uid: 'u1' });
+  t('shadow verdict = match when both agree', () => v1 === 'match');
+  t('comparison record written', () => !!store.entitlementComparison.S2);
+  t('comparison marked shadowOnly', () => store.entitlementComparison.S2.shadowOnly === true);
+  t('shadow granted nothing extra', () => ents() === 1);
+
+  /* Legacy wrote a DIFFERENT plan → mismatch must be detected, not hidden. */
+  store.subscriptions.u1.plan = 'business';
+  const v2 = await adapters.shadowCompareSubscription('S2', { uid: 'u1' });
+  t('shadow detects plan mismatch', () => v2 === 'mismatch');
+  t('mismatch detail recorded', () =>
+    (store.entitlementComparison.S2.fieldDifferences || []).some((d) => /plan/.test(d)));
+
+  /* Engine would refuse (foreign payment) → recorded as engine_error, not a crash. */
+  reset(); seed('S3', { payment: { status: 'COMPLETE', uid: 'attacker', amountCents: 49900, currency: 'KES' } });
+  const v3 = await adapters.shadowCompareSubscription('S3', { uid: 'u1' });
+  t('shadow records engine refusal', () => v3 === 'engine_error');
+  t('refusal wrote no entitlement', () => ents() === 0);
+
+  /* Diagnostics must never throw into the webhook. */
+  const v4 = await adapters.shadowCompareSubscription('DOES_NOT_EXIST', {});
+  t('missing ref degrades, never throws', () => typeof v4 === 'string');
 
   console.log('\n' + (fail ? fail + ' FAILED of ' + (pass + fail) : 'ALL ' + pass + ' PASSED'));
   process.exit(fail ? 1 : 0);

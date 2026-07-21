@@ -5696,6 +5696,30 @@ exports.intasendWebhook = onRequest(
         console.error("[intasendWebhook] Subscription auto-activation failed",
           { ref: apiRef, err: subErr.message });
       }
+
+      /* SHADOW MODE — Phase 2A+ (entitlement engine dual-run).
+         The legacy path above remains authoritative and has already run. This
+         asks the engine what it WOULD have written and records the comparison
+         to entitlementComparison, which no production reader consumes.
+
+         It cannot grant anything: engine.simulate() never opens a Firestore
+         transaction, so the safety is structural rather than a flag. Awaited
+         (not fire-and-forget) so the comparison is actually recorded before
+         the container can be frozen after the response — but wrapped so a
+         diagnostic can never turn a successful payment acknowledgement into a
+         500. Remove this block to disable shadow mode entirely. */
+      try {
+        const intentSnap2 = await db.collection("paymentIntents").doc(apiRef).get();
+        if (intentSnap2.exists && intentSnap2.data().purpose === "subscription") {
+          const adapters = require("./entitlement-adapters");
+          await adapters.shadowCompareSubscription(apiRef, {
+            uid: intentSnap2.data().uid || intentSnap2.data().ownerUid || null,
+          });
+        }
+      } catch (shadowErr) {
+        console.error("[intasendWebhook] shadow comparison skipped",
+          { ref: apiRef, err: shadowErr && shadowErr.message });
+      }
     }
 
     res.status(200).send("OK");
