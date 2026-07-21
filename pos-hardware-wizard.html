@@ -770,16 +770,19 @@
   <!-- ── STEP 1: DISCOVER ─────────────────────────────────── -->
   <div class="step-content active" id="step-1">
     <div class="step-heading">
-      <h2>&#128268; Detect Hardware</h2>
+      <h2>&#128269; Analyze Hardware Environment</h2>
       <p>Click the button to scan for connected devices. You can also add devices manually.</p>
     </div>
     <div class="info-banner">
       Some devices (USB, Serial, Bluetooth) require a browser permission prompt on first connection. Click "Allow" when asked.
     </div>
     <div class="discover-bar">
-      <button class="btn-primary" id="btnDiscover">&#128270; Detect Hardware</button>
+      <button class="btn-primary" id="btnDiscover">&#128269; Analyze Hardware Environment</button>
       <button class="btn-ghost"   id="btnAddManual">+ Add Manually</button>
       <span id="discoverStatus" style="font-size:12px;color:var(--muted)"></span>
+      <!-- Four-layer environment report. Kept separate from the category cards
+           so a platform capability can never be rendered as a found device. -->
+      <div id="hwEnvReport" style="margin-top:14px"></div>
     </div>
 
     <div class="hw-categories" id="hwCategories">
@@ -1237,13 +1240,20 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
   if (!window.SokoniHardware) {
     toast('Hardware library not loaded. Refresh the page.', 'error');
     btn.disabled = false;
-    btn.textContent = '🔍 Detect Hardware';
+    btn.innerHTML = '🔍 Analyze Hardware Environment';
     return;
   }
 
   try {
-    _discoverySummary = await window.SokoniHardware.discover();
+    /* analyzeEnvironment() runs discover() internally and returns the four
+       layers already separated, so the UI never has to decide what counts as a
+       device. */
+    const _env = window.SokoniHardware.analyzeEnvironment
+      ? await window.SokoniHardware.analyzeEnvironment()
+      : null;
+    _discoverySummary = _env ? _env.raw : await window.SokoniHardware.discover();
     renderCategoryCards(_discoverySummary);
+    if (_env) renderEnvReport(_env);
     const found = Object.values(_discoverySummary).filter(v => v && v.found).length;
 
     /* Count only real hardware. `found` also covers the phone's own camera and
@@ -1306,7 +1316,7 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
     renderCategoryCards(null);
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '🔍 Detect Hardware';
+    btn.innerHTML = '🔍 Analyze Hardware Environment';
   }
 });
 
@@ -1323,7 +1333,7 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
     const btn = document.getElementById('btnDiscover');
     if (btn) btn.innerHTML = '🖨️ Find Network Printer';
     const h = document.querySelector('#step-discover h2, h2');
-    if (h && /Detect Hardware/i.test(h.textContent)) h.textContent = '🖨️ Set Up Printing';
+    if (h && /(Detect Hardware|Analyze Hardware)/i.test(h.textContent)) h.textContent = '🖨️ Set Up Printing';
     const note = document.getElementById('discoverStatus');
     if (note) {
       note.innerHTML = 'On iPhone, printers connect over Wi-Fi or AirPrint — ' +
@@ -1332,6 +1342,50 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
     }
   } catch (_) { /* labelling must never block the wizard */ }
 })();
+
+/* ── Four-layer environment report ────────────────────────────────────────
+   Each layer is rendered under its own heading so the distinction survives
+   contact with the UI. The old wizard collapsed all four into one number and
+   announced "2 hardware categories found" while counting the phone's camera
+   and Face ID; keeping the headings separate is what makes that impossible to
+   repeat by accident. */
+const _LBL = {
+  camera: 'Camera', offline: 'Offline mode', touch: 'Touch input',
+  webShare: 'Share sheet', notifications: 'Notifications', browserPrint: 'Printing',
+  usb: 'USB', bluetooth: 'Bluetooth', serial: 'Serial',
+  networkManual: 'Network printer (manual IP)', networkDiscovery: 'Network auto-discovery',
+  keyboardScanner: 'Keyboard scanner', printers: 'Printer', scanners: 'Scanner',
+};
+const _lbl = k => _LBL[k] || k;
+
+function renderEnvReport(env) {
+  const el = document.getElementById('hwEnvReport');
+  if (!el) return;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+  const sec = (title, body) =>
+    `<div style="margin-bottom:14px">
+       <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:5px">${title}</div>
+       <div style="font-size:13px;line-height:1.55">${body}</div>
+     </div>`;
+  const none = '<span style="opacity:.55">None</span>';
+
+  const rec = env.transports.recommended[0];
+
+  el.innerHTML =
+    sec('1 · Platform', env.platform.features.map(f => esc(_lbl(f))).join(' · ') || none) +
+    sec('2 · Recommended connection',
+        rec ? `<strong>${esc(rec.label)}</strong>${rec.note ? ` <span style="opacity:.7">— ${esc(rec.note)}</span>` : ''}` : none) +
+    sec('3 · Configured devices',
+        env.configured.length ? env.configured.map(c => esc(_lbl(c))).join(', ') : none) +
+    sec('4 · Live devices',
+        env.live.length ? env.live.map(c => esc(_lbl(c))).join(', ') : none) +
+    (env.transports.unavailable.length
+      ? `<div style="font-size:11.5px;line-height:1.5;color:var(--muted);border-top:1px solid var(--bor,#222);padding-top:9px">
+           <strong style="opacity:.8">Not available on this device</strong><br>` +
+        env.transports.unavailable.map(u => `${esc(_lbl(u.id))} — ${esc(u.reason)}`).join('<br>') +
+        `</div>`
+      : '');
+}
 
 // Render empty category cards on load
 renderCategoryCards(null);
