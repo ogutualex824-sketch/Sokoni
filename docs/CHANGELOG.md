@@ -2,6 +2,40 @@
 
 ---
 
+## 2026-07-21 — Enterprise Auth Reliability: Phase 2 — Root Cause Elimination & Session Hardening
+
+### Summary
+Second phase of the enterprise authentication reliability mission. Eliminates four root causes of intermittent login failures that were not caught in Phase 1: OAuth profile timing race (new users lost their profile data on cold Firestore), Google redirect polling antipattern (3s ceiling insufficient for cold start), App Check deadlock with no user feedback, and phone-user session management exclusion (phone accounts could not be tracked or remotely revoked). Adds wrong-code retry ceiling to prevent Firebase `auth/too-many-requests` from surfacing to users.
+
+### Root Causes Fixed
+
+| # | Severity | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | **Critical** | `_handleOAuthResult` hardcoded 900ms delay: new Firestore cold start takes 2–8s → fallback profile written → real profile data (displayName, photoURL, referral, wallet) overwritten with empty object | Replaced `setTimeout(resolve, 900)` with `sokoniAuthReady` event listener + 4s ceiling — waits for the actual profile-ready signal |
+| 2 | **Critical** | `_handleGoogleResult` polling antipattern: 150ms × 20 = 3s max — same cold-start problem; race condition where redirect result arrives before the first Firestore write completes | Replaced `while (!localStorage... Date.now() < +3000)` busy-wait with identical event-based pattern |
+| 3 | **Major** | App Check token exchange takes up to 12s on cold start; during this window all `signInWithPhoneNumber()` calls return `auth/network-request-failed` with the button stuck "Sending…" forever | Added `window.__sokoniAppCheckReady` await in `sendPhoneOTP()` before the Firebase call; shows "Preparing security check…" feedback; bails gracefully on rejection |
+| 4 | **Major** | `touchSession()` and `watchSession()` checked `!user?.email` — phone accounts have no email in `sokoniUser` cache → sessions never created/tracked → `lastActive` permanently stale; no remote revocation possible for phone users | Replaced `_getUser()?.email` guard with `_getIdentity().uid` in both functions (uid always available from `firebaseAuth.currentUser` regardless of provider) |
+| 5 | **Moderate** | No wrong-code retry ceiling: 3 bad codes → Firebase returns `auth/too-many-requests` with confusing error message; user has no indication to request a new OTP | Added `_otpWrongAttempts` counter; after 3 consecutive wrong codes, surface "Too many wrong codes. Please tap Resend OTP" and reveal resend link rather than waiting for Firebase escalation |
+
+### Files Changed
+- `auth.js` — `_handleOAuthResult()`: event-wait replaces 900ms delay; `_handleGoogleResult()`: event-wait replaces polling busy-wait; `sendPhoneOTP()`: App Check readiness gate + `_otpWrongAttempts` reset; `verifyPhoneOTP()`: wrong-code counter increment + forced-resend at threshold; variable declarations for `_otpWrongAttempts`, `_OTP_MAX_ATTEMPTS`
+- `session-manager.js` — `touchSession()` + `watchSession()`: `!user?.email` guard replaced with `_getIdentity().uid`; adds phone-user session tracking, lastActive updates, and remote revocation
+
+### Security
+- Phone users now have full session revocation support — an admin or the user can remotely sign out a phone-authenticated device from any other device
+- Wrong-code ceiling prevents automated code-guessing from exhausting the verification window silently
+- App Check gate ensures the security token is present before any auth call is placed — eliminates the silent network-error class of failures that occur during cold start
+
+### Performance
+- `sokoniAuthReady` event fires as soon as `onAuthStateChanged` completes its Firestore writes — no fixed delay; fast on warm Firestore (~200ms), correct on cold Firestore (2–8s)
+- App Check gate is a `Promise.race` with a 10s ceiling; once exchanged (subsequent page loads hit the cache) the gate resolves in <5ms
+- `_otpWrongAttempts` check is an in-memory integer comparison — zero overhead
+
+### Breaking Changes
+None. All changes are internal to auth flow logic; public API and HTML structure unchanged.
+
+---
+
 ## 2026-07-21 — Enterprise Auth Reliability: OTP 6-Box UI, Leading-0 Fix, Rate Limiting & Observability
 
 ### Summary

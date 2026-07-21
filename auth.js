@@ -808,15 +808,22 @@ async function _handleGoogleResult(result) {
     console.info('[SOKONI Auth] Handling Google result', { uid: user?.uid });
 
     /* Wait for firebase.js's onAuthStateChanged to populate localStorage.
-       onAuthStateChanged fires a Firestore getDoc (async) before writing,
-       so we poll rather than using a fixed delay. Max wait: 3 s. */
-    const _startWait = Date.now();
-    while (!localStorage.getItem('sokoniUser') && (Date.now() - _startWait) < 3000) {
-        await new Promise(resolve => setTimeout(resolve, 150));
-    }
+       REPLACES: polling busy-wait (150ms × 20 iterations, 3s ceiling) —
+       same fix as _handleOAuthResult: event-based, zero delay when ready,
+       4s ceiling for Firestore cold starts. */
+    await new Promise(function(resolve) {
+        if (localStorage.getItem('sokoniUser')) { resolve(); return; }
+        var _done = false;
+        function _settle() { if (!_done) { _done = true; resolve(); } }
+        document.addEventListener('sokoniAuthReady', function _h() {
+            document.removeEventListener('sokoniAuthReady', _h);
+            _settle();
+        });
+        setTimeout(_settle, 4000);
+    });
 
     /* Fallback: write minimal profile if onAuthStateChanged was too slow
-       (e.g., Firestore cold start > 3 s). The real profile is written on
+       (e.g., Firestore cold start > 4 s). The real profile is written on
        next page load when onAuthStateChanged fires again. */
     if (!localStorage.getItem('sokoniUser')) {
         console.warn('[SOKONI Auth] onAuthStateChanged timeout — writing fallback profile');
@@ -1057,7 +1064,31 @@ function _providerLabel(providerId) {
 async function _handleOAuthResult(result, providerLabel) {
     const user = result.user;
 
-    await new Promise(function(resolve) { setTimeout(resolve, 900); });
+    /* Wait for firebase.js's onAuthStateChanged to complete its Firestore read/write
+       and populate localStorage with the verified profile.
+
+       REPLACES: hardcoded `await setTimeout(900)` — which was too short for new users
+       (Firestore cold-start takes 2–8s) and unnecessarily slow for warm connections.
+
+       HOW IT WORKS:
+       · Fast path  — if onAuthStateChanged already completed (localStorage set),
+         this resolves immediately with zero delay.
+       · Event path — sokoniAuthReady is dispatched by firebase.js after getDoc/setDoc
+         completes. We listen for it; the promise resolves as soon as it fires.
+       · Ceiling    — 4 s handles Firestore cold-starts and slow networks. At the
+         ceiling we proceed and write a minimal fallback profile so the user is
+         never left waiting forever. The real profile from Firestore will overwrite
+         the fallback the next time onAuthStateChanged fires (next page load). */
+    await new Promise(function(resolve) {
+        if (localStorage.getItem('sokoniUser')) { resolve(); return; }
+        var _done = false;
+        function _settle() { if (!_done) { _done = true; resolve(); } }
+        document.addEventListener('sokoniAuthReady', function _h() {
+            document.removeEventListener('sokoniAuthReady', _h);
+            _settle();
+        });
+        setTimeout(_settle, 4000);
+    });
 
     if (!localStorage.getItem('sokoniUser')) {
         const parts = (user.displayName || '').split(' ');
@@ -1281,10 +1312,12 @@ function signInWithFacebook() {
    Firebase Phone Auth with invisible reCAPTCHA.
    Default prefix: +254 (Kenya). User can type any international code.
 ══════════════════════════════════════════════════════════════ */
-let _phoneConfirmResult = null;
-let _recaptchaVerifier  = null;
-let _otpTimerHandle     = null;
-let _otpField           = null;   /* SokoniOtp controller — the single verification input */
+let _phoneConfirmResult  = null;
+let _recaptchaVerifier   = null;
+let _otpTimerHandle      = null;
+let _otpField            = null;   /* SokoniOtp controller — the verification input */
+let _otpWrongAttempts    = 0;      /* wrong-code counter; 3 bad codes → force resend */
+const _OTP_MAX_ATTEMPTS  = 3;
 
 function openPhoneAuth() {
     const section = document.getElementById('phoneAuthSection');
@@ -1332,6 +1365,25 @@ async function sendPhoneOTP() {
     const btn = document.getElementById('sendOtpBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
 
+    /* If App Check is still exchanging its token, all auth calls will hang silently
+       until it completes or times out (up to 12 s). Surface feedback so the user
+       knows something is happening, then bail early if the exchange was rejected. */
+    if (window.__sokoniAppCheckState === 'pending' && window.__sokoniAppCheckReady) {
+        showAuthMsg('Preparing security check…', '');
+        const _acStatus = await Promise.race([
+            window.__sokoniAppCheckReady,
+            new Promise(r => setTimeout(() => r('timeout'), 10000)),
+        ]);
+        if (_acStatus === 'rejected') {
+            showAuthMsg('Security check failed. Please refresh the page and try again.', 'error');
+            if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
+            return;
+        }
+        /* 'exchanged' or 'timeout' — proceed. Timeout lets Firebase handle it (it queues
+           the auth call internally and may still succeed when the token arrives). */
+        showAuthMsg('', '');
+    }
+
     try {
         const { signInWithPhoneNumber, RecaptchaVerifier } = await import(
             'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
@@ -1356,6 +1408,7 @@ async function sendPhoneOTP() {
            SMS suggestion strip) comes up straight away. */
         if (!_otpField) _setupOtpInputs();
         _otpField?.clear();
+        _otpWrongAttempts = 0;   /* reset on every new OTP send */
         /* Scroll the OTP entry into view within the card's scroll container before
            focusing — without this, the field is off-screen on desktop where the card
            clips at max-height:calc(100vh - 40px) and focus() alone races layout. */
@@ -1445,8 +1498,30 @@ async function verifyPhoneOTP() {
             'auth/network-request-failed':    'Network error. Check your connection and try again.',
         };
         try {
-            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_failed', { code: err.code || 'unknown' });
+            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_failed', { code: err.code || 'unknown', attempt: _otpWrongAttempts });
         } catch(_) {}
+
+        /* Wrong-code retry limit: after 3 consecutive wrong codes, Firebase will
+           return auth/too-many-requests anyway, but we surface this proactively so
+           users aren't confused by a "too many requests" error message. */
+        if (err.code === 'auth/invalid-verification-code') {
+            _otpWrongAttempts++;
+            if (_otpWrongAttempts >= _OTP_MAX_ATTEMPTS) {
+                _otpField?.error(true);
+                showAuthMsg(
+                    'Too many wrong codes. Please tap Resend OTP to get a new code.',
+                    'error'
+                );
+                /* Surface the resend link immediately so the path forward is obvious */
+                const resendEl = document.getElementById('otpResendLink');
+                if (resendEl) resendEl.style.display = 'inline';
+                const timerEl = document.getElementById('otpTimerDisplay');
+                if (timerEl) timerEl.textContent = '';
+                clearInterval(_otpTimerHandle);
+                return;
+            }
+        }
+
         /* error() re-arms auto-submit. Without it the field stays "already fired" and
            a corrected code would only ever verify via the button. */
         _otpField?.error(true);

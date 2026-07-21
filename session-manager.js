@@ -161,9 +161,11 @@ async function createSession(userEmailHint) {
 
 /* ─── Touch session (update lastActive) ─── */
 async function touchSession() {
-  const sid  = _getSessionId();
-  const user = _getUser();
-  if (!sid || !user?.email) return;
+  const sid = _getSessionId();
+  /* FIX: was `!user?.email` — phone accounts have no email and were excluded,
+     leaving their lastActive permanently stale and revocation impossible. */
+  const { uid } = _getIdentity();
+  if (!sid || !uid) return;
   try {
     await setDoc(doc(db, 'userSessions', sid),
       { lastActive: serverTimestamp() }, { merge: true });
@@ -173,9 +175,11 @@ async function touchSession() {
 /* ─── Watch current session for remote revocation ─── */
 let _unsubWatch = null;
 function watchSession() {
-  const sid  = _getSessionId();
-  const user = _getUser();
-  if (!sid || !user?.email) return;
+  const sid = _getSessionId();
+  /* FIX: was `!user?.email` — phone accounts had no revocation watch.
+     Now keyed on uid so phone users can be signed out from other devices. */
+  const { uid } = _getIdentity();
+  if (!sid || !uid) return;
 
   if (_unsubWatch) { _unsubWatch(); _unsubWatch = null; }
 
