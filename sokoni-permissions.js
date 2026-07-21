@@ -249,29 +249,61 @@
   let _currentRoles = ["user"];
   let _claimsVerified = false;
 
+  /* ── Elevation guard ──────────────────────────────────────────────────
+     _currentRoles can be populated from three places: the sessionStorage
+     cache, the localStorage sync pass, and the Firebase ID token. Only the
+     last is authoritative — the other two are attacker-writable.
+
+     The cache path is the sharp edge: _readCache() parses sessionStorage
+     without validation and init() RETURNS EARLY on a hit, so a forged entry
+     carrying {roles:["superAdmin"], claimsVerified:true} elevated the client
+     without Firebase ever being consulted. Reading claimsVerified back out of
+     that same cache cannot detect it, because the attacker sets that field too.
+
+     _verifiedThisLoad is therefore in-memory ONLY and is never serialised,
+     read back, or restorable from any storage. It becomes true solely when
+     _rolesFromFirebase() succeeds against a signed ID token in this page load.
+
+     Elevated permissions (moderator and above) now require it. Baseline and
+     seller-tier roles still resolve from cache so first paint stays fast —
+     those are product surfaces, not administrative power, and gating them on
+     an await would regress rendering for every ordinary user. */
+  let _verifiedThisLoad = false;
+  const ELEVATED_LEVEL = 50; /* moderator(50), admin(80), superAdmin(100) */
+
   async function init() {
     if (_initPromise) return _initPromise;
     _initPromise = (async () => {
-      // 1. Try cache first
+      // 1. Try cache first — for IMMEDIATE RENDER ONLY.
+      //    This used to return early, which meant a warm (or forged) cache
+      //    skipped Firebase entirely. The cache may now seed the role set for
+      //    a fast first paint, but it can never stand in for verification:
+      //    _verifiedThisLoad stays false until a signed token is read below,
+      //    so elevated permissions remain denied until then.
       const cached = _readCache();
       if (cached) {
         _currentRoles   = cached.roles;
         _claimsVerified = cached.claimsVerified;
         _initialized    = true;
         _filterNav();
-        return;
+        /* fall through — do NOT return; verification still has to happen */
       }
 
       // 2. Synchronous pass from localStorage (for immediate render)
-      _currentRoles = _rolesFromLocalStorage();
-      _initialized  = true;
-      _filterNav();
+      if (!cached) {
+        _currentRoles = _rolesFromLocalStorage();
+        _initialized  = true;
+        _filterNav();
+      }
 
       // 3. Async verification from Firebase (upgrades or downgrades roles)
       const firebaseRoles = await _rolesFromFirebase();
       if (firebaseRoles) {
-        _currentRoles   = firebaseRoles;
-        _claimsVerified = true;
+        _currentRoles     = firebaseRoles;
+        _claimsVerified   = true;
+        /* The only assignment of this flag anywhere. It is in-memory, never
+           serialised, and therefore not forgeable from any storage. */
+        _verifiedThisLoad = true;
 
         // Update localStorage so other scripts stay in sync
         try {
@@ -298,7 +330,11 @@
 
   function hasRole(role) {
     const norm = _normaliseRole(role) || role;
-    return _currentRoles.includes(norm);
+    if (!_currentRoles.includes(norm)) return false;
+    /* An elevated role asserted only by cache is not an elevated role. */
+    const def = ROLES[norm];
+    if (def && def.level >= ELEVATED_LEVEL && !_verifiedThisLoad) return false;
+    return true;
   }
 
   function hasAnyRole(rolesArray) {
@@ -315,6 +351,9 @@
       console.warn("[Permissions] Unknown permission:", permission);
       return false;
     }
+    /* Fail securely: an elevated permission is granted only from a signed
+       token verified during this page load, never from cached JSON. */
+    if (minLevel >= ELEVATED_LEVEL && !_verifiedThisLoad) return false;
     return _roleLevel(_currentRoles) >= minLevel;
   }
 
