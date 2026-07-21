@@ -46,7 +46,8 @@
 .sk-recs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;}
 .sk-rec-card{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;text-decoration:none;color:inherit;transition:all .2s;display:block;}
 .sk-rec-card:hover{border-color:rgba(113,255,0,0.25);transform:translateY(-3px);}
-.sk-rec-thumb{height:100px;display:flex;align-items:center;justify-content:center;font-size:40px;background:rgba(255,255,255,0.03);}
+.sk-rec-thumb{height:100px;display:flex;align-items:center;justify-content:center;font-size:40px;background:rgba(255,255,255,0.03);position:relative;overflow:hidden;}
+.sk-rec-thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
 .sk-rec-body{padding:10px 12px;}
 .sk-rec-name{font-size:13px;font-weight:700;color:white;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sk-rec-meta{font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;}
@@ -219,6 +220,7 @@
           location: d => d.location || d.city || '',
           price: d => d.price,
           sellerId: d => d.sellerId || d.uid || '',
+          image: d => d.imageUrl || d.image || (Array.isArray(d.images) && d.images[0] && (d.images[0].url || d.images[0])) || d.thumbnail || d.photo || d.coverImage || '',
         },
         {
           col: 'services', type: 'service', _skip: true,   /* phantom collection — no rule, no server-side use */
@@ -227,6 +229,7 @@
           location: d => d.location || d.city || '',
           price: d => d.price,
           sellerId: d => d.providerId || d.uid || '',
+          image: d => d.image || d.imageUrl || d.thumbnail || d.photo || '',
         },
         {
           col: 'providers', type: 'provider', _authOnly: true,  /* firestore.rules:153 — isAuthed() */
@@ -235,6 +238,7 @@
           location: d => d.location || '',
           price: d => d.rate,
           sellerId: d => d.uid || d.id || '',
+          image: d => d.image || d.imageUrl || d.thumbnail || d.photo || d.avatar || '',
         },
         {
           col: 'mechanics', type: 'business',
@@ -243,6 +247,7 @@
           location: d => d.location || '',
           price: d => null,
           sellerId: d => d.uid || d.id || '',
+          image: d => d.image || d.imageUrl || d.thumbnail || d.logo || d.photo || '',
         },
       ];
 
@@ -267,6 +272,7 @@
                 sellerId:   spec.sellerId(d) || '',
                 viewCount:  Number(d.viewCount || 0),
                 county:     (d.county || d.location || '').toLowerCase(),
+                image:      spec.image ? spec.image(d) : '',
               });
             });
             return items;
@@ -600,9 +606,15 @@
         JSON.stringify(item.id)   + ',' +
         JSON.stringify(item.category) + ',' +
         (item.price != null ? item.price : 'null') + ')';
+      /* Emoji sits in the thumb as text; if image is present the <img> overlays it
+         via absolute positioning (CSS). If the image fails to load, onerror removes
+         the img element and the emoji underneath is revealed automatically. */
+      const imgTag = item.image
+        ? '<img src="' + _esc(item.image) + '" loading="lazy" alt="' + name + '" onerror="this.remove()">'
+        : '';
 
       return `<a href="${url}" class="sk-rec-card" onclick="${trackClick}">
-  <div class="sk-rec-thumb">${emoji}</div>
+  <div class="sk-rec-thumb">${emoji}${imgTag}</div>
   <div class="sk-rec-body">
     <div class="sk-rec-name">${name}</div>
     <div class="sk-rec-meta">${meta}</div>

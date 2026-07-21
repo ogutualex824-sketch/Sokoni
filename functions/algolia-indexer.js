@@ -550,7 +550,7 @@ const TRANSFORMERS = {
       quantity:        _num(data.quantity),
       minOrder:        _num(data.minOrder, 1),
       images,
-      thumbnail:       images[0]?.url || _str(data.thumbnail),
+      thumbnail:       images[0]?.url || _str(data.thumbnail || data.imageUrl || data.image || data.photo || data.coverImage),
       tags:            _arr(data.tags).slice(0, 30),
       keywords:        _arr(data.keywords).slice(0, 20),
       seller: {

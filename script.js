@@ -594,7 +594,14 @@ function buildProductCard(product, size = "normal"){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
     const kebs     = kebsBadge(product);
-    const img      = product.image || "assets/default-product.png";
+    const img      = product.image
+                   || product.imageUrl
+                   || product.imageURL
+                   || (Array.isArray(product.images) && product.images[0] && (product.images[0].url || product.images[0]))
+                   || product.thumbnail
+                   || product.photo
+                   || product.coverImage
+                   || "assets/default-product.png";
     const price    = Number(product.price).toLocaleString();
     const locLabel = product.location ? locationLabels[product.location] || product.location : "";
     const locTag   = locLabel ? `<span class="product-location-tag">📍 ${locLabel}</span>` : "";

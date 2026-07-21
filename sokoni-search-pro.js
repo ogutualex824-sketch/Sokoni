@@ -843,7 +843,7 @@ const SokoniSearchPro = (function () {
             label:    h.name || h.title || h.label || '',
             category: h.category || '',
             price:    h.price ?? null,
-            image:    h.image || h.imageUrl || null,
+            image:    h.thumbnail || h.image || h.imageUrl || null,
             type:     'result',
           }));
 

@@ -204,7 +204,7 @@ function renderProducts(list){
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap">
-                <img src="${p.image || 'assets/default-product.png'}" alt="${_esc(p.name)}" loading="lazy" decoding="async">
+                <img src="${p.image || p.imageUrl || p.thumbnail || p.photo || p.coverImage || 'assets/default-product.png'}" alt="${_esc(p.name)}" loading="lazy" decoding="async" onerror="this.src='assets/default-product.png'">
                 ${cShopRing}
             </div>
             <div class="product-body">
