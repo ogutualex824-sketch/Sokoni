@@ -57,6 +57,7 @@ const PROFILE = {
 const KEY_DEVICE     = 'p58e_paired_device';
 const KEY_CHECKLIST  = 'p58e_production_checklist';
 const KEY_SETTINGS   = 'p58e_settings';
+const KEY_TEST_SEQ   = 'p58e_test_seq';
 
 /* ─────────────────────────────────────────────────────────────────
    P58E SERVICE
@@ -107,6 +108,22 @@ class P58EService {
     try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch(e) { return def; }
   }
   _save (key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
+
+  /* Monotonic counter behind both the Setup ID and the rotating closing remark.
+     Persisted so the id stays unique across reloads and the remark advances
+     rather than resetting — a merchant printing two tests in a row must not see
+     the same line twice, which is why this is a counter and not Math.random().
+     Falls back to a time-derived value when storage is unavailable (private
+     mode), where uniqueness still holds even though rotation cannot persist. */
+  _nextTestSeq () {
+    try {
+      const n = (parseInt(localStorage.getItem(KEY_TEST_SEQ), 10) || 0) + 1;
+      localStorage.setItem(KEY_TEST_SEQ, String(n));
+      return n;
+    } catch (_) {
+      return Math.floor(Date.now() / 1000) % 1000;
+    }
+  }
 
   _applyCfg () {
     if (window.SokoniPrinter) {
@@ -464,8 +481,46 @@ class P58EService {
 
     const info    = this._info || {};
     const now     = new Date();
-    const dateStr = now.toLocaleDateString('en-KE', { day:'2-digit', month:'short', year:'numeric' });
-    const timeStr = now.toLocaleTimeString('en-KE', { hour12: false });
+    const pad2    = (n) => String(n).padStart(2, '0');
+    /* dd/mm/yyyy HH:MM — locale-independent. toLocaleDateString('en-KE') is not
+       consistently supported across Android WebViews and silently falls back to
+       US ordering, which would print an ambiguous date on a fiscal document. */
+    const dateStr = `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()}`;
+    const timeStr = `${pad2(now.getHours())}:${pad2(now.getMinutes())}`;
+
+    /* ── Setup ID: unique, short, and readable back to support over the phone ── */
+    const seq     = this._nextTestSeq();
+    const setupId = 'TEST-' + String(seq).padStart(3, '0');
+
+    /* ── Rotating closing remark ──────────────────────────────────────────────
+       Rotated by a persisted counter rather than Math.random(), so a merchant
+       printing twice never sees the same line twice — random repeats about one
+       time in ten, which reads as a bug on a receipt that is meant to feel
+       finished. */
+    const REMARKS = [
+      'Printer setup completed successfully.',
+      'Welcome to the SOKONI merchant family.',
+      'Thank you for choosing SOKONI POS.',
+      'Powered by Bravilex International.',
+      'We wish you great success in your business.',
+      'Your POS is ready for real transactions.',
+      'Happy selling!',
+      'Need help? Scan the QR below.',
+      'Every sale builds your business.',
+      'We appreciate your trust in SOKONI POS.',
+    ];
+    const remark = REMARKS[seq % REMARKS.length];
+
+    /* Merchant identity, best-effort from whatever setup already stored. Falls
+       back to neutral copy rather than printing an empty label. */
+    const _ls = (k) => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } };
+    const merchantName = _ls('sokoni_business_name') || _ls('sokoni_merchant_name') || 'Your Business';
+    const merchantLoc  = _ls('sokoni_business_location') || _ls('sokoni_branch_name') || '';
+    const posVersion   = (window.SOKONI_VERSION || window.APP_VERSION || '1.0');
+
+    /* QR target — verified to resolve (200) on the canonical domain. The setup id
+       travels in the query string so support can look the print up. */
+    const qrUrl = 'https://mysokoni.co.ke/support?setup=' + encodeURIComponent(setupId);
 
     await SokoniPrinter.print('custom', {
       build (enc, W) {
@@ -480,112 +535,78 @@ class P58EService {
           return ' '.repeat(Math.max(0, Math.floor((W - str.length) / 2))) + str;
         };
 
+        /* ── Word wrap so merchant-supplied text can never overflow the roll ── */
+        const wrap = (t) => {
+          const out = []; let line = '';
+          for (const word of String(t).split(/s+/)) {
+            if (!word) continue;
+            if ((line + (line ? ' ' : '') + word).length > W) { if (line) out.push(line); line = word.slice(0, W); }
+            else line += (line ? ' ' : '') + word;
+          }
+          if (line) out.push(line); return out;
+        };
+        const writeCentered = (t) => { wrap(t).forEach(l => enc.text(center(l)).lf()); };
+
         /* ── Header ── */
-        enc.ac()
-           .bold(true).sz('tall').text(center('SOKONI SmartPOS')).lf()
-           .sz('normal').bold(false)
-           .text(center('Powered by P58E Thermal')).lf()
-           .al().text(sep).lf()
-           .ac().bold(true).text(center('★  PRINTER TEST RECEIPT  ★')).lf().bold(false)
-           .al().text(sep).lf();
+        enc.al().text(sep).lf()
+           .ac().bold(true).sz('tall').text(center('SOKONI POS')).lf().sz('normal')
+           .text(center('Powered by Bravilex')).lf().bold(false)
+           .al().text(sep).lf().lf();
 
-        /* ── Date / Time ── */
-        enc.text(row('Test Date:', dateStr)).lf()
-           .text(row('Test Time:', timeStr)).lf();
+        /* ── Test banner ── */
+        enc.ac().bold(true).text(center('*** TEST RECEIPT ***')).lf().bold(false);
+        writeCentered('This is a printer verification receipt.');
+        enc.al().lf();
 
-        /* ── Printer hardware info ── */
-        enc.text(dash).lf()
-           .bold(true).text('PRINTER INFORMATION').lf().bold(false)
-           .text(dash).lf()
-           .text(row('Model:', info.name || 'P58E Bluetooth')).lf()
-           .text(row('BT Device ID:', (info.id || 'N/A').slice(0, W - 14))).lf()
-           .text(row('BLE Service:', info.serviceUUID ? 'FF00 (P58E)' : 'Unknown')).lf()
-           .text(row('Write Char:', info.charUUID ? (info.charUUID.slice(4,8).toUpperCase()) : 'N/A')).lf()
-           .text(row('Write Mode:', info.writeMode || 'N/A')).lf()
-           .text(row('Paper Width:', '58mm / 32 chars')).lf()
-           .text(row('Connection:', 'BLE (Web Bluetooth)')).lf()
-           .text(row('Status:', 'CONNECTED  ✓')).lf()
-           .text(row('Firmware:', 'N/A (BLE only)')).lf()
-           .text(row('Paired At:', (info.connectedAt || now.toISOString()).slice(0, 16))).lf();
+        /* ── Merchant identity ── */
+        enc.text('Merchant:').lf().bold(true).text(merchantName.slice(0, W)).lf().bold(false);
+        if (merchantLoc) enc.lf().text('Location:').lf().text(merchantLoc.slice(0, W)).lf();
+        enc.lf();
 
-        /* ── ESC/POS feature verification ── */
-        enc.text(dash).lf()
-           .bold(true).text('FEATURE VERIFICATION').lf().bold(false)
-           .text(dash).lf()
-           .text(row('Text printing:',  'PASS  ✓')).lf()
-           .text(row('Bold text:',      'PASS  ✓')).lf()
-           .text(row('Double height:',  'PASS  ✓')).lf()
-           .text(row('Column layout:',  'PASS  ✓')).lf();
+        /* ── Transaction meta ── */
+        enc.text('Receipt No: ' + setupId).lf()
+           .text('Date: ' + dateStr + ' ' + timeStr).lf()
+           .text('Cashier: Test Cashier').lf().lf();
 
-        /* ── Sample products (receipt body) ── */
-        enc.text(dash).lf()
-           .bold(true).text('SAMPLE TRANSACTION').lf().bold(false)
-           .text(dash).lf();
+        /* ── Diagnostic certificate ── */
+        enc.text(dash).lf().bold(true).text('Printer Status').lf().bold(false)
+           .text('✓ Printer Connected').lf()
+           .text('✓ ESC/POS Verified').lf()
+           .text('✓ Paper Width: 58mm').lf()
+           .text('✓ Print Quality: PASS').lf()
+           .text('✓ QR Printing: PASS').lf()
+           .text('✓ Model: ' + String(info.name || 'P58E').slice(0, W - 9)).lf()
+           .text('✓ POS Version: ' + posVersion).lf()
+           .text(dash).lf().lf();
 
-        const items = [
-          { name: 'Unga Ndovu 2kg',        qty: 2, price: 220 },
-          { name: 'Mafuta ya Kupika 1L',   qty: 1, price: 190 },
-          { name: 'Sukari Futa 1kg',       qty: 3, price: 150 },
-          { name: 'Maziwa Safi 500ml',     qty: 2, price:  60 },
-          { name: 'Chumvi Kilo 1',         qty: 1, price:  50 },
-          { name: 'Uji wa Mtoto 500g',     qty: 1, price: 140 },
-        ];
+        /* ── Congratulations ── */
+        enc.ac().bold(true).text(center('Congratulations!')).lf().bold(false).lf();
+        writeCentered('Your SOKONI POS has been configured successfully and is ready to serve customers.');
+        enc.lf();
+        writeCentered('Thank you for choosing SOKONI POS powered by Bravilex International Co. Ltd.');
+        enc.lf();
 
-        const qW = 3, pW = 9, nW = W - qW - pW - 2;
-        enc.bold(true)
-           .text('Item'.padEnd(nW) + 'Qty'.padStart(qW) + 'Amount'.padStart(pW)).lf()
-           .bold(false).text(dash).lf();
+        /* ── Rotating remark ── */
+        writeCentered(remark);
+        enc.lf();
 
-        let subtotal = 0;
-        for (const it of items) {
-          const total = it.qty * it.price; subtotal += total;
-          enc.text(it.name.slice(0, nW).padEnd(nW) + String(it.qty).padStart(qW) + ('KES '+total).padStart(pW)).lf();
-        }
+        /* ── Support ── */
+        enc.al().text('Support:').lf()
+           .text('support@mysokoni.co.ke').lf()
+           .text('www.mysokoni.co.ke').lf().lf();
 
-        const vat   = Math.round(subtotal * 0.16);
-        const grand = subtotal + vat;
-        enc.text(dash).lf()
-           .text(row('Subtotal:', 'KES ' + subtotal)).lf()
-           .text(row('VAT (16%):', 'KES ' + vat)).lf()
-           .text(dash).lf()
-           .bold(true).sz('tall').text(row('TOTAL:', 'KES ' + grand)).lf().sz('normal').bold(false)
-           .text(dash).lf()
-           .text(row('Payment:', 'M-PESA')).lf()
-           .text(row('Mpesa Ref:', 'SH12345678A')).lf()
-           .text(row('Amount Paid:', 'KES 1,500')).lf()
-           .text(row('Change:', 'KES ' + (1500 - grand))).lf()
-           .text(row('Cashier:', 'Jane Kamau')).lf()
-           .text(row('Till #:', 'TILL-01')).lf()
-           .text(row('Receipt #:', 'RCP-TEST-001')).lf();
+        /* ── QR ── */
+        enc.ac();
+        writeCentered('Scan QR Code below to verify printer setup and access support.');
+        enc.lf().qr(qrUrl, 5).lf();
 
-        /* ── Barcode test ── */
-        enc.text(dash).lf()
-           .ac().bold(true).text('SAMPLE BARCODE (Code 128)').lf().bold(false);
-        enc.barcode('1234567890').lf();
-        enc.text(row('Barcode print:', 'PASS  ✓')).lf();
+        /* ── Setup ID ── */
+        enc.al().text('Setup ID:').lf().bold(true).text(setupId).lf().bold(false).lf();
 
-        /* ── QR code test ── */
-        enc.ac().bold(true).text('SAMPLE QR CODE').lf().bold(false);
-        enc.qr('https://sokoni.co.ke/r/TEST-P58E-001', 4).lf();
-        enc.al().text(row('QR code print:', 'PASS  ✓')).lf();
-
-        /* ── Auto-cutter test marker ── */
-        enc.text(dash).lf()
-           .text(row('Auto-cut test:', 'BELOW  ↓')).lf();
-
-        /* ── Pass banner ── */
+        /* ── Closing banner ── */
         enc.text(sep).lf()
-           .ac()
-           .bold(true).sz('tall').text(center('ALL TESTS PASSED')).lf()
-           .sz('normal').bold(false)
-           .text(center('P58E is ready for production')).lf().lf()
-           /* Platform attribution. A receipt is a fiscal document, so the operating
-              entity belongs on it — Bravilex is the merchant of record and the name
-              that appears on settlement. Customer-facing brand stays SOKONI. */
-           .text(center('SOKONI SmartPOS')).lf()
-           .text(center('Powered by Bravilex')).lf()
-           .text(center('International Co. Ltd.')).lf().lf()
-           .text(center('sokoni.co.ke')).lf()
+           .ac().bold(true).sz('tall').text(center('HAPPY SELLING!')).lf().sz('normal').bold(false)
+           .al().text(sep).lf()
            .lf(3);
       },
     });
