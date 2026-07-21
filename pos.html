@@ -1923,10 +1923,15 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  /* Auto-init Phase 2 modules */
+  /* Auto-init Phase 2 modules.
+     PosInventory + PosSales open Firestore onSnapshot listeners whose initial payloads
+     can create hundreds of concurrent IDB writes. Deferred 4 s so the JS parse/compile
+     cycle completes first — prevents iOS jetsam OOM kill on memory-constrained devices. */
   const branchId = localStorage.getItem('sokoni_pos_branch') || 'default';
-  if (window.PosInventory) PosInventory.init(branchId).catch(function(){});
-  if (window.PosSales)     PosSales.init(branchId).catch(function(){});
+  setTimeout(function() {
+    if (window.PosInventory) PosInventory.init(branchId).catch(function(){});
+    if (window.PosSales)     PosSales.init(branchId).catch(function(){});
+  }, 4000);
   if (window.PosCustomers) PosCustomers.init().catch(function(){});
   if (window.PosSuppliers) PosSuppliers.init().catch(function(){});
 

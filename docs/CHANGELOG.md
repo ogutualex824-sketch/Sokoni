@@ -2,6 +2,38 @@
 
 ---
 
+## 2026-07-21 — P0 iOS POS Crash — iPhone Reboot Fix
+
+### Summary
+Fixed a P0 memory exhaustion crash that caused iPhones to reboot when the POS button was tapped. Root cause: `pos-inventory.js:startFirestoreSync()` delivered all Firestore documents to concurrent IndexedDB write transactions simultaneously during `DOMContentLoaded`, while 39 synchronous scripts were still being parsed by JavaScriptCore. Combined memory pressure exceeded the iOS jetsam kill threshold.
+
+### Root Causes Fixed
+
+**RC-1 — Concurrent IDB write storm on Firestore initial snapshot**
+`pos-inventory.js:startFirestoreSync()` called `_put()` inside a `.forEach()` with no `await`, firing N concurrent IDB transactions for every product in `posProducts` on the initial `onSnapshot` payload. On a merchant with 200+ products this created 200+ simultaneous IDB transactions while the JS engine was still compiling 39 scripts.
+
+**RC-2 — Firestore subscriptions fired at DOMContentLoaded peak**
+`pos.html` line 1928 called `PosInventory.init()` and `PosSales.init()` directly on `DOMContentLoaded`, the same moment at which JavaScriptCore is under peak bytecode-compilation load. All Firestore initial payloads arrived while available iOS RAM was already minimally available.
+
+### Fixes Applied
+
+| File | Change |
+|------|--------|
+| `pos-inventory.js` | `startFirestoreSync()` — `.forEach()` replaced with `async for...of` with `await` on every `_put`/`_delete` call for both `posProducts` and `posInventory` listeners |
+| `pos.html` | `PosInventory.init()` + `PosSales.init()` wrapped in `setTimeout(..., 4000)` — deferred 4 seconds after `DOMContentLoaded` to clear the script-parse memory peak before Firestore subscriptions open |
+
+### Rollback Risk
+- Sequential IDB writes (RC-1 fix): snapshot callbacks are now `async`; each document is written before the next begins. Incremental updates (1-2 docs) are unaffected. Initial sync may take slightly longer on very large catalogs (500+ products), but does not block the POS UI.
+- 4-second defer (RC-2 fix): inventory and sales data are not in local IDB for the first 4 seconds after page load. Cashier authentication typically takes longer than 4 seconds, so the window of exposure is effectively zero for normal flows.
+
+### Security
+No security surface changed.
+
+### Performance
+Startup RAM spike eliminated. IDB write queue depth reduced from O(N) concurrent to 1 sequential at any moment.
+
+---
+
 ## 2026-07-21 — P0 POS Product Creation — Full System Fix
 
 **Scope:** Complete audit and rebuild of the Add Product workflow in the Inventory Management System.

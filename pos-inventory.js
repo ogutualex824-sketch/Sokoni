@@ -673,25 +673,25 @@ window.PosInventory = (() => {
     const db = window.firebase?.firestore?.();
     if (!db) return;
 
-    /* Listen to product changes */
+    /* Listen to product changes — sequential writes prevent IDB transaction storm on iOS */
     const unsub1 = db.collection('posProducts')
       .where('status', '!=', 'deleted')
-      .onSnapshot(snap => {
-        snap.docChanges().forEach(change => {
+      .onSnapshot(async snap => {
+        for (const change of snap.docChanges()) {
           const data = { id: change.doc.id, ...change.doc.data() };
-          if (change.type === 'removed') { _delete(S.PRODUCTS, data.id).catch(() => {}); }
-          else { _put(S.PRODUCTS, data).catch(() => {}); }
-        });
+          if (change.type === 'removed') { await _delete(S.PRODUCTS, data.id).catch(() => {}); }
+          else { await _put(S.PRODUCTS, data).catch(() => {}); }
+        }
       }, () => {});
 
-    /* Listen to inventory for this branch */
+    /* Listen to inventory for this branch — sequential writes prevent IDB transaction storm on iOS */
     const unsub2 = db.collection('posInventory')
       .where('branchId', '==', branchId)
-      .onSnapshot(snap => {
-        snap.docChanges().forEach(change => {
+      .onSnapshot(async snap => {
+        for (const change of snap.docChanges()) {
           const data = { id: change.doc.id, ...change.doc.data() };
-          if (change.type !== 'removed') _put(S.INVENTORY, data).catch(() => {});
-        });
+          if (change.type !== 'removed') await _put(S.INVENTORY, data).catch(() => {});
+        }
       }, () => {});
 
     _unsubs = [unsub1, unsub2];
