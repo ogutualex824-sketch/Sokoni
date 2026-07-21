@@ -196,6 +196,61 @@ async function shadowCompareSubscription(paymentRef, legacyMeta = {}) {
   }
 }
 
+/* ── Digital download adapter ─────────────────────────────────────────────
+   digitalPurchases is created with status 'completed' for free products and
+   'pending_payment' for paid ones (digital-hub.js:218). Nothing anywhere writes
+   'completed' for a paid purchase, and downloadDigitalProduct refuses anything
+   else (:255) — so every paid digital purchase has been permanently
+   undeliverable. The state machine had a start and an exit but no transition.
+
+   The transition belongs to the engine, not to a payment callback: access is
+   granted because an entitlement was issued, never because a webhook fired.
+   resourceId carries the purchaseId. */
+const digitalDownload = {
+  validate(ctx) {
+    if (!ctx.resourceId) { const e = new Error('No purchaseId on the intent.'); e.code = 'resource_missing'; throw e; }
+    return { ok: true };
+  },
+
+  activate(txn, ctx) {
+    const ref = _db().collection('digitalPurchases').doc(String(ctx.resourceId));
+    /* merge, not set: the purchase already holds licence key, download limits
+       and seller split, and none of that may be overwritten by activation. */
+    txn.set(ref, {
+      status:      'completed',
+      completedAt: FieldValue.serverTimestamp(),
+      paymentRef:  ctx.paymentRef,
+      updatedAt:   FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { ref: `digitalPurchases/${ctx.resourceId}` };
+  },
+
+  /* Refund or chargeback withdraws the download. downloadsUsed is deliberately
+     left intact — it is the record of what the buyer already took, and a refund
+     does not un-download a file. */
+  revoke(txn, led, reason) {
+    if (!led.resourceId) return { skipped: true };
+    txn.set(_db().collection('digitalPurchases').doc(String(led.resourceId)), {
+      status:       'revoked',
+      revokedAt:    FieldValue.serverTimestamp(),
+      revokeReason: String(reason || '').slice(0, 200),
+      updatedAt:    FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { ref: `digitalPurchases/${led.resourceId}` };
+  },
+
+  async status(ctx) {
+    const snap = await _db().collection('digitalPurchases').doc(String(ctx.resourceId)).get();
+    if (!snap.exists) return { active: false };
+    const d = snap.data();
+    return {
+      active: d.status === 'completed' && (d.downloadsUsed || 0) < (d.allowedDownloads || 0),
+      downloadsUsed: d.downloadsUsed || 0,
+      allowedDownloads: d.allowedDownloads || 0,
+    };
+  },
+};
+
 /* ── Registration ─────────────────────────────────────────────────────────
    Adding a future paid feature should require exactly this — one entry, zero
    engine modification. Guarded so a double-require cannot throw. */
@@ -208,12 +263,20 @@ function registerAll() {
       refundable:   true,
     });
   }
+  if (!engine.getPurpose('digital_download')) {
+    engine.registerPurpose('digital_download', {
+      resourceType: 'digitalPurchase',
+      handler:      digitalDownload,
+      expiresDays:  null,          /* a purchased file does not expire */
+      refundable:   true,
+    });
+  }
   return engine.registeredPurposes();
 }
 
 registerAll();
 
 module.exports = {
-  registerAll, isEngineEnabled, subscription, FLAG_DOC, PLAN_DAYS,
+  registerAll, isEngineEnabled, subscription, digitalDownload, FLAG_DOC, PLAN_DAYS,
   shadowCompareSubscription, COMPARE_COL, _diffSubscription,
 };
