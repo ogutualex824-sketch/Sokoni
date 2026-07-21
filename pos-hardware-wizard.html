@@ -1141,7 +1141,7 @@ function renderCategoryCards(summary) {
         <input type="text" class="cat-ip-input" placeholder="Printer IP (e.g. 192.168.1.100)"
                data-category="${cat.key}"
                value="${cat.key === 'receipt_printer' && summary && summary.printers && summary.printers.savedIP
-                         ? summary.printers.savedIP : ''}" />
+                         ? _attr(summary.printers.savedIP) : ''}" />
         <input type="text" class="cat-port-input" placeholder="9100" style="max-width:70px" />
       </div>` : '';
 
@@ -1349,6 +1349,30 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
    announced "2 hardware categories found" while counting the phone's camera
    and Face ID; keeping the headings separate is what makes that impossible to
    repeat by accident. */
+/* Device names, vendor strings and printer IPs are merchant-supplied and are
+   interpolated into innerHTML in several places. Without escaping, a device
+   saved as `<img src=x onerror=…>` executes every time its card, settings
+   panel, test row or table row renders — stored XSS on an admin surface, and
+   it persists in the device registry until someone deletes it.
+   _h escapes text nodes; _attr additionally neutralises quotes so a value
+   cannot break out of an attribute. */
+function _h(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+const _attr = _h;
+
+/* A printer address is an IPv4/host:port, never markup. Validate on the way in
+   as well as escaping on the way out — defence in depth, and it also stops a
+   typo being saved as a working profile. */
+function _validHost(v) {
+  const s = String(v || '').trim();
+  if (!s || s.length > 253) return null;
+  if (!/^[a-zA-Z0-9.\-]+$/.test(s)) return null;      /* no quotes, no angle brackets, no spaces */
+  return s;
+}
+
 const _LBL = {
   camera: 'Camera', offline: 'Offline mode', touch: 'Touch input',
   webShare: 'Share sheet', notifications: 'Notifications', browserPrint: 'Printing',
@@ -1419,7 +1443,7 @@ function renderConfigStep() {
     const icon = CAT_ICON[info.category] || '🔌';
     return `<div class="device-card" data-device-id="${id}">
       <div class="device-card__icon">${icon}</div>
-      <div class="device-card__name">${info.name || id}</div>
+      <div class="device-card__name">${_h(info.name || id)}</div>
       <div class="device-card__model">${info.model || '—'}</div>
       <div class="device-card__badges">
         <span class="badge badge-blue">${info.connection || 'unknown'}</span>
@@ -1465,7 +1489,7 @@ function openSettingsPanel(deviceId) {
   const body    = document.getElementById('settingsPanelBody');
   const icon    = CAT_ICON[info.category] || '🔌';
 
-  title.innerHTML = icon + ' ' + (info.name || deviceId) + ' — Settings';
+  title.innerHTML = icon + ' ' + _h(info.name || deviceId) + ' — Settings';
 
   body.innerHTML = buildSettingsForm(device, info);
   panel.classList.add('visible');
@@ -1614,7 +1638,8 @@ document.getElementById('btnSaveSettings').addEventListener('click', () => {
     if (device._networkIp   !== undefined) device._networkIp   = cfg.ip;
     if (device._networkPort !== undefined) device._networkPort = cfg.port;
     if (device._logoEnabled !== undefined) device._logoEnabled = cfg.logoEnabled;
-    if (cfg.ip) localStorage.setItem('_posNetworkPrinterIP', cfg.ip);
+    const _ipOk = _validHost(cfg.ip);
+    if (_ipOk) localStorage.setItem('_posNetworkPrinterIP', _ipOk);
   }
 
   if (cat === 'weighing_scale') {
@@ -1680,7 +1705,7 @@ function renderTestStep() {
     return `<div class="test-item" id="test-item-${id}">
       <div class="test-item__icon">${icon}</div>
       <div class="test-item__info">
-        <div class="test-item__name">${info.name || id}</div>
+        <div class="test-item__name">${_h(info.name || id)}</div>
         <div class="test-item__detail">${info.model || ''} — ${info.connection || ''}</div>
       </div>
       <span class="test-item__result ${result.status}" id="test-result-${id}">
@@ -1799,7 +1824,7 @@ function renderSaveStep() {
       : '<span class="badge badge-muted">' + (info.status || 'unknown') + '</span>';
 
     return `<tr>
-      <td>${icon} ${info.name || id}</td>
+      <td>${icon} ${_h(info.name || id)}</td>
       <td>${(info.category || '').replace(/_/g, ' ')}</td>
       <td><span class="badge badge-blue">${info.connection || '—'}</span></td>
       <td>${statusBadge}</td>
@@ -1908,7 +1933,7 @@ function renderHealthBar() {
                  : '';
     return `<div class="health-dot ${cls}">
       <div class="health-dot__circle"></div>
-      <span>${info.name || id}</span>
+      <span>${_h(info.name || id)}</span>
     </div>`;
   }).join('');
 
