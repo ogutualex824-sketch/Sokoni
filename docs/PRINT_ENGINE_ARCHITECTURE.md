@@ -258,6 +258,54 @@ verification, in the manner of the entitlement-adapter migration.
 
 ---
 
+## 10a. Dependency graph — measured, not assumed
+
+Script-tag consumers per module (2026-07-21):
+
+| Module | KB | Pages loading it | Global | Verdict |
+|---|---|---|---|---|
+| `sokoni-universal-printer.js` | 79 | 2 — checkout, printer-setup | `SokoniPrinter` | **CANONICAL** |
+| `sokoni-bluetooth-printer.js` | 39 | 3 | `P58EPrinter` | **KEEP — layer** |
+| `pos-receipt-engine.js` | 40 | 1 | `SokoniReceiptEngine` | **KEEP — builder** |
+| `sokoni-pos-print-service.js` | 53 | 3 | `PosPrintService` | duplicate → migrate |
+| `sokoni-printer-manager.js` | 46 | 3 | `PrinterManager` | duplicate → migrate |
+| `sokoni-print-engine.js` | 38 | 2 | `SokoniPrint` | duplicate → migrate |
+| `pos-printer.js` | 21 | 4 | `PosPrinter` | duplicate → migrate |
+| `sokoni-pos-print.js` | 32 | 1 | `SokoniPosprint` | duplicate → migrate |
+| `sokoni-pos-ios-print.js` | 30 | 1 | `—` | duplicate → migrate |
+| `sokoni-printer-drivers.js` | 20 | 1 | `SokoniPrinterDrivers` | duplicate → migrate |
+| `sokoni-printer-discovery.js` | 16 | 1 | `SokoniPrinterDiscovery` | duplicate → migrate |
+
+**`pos.html` loads nine printing modules simultaneously — roughly 285 KB of overlapping code on the
+till page.** `pos-checkout.html` loads five. That, not a missing engine, is the production cost.
+
+### Correction to §0
+
+`sokoni-bluetooth-printer.js` is **not** a duplicate. Its header states *"Depends on:
+sokoni-universal-printer.js (must load first)"*, and it implements a P58E **profile** — BLE service
+`0000ff00` for Goojprt / Jepod / HOIN clones, 58 mm / 32 columns, plus `requestAndPair`,
+`autoConnect`, `printTestReceipt`, `forget`. Engine + device-profile is already the correct two-tier
+shape and must be preserved, not collapsed.
+
+This also corrects a claim made while auditing the hardware wizard: the platform is **not** ignorant
+of the P58E. The wizard's registry was, and now is not; the printing subsystem has had a dedicated
+P58E driver all along.
+
+### Migration order — fewest consumers first
+
+Risk rises with consumer count, so the order is ascending:
+
+1. `sokoni-printer-discovery.js` · `sokoni-printer-drivers.js` · `sokoni-pos-print.js` ·
+   `sokoni-pos-ios-print.js` — 1 page each
+2. `sokoni-print-engine.js` — 2 pages
+3. `sokoni-printer-manager.js` · `sokoni-pos-print-service.js` — 3 pages
+4. `pos-printer.js` — 4 pages, **last**
+
+Each step: route the module's global to the canonical engine as a thin compatibility shim, verify the
+page, then delete the shim once no caller remains. Never two modules in one release.
+
+**Expected reduction:** ~285 KB → ~120 KB on `pos.html` (engine + P58E profile + receipt builder).
+
 ## 11. Recommendation
 
 **Do not build a new engine.** Adopt `sokoni-universal-printer.js` as canonical, add the selector,
