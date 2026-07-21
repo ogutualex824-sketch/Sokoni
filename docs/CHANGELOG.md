@@ -2,6 +2,144 @@
 
 ---
 
+## 2026-07-22 — POS Hardware Architecture: Enterprise Device Abstraction Layer v1.0
+
+### Summary
+Complete redesign of the POS hardware layer from 11 overlapping implementations with incorrect auto-discovery into a structured, permission-correct enterprise device abstraction. The old stack called `navigator.bluetooth.getDevices()` and `navigator.usb.getDevices()` at module init — outside any user gesture — and had a dedicated `sokoni-printer-discovery.js` engine built entirely around auto-discovery that Android Chrome will reject. The new architecture enforces a strict rule: the browser device picker is only opened when the user clicks a button, matching the Web Bluetooth / WebUSB permission model exactly.
+
+### Root Causes Addressed
+
+| # | Severity | Issue | Resolution |
+|---|----------|-------|------------|
+| 1 | **Critical** | `sokoni-printer-discovery.js` dedicated auto-discovery engine — entire module built around `requestDevice()` being called without user gesture → `NotAllowedError` on Android Chrome | Module superseded; all discovery now exclusively user-gesture-triggered |
+| 2 | **Critical** | 6 files call `navigator.bluetooth.getDevices()` / `navigator.usb.getDevices()` at module init — fine for passive reconnect, but the same code paths also called `requestDevice()` speculatively | Separated into: `getStored*()` passive (no gesture) vs `requestDevice()` only in click handler |
+| 3 | **Critical** | No PermissionManager — permission logic duplicated across 10 files with incompatible error handling; some files call `navigator.serial.requestPort()` inside `addEventListener('online')` (never a user gesture) | `SokoniPermissionManager` is the single authority; all `request*` methods documented as requiring user gesture |
+| 4 | **Major** | No capability gating — UI in `pos-hardware-wizard.html` shows USB / Bluetooth / Serial options on iOS Safari where these APIs do not exist, guaranteeing failure | `SokoniCapabilityDetector.availableTransports()` drives wizard UI — unavailable transports are disabled |
+| 5 | **Major** | 15+ conflicting localStorage keys (`spp_config`, `p58e_paired_device`, `sokoni_print_settings_v3`, `_posHardware`, `pm_print_stats`, `sdk_device_registry`, …) with no schema, no migration, no single source of truth | `SokoniHardwarePersistence` — single IndexedDB database `sokoni_hw_v1`, typed schema, one-time migration |
+| 6 | **Moderate** | Phase 12 wizard flow (`pos-hardware-wizard.html`) starts with "Scan for Devices" — tries auto-discovery first, correct flow is never attempted | New wizard (`pos-hardware-setup.html`) starts with Platform Detection → Capability Detection → manual transport selection → user clicks button → browser picker opens |
+
+### New Files (no existing files modified)
+
+| File | Phase | Purpose |
+|------|-------|---------|
+| `sokoni-capability-detector.js` | 3 | Platform + browser API capability detection; `availableTransports()` drives wizard |
+| `sokoni-permission-manager.js`  | 7 | Single authority for ALL navigator permission calls; USB, BT, Serial, HID, NFC, Camera, Notifications, Biometric |
+| `sokoni-hardware-persistence.js`| 9 | IndexedDB `sokoni_hw_v1`; printer CRUD, session, diagnostics history, legacy migration |
+| `sokoni-printer-providers.js`   | 2+5+6 | `PrinterProvider` base + USB, Bluetooth, Network, Browser providers + `ESCPosProvider`; P58E profile auto-detected from BLE name and USB VID |
+| `sokoni-hardware-manager.js`    | 1 | `HardwareManager` singleton — owns all hardware; the only entry point for POS code |
+| `sokoni-hardware-diagnostics.js`| 10 | `generate()` full diagnostic report; `renderToElement()` styled HTML panel |
+| `sokoni-hardware-recovery.js`   | 11 | USB connect/disconnect events → passive reconnect; BT `gattserverdisconnected` → retry loop; page visibility re-probe |
+| `pos-hardware-setup.html`       | 12 | 9-step wizard: Platform → Capability → Connection → Permission → Connecting → ESC/POS → Test → Save → Ready |
+
+### Architecture
+
+```
+HardwareManager (singleton)
+├── SokoniCapabilityDetector   — frozen at parse time; never triggers dialogs
+├── SokoniPermissionManager    — all navigator.*.request*() calls centralised here
+├── SokoniHardwarePersistence  — IndexedDB sokoni_hw_v1
+├── SokoniHardwareDiagnostics  — report() + renderToElement()
+├── SokoniHardwareRecovery     — USB/BT event listeners, page visibility probe
+└── SokoniPrinterProviders
+    ├── USBPrinterProvider       — WebUSB; bulk-OUT endpoint; 512B chunks
+    ├── BluetoothPrinterProvider — Web Bluetooth GATT; 128B chunks / 20ms; 6 service UUID fallbacks
+    ├── NetworkPrinterProvider   — localhost:9101 bridge → CF proxy fallback
+    ├── BrowserPrinterProvider   — hidden iframe + window.print()
+    └── ESCPosProvider           — protocol layer; probe(), buildTestReceipt(), kickDrawer()
+```
+
+### Connection Flow (Phase 4 — never auto-discovers)
+```
+Platform Detection (auto) → Capability Detection (auto)
+→ User selects transport type (only available shown)
+→ User clicks "Connect [USB/BT] Printer" button
+→ Browser native picker opens (user gesture in call stack)
+→ User selects device
+→ Connect + GATT/USB negotiation
+→ ESC/POS probe (ESC @ + feed)
+→ Test receipt printed
+→ User confirms receipt ✓
+→ Save to IndexedDB
+→ Ready
+```
+
+### Printer Profiles (Phase 6 — P58E auto-detect)
+- P58E: detected from BLE name patterns (`/^P58/i`, `/^XP-58/i`, etc.) and USB VIDs (0x154F, 0x0FE6, 0x1FC9)
+- Epson TM-T88 / TM-T20: VID 0x04B8
+- Star TSP100: VID 0x0519
+- Generic 58mm / Generic 80mm: fallbacks
+- Profile drives: paper width, column count, BLE service UUIDs, chunk size, inter-chunk delay
+
+### Capability Detection (Phase 3)
+- `supportsUSB` / `supportsBluetooth` / `supportsSerial` / `supportsHID` / `supportsWebSocket` / `supportsWebRTC`
+- iOS platform suppresses USB, Bluetooth, Serial, HID (correct — WebKit does not expose these)
+- Android platform suppresses Serial (correct — not available in Chrome for Android)
+- `availableTransports()` → only shown in wizard; unavailable options rendered disabled
+
+### Permission Manager API (Phase 7)
+- `requestUSBDevice(filters)` — opens browser USB picker; MUST be in user gesture
+- `requestBluetoothDevice(options)` — opens browser BT picker; MUST be in user gesture
+- `requestSerialPort(options)` — opens browser serial picker; MUST be in user gesture
+- `requestHIDDevice(filters)`, `requestCamera()`, `requestNotificationPermission()`, `requestNFC()`, `checkBiometricAvailability()`
+- `getGrantedUSBDevices()`, `getGrantedBluetoothDevices()`, `getGrantedSerialPorts()` — passive, no dialog
+- `watchUSBEvents(onConnect, onDisconnect)` — passive USB event listeners
+
+### Persistence Schema (Phase 9)
+IndexedDB `sokoni_hw_v1`, stores: `printers`, `sessions`, `diagnostics`
+
+Printer record fields: `id`, `transport`, `model`, `label`, `paperWidth`, `escposProfile`, `vendorId`, `productId`, `deviceId`, `deviceName`, `networkHost`, `networkPort`, `serialFilters`, `lastConnected`, `lastPrintAt`, `printCount`, `isDefault`, `createdAt`
+
+### Auto-recovery (Phase 11)
+- USB `connect` event → match against saved printers by VID+PID → passive reconnect (up to 5 attempts, exponential backoff 3s–60s)
+- USB `disconnect` → emit `hw:disconnected`; auto-reconnects on next `connect` event
+- BT `gattserverdisconnected` → retry loop via `getGrantedBluetoothDevices()` passive
+- Page `visibilitychange` (hidden→visible) → probe active printer; if no response, trigger reconnect
+
+### Diagnostics (Phase 10)
+`SokoniHardwareDiagnostics.generate()` returns:
+- browser (name, version, language, online)
+- platform (iOS, Android, Desktop, PWA, WebView)
+- apis (USB, BT, Serial, HID, NFC, Share, BarcodeDetector, WakeLock, SW, IDB, Notifications, WebAuthn, WebRTC)
+- transports (availability per transport)
+- permissions (granted device count per transport, notification state)
+- activePrinter (model, transport, profile, VID, deviceId)
+- savedPrinters (count)
+- recentErrors (last 10 `hw:error` events)
+- suggestions (actionable — per-platform and per-state)
+
+### Security
+- No printer credentials, keys, or tokens stored — only device identifiers (VID/PID, BT name, network IP)
+- All `request*` methods gate on API availability before calling — no crash on unsupported browsers
+- Network printer sends ESC/POS bytes to localhost bridge or Cloud Function only — no raw TCP from browser (not possible)
+- `BrowserPrinterProvider.write()` uses `textContent` for text portions — no innerHTML
+
+### Performance
+- Capability detection: synchronous, evaluated once at parse time (frozen object)
+- `getGrantedUSBDevices()` / `getGrantedBluetoothDevices()`: sub-millisecond cached by browser
+- IndexedDB opens on first use (lazy) — no startup I/O
+- BLE write: 128B chunks / 20ms inter-chunk (P58E); 512B for USB
+
+### Migration
+- `SokoniHardwarePersistence.migrateFromLegacy()` reads old localStorage keys (`spp_config`, `p58e_paired_device`, `sokoni_print_settings_v3`) and imports into the new IDB schema
+- Called automatically by `HardwareManager.init()` on first run; no-op on subsequent runs
+- Old files (`pos-printer.js`, `sokoni-universal-printer.js`, etc.) unchanged — coexist
+
+### Breaking Changes
+None — new files only. Old stack untouched.
+
+### Load Order for New Stack
+```html
+<script src="sokoni-capability-detector.js"></script>
+<script src="sokoni-permission-manager.js"></script>
+<script src="sokoni-hardware-persistence.js"></script>
+<script src="sokoni-printer-providers.js"></script>
+<script src="sokoni-hardware-diagnostics.js"></script>
+<script src="sokoni-hardware-recovery.js"></script>
+<script src="sokoni-hardware-manager.js"></script>
+```
+
+---
+
 ## 2026-07-21 — Enterprise Auth Reliability: Phase 3 — Google Sign-In, Cross-Device OTP & Error Elimination
 
 ### Summary

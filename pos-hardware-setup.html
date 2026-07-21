@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#050505">
+<title>Printer Setup — SOKONI POS</title>
+<style>
+/* ──────────────────────────────────────────────────────────────────
+   SOKONI Hardware Setup — Premium dark theme
+   #050505 background · #71ff00 accent
+   ────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+    --bg:        #050505;
+    --surface:   #111111;
+    --surface-2: #1a1a1a;
+    --border:    #222222;
+    --accent:    #71ff00;
+    --accent-dim:#4ab800;
+    --text:      #e8e8e8;
+    --text-dim:  #888888;
+    --text-xdim: #444444;
+    --ok:        #71ff00;
+    --warn:      #ffaa00;
+    --err:       #ff4444;
+    --radius:    12px;
+    --radius-sm: 8px;
+    --header-h:  56px;
+}
+
+html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+}
+
+/* ── Header ── */
+.hw-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: var(--header-h);
+    background: #080808;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 14px;
+    z-index: 100;
+}
+.hw-header .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -.02em;
+}
+.hw-header .title {
+    font-size: 14px;
+    color: var(--text-dim);
+}
+.hw-header .back-btn {
+    margin-left: auto;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: border-color .15s, color .15s;
+}
+.hw-header .back-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── Main layout ── */
+.hw-main {
+    margin-top: var(--header-h);
+    min-height: calc(100vh - var(--header-h));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 16px 64px;
+}
+
+/* ── Progress bar ── */
+.progress-wrap {
+    width: 100%;
+    max-width: 560px;
+    margin-bottom: 32px;
+}
+.progress-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text-xdim);
+    transition: color .2s;
+}
+.progress-step.active  { color: var(--accent); }
+.progress-step.done    { color: var(--text-dim); }
+.step-dot {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--border);
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 9px;
+    font-weight: 700;
+    transition: background .2s, border-color .2s;
+}
+.progress-step.active  .step-dot { background: var(--accent); border-color: var(--accent); color: #000; }
+.progress-step.done    .step-dot { background: var(--accent-dim); border-color: var(--accent-dim); color: #000; }
+.progress-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.progress-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width .4s ease;
+}
+
+/* ── Step card ── */
+.step-card {
+    width: 100%;
+    max-width: 560px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    display: none;
+}
+.step-card.active { display: block; }
+
+.step-icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    display: block;
+    text-align: center;
+}
+.step-title {
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 8px;
+    letter-spacing: -.02em;
+}
+.step-sub {
+    font-size: 14px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-bottom: 28px;
+    line-height: 1.6;
+}
+
+/* ── Detection grids ── */
+.detect-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 24px;
+}
+.detect-row {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+}
+.detect-label { flex: 1; color: var(--text-dim); }
+.detect-val   { font-weight: 600; }
+.detect-val.ok   { color: var(--ok); }
+.detect-val.warn { color: var(--warn); }
+.detect-val.na   { color: var(--text-xdim); }
+
+/* ── Transport options ── */
+.transport-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 28px;
+}
+.transport-btn {
+    background: var(--surface-2);
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 16px;
+    cursor: pointer;
+    text-align: center;
+    transition: border-color .15s, background .15s;
+    position: relative;
+}
+.transport-btn:hover:not(:disabled) { border-color: var(--accent); background: #161616; }
+.transport-btn.selected { border-color: var(--accent); background: #0d1a00; }
+.transport-btn:disabled { opacity: .35; cursor: not-allowed; }
+.transport-btn .t-icon { font-size: 28px; display: block; margin-bottom: 8px; }
+.transport-btn .t-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.transport-btn .t-note { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+.transport-btn .t-badge {
+    position: absolute;
+    top: 8px; right: 8px;
+    font-size: 9px;
+    padding: 2px 6px;
+    border-radius: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+.t-badge.recommended { background: var(--accent); color: #000; }
+.t-badge.unavailable { background: #330000; color: var(--err); }
+
+/* ── Permission prompt ── */
+.perm-box {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 20px;
+    margin-bottom: 24px;
+}
+.perm-box p { font-size: 13px; color: var(--text-dim); margin-bottom: 12px; line-height: 1.6; }
+.perm-box .perm-note {
+    font-size: 11px;
+    color: var(--text-xdim);
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
+/* ── Network IP input ── */
+.ip-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.ip-input {
+    flex: 1;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 12px 16px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .15s;
+}
+.ip-input:focus { border-color: var(--accent); }
+.ip-input::placeholder { color: var(--text-xdim); }
+
+/* ── Status display ── */
+.status-box {
+    text-align: center;
+    padding: 28px 0;
+}
+.status-spinner {
+    width: 44px;
+    height: 44px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+    margin: 0 auto 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.status-icon { font-size: 44px; margin-bottom: 12px; }
+.status-msg  { font-size: 15px; color: var(--text-dim); }
+.status-err  { color: var(--err); }
+
+/* ── Probe result ── */
+.probe-grid {
+    margin: 20px 0;
+}
+.probe-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+}
+.probe-row:last-child { border-bottom: none; }
+.probe-key   { color: var(--text-dim); }
+.probe-val   { font-weight: 600; }
+.probe-val.ok   { color: var(--ok); }
+.probe-val.warn { color: var(--warn); }
+
+/* ── Print confirm ── */
+.confirm-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+/* ── Save fields ── */
+.field-row {
+    margin-bottom: 16px;
+}
+.field-label {
+    font-size: 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    margin-bottom: 6px;
+    display: block;
+}
+.field-input, .field-select {
+    width: 100%;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    padding: 12px 16px;
+    font-size: 15px;
+    outline: none;
+    transition: border-color .15s;
+    -webkit-appearance: none;
+    appearance: none;
+}
+.field-input:focus, .field-select:focus { border-color: var(--accent); }
+
+/* ── Ready summary ── */
+.ready-summary {
+    background: var(--surface-2);
+    border: 1px solid var(--accent-dim);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin: 20px 0 28px;
+}
+.ready-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+}
+.ready-row:last-child { border-bottom: none; }
+.ready-key { color: var(--text-dim); }
+.ready-val { font-weight: 600; color: var(--accent); }
+
+/* ── Diagnostics panel (Phase 10) ── */
+#hw-diag-panel { margin-top: 24px; }
+
+/* ── Buttons ── */
+.btn {
+    width: 100%;
+    padding: 15px 24px;
+    border-radius: var(--radius-sm);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: opacity .15s, transform .1s;
+    letter-spacing: .02em;
+}
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); color: #000; }
+.btn-primary:hover:not(:disabled) { background: #80ff10; }
+.btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-danger { background: #2a0000; border: 1px solid #550000; color: var(--err); }
+.btn-sm { width: auto; padding: 10px 20px; font-size: 14px; }
+
+.btn + .btn { margin-top: 10px; }
+
+/* ── Error message ── */
+.hw-err {
+    background: #1a0000;
+    border: 1px solid #440000;
+    border-radius: var(--radius-sm);
+    color: var(--err);
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    display: none;
+}
+.hw-err.show { display: block; }
+
+@media (max-width: 480px) {
+    .step-card { padding: 24px 16px; }
+    .transport-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .transport-btn { padding: 16px 10px; }
+    .detect-grid { grid-template-columns: 1fr; }
+    .confirm-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="hw-header">
+    <span class="logo">SOKONI</span>
+    <span class="title">Printer Setup</span>
+    <a href="pos-checkout.html" class="back-btn">← POS</a>
+</header>
+
+<main class="hw-main">
+
+    <!-- Progress -->
+    <div class="progress-wrap">
+        <div class="progress-steps" id="progressSteps"></div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 1 — Platform Detection
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card active" id="step-1">
+        <span class="step-icon">🖥️</span>
+        <h2 class="step-title">Platform Detection</h2>
+        <p class="step-sub">Identifying your device and browser.</p>
+        <div class="detect-grid" id="platformGrid"></div>
+        <button class="btn btn-primary" id="s1Next">Continue →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 2 — Capability Detection
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-2">
+        <span class="step-icon">🔍</span>
+        <h2 class="step-title">Capability Detection</h2>
+        <p class="step-sub">Checking which connection types your browser supports.</p>
+        <div class="detect-grid" id="capGrid"></div>
+        <button class="btn btn-primary" id="s2Next">Continue →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 3 — Choose Connection
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-3">
+        <span class="step-icon">🔌</span>
+        <h2 class="step-title">Choose Connection</h2>
+        <p class="step-sub">Select how your printer connects to this device.<br>
+            Only supported options are shown.</p>
+        <div class="transport-grid" id="transportGrid"></div>
+        <div class="hw-err" id="s3Err"></div>
+        <button class="btn btn-primary" id="s3Next" disabled>Continue →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 4 — Grant Permission
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-4">
+        <span class="step-icon">🔐</span>
+        <h2 class="step-title">Grant Permission</h2>
+        <p class="step-sub" id="s4Sub">Your browser will ask you to select your printer.</p>
+
+        <!-- Network: show IP field instead -->
+        <div id="s4NetworkForm" style="display:none">
+            <div class="field-row">
+                <label class="field-label">Printer IP Address</label>
+                <div class="ip-row">
+                    <input class="ip-input" type="text" id="networkIp" placeholder="192.168.1.100" maxlength="45"
+                           inputmode="decimal" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="field-row">
+                    <label class="field-label">Port (default 9100)</label>
+                    <input class="ip-input" type="number" id="networkPort" value="9100" min="1" max="65535">
+                </div>
+            </div>
+        </div>
+
+        <div id="s4PermBox" class="perm-box">
+            <p id="s4PermDesc">Click the button below. Your browser will open a picker — select your printer from the list.</p>
+            <p class="perm-note">⚠ This must be done by clicking the button — the browser does not allow automatic device access.</p>
+        </div>
+
+        <div class="hw-err" id="s4Err"></div>
+        <!-- This is the user-gesture entry point — requestDevice() fires here -->
+        <button class="btn btn-primary" id="s4Btn" onclick="wizardRequestDevice()">Connect Printer →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 5 — (Device is selected in browser picker — automatic)
+                  Connecting…
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-5">
+        <span class="step-icon">⚡</span>
+        <h2 class="step-title">Connecting</h2>
+        <p class="step-sub">Opening connection to your printer…</p>
+        <div class="status-box" id="s5Status">
+            <div class="status-spinner"></div>
+            <div class="status-msg">Connecting…</div>
+        </div>
+        <div class="hw-err" id="s5Err"></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 6 — Verify ESC/POS
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-6">
+        <span class="step-icon">✅</span>
+        <h2 class="step-title">Verifying ESC/POS</h2>
+        <p class="step-sub">Checking your printer supports ESC/POS thermal commands.</p>
+        <div class="probe-grid" id="probeGrid"></div>
+        <div class="hw-err" id="s6Err"></div>
+        <button class="btn btn-primary" id="s6Next" disabled>Continue →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 7 — Print Test
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-7">
+        <span class="step-icon">🖨️</span>
+        <h2 class="step-title">Print Test Receipt</h2>
+        <p class="step-sub">A test receipt will be printed. Confirm it printed correctly.</p>
+        <div class="status-box" id="s7Status">
+            <div class="status-spinner"></div>
+            <div class="status-msg">Printing…</div>
+        </div>
+        <div class="hw-err" id="s7Err"></div>
+        <div class="confirm-row" id="s7Confirm" style="display:none">
+            <button class="btn btn-primary btn-sm" onclick="wizardConfirmPrint(true)">✓ Printed correctly</button>
+            <button class="btn btn-outline btn-sm" onclick="wizardConfirmPrint(false)">✗ Did not print</button>
+        </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 8 — Save Configuration
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-8">
+        <span class="step-icon">💾</span>
+        <h2 class="step-title">Save Configuration</h2>
+        <p class="step-sub">Name your printer and confirm the paper width.</p>
+        <div class="field-row">
+            <label class="field-label" for="printerLabel">Printer Name</label>
+            <input class="field-input" type="text" id="printerLabel" placeholder="My Receipt Printer" maxlength="64">
+        </div>
+        <div class="field-row">
+            <label class="field-label" for="paperWidth">Paper Width</label>
+            <select class="field-select" id="paperWidth">
+                <option value="58mm">58 mm (small)</option>
+                <option value="80mm">80 mm (standard)</option>
+                <option value="76mm">76 mm</option>
+            </select>
+        </div>
+        <div class="hw-err" id="s8Err"></div>
+        <button class="btn btn-primary" id="s8Save" onclick="wizardSave()">Save & Activate →</button>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════
+         STEP 9 — Ready
+         ═══════════════════════════════════════════════════════════ -->
+    <div class="step-card" id="step-9">
+        <span class="step-icon">🎉</span>
+        <h2 class="step-title">Printer Ready</h2>
+        <p class="step-sub">Your printer is configured and active.</p>
+        <div class="ready-summary" id="readySummary"></div>
+        <div id="hw-diag-panel"></div>
+        <button class="btn btn-primary" onclick="location.href='pos-checkout.html'">Open POS →</button>
+        <button class="btn btn-outline" style="margin-top:10px" onclick="wizardReset()">Set Up Another Printer</button>
+    </div>
+
+</main>
+
+<!-- Scripts — load order is critical -->
+<script src="sokoni-capability-detector.js" defer></script>
+<script src="sokoni-permission-manager.js"  defer></script>
+<script src="sokoni-hardware-persistence.js" defer></script>
+<script src="sokoni-printer-providers.js"   defer></script>
+<script src="sokoni-hardware-diagnostics.js" defer></script>
+<script src="sokoni-hardware-recovery.js"   defer></script>
+<script src="sokoni-hardware-manager.js"    defer></script>
+<script>
+/* ──────────────────────────────────────────────────────────────────
+   Wizard controller
+   ────────────────────────────────────────────────────────────────── */
+
+var STEP_LABELS = [
+    'Platform',
+    'Capability',
+    'Connection',
+    'Permission',
+    'Connecting',
+    'ESC/POS',
+    'Test Print',
+    'Save',
+    'Ready',
+];
+
+var _currentStep    = 1;
+var _selectedTransport = null;
+var _pendingPrinter = null;  // returned from HardwareManager.connectPrinter()
+
+// ---------------------------------------------------------------------------
+// Progress bar
+// ---------------------------------------------------------------------------
+
+function _renderProgress(step) {
+    var stepsEl = document.getElementById('progressSteps');
+    var fillEl  = document.getElementById('progressFill');
+
+    stepsEl.innerHTML = STEP_LABELS.map(function (lbl, i) {
+        var n    = i + 1;
+        var cls  = n < step ? 'done' : n === step ? 'active' : '';
+        return '<div class="progress-step ' + cls + '">' +
+               '<div class="step-dot">' + (n < step ? '✓' : n) + '</div>' +
+               '<span>' + lbl + '</span>' +
+               '</div>';
+    }).join('');
+
+    fillEl.style.width = (((step - 1) / (STEP_LABELS.length - 1)) * 100).toFixed(1) + '%';
+}
+
+function _goTo(n) {
+    document.querySelectorAll('.step-card').forEach(function (el) { el.classList.remove('active'); });
+    var el = document.getElementById('step-' + n);
+    if (el) {
+        el.classList.add('active');
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    _currentStep = n;
+    _renderProgress(n);
+}
+
+function _showErr(stepN, msg) {
+    var el = document.getElementById('s' + stepN + 'Err');
+    if (!el) return;
+    el.textContent = msg;
+    el.classList.add('show');
+}
+function _hideErr(stepN) {
+    var el = document.getElementById('s' + stepN + 'Err');
+    if (el) el.classList.remove('show');
+}
+
+// ---------------------------------------------------------------------------
+// Step 1 — Platform detection (auto-populate)
+// ---------------------------------------------------------------------------
+
+function _buildStep1() {
+    var cap = window.SokoniCapabilityDetector;
+    if (!cap) { setTimeout(_buildStep1, 100); return; }
+
+    var p = cap.platform;
+    var rows = [
+        ['OS',       p.isIOS ? 'iOS' : p.isAndroid ? 'Android' : p.isWindows ? 'Windows' : p.isMacOS ? 'macOS' : 'Linux/Other', p.isIOS ? 'warn' : 'ok'],
+        ['Browser',  p.isChrome ? 'Chrome' : p.isSafari ? 'Safari' : p.isEdge ? 'Edge' : p.isSamsungInternet ? 'Samsung Internet' : p.isFirefox ? 'Firefox' : 'Other', 'ok'],
+        ['Mobile',   p.isMobile  ? 'Yes' : 'No',         'ok'],
+        ['PWA',      p.isPWA     ? 'Installed' : 'Browser tab', 'ok'],
+        ['WebView',  p.isWebView ? 'Yes (limited)' : 'No', p.isWebView ? 'warn' : 'ok'],
+    ];
+
+    document.getElementById('platformGrid').innerHTML = rows.map(function (r) {
+        return '<div class="detect-row">' +
+               '<span class="detect-label">' + r[0] + '</span>' +
+               '<span class="detect-val ' + r[2] + '">' + r[1] + '</span>' +
+               '</div>';
+    }).join('');
+
+    document.getElementById('s1Next').addEventListener('click', function () { _buildStep2(); _goTo(2); });
+}
+
+// ---------------------------------------------------------------------------
+// Step 2 — Capability detection (auto-populate)
+// ---------------------------------------------------------------------------
+
+function _buildStep2() {
+    var cap = window.SokoniCapabilityDetector;
+    if (!cap) return;
+    var c = cap.capabilities;
+    var t = cap.transports;
+
+    var rows = [
+        ['USB',        t.usb        ? '✓ Supported' : '✗ Not available', t.usb        ? 'ok' : 'na'],
+        ['Bluetooth',  t.bluetooth  ? '✓ Supported' : '✗ Not available', t.bluetooth  ? 'ok' : 'na'],
+        ['Serial',     t.serial     ? '✓ Supported' : '✗ Not available', t.serial     ? 'ok' : 'na'],
+        ['Network',    t.network    ? '✓ Supported' : '✗ Not available', t.network    ? 'ok' : 'na'],
+        ['Browser',    '✓ Always',   'ok'],
+        ['NFC',        c.supportsNFC ? '✓ Available' : '✗ Not available', c.supportsNFC ? 'ok' : 'na'],
+        ['Camera',     c.supportsMediaDevices ? '✓ Available' : '✗ Not available', c.supportsMediaDevices ? 'ok' : 'na'],
+        ['IndexedDB',  c.supportsIndexedDB ? '✓ Available' : '✗ Not available', c.supportsIndexedDB ? 'ok' : 'na'],
+    ];
+
+    document.getElementById('capGrid').innerHTML = rows.map(function (r) {
+        return '<div class="detect-row">' +
+               '<span class="detect-label">' + r[0] + '</span>' +
+               '<span class="detect-val ' + r[2] + '">' + r[1] + '</span>' +
+               '</div>';
+    }).join('');
+
+    document.getElementById('s2Next').addEventListener('click', function () { _buildStep3(); _goTo(3); });
+}
+
+// ---------------------------------------------------------------------------
+// Step 3 — Choose connection type
+// ---------------------------------------------------------------------------
+
+var TRANSPORT_META = {
+    usb:       { icon: '🔌', name: 'USB',       note: 'Direct cable — fastest' },
+    bluetooth: { icon: '📡', name: 'Bluetooth', note: 'Wireless, up to ~10m' },
+    serial:    { icon: '🔧', name: 'Serial',    note: 'USB-Serial adapter' },
+    network:   { icon: '🌐', name: 'Network',   note: 'WiFi / Ethernet IP' },
+    browser:   { icon: '🖥️', name: 'System',   note: 'window.print() fallback' },
+};
+
+function _buildStep3() {
+    var cap       = window.SokoniCapabilityDetector;
+    if (!cap) return;
+    var available = cap.availableTransports();
+    var recommended = cap.recommendedTransport();
+
+    var html = '';
+    ['usb', 'bluetooth', 'serial', 'network', 'browser'].forEach(function (t) {
+        var meta  = TRANSPORT_META[t] || { icon: '?', name: t, note: '' };
+        var avail = available.includes(t);
+        var rec   = t === recommended;
+
+        html += '<button class="transport-btn" data-transport="' + t + '"' + (avail ? '' : ' disabled') + '>' +
+                (rec && avail ? '<span class="t-badge recommended">Recommended</span>' : '') +
+                (!avail       ? '<span class="t-badge unavailable">Unavailable</span>' : '') +
+                '<span class="t-icon">' + meta.icon + '</span>' +
+                '<div class="t-name">' + meta.name + '</div>' +
+                '<div class="t-note">' + meta.note + '</div>' +
+                '</button>';
+    });
+
+    document.getElementById('transportGrid').innerHTML = html;
+
+    document.querySelectorAll('.transport-btn:not(:disabled)').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.transport-btn').forEach(function (b) { b.classList.remove('selected'); });
+            btn.classList.add('selected');
+            _selectedTransport = btn.dataset.transport;
+            document.getElementById('s3Next').disabled = false;
+            _hideErr(3);
+        });
+    });
+
+    document.getElementById('s3Next').addEventListener('click', function () {
+        if (!_selectedTransport) { _showErr(3, 'Please select a connection type.'); return; }
+        _buildStep4(_selectedTransport);
+        _goTo(4);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// Step 4 — Grant permission (or enter IP for network)
+// ---------------------------------------------------------------------------
+
+var PERM_DESCS = {
+    usb:       'Chrome will open a USB device picker. Select your thermal printer from the list, then click "Connect".',
+    bluetooth: 'Chrome will open a Bluetooth picker. Make sure your printer is powered on and in pairing mode, then select it from the list.',
+    serial:    'Chrome will open a Serial port picker. Select the port your printer is connected to (e.g. COM3 on Windows, /dev/ttyUSB0 on Linux).',
+    network:   'Enter the IP address of your network printer. You can find this on the printer\'s configuration page or test print.',
+    browser:   'The system print dialog will be used. Click Continue to proceed.',
+};
+
+function _buildStep4(transport) {
+    document.getElementById('s4Sub').textContent = 'Connect via ' + (TRANSPORT_META[transport] || {}).name + '.';
+    document.getElementById('s4PermDesc').textContent = PERM_DESCS[transport] || 'Click Continue to connect.';
+
+    var isNetwork = (transport === 'network');
+    document.getElementById('s4NetworkForm').style.display = isNetwork ? 'block' : 'none';
+    document.getElementById('s4PermBox').style.display     = isNetwork ? 'none'  : 'block';
+
+    var btn = document.getElementById('s4Btn');
+    btn.textContent = isNetwork ? 'Connect to Network Printer →' : 'Connect ' + (TRANSPORT_META[transport] || {}).name + ' Printer →';
+
+    _hideErr(4);
+}
+
+// ---------------------------------------------------------------------------
+// wizardRequestDevice() — called from the button's onclick (user gesture)
+// ---------------------------------------------------------------------------
+
+async function wizardRequestDevice() {
+    var transport = _selectedTransport;
+    if (!transport) return;
+
+    var btn = document.getElementById('s4Btn');
+    btn.disabled = true;
+    btn.textContent = 'Waiting for browser…';
+    _hideErr(4);
+
+    var options = null;
+    if (transport === 'network') {
+        var host = (document.getElementById('networkIp').value || '').trim();
+        var port = parseInt(document.getElementById('networkPort').value, 10) || 9100;
+        if (!host) {
+            _showErr(4, 'Please enter the printer\'s IP address.');
+            btn.disabled = false;
+            btn.textContent = 'Connect to Network Printer →';
+            return;
+        }
+        options = { host: host, port: port };
+    }
+
+    // Phase 4: request device → connect → advance automatically
+    // This call is in the user gesture stack because the button's onclick
+    // invokes it synchronously.
+    try {
+        // Step 4 → 5: connecting…
+        _goTo(5);
+        document.getElementById('s5Status').innerHTML =
+            '<div class="status-spinner"></div><div class="status-msg">Requesting device access…</div>';
+
+        _pendingPrinter = await window.HardwareManager.connectPrinter(transport, options);
+
+        // Step 5 → 6: probe
+        document.getElementById('s5Status').innerHTML =
+            '<div class="status-icon">⚡</div><div class="status-msg" style="color:var(--ok)">Connected!</div>';
+
+        await new Promise(function (r) { setTimeout(r, 600); });
+        _buildStep6(_pendingPrinter);
+        _goTo(6);
+
+    } catch (err) {
+        // Back to step 4 with error
+        _goTo(4);
+        btn.disabled = false;
+        btn.textContent = (TRANSPORT_META[transport] || {}).name
+            ? 'Retry: Connect ' + (TRANSPORT_META[transport] || {}).name + ' Printer →'
+            : 'Retry →';
+        _showErr(4, err.userMessage || err.message || 'Connection failed. Please try again.');
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Step 6 — ESC/POS verification display
+// ---------------------------------------------------------------------------
+
+function _buildStep6(pending) {
+    var probe   = pending.probeResult;
+    var profile = pending.profile;
+
+    var rows = [
+        ['Printer Model',   pending.descriptor.model   || 'Unknown'],
+        ['Transport',       pending.transport],
+        ['ESC/POS Profile', (profile && profile.name)  || 'Generic'],
+        ['Paper Width',     (profile && profile.paperWidth) || '58mm'],
+        ['ESC/POS Compatible', probe.compatible ? '✓ Yes' : '✗ No'],
+    ];
+
+    document.getElementById('probeGrid').innerHTML = rows.map(function (r) {
+        var isCompat = r[0] === 'ESC/POS Compatible';
+        return '<div class="probe-row">' +
+               '<span class="probe-key">' + r[0] + '</span>' +
+               '<span class="probe-val ' + (isCompat ? (probe.compatible ? 'ok' : 'warn') : '') + '">' + r[1] + '</span>' +
+               '</div>';
+    }).join('');
+
+    // Pre-fill save fields
+    document.getElementById('printerLabel').value = pending.descriptor.model || 'My Printer';
+    document.getElementById('paperWidth').value   = (profile && profile.paperWidth) || '58mm';
+
+    var nextBtn = document.getElementById('s6Next');
+    nextBtn.disabled = false;
+    nextBtn.textContent = probe.compatible ? 'Print Test Receipt →' : 'Continue Anyway →';
+
+    _hideErr(6);
+
+    nextBtn.onclick = function () {
+        nextBtn.disabled = true;
+        _goTo(7);
+        _runTestPrint();
+    };
+}
+
+// ---------------------------------------------------------------------------
+// Step 7 — Test print
+// ---------------------------------------------------------------------------
+
+async function _runTestPrint() {
+    var statusEl  = document.getElementById('s7Status');
+    var confirmEl = document.getElementById('s7Confirm');
+    _hideErr(7);
+    confirmEl.style.display = 'none';
+    statusEl.innerHTML = '<div class="status-spinner"></div><div class="status-msg">Printing test receipt…</div>';
+
+    try {
+        await window.HardwareManager.testPrintPending(_pendingPrinter);
+        statusEl.innerHTML = '<div class="status-icon">🖨️</div><div class="status-msg">Test receipt sent to printer.</div>';
+        confirmEl.style.display = 'flex';
+    } catch (err) {
+        statusEl.innerHTML = '<div class="status-icon">❌</div><div class="status-msg status-err">Print failed.</div>';
+        _showErr(7, err.userMessage || err.message || 'Test print failed. Check printer is on and paper is loaded.');
+        confirmEl.style.display = 'flex';
+    }
+}
+
+function wizardConfirmPrint(success) {
+    if (!success) {
+        // Let user retry
+        var el = document.getElementById('s7Status');
+        el.innerHTML = '<div class="status-msg" style="color:var(--warn)">Check printer power and paper, then try again.</div>';
+        setTimeout(_runTestPrint, 1500);
+        return;
+    }
+    _goTo(8);
+}
+
+// ---------------------------------------------------------------------------
+// Step 8 — Save
+// ---------------------------------------------------------------------------
+
+async function wizardSave() {
+    var label = document.getElementById('printerLabel').value.trim();
+    var width = document.getElementById('paperWidth').value;
+    var btn   = document.getElementById('s8Save');
+
+    if (!_pendingPrinter) { _showErr(8, 'No pending printer — please restart setup.'); return; }
+
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    _hideErr(8);
+
+    try {
+        var savedId = await window.HardwareManager.confirmAndSave(_pendingPrinter, {
+            label:      label || _pendingPrinter.descriptor.model,
+            paperWidth: width,
+        });
+        _buildStep9(savedId);
+        _goTo(9);
+    } catch (err) {
+        btn.disabled = false;
+        btn.textContent = 'Save & Activate →';
+        _showErr(8, err.userMessage || err.message || 'Save failed. Please try again.');
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Step 9 — Ready
+// ---------------------------------------------------------------------------
+
+async function _buildStep9(savedId) {
+    var hm = window.HardwareManager;
+    var ap = hm ? hm.getActivePrinter() : null;
+
+    var summaryEl = document.getElementById('readySummary');
+    summaryEl.innerHTML = '';
+
+    if (ap) {
+        var rows = [
+            ['Status',      'Connected ✓'],
+            ['Model',       ap.descriptor.model  || 'Unknown'],
+            ['Transport',   ap.descriptor.transport || (ap.provider && ap.provider.transport) || '—'],
+            ['Profile',     ap.escpos && ap.escpos._profile ? ap.escpos._profile.name : '—'],
+            ['Paper Width', ap.escpos && ap.escpos._profile ? ap.escpos._profile.paperWidth : '—'],
+            ['Printer ID',  ap.savedId || savedId || '—'],
+        ];
+        summaryEl.innerHTML = rows.map(function (r) {
+            return '<div class="ready-row">' +
+                   '<span class="ready-key">' + r[0] + '</span>' +
+                   '<span class="ready-val">' + r[1] + '</span>' +
+                   '</div>';
+        }).join('');
+    }
+
+    // Phase 10 diagnostics on ready screen
+    var diagEl = document.getElementById('hw-diag-panel');
+    if (window.SokoniHardwareDiagnostics) {
+        try {
+            var report = await window.SokoniHardwareDiagnostics.generate();
+            window.SokoniHardwareDiagnostics.renderToElement(diagEl, report);
+        } catch (_) {}
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Reset wizard
+// ---------------------------------------------------------------------------
+
+function wizardReset() {
+    _pendingPrinter    = null;
+    _selectedTransport = null;
+    document.querySelectorAll('.hw-err').forEach(function (el) { el.classList.remove('show'); });
+    _buildStep1();
+    _goTo(1);
+}
+
+// ---------------------------------------------------------------------------
+// Boot
+// ---------------------------------------------------------------------------
+
+document.addEventListener('DOMContentLoaded', async function () {
+    _renderProgress(1);
+
+    // Wait for all deferred scripts to load
+    var waitFor = function (name, cb, tries) {
+        tries = (tries || 0) + 1;
+        if (window[name]) { cb(); return; }
+        if (tries > 50)   { console.warn('[HW Setup] Timed out waiting for ' + name); return; }
+        setTimeout(function () { waitFor(name, cb, tries); }, 100);
+    };
+
+    waitFor('HardwareManager', async function () {
+        // Init HardwareManager (passive — no permission requests)
+        try { await window.HardwareManager.init(); } catch (_) {}
+
+        // If already has a saved printer, show a skip option
+        var saved = await window.HardwareManager.getSavedPrinters();
+        if (saved.length > 0 && window.HardwareManager.isConnected()) {
+            var skipBtn = document.createElement('button');
+            skipBtn.className = 'btn btn-outline';
+            skipBtn.style.marginTop = '10px';
+            skipBtn.textContent = 'Skip — Use existing: ' + saved[0].model;
+            skipBtn.onclick = function () {
+                _buildStep9(saved[0].id);
+                _goTo(9);
+            };
+            document.getElementById('step-1').appendChild(skipBtn);
+        }
+
+        // Build step 1 content
+        _buildStep1();
+    });
+});
+</script>
+</body>
+</html>
