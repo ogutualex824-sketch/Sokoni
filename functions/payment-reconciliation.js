@@ -699,8 +699,17 @@ async function runSubscriptionReconciliation(log) {
   /* Subscription intents in the window. Two range bounds on one
      field (createdAt) + one equality (purpose) → one composite index
      (added to firestore.indexes.json). */
+  /* Purpose-agnostic sweep. This filtered `purpose == 'subscription'`, so a
+     paid booking, download, ticket or hub registration that missed activation
+     stayed orphaned forever — the recovery net only covered the one domain that
+     already had the fewest problems.
+
+     Dropping the purpose filter is what makes recovery platform-wide: the
+     window query stays identical, and every registered purpose is swept the day
+     it appears. An intent whose purpose has no registered handler is reported
+     as an anomaly rather than skipped, so a domain that mints intents without
+     an adapter is visible instead of silently unrecoverable. */
   const snap = await db.collection('paymentIntents')
-    .where('purpose', '==', 'subscription')
     .where('createdAt', '>=', floor)
     .where('createdAt', '<=', ceiling)
     .orderBy('createdAt', 'asc')
@@ -711,27 +720,64 @@ async function runSubscriptionReconciliation(log) {
   for (const doc of snap.docs) {
     const intent = doc.data();
     const ref    = doc.id;
-    if (!intent.uid || !intent.planId) { skipped++; continue; }
+    const owner  = intent.ownerUid || intent.uid;
+    if (!owner) { skipped++; continue; }
+
+    /* Legacy intents predate the purpose field and are always subscriptions —
+       they carry planId. Anything else is dispatched by its declared purpose. */
+    const purpose = intent.purpose || (intent.planId ? 'subscription' : null);
+    if (!purpose) { skipped++; continue; }
+    if (purpose === 'subscription' && !intent.planId) { skipped++; continue; }
     scanned++;
 
     /* Only intents whose payment actually COMPLETED can have a gap. */
     const paySnap = await db.collection('payments').doc(ref).get();
     if (!paySnap.exists || paySnap.data().status !== 'COMPLETE') continue;
 
-    if (await subscriptionEntitlementExists(intent.uid)) continue; // already entitled
+    /* Has this payment already been honoured?
+       Subscriptions keep their existing check against subscriptions/{uid},
+       which is what the merchant's dashboard actually resolves. Every other
+       purpose is answered by the engine ledger: entitlements/{paymentRef}
+       existing IS the definition of honoured. */
+    let honoured;
+    if (purpose === 'subscription') {
+      honoured = await subscriptionEntitlementExists(owner);
+    } else {
+      honoured = (await db.collection('entitlements').doc(ref).get()).exists;
+    }
+    if (honoured) continue;
 
     gaps++;
     const entry = {
-      paymentRef: ref, uid: intent.uid, plan: intent.planId,
-      planName:   intent.planName || intent.planId,
+      paymentRef: ref, uid: owner, purpose,
+      plan:       intent.planId || null,
+      resourceId: intent.resourceId || null,
       amount:     intent.amount || null,
       intentAt:   intent.createdAt ? intent.createdAt.toDate().toISOString() : null,
     };
 
     if (autoHeal) {
-      const r = await healSubscriptionEntitlement(intent, ref, log);
-      if (r.healed) { healed++; entry.action = 'auto_healed'; }
-      else          { entry.action = 'heal_skipped'; entry.reason = r.reason; }
+      if (purpose === 'subscription') {
+        const r = await healSubscriptionEntitlement(intent, ref, log);
+        if (r.healed) { healed++; entry.action = 'auto_healed'; }
+        else          { entry.action = 'heal_skipped'; entry.reason = r.reason; }
+      } else {
+        /* Every other purpose heals through the engine, which re-validates the
+           payment and dispatches to the registered adapter. The reconciler
+           deliberately owns no activation logic of its own — a recovery path
+           that reimplements activation drifts from it. */
+        try {
+          const engine = require('./entitlement-engine');
+          require('./entitlement-adapters');            /* registers purposes */
+          const r = await engine.activate(ref, { source: 'reconciler' });
+          if (r.activated)      { healed++; entry.action = 'auto_healed'; }
+          else                  { entry.action = 'already_active'; }
+        } catch (e) {
+          entry.action = 'heal_failed';
+          entry.reason = e.code || 'unknown';
+          entry.error  = e.message;
+        }
+      }
     } else {
       entry.action = 'alert_only';
     }
@@ -739,8 +785,9 @@ async function runSubscriptionReconciliation(log) {
 
     /* Every gap raises a P1 alert regardless of heal outcome — an
        auto-heal that had to skip (ownership mismatch, payment not
-       COMPLETE) is exactly what an operator must see immediately. */
-    await writeAdminAlert('subscription_entitlement_gap', {
+       COMPLETE, no adapter registered for the purpose) is exactly what
+       an operator must see immediately. */
+    await writeAdminAlert('entitlement_gap', {
       priority: 'P1', ...entry, autoHeal,
     }, log);
     alerted++;
