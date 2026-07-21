@@ -31,15 +31,56 @@ it (`new SokoniPrinter.ESCPOSEncoder()`), proving the adapter model works. A
 2026-07-21 audit found ~10 independent ESC/POS encoders, up to six co-loading on
 `pos.html`.
 
-**Consequences:** `sokoni-bluetooth-printer.js` is the P58E **profile adapter**.
-`print-engine`, `pos-print`, `pos-print-service`, `printer-manager`,
-`printer-drivers` (old), `pos-printer`, and the 8596d21 additions
-`printer-providers`/`printer-driver`/`device-profiles` are duplicates to be
-collapsed into adapters or retired one page at a time.
+**Consequences — CORRECTED 2026-07-22 by behavioural analysis.** The sentence
+that stood here called `print-engine`, `pos-print`, `pos-print-service`,
+`printer-manager`, `printer-drivers` and `pos-printer` "duplicates to be
+collapsed or retired". That was wrong, for the second time in this file, and
+from the same cause: counting ESC/POS byte tables instead of reading what each
+module does.
+
+A per-file audit of all six — complete public API, unique methods, external
+call sites, and output protocol — found **zero true duplicates**. Every one has
+at least four methods with no equivalent in any other module, and at least two
+external consumer files. They are a **layered stack**, not parallel engines:
+
+| Module | Role | Unique capability |
+|---|---|---|
+| `pos-printer.js` | transport foundation for `pos.html` | `sendRaw` — the only raw-byte sink on the page; `printBrowser`; `buildQR` |
+| `sokoni-print-engine.js` | branded business documents | Firestore merchant branding; six A4 HTML templates (invoice, quotation, delivery note, return slip, shelf tag, sticker) |
+| `sokoni-pos-print.js` | multi-printer fleet | IndexedDB printer registry; `printFulfilment` role routing; Web Serial; Android bridge |
+| `sokoni-pos-print-service.js` | POS document orchestrator | ~15 document types (refund, credit note, X/Z report, EOD); reprint; audit trail |
+| `sokoni-printer-drivers.js` | stateless encoder library | `logoBytes` raster; 7-symbology barcodes; eTIMS/KRA block; TSPL/ZPL/CPCL |
+| `sokoni-printer-manager.js` | adapter over canonical | `.p58e` proxy; `PRINTER_PROFILES`; `detectPlatform`/`getConnectionPriority` |
+
+The trap: four modules expose a method named `print` and three expose
+`printLabel`, with mutually incompatible signatures and protocols.
+`PosPrinter.printLabel` renders HTML for `window.print()`;
+`SokoniPosprint.printLabel` emits TSPL/ZPL bytes. Same name, opposite protocol
+— identical to the ADR-0002 error below. **A shared method name is not shared
+behaviour, and an ESC/POS table is not evidence of a duplicate engine.**
+
+Deleting any of the six removes production capability: POS pairing, all
+receipt printing, price labels, `print-station.html` entirely, seller
+fulfilment documents, or every barcode label silently printing blank paper.
+
+**Genuine defects the audit did find** — neither is duplication:
+- `pos.html:1449-1450` loads `printer-manager` and `pos-print-service` but
+  **not** their hard dependency `sokoni-universal-printer.js`; both are inert
+  there (no call sites on that page) and load-bearing elsewhere.
+- `sokoni-printer-driver.js:468` (singular) assigns `SokoniPrinterDrivers` with
+  a *different shape* than `sokoni-printer-drivers.js:5` (plural). Latent only
+  because no page loads both. **Rename, never delete** — co-loading them breaks
+  `sokoni-receipt-engine.js:88`.
 
 **Forbidden:** a new ESC/POS byte table; a new Web Bluetooth `requestDevice` for
-printing outside the permission pipeline (ADR-0004); loading more than one
-printer engine on a page.
+printing outside the permission pipeline (ADR-0004); **deleting any printer
+module on the basis of a name, a global, or an encoder count** — only a
+behavioural audit proving zero unique capability and zero external callers may
+justify removal.
+
+**Guard note:** `printerEnginesPerPage` baselines at 6 and that is **not** a
+violation being tolerated — six layered modules on `pos.html` is the correct
+state. The metric blocks a *seventh*; it is not driving the count to one.
 
 ---
 

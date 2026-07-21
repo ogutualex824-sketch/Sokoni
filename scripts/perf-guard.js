@@ -96,8 +96,10 @@ function countGlobalAssigners(globalName) {
   }).length;
 }
 
-/* Max independent printer-engine <script> tags on any single HTML page.
-   Loading more than one means more than one ESC/POS encoder parses per page. */
+/* Max printer-module <script> tags on any single HTML page. NOTE: more than one
+   is not per se a defect — the six on pos.html are complementary layers, proven
+   by per-file API/consumer analysis. This counts them only to catch a NEW one
+   arriving unreviewed. A name or an ESC/POS table never proves duplication. */
 function maxPrinterEnginesPerPage() {
   const ENGINES = ['sokoni-universal-printer', 'sokoni-print-engine', 'sokoni-pos-print',
     'sokoni-pos-print-service', 'sokoni-printer-manager', 'sokoni-printer-drivers',
@@ -138,7 +140,10 @@ report.totals = {
      THIRD owner; it is not driving the count to one. See the superseded note. */
   receiptEngines: countGlobalAssigners('SokoniReceiptEngine'),
   printerDriverGlobals: countGlobalAssigners('SokoniPrinterDrivers'),
-  /* ADR-0001: no page may load more than one printer engine. */
+  /* ADR-0001: printerEnginesPerPage baselines at 6. A behavioural audit proved
+     those six are a layered stack — transport, document library, fleet manager,
+     orchestrator, encoder library, adapter — with zero true duplicates. The
+     metric blocks a SEVENTH; it is not driving the count to one. */
   printerEnginesPerPage: printerPages.max,
   filesScanned:  files.length,
 };
