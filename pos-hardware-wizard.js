@@ -164,7 +164,89 @@ window.SokoniHardware = (function () {
           : 'Camera API unavailable.',
         action: null,
       },
+      /* A HID scanner types into whatever field has focus. It needs no API at
+         all, which makes it the one hardware scanner that works on every
+         platform in this matrix — including iPhone over Bluetooth HID, because
+         iOS pairs it at the OS level rather than through the browser. */
+      keyboardScanner: {
+        supported: true,
+        reason: 'Keyboard-wedge scanners type into the focused field and need no browser API. On iPhone, pair it in iOS Settings — not in the browser.',
+        action: null,
+      },
+      touch: {
+        supported: (navigator.maxTouchPoints || 0) > 0 || 'ontouchstart' in window,
+        reason: 'Touch input available.', action: null,
+      },
+      offline: {
+        supported: 'serviceWorker' in navigator && 'indexedDB' in window,
+        reason: ('serviceWorker' in navigator && 'indexedDB' in window)
+          ? 'Service Worker + IndexedDB available — offline selling supported.'
+          : 'Offline storage unavailable; sales require connectivity.',
+        action: null,
+      },
+      webShare: {
+        supported: typeof navigator.share === 'function',
+        reason: typeof navigator.share === 'function'
+          ? 'Share sheet available — receipts can be sent without a printer.'
+          : 'Share sheet unavailable.',
+        action: null,
+      },
+      notifications: {
+        supported: typeof Notification !== 'undefined',
+        reason: typeof Notification !== 'undefined' ? 'Notifications available.' : 'Notifications unavailable.',
+        action: null,
+      },
     };
+  }
+
+  /**
+   * deviceProfile() — one label the whole wizard can branch on, so no page has
+   * to re-sniff the user agent and drift from the others.
+   *
+   * iPadOS deliberately reports itself as a Mac, so a UA test alone
+   * misclassifies every iPad as a desktop and offers it USB. maxTouchPoints is
+   * what separates them.
+   */
+  function deviceProfile() {
+    var c = capabilities();
+    var ua = navigator.userAgent || '';
+    var touch = (navigator.maxTouchPoints || 0) > 1;
+    if (c.platform.isIOS) return /iPad/.test(ua) || (navigator.platform === 'MacIntel' && touch) ? 'ipad' : 'iphone';
+    if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'android-phone' : 'android-tablet';
+    return 'desktop';
+  }
+
+  /* Remembered choices. Firestore owns business data; this is a per-device UI
+     preference, so localStorage is the correct home rather than an authority
+     leak — nothing here grants access or changes what is charged. */
+  var PREF_KEY = '_posHardwarePrefs';
+  function getPreferences() {
+    try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch (_) { return {}; }
+  }
+  function savePreference(categoryKey, transportId, extra) {
+    try {
+      var p = getPreferences();
+      p[categoryKey] = Object.assign({ transport: transportId, savedAt: Date.now() }, extra || {});
+      localStorage.setItem(PREF_KEY, JSON.stringify(p));
+      return true;
+    } catch (_) { return false; }
+  }
+
+  /**
+   * autoSelect(categoryKey) — the transport to use without asking.
+   * A remembered choice wins, but only while it is still usable: a merchant who
+   * paired USB on desktop and later opens the same account on an iPhone must
+   * not be handed a transport that cannot work there.
+   */
+  function autoSelect(categoryKey) {
+    var plan = transportPlan(categoryKey);
+    if (!plan.length) return null;
+    var pref = getPreferences()[categoryKey];
+    if (pref) {
+      var kept = plan.filter(function (t) { return t.id === pref.transport; })[0];
+      if (kept) return Object.assign({}, kept, { remembered: true });
+    }
+    return Object.assign({}, plan[0], { remembered: false });
   }
 
   /**
@@ -1761,6 +1843,10 @@ window.SokoniHardware = (function () {
     recommendedTransports: recommendedTransports,
     transportPlan:       transportPlan,
     why:                 why,
+    deviceProfile:       deviceProfile,
+    autoSelect:          autoSelect,
+    getPreferences:      getPreferences,
+    savePreference:      savePreference,
     registerDevice:      registerDevice,
     unregisterDevice:    unregisterDevice,
     getDevice:           getDevice,
