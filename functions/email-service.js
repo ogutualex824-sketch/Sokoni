@@ -20,55 +20,70 @@ const MAIL_PASS    = defineSecret("MAIL_PASS");
 const EMAIL_SECRETS = [SENDGRID_KEY, MAIL_HOST, MAIL_USER, MAIL_PASS];
 module.exports.EMAIL_SECRETS = EMAIL_SECRETS;
 
-/* ── Sender identities ───────────────────────────────────── */
+/* ── Canonical sender registry ─────────────────────────────
+   Every address here is send-only and replies are routed to REPLY_TO
+   below, so a sender does NOT need its own Workspace mailbox — the
+   authenticated domain signs all of them. Only the reply destination
+   has to be a real, monitored place.
+
+   Three identities carry a role; the rest are routing labels:
+
+     verify@   authentication only (Firebase Custom SMTP sender)
+     support@  the single monitored destination — universal Reply-To
+     accounts@ finance / billing / settlement correspondence
+
+   This map previously held 45 identities, 22 of which were never
+   referenced anywhere. Dormant entries are not free: they imply a
+   mailbox exists behind each one, which is what made the messaging
+   architecture ambiguous. Retired 2026-07-21 after confirming zero
+   `FROM.<key>` references across functions/. Restore from git if a
+   domain genuinely needs its own identity. */
 const FROM = {
+  /* Roles */
   default:      '"SOKONI" <noreply@mysokoni.co.ke>',
+  verify:       '"SOKONI" <verify@mysokoni.co.ke>',      /* auth mail — Firebase SMTP sender */
+  support:      '"SOKONI Support" <support@mysokoni.co.ke>',
+  accounts:     '"SOKONI Accounts" <accounts@mysokoni.co.ke>',
+
+  /* Commerce */
   orders:       '"SOKONI Orders" <orders@mysokoni.co.ke>',
   payments:     '"SOKONI Payments" <payments@mysokoni.co.ke>',
   billing:      '"SOKONI Billing" <billing@mysokoni.co.ke>',
-  accounts:     '"SOKONI Accounts" <accounts@mysokoni.co.ke>',
-  support:      '"SOKONI Support" <support@mysokoni.co.ke>',
-  events:       '"SOKONI Events" <events@mysokoni.co.ke>',
-  tickets:      '"SOKONI Tickets" <tickets@mysokoni.co.ke>',
-  property:     '"SOKONI Property" <property@mysokoni.co.ke>',
-  bnb:          '"SOKONI BnB" <bnb@mysokoni.co.ke>',
-  motors:       '"SOKONI Motors" <motors@mysokoni.co.ke>',
-  vendors:      '"SOKONI Vendors" <vendors@mysokoni.co.ke>',
-  seller:       '"SOKONI Sellers" <seller@mysokoni.co.ke>',
-  merchant:     '"SOKONI Merchant" <merchant@mysokoni.co.ke>',
-  returns:      '"SOKONI Returns" <returns@mysokoni.co.ke>',
   disputes:     '"SOKONI Disputes" <disputes@mysokoni.co.ke>',
-  logistics:    '"SOKONI Logistics" <logistics@mysokoni.co.ke>',
+  tickets:      '"SOKONI Tickets" <tickets@mysokoni.co.ke>',
+  events:       '"SOKONI Events" <events@mysokoni.co.ke>',
+
+  /* Merchants */
+  seller:       '"SOKONI Sellers" <seller@mysokoni.co.ke>',
+  vendors:      '"SOKONI Vendors" <vendors@mysokoni.co.ke>',
+
+  /* Logistics */
   delivery:     '"SOKONI Delivery" <delivery@mysokoni.co.ke>',
   dispatch:     '"SOKONI Dispatch" <dispatch@mysokoni.co.ke>',
   drivers:      '"SOKONI Drivers" <drivers@mysokoni.co.ke>',
   tracking:     '"SOKONI Tracking" <tracking@mysokoni.co.ke>',
-  jobs:         '"SOKONI Jobs" <jobs@mysokoni.co.ke>',
+
+  /* Verticals */
+  property:     '"SOKONI Property" <property@mysokoni.co.ke>',
   health:       '"SOKONI Health" <health@mysokoni.co.ke>',
   law:          '"SOKONI Legal" <law@mysokoni.co.ke>',
-  travel:       '"SOKONI Travel" <travel@mysokoni.co.ke>',
-  marketing:    '"SOKONI" <marketing@mysokoni.co.ke>',
-  media:        '"SOKONI Media" <media@mysokoni.co.ke>',
-  press:        '"SOKONI PR" <press@mysokoni.co.ke>',
-  partnerships: '"SOKONI Partnerships" <partnerships@mysokoni.co.ke>',
-  advertising:  '"SOKONI Ads" <advertising@mysokoni.co.ke>',
-  careers:      '"SOKONI Careers" <careers@mysokoni.co.ke>',
-  tech:         '"SOKONI Tech" <tech@mysokoni.co.ke>',
-  developers:   '"SOKONI Dev" <developers@mysokoni.co.ke>',
+
+  /* Platform */
   security:     '"SOKONI Security" <security@mysokoni.co.ke>',
-  abuse:        '"SOKONI Abuse" <abuse@mysokoni.co.ke>',
-  api:          '"SOKONI API" <api@mysokoni.co.ke>',
-  devops:       '"SOKONI DevOps" <devops@mysokoni.co.ke>',
-  legal:        '"SOKONI Legal" <legal@mysokoni.co.ke>',
-  info:         '"SOKONI" <info@mysokoni.co.ke>',
-  admin:        '"SOKONI Admin" <admin@mysokoni.co.ke>',
+  tech:         '"SOKONI Tech" <tech@mysokoni.co.ke>',
+  marketing:    '"SOKONI" <marketing@mysokoni.co.ke>',
   notifications:'"SOKONI" <notifications@mysokoni.co.ke>',
-  finance:      '"SOKONI Finance" <finance@mysokoni.co.ke>',
-  privacy:      '"SOKONI Privacy" <privacy@mysokoni.co.ke>',
-  compliance:   '"SOKONI Compliance" <compliance@mysokoni.co.ke>',
   marketplace:  '"SOKONI Marketplace" <notifications@mysokoni.co.ke>',
 };
-module.exports.FROM = FROM;
+
+/* The one monitored destination. Both transports below default every
+   outbound message's Reply-To to this, so no reply can land on an
+   unattended address. Changing it changes reply routing platform-wide,
+   which is the point: one place, not 45. */
+const REPLY_TO = 'support@mysokoni.co.ke';
+
+module.exports.FROM     = FROM;
+module.exports.REPLY_TO = REPLY_TO;
 
 /* ── Email category → preferences key mapping ─────────────── */
 const PREF_MAP = {
@@ -191,7 +206,7 @@ async function _sendViaSendGrid(payload) {
   const msg = {
     to:          payload.to,
     from:        payload.from || FROM.default,
-    replyTo:     payload.replyTo || "support@mysokoni.co.ke",
+    replyTo:     payload.replyTo || REPLY_TO,
     subject:     payload.subject,
     html:        payload.html,
     /* THE BUG THAT BROKE EVERY TRANSACTIONAL EMAIL.
@@ -280,7 +295,7 @@ async function _sendViaSmtp(payload) {
   const info = await transporter.sendMail({
     from:    _sanitizeHeader(payload.from || FROM.default),
     to:      _sanitizeHeader(payload.to),
-    replyTo: _sanitizeHeader(payload.replyTo || "support@mysokoni.co.ke"),
+    replyTo: _sanitizeHeader(payload.replyTo || REPLY_TO),
     subject: _sanitizeHeader(payload.subject),
     html:    payload.html,
     text:    payload.text || "",
