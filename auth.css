@@ -482,6 +482,9 @@ body{
    PHONE OTP SECTION (collapsible, slides open)
 ══════════════════════════════════════════════════════════════ */
 #phoneAuthSection {
+  width: 100%;           /* stretch to full card width — without this, align-items:center
+                            on the card shrinks the section to ~200px on desktop, leaving
+                            only ~114px for the phone number input (visually broken) */
   max-height: 0;
   overflow: hidden;
   transition: max-height .32s ease, opacity .32s ease;

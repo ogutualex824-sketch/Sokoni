@@ -2,6 +2,26 @@
 
 ---
 
+## 2026-07-21 — Fix: Phone OTP section invisible on desktop
+
+### Summary
+`#phoneAuthSection` had no `width: 100%`, causing it to shrink to its intrinsic content width (~200 px) when centered in the 420 px card. The country-code input consumed 78 px and the 8 px gap left only ~114 px for the phone number field — effectively invisible and unusable on desktop.
+
+### Root Cause
+`.auth-card` uses `display:flex; flex-direction:column; align-items:center`. Without an explicit width, flex children in a centered column context are sized to their content (fit-content) rather than stretching to fill the card. Every other interactive element on the form (`.auth-field`, `.auth-btn`, `.auth-google-btn`) has `width:100%` which overrides this — but `#phoneAuthSection` was missing it.
+
+### Fix
+Added `width: 100%` to `#phoneAuthSection` in `auth.css`. The section now fills the full 420 px card width on desktop; the phone number input gets ~334 px of space (previously ~114 px).
+
+### Files Changed
+- `auth.css`
+- `docs/CHANGELOG.md`
+
+### Breaking Changes
+None.
+
+---
+
 ## 2026-07-21 — P0 Desktop OTP Login Fix
 
 ### Summary
