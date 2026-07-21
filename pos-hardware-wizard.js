@@ -167,6 +167,101 @@ window.SokoniHardware = (function () {
     };
   }
 
+  /**
+   * transportPlan(categoryKey) — the ordered list of transports that can
+   * actually work on THIS device for THIS category, best first.
+   *
+   * Apple-first rather than Apple-excluded. An iPhone merchant is not a
+   * degraded desktop merchant: they have a network stack, AirPrint and a very
+   * good camera, which covers receipt printing, label printing, cash-drawer
+   * kick and barcode scanning without a single unavailable API. What they lack
+   * is USB, Bluetooth and Serial, so those are removed from the plan entirely
+   * instead of being offered and then failing.
+   *
+   * Returns [{ id, label, note }] — empty only when a category genuinely has
+   * no working path here, in which case `why(category)` explains it.
+   */
+  function transportPlan(categoryKey) {
+    var c = capabilities();
+    var ios = c.platform.isIOS;
+    var plan = [];
+    var add = function (id, label, note) { plan.push({ id: id, label: label, note: note || null }); };
+
+    switch (categoryKey) {
+      case 'receipt_printer':
+      case 'label_printer':
+        /* Network ESC/POS first everywhere: it is the only transport that works
+           on every platform, and on iOS it is the only one at all. */
+        add('network', 'Network printer (enter IP)', 'Works on every device, including iPhone.');
+        if (c.browserPrint.supported) {
+          add('browser', ios ? 'AirPrint / system print' : 'System print dialog',
+              ios ? 'Uses the iPhone share sheet — no pairing needed.' : null);
+        }
+        if (c.usb.supported)       add('usb', 'USB printer', 'Tap Connect to choose the device.');
+        if (c.bluetooth.supported) add('bluetooth', 'Bluetooth printer', 'Tap Connect to pair.');
+        break;
+
+      case 'barcode_scanner':
+        /* The camera is a first-class scanner on iPhone, not a fallback. */
+        if (c.camera.supported) add('camera', 'Camera scanner', 'Uses the device camera — recommended on iPhone.');
+        add('keyboard', 'Keyboard-wedge scanner', 'Any scanner that types into a field works with no drivers.');
+        add('manual', 'Type the barcode', 'Always available.');
+        if (c.usb.supported)       add('usb_hid', 'USB scanner');
+        if (c.bluetooth.supported) add('bluetooth_hid', 'Bluetooth scanner');
+        break;
+
+      case 'cash_drawer':
+        /* A drawer has no transport of its own — it is kicked by the printer. */
+        add('network_kick', 'Kick via network printer', 'The drawer opens through the ESC/POS printer it is wired to.');
+        if (c.usb.supported) add('usb', 'USB drawer');
+        break;
+
+      case 'customer_display':
+        add('network', 'Network display (enter IP)');
+        if (c.usb.supported) add('usb', 'USB display');
+        break;
+
+      case 'weighing_scale':
+        add('network', 'Network scale (enter IP)');
+        if (c.serial.supported)    add('serial', 'Serial scale');
+        if (c.usb.supported)       add('usb_serial', 'USB scale');
+        if (c.bluetooth.supported) add('bluetooth', 'Bluetooth scale');
+        break;
+
+      case 'payment_terminal':
+        add('network', 'Network terminal (enter IP)');
+        if (c.bluetooth.supported) add('bluetooth', 'Bluetooth terminal');
+        break;
+
+      case 'nfc_reader':
+        if (c.usb.supported) add('usb', 'USB NFC reader');
+        break;
+
+      case 'biometric':
+        add('platform', 'Device biometrics', 'Face ID / Touch ID via the platform authenticator.');
+        break;
+    }
+    return plan;
+  }
+
+  /**
+   * why(categoryKey) — one honest sentence when a category has no working
+   * transport here, so the UI never has to invent "Not Found".
+   */
+  function why(categoryKey) {
+    var c = capabilities();
+    if (!c.platform.isIOS) {
+      return 'Nothing is paired with this site yet — use Connect to choose a device.';
+    }
+    if (categoryKey === 'nfc_reader') {
+      return 'External NFC readers need WebUSB, which iOS does not provide. Apple Pay terminals connect through the payment provider instead.';
+    }
+    if (categoryKey === 'payment_terminal') {
+      return 'Card readers cannot be paired from an iPhone browser. Use a network terminal, or the provider’s own app.';
+    }
+    return 'iPhone browsers cannot use USB, Bluetooth or Serial. Use a network device or AirPrint.';
+  }
+
   /** The transports a merchant can actually use here, best first. */
   function recommendedTransports() {
     var c = capabilities();
@@ -1664,6 +1759,8 @@ window.SokoniHardware = (function () {
     discover:            discover,
     capabilities:        capabilities,
     recommendedTransports: recommendedTransports,
+    transportPlan:       transportPlan,
+    why:                 why,
     registerDevice:      registerDevice,
     unregisterDevice:    unregisterDevice,
     getDevice:           getDevice,

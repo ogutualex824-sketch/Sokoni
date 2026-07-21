@@ -1105,15 +1105,33 @@ function renderCategoryCards(summary) {
   CATS.forEach(cat => {
     const summaryKey = _catToSummaryKey(cat.key);
     const info = (summary && summaryKey && summary[summaryKey]) || { found: false, count: 0, types: [] };
-    const status = info.found ? (info.count > 1 ? 'partial' : 'found') : 'not-found';
-    const statusLabel = info.found ? (info.count + ' found') : 'Not Found';
+    /* Only offer transports that can actually work on this device. On iPhone
+       USB/Bluetooth/Serial are absent from WebKit, so listing them produced a
+       "Not Found" that read as a hardware fault. The plan is empty only when a
+       category has genuinely no path here, and then HW.why() explains it. */
+    const HW   = window.SokoniHardware;
+    const plan = (HW && HW.transportPlan) ? HW.transportPlan(cat.key) : null;
+    const usable = plan ? plan.map(t => t.id) : cat.connections;
+    const noPath = plan && plan.length === 0;
+
+    const status = info.found ? (info.count > 1 ? 'partial' : 'found')
+                             : (noPath ? 'not-found' : 'partial');
+    /* Never a bare "Not Found": say what to do instead. */
+    const statusLabel = info.found ? (info.count + ' found')
+                     : noPath      ? 'Not available here'
+                                   : 'Set up: ' + (plan ? plan[0].label : 'choose a connection');
 
     const card = document.createElement('div');
     card.className = 'hw-cat-card';
     card.dataset.category = cat.key;
 
-    const connBadges = cat.connections.map(c =>
-      `<span class="conn-badge">${c}</span>`).join('');
+    const connBadges = usable.map(c =>
+      `<span class="conn-badge">${c}</span>`).join('') +
+      (noPath && HW && HW.why
+        ? `<div style="margin-top:6px;font-size:11px;line-height:1.45;color:var(--muted)">${HW.why(cat.key)}</div>`
+        : (plan && plan[0] && plan[0].note
+            ? `<div style="margin-top:6px;font-size:11px;line-height:1.45;color:var(--muted)">${plan[0].note}</div>`
+            : ''));
 
     const networkInput = cat.key === 'receipt_printer' || cat.key === 'label_printer' ? `
       <div class="ip-row" style="margin-top:6px">
@@ -1250,6 +1268,29 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
     btn.innerHTML = '🔍 Detect Hardware';
   }
 });
+
+/* Apple-first labelling. "Detect Hardware" promises a scan that cannot exist on
+   iOS — there is no USB/Bluetooth/Serial API to scan with, and the working path
+   is entering a printer IP. Naming the button after what it actually does stops
+   the merchant waiting for a discovery that will never return anything. */
+(function applyPlatformLabels() {
+  const HW = window.SokoniHardware;
+  if (!HW || !HW.capabilities) return;
+  try {
+    const cap = HW.capabilities();
+    if (!cap.platform.isIOS) return;
+    const btn = document.getElementById('btnDiscover');
+    if (btn) btn.innerHTML = '🖨️ Find Network Printer';
+    const h = document.querySelector('#step-discover h2, h2');
+    if (h && /Detect Hardware/i.test(h.textContent)) h.textContent = '🖨️ Set Up Printing';
+    const note = document.getElementById('discoverStatus');
+    if (note) {
+      note.innerHTML = 'On iPhone, printers connect over Wi-Fi or AirPrint — ' +
+                       'no pairing needed. Enter your printer’s IP address below, ' +
+                       'or use AirPrint from the share sheet.';
+    }
+  } catch (_) { /* labelling must never block the wizard */ }
+})();
 
 // Render empty category cards on load
 renderCategoryCards(null);
