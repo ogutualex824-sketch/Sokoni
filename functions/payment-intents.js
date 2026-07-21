@@ -61,7 +61,62 @@ exports.createPaymentIntent = onCall(_OPTS, async (request) => {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in required.');
   const uid = request.auth.uid;
 
-  const { planId, billingCycle, phone } = request.data || {};
+  const { planId, billingCycle, phone, purpose } = request.data || {};
+
+  /* ── Non-subscription purposes ────────────────────────────────────────────
+     createPaymentIntent could only mint purpose 'subscription'. Every other
+     paid domain therefore had no intent, which is why none of them could be
+     swept by the reconciler and why the digital-download adapter had nothing to
+     fire on — one hardcoded field was the bottleneck behind four non-compliant
+     domains.
+
+     Other purposes are dispatched to the registry, which derives the price from
+     Firestore exactly as the subscription branch derives it from the plan
+     catalogue. No branch anywhere reads an amount from the request. An
+     unregistered purpose is rejected rather than defaulted, because silently
+     treating an unknown purpose as a subscription is precisely the quiet
+     mis-dispatch this registry exists to prevent.
+
+     The subscription path below is unchanged, and a request that omits
+     `purpose` still takes it — existing clients are unaffected. */
+  if (purpose && purpose !== 'subscription') {
+    const purposes = require('./payment-purposes');
+    const quote = await purposes.priceFor(purpose, uid, request.data || {});
+
+    if (phone && !/^254[17]\d{8}$/.test(String(phone))) {
+      throw new HttpsError('invalid-argument', 'Invalid phone number.');
+    }
+
+    const ref2 = _mintRef();
+    const now2 = Date.now();
+    const intent2 = {
+      ref:          ref2,
+      uid,
+      ownerUid:     uid,
+      purpose:      quote.purpose,
+      resourceType: quote.resourceType,
+      resourceId:   quote.resourceId,
+      amount:       quote.amount,          /* whole KES — what the provider collects */
+      amountCents:  quote.amountCents,
+      currency:     quote.currency || 'KES',
+      phone:        phone ? String(phone) : null,
+      merchantId:   (request.data || {}).merchantId || null,
+      metadata:     quote.metadata || {},
+      correlationId: ref2,
+      status:       'created',
+      createdAt:    admin.firestore.FieldValue.serverTimestamp(),
+      expiresAt:    admin.firestore.Timestamp.fromMillis(now2 + TTL_MS),
+      createdBy:    'createPaymentIntent',
+    };
+
+    await db().collection('paymentIntents').doc(ref2).create(intent2);
+    timeline.mark(ref2, 'intent_created', {
+      uid, purpose: quote.purpose, resourceId: quote.resourceId, amount: quote.amount,
+    });
+    logger.info('[intent] created', { ref: ref2, purpose: quote.purpose, resourceId: quote.resourceId, amount: quote.amount });
+
+    return { ref: ref2, amount: quote.amount, currency: intent2.currency, purpose: quote.purpose };
+  }
 
   if (!planId || typeof planId !== 'string') {
     throw new HttpsError('invalid-argument', 'planId is required.');
