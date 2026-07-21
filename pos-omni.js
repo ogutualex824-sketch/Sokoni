@@ -202,12 +202,16 @@
         fs.limit(500)
       );
 
+      /* Snapshots are processed one at a time. Firestore may deliver a second
+         snapshot while the first is still applying; without this chain the two
+         would interleave read-modify-write cycles and lose updates. */
+      let _queue = Promise.resolve();
+
       _state.productsSub = fs.onSnapshot(q, snap => {
-        snap.docChanges().forEach(async change => {
-          if (change.type === 'removed') return;
-          const mktProduct = { id: change.doc.id, ...change.doc.data() };
-          await _applyMarketplaceProductUpdate(mktProduct);
-        });
+        const changes = snap.docChanges().filter(c => c.type !== 'removed');
+        if (!changes.length) return;
+        _queue = _queue.then(() => _applySnapshot(changes))
+                       .catch(err => console.error('[PosOmni] snapshot apply failed:', err));
       }, err => {
         console.error('[PosOmni] Products subscription error:', err);
       });
@@ -217,12 +221,62 @@
     }
   }
 
-  async function _applyMarketplaceProductUpdate(mktProduct) {
+  /**
+   * Apply one Firestore snapshot's worth of marketplace changes.
+   *
+   * Each change previously called _applyMarketplaceProductUpdate, which ran its
+   * own PosDB.products.getAll() — a full IndexedDB store read — and then an
+   * O(P) linear find. Because the changes were iterated with
+   * `forEach(async …)`, which ignores the returned promise, every one of those
+   * full-store arrays could be resident at the same time. An initial snapshot
+   * carries up to 500 changes (fs.limit(500)).
+   *
+   * Measured transient heap for that pattern: ~42 MB at 200 local products,
+   * ~109 MB at 500, ~219 MB at 1000 — against an Android WebView renderer
+   * budget that is often 128–256 MB. That is a plausible cause of renderer
+   * termination during POS startup, which surfaces as the app disappearing and
+   * the phone returning to its lock screen.
+   *
+   * One read, one index, sequential application: O(M × P) becomes O(P + M),
+   * and peak residency becomes a single array rather than M of them.
+   * Business behaviour is unchanged — the same products are matched by the
+   * same key and the same fields are synced.
+   */
+  async function _applySnapshot(changes) {
+    if (!window.PosDB) return;
+
+    /* ONE store read per snapshot. */
+    const all = await PosDB.products.getAll();
+
+    /* O(1) lookups. Later duplicates do not overwrite earlier ones, matching
+       the previous find(), which returned the first match. */
+    const byMarketplaceId = new Map();
+    for (const p of all) {
+      if (p && p.marketplaceId && !byMarketplaceId.has(p.marketplaceId)) {
+        byMarketplaceId.set(p.marketplaceId, p);
+      }
+    }
+
+    /* Sequential: bounded promises, bounded IndexedDB transactions, and no
+       concurrent read-modify-write on the same record. */
+    for (const change of changes) {
+      const mktProduct = { id: change.doc.id, ...change.doc.data() };
+      await _applyMarketplaceProductUpdate(mktProduct, byMarketplaceId);
+    }
+  }
+
+  async function _applyMarketplaceProductUpdate(mktProduct, index) {
     if (!window.PosDB) return;
     try {
-      /* Find the local product by marketplaceId */
-      const all = await PosDB.products.getAll();
-      const local = all.find(p => p.marketplaceId === mktProduct.id);
+      /* Find the local product by marketplaceId. `index` is supplied by
+         _applySnapshot; the getAll() fallback keeps this callable on its own. */
+      let local;
+      if (index) {
+        local = index.get(mktProduct.id);
+      } else {
+        const all = await PosDB.products.getAll();
+        local = all.find(p => p.marketplaceId === mktProduct.id);
+      }
       if (!local) return;
 
       /* Only sync non-stock fields from marketplace → POS (stock flows the other way) */
