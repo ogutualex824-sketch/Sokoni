@@ -91,6 +91,30 @@
     '}',
     /* Still above the 16px no-zoom floor on the narrowest phones. */
     '@media (max-width:360px){.sk-otp{--sk-otp-fs:21px}.sk-otp-in{letter-spacing:.3em;text-indent:.3em}}',
+
+    /* ── 6-box grid (boxes: true mode) ──────────────────────────────────────── */
+    '.sk-otp-boxes{display:flex;gap:8px;justify-content:center;width:100%;}',
+    '.sk-otp-box{',
+    '  flex:1;min-width:0;max-width:52px;aspect-ratio:1/1;padding:0;',
+    '  text-align:center;',
+    '  font-weight:700;font-variant-numeric:tabular-nums;',
+    '  color:var(--text,var(--txt,#fff));',
+    '  background:var(--surf2,var(--surface,rgba(255,255,255,.07)));',
+    '  border:1.5px solid var(--border,var(--bor,rgba(255,255,255,.14)));',
+    '  border-radius:var(--r,12px);',
+    '  outline:none;transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;',
+    '  cursor:text;caret-color:transparent;',
+    '  -webkit-tap-highlight-color:transparent;',
+    '}',
+    '.sk-otp-box:focus{',
+    '  border-color:var(--acc,var(--sk-accent,#71ff00));',
+    '  box-shadow:0 0 0 3px color-mix(in srgb,var(--acc,#71ff00) 18%,transparent);',
+    '  background:rgba(255,255,255,.1);',
+    '}',
+    '.sk-otp-box.is-full{border-color:var(--acc,var(--sk-accent,#71ff00));}',
+    '.sk-otp-box[aria-invalid="true"],.sk-otp-box.is-error{border-color:#ff3d3d;box-shadow:0 0 0 3px rgba(255,61,61,.12);}',
+    '.sk-otp-box:disabled{opacity:.5;}',
+    '@media (max-width:380px){.sk-otp-boxes{gap:6px;}}',
   ].join('');
 
   function injectCss() {
@@ -112,6 +136,11 @@
 
     var len   = opts.length || 6;
     var id    = opts.id || ('sk-otp-' + (++_seq));
+
+    /* 6-box grid mode: individual digit inputs with auto-advance, backspace nav,
+       paste distribution, and iOS AutoFill compat. */
+    if (opts.boxes) return mountBoxes(host, opts, len, id);
+
     var hintId = id + '-hint';
 
     var wrap = document.createElement('div');
@@ -249,6 +278,181 @@
         if (ac) { try { ac.abort(); } catch (e) {} ac = null; }
         return api;
       },
+    };
+
+    return api;
+  }
+
+  /* ── 6-box mode implementation ──────────────────────────────────────────────
+     Six individual digit inputs. Each box handles its own input event and routes
+     focus, paste, and backspace correctly.
+
+     iOS AutoFill path: iOS fills the first box with the full 6-digit code despite
+     maxLength=1 (AutoFill bypasses maxLength). The input handler detects value.length
+     > 1 and distributes the digits across all boxes — one-tap autofill works.
+
+     Android keyboard suggestions route to autocomplete="one-time-code" on the first
+     box; the same distribute() path handles it.
+
+     The public API is identical to the single-field API so callers need no changes.
+  ─────────────────────────────────────────────────────────────────────────────── */
+  function mountBoxes(host, opts, len, id) {
+    var wrap = document.createElement('div');
+    wrap.className  = 'sk-otp-boxes';
+    wrap.setAttribute('role', 'group');
+    wrap.setAttribute('aria-label', opts.label || 'Verification code');
+
+    var inputs = [];
+    for (var i = 0; i < len; i++) {
+      var box = document.createElement('input');
+      box.type      = 'text';
+      box.inputMode = 'numeric';
+      box.setAttribute('pattern', '[0-9]*');
+      box.maxLength = 1;
+      box.className = 'sk-otp-box';
+      box.setAttribute('aria-label', 'Digit ' + (i + 1) + ' of ' + len);
+      /* Only the first box carries autocomplete="one-time-code": iOS/Android
+         route the SMS suggestion to a SINGLE field; we distribute from there. */
+      box.autocomplete = (i === 0) ? 'one-time-code' : 'off';
+      if (i === 0) box.name = opts.name || 'one-time-code';
+      box.setAttribute('autocapitalize', 'off');
+      box.setAttribute('autocorrect', 'off');
+      box.spellcheck    = false;
+      box.enterKeyHint  = (i === len - 1) ? 'go' : 'next';
+      /* Inline !important beats the global iOS-zoom guard (see single-field note). */
+      box.style.setProperty('font-size', 'var(--sk-otp-box-fs, 22px)', 'important');
+      inputs.push(box);
+      wrap.appendChild(box);
+    }
+
+    var fired = false;
+    var lastFired = '';
+
+    function getValue() {
+      return inputs.map(function(b) { return b.value; }).join('');
+    }
+
+    function distribute(str, startIdx) {
+      /* Strip non-digits — handles "Your code is 899297", dashes, spaces, etc. */
+      var digits = String(str || '').replace(/\D+/g, '').slice(0, len);
+      var pos = startIdx || 0;
+      for (var i = 0; i < digits.length && pos < len; i++, pos++) {
+        inputs[pos].value = digits[i];
+        inputs[pos].setAttribute('aria-invalid', 'false');
+        inputs[pos].classList.remove('is-error');
+      }
+      /* Focus the first unfilled box, or the last box if all filled. */
+      var focusIdx = pos < len ? pos : len - 1;
+      try { inputs[focusIdx].focus(); } catch(e) {}
+      maybeComplete();
+    }
+
+    function maybeComplete() {
+      var v = getValue();
+      if (v.length !== len) { fired = false; return; }
+      if (fired && v === lastFired) return;
+      fired = true;
+      lastFired = v;
+      inputs.forEach(function(b) { b.classList.add('is-full'); });
+      if (typeof opts.onComplete === 'function') {
+        setTimeout(function() { opts.onComplete(v); }, 120);
+      }
+    }
+
+    inputs.forEach(function(box, idx) {
+      box.addEventListener('input', function() {
+        var v = box.value;
+        /* iOS AutoFill fills the first box with the whole code despite maxLength. */
+        if (v.length > 1) {
+          box.value = '';
+          distribute(v, idx === 0 ? 0 : idx);
+          return;
+        }
+        var digit = v.replace(/\D/g, '');
+        box.value = digit;
+        if (digit) {
+          box.setAttribute('aria-invalid', 'false');
+          box.classList.remove('is-error');
+          if (idx < len - 1) try { inputs[idx + 1].focus(); } catch(e) {}
+          maybeComplete();
+        }
+      });
+
+      box.addEventListener('keydown', function(e) {
+        if (e.key === 'Backspace') {
+          e.preventDefault();
+          if (box.value) {
+            box.value = '';
+            fired = false;
+          } else if (idx > 0) {
+            inputs[idx - 1].value = '';
+            fired = false;
+            try { inputs[idx - 1].focus(); } catch(e) {}
+          }
+        } else if (e.key === 'ArrowLeft' && idx > 0) {
+          e.preventDefault();
+          try { inputs[idx - 1].focus(); } catch(e) {}
+        } else if (e.key === 'ArrowRight' && idx < len - 1) {
+          e.preventDefault();
+          try { inputs[idx + 1].focus(); } catch(e) {}
+        } else if (e.key === 'Enter' && idx === len - 1) {
+          e.preventDefault();
+          var v = getValue();
+          if (v.length === len && typeof opts.onComplete === 'function') {
+            fired = true; lastFired = v;
+            opts.onComplete(v);
+          }
+        }
+      });
+
+      box.addEventListener('paste', function(e) {
+        e.preventDefault();
+        var pasted = (e.clipboardData || window.clipboardData || {}).getData('text');
+        if (pasted) distribute(pasted, idx === 0 ? 0 : idx);
+      });
+
+      /* Select on focus: re-entering a digit is natural — tap the box, type. */
+      box.addEventListener('focus', function() {
+        try { box.select(); } catch(e) {}
+      });
+    });
+
+    host.innerHTML = '';
+    host.appendChild(wrap);
+
+    var api = {
+      el:    inputs[0] || null,
+      value: function() { return getValue(); },
+      focus: function() {
+        var firstEmpty = null;
+        for (var i = 0; i < inputs.length; i++) {
+          if (!inputs[i].value) { firstEmpty = inputs[i]; break; }
+        }
+        try { (firstEmpty || inputs[0]).focus(); } catch(e) {}
+        return api;
+      },
+      clear: function() {
+        inputs.forEach(function(b) {
+          b.value = '';
+          b.classList.remove('is-full', 'is-error');
+          b.setAttribute('aria-invalid', 'false');
+        });
+        fired = false; lastFired = '';
+        return api;
+      },
+      disabled: function(on) {
+        inputs.forEach(function(b) { b.disabled = !!on; });
+        return api;
+      },
+      error: function(on) {
+        inputs.forEach(function(b) {
+          b.setAttribute('aria-invalid', on ? 'true' : 'false');
+          b.classList.toggle('is-error', !!on);
+        });
+        if (on) { fired = false; lastFired = ''; }
+        return api;
+      },
+      destroy: function() { return api; },
     };
 
     return api;

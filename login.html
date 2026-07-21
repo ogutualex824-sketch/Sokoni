@@ -134,24 +134,27 @@
         <p class="phone-section-label">Phone Sign In</p>
         <div class="phone-row">
           <input type="text" class="phone-code-input" id="phoneCountryCode" value="+254" maxlength="5"
-                 inputmode="tel" aria-label="Country code">
+                 inputmode="tel" aria-label="Country code" readonly title="Kenya (+254)">
           <div class="auth-field" style="flex:1;margin:0;">
             <i class="fas fa-mobile-alt" aria-hidden="true"></i>
-            <input type="tel" id="phoneNumber" placeholder="7XX XXX XXX" inputmode="numeric"
+            <input type="tel" id="phoneNumber" placeholder="0712 345 678" inputmode="numeric"
+                   autocomplete="tel-national"
                    onkeydown="if(event.key==='Enter')sendPhoneOTP()">
           </div>
         </div>
+        <p class="phone-format-hint">Enter with or without leading 0 &mdash; e.g. 0712 345 678</p>
         <button type="button" class="auth-btn" id="sendOtpBtn" onclick="sendPhoneOTP()" style="margin-top:8px;">
           Send OTP →
         </button>
 
         <!-- OTP entry (hidden until SMS sent) -->
         <div id="otpEntry" style="display:none;margin-top:4px;">
-          <p style="font-size:12px;color:rgba(255,255,255,0.38);text-align:center;margin:12px 0 2px;">
-            Enter the 6-digit code sent to your phone
+          <p style="font-size:12px;color:rgba(255,255,255,0.38);text-align:center;margin:12px 0 8px;line-height:1.5;">
+            Code sent to
+            <span id="otpPhoneDisplay" style="color:#71ff00;font-weight:700;white-space:nowrap;"></span>
           </p>
-          <!-- Single verification field, mounted by sokoni-otp.js. One input is what
-               iOS SMS AutoFill and the Android keyboard suggestion can actually fill. -->
+          <!-- Six-box OTP grid, mounted by sokoni-otp.js (boxes:true).
+               iOS AutoFill fills the first box with the full code; distribute() spreads it. -->
           <div id="otpMount"></div>
           <button type="button" class="auth-btn" id="verifyOtpBtn" onclick="verifyPhoneOTP()">
             Verify Code →

@@ -532,6 +532,14 @@ body{
 /* The six-digit grid (.otp-row / .otp-digit) is gone — replaced by the single
    verification field in sokoni-otp.js, which owns its own styling so login,
    onboarding and provider-onboarding cannot drift apart again. */
+.phone-format-hint {
+  font-size: 11px;
+  color: rgba(255,255,255,0.32);
+  text-align: center;
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
 .otp-resend-row {
   text-align: center;
   font-size: 12px;

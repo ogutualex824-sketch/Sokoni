@@ -1297,14 +1297,28 @@ function openPhoneAuth() {
 
 async function sendPhoneOTP() {
     const countryCode = ((document.getElementById('phoneCountryCode')?.value) || '+254').trim();
-    const rawNumber   = ((document.getElementById('phoneNumber')?.value) || '').replace(/[\s\-()]/g, '').trim();
+    const rawNumber   = ((document.getElementById('phoneNumber')?.value) || '').replace(/[\s\-()\.]/g, '').trim();
 
-    if (!rawNumber || rawNumber.length < 6) {
-        showAuthMsg('Please enter a valid phone number.', 'error');
+    /* Strip a leading 0 that local Kenyan format includes (e.g. 0712345678 → 712345678).
+       Without this: +254 + 0712345678 = +2540712345678 (14 digits, invalid E.164). */
+    const cleanNumber = rawNumber.replace(/^0+/, '');
+
+    if (!cleanNumber || cleanNumber.length < 7 || !/^\d+$/.test(cleanNumber)) {
+        showAuthMsg('Please enter a valid phone number (e.g. 0712 345 678).', 'error');
         return;
     }
 
-    const fullPhone = countryCode.startsWith('+') ? countryCode + rawNumber : '+' + countryCode + rawNumber;
+    const fullPhone = countryCode.startsWith('+') ? countryCode + cleanNumber : '+' + countryCode + cleanNumber;
+
+    /* Client-side rate limit: max 3 OTP sends per 5 minutes per browser.
+       Firebase also enforces auth/too-many-requests, but this guards SMS quota
+       and gives a friendly, immediate response before the network call goes out. */
+    if (typeof SokoniSecurity !== 'undefined' && SokoniSecurity.persistentRateLimit) {
+        if (!SokoniSecurity.persistentRateLimit('phone_otp_send', 3, 300000)) {
+            showAuthMsg('Too many OTP requests. Please wait a few minutes before trying again.', 'error');
+            return;
+        }
+    }
 
     if (!navigator.onLine) {
         showAuthMsg('Phone OTP requires an internet connection.', 'error');
@@ -1354,6 +1368,15 @@ async function sendPhoneOTP() {
         _startOTPTimer(60);
         showAuthMsg('OTP sent to ' + fullPhone + '. Check your messages.', 'success');
 
+        /* Show the target number in the OTP entry section */
+        const _displayEl = document.getElementById('otpPhoneDisplay');
+        if (_displayEl) _displayEl.textContent = fullPhone;
+
+        /* Funnel metric */
+        try {
+            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_sent', { country: countryCode });
+        } catch(_) {}
+
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
         if (_recaptchaVerifier) {
@@ -1395,6 +1418,9 @@ async function verifyPhoneOTP() {
     try {
         const result = await _phoneConfirmResult.confirm(code);   /* OTP errors only */
         clearInterval(_otpTimerHandle);
+        try {
+            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_verified', { success: true });
+        } catch(_) {}
         /* Verification SUCCEEDED. Anything failing past this point is a post-auth
            problem, never a bad code -- reporting it as "Verification failed" told
            authenticated users their OTP was wrong. Side effects are now isolated
@@ -1418,6 +1444,9 @@ async function verifyPhoneOTP() {
             'auth/session-expired':           'Session expired. Please request a new OTP.',
             'auth/network-request-failed':    'Network error. Check your connection and try again.',
         };
+        try {
+            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_failed', { code: err.code || 'unknown' });
+        } catch(_) {}
         /* error() re-arms auto-submit. Without it the field stays "already fired" and
            a corrected code would only ever verify via the button. */
         _otpField?.error(true);
@@ -1472,10 +1501,10 @@ function _setupOtpInputs() {
 
     _otpField = window.SokoniOtp.mount(mount, {
         length:     6,
+        boxes:      true,   /* 6 individual digit inputs with auto-advance, paste, backspace nav */
         label:      'Verification code',
-        placeholder:'6-digit verification code',
         /* Auto-verify the moment six digits are present, from any source: typing,
-           paste, or the SMS suggestion. The Verify Code button stays as the fallback. */
+           paste, or the SMS AutoFill suggestion. The Verify Code button is the fallback. */
         onComplete: function() { verifyPhoneOTP(); },
     });
 }

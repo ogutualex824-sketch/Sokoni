@@ -2,6 +2,58 @@
 
 ---
 
+## 2026-07-21 — Enterprise Auth Reliability: OTP 6-Box UI, Leading-0 Fix, Rate Limiting & Observability
+
+### Summary
+Comprehensive phone-OTP authentication hardening across `auth.js`, `sokoni-otp.js`, `login.html`, and `auth.css`. Addresses a critical E.164 formatting bug that caused all users entering local-format Kenyan numbers to receive `auth/invalid-phone-number`, plus adds 6-box OTP UI, client-side SMS rate limiting, observability funnel tracking, and UX improvements.
+
+### Root Causes Fixed
+
+| # | Severity | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | **Critical** | Leading `0` not stripped: `+254` + `0712345678` = `+2540712345678` (invalid E.164) — every user entering local format received `auth/invalid-phone-number` | `cleanNumber = rawNumber.replace(/^0+/, '')` in `sendPhoneOTP()` |
+| 2 | Major | No client-side rate limit on OTP sends — could exhaust Firebase SMS quota on rapid retries or accidental double-tap | `SokoniSecurity.persistentRateLimit('phone_otp_send', 3, 300000)` — max 3 per 5 minutes |
+| 3 | Major | OTP entry was a single text field — could not satisfy the 6-box UX requirement; iOS AutoFill and Android suggestion paths unchanged | `sokoni-otp.js` now has `boxes: true` mode: 6 individual `maxLength=1` inputs with auto-advance, backspace nav, paste distribution, iOS AutoFill compat |
+| 4 | Minor | No format hint on phone field — users unaware they can enter with or without leading 0 | `phone-format-hint` paragraph added below the phone row |
+| 5 | Minor | OTP entry showed "Enter the 6-digit code" with no indication of where it was sent | `#otpPhoneDisplay` span now shows the full E.164 number (e.g. `+254712345678`) |
+| 6 | Minor | No observability on OTP funnel — impossible to diagnose delivery failure vs. verification failure | `SokoniObservability.track()` calls at `auth_otp_sent`, `auth_otp_verified`, `auth_otp_failed` |
+
+### OTP 6-Box Implementation (`sokoni-otp.js`)
+
+`SokoniOtp.mount(target, { boxes: true })` creates a `div.sk-otp-boxes` containing 6 `input.sk-otp-box` elements:
+
+- **Auto-advance**: digit typed → focus next
+- **Backspace navigation**: empty box + backspace → clear previous box + focus previous
+- **Arrow keys**: navigate left/right between boxes
+- **Paste**: strips non-digits, distributes from paste position
+- **iOS AutoFill**: first box carries `autocomplete="one-time-code"`; iOS bypasses `maxLength` and fills with the full code — detected by `value.length > 1` and distributed across all boxes
+- **Android keyboard suggestions**: same first-box `autocomplete` attribute routes the suggestion; distribute() path handles it
+- **`onComplete` callback**: fires 120ms after the last box is filled (from any input source)
+- **Error state** (`.error(true)`): red border on all 6 boxes, re-arms `onComplete` for correction
+- Public API (`value()`, `clear()`, `focus()`, `error()`, `disabled()`, `destroy()`) is identical to single-field API — all callers unaffected
+
+Existing single-field mode (`boxes` omitted) is unchanged — other pages (onboarding, provider-onboarding) continue working with no code change.
+
+### Files Changed
+- `auth.js` — `sendPhoneOTP()`: leading-0 strip, min-length validation, rate limiting, phone display update, observability; `_setupOtpInputs()`: `boxes: true`; `verifyPhoneOTP()`: success/fail observability
+- `sokoni-otp.js` — `mountBoxes()` function + inline CSS for `.sk-otp-boxes` / `.sk-otp-box`; early-return in `mount()` when `opts.boxes`
+- `login.html` — format hint paragraph, `#otpPhoneDisplay` span, placeholder updated to `"0712 345 678"`, country code input marked `readonly`
+- `auth.css` — `.phone-format-hint` rule
+
+### Security
+- Rate limiting prevents SMS quota abuse from rapid automated OTP requests
+- Country code field is `readonly` (was editable text) — eliminates injecting arbitrary prefixes
+- No new attack surface introduced; Firebase App Check + server-side rate limits remain the primary defence
+
+### Performance
+- Rate limit check is synchronous localStorage read — <1ms, before any network call
+- Observability calls are fire-and-forget in try/catch — cannot block the auth path
+
+### Breaking Changes
+None. The 6-box API is additive; `boxes` defaults to `false` (undefined) which preserves existing single-field behaviour.
+
+---
+
 ## 2026-07-21 — Fix: Desktop home page not scrollable
 
 ### Summary
