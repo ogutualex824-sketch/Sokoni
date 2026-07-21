@@ -133,7 +133,9 @@ report.totals = {
   amplification: Object.values(report.amplification).reduce((s, a) => s + a.length, 0),
   fanOut:        Object.values(report.fanOut).reduce((s, a) => s + a.length, 0),
   staleDelivery: report.staleDelivery.length,
-  /* ADR-0002: exactly one module may own each singular global. */
+  /* ADR-0002: receiptEngines baselines at 2 — a thermal byte builder and an
+     on-screen receipt UI, complementary and both required. The metric blocks a
+     THIRD owner; it is not driving the count to one. See the superseded note. */
   receiptEngines: countGlobalAssigners('SokoniReceiptEngine'),
   printerDriverGlobals: countGlobalAssigners('SokoniPrinterDrivers'),
   /* ADR-0001: no page may load more than one printer engine. */

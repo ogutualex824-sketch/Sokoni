@@ -45,21 +45,51 @@ printer engine on a page.
 
 ## ADR-0002 — Receipt engine
 
-**Decision:** exactly one receipt builder. `pos-receipt-engine.js`
-(`SokoniReceiptEngine`) is canonical; `sokoni-receipt-engine.js` must be removed
-from any page that also loads it.
+> **Superseded 2026-07-22 by evidence. The first version of this record was
+> wrong and would have broken production if executed.** It said
+> `sokoni-receipt-engine.js` "must be removed from any page that also loads
+> `pos-receipt-engine.js`", reasoning from a static count of two modules
+> assigning one global. That is recorded here rather than deleted, because the
+> mistake is the useful part: a duplicate-looking global is not evidence of
+> duplicate capability, and the count that looked like a defect was a fix.
 
-**Evidence:** both assign `window.SokoniReceiptEngine`, and **both load on
-`pos.html`** (`:1445`, `:2231`). `pos-receipt-engine.js:1120` documents the
-collision against itself. Later `defer` wins by Object.assign merge — fragile
-and load-order dependent.
+**Decision:** the two modules are **complementary and both stay**.
+`sokoni-receipt-engine.js` owns **thermal ESC/POS receipt bytes**;
+`pos-receipt-engine.js` owns the **on-screen receipt UI**. Neither may absorb
+the other. What is forbidden is the *ambiguity*, not the second module.
 
-**Consequences:** receipt rendering is transport-independent — the builder emits
-a model, the printer engine (ADR-0001) encodes it. Marketplace, orders, refunds,
-invoices and gift receipts all consume the same builder.
+**Evidence:** `sokoni-receipt-engine.js` uniquely provides the thermal
+primitives — `init, bold, align, size, feed, partCut, drawer, charset, line,
+receipt, customer, invoice` — plus `buildShippingLabel()`, which
+`sokoni-label-engine.js:413` calls directly, on a page where it is loaded
+(`pos.html`). `pos-receipt-engine.js` provides `show / generate / print /
+downloadPDF / shareWhatsApp / copyText / close`. Removing either deletes
+capability: dropping the thermal module throws `TypeError` on every shipping
+label.
 
-**Forbidden:** a second module assigning `SokoniReceiptEngine`; ESC/POS bytes
-inside a receipt builder.
+The shared global is already handled deliberately —
+`pos-receipt-engine.js:1136` merges rather than overwrites
+(`Object.assign({}, window.SokoniReceiptEngine || {}, engine)`) precisely so
+whichever loads second keeps the other's methods, and it already publishes
+itself under the unambiguous `window.SokoniPosReceiptUI`. That merge was a bug
+fix for exactly the breakage this ADR originally proposed to reintroduce.
+
+**Consequences:** the residual defect is load-order sensitivity, not
+duplication. The convergence is to finish the explicit-naming migration the
+canonical file started — give the thermal engine its own distinct global, move
+callers onto explicit names, and keep `SokoniReceiptEngine` as a merged
+backward-compatible alias. That is incremental and breaks nothing. It is not
+"delete one file".
+
+**Forbidden:** a *third* module assigning `SokoniReceiptEngine`; a new on-screen
+receipt renderer; a new thermal receipt byte builder. ESC/POS bytes for
+*printing transport* still belong to ADR-0001 — `sokoni-receipt-engine.js`
+builds receipt content, and folding its byte emission into the canonical
+encoder remains open, but only as a merge that preserves `buildShippingLabel`.
+
+**Guard note:** `perf-guard` ratchets `receiptEngines` at a baseline of **2**,
+which is now the correct steady state rather than a violation being tolerated.
+The metric's value is blocking a third owner, not driving the count to one.
 
 ---
 
