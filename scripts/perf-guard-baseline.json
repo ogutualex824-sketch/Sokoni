@@ -1,0 +1,9 @@
+{
+  "totals": {
+    "amplification": 7,
+    "fanOut": 3,
+    "staleDelivery": 2,
+    "filesScanned": 633
+  },
+  "recorded": "manual"
+}
