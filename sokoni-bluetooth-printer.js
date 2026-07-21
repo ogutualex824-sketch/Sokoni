@@ -579,6 +579,12 @@ class P58EService {
            .bold(true).sz('tall').text(center('ALL TESTS PASSED')).lf()
            .sz('normal').bold(false)
            .text(center('P58E is ready for production')).lf().lf()
+           /* Platform attribution. A receipt is a fiscal document, so the operating
+              entity belongs on it — Bravilex is the merchant of record and the name
+              that appears on settlement. Customer-facing brand stays SOKONI. */
+           .text(center('SOKONI SmartPOS')).lf()
+           .text(center('Powered by Bravilex')).lf()
+           .text(center('International Co. Ltd.')).lf().lf()
            .text(center('sokoni.co.ke')).lf()
            .lf(3);
       },
