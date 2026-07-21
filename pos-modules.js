@@ -358,17 +358,33 @@ const PosOmni = (() => {
       const q  = query(collection(db, 'products'), where('sellerId', '==', bizPin));
 
       _unsub = onSnapshot(q, async (snap) => {
-        for (const change of snap.docChanges()) {
-          if (change.type === 'modified') {
-            const data = change.doc.data();
-            /* Stock change from online store */
-            if (data.stock !== undefined) {
-              const local = await PosDB.products.getAll().then(all => all.find(p => p.marketplaceId === change.doc.id));
-              if (local && local.stock !== data.stock) {
-                await PosDB.products.update(local.id, { stock: data.stock });
-                if (window.SPos) SPos.toast(`Stock synced: ${data.name} → ${data.stock} units`, 'info');
-              }
-            }
+        /* One IndexedDB read per snapshot, not one per changed document.
+           This previously called PosDB.products.getAll() — a full store read —
+           inside the change loop, then scanned the result linearly, making the
+           handler O(M x P). Unlike the pos-omni case this loop awaits, so peak
+           memory was one array rather than M; the cost here is M full reads and
+           M linear scans of CPU and IndexedDB latency. This query carries no
+           limit(), so M is bounded only by the seller's catalogue size.
+
+           Behaviour is unchanged: the same products match on the same key and
+           the same stock field syncs. */
+        const changes = snap.docChanges().filter(c => c.type === 'modified' && c.doc.data().stock !== undefined);
+        if (!changes.length) return;
+
+        const all = await PosDB.products.getAll();
+        const byMarketplaceId = new Map();
+        for (const p of all) {
+          if (p && p.marketplaceId && !byMarketplaceId.has(p.marketplaceId)) {
+            byMarketplaceId.set(p.marketplaceId, p);   /* first match wins, as find() did */
+          }
+        }
+
+        for (const change of changes) {
+          const data  = change.doc.data();
+          const local = byMarketplaceId.get(change.doc.id);
+          if (local && local.stock !== data.stock) {
+            await PosDB.products.update(local.id, { stock: data.stock });
+            if (window.SPos) SPos.toast(`Stock synced: ${data.name} → ${data.stock} units`, 'info');
           }
         }
       });
