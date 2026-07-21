@@ -1246,9 +1246,34 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
     renderCategoryCards(_discoverySummary);
     const found = Object.values(_discoverySummary).filter(v => v && v.found).length;
 
-    if (found > 0) {
-      status.textContent = found + ' hardware categories detected';
-      toast('Hardware scan complete — ' + found + ' category(ies) found', 'success');
+    /* Count only real hardware. `found` also covers the phone's own camera and
+       Face ID, so the old message announced "2 categories found" on a device
+       with no printer attached — a merchant reasonably read that as "my printer
+       was detected". Capabilities are never reported as discovered hardware. */
+    const cls  = _discoverySummary.classify || { peripheral: [], builtin: [], capability: [], configured: [] };
+    const hw   = _discoverySummary.hardwareCount || 0;
+    const cap0 = _discoverySummary.capabilities || {};
+
+    if (hw > 0) {
+      const what = cls.configured.length ? 'saved printer' : 'connected device';
+      status.textContent = hw + ' ' + what + (hw > 1 ? 's' : '') + ' ready';
+      toast(hw + ' ' + what + (hw > 1 ? 's' : '') + ' ready', 'success');
+    } else if (found > 0) {
+      /* Something was "found", but none of it is POS hardware. Say so plainly
+         and name the next action rather than implying success. */
+      const extras = [];
+      if (cls.builtin.includes('scanners'))     extras.push('camera scanner');
+      if (cls.capability.includes('biometric')) extras.push('Face ID / fingerprint');
+      const printWays = [];
+      if (cap0.networkManual && cap0.networkManual.supported) printWays.push('network printers');
+      if (cap0.browserPrint  && cap0.browserPrint.supported)  printWays.push(cap0.platform && cap0.platform.isIOS ? 'AirPrint' : 'browser printing');
+
+      status.innerHTML =
+        '<strong>No printer configured yet.</strong><br>' +
+        (printWays.length ? 'This device supports ' + printWays.join(' and ') + '. ' : '') +
+        'Enter your printer’s IP address below to connect one.' +
+        (extras.length ? '<br><span style="opacity:.75">Also available: ' + extras.join(', ') + '.</span>' : '');
+      toast('No printer configured — add one by IP address', 'info');
     } else {
       /* An empty result is not "no hardware". This scan only sees devices
          already paired with this site, and on iOS the USB/Bluetooth/Serial APIs

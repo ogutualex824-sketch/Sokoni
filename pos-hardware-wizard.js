@@ -520,6 +520,33 @@ window.SokoniHardware = (function () {
        page could only say "Not Found", which reads as a hardware fault when the
        real answer is that the browser has no such API, or that nothing has been
        paired to this origin yet. */
+    /* Classify what was actually found. `found` alone conflated three very
+       different things and the wizard counted them together, so a fresh iPhone
+       reported "2 hardware categories found" while no printer existed:
+
+         scanners  — the phone's own camera (built in, not connected by anyone)
+         biometric — Face ID / Touch ID, a browser capability, not a peripheral
+
+       Reporting a capability as discovered hardware tells a merchant their
+       printer was detected when it was not. Split the count so the UI can say
+       what is true. */
+    var PERIPHERAL_TYPES = ['usb', 'bluetooth', 'serial', 'network'];
+    summary.classify = { peripheral: [], builtin: [], capability: [], configured: [] };
+    Object.keys(summary).forEach(function (k) {
+      var v = summary[k];
+      if (!v || typeof v !== 'object' || v.found !== true || !Array.isArray(v.types)) return;
+      if (k === 'biometric') { summary.classify.capability.push(k); return; }
+      if (v.types.indexOf('camera') !== -1 && v.types.length === 1) { summary.classify.builtin.push(k); return; }
+      if (k === 'printers' && v.savedIP) { summary.classify.configured.push(k); return; }
+      if (v.types.some(function (t) { return PERIPHERAL_TYPES.indexOf(t) !== -1; })) {
+        summary.classify.peripheral.push(k); return;
+      }
+      summary.classify.builtin.push(k);
+    });
+    /* The only number that answers "did we find your hardware?" */
+    summary.hardwareCount = summary.classify.peripheral.length + summary.classify.configured.length;
+    summary.printerFound  = summary.printers && summary.printers.found === true;
+
     summary.capabilities = capabilities();
     summary.recommended  = recommendedTransports();
     summary.diagnostics  = Object.keys(summary.capabilities)
