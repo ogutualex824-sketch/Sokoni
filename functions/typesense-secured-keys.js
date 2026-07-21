@@ -121,8 +121,16 @@ async function _rateCheck(db, bucket, limitPerHour) {
     const snap = await tx.get(ref);
     const data = snap.exists ? snap.data() : { count: 0, windowStart: now, expiresAt: now + windowSec };
 
-    /* Reset window if expired */
-    if (data.windowStart < windowStart) {
+    /* First request for this bucket, or an expired window → start a fresh
+       one. The `!snap.exists` half is load-bearing: the seed `data` above
+       carries windowStart = now, which is never < windowStart (= now -
+       windowSec), so a brand-new bucket fell through to the tx.update()
+       below and threw NOT_FOUND — non-transient, so the transaction did not
+       retry and the callable returned 500. Nothing else writes this
+       collection, so the document was never created and every subsequent
+       call failed identically: the endpoint was down for every IP and every
+       uid, not merely rate-limited. */
+    if (!snap.exists || data.windowStart < windowStart) {
       tx.set(ref, { count: 1, windowStart: now, expiresAt: now + windowSec });
       return { allowed: true, remaining: limitPerHour - 1 };
     }
