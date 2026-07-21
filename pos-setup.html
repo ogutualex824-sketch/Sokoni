@@ -1574,6 +1574,11 @@
             <button type="button" id="btn-branch-create" class="btn-secondary" style="min-height:46px;">
               + Create first branch
             </button>
+            <button type="button" id="btn-branch-refresh" class="btn-ghost"
+                    style="margin-top:10px;font-size:12px;color:rgba(255,255,255,.5);"
+                    aria-label="Refresh the branch list after creating a branch">
+              Done? Refresh list
+            </button>
           </div>
 
           <!-- Genuine backend failure only -->
@@ -2218,10 +2223,8 @@ document.getElementById('btn-send-otp').addEventListener('click', async () => {
       try { _recaptchaVerifier.clear(); } catch (_) {}
       _recaptchaVerifier = null;
     }
-    /* Show raw Firebase error code so it can be diagnosed */
-    showAuthError(
-      '[DEBUG] ' + (err.code || 'unknown-code') + '\n' + (err.message || String(err))
-    );
+    /* Map Firebase error to a human-readable message. Raw code goes to console only. */
+    showAuthError(_skWhy(err, 'Could not send the verification code. Check the number and try again.'));
   }
 });
 
@@ -2491,7 +2494,7 @@ async function createMyBusiness() {
     WIZ.newBusinessQr      = d.qr;            // shown later in Business Settings
     goToStep(5);
   } catch (err) {
-    errEl.textContent = (err && err.message) || 'Could not create business. Please try again.';
+    errEl.textContent = _skWhy(err, 'Could not create business. Please try again.');
     errEl.classList.add('visible');
     btn.disabled = false; btn.textContent = orig;
   }
@@ -2724,12 +2727,33 @@ document.getElementById('btn-branch-continue').addEventListener('click', () => {
 document.getElementById('btn-branch-create').addEventListener('click', () => {
   const mid = WIZ.selectedBiz && WIZ.selectedBiz.id;
   if (window.HubRegister && typeof window.HubRegister.open === 'function') {
+    /* HubRegister opens an in-page modal; listen for its completion event
+       and auto-refresh the branch list so the wizard can continue. */
     window.HubRegister.open({ hub: 'branch', merchantId: mid });
+    window.addEventListener('hub:created', function onBranchCreated(e) {
+      if (e.detail && e.detail.hub === 'branch') {
+        window.removeEventListener('hub:created', onBranchCreated);
+        WIZ._bizBranches = null; /* force server fetch */
+        initBranchStep();
+      }
+    }, { once: false });
     return;
   }
-  /* No registration widget on this build — send them somewhere real rather
-     than failing silently. */
-  window.location.href = 'seller.html#settings' + (mid ? '?merchant=' + encodeURIComponent(mid) : '');
+  /* No registration widget on this build — open the settings page in a NEW TAB
+     so the wizard stays open. The merchant can then click "Done? Refresh list"
+     to re-fetch their branches without losing wizard progress. */
+  window.open(
+    'seller.html#settings' + (mid ? '?merchant=' + encodeURIComponent(mid) : ''),
+    '_blank',
+    'noopener,noreferrer'
+  );
+});
+
+/* "Done? Refresh list" — clears the prefetch cache and re-runs branch loading
+   without a page reload. Works after HubRegister OR after opening seller.html. */
+document.getElementById('btn-branch-refresh').addEventListener('click', () => {
+  WIZ._bizBranches = null; /* force server fetch instead of cached array */
+  initBranchStep();
 });
 
 /* ═══════════════════════════════════════════════════════════════
@@ -3219,7 +3243,11 @@ async function renderSetupChecklist() {
     _paintSetupGuide(_setupStatus);
     wrap.style.display = 'block';
     _syncReadyCTA(_setupStatus);
-  } catch (_) { /* informational only — never block Ready */ }
+  } catch (statusErr) {
+    /* Non-fatal — checklist is informational. Log so ops can investigate if the
+       setup guide is consistently missing without interrupting the merchant. */
+    console.warn('[POS Setup] getSetupStatus failed — checklist not rendered:', statusErr && statusErr.message);
+  }
 }
 
 function _paintSetupGuide(s) {

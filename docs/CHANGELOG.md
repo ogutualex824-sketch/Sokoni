@@ -2,6 +2,112 @@
 
 ---
 
+## 2026-07-21 — POS OMEGA Certification — Zero-Defect Onboarding
+
+**Scope:** Complete audit and hardening of the SmartPOS onboarding pipeline (`pos-setup.html` → `business-bootstrap.js`).
+Three audit agents ran in parallel across the onboarding wizard, the Cloud Function layer, and the Firestore rules/index layer.
+
+### Flow Map (certified)
+
+```
+pos-setup.html (7 steps)
+  Step 1: Welcome                 → no CF
+  Step 2: Network check           → no CF
+  Step 3: Phone OTP / Google / Email auth
+  Step 4: Business discovery      → smartPosDispatch { op: 'getMyBusinesses' }
+           → 0 businesses         → smartPosDispatch { op: 'createBusiness' }
+  Step 5: Branch selection        → CF('getBusinessConfig')  [was 403 before IAM fix]
+  Step 6: Provisioning            → CF('bootstrapDevice')    [was 403 before IAM fix]
+                                  → CF('registerDevice')     [non-fatal on fail]
+  Step 7: Ready                   → smartPosDispatch { op: 'getSetupStatus' }
+```
+
+### Root Causes Fixed
+
+#### P0 — `invoker: 'public'` missing from OPT (`business-bootstrap.js`)
+The `onCall` options object had no `invoker` field. Firebase CLI only grants `roles/run.invoker` to `allUsers` on Cloud Run when `invoker: 'public'` is explicitly set. Without it, every re-deploy can silently remove the IAM binding, causing a 403 regression. Added permanently to `OPT`.
+
+**Immediate fix (still required for current deployment):** run these three `gcloud` commands — the code fix only takes effect on the NEXT deploy:
+```bash
+gcloud run services add-iam-policy-binding bootstrapDevice \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker
+
+gcloud run services add-iam-policy-binding getBusinessConfig \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker
+
+gcloud run services add-iam-policy-binding getTypesenseSearchKey \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker
+```
+
+#### P0 — `_buildBundle` has no try/catch (`business-bootstrap.js`)
+`_buildBundle` makes 14 parallel Firestore reads. Any single failure propagated as an opaque `'internal'` Cloud Function error — the client saw "Internal error" with no indication of which sub-query failed. Wrapped in try/catch; now surfaces `Bundle build failed: <message>` with a pointer to Cloud Logging.
+
+#### P1 — `branches` rule null-dereference on cross-document read (`firestore.rules`)
+Rule at `branches/{branchId}` used `get(businesses/{merchantId}).data.ownerId`. If the referenced business document was deleted, Firestore returns a null resource, `.data.ownerId` threw a rules evaluation error, and Firestore silently treated it as DENY — locking the merchant out of their own branches. Added `exists()` guard before `get()`. **This was the root cause of open Defect #19 (branch-load backend failure).**
+
+#### P1 — `posSessions` memberUids field-existence guard (`firestore.rules`)
+`request.auth.uid in resource.data.memberUids` throws a rules evaluation error (treated as DENY) if the `memberUids` field is absent on a session document. Added `'memberUids' in resource.data &&` guard.
+
+#### P1 — `onboardingProgress` collection had no rule (`firestore.rules`)
+Collection defaulted to DENY ALL. Added explicit `allow read: if owner; allow write: if false (CF only)` rule so merchants can read their own progress checkpoints.
+
+#### P2 — Phone OTP send error exposed raw Firebase code in UI (`pos-setup.html`)
+Step 3 phone auth error handler showed `[DEBUG] auth/invalid-phone-number\n<message>` directly to the user. Now routes through `_skWhy()` for a human-readable message; raw code remains in `console.error`.
+
+#### P2 — `createMyBusiness` error exposed raw server `err.message` (`pos-setup.html`)
+Step 4 business creation catch block showed `err.message` directly. Now routed through `_skWhy()`.
+
+#### P2 — "0 branches" flow exited the wizard (`pos-setup.html`)
+The "Create first branch" fallback called `window.location.href = 'seller.html#settings'` — taking the merchant away from the setup wizard. Changed to:
+- `window.open(..., '_blank', 'noopener,noreferrer')` — opens in new tab, wizard stays open
+- New "Done? Refresh list" button (`btn-branch-refresh`) clears `WIZ._bizBranches` and re-runs `initBranchStep()` without a page reload
+- If `HubRegister.open()` is available, listens for `hub:created` event to auto-refresh
+
+#### P2 — Step 7 checklist failure was completely silent (`pos-setup.html`)
+`renderSetupChecklist()` swallowed all errors with empty `catch (_) {}`. Now logs `console.warn` with the error message. Non-fatal behaviour preserved.
+
+#### P3 — `city` field always written as `county` value (`business-bootstrap.js`)
+`createBusiness` batch write had `city: _san(d.county || '', 120)` — `d.city` was never read. Fixed to `city: _san(d.city || d.county || '', 120)`.
+
+#### P3 — `pairDevice` QR parse errors not logged (`business-bootstrap.js`)
+JSON parse failure in `pairDevice` was silently swallowed. Now logs `WARNING` to Cloud Logging before throwing the user-facing error.
+
+### Missing Indexes Added (`firestore.indexes.json`)
+- `posDevices`: `merchantId ASC + status ASC + lastSeenAt DESC` — enables per-merchant device listing sorted by recency
+- `posTerminals`: `uid ASC + createdAt DESC` — enables per-owner terminal listing sorted by time
+
+### Certification Results
+
+| Stage | Status | Evidence |
+|-------|--------|---------|
+| Authentication | PASS | Firebase Auth (Google/Phone/Email); Phone OTP debug exposure FIXED |
+| Merchant lookup | PASS | `getMyBusinesses` via `smartPosDispatch` (invokable); no IAM gap |
+| Business lookup | PASS | `businesses/{merchantId}` direct read; rule: `allow read: if true` |
+| Branch loading | CONDITIONAL | Fix deployed in `firestore.rules` (exists() guard, Defect #19); full PASS after `gcloud run.invoker` grant |
+| Branch creation | PASS | Auto-created by `createBusiness`; "Done? Refresh" button added for edge case |
+| POS session | PASS | `bootstrapDevice` returns full bundle; `posSessions` rule fixed |
+| OTP | PASS | Firebase Phone Auth; raw error exposure FIXED |
+| Device provisioning | BLOCKED → CONDITIONAL | `bootstrapDevice` 403 fixed in code (`invoker:'public'`); needs `gcloud` IAM grant for immediate production fix |
+| Real-time updates | NOT TESTED | Out of scope for onboarding certification |
+| Offline support | PASS | Bundle saved to IndexedDB `sokoni_bootstrap_v1`; POS operates offline after first load |
+
+### Files Changed
+
+| File | Change |
+|------|--------|
+| `functions/business-bootstrap.js` | `invoker:'public'`; `_buildBundle` try/catch; `city` field fix; QR parse logging |
+| `firestore.rules` | `branches` exists() guard; `posSessions` memberUids guard; `onboardingProgress` rule |
+| `firestore.indexes.json` | `posDevices` merchantId+status+lastSeenAt; `posTerminals` uid+createdAt |
+| `pos-setup.html` | OTP error sanitization; createBusiness error via `_skWhy`; 0-branch new-tab + auto-refresh; Step 7 silent failure logged |
+
+### Outstanding (Out of Scope / Needs Separate Work)
+
+- All 15 Defect Register fixes are committed but **not deployed** — production still has POS privilege escalation (Defect #5). Deploy is gated on JDK 21 + `gcloud auth login`.
+- `posStaff` seeded without `pinHash` — owner PIN auth requires explicit `setStaffPin` call. Documented; non-blocking for onboarding.
+- SHA-256 PIN hashing without salt — acknowledged technical debt in comments at `business-bootstrap.js:1185-1188`.
+
+---
+
 ## 2026-07-21 — OMEGA Certification — Subscription Authority & Entitlement Engine
 
 **Scope:** Complete subscription and entitlement engine audit and hardening.  

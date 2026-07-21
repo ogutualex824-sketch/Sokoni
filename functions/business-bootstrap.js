@@ -36,6 +36,10 @@ const OPT    = {
   enforceAppCheck: true,
   timeoutSeconds:  30,
   memory:          '512MiB',
+  /* invoker:'public' tells the Firebase CLI to grant roles/run.invoker to
+     allUsers on every deploy, preventing the Cloud Run IAM 403 regression
+     that blocked bootstrapDevice / getBusinessConfig in production. */
+  invoker:         'public',
 };
 
 /* ── Free-trial window ─────────────────────────────────────────────
@@ -415,7 +419,19 @@ exports.bootstrapDevice = onCall(OPT, async (req) => {
   }
 
   if (!bundle) {
-    bundle = await _buildBundle(safeMerchantId, safeBranchId);
+    try {
+      bundle = await _buildBundle(safeMerchantId, safeBranchId);
+    } catch (buildErr) {
+      /* _buildBundle makes 14 parallel Firestore reads. Surface the first failing
+         sub-query rather than a generic 'internal' error. */
+      _log('ERROR', 'bootstrapDevice _buildBundle failed', {
+        merchantId: safeMerchantId, branchId: safeBranchId, err: buildErr.message,
+      });
+      throw new HttpsError(
+        'internal',
+        `Bundle build failed: ${buildErr.message}. Check Cloud Logging for detail.`,
+      );
+    }
 
     // Write to cache (don't await — don't block the response)
     cacheRef.set({
@@ -924,7 +940,7 @@ async function _createBusiness(req) {
   batch.set(db.collection('businesses').doc(merchantId), {
     merchantId, businessId, name: businessName, businessName,
     category, businessType: category,
-    country: _san(d.country || 'Kenya', 80), county: _san(d.county || '', 120), city: _san(d.county || '', 120),
+    country: _san(d.country || 'Kenya', 80), county: _san(d.county || '', 120), city: _san(d.city || d.county || '', 120),
     phone: _san(d.phone || '', 30), logo: d.logo || null, currency: 'KES',
     ownerId: uid, status: 'active', defaultBranchId: branchId, pairingToken,
     storeCode, posCode, publicStoreId, referralCode, apiPublicKey,
@@ -1025,7 +1041,10 @@ async function _pairDevice(req) {
       const p = JSON.parse(d.qr);
       if (p && p.t === 'sokoni-pos-pair') { merchantId = _san(p.merchantId || '', 128); branchId = _san(p.branchId || '', 128); token = p.token || null; }
       else _err('Invalid pairing QR code.');
-    } catch (_) { _err('Invalid pairing QR code.'); }
+    } catch (qrErr) {
+      _log('WARNING', 'pairDevice QR parse error', { error: qrErr.message, uid });
+      _err('Invalid pairing QR code.');
+    }
   }
   if (!merchantId) _err('Merchant ID or a valid pairing QR is required.');
   if (!branchId) branchId = `${merchantId}-main`;

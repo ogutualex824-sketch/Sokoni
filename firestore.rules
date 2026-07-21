@@ -1005,6 +1005,14 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+    /* Wizard progress checkpoint — one doc per UID, written by saveOnboardingProgress CF.
+       The collection previously had no rule and defaulted to DENY ALL, which would cause
+       the progress-save to silently fail (non-fatal in the wizard, but prevents resume). */
+    match /onboardingProgress/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false; /* CF only — saveOnboardingProgress uses Admin SDK */
+    }
+
     match /offers/{offerId} {
       allow read:   if true;
       allow create: if isAdmin()
@@ -1399,10 +1407,13 @@ service cloud.firestore {
 
     /* SmartPOS 2.0 — Multi-device sessions */
     match /posSessions/{sessionId} {
-      /* Seller always has full read access; other session members via memberUids array */
+      /* Seller always has full read access; other session members via memberUids array.
+         Guard the in-array check: if memberUids field is absent, `uid in resource.data.memberUids`
+         throws a rules evaluation error (treated as DENY). The `in` key-existence guard
+         makes it a clean false instead. */
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.sellerId == request.auth.uid)
-                    || (isAuthed() && request.auth.uid in resource.data.memberUids);
+                    || (isAuthed() && 'memberUids' in resource.data && request.auth.uid in resource.data.memberUids);
       /* Only Cloud Functions (Admin SDK) write session state */
       allow write:  if false;
     }
@@ -2074,9 +2085,15 @@ service cloud.firestore {
        membership lookup in this rule would cost a second document read on
        every branch read for a path that does not need it. */
     match /branches/{branchId} {
+      /* Guard the cross-document get() with an exists() check.
+         Without it, if businesses/{merchantId} was ever deleted, Firestore returns
+         a null resource for the get(), evaluating .data.ownerId throws a rules error,
+         and Firestore silently treats it as DENY — locking the merchant out of their
+         own branches with no error message. */
       allow read:  if isAuthed() && (
                         resource.data.sellerId == request.auth.uid
                      || ('merchantId' in resource.data
+                         && exists(/databases/$(database)/documents/businesses/$(resource.data.merchantId))
                          && get(/databases/$(database)/documents/businesses/$(resource.data.merchantId))
                               .data.ownerId == request.auth.uid)
                      || isAdmin());
