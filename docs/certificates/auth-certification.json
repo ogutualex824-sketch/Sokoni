@@ -1,0 +1,161 @@
+{
+  "tool": "sokoni-auth-cert",
+  "version": 1,
+  "generatedAt": "2026-07-20T10:12:02.401Z",
+  "project": "sokoni-aeb26",
+  "origin": "https://mysokoni.co.ke",
+  "verdict": "FAILED",
+  "totals": {
+    "total": 12,
+    "passed": 6,
+    "failed": 1,
+    "skipped": 5,
+    "errored": 0
+  },
+  "results": [
+    {
+      "id": "static.config.present",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "Firebase client configuration files exist",
+      "severity": "high",
+      "status": "PASS",
+      "evidence": "sokoni-config.js and firebase.js present",
+      "detail": null,
+      "remediation": null,
+      "ms": 5
+    },
+    {
+      "id": "static.authdomain.consistent",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "authDomain agrees across every client config",
+      "severity": "critical",
+      "status": "PASS",
+      "evidence": "authDomain = auth.mysokoni.co.ke (2 files agree)",
+      "detail": null,
+      "remediation": null,
+      "ms": 4
+    },
+    {
+      "id": "static.appcheck.sitekey",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "App Check reCAPTCHA site key is present and not a placeholder",
+      "severity": "high",
+      "status": "PASS",
+      "evidence": "SITE_KEY present (6Lf93TktAAAA…, 40 chars)",
+      "detail": null,
+      "remediation": null,
+      "ms": 6
+    },
+    {
+      "id": "static.blocking.orphan-import",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "No orphaned blocking-function imports (beforeUserCreated / beforeUserSignedIn)",
+      "severity": "critical",
+      "status": "FAIL",
+      "evidence": "email-triggers.js imports beforeUserCreated but never calls it",
+      "detail": null,
+      "remediation": "Remove the unused import, THEN verify with Layer 2 that Identity Platform has no blockingFunctions.triggers pointing at a deleted service. A stale registration breaks every sign-in provider with auth/internal-error.",
+      "ms": 485
+    },
+    {
+      "id": "static.blocking.defined-are-exported",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "Any defined blocking function is exported from functions/index.js",
+      "severity": "critical",
+      "status": "PASS",
+      "evidence": "no blocking functions defined in source",
+      "detail": null,
+      "remediation": null,
+      "ms": 130
+    },
+    {
+      "id": "static.secrets.no-plaintext",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "No plaintext private keys or service-account JSON committed",
+      "severity": "critical",
+      "status": "PASS",
+      "evidence": "no plaintext private keys or service-account JSON found",
+      "detail": null,
+      "remediation": null,
+      "ms": 2130
+    },
+    {
+      "id": "static.auth.error-mapping",
+      "layer": 1,
+      "layerLabel": "Layer 1 — static repository validation",
+      "title": "Auth error handler maps codes rather than emitting one generic string",
+      "severity": "medium",
+      "status": "PASS",
+      "evidence": "25 distinct auth/* codes mapped to user-facing messages",
+      "detail": null,
+      "remediation": null,
+      "ms": 2
+    },
+    {
+      "id": "gcp.auth.active",
+      "layer": 2,
+      "layerLabel": "Layer 2 — live Google Cloud validation",
+      "title": "An authenticated Google Cloud account is available",
+      "severity": "high",
+      "status": "SKIPPED",
+      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "detail": null,
+      "remediation": "Run `gcloud auth login`. Every Layer 2 check is blocked until this succeeds.",
+      "ms": 16
+    },
+    {
+      "id": "gcp.project.active",
+      "layer": 2,
+      "layerLabel": "Layer 2 — live Google Cloud validation",
+      "title": "Active project matches the expected SOKONI project",
+      "severity": "high",
+      "status": "SKIPPED",
+      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "detail": null,
+      "remediation": null,
+      "ms": 0
+    },
+    {
+      "id": "gcp.identity.blocking-functions-resolve",
+      "layer": 2,
+      "layerLabel": "Layer 2 — live Google Cloud validation",
+      "title": "Every registered blocking function resolves to a live service",
+      "severity": "critical",
+      "status": "SKIPPED",
+      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "detail": null,
+      "remediation": null,
+      "ms": 0
+    },
+    {
+      "id": "gcp.identity.authorized-domains",
+      "layer": 2,
+      "layerLabel": "Layer 2 — live Google Cloud validation",
+      "title": "Authorized domains include every production host",
+      "severity": "high",
+      "status": "SKIPPED",
+      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "detail": null,
+      "remediation": null,
+      "ms": 0
+    },
+    {
+      "id": "gcp.runtime.auth-services-healthy",
+      "layer": 2,
+      "layerLabel": "Layer 2 — live Google Cloud validation",
+      "title": "Cloud Run services backing auth are serving traffic",
+      "severity": "medium",
+      "status": "SKIPPED",
+      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "detail": null,
+      "remediation": null,
+      "ms": 0
+    }
+  ]
+}

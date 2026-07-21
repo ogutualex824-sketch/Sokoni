@@ -1,0 +1,87 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SOKONI — Authentication Certification</title><style>
+*{box-sizing:border-box}body{margin:0;background:#050505;color:#e8e8e8;
+font:15px/1.55 ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;padding:32px 20px}
+.wrap{max-width:1000px;margin:0 auto}h1{font-size:20px;letter-spacing:.04em;text-transform:uppercase;margin:0 0 4px}
+.sub{color:#8a8a8a;font-size:13px;margin-bottom:28px}
+.verdict{border:1px solid var(--c);color:var(--c);border-radius:10px;padding:18px 22px;margin-bottom:8px}
+.verdict b{font-size:26px;letter-spacing:.06em}
+.note{background:#1a1206;border-left:3px solid #ffb020;padding:12px 16px;border-radius:6px;
+color:#ffd89b;font-size:13px;margin:14px 0 26px}
+.tot{display:flex;gap:22px;font-size:13px;color:#9a9a9a;margin:14px 0 26px;flex-wrap:wrap}
+.tot b{color:#e8e8e8;font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse}td{padding:13px 10px;border-bottom:1px solid #1b1b1b;vertical-align:top}
+.pill{display:inline-block;border:1px solid var(--c);color:var(--c);border-radius:999px;
+padding:2px 11px;font-size:11px;letter-spacing:.08em;white-space:nowrap}
+.ttl{font-weight:600}.id{color:#6a6a6a;font-size:11.5px;font-family:ui-monospace,monospace;margin-top:3px}
+.ev{color:#b4b4b4;font-size:13px}.rem{color:#ffb020;font-size:12.5px;margin-top:7px}
+@media(max-width:620px){td{display:block;border:0;padding:4px 0}tr{display:block;border-bottom:1px solid #1b1b1b;padding:12px 0}}
+</style></head><body><div class="wrap">
+<h1>Authentication Certification</h1>
+<div class="sub">2026-07-20T10:12:02.401Z &nbsp;·&nbsp; https://mysokoni.co.ke</div>
+<div class="verdict" style="--c:#ff4d4d"><b>FAILED</b></div>
+
+<div class="tot"><span>passed <b>6</b></span><span>failed <b>1</b></span>
+<span>skipped <b>5</b></span><span>errored <b>0</b></span></div>
+<table>
+    <tr>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
+      <td><div class="ttl">Firebase client configuration files exist</div><div class="id">static.config.present</div></td>
+      <td class="ev">sokoni-config.js and firebase.js present</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
+      <td><div class="ttl">authDomain agrees across every client config</div><div class="id">static.authdomain.consistent</div></td>
+      <td class="ev">authDomain = auth.mysokoni.co.ke (2 files agree)</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
+      <td><div class="ttl">App Check reCAPTCHA site key is present and not a placeholder</div><div class="id">static.appcheck.sitekey</div></td>
+      <td class="ev">SITE_KEY present (6Lf93TktAAAA…, 40 chars)</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#ff4d4d">FAIL</span></td>
+      <td><div class="ttl">No orphaned blocking-function imports (beforeUserCreated / beforeUserSignedIn)</div><div class="id">static.blocking.orphan-import</div></td>
+      <td class="ev">email-triggers.js imports beforeUserCreated but never calls it<div class="rem">Remove the unused import, THEN verify with Layer 2 that Identity Platform has no blockingFunctions.triggers pointing at a deleted service. A stale registration breaks every sign-in provider with auth/internal-error.</div></td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
+      <td><div class="ttl">Any defined blocking function is exported from functions/index.js</div><div class="id">static.blocking.defined-are-exported</div></td>
+      <td class="ev">no blocking functions defined in source</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
+      <td><div class="ttl">No plaintext private keys or service-account JSON committed</div><div class="id">static.secrets.no-plaintext</div></td>
+      <td class="ev">no plaintext private keys or service-account JSON found</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
+      <td><div class="ttl">Auth error handler maps codes rather than emitting one generic string</div><div class="id">static.auth.error-mapping</div></td>
+      <td class="ev">25 distinct auth/* codes mapped to user-facing messages</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><div class="ttl">An authenticated Google Cloud account is available</div><div class="id">gcp.auth.active</div></td>
+      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL<div class="rem">Run `gcloud auth login`. Every Layer 2 check is blocked until this succeeds.</div></td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><div class="ttl">Active project matches the expected SOKONI project</div><div class="id">gcp.project.active</div></td>
+      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><div class="ttl">Every registered blocking function resolves to a live service</div><div class="id">gcp.identity.blocking-functions-resolve</div></td>
+      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><div class="ttl">Authorized domains include every production host</div><div class="id">gcp.identity.authorized-domains</div></td>
+      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+    </tr>
+    <tr>
+      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><div class="ttl">Cloud Run services backing auth are serving traffic</div><div class="id">gcp.runtime.auth-services-healthy</div></td>
+      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+    </tr></table></div></body></html>

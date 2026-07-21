@@ -1,0 +1,100 @@
+{
+  "name": "projects/24799054989/config",
+  "signIn": {
+    "email": {
+      "enabled": true,
+      "passwordRequired": true
+    },
+    "phoneNumber": {
+      "enabled": true
+    },
+    "hashConfig": {
+      "algorithm": "SCRYPT",
+      "signerKey": "sPP/lkGBkg9rexh3Y3Q1/KQn+YySAhpyGBBEVgX02wg06k7fbUUmZwYRxHXGHquQwpf8+LwSfHtfTOriFUCgaA==",
+      "saltSeparator": "Bw==",
+      "rounds": 8,
+      "memoryCost": 14
+    }
+  },
+  "notification": {
+    "sendEmail": {
+      "method": "DEFAULT",
+      "resetPasswordTemplate": {
+        "senderLocalPart": "noreply",
+        "subject": "Reset your password for %APP_NAME%",
+        "body": "\u003cp\u003eHello,\u003c/p\u003e\n\u003cp\u003eFollow this link to reset your %APP_NAME% password for your %EMAIL% account.\u003c/p\u003e\n\u003cp\u003e\u003ca href='%LINK%'\u003e%LINK%\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eIf you didn’t ask to reset your password, you can ignore this email.\u003c/p\u003e\n\u003cp\u003eThanks,\u003c/p\u003e\n\u003cp\u003eYour %APP_NAME% team\u003c/p\u003e",
+        "bodyFormat": "HTML",
+        "replyTo": "noreply"
+      },
+      "verifyEmailTemplate": {
+        "senderLocalPart": "noreply",
+        "subject": "Verify your email for %APP_NAME%",
+        "body": "\u003cp\u003eHello %DISPLAY_NAME%,\u003c/p\u003e\n\u003cp\u003eFollow this link to verify your email address.\u003c/p\u003e\n\u003cp\u003e\u003ca href='%LINK%'\u003e%LINK%\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eIf you didn’t ask to verify this address, you can ignore this email.\u003c/p\u003e\n\u003cp\u003eThanks,\u003c/p\u003e\n\u003cp\u003eYour %APP_NAME% team\u003c/p\u003e",
+        "bodyFormat": "HTML",
+        "replyTo": "noreply"
+      },
+      "changeEmailTemplate": {
+        "senderLocalPart": "noreply",
+        "subject": "Your sign-in email was changed for %APP_NAME%",
+        "body": "\u003cp\u003eHello %DISPLAY_NAME%,\u003c/p\u003e\n\u003cp\u003eYour sign-in email for %APP_NAME% was changed to %NEW_EMAIL%.\u003c/p\u003e\n\u003cp\u003eIf you didn’t ask to change your email, follow this link to reset your sign-in email.\u003c/p\u003e\n\u003cp\u003e\u003ca href='%LINK%'\u003e%LINK%\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eThanks,\u003c/p\u003e\n\u003cp\u003eYour %APP_NAME% team\u003c/p\u003e",
+        "bodyFormat": "HTML",
+        "replyTo": "noreply"
+      },
+      "callbackUri": "https://sokoni-aeb26.firebaseapp.com/__/auth/action",
+      "dnsInfo": {
+        "customDomainState": "NOT_STARTED",
+        "domainVerificationRequestTime": "1970-01-01T00:00:00Z"
+      },
+      "revertSecondFactorAdditionTemplate": {
+        "senderLocalPart": "noreply",
+        "subject": "You've added 2 step verification to your %APP_NAME% account.",
+        "body": "\u003cp\u003eHello %DISPLAY_NAME%,\u003c/p\u003e\n\u003cp\u003eYour account in %APP_NAME% has been updated with %SECOND_FACTOR% for 2-step verification.\u003c/p\u003e\n\u003cp\u003eIf you didn't add this 2-step verification, click the link below to remove it.\u003c/p\u003e\n\u003cp\u003e\u003ca href='%LINK%'\u003e%LINK%\u003c/a\u003e\u003c/p\u003e\n\u003cp\u003eThanks,\u003c/p\u003e\n\u003cp\u003eYour %APP_NAME% team\u003c/p\u003e",
+        "bodyFormat": "HTML",
+        "replyTo": "noreply"
+      }
+    },
+    "sendSms": {
+      "smsTemplate": {
+        "content": "%LOGIN_CODE% is your verification code for %APP_NAME%."
+      }
+    },
+    "defaultLocale": "en"
+  },
+  "quota": {},
+  "monitoring": {
+    "requestLogging": {}
+  },
+  "multiTenant": {},
+  "authorizedDomains": [
+    "localhost",
+    "sokoni-aeb26.firebaseapp.com",
+    "sokoni-aeb26.web.app",
+    "mysokoni.co.ke",
+    "www.mysokoni.co.ke",
+    "auth.mysokoni.co.ke"
+  ],
+  "subtype": "IDENTITY_PLATFORM",
+  "client": {
+    "apiKey": "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
+    "permissions": {},
+    "firebaseSubdomain": "sokoni-aeb26"
+  },
+  "mfa": {
+    "state": "DISABLED"
+  },
+  "blockingFunctions": {},
+  "smsRegionConfig": {
+    "allowlistOnly": {
+      "allowedRegions": [
+        "KE"
+      ]
+    }
+  },
+  "emailPrivacyConfig": {
+    "enableImprovedEmailPrivacy": true
+  },
+  "mobileLinksConfig": {
+    "domain": "HOSTING_DOMAIN"
+  },
+  "defaultHostingSite": "sokoni-aeb26"
+}
