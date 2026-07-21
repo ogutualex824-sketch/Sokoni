@@ -2580,11 +2580,11 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 
 <!-- Bottom Nav -->
 <nav class="bottom-nav">
-  <a href="/" class="bnav-item"><span class="bnav-emoji">&#127968;</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">&#128717;</span><span>Categories</span></a>
-  <a href="flashsale.html" class="bnav-item"><span class="bnav-emoji">&#9889;</span><span>Deals</span></a>
-  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">&#128172;</span><span>Messages</span></a>
-  <a href="profile.html" class="bnav-item active-bnav"><span class="bnav-emoji">&#128100;</span><span>Profile</span></a>
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Market</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
 <!-- Settings Sheet -->
@@ -2684,6 +2684,10 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <script src="sokoni-invoice.js"></script>
 <script type="module" src="session-manager.js"></script>
 <script type="module" src="firebase.js"></script>
+<!-- Canonical avatar resolver + upload. Not deferred: handleAvatarUpload is
+     an inline onchange handler, so SokoniAvatar must exist before a user
+     can reach the file picker. -->
+<script src="sokoni-avatar.js"></script>
 <script src="sokoni-referral.js" defer></script>
 <script src="sokoni-social.js" defer></script>
 <script src="sokoni-audit.js" defer></script>
@@ -2867,11 +2871,13 @@ function renderHeaderCard(){
     bioEl.style.color = _user.bio ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.2)';
   }
 
-  /* Avatar */
+  /* Avatar — bind() resolves photoURL -> avatarUrl -> platform mark and
+     attaches the error fallback, so a deleted Storage object or an expired
+     token degrades to the mark instead of a broken-image icon. The old
+     `if (_user.avatarUrl)` guard left the element on whatever the markup
+     happened to carry when the field was absent. */
   var avatarEl = document.getElementById('upAvatar');
-  if(avatarEl && _user.avatarUrl){
-    avatarEl.src = _user.avatarUrl;
-  }
+  if(avatarEl) window.SokoniAvatar.bind(avatarEl, _user);
 
   /* Cover */
   if(_user.coverUrl){
@@ -2992,19 +2998,38 @@ function saveBioEdit(){
 }
 
 /* Avatar upload */
+/* Uploads to Cloud Storage via the canonical resolver.
+
+   This previously read the file with FileReader.readAsDataURL and wrote the
+   base64 into users/{uid}.avatarUrl. Firestore caps documents at 1 MiB and
+   base64 adds ~37%, so any photo over ~730 KB — nearly every phone photo —
+   failed the write. saveToFirestore only console.warns, so the toast still
+   claimed success and the photo was gone on reload.
+
+   The preview is shown immediately but is NOT committed to _user until the
+   upload resolves, so a failure cannot leave a dead URL in local state. */
 function handleAvatarUpload(e){
   var file = e.target.files && e.target.files[0];
   if(!file) return;
-  var reader = new FileReader();
-  reader.onload = function(ev){
-    var url = ev.target.result;
-    document.getElementById('upAvatar').src = url;
+  var imgEl   = document.getElementById('upAvatar');
+  var previous = imgEl ? imgEl.src : null;
+  var preview = null;
+  try { preview = URL.createObjectURL(file); if(imgEl) imgEl.src = preview; }catch(_){}
+
+  upToast('Uploading photo…', true);
+  window.SokoniAvatar.upload(file).then(function(url){
+    if(imgEl) imgEl.src = url;
     _user.avatarUrl = url;
+    _user.photoURL  = url;
     setUser(_user);
-    saveToFirestore({avatarUrl: url});
     upToast('Profile photo updated!', true);
-  };
-  reader.readAsDataURL(file);
+  }).catch(function(err){
+    if(imgEl && previous) imgEl.src = previous;   /* roll the preview back */
+    upToast(err && err.message ? err.message : 'Could not update photo.', false);
+  }).then(function(){
+    try { if(preview) URL.revokeObjectURL(preview); }catch(_){}
+    if(e.target) e.target.value = '';             /* re-selecting the same file must re-fire */
+  });
 }
 
 /* Cover upload */
