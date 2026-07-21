@@ -39,6 +39,32 @@ function _ip(req) {
        || null;
 }
 
+/**
+ * _ipHash(req, uid) — pseudonymised client address.
+ *
+ * The raw IP was persisted on every device document and returned to the client
+ * in the device list. An IP address is personal data under both the Kenya Data
+ * Protection Act — SOKONI is ODPC-registered — and GDPR, and a device list is
+ * not a lawful place to retain one indefinitely.
+ *
+ * Keyed on the uid rather than hashed bare. A plain SHA-256 of an IPv4 address
+ * is not pseudonymisation: the whole space is about four billion values, so it
+ * can be reversed exhaustively in minutes. Keying per user also means the same
+ * household address hashes differently for each member, which removes the
+ * cross-account correlation a global hash would create.
+ *
+ * The hash is still useful for what the field is actually for — noticing that a
+ * device is signing in from somewhere new — while no longer storing where.
+ */
+function _ipHash(req, uid) {
+  const ip = _ip(req);
+  if (!ip) return null;
+  try {
+    return require('crypto').createHmac('sha256', String(uid || 'sokoni'))
+      .update(ip).digest('hex').slice(0, 32);
+  } catch (_) { return null; }
+}
+
 function _platform(ua = '') {
   if (/Android/i.test(ua)) return 'Android';
   if (/iPhone/i.test(ua))  return 'iPhone';
@@ -90,7 +116,7 @@ exports.deviceRegister = onCall({ region: 'us-central1' }, async (req) => {
   }
 
   const ua  = req.rawRequest?.headers?.['user-agent'] || '';
-  const ip  = _ip(req);
+  const ipHash = _ipHash(req, uid);   /* pseudonymised — raw IP is never persisted */
   const dId = `${uid}_${deviceId.slice(0, 64)}`;
   const ref = db.collection('userDevices').doc(dId);
   const snap = await ref.get();
@@ -100,7 +126,7 @@ exports.deviceRegister = onCall({ region: 'us-central1' }, async (req) => {
       uid,
       deviceId,
       userAgent:    ua,
-      ip,
+      ipHash,
       platform:     _platform(ua),
       browser:      _browser(ua),
       deviceName:   _deviceName(ua, nameHint || ''),
@@ -116,7 +142,7 @@ exports.deviceRegister = onCall({ region: 'us-central1' }, async (req) => {
   } else {
     await ref.update({
       userAgent:    ua,
-      ip,
+      ipHash,
       platform:     _platform(ua),
       browser:      _browser(ua),
       deviceName:   _deviceName(ua, nameHint || '') || snap.data().deviceName,
@@ -153,7 +179,7 @@ exports.deviceList = onCall({ region: 'us-central1' }, async (req) => {
         deviceType:   data.deviceType    || 'desktop',
         platform:     data.platform      || 'Unknown',
         browser:      data.browser       || 'Unknown',
-        ip:           data.ip            || null,
+        /* raw IP is no longer stored or returned; geo remains for the user's own review */
         city:         data.city          || null,
         country:      data.country       || null,
         isTrusted:    data.isTrusted     || false,
