@@ -180,9 +180,9 @@ if (baseline) {
 if (!AS_JSON) {
   console.log('\n[perf-guard] scanned ' + report.totals.filesScanned + ' client files');
   console.log('  getAll() inside a loop      : ' + report.totals.amplification + (baseline ? '   (baseline ' + baseline.amplification + ')' : ''));
-  console.log('  SokoniReceiptEngine owners  : ' + report.totals.receiptEngines + (baseline && baseline.receiptEngines != null ? '   (baseline ' + baseline.receiptEngines + ', ADR-0002 target 1)' : ''));
-  console.log('  SokoniPrinterDrivers owners : ' + report.totals.printerDriverGlobals + (baseline && baseline.printerDriverGlobals != null ? '   (baseline ' + baseline.printerDriverGlobals + ', target 1)' : ''));
-  console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', ADR-0001 target 1)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
+  console.log('  SokoniReceiptEngine owners  : ' + report.totals.receiptEngines + (baseline && baseline.receiptEngines != null ? '   (baseline ' + baseline.receiptEngines + ', complementary — blocks a 3rd)' : ''));
+  console.log('  SokoniPrinterDrivers owners : ' + report.totals.printerDriverGlobals + (baseline && baseline.printerDriverGlobals != null ? '   (baseline ' + baseline.printerDriverGlobals + ', distinct shapes — see ADR-0001)' : ''));
+  console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', layered — blocks a 7th)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
   console.log('  forEach(async …) fan-out    : ' + report.totals.fanOut + (baseline ? '   (baseline ' + baseline.fanOut + ')' : ''));
   console.log('  precached but not fresh     : ' + report.totals.staleDelivery + (baseline ? '   (baseline ' + baseline.staleDelivery + ')' : ''));
 
