@@ -354,6 +354,62 @@ exports.bookingCreate = onCall(
 
     const pricingBreakdown = _calculatePrice(venue, startMins, endMins, date, { addOns });
 
+    /* ── Server-authoritative payment verification ────────────────────────
+       paymentId arrives from req.data and its truthiness alone used to set
+       paymentStatus: 'paid'. Nothing read payments/, so any authenticated
+       caller could pass an arbitrary string — or another customer's real
+       reference — and receive a paid booking. That is an authorization defect,
+       not a reliability gap.
+
+       The server now re-derives payment state from Firestore: the payment must
+       exist, be in a terminal paid state, belong to THIS caller, and cover the
+       price the server just computed. amountPaid is compared against
+       pricingBreakdown.total, never against a client figure, so a real payment
+       for a cheaper slot cannot be replayed against an expensive one.
+
+       An unverifiable paymentId is downgraded to 'awaiting' rather than
+       throwing: the booking is still a legitimate request and the slot hold is
+       already taken, so failing the whole call would lose the slot over a
+       payment that may simply be settling. It is recorded for reconciliation
+       instead. */
+    let verifiedPaymentId = null;
+    let paymentStatus     = 'awaiting';
+    let paymentNote       = null;
+
+    if (paymentId) {
+      const TERMINAL_PAID = new Set(['COMPLETE', 'COMPLETED', 'PAID', 'SUCCESS']);
+      const REVERSED      = new Set(['REFUNDED', 'REVERSED', 'CHARGEBACK', 'CANCELLED']);
+      try {
+        const paySnap = await db.collection('payments').doc(String(paymentId)).get();
+        if (!paySnap.exists) {
+          paymentNote = 'payment_not_found';
+        } else {
+          const pay    = paySnap.data() || {};
+          const status = String(pay.status || '').toUpperCase();
+          const payer  = pay.uid || pay.ownerUid || null;
+          const paid   = Number.isFinite(Number(pay.amountCents))
+            ? Number(pay.amountCents) / 100
+            : Number(pay.amount);
+
+          if (REVERSED.has(status))            paymentNote = 'payment_reversed';
+          else if (!TERMINAL_PAID.has(status)) paymentNote = 'payment_not_terminal';
+          else if (payer && payer !== uid)     paymentNote = 'ownership_mismatch';
+          else if (Number.isFinite(paid) && paid + 0.01 < Number(pricingBreakdown.total))
+            paymentNote = 'amount_short';
+          else {
+            verifiedPaymentId = String(paymentId);
+            paymentStatus     = 'paid';
+          }
+        }
+      } catch (e) {
+        paymentNote = 'verification_failed';
+        console.error('[bookingCreate] payment verification failed', { paymentId, err: e.message });
+      }
+      if (paymentNote) {
+        console.warn('[bookingCreate] payment rejected', { uid, paymentId, reason: paymentNote });
+      }
+    }
+
     /* Fetch user profile outside the transaction — read-only, no conflict risk */
     const userSnap = await db.collection('users').doc(uid).get();
     const user = userSnap.data() || {};
@@ -461,8 +517,13 @@ exports.bookingCreate = onCall(
         notes: _sanitize(notes || ''),
         pricingBreakdown,
         status:   requiresApproval ? 'pending' : 'confirmed',
-        paymentId: paymentId || null,
-        paymentStatus: paymentId ? 'paid' : 'awaiting',
+        /* Only a server-verified reference is stored. An unverified one is kept
+           separately so reconciliation can see the attempt without any reader
+           mistaking it for a payment. */
+        paymentId:        verifiedPaymentId,
+        paymentStatus,
+        unverifiedPaymentId:     verifiedPaymentId ? null : (paymentId || null),
+        paymentRejectionReason:  paymentNote,
         idempotencyKey: idempotencyKey || null,
         cancellationWindowHours: venue.pricing?.cancellationWindow || 24,
         cancellationFeeRate:     venue.pricing?.cancellationFeeRate || 0,
