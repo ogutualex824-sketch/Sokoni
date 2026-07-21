@@ -85,8 +85,107 @@ window.SokoniHardware = (function () {
   // ---------------------------------------------------------------------------
 
   /**
+   * capabilities() — what this browser can actually do, and why not.
+   *
+   * Two separate reasons the wizard reported "nothing found", and neither was
+   * a hardware fault:
+   *
+   * 1. On iOS every browser is WebKit, and WebKit ships no WebUSB, no Web
+   *    Bluetooth and no Web Serial. Chrome and Firefox on iPhone are affected
+   *    identically — it is not a Safari preference the merchant can change.
+   *    discover() guards each transport on `navigator.usb && …` and simply
+   *    skips it, so the page reported an empty result with no explanation.
+   *
+   * 2. Even where those APIs exist, discover() calls getDevices()/getPorts().
+   *    Per spec those return ONLY devices the user has already granted this
+   *    origin permission to. A first-time setup has granted none, so the array
+   *    is empty on Chrome too. Finding a NEW device requires requestDevice()/
+   *    requestPort(), which must run inside a user gesture and shows the
+   *    browser's own chooser. Neither appears anywhere in this file, so
+   *    "Detect Hardware" could never discover unpaired hardware on ANY browser.
+   *
+   * Raw TCP (port 9100) and mDNS/Bonjour are not exposed to web pages on any
+   * browser, so network printers cannot be auto-discovered from a page at all;
+   * manual IP entry is the only conforming path.
+   *
+   * Returns per-transport { supported, reason, action } so the UI can explain
+   * instead of showing "Not Found".
+   */
+  function capabilities() {
+    var ua = navigator.userAgent || '';
+    var isIOS = /iPad|iPhone|iPod/.test(ua) ||
+                (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); /* iPadOS reports as Mac */
+    var isSecure = (typeof isSecureContext === 'boolean') ? isSecureContext : (location.protocol === 'https:');
+
+    function cap(apiPresent, iosNote) {
+      if (isIOS) {
+        return { supported: false, reason: iosNote, action: 'Use a network printer with manual IP, or an Android/desktop browser.' };
+      }
+      if (!isSecure) {
+        return { supported: false, reason: 'Requires a secure (HTTPS) context.', action: 'Open this page over HTTPS.' };
+      }
+      if (!apiPresent) {
+        return { supported: false, reason: 'This browser does not implement the API.', action: 'Use Chrome or Edge on desktop or Android.' };
+      }
+      return { supported: true, reason: 'Available. Pairing requires tapping a Connect button (browser chooser opens on a user gesture).', action: null };
+    }
+
+    var IOS_WEBKIT = 'iOS uses WebKit for every browser, and WebKit does not implement this API. Changing browser on iPhone will not help.';
+
+    return {
+      platform: { isIOS: isIOS, secureContext: isSecure, userAgent: ua.slice(0, 180) },
+      usb:       cap(!!navigator.usb, IOS_WEBKIT),
+      bluetooth: cap(!!navigator.bluetooth, IOS_WEBKIT),
+      serial:    cap(!!navigator.serial, IOS_WEBKIT),
+      /* Raw sockets and mDNS are unavailable to web pages everywhere, so this
+         is a platform limit rather than a browser gap. */
+      networkDiscovery: {
+        supported: false,
+        reason: 'Browsers cannot open raw TCP sockets or query mDNS/Bonjour, so printers cannot be auto-discovered from a web page on any platform.',
+        action: 'Enter the printer IP manually — this is the supported path everywhere, including iPhone.',
+      },
+      networkManual: {
+        supported: true,
+        reason: 'Manual IP entry works on every platform, including iOS.',
+        action: null,
+      },
+      /* AirPrint/system print dialog — the practical iOS receipt path. */
+      browserPrint: {
+        supported: typeof window.print === 'function',
+        reason: typeof window.print === 'function'
+          ? 'System print dialog available (AirPrint on iOS).'
+          : 'Print dialog unavailable.',
+        action: null,
+      },
+      camera: {
+        supported: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+        reason: (navigator.mediaDevices && navigator.mediaDevices.getUserMedia)
+          ? 'Camera available — usable as a barcode scanner.'
+          : 'Camera API unavailable.',
+        action: null,
+      },
+    };
+  }
+
+  /** The transports a merchant can actually use here, best first. */
+  function recommendedTransports() {
+    var c = capabilities();
+    var out = [];
+    if (c.usb.supported)       out.push({ id: 'usb',        label: 'USB printer' });
+    if (c.bluetooth.supported) out.push({ id: 'bluetooth',  label: 'Bluetooth printer' });
+    if (c.serial.supported)    out.push({ id: 'serial',     label: 'Serial printer' });
+    out.push({ id: 'network',  label: 'Network printer (manual IP)' });
+    if (c.browserPrint.supported) out.push({ id: 'browser', label: 'System print dialog' + (c.platform.isIOS ? ' (AirPrint)' : '') });
+    return out;
+  }
+
+  /**
    * discover() — Detects all available hardware via Web APIs.
    * Returns a summary of what was found by category.
+   *
+   * NOTE: this reports devices ALREADY PAIRED with this origin. It cannot find
+   * new hardware — see capabilities() above. summary.capabilities carries the
+   * per-transport reasons so the UI can explain an empty result honestly.
    */
   async function discover() {
     var summary = {
@@ -239,6 +338,20 @@ window.SokoniHardware = (function () {
         summary.printers.savedIP = saved;
       }
     } catch (e) { /* ignore */ }
+
+    /* Structured diagnostics so a null result is never silent. Without this the
+       page could only say "Not Found", which reads as a hardware fault when the
+       real answer is that the browser has no such API, or that nothing has been
+       paired to this origin yet. */
+    summary.capabilities = capabilities();
+    summary.recommended  = recommendedTransports();
+    summary.diagnostics  = Object.keys(summary.capabilities)
+      .filter(function (k) { return k !== 'platform' && summary.capabilities[k].supported === false; })
+      .map(function (k) {
+        return { transport: k, reason: summary.capabilities[k].reason, action: summary.capabilities[k].action };
+      });
+    /* Paired-vs-discoverable is the distinction that made this confusing. */
+    summary.scanScope = 'already-paired-devices-only';
 
     emit('device:discovered', summary);
     return summary;
@@ -1549,6 +1662,8 @@ window.SokoniHardware = (function () {
 
     // Discovery & Registration
     discover:            discover,
+    capabilities:        capabilities,
+    recommendedTransports: recommendedTransports,
     registerDevice:      registerDevice,
     unregisterDevice:    unregisterDevice,
     getDevice:           getDevice,

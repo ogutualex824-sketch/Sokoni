@@ -1211,8 +1211,37 @@ document.getElementById('btnDiscover').addEventListener('click', async () => {
     _discoverySummary = await window.SokoniHardware.discover();
     renderCategoryCards(_discoverySummary);
     const found = Object.values(_discoverySummary).filter(v => v && v.found).length;
-    status.textContent = found + ' hardware categories detected';
-    toast('Hardware scan complete — ' + found + ' category(ies) found', 'success');
+
+    if (found > 0) {
+      status.textContent = found + ' hardware categories detected';
+      toast('Hardware scan complete — ' + found + ' category(ies) found', 'success');
+    } else {
+      /* An empty result is not "no hardware". This scan only sees devices
+         already paired with this site, and on iOS the USB/Bluetooth/Serial APIs
+         do not exist at all. Saying "Not Found" sent merchants hunting for a
+         hardware fault that was never there — explain the actual limit and name
+         the transport that does work here. */
+      const cap  = _discoverySummary.capabilities || {};
+      const recs = _discoverySummary.recommended || [];
+      const ios  = cap.platform && cap.platform.isIOS;
+      const blocked = (_discoverySummary.diagnostics || [])
+        .filter(d => ['usb', 'bluetooth', 'serial'].includes(d.transport));
+
+      let html = '<strong>No paired hardware yet.</strong><br>';
+      html += ios
+        ? 'On iPhone and iPad every browser uses WebKit, which has no USB, Bluetooth or Serial support — switching browser will not change this.'
+        : 'This scan only lists devices already connected to this site. To add a new one, use a Connect button so the browser can show its device chooser.';
+      if (recs.length) {
+        html += '<br><br><strong>Works on this device:</strong> ' +
+                recs.map(r => r.label).join(' · ');
+      }
+      if (blocked.length && !ios) {
+        html += '<br><span style="opacity:.7">Unavailable: ' +
+                blocked.map(d => d.transport).join(', ') + '</span>';
+      }
+      status.innerHTML = html;
+      toast(ios ? 'Use a network printer — enter its IP manually' : 'No paired hardware — use Connect to pair a device', 'info');
+    }
   } catch (e) {
     toast('Discovery error: ' + e.message, 'error');
     renderCategoryCards(null);
