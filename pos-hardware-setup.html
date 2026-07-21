@@ -581,13 +581,21 @@ html, body {
 </main>
 
 <!-- Scripts — load order is critical -->
-<script src="sokoni-capability-detector.js" defer></script>
-<script src="sokoni-permission-manager.js"  defer></script>
-<script src="sokoni-hardware-persistence.js" defer></script>
-<script src="sokoni-printer-providers.js"   defer></script>
-<script src="sokoni-hardware-diagnostics.js" defer></script>
-<script src="sokoni-hardware-recovery.js"   defer></script>
-<script src="sokoni-hardware-manager.js"    defer></script>
+<!-- Universal Hardware Layer v2 load order -->
+<script src="sokoni-capability-detector.js"    defer></script>
+<script src="sokoni-permission-manager.js"     defer></script>
+<script src="sokoni-hardware-persistence.js"   defer></script>
+<script src="sokoni-device-profiles.js"        defer></script>
+<script src="sokoni-driver-base.js"            defer></script>
+<script src="sokoni-device-registry.js"        defer></script>
+<script src="sokoni-connection-manager.js"     defer></script>
+<script src="sokoni-driver-manager.js"         defer></script>
+<script src="sokoni-discovery-engine.js"       defer></script>
+<script src="sokoni-printer-driver.js"         defer></script>
+<script src="sokoni-peripheral-drivers.js"     defer></script>
+<script src="sokoni-hardware-diagnostics.js"   defer></script>
+<script src="sokoni-hardware-recovery.js"      defer></script>
+<script src="sokoni-universal-hardware.js"     defer></script>
 <script>
 /* ──────────────────────────────────────────────────────────────────
    Wizard controller
@@ -822,7 +830,7 @@ async function wizardRequestDevice() {
         document.getElementById('s5Status').innerHTML =
             '<div class="status-spinner"></div><div class="status-msg">Requesting device access…</div>';
 
-        _pendingPrinter = await window.HardwareManager.connectPrinter(transport, options);
+        _pendingPrinter = await window.SokoniHardware.request('printer', transport, options);
 
         // Step 5 → 6: probe
         document.getElementById('s5Status').innerHTML =
@@ -896,7 +904,7 @@ async function _runTestPrint() {
     statusEl.innerHTML = '<div class="status-spinner"></div><div class="status-msg">Printing test receipt…</div>';
 
     try {
-        await window.HardwareManager.testPrintPending(_pendingPrinter);
+        await window.SokoniHardware.printer.test();
         statusEl.innerHTML = '<div class="status-icon">🖨️</div><div class="status-msg">Test receipt sent to printer.</div>';
         confirmEl.style.display = 'flex';
     } catch (err) {
@@ -933,8 +941,9 @@ async function wizardSave() {
     _hideErr(8);
 
     try {
+        var label_ = label || (_pendingPrinter && (_pendingPrinter.label || (_pendingPrinter.profile && _pendingPrinter.profile.name))) || 'Printer';
         var savedId = await window.HardwareManager.confirmAndSave(_pendingPrinter, {
-            label:      label || _pendingPrinter.descriptor.model,
+            label:      label_,
             paperWidth: width,
         });
         _buildStep9(savedId);
@@ -951,20 +960,26 @@ async function wizardSave() {
 // ---------------------------------------------------------------------------
 
 async function _buildStep9(savedId) {
-    var hm = window.HardwareManager;
-    var ap = hm ? hm.getActivePrinter() : null;
+    var ap = window.SokoniHardware ? window.SokoniHardware.printer.getActive() :
+             (window.HardwareManager ? window.HardwareManager.getActivePrinter() : null);
 
     var summaryEl = document.getElementById('readySummary');
     summaryEl.innerHTML = '';
 
-    if (ap) {
+    // Support both old HardwareManager shape and new DeviceRegistry shape
+    var rec = ap && (ap.deviceId ? ap : null);
+    if (!rec && ap && ap.descriptor) {
+        rec = { label: ap.descriptor.model, transport: ap.descriptor.transport, profile: ap.escpos && ap.escpos._profile, savedId: ap.savedId };
+    }
+    if (rec) {
+        var profile = rec.profile || null;
         var rows = [
             ['Status',      'Connected ✓'],
-            ['Model',       ap.descriptor.model  || 'Unknown'],
-            ['Transport',   ap.descriptor.transport || (ap.provider && ap.provider.transport) || '—'],
-            ['Profile',     ap.escpos && ap.escpos._profile ? ap.escpos._profile.name : '—'],
-            ['Paper Width', ap.escpos && ap.escpos._profile ? ap.escpos._profile.paperWidth : '—'],
-            ['Printer ID',  ap.savedId || savedId || '—'],
+            ['Model',       rec.label || (profile && profile.name) || 'Unknown'],
+            ['Transport',   rec.transport || '—'],
+            ['Profile',     profile ? profile.name : '—'],
+            ['Paper Width', profile && profile.capabilities ? profile.capabilities.paperWidth : '—'],
+            ['Printer ID',  rec.savedId || savedId || '—'],
         ];
         summaryEl.innerHTML = rows.map(function (r) {
             return '<div class="ready-row">' +
@@ -1011,22 +1026,56 @@ document.addEventListener('DOMContentLoaded', async function () {
         setTimeout(function () { waitFor(name, cb, tries); }, 100);
     };
 
-    waitFor('HardwareManager', async function () {
-        // Init HardwareManager (passive — no permission requests)
-        try { await window.HardwareManager.init(); } catch (_) {}
+    waitFor('SokoniHardware', async function () {
+        // Init universal hardware layer (passive — no permission requests)
+        try { await window.SokoniHardware.init(); } catch (_) {}
 
-        // If already has a saved printer, show a skip option
-        var saved = await window.HardwareManager.getSavedPrinters();
-        if (saved.length > 0 && window.HardwareManager.isConnected()) {
+        // Run passive discovery to detect previously-granted devices
+        var discovered = [];
+        if (window.SokoniDiscoveryEngine) {
+            try {
+                var discResult = await window.SokoniDiscoveryEngine.discover();
+                discovered = discResult.detected || [];
+            } catch (_) {}
+        }
+
+        // Inject discovery panel into step 3 if devices were found
+        var s3 = document.getElementById('step-3');
+        var discPanel = document.createElement('div');
+        discPanel.id = 'disc-panel';
+        if (discovered.length > 0) {
+            discPanel.innerHTML = '<div style="background:#0d1a00;border:1px solid var(--accent-dim);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:18px">' +
+                '<div style="font-size:12px;color:var(--accent);font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">Detected devices</div>' +
+                discovered.map(function (d) {
+                    return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-top:1px solid #1a2a00">' +
+                        '<span style="width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0"></span>' +
+                        '<div>' +
+                            '<div style="color:var(--text);font-weight:600">' + (d.deviceName || 'Unknown') + '</div>' +
+                            '<div style="font-size:12px;color:var(--text-dim)">' + d.transport.toUpperCase() + (d.profile ? ' · ' + d.profile.protocol.toUpperCase() : '') + ' · Ready to reconnect</div>' +
+                        '</div>' +
+                    '</div>';
+                }).join('') +
+                '</div>';
+        } else {
+            discPanel.innerHTML = '<div style="color:var(--text-dim);font-size:13px;margin-bottom:12px">No previously-paired devices found. Select a connection type below to pair a new device.</div>';
+        }
+        // Prepend to step 3 content (after the heading)
+        var s3Content = s3 && s3.querySelector('.step-content');
+        if (s3Content) s3Content.insertBefore(discPanel, s3Content.firstChild);
+
+        // If already has a connected printer, show skip option
+        if (window.SokoniHardware.isConnected('printer')) {
+            var active = window.SokoniHardware.printer.getActive();
             var skipBtn = document.createElement('button');
             skipBtn.className = 'btn btn-outline';
-            skipBtn.style.marginTop = '10px';
-            skipBtn.textContent = 'Skip — Use existing: ' + saved[0].model;
+            skipBtn.style.cssText = 'margin-top:10px;display:block';
+            skipBtn.textContent = 'Skip — Use existing: ' + (active ? active.label : 'saved printer');
             skipBtn.onclick = function () {
-                _buildStep9(saved[0].id);
+                _buildStep9(active && active.savedId);
                 _goTo(9);
             };
-            document.getElementById('step-1').appendChild(skipBtn);
+            var s1 = document.getElementById('step-1');
+            if (s1) s1.appendChild(skipBtn);
         }
 
         // Build step 1 content

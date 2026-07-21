@@ -1,4 +1,57 @@
-﻿## [2026-07-21] — A paid subscription could silently never become an entitlement
+﻿## [2026-07-22] — Image Pipeline & Search Index Production Recovery
+
+### Summary
+
+Five rendering surfaces displayed placeholder images (or no image at all) despite valid product images existing in Firebase Storage. Root cause: inconsistent Firestore field names across product creation paths (`imageUrl` / `image` / `images[]` / `thumbnail` / `photo` / `coverImage`), combined with rendering code that only checked one field per surface.
+
+### Root causes fixed
+
+| # | Surface | File | Issue |
+|---|---|---|---|
+| RC-1 | AI recommendation feed | `sokoni-recommendations.js` | `_fetchFirestore()` never extracted any image field; `renderWidget()` had no `<img>` tag |
+| RC-2 | Home feed product cards | `script.js:597` | Single-field check `product.image` |
+| RC-3 | Category browse grid | `category.js:207` | Single-field check `p.image`; no `onerror` |
+| RC-4 | Algolia search index | `functions/algolia-indexer.js:553` | `thumbnail` resolver only checked `images[0].url` and scalar `thumbnail`; missed `imageUrl`/`image`/`photo` |
+| RC-5 | Search autocomplete | `sokoni-search-pro.js:846` | Normalization used `h.image || h.imageUrl`; missed `h.thumbnail` (the field Algolia stores) |
+
+### Files affected
+
+- `sokoni-recommendations.js` — SPECS image extractors, `items.push()` image field, `renderWidget()` `<img>` overlay, CSS
+- `script.js` — 7-field image resolution chain
+- `category.js` — 5-field image resolution chain + `onerror` fallback
+- `functions/algolia-indexer.js` — thumbnail field expanded to cover all scalar image field variants
+- `sokoni-search-pro.js` — hit normalization now checks `h.thumbnail` first
+
+### Infrastructure action required
+
+`getTypesenseSearchKey` CF returns HTTP 403 at Cloud Run — IAM gap. Apply:
+
+```bash
+gcloud run services add-iam-policy-binding getTypesenseSearchKey \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker
+```
+
+Engine degrades to Algolia until applied. No user-visible error.
+
+### Post-deploy action required
+
+Run `algoliaBackfill` CF after deploying `algolia-indexer.js` to re-index products that were indexed before this fix.
+
+### Security
+
+No security implications. All new dynamic HTML uses `_esc()` or string-literal-only `onerror` handlers. No new Firestore read paths. App Check not modified.
+
+### Performance
+
+All new `<img>` elements carry `loading="lazy"`. No new network calls on the happy path.
+
+### Certification
+
+ENGINEERING COMPLETE. Runtime verification (post-deploy, physical device) required before VERIFIED. See `docs/IMAGE_PIPELINE_SEARCH_RECOVERY.md`.
+
+---
+
+## [2026-07-21] — A paid subscription could silently never become an entitlement
 
 ### Root cause
 

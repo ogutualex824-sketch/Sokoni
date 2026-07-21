@@ -2,6 +2,88 @@
 
 ---
 
+## 2026-07-22 — Universal Hardware Abstraction Layer v1.0
+
+### Summary
+Second-generation hardware layer built on top of the Phase 1–12 device abstraction. Where Phase 1–12 established correct permission handling and per-transport providers, this release introduces a full plugin driver architecture so that adding a new peripheral (printer, scanner, terminal, scale, NFC reader) requires only writing a driver class and a device profile entry — zero changes to application code.
+
+### Architecture Added
+
+```
+SokoniHardware (sokoni-universal-hardware.js)
+├── TypeController × 8 (printer, scanner, drawer, display, scale, nfc, terminal, biometric)
+├── SokoniDeviceProfiles (sokoni-device-profiles.js)      ← 40+ device profiles
+├── SokoniDriverManager  (sokoni-driver-manager.js)       ← plugin registry
+├── SokoniDriverBase     (sokoni-driver-base.js)          ← interface contract
+├── SokoniDeviceRegistry (sokoni-device-registry.js)      ← runtime state
+├── SokoniConnectionManager (sokoni-connection-manager.js)← transport abstraction
+├── SokoniDiscoveryEngine   (sokoni-discovery-engine.js)  ← passive detection
+├── SokoniPrinterDrivers (sokoni-printer-driver.js)       ← ESC/POS, StarPRNT, ZPL
+└── SokoniPeripheralDrivers (sokoni-peripheral-drivers.js)← all other drivers
+```
+
+### Files Added
+- `sokoni-device-profiles.js` — 40+ built-in device profiles (printers, scanners, drawers, NFC, scales, displays, payment terminals, biometrics)
+- `sokoni-driver-base.js` — DeviceDriver base class with `extend()` factory; TestResult/StatusResult/DiagnosticsResult shapes
+- `sokoni-device-registry.js` — In-memory runtime registry; STATE constants; `register/update/markConnected/markError/getActive/getByType`
+- `sokoni-connection-manager.js` — USBConnection, BluetoothConnection, SerialConnection, NetworkConnection, AndroidConnection, BrowserConnection; `create()` + `restore()` factory
+- `sokoni-driver-manager.js` — `register(DriverClass)`, `getBestDriver(profile)`, `createDriver(profile)`, `getDriversForType(type)`
+- `sokoni-discovery-engine.js` — Passive scan across USB/BT/Serial/HID; profile matching; smart hints; `findSavedDevice(savedRecord)`
+- `sokoni-printer-driver.js` — ESCPosPrinterDriver, StarPrinterDriver, ZPLPrinterDriver; ReceiptBuilder with full ESC/POS command table; auto-registers with DriverManager
+- `sokoni-peripheral-drivers.js` — KeyboardScannerDriver, HIDScannerDriver, PrinterCashDrawerDriver, WebNFCDriver, SerialScaleDriver, SerialDisplayDriver, IntaSendTerminalDriver, WebAuthnBiometricDriver; all auto-register
+- `sokoni-universal-hardware.js` — SokoniHardware singleton; TypeController per device type; HardwareManager backwards-compatibility shim
+
+### Files Updated
+- `pos-hardware-setup.html` — Updated script loading order (7 files → 14); added smart discovery panel (shows "Detected: P58E · BLUETOOTH · ESC/POS · Ready to reconnect"); updated API calls to SokoniHardware; new DOMContentLoaded boot flow using SokoniDiscoveryEngine
+
+### Device Profiles Database (sokoni-device-profiles.js)
+**Printers:** P58E, XP-58, XP-80, Rongta RP58, Rongta RP80, Sunmi T2, Epson TM-T20III, Epson TM-T88VII, Star TSP100, Zebra ZD220, Bixolon SRP-350V, Generic 58mm, Generic 80mm
+**Scanners:** Honeywell Voyager 1202g, Datalogic Gryphon I GD4400, Zebra LS2208, Keyboard Wedge (generic HID)
+**Drawers:** APG Vasario, MMF Val-u Line, Printer Port Drawer
+**NFC:** ACS ACR122U, Web NFC (NDEFReader)
+**Scales:** Ohaus Ranger 3000, CAS SW-1
+**Displays:** Epson DM-D110, Generic 2×20 VFD
+**Payment Terminals:** IntaSend (cloud), Ingenico ICT 250, Verifone P400, PAX A920
+**Biometric:** WebAuthn Platform Authenticator
+
+### Driver System
+- `DeviceDriver.extend(spec)` — factory for clean subclasses without ES6 class syntax (IE-safe pattern)
+- All drivers implement: `onConnect(connection, profile)`, `test()`, `status()`, `execute(command, data)`, `recover()`, `diagnostics()`, `disconnect()`
+- `ReceiptBuilder` — fluent builder for ESC/POS receipts: `align()`, `bold()`, `size()`, `line()`, `row()`, `divider()`, `qr()`, `feed()`, `cut()`
+- StarPRNT + ZPL command tables alongside ESC/POS; all share the same ReceiptBuilder interface
+
+### Connection Manager
+- All transport objects (`USBConnection`, `BluetoothConnection`, etc.) share `write(bytes) / read(ms) / close()` uniform API
+- USB: finds printer class 7 interface; falls back to bulk-OUT endpoint on interface 0; 512B chunks
+- Bluetooth: tries profile-specified BLE service + write char UUIDs; falls back to all known UUIDs; 128B chunks with 20ms inter-chunk delay
+- Serial: configurable baud rate from profile; writable + readable streams
+- Network: SOKONI Desktop bridge (`localhost:9101/print`) → Cloud Function proxy fallback (`posPrint`)
+- Android: `window.SokoniAndroid.printESCPOS(b64)` for Bluetooth Classic (SPP)
+- `restore(savedRecord, profile)` — passive reconnect, no dialog — used by auto-recovery
+
+### Discovery Engine
+- `discover()` → scans all available transports passively via `getDevices()`/`getPorts()` (no dialog)
+- Matches found devices against all 40+ profiles using VID/PID (USB), BLE name patterns (Bluetooth), USB info (Serial)
+- Returns `{detected, hints, canDiscover, capturedAt}` — `detected[i].deviceName` shows "P58E" not "USB Device 0x154F"
+- Smart hints: iOS → "use Network/AirPrint"; Android → "Serial not supported"; no devices → "Tap USB Printer to pair"
+
+### Security
+- Permission boundary strictly enforced: `requestDevice` / `requestPort` only called inside `TypeController.connect()` which must be triggered from user gestures
+- `restore()` and `discover()` use only passive APIs — safe to call from init() without user gesture
+- No private keys or secrets stored in device profiles or drivers
+- WebAuthn driver uses `userVerification: 'required'` — biometric or device PIN mandatory
+
+### Performance
+- All discovery scans run in parallel (`Promise.all`) — full scan in one round-trip
+- Connection objects reused — no reconnect on every print
+- IndexedDB persistence unchanged (sokoni_hw_v1) — legacy records auto-migrated
+
+### Backwards Compatibility
+- `window.HardwareManager` shim in `sokoni-universal-hardware.js` exposes `init()`, `isConnected()`, `getActivePrinter()`, `getSavedPrinters()`, `connectPrinter()`, `confirmAndSave()`, `testPrintPending()`, `reconnect()` — existing pos-checkout.html and other POS pages continue to work unchanged
+- `sokoni-hardware-manager.js` still exists for pages that load it independently
+
+---
+
 ## 2026-07-22 — POS Hardware Architecture: Enterprise Device Abstraction Layer v1.0
 
 ### Summary
