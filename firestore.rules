@@ -2319,8 +2319,13 @@ service cloud.firestore {
 
     match /tenants/{tenantId}/{document=**} {
       function isTenantMember() {
+        // Allow if: user uid IS the tenant (single-merchant), OR Firebase multi-tenant claim,
+        // OR sellerId custom claim matches, OR platform admin.
         return request.auth != null &&
-               (request.auth.token.tenantId == tenantId || isAdmin());
+               (request.auth.uid == tenantId ||
+                request.auth.token.tenantId == tenantId ||
+                request.auth.token.sellerId == tenantId ||
+                isAdmin());
       }
       function isTenantAdmin() {
         return isAdmin() || request.auth.token.get('tenantAdmin', false) == true;
@@ -2368,6 +2373,14 @@ service cloud.firestore {
       match /inventory_warehouses/{warehouseId} {
         allow read:   if isTenantMember();
         allow write:  if isTenantAdmin();
+      }
+      match /inventory_categories/{catId} {
+        allow read:   if isTenantMember();
+        allow create: if isTenantMember()
+                      && request.resource.data.name is string
+                      && request.resource.data.name.size() > 0;
+        allow update: if isTenantAdmin();
+        allow delete: if isTenantAdmin();
       }
       match /inventory_audits/{auditId} {
         allow read:   if isTenantMember();

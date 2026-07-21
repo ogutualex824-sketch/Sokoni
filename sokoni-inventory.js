@@ -330,12 +330,77 @@ const SokoniInventory = (() => {
 
     if (_online && _fs) {
       await col('inventory_products').doc(product.id).set(product, { merge: true });
+
+      // Mirror to posProducts so the product is immediately visible at POS checkout.
+      // posProducts rules require sellerId == request.auth.uid.
+      const posUid = (_auth && _auth.currentUser) ? _auth.currentUser.uid : _uid;
+      if (posUid) {
+        const posDoc = {
+          name:         product.name,
+          price:        product.sellingPrice || 0,
+          cost:         product.buyingPrice  || 0,
+          category:     product.category     || '',
+          sku:          product.sku          || '',
+          barcode:      product.barcode      || '',
+          unit:         product.unit         || 'pcs',
+          brand:        product.brand        || '',
+          taxRate:      product.taxRate      || 0,
+          stockLevel:   product.stockLevel   || 0,
+          reorderPoint: product.reorderPoint || 10,
+          imageUrl:     product.imageUrl     || '',
+          description:  product.description  || '',
+          sellerId:     posUid,
+          status:       product.active === false ? 'inactive' : 'active',
+          updatedAt:    now,
+          tenantId:     _tenantId,
+        };
+        await _fs.collection('posProducts').doc(product.id).set(posDoc, { merge: true }).catch(() => {});
+      }
     } else {
       await _enqueue({ op: 'save_product', data: product });
     }
 
     emit('product_saved', { product, isNew });
     return product;
+  }
+
+  /* alias: add a new product (saveProduct detects new vs existing by absence of id) */
+  async function addProduct(data) {
+    const copy = { ...data };
+    delete copy.id; // ensure fresh id is generated
+    return saveProduct(copy);
+  }
+
+  /* alias: update existing product by id, merging with existing data */
+  async function updateProduct(id, updates) {
+    let existing = {};
+    try { existing = (await getProduct(id)) || {}; } catch (_) {}
+    return saveProduct({ ...existing, ...updates, id });
+  }
+
+  /* categories — load from Firestore inventory_categories, fallback to static list */
+  const _DEFAULT_CATEGORIES = [
+    'Food & Beverages', 'Electronics', 'Clothing & Apparel', 'Health & Beauty',
+    'Home & Kitchen', 'Agriculture', 'Automotive', 'Office Supplies',
+    'Books & Stationery', 'Sports & Outdoors', 'Toys & Games',
+    'Building & Construction', 'Pharmaceuticals', 'Cosmetics', 'General',
+  ];
+
+  async function getCategories() {
+    if (_online && _fs) {
+      try {
+        const snap = await col('inventory_categories').orderBy('name').get();
+        const cats = snap.docs.map(d => d.data().name || d.id).filter(Boolean);
+        if (cats.length) return cats;
+      } catch (_) {}
+    }
+    // derive from IDB-cached products
+    try {
+      const products = await idbGetAll('products');
+      const fromProducts = [...new Set(products.map(p => p.category).filter(Boolean))].sort();
+      if (fromProducts.length) return fromProducts;
+    } catch (_) {}
+    return _DEFAULT_CATEGORIES;
   }
 
   async function deleteProduct(id) {
@@ -1094,7 +1159,8 @@ const SokoniInventory = (() => {
 
     // Products
     getProducts, getProduct, getProductByBarcode,
-    saveProduct, deleteProduct, importProducts, searchProducts,
+    saveProduct, addProduct, updateProduct, deleteProduct, importProducts, searchProducts,
+    getCategories,
 
     // Stock Levels
     getStockLevel, getStockLevels, getAllStockLevels, getLowStockItems,

@@ -1539,22 +1539,39 @@ th .inv-sort-icon::before{content:'↕'}
 
   function clearProductForm() {
     ['pm-name','pm-sku','pm-brand','pm-desc','pm-barcode','pm-stock','pm-reorder','pm-maxstock','pm-buy','pm-sell','pm-wholesale'].forEach(id => { const el = $(id); if (el) el.value = ''; });
-    $('pm-margin').textContent = '—';
+    const el = $('pm-margin'); if (el) { el.textContent = '—'; el.style.color = ''; }
+    const pmCat = $('pm-category'); if (pmCat) pmCat.value = '';
+    const pmSup = $('pm-supplier'); if (pmSup) pmSup.value = '';
+    const pmTax = $('pm-tax'); if (pmTax) pmTax.value = '16';
+    const pmUnit= $('pm-unit');    if (pmUnit) pmUnit.value = 'pcs';
+    const pmWh  = $('pm-warehouse');if (pmWh) pmWh.selectedIndex = 0;
+    const prev  = $('imgPreview'); if (prev)  { prev.style.display = 'none'; prev.src = ''; }
+    const icon  = $('imgZoneIcon'); if (icon)  icon.style.display = '';
+    const lbl   = $('imgZoneLabel');if (lbl)   lbl.style.display = '';
+    $('imgZone')?.classList.remove('has-img');
+    $('pmSaveStatus').textContent = 'All fields auto-saved as draft';
   }
 
   async function loadProductForEdit(id) {
     try {
       const p = _allProducts.find(x => x.id === id) || await SokoniInventory.getProduct(id);
       if (!p) return;
-      $('pm-name').value      = p.name        || '';
-      $('pm-sku').value       = p.sku          || '';
-      $('pm-brand').value     = p.brand        || '';
-      $('pm-desc').value      = p.description  || '';
-      $('pm-barcode').value   = p.barcode      || '';
-      $('pm-stock').value     = p.stockLevel   || 0;
-      $('pm-reorder').value   = p.reorderPoint || '';
-      $('pm-buy').value       = p.buyingPrice  || '';
-      $('pm-sell').value      = p.sellingPrice || '';
+      $('pm-name').value        = p.name          || '';
+      $('pm-sku').value         = p.sku            || '';
+      $('pm-brand').value       = p.brand          || '';
+      $('pm-desc').value        = p.description    || '';
+      $('pm-barcode').value     = p.barcode        || '';
+      $('pm-stock').value       = p.stockLevel     || 0;
+      $('pm-reorder').value     = p.reorderPoint   || '';
+      $('pm-maxstock').value    = p.maxStock        || '';
+      $('pm-buy').value         = p.buyingPrice    || '';
+      $('pm-sell').value        = p.sellingPrice   || '';
+      $('pm-wholesale').value   = p.wholesalePrice || '';
+      if ($('pm-unit')     && p.unit)        $('pm-unit').value      = p.unit;
+      if ($('pm-tax')      && p.taxRate != null) $('pm-tax').value   = String(p.taxRate);
+      if ($('pm-category') && p.category)   $('pm-category').value   = p.category;
+      if ($('pm-warehouse')&& p.warehouseId) $('pm-warehouse').value = p.warehouseId;
+      if ($('pm-supplier') && p.supplierId)  $('pm-supplier').value  = p.supplierId;
       updateMargin();
     } catch (e) { showToast('Error loading product', 'error'); }
   }
@@ -1663,51 +1680,77 @@ th .inv-sort-icon::before{content:'↕'}
 
   async function saveProduct() {
     const name = $('pm-name').value.trim();
-    if (!name) { showToast('Product name is required', 'error'); return; }
+    if (!name) { showToast('Product name is required', 'error'); $('pm-name').focus(); return; }
+    const sellingPrice = parseFloat($('pm-sell').value) || 0;
+    if (sellingPrice <= 0) { showToast('Selling price must be greater than 0', 'error'); $('pm-sell').focus(); return; }
+
+    const saveBtn = document.querySelector('#addProductModal .inv-btn-primary');
+    const origTxt = saveBtn ? saveBtn.textContent : '';
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving…'; }
+
+    const catEl  = $('pm-category');
+    const supEl  = $('pm-supplier');
     const data = {
       name,
-      sku:          $('pm-sku').value.trim()    || generateSkuStr(name),
-      brand:        $('pm-brand').value.trim(),
-      description:  $('pm-desc').value.trim(),
-      barcode:      $('pm-barcode').value.trim(),
-      stockLevel:   parseFloat($('pm-stock').value)     || 0,
-      reorderPoint: parseFloat($('pm-reorder').value)   || 10,
-      maxStock:     parseFloat($('pm-maxstock').value)  || 500,
-      buyingPrice:  parseFloat($('pm-buy').value)       || 0,
-      sellingPrice: parseFloat($('pm-sell').value)      || 0,
-      unit:         $('pm-unit')?.value || 'pcs',
-      active:       true,
+      sku:           $('pm-sku').value.trim()               || generateSkuStr(name),
+      category:      catEl?.value                           || '',
+      brand:         $('pm-brand').value.trim()             || '',
+      description:   $('pm-desc').value.trim()              || '',
+      barcode:       $('pm-barcode').value.trim()           || '',
+      stockLevel:    parseFloat($('pm-stock').value)        || 0,
+      reorderPoint:  parseFloat($('pm-reorder').value)      || 10,
+      maxStock:      parseFloat($('pm-maxstock').value)     || 500,
+      warehouseId:   $('pm-warehouse')?.value               || 'main',
+      supplierId:    supEl?.value                           || '',
+      supplierName:  supEl?.selectedOptions?.[0]?.text?.replace('Select supplier','').trim() || '',
+      buyingPrice:   parseFloat($('pm-buy').value)          || 0,
+      sellingPrice,
+      wholesalePrice:parseFloat($('pm-wholesale')?.value)   || 0,
+      taxRate:       parseFloat($('pm-tax')?.value)         || 0,
+      unit:          $('pm-unit')?.value                    || 'pcs',
+      active:        true,
     };
     try {
       $('pmSaveStatus').textContent = 'Saving…';
       if (_editId) await SokoniInventory.updateProduct(_editId, data);
       else         await SokoniInventory.addProduct(data);
-      showToast(_editId ? 'Product updated' : 'Product added', 'success');
+      showToast(_editId ? 'Product updated ✓' : 'Product added ✓', 'success');
       $('addProductModal').classList.remove('open');
       loadProducts();
     } catch (e) {
-      showToast('Error: ' + e.message, 'error');
-      $('pmSaveStatus').textContent = 'Save failed';
+      showToast('Save failed: ' + e.message, 'error');
+      $('pmSaveStatus').textContent = 'Save failed — ' + e.message;
+    } finally {
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = origTxt; }
     }
   }
   window.saveProduct = saveProduct;
 
   async function saveProductDraft() {
     const name = $('pm-name').value.trim();
-    if (!name) { showToast('Product name required to save draft', 'warn'); return; }
+    if (!name) { showToast('Product name required to save draft', 'warn'); $('pm-name').focus(); return; }
+    const catEl = $('pm-category');
+    const supEl = $('pm-supplier');
     const data = {
       name,
-      sku:          $('pm-sku').value.trim()  || generateSkuStr(name),
-      brand:        $('pm-brand').value.trim(),
-      description:  $('pm-desc').value.trim(),
-      barcode:      $('pm-barcode').value.trim(),
-      stockLevel:   parseFloat($('pm-stock').value)     || 0,
-      reorderPoint: parseFloat($('pm-reorder').value)   || 10,
-      buyingPrice:  parseFloat($('pm-buy').value)       || 0,
-      sellingPrice: parseFloat($('pm-sell').value)      || 0,
-      unit:         $('pm-unit')?.value || 'pcs',
-      active:       false, // draft — not active in storefront
-      status:       'draft',
+      sku:           $('pm-sku').value.trim()               || generateSkuStr(name),
+      category:      catEl?.value                           || '',
+      brand:         $('pm-brand').value.trim()             || '',
+      description:   $('pm-desc').value.trim()              || '',
+      barcode:       $('pm-barcode').value.trim()           || '',
+      stockLevel:    parseFloat($('pm-stock').value)        || 0,
+      reorderPoint:  parseFloat($('pm-reorder').value)      || 10,
+      maxStock:      parseFloat($('pm-maxstock').value)     || 500,
+      warehouseId:   $('pm-warehouse')?.value               || 'main',
+      supplierId:    supEl?.value                           || '',
+      supplierName:  supEl?.selectedOptions?.[0]?.text?.replace('Select supplier','').trim() || '',
+      buyingPrice:   parseFloat($('pm-buy').value)          || 0,
+      sellingPrice:  parseFloat($('pm-sell').value)         || 0,
+      wholesalePrice:parseFloat($('pm-wholesale')?.value)   || 0,
+      taxRate:       parseFloat($('pm-tax')?.value)         || 0,
+      unit:          $('pm-unit')?.value                    || 'pcs',
+      active:        false,
+      status:        'draft',
     };
     try {
       $('pmSaveStatus').textContent = 'Saving draft…';
@@ -1728,22 +1771,59 @@ th .inv-sort-icon::before{content:'↕'}
   }
 
   /* ── POPULATE DROPDOWNS ── */
-  function populateDropdowns() {
-    // Categories filter
-    const catUniq = [...new Set(_allProducts.map(p => p.category).filter(Boolean))].sort();
+  const _STATIC_CATEGORIES = [
+    'Food & Beverages','Electronics','Clothing & Apparel','Health & Beauty',
+    'Home & Kitchen','Agriculture','Automotive','Office Supplies',
+    'Books & Stationery','Sports & Outdoors','Toys & Games',
+    'Building & Construction','Pharmaceuticals','Cosmetics','General',
+  ];
+
+  async function populateDropdowns() {
+    // Categories: derive from existing products first; fall back to static defaults for new merchants
+    const fromProducts = [...new Set(_allProducts.map(p => p.category).filter(Boolean))].sort();
+    let catUniq = fromProducts.length ? fromProducts : [];
+    // Always also load from service (may have seeded Firestore categories)
+    try {
+      const serviceCats = await SokoniInventory.getCategories();
+      if (serviceCats && serviceCats.length) {
+        const merged = [...new Set([...catUniq, ...serviceCats])].sort();
+        catUniq = merged;
+      }
+    } catch (_) {}
+    if (!catUniq.length) catUniq = _STATIC_CATEGORIES;
     _categories = catUniq;
+
+    // Filter sidebar checkboxes
     const catEl = $('categoryFilters');
-    if (catEl) catEl.innerHTML = catUniq.slice(0,8).map(c => `
+    if (catEl) catEl.innerHTML = catUniq.slice(0,12).map(c => `
       <label class="inv-filter-option"><input type="checkbox" value="cat_${c.replace(/\s/g,'_')}" onchange="applyFilters()"> ${escHtml(c)}</label>
     `).join('');
 
     // Product modal category dropdown
     const pmCat = $('pm-category');
-    if (pmCat) pmCat.innerHTML = `<option value="">Select category</option>` + catUniq.map(c => `<option>${escHtml(c)}</option>`).join('');
+    if (pmCat) pmCat.innerHTML = `<option value="">Select category…</option>` + catUniq.map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join('');
 
     // Warehouse dropdown in modal
     const pmWh = $('pm-warehouse');
-    if (pmWh && _warehouses.length) pmWh.innerHTML = _warehouses.map(w => `<option value="${escHtml(w.id)}">${escHtml(w.name)}</option>`).join('');
+    if (pmWh) {
+      const whList = _warehouses.length ? _warehouses : [{ id: 'main', name: 'Main Warehouse' }];
+      pmWh.innerHTML = whList.map(w => `<option value="${escHtml(w.id)}">${escHtml(w.name)}</option>`).join('');
+    }
+
+    // Supplier dropdown in modal
+    const pmSup = $('pm-supplier');
+    if (pmSup) {
+      pmSup.innerHTML = `<option value="">No supplier</option>` +
+        _suppliers.map(s => `<option value="${escHtml(s.id)}">${escHtml(s.name)}</option>`).join('');
+    }
+
+    // Filter sidebar: supplier checkboxes
+    const supEl = $('supplierFilters');
+    if (supEl && _suppliers.length) {
+      supEl.innerHTML = _suppliers.slice(0,8).map(s => `
+        <label class="inv-filter-option"><input type="checkbox" value="sup_${escHtml(s.id)}" onchange="applyFilters()"> ${escHtml(s.name)}</label>
+      `).join('');
+    }
 
     // Filter counts
     const low = _allProducts.filter(p => (p.stockLevel||0) > 0 && (p.stockLevel||0) <= (p.reorderPoint||5)).length;
@@ -1753,19 +1833,25 @@ th .inv-sort-icon::before{content:'↕'}
     if ($('fc-low'))      $('fc-low').textContent      = low;
     if ($('fc-oos'))      $('fc-oos').textContent      = oos;
     if ($('fc-inactive')) $('fc-inactive').textContent = _allProducts.filter(p => p.active === false).length;
+    if ($('navLowBadge')) {
+      $('navLowBadge').textContent = low;
+      $('navLowBadge').style.display = low > 0 ? '' : 'none';
+    }
   }
 
   /* ── LOAD ── */
   async function loadProducts() {
     try {
-      const [products, warehouses] = await Promise.all([
+      const [products, warehouses, suppliers] = await Promise.all([
         SokoniInventory.getProducts({ active: true }).catch(() => []),
         SokoniInventory.getWarehouses().catch(() => []),
+        SokoniInventory.getSuppliers().catch(() => []),
       ]);
       _allProducts = products;
       _warehouses  = warehouses;
+      _suppliers   = suppliers;
       _filtered    = [...products];
-      $('productCount').textContent = products.length;
+      $('productCount').textContent  = products.length;
       $('filteredCount').textContent = products.length;
 
       // Apply URL query filter
@@ -1777,7 +1863,7 @@ th .inv-sort-icon::before{content:'↕'}
         $('filteredCount').textContent = _filtered.length;
       }
 
-      populateDropdowns();
+      await populateDropdowns();
       setView(_view, $(`vb-${_view}`) || $('vb-table'));
 
       window.dispatchEvent(new Event('invReady'));
@@ -1791,10 +1877,19 @@ th .inv-sort-icon::before{content:'↕'}
   if (typeof firebase !== 'undefined' && firebase.auth) {
     firebase.auth().onAuthStateChanged(user => {
       if (!user) { window.location.href = "/"; return; }
-      SokoniInventory.init?.().then(loadProducts).catch(() => loadProducts());
+      // tenantId: prefer explicit seller id from POS setup; fall back to user uid
+      const tenantId = localStorage.getItem('pos_tenant_id')
+        || localStorage.getItem('inv_tenant')
+        || localStorage.getItem('sokoni_seller_id')
+        || user.uid;
+      SokoniInventory.init?.({ tenantId }).then(loadProducts).catch(() => loadProducts());
     });
   } else {
-    SokoniInventory?.init?.().then(loadProducts).catch(() => loadProducts());
+    const tenantId = localStorage.getItem('pos_tenant_id')
+      || localStorage.getItem('inv_tenant')
+      || localStorage.getItem('sokoni_seller_id')
+      || 'default';
+    SokoniInventory?.init?.({ tenantId }).then(loadProducts).catch(() => loadProducts());
   }
 
   // Keyboard shortcut: N = new product
