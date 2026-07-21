@@ -1,0 +1,137 @@
+'use strict';
+/**
+ * SOKONI Entitlement Adapters — thin domain bindings for the canonical engine.
+ *
+ * An adapter answers exactly one question: "given an already-validated
+ * payment, what does this domain write?" It performs NO payment verification,
+ * NO webhook handling and NO reconciliation — those live only in
+ * entitlement-engine.js, and duplicating them here would rebuild the very
+ * split-brain the engine exists to remove.
+ *
+ * Phase 2A migrates ONE domain: subscriptions. It is first because it is the
+ * only domain whose canonical shape is already proven in production —
+ * activateSubscription (functions/index.js) writes exactly 7 fields, and that
+ * shape was verified field-by-field against the live KES 499 merchant incident.
+ * The other five domains follow one release at a time.
+ *
+ * FEATURE-FLAGGED AND INERT. Registration alone changes nothing: the engine
+ * only acts when a caller invokes activate(). Wiring the webhook to call it is
+ * a separate step gated on `_systemConfig/entitlementEngine.subscriptionEngine`,
+ * so disabling the flag restores the previous behaviour immediately without a
+ * deploy.
+ *
+ * Related: docs/PAYMENT_ARCHITECTURE_UNIFICATION.md, functions/entitlement-engine.js
+ */
+
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const engine = require('./entitlement-engine');
+
+const _db = () => getFirestore();
+
+const FLAG_DOC   = '_systemConfig/entitlementEngine';
+const PLAN_DAYS  = 30;                       /* matches activateSubscription */
+const VALID_PLANS = new Set(['free', 'starter', 'pro', 'business']);
+
+/* ── Feature flags ────────────────────────────────────────────────────────
+   One document, one boolean per domain, default OFF, and the read FAILS
+   CLOSED. A config outage must never be the reason the platform starts
+   granting entitlements down an unproven path. */
+async function isEngineEnabled(domain) {
+  try {
+    const [col, doc] = FLAG_DOC.split('/');
+    const snap = await _db().collection(col).doc(doc).get();
+    return snap.exists && snap.data()[`${domain}Engine`] === true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/* ── Subscription adapter ─────────────────────────────────────────────────
+   activate() writes the SAME 7 fields activateSubscription writes, so a
+   subscription produced here is indistinguishable from a normally-activated
+   one. Provenance belongs on the engine's ledger, never on this document —
+   if it leaked onto the subscription, readers would start branching on how
+   the entitlement came to exist. */
+const subscription = {
+  /* Domain preconditions only. Payment validity was already established by
+     the engine and must not be re-derived here. */
+  validate(ctx) {
+    const plan = ctx.intent.planId || ctx.intent.plan || ctx.resourceId;
+    if (!plan) { const e = new Error('Subscription intent carries no plan.'); e.code = 'plan_missing'; throw e; }
+    if (!VALID_PLANS.has(String(plan))) {
+      const e = new Error(`Unknown plan "${plan}".`); e.code = 'plan_invalid'; throw e;
+    }
+    if (!ctx.ownerUid) { const e = new Error('No owner uid.'); e.code = 'owner_missing'; throw e; }
+    return { ok: true, plan: String(plan) };
+  },
+
+  /* MUST use the supplied transaction — writing outside it would break the
+     engine's exactly-once guarantee. */
+  activate(txn, ctx) {
+    const plan      = String(ctx.intent.planId || ctx.intent.plan || ctx.resourceId);
+    const uid       = ctx.ownerUid;
+    const subRef    = _db().collection('subscriptions').doc(uid);
+    const expiresAt = Timestamp.fromDate(new Date(Date.now() + PLAN_DAYS * 86400000));
+
+    /* set() rather than create(): a renewal is a NEW paymentRef, so the engine
+       ledger already guarantees this runs once per payment. Overwriting the
+       subscription doc is the correct renewal behaviour and matches the
+       canonical path. */
+    txn.set(subRef, {
+      uid,
+      plan,
+      status:      'active',
+      paymentRef:  ctx.paymentRef,
+      activatedAt: FieldValue.serverTimestamp(),
+      expiresAt,
+      updatedAt:   FieldValue.serverTimestamp(),
+    });
+
+    return { ref: `subscriptions/${uid}`, plan, expiresAt };
+  },
+
+  /* Refund / chargeback. Downgrades rather than deleting: the merchant's
+     history and paymentRef stay auditable, and getProviderPlan resolves a
+     non-active status to the free tier by itself. */
+  revoke(txn, led, reason) {
+    if (!led.ownerUid) return { skipped: true };
+    txn.set(_db().collection('subscriptions').doc(led.ownerUid), {
+      status:       'cancelled',
+      cancelledAt:  FieldValue.serverTimestamp(),
+      cancelReason: String(reason || '').slice(0, 200),
+      updatedAt:    FieldValue.serverTimestamp(),
+    }, { merge: true });
+    return { ref: `subscriptions/${led.ownerUid}` };
+  },
+
+  async status(ctx) {
+    const snap = await _db().collection('subscriptions').doc(ctx.ownerUid).get();
+    if (!snap.exists) return { active: false };
+    const d = snap.data();
+    const exp = d.expiresAt && d.expiresAt.toMillis ? d.expiresAt.toMillis() : null;
+    return {
+      active:    d.status === 'active' && (!exp || exp > Date.now()),
+      plan:      d.plan || null,
+      expiresAt: d.expiresAt || null,
+    };
+  },
+};
+
+/* ── Registration ─────────────────────────────────────────────────────────
+   Adding a future paid feature should require exactly this — one entry, zero
+   engine modification. Guarded so a double-require cannot throw. */
+function registerAll() {
+  if (!engine.getPurpose('subscription')) {
+    engine.registerPurpose('subscription', {
+      resourceType: null,          /* the plan rides on intent.planId */
+      handler:      subscription,
+      expiresDays:  PLAN_DAYS,
+      refundable:   true,
+    });
+  }
+  return engine.registeredPurposes();
+}
+
+registerAll();
+
+module.exports = { registerAll, isEngineEnabled, subscription, FLAG_DOC, PLAN_DAYS };
