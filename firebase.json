@@ -61,7 +61,8 @@
       "screenshots/**",
       "*-preview.png",
       "assets/branding/extracted/**",
-      "assets/sokoni footer.png"
+      "assets/sokoni footer.png",
+      "pos-hardware-setup.html"
     ],
     "rewrites": [
       {
