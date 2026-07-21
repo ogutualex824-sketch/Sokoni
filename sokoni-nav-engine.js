@@ -186,7 +186,10 @@
          "index.html", which Firebase 301s to "/", costing a round-trip on every Home
          tap and (until the service worker was fixed) producing ERR_FAILED outright. */
       { i:'🏠',  l:'Home',       h:'/' },
-      { i:'🛍️', l:'Categories', h:'category.html?cat=all' },
+      /* "Market", not "Categories" — this engine overwrites .bottom-nav at runtime,
+         so this label is what every buyer page actually renders. The static markup
+         in the pages was aligned to match, keeping first paint identical. */
+      { i:'🛍️', l:'Market', h:'category.html?cat=all' },
       { i:'🛠️', l:'Services',   h:'services.html' },
       { i:'📦',  l:'Orders',     h:'profile.html#orders' },
       { i:'👤',  l:'Profile',    h:'profile.html' }
