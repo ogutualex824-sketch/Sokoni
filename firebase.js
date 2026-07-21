@@ -484,6 +484,61 @@ if (!window.firebase) {
    get the correct, up-to-date state without needing to know about
    Firebase Auth directly.
 ══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   SESSION / DEVICE REGISTRATION
+   ──────────────────────────────────────────────────────────────────
+   deviceRegister was called from exactly ONE place in the codebase —
+   account-centre.html — so a device only appeared in the Devices list
+   if the user happened to open the Account Centre page on it. A phone
+   that signed in and used the app normally was authenticated but
+   never registered, which is why concurrent devices showed as one.
+
+   The Cloud Function was never the problem: it keys documents on
+   `${uid}_${deviceId}`, so distinct devices already get distinct
+   documents. The trigger was simply in the wrong place.
+
+   Registering here means every authenticated device registers itself
+   regardless of which pages it visits. Deliberately cheap:
+
+     • once per browser session (sessionStorage latch), not per page
+       load — otherwise every navigation costs a Firestore write
+     • fire-and-forget, so a failure can never block or delay sign-in
+     • the deviceId is the same stable localStorage key the Devices
+       page already reads, so existing rows keep their identity
+       instead of duplicating
+══════════════════════════════════════════════════════════════════ */
+function _sokoniDeviceId() {
+  try {
+    let id = localStorage.getItem('sk_device_id');
+    if (!id) {
+      id = 'dev_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+      localStorage.setItem('sk_device_id', id);
+    }
+    return id;
+  } catch (_) { return null; }
+}
+
+async function _registerSession() {
+  try {
+    if (sessionStorage.getItem('_skSessionRegistered') === '1') return;
+    const deviceId = _sokoniDeviceId();
+    if (!deviceId) return;                       /* private mode — skip silently */
+    sessionStorage.setItem('_skSessionRegistered', '1');   /* latch before await: no double-fire */
+
+    const res = await httpsCallable(functions, 'deviceRegister')({
+      deviceId,
+      deviceName: (navigator.userAgentData?.platform || navigator.platform || '') || undefined,
+    });
+    const docId = res?.data?.deviceDocId;
+    if (docId) { try { localStorage.setItem('sk_device_doc', docId); } catch (_) {} }
+    console.info('[Session] device registered', docId || '(no id)');
+  } catch (e) {
+    /* Never surface: a session-tracking failure must not affect sign-in. */
+    try { sessionStorage.removeItem('_skSessionRegistered'); } catch (_) {}
+    console.warn('[Session] device registration failed:', e?.code || e?.message || e);
+  }
+}
+
 onAuthStateChanged(auth, async (user) => {
   /* Expose current UID for framework-agnostic consumers (e.g. sokoni-search-engine.js)
      without requiring them to import Firebase directly. */
@@ -491,6 +546,10 @@ onAuthStateChanged(auth, async (user) => {
 
   if (user) {
     localStorage.setItem("loggedIn", "true");
+
+    /* Register this device for the multi-device session list. Not awaited —
+       sign-in must never wait on session bookkeeping. */
+    _registerSession();
 
     /* Determine sign-in provider from Auth token */
     const providerId = user.providerData?.[0]?.providerId || "password";
@@ -696,6 +755,12 @@ onAuthStateChanged(auth, async (user) => {
   } else {
     /* Stop idle timeout when signed out */
     if (window._sokoniStopIdleTimer) window._sokoniStopIdleTimer();
+
+    /* Release the registration latch so a subsequent sign-in on this device
+       registers again. sk_device_id is deliberately NOT cleared — it is this
+       browser's stable identity, and regenerating it would create a duplicate
+       row in the Devices list on every sign-out/sign-in cycle. */
+    try { sessionStorage.removeItem('_skSessionRegistered'); } catch (_) {}
 
     /* Firebase session gone — clear ALL auth-related storage */
     localStorage.removeItem("loggedIn");
