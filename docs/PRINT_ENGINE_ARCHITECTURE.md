@@ -1,12 +1,104 @@
 # Enterprise Print Engine — Architecture
 
-**Status:** DESIGN — awaiting Architecture Review Gate
+**Status:** CORRECTED 2026-07-22 — see §0-A. The original convergence thesis is superseded.
 **Date:** 2026-07-21
 **Related:** [[SmartPOS]] · [[Payments]] · [[Platform Constitution]] · [[Universal Printer Engine v3.0]]
 
 ---
 
-## 0. The finding that shapes this design
+## 0-A. CORRECTION — 2026-07-22: the subsystem is layered, not duplicated
+
+**Everything below section 0-A was written from a static count and is wrong in
+its central claim.** It counted modules that contain ESC/POS bytes and concluded
+the platform had "eleven print engines" that must converge to one. A per-module
+behavioural audit — complete public API, unique methods, external call sites,
+and output protocol for each — found **zero true duplicates**. Acting on the
+original thesis would have caused a production outage.
+
+The subsystem is a **layered architecture**. Each module occupies exactly one
+layer and every one of them is load-bearing.
+
+### Layer diagram
+
+```
+  ┌──────────────────────────────────────────────────────────────┐
+  │ L6  RECEIPT UI          pos-receipt-engine.js                │
+  │                         (show/generate/downloadPDF/WhatsApp) │
+  ├──────────────────────────────────────────────────────────────┤
+  │ L5  BUSINESS DOCUMENTS  sokoni-print-engine.js  (6 A4 docs,  │
+  │                           Firestore branding, retry queue)   │
+  │                         sokoni-pos-print-service.js  (~15    │
+  │                           POS doc types, audit, reprint)     │
+  ├──────────────────────────────────────────────────────────────┤
+  │ L4  FLEET MANAGER       sokoni-pos-print.js  (IndexedDB      │
+  │                           printer registry, role routing)    │
+  ├──────────────────────────────────────────────────────────────┤
+  │ L3  ADAPTER / PROFILE   sokoni-printer-manager.js (.p58e     │
+  │                           proxy, PRINTER_PROFILES, platform) │
+  │                         sokoni-bluetooth-printer.js (P58E)   │
+  ├──────────────────────────────────────────────────────────────┤
+  │ L2  PROTOCOL LIBRARY    sokoni-printer-drivers.js  (stateless│
+  │                           ESC/POS · TSPL · ZPL · CPCL)       │
+  │                         sokoni-receipt-engine.js  (thermal   │
+  │                           receipt bytes + buildShippingLabel)│
+  ├──────────────────────────────────────────────────────────────┤
+  │ L1  TRANSPORT           sokoni-universal-printer.js  ← canon │
+  │                           (Bt/Usb/Serial/Network/Browser)    │
+  │                         pos-printer.js  (pos.html's own      │
+  │                           transport + the only sendRaw sink) │
+  └──────────────────────────────────────────────────────────────┘
+```
+
+### Module table
+
+| Module | Layer | Unique capability | External callers | Merge? |
+|---|---|---|---|---|
+| `sokoni-universal-printer.js` | L1 transport | 5 adapters + queue + encoder | 2 pages | **NO** — canonical |
+| `pos-printer.js` | L1 transport | `sendRaw` (only byte sink on pos.html), `printBrowser`, `buildQR` | **9 files** | **NO** |
+| `sokoni-printer-drivers.js` | L2 protocol | raster `logoBytes`, 7 barcode symbologies, eTIMS/KRA block | 3 | **NO** |
+| `sokoni-receipt-engine.js` | L2 protocol | thermal primitives, `buildShippingLabel()` | label engine | **NO** |
+| `sokoni-bluetooth-printer.js` | L3 adapter | P58E profile | 3 | **NO** — already an adapter |
+| `sokoni-printer-manager.js` | L3 adapter | `.p58e` proxy, `PRINTER_PROFILES`, `detectPlatform`/`getConnectionPriority` | 2 (~70 sites) | **NO** |
+| `sokoni-pos-print.js` | L4 fleet | IndexedDB registry, `printFulfilment` routing, Serial, Android bridge | 3 | **NO** |
+| `sokoni-print-engine.js` | L5 documents | Firestore branding, 6 A4 templates | 4 | **NO** |
+| `sokoni-pos-print-service.js` | L5 documents | ~15 doc types, audit trail, reprint, CSV | 2 | **NO** |
+| `pos-receipt-engine.js` | L6 UI | on-screen receipt, PDF, WhatsApp share | pos.html | **NO** |
+
+**No module may merge.** Each has ≥4 methods with no equivalent elsewhere and
+≥2 external consumer files.
+
+### Why the count misled — twice
+
+Four modules expose a method named `print`; three expose `printLabel`. The
+signatures and protocols are mutually incompatible:
+
+- `PosPrinter.printLabel(products)` → renders **HTML** for `window.print()`
+- `SokoniPosprint.printLabel(job)` → emits **TSPL/ZPL bytes**
+
+Same name, opposite protocol. The same error was made independently about the
+two receipt engines (see ADR-0002). **A shared method name is not shared
+behaviour; an ESC/POS table is not a duplicate engine.**
+
+### 5. Safe cleanup — no deletions
+
+| # | Item | Action |
+|---|---|---|
+| 1 | `pos.html:1449-1450` loads `printer-manager` + `pos-print-service` **without** their dependency `sokoni-universal-printer.js` | **Missing dependency injection.** Add the canonical engine, or drop the two inert tags. Verify the `pos.html:279` health chip first. |
+| 2 | `sokoni-printer-driver.js:468` assigns `SokoniPrinterDrivers` with a **different shape** than `sokoni-printer-drivers.js:5` | **Global conflict — rename the singular.** Latent only because no page loads both; co-loading breaks `sokoni-receipt-engine.js:88`. |
+| 3 | `pos-hardware-setup.html:945` calls `HardwareManager.confirmAndSave()` **unguarded**; no page loads its definition | **Missing dependency.** Latent because the page is 404. |
+| 4 | `sokoni-printer-providers.js` | **Dead code** — zero references repo-wide. Only true deletion candidate found. |
+| 5 | `sokoni-pos-ios-print.js` self-describes as called by `PosPrintService` on iOS; no such call site found | **UNCERTAIN** — needs its own pass before any action. |
+
+### Governing rule
+
+Do not delete a printing module on the basis of a name, a global, or an encoder
+count. Only a behavioural audit proving identical API **and** identical protocol
+**and** zero unique capability **and** zero external consumers may justify
+removal. Otherwise **rename, layer, document, or fix the dependency.**
+
+---
+
+## 0. The finding that shapes this design *(SUPERSEDED — see 0-A)*
 
 The brief asks for a Universal Print Engine to be designed from scratch. **It already exists**, and
 building a second one would be the most damaging thing this document could recommend.
