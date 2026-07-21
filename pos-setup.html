@@ -1888,6 +1888,60 @@ const WIZ = {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   DRAFT PERSISTENCE — survive refresh, crash, and Android tab eviction
+   ─────────────────────────────────────────────────────────────
+   Before this, only TERMINAL state was written (merchant_id, branch_id,
+   setup_complete, at the very end of provisioning). A merchant who refreshed,
+   was backgrounded by Android, or hit a permission dialog at step 5 came back
+   to step 1 and re-entered everything. On a shop floor that is the difference
+   between onboarding once and giving up.
+
+   Persisted: the step reached and the two selections. NOT persisted: WIZ.user
+   (a live Firebase auth object), WIZ.businesses and WIZ.bootstrapData — those
+   are server truth and must be re-fetched, never replayed from a cache that
+   could be stale or edited.
+
+   SECURITY: this draft is UI convenience, never authority. A restored business
+   or branch is a *hint about which entry to preselect*; it is re-validated
+   against the server-fetched list before use (see _resumeFromDraft). Anyone can
+   edit localStorage, so nothing here may decide what a merchant may access —
+   the server list decides, exactly as it did before.
+════════════════════════════════════════════════════════════════ */
+const DRAFT_KEY     = 'sokoni_pos_setup_draft';
+const DRAFT_VERSION = 1;
+const DRAFT_MAX_AGE = 7 * 24 * 60 * 60 * 1000;   /* a week — beyond that, start fresh */
+
+function saveDraft() {
+  try {
+    /* Store only plain identifying fields. Spreading the whole object would drag
+       in Firestore refs and DOM nodes that do not survive JSON. */
+    const biz = WIZ.selectedBiz;
+    const br  = WIZ.selectedBranch;
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      v:           DRAFT_VERSION,
+      currentStep: WIZ.currentStep,
+      biz:         biz ? { id: biz.id || biz.merchantId || null, name: biz.name || '' } : null,
+      branch:      br  ? { id: br.id  || null,                   name: br.name  || '' } : null,
+      savedAt:     Date.now(),
+    }));
+  } catch (_) { /* private mode / quota — the wizard must still work without a draft */ }
+}
+
+function loadDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
+    if (!d || d.v !== DRAFT_VERSION) return null;
+    if (!(Date.now() - (d.savedAt || 0) < DRAFT_MAX_AGE)) { clearDraft(); return null; }
+    if (!(typeof d.currentStep === 'number' && d.currentStep >= 4 && d.currentStep <= 6)) return null;
+    return d;
+  } catch (_) { return null; }
+}
+
+function clearDraft() {
+  try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
+}
+
+/* ═══════════════════════════════════════════════════════════════
    STEP NAVIGATION
 ════════════════════════════════════════════════════════════════ */
 /* Handle for the pending activation frame. Activation is deferred to rAF (below), so a
@@ -1967,6 +2021,9 @@ function goToStep(n) {
   }
 
   WIZ.currentStep = n;
+  /* One choke point: every navigation persists progress, so no caller can
+     advance the wizard and forget to save. */
+  saveDraft();
   onStepEnter(n);
 }
 
@@ -2361,6 +2418,29 @@ async function initBizStep() {
       // First-time user — Create Your Business (never prompt for a Merchant ID).
       renderCreateBusiness();
       return;
+    }
+
+    /* ── Resume from draft ───────────────────────────────────────────────────
+       The saved id is a HINT about which entry to preselect, never a grant. It
+       must match a business the server just returned for THIS user or it is
+       discarded — localStorage is editable, so a forged id must not be able to
+       preselect a business the merchant has no access to. The server list is
+       the authority here exactly as it was before this block existed.
+
+       Resume stops at step 5 (branch selection) and never jumps to 6. Step 6
+       provisions — it writes. Skipping a merchant straight into an irreversible
+       step based on a cached hint is not a convenience, and re-picking a branch
+       costs one tap. */
+    const _draft = loadDraft();
+    if (_draft && _draft.biz && _draft.biz.id) {
+      const _match = businesses.find((b) => (b.id || b.merchantId) === _draft.biz.id);
+      if (_match) {
+        WIZ.selectedBiz = _match;
+        if (_match.branches) WIZ._bizBranches = _match.branches;
+        goToStep(_draft.currentStep >= 5 ? 5 : 4);
+        return;
+      }
+      clearDraft();   /* no longer accessible to this user — do not keep offering it */
     }
 
     // Auto-select if only 1
@@ -2978,6 +3058,7 @@ async function initProvisionStep() {
   localStorage.setItem('sokoni_merchant_id', merchantId);
   localStorage.setItem('sokoni_branch_id',   branchId);
   localStorage.setItem('sokoni_setup_complete', '1');
+  clearDraft();   /* setup finished — a stale draft must not resurrect the wizard */
 
   setLiveMsg('All done!');
   await _delay(600);
