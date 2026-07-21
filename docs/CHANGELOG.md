@@ -2,6 +2,35 @@
 
 ---
 
+## 2026-07-21 — P0 Desktop OTP Login Fix
+
+### Summary
+Fixed all root causes of the OTP phone login failure on desktop. The primary cause was a `RecaptchaVerifier` that was nullified without calling `.clear()`, causing every resend or retry to throw `"reCAPTCHA has already been rendered in this element"`. Secondary causes: the OTP entry field scrolled off-screen (hidden inside the card's height-clipped scroll container on desktop), and five Firebase error codes had no user-readable messages.
+
+### Root Causes Fixed
+
+| # | Severity | File | Issue | Fix |
+|---|----------|------|-------|-----|
+| 1 | CRITICAL | `auth.js` | `RecaptchaVerifier` nullified without `.clear()` in expired-callback, catch block, and `resendPhoneOTP()` — next attempt threw `"reCAPTCHA has already been rendered in this element"`; every resend silently failed | Added `try { _recaptchaVerifier.clear(); } catch (_) {}` before every assignment to `null`; removed dead `const sendOtpBtn` variable |
+| 2 | HIGH | `auth.js` | OTP entry appeared off-screen on desktop — `focus()` was called synchronously after `style.display = 'block'` before browser recalculated layout; card has `overflow-y:auto` + `max-height:calc(100vh-40px)` which clips the field below the visible area | Replaced `_otpField?.clear().focus()` with explicit `requestAnimationFrame` → `scrollIntoView({ behavior:'smooth', block:'nearest' })` → `focus()` |
+| 3 | HIGH | `auth.css` | `.auth-card` on desktop was `max-height:calc(100vh-40px)` / `overflow-y:auto` — on short viewports the OTP field was completely hidden with no visible scroll indicator | Added `@media(min-width:601px)` override setting `max-height:none` / `overflow-y:visible`; card grows naturally and page scrolls (matching mobile) |
+| 4 | HIGH | `auth.css` | `#phoneAuthSection.open` had `max-height:420px` with `overflow:hidden` inherited — fragile budget; OTP content clipped silently if fonts enlarged or section grew | Increased to `max-height:560px`; added `overflow-y:auto` on `.open` state |
+| 5 | MEDIUM | `auth.js` | `_phoneErrMap` missing 5 error codes (`auth/network-request-failed`, `auth/internal-error`, `auth/app-check-token-exchange-failed`, `auth/missing-client-identifier`, `auth/operation-not-allowed`) — all showed identical generic "Could not send OTP" | Added all 5 with actionable messages; fallback now includes the error code for support diagnosis |
+| 6 | MEDIUM | `auth.js` | `_otpErrMap` missing `auth/session-expired` and `auth/network-request-failed` | Added both with user-readable messages |
+
+### Files Changed
+- `auth.js`
+- `auth.css`
+- `docs/CHANGELOG.md`
+
+### Why desktop-specific
+Desktop browsers commonly run ad blockers which block `*.google.com/recaptcha/` endpoints. When the reCAPTCHA v3 token fetch fails, Firebase Auth returns `auth/network-request-failed`. This was shown as a generic "Could not send OTP" with no guidance. Additionally, the card's `max-height` height constraint (desktop-only) hid the OTP field below the card boundary — a clip that does not occur on mobile where `max-height:none` was already applied.
+
+### Breaking Changes
+None.
+
+---
+
 ## 2026-07-21 — Education Hub — Full Fix
 
 ### Summary

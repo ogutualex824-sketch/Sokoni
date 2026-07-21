@@ -1323,16 +1323,14 @@ async function sendPhoneOTP() {
             'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
         );
 
-        const sendOtpBtn = document.getElementById('sendOtpBtn');
         if (!_recaptchaVerifier) {
-            try {
-                _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
-                    size: 'invisible',
-                    'expired-callback': function() { _recaptchaVerifier = null; },
-                });
-            } catch (rcErr) {
-                throw rcErr;
-            }
+            _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
+                size: 'invisible',
+                'expired-callback': function() {
+                    try { _recaptchaVerifier.clear(); } catch (_) {}
+                    _recaptchaVerifier = null;
+                },
+            });
         }
 
         _phoneConfirmResult = await signInWithPhoneNumber(window.firebaseAuth, fullPhone, _recaptchaVerifier);
@@ -1343,7 +1341,14 @@ async function sendPhoneOTP() {
            mountable on DOM ready — mount lazily, then focus so the keyboard (and its
            SMS suggestion strip) comes up straight away. */
         if (!_otpField) _setupOtpInputs();
-        _otpField?.clear().focus();
+        _otpField?.clear();
+        /* Scroll the OTP entry into view within the card's scroll container before
+           focusing — without this, the field is off-screen on desktop where the card
+           clips at max-height:calc(100vh - 40px) and focus() alone races layout. */
+        requestAnimationFrame(function() {
+            document.getElementById('otpEntry')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            _otpField?.focus();
+        });
 
         if (btn) { btn.disabled = false; btn.textContent = 'Resend OTP'; }
         _startOTPTimer(60);
@@ -1351,15 +1356,23 @@ async function sendPhoneOTP() {
 
     } catch (err) {
         if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
-        _recaptchaVerifier = null;
+        if (_recaptchaVerifier) {
+            try { _recaptchaVerifier.clear(); } catch (_) {}
+            _recaptchaVerifier = null;
+        }
         const _phoneErrMap = {
-            'auth/invalid-phone-number':    'Invalid phone number. Please use the format +254 7XX XXX XXX.',
-            'auth/too-many-requests':        'Too many attempts. Please try again later.',
-            'auth/captcha-check-failed':     'Verification failed. Please refresh and try again.',
-            'auth/quota-exceeded':           'SMS quota exceeded. Please try again later.',
-            'auth/user-disabled':            'This account has been disabled.',
+            'auth/invalid-phone-number':            'Invalid phone number. Please use format +254 7XX XXX XXX.',
+            'auth/too-many-requests':               'Too many attempts. Please try again later.',
+            'auth/captcha-check-failed':            'Verification check failed. Please refresh the page and try again.',
+            'auth/quota-exceeded':                  'SMS quota exceeded. Please try again later.',
+            'auth/user-disabled':                   'This account has been disabled.',
+            'auth/network-request-failed':          'Network error. If you use an ad blocker or VPN, try disabling it temporarily, then refresh.',
+            'auth/internal-error':                  'An internal error occurred. Please refresh the page and try again.',
+            'auth/app-check-token-exchange-failed': 'Security check failed. Please refresh the page.',
+            'auth/missing-client-identifier':       'Phone sign-in is not configured. Please contact support.',
+            'auth/operation-not-allowed':           'Phone sign-in is currently disabled. Please contact support.',
         };
-        showAuthMsg(_phoneErrMap[err.code] || 'Could not send OTP. Please try again.', 'error');
+        showAuthMsg(_phoneErrMap[err.code] || ('Could not send OTP. Please try again. (' + (err.code || 'unknown') + ')'), 'error');
     }
 }
 
@@ -1402,6 +1415,8 @@ async function verifyPhoneOTP() {
             'auth/invalid-verification-code': 'Incorrect code. Please check and try again.',
             'auth/code-expired':              'Code expired. Please request a new OTP.',
             'auth/too-many-requests':         'Too many attempts. Please request a new OTP.',
+            'auth/session-expired':           'Session expired. Please request a new OTP.',
+            'auth/network-request-failed':    'Network error. Check your connection and try again.',
         };
         /* error() re-arms auto-submit. Without it the field stays "already fired" and
            a corrected code would only ever verify via the button. */
@@ -1414,7 +1429,10 @@ async function verifyPhoneOTP() {
 
 function resendPhoneOTP() {
     _phoneConfirmResult = null;
-    _recaptchaVerifier  = null;
+    if (_recaptchaVerifier) {
+        try { _recaptchaVerifier.clear(); } catch (_) {}
+        _recaptchaVerifier = null;
+    }
     _otpField?.clear();
     const resendEl = document.getElementById('otpResendLink');
     if (resendEl) resendEl.style.display = 'none';

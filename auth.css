@@ -307,7 +307,7 @@ body{
     margin:0;
     border-radius:20px;
     padding:28px 18px;
-    max-height:none;            /* allow natural scroll, not internal clip */
+    max-height:none;
     overflow-y:visible;
   }
   .auth-title{font-size:22px;}
@@ -326,6 +326,18 @@ body{
   .auth-card{padding:18px 12px;border-radius:14px;}
   .auth-title{font-size:17px;}
   .auth-social-grid{grid-template-columns:1fr;} /* stack buttons vertically at 320px */
+}
+
+/* Desktop: remove card height clip so OTP entry is never hidden off-screen.
+   Mobile already removes max-height (see @media max-width:600px above).
+   On desktop the card was set to overflow-y:auto with max-height:calc(100vh - 40px),
+   which clipped the OTP code entry below the visible area of the card.
+   Now the card grows naturally and the page scrolls instead. */
+@media(min-width:601px){
+  .auth-card{
+    max-height: none;
+    overflow-y: visible;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -477,7 +489,8 @@ body{
   margin-top: 0;
 }
 #phoneAuthSection.open {
-  max-height: 420px;
+  max-height: 560px;    /* was 420px — extra headroom for OTP entry + timer + resend */
+  overflow-y: auto;     /* scrollable if content grows rather than silently clipped */
   opacity: 1;
   margin-top: 4px;
 }
