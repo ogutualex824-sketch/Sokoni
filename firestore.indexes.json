@@ -1218,24 +1218,6 @@
       ]
     },
     {
-      "collectionGroup": "education",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "active",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "featured",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "emailLogs",
       "queryScope": "COLLECTION",
       "fields": [

@@ -1620,7 +1620,7 @@ SERVICES (hire a professional)
   Plumbers, electricians, carpenters, painters, CCTV installation, AC repair, TV mounting, computer repair, phone repair, appliance repair, cleaning, pest control, landscaping, pool service, security guards.
 • Cleaning → cleaning.html
   Domestic cleaning, deep cleans, office cleaning, sofa/carpet steam cleaning, move-in/out cleaning, post-construction cleaning.
-• Education Hub → education-hub.html
+• Education Hub → education.html
   Home tutors (CBC to university), online classes, holiday programmes, skill courses, music lessons, driving lessons, coding bootcamps, language classes.
 • Legal Hub → legal-hub.html
   Lawyers, notaries, conveyancing, business registration, contracts, wills, court representation, debt collection, trademark registration.
@@ -1718,7 +1718,7 @@ INTENT → DESTINATION (know every alias)
 "job / kazi / vacancy / hiring / apply / internship / attachment / graduate / freelance / remote work" → jobs.html
 "concert / show / ticket / event / comedy / festival / conference / wedding venue" → events.html
 "DJ / MC / band / musician / photographer / videographer / sound system / event decor" → entertainment-hub.html
-"tutor / teacher / lessons / homework help / CBC / exam prep / music class / coding / driving school" → education-hub.html
+"tutor / teacher / lessons / homework help / CBC / exam prep / music class / coding / driving school" → education.html
 "lawyer / advocate / legal / contract / will / court / trademark / company registration" → legal-hub.html
 "cleaning / usafi / sweep / mop / carpet / sofa / post-construction / deep clean" → cleaning.html
 "courier / parcel / package / send / ship / transport goods / logistics / warehouse" → delivery.html

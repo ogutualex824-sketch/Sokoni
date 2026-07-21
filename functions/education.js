@@ -465,33 +465,44 @@ exports.reviewCourse = onCall(CF_OPTS, async (request) => {
   const now        = admin.firestore.Timestamp.now();
 
   await db.runTransaction(async (tx) => {
+    /* Read both docs inside the transaction for consistency */
+    const [courseSnap, existingReviewSnap] = await Promise.all([
+      tx.get(courseRef),
+      tx.get(reviewRef),
+    ]);
+
+    if (!courseSnap.exists) _deny('not-found', 'Course not found');
+
+    const courseData  = courseSnap.data();
+    const isUpdate    = existingReviewSnap.exists;
+    const oldRating   = isUpdate ? Number(existingReviewSnap.data().rating || 0) : 0;
+    const oldCount    = Number(courseData.reviewCount || 0);
+    const oldAvg      = Number(courseData.rating || 0);
+
+    /* Incremental average — O(1) reads, no collection scan */
+    let newCount, newAvg;
+    if (isUpdate) {
+      newCount = Math.max(1, oldCount);
+      newAvg   = oldCount > 0
+        ? ((oldAvg * oldCount) - oldRating + ratingNum) / oldCount
+        : ratingNum;
+    } else {
+      newCount = oldCount + 1;
+      newAvg   = ((oldAvg * oldCount) + ratingNum) / newCount;
+    }
+    newAvg = Math.round(newAvg * 10) / 10;
+
     /* Upsert review */
     tx.set(reviewRef, {
       uid,
       courseId,
-      rating: ratingNum,
-      comment: _sanitize(String(comment).trim()),
-      createdAt: now,
+      rating:    ratingNum,
+      comment:   _sanitize(String(comment).trim()),
+      createdAt: isUpdate ? existingReviewSnap.data().createdAt : now,
       updatedAt: now,
-    }, { merge: true });
-
-    /* Recalculate average from existing reviews (single-field query ✓) */
-    const reviewsSnap = await db.collection('courseReviews')
-      .where('courseId', '==', courseId)
-      .limit(200)
-      .get();
-
-    let total  = ratingNum;
-    let count  = 1;
-    reviewsSnap.docs.forEach(d => {
-      if (d.id !== reviewRef.id) {
-        total += Number(d.data().rating || 0);
-        count++;
-      }
     });
 
-    const avgRating = Math.round((total / count) * 10) / 10;
-    tx.update(courseRef, { rating: avgRating, reviewCount: count });
+    tx.update(courseRef, { rating: newAvg, reviewCount: newCount });
   });
 
   log.info('reviewPosted', { uid, courseId, rating: ratingNum });

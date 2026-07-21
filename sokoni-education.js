@@ -35,6 +35,8 @@ window.SokoniEducation = (() => {
   let _callableCache    = {};
   let _toastContainer   = null;
   let _loading          = false;
+  let _courseProgress   = [];   // completedLessons for the currently open course
+  let _reviewRating     = 0;    // selected star rating in the review form
 
   /* ─── Constants ──────────────────────────────────────────────────────────── */
 
@@ -322,6 +324,17 @@ window.SokoniEducation = (() => {
     try {
       const res = await _callable('getCourse')({ courseId });
       const { course, isEnrolled, reviews } = res.data;
+
+      /* Fetch lesson progress for enrolled users */
+      _courseProgress = [];
+      _reviewRating   = 0;
+      if (isEnrolled && _uid) {
+        try {
+          const progRes   = await _callable('getCourseProgress')({ courseId });
+          _courseProgress = progRes.data.completedLessons || [];
+        } catch (_) {}
+      }
+
       renderCourseDetail(course, isEnrolled, reviews);
     } catch (err) {
       console.error('[Education] getCourse error:', err);
@@ -524,9 +537,9 @@ window.SokoniEducation = (() => {
       el.innerHTML = `
         <div class="edu-card-thumb">
           <img
-            src="${thumb ? _esc(thumb) : 'assets/course-placeholder.png'}"
+            src="${thumb ? _esc(thumb) : 'assets/default-product.png'}"
             alt="${_esc(course.title)}"
-            onerror="this.src='assets/course-placeholder.png'"
+            onerror="this.src='assets/default-product.png'"
             loading="lazy"
           >
           ${course.isFeatured ? '<span class="edu-featured-badge">★ Featured</span>' : ''}
@@ -594,9 +607,9 @@ window.SokoniEducation = (() => {
              onkeydown="if(event.key==='Enter')SokoniEducation.openCourseDetail('${_esc(c.courseId)}')"
              aria-label="${_esc(c.title)}">
           <div class="edu-featured-thumb">
-            <img src="${thumb || 'assets/course-placeholder.png'}"
+            <img src="${thumb || 'assets/default-product.png'}"
                  alt="${_esc(c.title)}"
-                 onerror="this.src='assets/course-placeholder.png'"
+                 onerror="this.src='assets/default-product.png'"
                  loading="lazy">
           </div>
           <div class="edu-featured-body">
@@ -642,9 +655,9 @@ window.SokoniEducation = (() => {
              role="listitem" tabindex="0"
              onkeydown="if(event.key==='Enter')SokoniEducation.openCourseDetail('${_esc(e.courseId)}')">
           <div class="edu-enroll-thumb">
-            <img src="${thumb || 'assets/course-placeholder.png'}"
+            <img src="${thumb || 'assets/default-product.png'}"
                  alt="${_esc(course.title || 'Course')}"
-                 onerror="this.src='assets/course-placeholder.png'">
+                 onerror="this.src='assets/default-product.png'">
             ${done ? '<span class="edu-complete-badge">✓</span>' : ''}
           </div>
           <div class="edu-enroll-info">
@@ -678,23 +691,33 @@ window.SokoniEducation = (() => {
     const rating = Number(course.rating || 0).toFixed(1);
     const levelColor = LEVEL_COLORS[course.level] || '#6b7280';
 
-    /* Build lesson list (lessonCount might be a number without lesson IDs in catalog) */
+    /* Build lesson list with progress tracking */
     const lessonCount = Number(course.lessonCount || 0);
     let lessonListHtml = '';
     if (lessonCount > 0) {
+      const completedCount = _courseProgress.length;
       const lessonsArr = Array.from({ length: lessonCount }, (_, i) => ({
-        id: `lesson_${i + 1}`,
+        id:    `lesson_${i + 1}`,
         title: `Lesson ${i + 1}`,
       }));
       lessonListHtml = `
         <div class="edu-lesson-list">
-          <h3 style="font-size:15px;font-weight:700;margin-bottom:10px">Course Content (${lessonCount} lessons)</h3>
-          ${lessonsArr.map((l, i) => `
-            <div class="edu-lesson-row ${!isEnrolled && i > 0 ? 'edu-lesson-locked' : ''}">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <h3 style="font-size:15px;font-weight:700;margin:0">Course Content (${lessonCount} lessons)</h3>
+            ${isEnrolled ? `<span style="font-size:12px;color:var(--muted)">${completedCount}/${lessonCount} complete</span>` : ''}
+          </div>
+          ${lessonsArr.map((l, i) => {
+            const locked    = !isEnrolled && i > 0;
+            const completed = _courseProgress.includes(l.id);
+            const icon      = locked ? '🔒' : completed ? '✅' : '▶';
+            const clickable = isEnrolled ? `data-lesson-id="${_esc(l.id)}" onclick="SokoniEducation.markLessonComplete('${_esc(course.courseId)}','${_esc(l.id)}',${completed})" style="cursor:pointer" role="button" tabindex="0" onkeydown="if(event.key==='Enter')SokoniEducation.markLessonComplete('${_esc(course.courseId)}','${_esc(l.id)}',${completed})"` : '';
+            return `
+            <div class="edu-lesson-row${locked ? ' edu-lesson-locked' : ''}${completed ? ' edu-lesson-done' : ''}" ${clickable}>
               <span class="edu-lesson-num">${i + 1}</span>
               <span class="edu-lesson-title">${_esc(l.title)}</span>
-              ${!isEnrolled && i > 0 ? '<span class="edu-lock-icon">🔒</span>' : '<span class="edu-lock-icon">▶</span>'}
-            </div>`).join('')}
+              <span class="edu-lock-icon">${icon}</span>
+            </div>`;
+          }).join('')}
         </div>`;
     }
 
@@ -713,6 +736,29 @@ window.SokoniEducation = (() => {
         </div>`
       : '';
 
+    /* Review form — shown only to enrolled users */
+    const reviewFormHtml = isEnrolled ? `
+      <div class="edu-review-form" style="margin-top:24px;padding:20px;background:var(--sur2);border-radius:var(--radius);border:1px solid var(--bor)">
+        <h3 style="font-size:15px;font-weight:700;margin-bottom:12px">Leave a Review</h3>
+        <div id="eduReviewStars" style="font-size:30px;letter-spacing:4px;margin-bottom:12px;cursor:pointer" role="group" aria-label="Star rating">
+          ${[1,2,3,4,5].map(n => `<span class="edu-star-pick" data-val="${n}"
+            onclick="SokoniEducation.setReviewRating('${_esc(course.courseId)}',${n})"
+            role="radio" aria-label="${n} star${n > 1 ? 's' : ''}" tabindex="0"
+            onkeydown="if(event.key==='Enter'||event.key===' ')SokoniEducation.setReviewRating('${_esc(course.courseId)}',${n})"
+            style="color:var(--sub)">☆</span>`).join('')}
+        </div>
+        <textarea id="eduReviewComment"
+          class="form-input"
+          rows="3"
+          placeholder="Share your experience… (minimum 5 characters)"
+          maxlength="2000"
+          style="width:100%;box-sizing:border-box;resize:vertical;margin-bottom:10px"></textarea>
+        <button id="eduReviewSubmitBtn" class="btn btn-primary"
+          onclick="SokoniEducation.submitReview('${_esc(course.courseId)}')">
+          Submit Review
+        </button>
+      </div>` : '';
+
     /* Media section */
     let mediaHtml = '';
     if (embed) {
@@ -724,7 +770,7 @@ window.SokoniEducation = (() => {
     } else if (thumb) {
       mediaHtml = `<img class="edu-detail-thumb" src="${_esc(thumb)}"
         alt="${_esc(course.title)}"
-        onerror="this.src='assets/course-placeholder.png'">`;
+        onerror="this.src='assets/default-product.png'">`;
     }
 
     content.innerHTML = `
@@ -756,6 +802,7 @@ window.SokoniEducation = (() => {
 
         ${lessonListHtml}
         ${reviewsHtml}
+        ${reviewFormHtml}
       </div>`;
 
     /* Update enrol button */
@@ -776,6 +823,102 @@ window.SokoniEducation = (() => {
         enrollBtn.onclick = () => enrollCourse(course.courseId);
         enrollBtn.disabled = false;
       }
+    }
+  }
+
+  /* ─── Lesson progress ───────────────────────────────────────────────────── */
+
+  async function markLessonComplete(courseId, lessonId, isCurrentlyCompleted) {
+    if (!_uid) { toast('Sign in to track progress', 'warn'); return; }
+
+    const completed = !isCurrentlyCompleted;
+    const row = document.querySelector(`.edu-lesson-row[data-lesson-id="${lessonId}"]`);
+
+    /* Optimistic UI update */
+    if (row) {
+      const icon = row.querySelector('.edu-lock-icon');
+      if (icon) icon.textContent = completed ? '✅' : '▶';
+      row.classList.toggle('edu-lesson-done', completed);
+      /* Flip the onclick toggle state */
+      row.setAttribute('onclick', `SokoniEducation.markLessonComplete('${_esc(courseId)}','${_esc(lessonId)}',${completed})`);
+      row.setAttribute('onkeydown', `if(event.key==='Enter')SokoniEducation.markLessonComplete('${_esc(courseId)}','${_esc(lessonId)}',${completed})`);
+    }
+
+    /* Update local progress cache */
+    if (completed) {
+      if (!_courseProgress.includes(lessonId)) _courseProgress = [..._courseProgress, lessonId];
+    } else {
+      _courseProgress = _courseProgress.filter(l => l !== lessonId);
+    }
+
+    try {
+      const res = await _callable('updateCourseProgress')({ courseId, lessonId, completed });
+      const progress = res.data.progress || 0;
+
+      if (progress >= 100) {
+        toast('🎉 Course completed! Congratulations!', 'success', 5000);
+      } else {
+        toast(`Progress: ${progress}%`, 'info', 2000);
+      }
+
+      /* Refresh My Learning panel if it's open */
+      _loadMyEnrollments().catch(() => {});
+
+    } catch (err) {
+      /* Rollback optimistic update on error */
+      if (row) {
+        const icon = row.querySelector('.edu-lock-icon');
+        if (icon) icon.textContent = isCurrentlyCompleted ? '✅' : '▶';
+        row.classList.toggle('edu-lesson-done', isCurrentlyCompleted);
+        row.setAttribute('onclick', `SokoniEducation.markLessonComplete('${_esc(courseId)}','${_esc(lessonId)}',${isCurrentlyCompleted})`);
+        row.setAttribute('onkeydown', `if(event.key==='Enter')SokoniEducation.markLessonComplete('${_esc(courseId)}','${_esc(lessonId)}',${isCurrentlyCompleted})`);
+      }
+      if (completed) {
+        _courseProgress = _courseProgress.filter(l => l !== lessonId);
+      } else {
+        if (!_courseProgress.includes(lessonId)) _courseProgress = [..._courseProgress, lessonId];
+      }
+      toast(err.message || 'Could not update progress', 'error');
+    }
+  }
+
+  /* ─── Review form ────────────────────────────────────────────────────────── */
+
+  function setReviewRating(courseId, n) {
+    _reviewRating = Number(n);
+    const container = document.getElementById('eduReviewStars');
+    if (!container) return;
+    container.querySelectorAll('.edu-star-pick').forEach(star => {
+      const val = Number(star.dataset.val);
+      star.textContent = val <= _reviewRating ? '★' : '☆';
+      star.style.color = val <= _reviewRating ? '#f59e0b' : 'var(--sub)';
+    });
+  }
+
+  async function submitReview(courseId) {
+    if (!_uid) {
+      window.location.href = 'login.html?return=education.html';
+      return;
+    }
+
+    if (!_reviewRating) { toast('Please select a star rating', 'warn'); return; }
+
+    const comment = (document.getElementById('eduReviewComment') || {}).value || '';
+    if (comment.trim().length < 5) { toast('Comment must be at least 5 characters', 'warn'); return; }
+
+    const btn = document.getElementById('eduReviewSubmitBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+
+    try {
+      await _callable('reviewCourse')({ courseId, rating: _reviewRating, comment: comment.trim() });
+      toast('Review submitted — thank you!', 'success');
+      _reviewRating = 0;
+      /* Refresh modal to show the new review in the list */
+      await openCourseDetail(courseId);
+    } catch (err) {
+      console.error('[Education] reviewCourse error:', err);
+      toast(err.message || 'Could not submit review. Please try again.', 'error');
+      if (btn) { btn.disabled = false; btn.textContent = 'Submit Review'; }
     }
   }
 
@@ -854,6 +997,9 @@ window.SokoniEducation = (() => {
     showCreateForm,
     hideCreateForm,
     submitCourse,
+    markLessonComplete,
+    setReviewRating,
+    submitReview,
     renderCourses,
     renderFeatured,
     renderMyEnrollments,

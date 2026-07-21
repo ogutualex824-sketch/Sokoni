@@ -2,6 +2,47 @@
 
 ---
 
+## 2026-07-21 — Education Hub — Full Fix
+
+### Summary
+Fixed all 8 issues identified in the Education Hub audit. The page was completely non-functional (entire JS engine threw `ReferenceError: firebase is not defined` on every page load). This release makes the Education Hub fully operational end-to-end: course browsing, enrolment, lesson progress tracking, review submission, and KASS AI navigation.
+
+### Issues Fixed
+
+| # | Severity | File | Issue | Fix |
+|---|----------|------|-------|-----|
+| 1 | CRITICAL | `education.html` | `firebase.js` never loaded — `window.firebase` undefined; all CF calls and `onAuthStateChanged` threw `ReferenceError`; entire page broken | Added `<script type="module" src="firebase.js"></script>` before `sokoni-education.js` |
+| 2 | HIGH | `sokoni-education.js` | `assets/course-placeholder.png` does not exist — all fallback images show broken icon | Replaced all 7 occurrences with `assets/default-product.png` |
+| 3 | HIGH | `functions/index.js` | KASS AI routed education queries to `education-hub.html` (404) | Fixed both routing entries (lines 1623 + 1721) to `education.html` |
+| 4 | MEDIUM | `sokoni-education.js` | `getCourseProgress` and `updateCourseProgress` deployed but never called — lesson rows did nothing on click | Added `markLessonComplete()` + optimistic UI updates; `openCourseDetail` now fetches progress when enrolled; lesson rows show ✅/▶/🔒 and toggle on click |
+| 5 | MEDIUM | `sokoni-education.js` + `education.html` | `reviewCourse` deployed but no UI to submit a review | Added `setReviewRating()` + `submitReview()` + interactive star-rating form rendered in course detail modal for enrolled users |
+| 6 | LOW | `functions/education.js` | `reviewCourse` read `courseReviews` collection outside the transaction it used to write — race condition in average-rating calculation | Replaced O(N) collection scan with incremental O(1) transactional average using `tx.get(courseRef)` + `tx.get(reviewRef)` |
+| 7 | LOW | `firestore.indexes.json` | Stale index on non-existent `education` collection consuming 1 index budget slot | Removed |
+| 8 | LOW | `firestore.rules` | Missing explicit parentheses on `&&`/`\|\|` in `courseEnrollments` + `courseProgress` read rules | Added parens for unambiguous precedence |
+
+### New Callable Surface Used
+- `getCourseProgress({ courseId })` — called from `openCourseDetail` when `isEnrolled === true`
+- `updateCourseProgress({ courseId, lessonId, completed })` — called from `markLessonComplete`
+- `reviewCourse({ courseId, rating, comment })` — called from `submitReview`
+
+### Files Changed
+- `education.html`
+- `sokoni-education.js`
+- `functions/index.js`
+- `functions/education.js`
+- `firestore.indexes.json`
+- `firestore.rules`
+
+### Security
+- All user-supplied text in the new review form passes through existing `_esc()` before innerHTML.
+- `reviewCourse` CF validates rating (integer 1–5) and comment (5–2000 chars) server-side.
+- Lesson progress writes require enrolment verification inside the CF; no client-side trust.
+
+### Breaking Changes
+None.
+
+---
+
 ## 2026-07-21 — P0 iOS POS Crash — iPhone Reboot Fix
 
 ### Summary
