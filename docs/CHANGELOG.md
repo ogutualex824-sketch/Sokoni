@@ -2,6 +2,45 @@
 
 ---
 
+## 2026-07-21 — Production Deployment + Security Rules Audit
+
+### Deployment
+
+- **IAM**: Granted `roles/run.invoker` to `allUsers` on `bootstrapdevice` and `getbusinessconfig` Cloud Run services — fixes POS device provisioning 403 errors that blocked onboarding step 6
+- **Functions**: Redeployed `subActivate`, `subGetStatus`, `subGetPlans` — live-deploys the `'COMPLETE'` (uppercase) status fix; subscription activation now works after M-Pesa payment webhook
+- **Rules**: Deployed patched `firestore.rules` — two security fixes (see Security section)
+
+### Security (Firestore Rules Audit — Score 3/5 Moderate)
+
+Two verified findings fixed; two moderate and two minor deferred:
+
+**FIXED — Major: posTerminals IDOR** (`firestore.rules:2310`)  
+Update rule checked `request.resource.data.uid` (incoming) but NOT `resource.data.uid` (existing owner). Any authenticated user could overwrite another merchant's terminal by setting `uid=self`. Fixed by splitting create/update and adding `resource.data.uid == request.auth.uid` guard on update.
+
+**FIXED — Major: hubs privilege escalation** (`firestore.rules:3195`)  
+Hub managers could update the `managerIds` and `managerId` fields with no restriction — effectively granting hub manager access to any arbitrary user. Fixed by adding `!affectedKeys().hasAny(['managerId','managerIds','ownerId'])` guard on the manager update path.
+
+**DEFERRED — Moderate: legalDocDrafts size bypass**  
+Create enforces 100KB content limit; update does not. Low priority — affects only the document owner's own draft.
+
+**DEFERRED — Moderate: fcm_tokens phone-auth exclusion**  
+`request.auth.token.email != null` blocks phone-auth users from registering FCM tokens. Phone users get no push notifications. Fix pending; requires migrating token key from email to uid.
+
+**DEFERRED — Minor: gipRoutes unbound create / size limits**  
+See audit for details.
+
+### Files Changed
+- `firestore.rules` — posTerminals IDOR fix + hubs manager escalation fix
+- `functions/sub-billing.js` — redeployed with `'COMPLETE'` case fix (committed in `fdd8af3`)
+
+### Still Pending
+- `getTypesenseSearchKey` IAM grant (service not yet deployed — quota limit)
+- FCM token phone-auth fix (deferred)
+- Phase 5 POS E2E flow testing (manual)
+- Phase 6 production payment verification (manual)
+
+---
+
 ## 2026-07-21 — POS OMEGA Certification — Zero-Defect Onboarding
 
 **Scope:** Complete audit and hardening of the SmartPOS onboarding pipeline (`pos-setup.html` → `business-bootstrap.js`).

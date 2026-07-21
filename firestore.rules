@@ -2306,8 +2306,14 @@ service cloud.firestore {
     /* ─── SmartPOS 3.0 — Hardware Registry ─────────────────────── */
     match /posTerminals/{terminalId} {
       allow read:  if isAuthed() && (resource.data.uid == request.auth.uid || isAdmin());
-      /* hardware wizard writes directly — allow owner write */
-      allow create, update: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      /* SEC: split create/update — update must verify the EXISTING owner (resource.data.uid),
+         not just the incoming uid. Without this any authed user can overwrite another
+         merchant's terminal by setting uid=self (IDOR). */
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid;
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && resource.data.uid == request.auth.uid
+                        && request.resource.data.uid == request.auth.uid);
       allow delete: if isAdmin();
     }
 
@@ -3192,10 +3198,15 @@ service cloud.firestore {
     match /hubs/{hubId} {
       allow read:   if isAuthed();
       allow create: if isAdmin();
-      allow update: if isAdmin() || (isAuthed() && (
-                      resource.data.managerId == request.auth.uid ||
-                      resource.data.managerIds.hasAny([request.auth.uid])
-                    ));
+      /* SEC: hub managers may update operational fields only — they must NOT be able to
+         write managerId/managerIds/ownerId, which would let them grant hub access to
+         arbitrary users (hub-scoped privilege escalation). */
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && (resource.data.managerId == request.auth.uid
+                            || resource.data.managerIds.hasAny([request.auth.uid]))
+                        && !request.resource.data.diff(resource.data)
+                             .affectedKeys().hasAny(['managerId','managerIds','ownerId']));
       allow delete: if isAdmin();
     }
 
