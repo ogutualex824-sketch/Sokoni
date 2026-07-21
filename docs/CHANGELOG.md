@@ -2,6 +2,33 @@
 
 ---
 
+## 2026-07-21 — Fix: Desktop home page not scrollable
+
+### Summary
+The home page (and all pages) could not be scrolled vertically on desktop. The page appeared fully loaded but mouse wheel and keyboard scroll had no effect.
+
+### Root Cause
+`sokoni-drawers.css` (injected globally by `shared-header.js` after DOMContentLoaded) set `overflow-x: hidden` on both `html` and `body` via a global horizontal-overflow guard rule. Per the CSS Overflow spec, when one axis is `hidden` (non-visible), the other axis's `visible` default is coerced to `auto`. This created dual scroll containers on both `html` and `body`, disrupting the browser's normal vertical scroll chain — on desktop Chrome/Edge the result is the page becoming un-scrollable via the window scroll.
+
+`premium.css` intentionally uses `overflow-x: clip` (not `hidden`) for the same guard because `clip` prevents horizontal bleed without triggering the overflow interaction and without creating a scroll container. `sokoni-drawers.css` was inconsistent with this design intent.
+
+### Fix
+Changed `overflow-x: hidden` → `overflow-x: clip` in `sokoni-drawers.css` global guard rule. Added explanatory comment matching `premium.css`.
+
+### Files Changed
+- `sokoni-drawers.css`
+- `docs/CHANGELOG.md`
+
+### Security / Performance
+- No security impact.
+- `clip` is equivalent in clipping behavior; no horizontal content becomes visible.
+- Browser support: `overflow: clip` is supported in all Chromium 90+, Firefox 81+, Safari 16+ browsers.
+
+### Breaking Changes
+None.
+
+---
+
 ## 2026-07-21 — Fix: Phone OTP section invisible on desktop
 
 ### Summary

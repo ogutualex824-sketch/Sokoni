@@ -202,9 +202,13 @@ body.sk-body-locked {
 }
 
 /* ── Global overflow guard — no page-level horizontal scroll ─── */
+/* overflow-x: clip (not hidden) — clip prevents horizontal bleed WITHOUT triggering
+   the CSS overflow interaction. With hidden, overflow-y:visible is coerced to auto on
+   both html and body, creating dual scroll containers that disrupt desktop vertical
+   scrolling. premium.css intentionally uses clip for the same reason. */
 html, body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ── FABs — hide while any SK drawer is open ────────────────── */
