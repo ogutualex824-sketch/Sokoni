@@ -47,6 +47,23 @@ const OPT    = { region: REGION, enforceAppCheck: true };
 /* ── Order statuses considered "settled" for reconciliation ── */
 const SETTLED_STATUSES = new Set(['completed', 'confirmed']);
 
+/* ── Subscription entitlement reconciliation window ──────────────
+   A COMPLETE subscription payment should become an active
+   subscription within seconds via one of THREE real-time paths:
+     1. intasendWebhook            (index.js — reads paymentIntents)
+     2. subAutoActivateOnPayment   (sub-engine — payments onUpdate)
+     3. activateSubscription       (onCall — client-invoked)
+   Each has a distinct blind spot (webhook rejected, payment created
+   already-COMPLETE so no onUpdate fires, tab closed before onCall).
+   This backstop assumes ALL THREE can fail and sweeps for the
+   residue. GRACE = don't touch a payment younger than this; the
+   real-time paths deserve their moment first. LOOKBACK caps how far
+   back a single run scans (older stragglers need a manual recovery
+   run — they are historical, not an active-incident concern). */
+const SUB_RECON_GRACE_MS    = 2  * 60 * 1000;        // 2 minutes
+const SUB_RECON_LOOKBACK_MS = 24 * 60 * 60 * 1000;   // 24 hours
+const SUB_PLAN_DAYS         = 30;                     // canonical entitlement length
+
 /* ── M-Pesa payment method identifiers ─────────────────────── */
 const MPESA_METHODS = new Set(['mpesa']);
 
@@ -554,6 +571,219 @@ exports.getMpesaReconciliationSummary = onCall(
       date: label, totalOrders: grandTotalOrders, totalCents: grandTotalCents,
     });
 
+    return summary;
+  }
+);
+
+/* ================================================================
+   SUBSCRIPTION ENTITLEMENT RECONCILIATION  (backstop)
+   ────────────────────────────────────────────────────────────────
+   Closes the silent-failure class: a COMPLETE subscription payment
+   that never became an active subscription because all three
+   real-time activation paths missed it.
+
+   Default posture is ALERT-ONLY (detect + raise a P1 adminAlert).
+   Auto-heal is opt-in via a feature flag so an operator stages the
+   rollout: deploy → watch the alerts prove the detector correct →
+   enable auto-heal only once the alerts are trusted. When auto-heal
+   IS on, the write is byte-identical to the canonical activation
+   (activateSubscription, index.js): exactly the same 7 fields on
+   subscriptions/{uid}, provenance recorded only on the audit log.
+================================================================ */
+
+/**
+ * Read the auto-heal feature flag. Default OFF (alert-only).
+ * Lives in _systemConfig/reconciliation.subscriptionAutoHeal — the
+ * same admin/IAM-gated config space firestore.rules already locks,
+ * so a client can never flip the platform into auto-writing
+ * entitlements.
+ */
+async function isSubscriptionAutoHealEnabled() {
+  try {
+    const snap = await db.collection('_systemConfig').doc('reconciliation').get();
+    return snap.exists && snap.data().subscriptionAutoHeal === true;
+  } catch (_) {
+    return false; // fail CLOSED — never auto-write on a config read error
+  }
+}
+
+/**
+ * Does the DASHBOARD-authoritative entitlement exist for this uid?
+ * getProviderPlan (client) and the canonical activation path both key
+ * on subscriptions/{uid} by document id, so that doc is the single
+ * source the merchant's banner actually resolves. A record living
+ * only under some other id is a divergence problem, not this
+ * backstop's concern — and healing the canonical location is exactly
+ * what activateSubscription would have done.
+ */
+async function subscriptionEntitlementExists(uid) {
+  const snap = await db.collection('subscriptions').doc(uid).get();
+  if (!snap.exists) return false;
+  const d = snap.data();
+  if (d.status && d.status !== 'active' && d.status !== 'trialing' && d.status !== 'grace') return false;
+  return true;
+}
+
+/**
+ * Auto-heal one entitlement gap. Re-validates the payment against
+ * Firestore (COMPLETE + ownership) exactly as the canonical path
+ * does, then writes the canonical 7-field subscription create-only
+ * (never overwrites) plus one audit record tagged as an operational
+ * recovery. Idempotent: a concurrent real-time path that wins the
+ * race leaves subscriptions/{uid} present, and create() no-ops here.
+ */
+async function healSubscriptionEntitlement(intent, ref, log) {
+  const uid = intent.uid;
+  /* Canonical pre-write validation — mirror of activateSubscription. */
+  const paySnap = await db.collection('payments').doc(ref).get();
+  if (!paySnap.exists)                     return { healed: false, reason: 'payment_missing' };
+  const pay = paySnap.data();
+  if (pay.status !== 'COMPLETE')           return { healed: false, reason: 'payment_not_complete' };
+  if (pay.uid && pay.uid !== uid)          return { healed: false, reason: 'ownership_mismatch' };
+
+  const subRef    = db.collection('subscriptions').doc(uid);
+  const expiresAt = new Date(Date.now() + SUB_PLAN_DAYS * 86400000);
+
+  /* Transaction: re-check absence and create atomically so a
+     real-time path that lands mid-run cannot be clobbered. */
+  const wrote = await db.runTransaction(async (txn) => {
+    const existing = await txn.get(subRef);
+    if (existing.exists) return false; // someone activated it first — done
+    txn.set(subRef, {
+      uid,
+      plan:        intent.planId,
+      status:      'active',
+      paymentRef:  ref,
+      activatedAt: F.serverTimestamp(),
+      expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
+      updatedAt:   F.serverTimestamp(),
+    });
+    return true;
+  });
+
+  if (!wrote) return { healed: false, reason: 'already_active' };
+
+  /* Provenance goes on the audit log ONLY — the subscription doc
+     stays indistinguishable from a normally-activated one. */
+  await db.collection('subscriptionAuditLog').add({
+    uid, plan: intent.planId, paymentRef: ref,
+    action:    'ACTIVATED',
+    source:    'reconciliation_backstop',
+    note:      'Operational Recovery — auto-healed by reconcileSubscriptionEntitlements',
+    expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+    timestamp: F.serverTimestamp(),
+  }).catch((e) => log.error('Heal audit write failed', { ref, error: e.message }));
+
+  log.audit('Subscription entitlement auto-healed', { uid, ref, plan: intent.planId });
+  return { healed: true };
+}
+
+/**
+ * Core sweep. Finds subscription payment intents whose payment is
+ * COMPLETE but whose entitlement is absent, within the grace/lookback
+ * window. Returns a summary; performs writes only when autoHeal.
+ */
+async function runSubscriptionReconciliation(log) {
+  const autoHeal = await isSubscriptionAutoHealEnabled();
+  const now      = Date.now();
+  const floor    = admin.firestore.Timestamp.fromMillis(now - SUB_RECON_LOOKBACK_MS);
+  const ceiling  = admin.firestore.Timestamp.fromMillis(now - SUB_RECON_GRACE_MS);
+
+  log.info('Subscription reconciliation starting', {
+    autoHeal, grace: '2m', lookback: '24h',
+  });
+
+  let scanned = 0, gaps = 0, healed = 0, alerted = 0, skipped = 0;
+  const gapList = [];
+
+  /* Subscription intents in the window. Two range bounds on one
+     field (createdAt) + one equality (purpose) → one composite index
+     (added to firestore.indexes.json). */
+  const snap = await db.collection('paymentIntents')
+    .where('purpose', '==', 'subscription')
+    .where('createdAt', '>=', floor)
+    .where('createdAt', '<=', ceiling)
+    .orderBy('createdAt', 'asc')
+    .limit(500)
+    .get();
+
+  /* eslint-disable no-await-in-loop */
+  for (const doc of snap.docs) {
+    const intent = doc.data();
+    const ref    = doc.id;
+    if (!intent.uid || !intent.planId) { skipped++; continue; }
+    scanned++;
+
+    /* Only intents whose payment actually COMPLETED can have a gap. */
+    const paySnap = await db.collection('payments').doc(ref).get();
+    if (!paySnap.exists || paySnap.data().status !== 'COMPLETE') continue;
+
+    if (await subscriptionEntitlementExists(intent.uid)) continue; // already entitled
+
+    gaps++;
+    const entry = {
+      paymentRef: ref, uid: intent.uid, plan: intent.planId,
+      planName:   intent.planName || intent.planId,
+      amount:     intent.amount || null,
+      intentAt:   intent.createdAt ? intent.createdAt.toDate().toISOString() : null,
+    };
+
+    if (autoHeal) {
+      const r = await healSubscriptionEntitlement(intent, ref, log);
+      if (r.healed) { healed++; entry.action = 'auto_healed'; }
+      else          { entry.action = 'heal_skipped'; entry.reason = r.reason; }
+    } else {
+      entry.action = 'alert_only';
+    }
+    if (gapList.length < 50) gapList.push(entry);
+
+    /* Every gap raises a P1 alert regardless of heal outcome — an
+       auto-heal that had to skip (ownership mismatch, payment not
+       COMPLETE) is exactly what an operator must see immediately. */
+    await writeAdminAlert('subscription_entitlement_gap', {
+      priority: 'P1', ...entry, autoHeal,
+    }, log);
+    alerted++;
+  }
+  /* eslint-enable no-await-in-loop */
+
+  const summary = {
+    scanned, gaps, healed, alerted, skipped, autoHeal,
+    gapList, generatedAt: new Date().toISOString(),
+  };
+  log[gaps > 0 ? 'warn' : 'info']('Subscription reconciliation complete', {
+    scanned, gaps, healed, alerted, mode: autoHeal ? 'auto_heal' : 'alert_only',
+  });
+  return summary;
+}
+
+/* ----------------------------------------------------------------
+   7. reconcileSubscriptionEntitlements  (scheduled, every 10 min)
+---------------------------------------------------------------- */
+exports.reconcileSubscriptionEntitlements = onSchedule(
+  { schedule: '*/10 * * * *', region: REGION, timeoutSeconds: 300 },
+  async () => {
+    const log = createLogger({ fn: 'reconcileSubscriptionEntitlements' });
+    const summary = await runSubscriptionReconciliation(log);
+    /* Persist a run record for observability / trend analysis. */
+    await db.collection('subscriptionReconciliationRuns').add({
+      ...summary, createdAt: F.serverTimestamp(),
+    }).catch((e) => log.error('Run record write failed', { error: e.message }));
+  }
+);
+
+/* ----------------------------------------------------------------
+   8. triggerSubscriptionReconciliation  (admin, on-demand)
+   ────────────────────────────────────────────────────────────────
+   Manual/dry-run entry point. Admins can preview gaps without
+   waiting for the schedule; the flag still governs whether it heals.
+---------------------------------------------------------------- */
+exports.triggerSubscriptionReconciliation = onCall(
+  { ...OPT, timeoutSeconds: 300 },
+  async (req) => {
+    const log = createLogger({ fn: 'triggerSubscriptionReconciliation', uid: req.auth?.uid });
+    assertAdmin(req);
+    const summary = await runSubscriptionReconciliation(log);
     return summary;
   }
 );

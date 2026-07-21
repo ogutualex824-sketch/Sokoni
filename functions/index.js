@@ -9760,6 +9760,13 @@ exports.resolveUnmatchedPayment       = paymentRecon.resolveUnmatchedPayment;
 exports.getMpesaReconciliationSummary = paymentRecon.getMpesaReconciliationSummary;
 exports.triggerManualReconciliation   = paymentRecon.triggerManualReconciliation;
 
+/* Subscription entitlement backstop — catches a COMPLETE subscription payment
+   that none of the three real-time activation paths turned into an active
+   subscription. Alert-only until _systemConfig/reconciliation.subscriptionAutoHeal
+   is set true. */
+exports.reconcileSubscriptionEntitlements = paymentRecon.reconcileSubscriptionEntitlements;
+exports.triggerSubscriptionReconciliation = paymentRecon.triggerSubscriptionReconciliation;
+
 /* ── Marketing Engine — consolidated into commerceDispatch above ── */
 const mktEngine = require('./marketing-engine');
 exports.concludeExpiredFlashSales       = mktEngine.concludeExpiredFlashSales; /* scheduled */

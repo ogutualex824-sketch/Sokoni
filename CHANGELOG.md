@@ -1,4 +1,74 @@
-﻿## [2026-07-20] — The merchant dashboard and the storefront read different collections
+﻿## [2026-07-21] — A paid subscription could silently never become an entitlement
+
+### Root cause
+
+Three server-side paths can activate a subscription, and each has a blind spot:
+
+| Path | Trigger | Blind spot |
+|---|---|---|
+| `intasendWebhook` (`functions/index.js:5654`) | IntaSend callback → reads `paymentIntents/{ref}` | Callback rejected at the auth gate; or no `paymentIntents` doc (subscription checkout only started minting intents on 2026-07-20) |
+| `subAutoActivateOnPayment` (`functions/sub-engine.js:288`) | `payments/{ref}` **onUpdate** → COMPLETE | Never fires if the payment doc is *created* already-COMPLETE, or lacks `meta.purpose` |
+| `activateSubscription` (`functions/index.js:5730`) | client onCall after payment | Tab closed, network dropped — and it refuses unless `payments/{ref}.status === "COMPLETE"`, which the rejected webhook never wrote |
+
+When all three miss, `subscriptions/{uid}` is never written. `getProviderPlan` then correctly
+resolves `free`, and the merchant sees "Plan limit: 3 listings on Free plan" after paying. Nothing
+in the platform noticed: there was **no scheduled sweep** for a COMPLETE subscription payment with
+no entitlement.
+
+### Fix — a backstop that assumes every real-time path can fail
+
+`reconcileSubscriptionEntitlements` (`functions/payment-reconciliation.js`) runs every 10 minutes,
+finds subscription intents whose payment is COMPLETE but whose `subscriptions/{uid}` is absent, and
+raises a **P1 `adminAlert` per gap**. This is the same shape as `sweepStaleWalletTopUps`
+(`functions/wallet.js:714`) — the one entitlement flow that already had a reconciler and
+consequently has never silently failed.
+
+**Alert-only by default.** Auto-heal is gated on `_systemConfig/reconciliation.subscriptionAutoHeal`
+and the flag read **fails closed**, so a config error can never start auto-writing entitlements. The
+intended rollout is deploy → watch the alerts prove the detector → enable the flag.
+
+When auto-heal *is* on, the write is deliberately indistinguishable from a normal activation: the
+same 7 fields `activateSubscription` writes, created inside a transaction that re-checks absence (so
+a real-time path landing mid-run wins instead of being clobbered), after re-validating the payment is
+COMPLETE and owned by the same uid. Provenance lives only on `subscriptionAuditLog`
+(`source: reconciliation_backstop`), never on the subscription document.
+
+### Also found — the same shape elsewhere, ranked
+
+A repo-wide audit of every pay→entitlement flow found this is **not the worst instance**:
+
+| Risk | Domain | Evidence |
+|---|---|---|
+| **HIGH** | **Event ticketing** | No function anywhere flips `eventTickets.status` from `awaiting_payment` → `valid` (`functions/event-hub.js:595`), and `checkInTicket` requires `valid` (`:720`). A paid ticket is permanently unusable at the gate — no activation path *and* no recovery path. |
+| HIGH | Subscriptions | Fixed by this change. |
+| MED | Featured listings | Grant is client-callable-only and depends on `posPayments/{ref}.status === "completed"` from a Daraja callback behind an IP allowlist (`functions/index.js:3211`); `.add()` also allows duplicate listings on retry. |
+| MED | Ad campaigns | `createAdCampaign` (`functions/index.js:4071`) grants with no payment verification at all — the inverse risk. |
+| LOW | Wallet top-ups | The model to copy: independent scheduled reconciler, re-verifies with the provider, idempotent credit. |
+
+### Files affected
+
+- `functions/payment-reconciliation.js` — +2 CFs, sweep/heal/flag helpers
+- `functions/index.js` — 2 exports wired
+- `firestore.indexes.json` — +1: `paymentIntents(purpose ASC, createdAt ASC)`
+
+### Database changes
+
+New: `subscriptionReconciliationRuns` (run history). Writes to existing `adminAlerts`,
+`subscriptionAuditLog`, `subscriptions`. Reads `_systemConfig/reconciliation`.
+
+### Security
+
+No rule, App Check, or auth change. The admin trigger requires the `admin`/`superAdmin` claim.
+The auto-heal flag lives in the IAM-gated `_systemConfig` space, so no client can enable it.
+
+### Deployment
+
+Not yet deployed — index first, then functions:
+`firebase deploy --only firestore:indexes` then
+`firebase deploy --only functions:reconcileSubscriptionEntitlements,functions:triggerSubscriptionReconciliation`.
+Deploy the index first, or the sweep's query will error until it exists.
+
+## [2026-07-20] — The merchant dashboard and the storefront read different collections
 
 ### Root cause
 
