@@ -330,16 +330,25 @@
         }
 
         /* Wait for Firebase + auth to be ready */
-        document.addEventListener('sokoniFirebaseReady', function() {
-          var auth = window.firebaseAuth;
-          if (auth) {
-            /* onAuthStateChanged fires immediately with current user (null or user) */
-            auth.onAuthStateChanged(function(user) {
-              if (user) _tryLoad();
-            });
-          } else {
-            setTimeout(_tryLoad, 3000); /* fallback if auth not ready */
-          }
+        /* waitForFirebaseReady resolves immediately when Firebase is already
+           up, so this works whether firebase.js ran before or after this
+           script. The previous version listened for an event nothing
+           dispatched, and its 3-second fallback sat INSIDE that dead
+           listener — so on the page the OAuth redirect lands on, no auth
+           code ran at all and a restored session was never rendered. */
+        (window.waitForFirebaseReady
+          ? window.waitForFirebaseReady()
+          : new Promise(function (res) {
+              document.addEventListener('sokoniFirebaseReady', function () { res(window.firebaseAuth); }, { once: true });
+              setTimeout(function () { res(window.firebaseAuth); }, 3000);   /* fallback OUTSIDE the listener */
+            })
+        ).then(function (auth) {
+          console.info('[Page] sokoniFirebaseReady received');
+          if (!auth) { _tryLoad(); return; }
+          auth.onAuthStateChanged(function (user) {
+            console.info('[Auth] onAuthStateChanged fired', user ? '| User UID: ' + user.uid : '| no user');
+            if (user) _tryLoad();
+          });
         });
       })();
       </script>

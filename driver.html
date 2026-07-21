@@ -710,7 +710,11 @@ function _startFuelPricesListener() {
   } catch(_) {}
 }
 /* Subscribe as soon as Firebase is ready */
-document.addEventListener("sokoniFirebaseReady", _startFuelPricesListener);
+/* Idempotent: runs immediately if Firebase is already up, otherwise on the
+   event. A bare addEventListener misses a dispatch that already happened. */
+(window.waitForFirebaseReady ? window.waitForFirebaseReady()
+  : new Promise(function(r){ document.addEventListener("sokoniFirebaseReady", function(){r();}, {once:true}); setTimeout(r, 3000); })
+).then(function(){ console.info("[Page] sokoniFirebaseReady received"); _startFuelPricesListener(); });
 if (window.firebaseDB) _startFuelPricesListener();
 
 /* Vehicle fuel consumption (km per litre) + cargo metadata */

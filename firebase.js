@@ -197,6 +197,57 @@ window.firebaseDB        = db;
 window.firebaseStorage   = storage;
 window.firebaseFunctions = functions;
 
+/* ══════════════════════════════════════════════════════════════════
+   FIREBASE READY LIFECYCLE
+   ──────────────────────────────────────────────────────────────────
+   Four pages — index.html, driver.html, launch-readiness.html and
+   merchant-pipeline.html — registered their entire auth pipeline
+   inside a listener for `sokoniFirebaseReady`. Nothing in the
+   codebase ever dispatched it, so those listeners never fired.
+
+   On index.html that is the page the Google OAuth redirect lands on,
+   so onAuthStateChanged was never registered there: the session was
+   restored by the SDK but nothing rendered it, and the header stayed
+   logged-out. The user read that as "not signed in". OAuth itself was
+   never broken — the landing page simply never listened.
+
+   The event now fires here, immediately after window.firebaseAuth is
+   assigned, so a listener can rely on the global existing.
+
+   IDEMPOTENT BY DESIGN. An event is a one-shot: any page whose script
+   parses after this module has already missed it, which on a deferred
+   module is a coin-toss the page cannot win reliably. The latch below
+   makes late arrivals safe, and waitForFirebaseReady() resolves
+   immediately when Firebase is already up rather than waiting for an
+   event that has been and gone. That is what removes the race rather
+   than narrowing it.
+══════════════════════════════════════════════════════════════════ */
+window.__sokoniFirebaseReady = true;
+
+/**
+ * waitForFirebaseReady(cb?) — the single readiness contract.
+ *   waitForFirebaseReady().then(auth => …)   or   waitForFirebaseReady(auth => …)
+ * Resolves immediately if Firebase is already initialised, otherwise on
+ * the event. Callers never need to know which case they are in.
+ */
+window.waitForFirebaseReady = function (cb) {
+  const done = (a) => { try { if (typeof cb === 'function') cb(a); } catch (e) { console.error('[Firebase] ready callback threw:', e); } return a; };
+  if (window.__sokoniFirebaseReady && window.firebaseAuth) return Promise.resolve(done(window.firebaseAuth));
+  return new Promise((resolve) => {
+    document.addEventListener('sokoniFirebaseReady', function _once() {
+      document.removeEventListener('sokoniFirebaseReady', _once);
+      resolve(done(window.firebaseAuth));
+    }, { once: true });
+  });
+};
+
+console.info('[Firebase] Initialized');
+console.info('[Firebase] Auth Ready');
+/* Dispatched on `document` — that is where all four existing listeners
+   are registered, so the contract matches what pages already expect. */
+document.dispatchEvent(new CustomEvent('sokoniFirebaseReady', { detail: { auth } }));
+console.info('[Firebase] sokoniFirebaseReady dispatched');
+
 /* sokoniCallable(name) — synchronous replacement for firebase.functions().httpsCallable(name) */
 window.sokoniCallable = (name) => httpsCallable(functions, name);
 

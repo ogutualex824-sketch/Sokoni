@@ -604,7 +604,10 @@ document.getElementById('mp-modal-backdrop').addEventListener('click', function(
 });
 
 /* ── Init ─────────────────────────────────────────────────── */
-document.addEventListener('sokoniFirebaseReady', function(){
+/* Idempotent readiness: fires immediately when Firebase is already up. */
+(window.waitForFirebaseReady ? window.waitForFirebaseReady()
+  : new Promise(function(r){ document.addEventListener('sokoniFirebaseReady', function(){r();}, {once:true}); setTimeout(r, 3000); })
+).then(function(){
   if (_mpCheckSession()) _mpLoad();
 });
 setTimeout(function(){
