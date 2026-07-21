@@ -22,7 +22,7 @@
    v88 — consent-layer removal (glass-overlay P0). security.js is precached. The
    old copy removes the blurred backdrop with a single setTimeout, which WebKit
    drops in a backgrounded tab, leaving a blur that renders at opacity 0. */
-const CACHE_VERSION = "sokoni-20260719-app-shell-v98";
+const CACHE_VERSION = "sokoni-20260721-app-shell-v99";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -638,7 +638,17 @@ self.addEventListener("fetch", event => {
        would tap POS, get the old broken build, and still see nothing happen — on a
        version we had already fixed and shipped. Routing fixes must land on the first
        load, not the second. */
-    "seller.js"];
+    "seller.js",
+    /* POS startup path. pos-omni.js and pos-modules.js are both precached in
+       the app shell, so they were stale-while-revalidate like seller.js — and
+       the consequence here is worse than a dead button. These two carry the
+       startup memory fixes (54b3e63, f0a435d) for a terminal that crashes
+       during startup. Stale-while-revalidate hands that terminal the OLD copy
+       on its next launch and only the fixed copy on the launch after; a device
+       that dies before the page settles may never reach that second launch, so
+       the fix could not arrive by the very failure it repairs.
+       Anything on the POS startup path must land on the first load. */
+    "pos-omni.js", "pos-modules.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;
