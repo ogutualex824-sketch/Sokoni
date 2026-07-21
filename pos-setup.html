@@ -3388,8 +3388,38 @@ document.getElementById('btn-configure-hw').addEventListener('click', () => {
       }
       // No business → the wizard's create flow handles it.
     } catch (_) {
-      // Resilient fallback to the legacy flag if the status call is unavailable.
-      if (localStorage.getItem('sokoni_setup_complete') === '1') goLive();
+      /* A transient dispatch failure must not be read as "not set up".
+         localStorage is a cache, not the authority: after the browser cache is
+         cleared the legacy flag is absent, so degrading straight to it puts a
+         merchant whose device Firestore already considers provisioned back
+         through installation — the repeated-onboarding report.
+
+         smartPosDispatch is a Cloud Run service that cold-starts (~2.6s
+         measured), and this call happens at the first paint after auth
+         restores, which is exactly when a cold start is most likely. Retry the
+         AUTHORITATIVE source once before trusting the cache. */
+      try {
+        await new Promise((r) => setTimeout(r, 2500));
+        const res2 = await SPOS('getSetupStatus')({});
+        const s2   = (res2 && res2.data) || {};
+        if (s2.hasBusiness && s2.productionReady) {
+          localStorage.setItem('sokoni_setup_complete', '1');   /* rebuild the cache */
+          goLive();
+          return;
+        }
+        if (s2.hasBusiness && !s2.productionReady) {
+          localStorage.removeItem('sokoni_setup_complete');
+          WIZ.resumeNextStep = s2.nextStep || null;             /* resume, never restart */
+          return;
+        }
+        /* No business on the authoritative source → genuinely a new merchant. */
+        return;
+      } catch (_retry) {
+        /* Still unavailable. Only now fall back to the cached flag, and only
+           in the direction that cannot cause harm: a cached '1' sends the
+           merchant to POS, while its absence leaves the wizard to resume. */
+        if (localStorage.getItem('sokoni_setup_complete') === '1') goLive();
+      }
     }
   });
 })();
