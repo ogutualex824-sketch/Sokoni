@@ -84,6 +84,126 @@ window.SokoniHardware = (function () {
   // A. DEVICE DISCOVERY & REGISTRATION
   // ---------------------------------------------------------------------------
 
+  /* ══════════════════════════════════════════════════════════════════
+     LAYER 3 — DEVICE REGISTRY
+     ══════════════════════════════════════════════════════════════════
+     What a model IS, independent of any browser. Separating this from
+     capabilities() is what stops the wizard conflating "this browser has a
+     Bluetooth API" with "this printer can be reached" — the confusion that
+     produced "2 hardware categories found" on a device with no printer.
+
+     `interfaces` describes the hardware. `compatible` is then DERIVED from the
+     platform, never stored, so adding a native bridge later changes one entry
+     in TRANSPORT_HOSTS rather than every device record.
+
+     Accuracy note: budget 58 mm printers ship under many near-identical model
+     names with different interface fits. `confirm` marks entries whose exact
+     interface set should be read off the unit's own self-test page (hold FEED
+     while powering on) rather than trusted from a catalogue. Claiming an
+     interface a unit does not have is how a merchant ends up buying the wrong
+     cable. */
+  var PRINTER_REGISTRY = {
+    P58E: {
+      manufacturer: 'Generic / OEM', model: 'P58E',
+      interfaces: ['bluetooth', 'usb'],   /* common build; Wi-Fi variants exist */
+      escpos: true, paperWidthMm: 58, columns: 32,
+      cashDrawer: true, encoding: 'CP437 / GB18030',
+      confirm: 'Interface set varies by batch — confirm on the printer’s self-test page.',
+    },
+    'TM-T20': {
+      manufacturer: 'Epson', model: 'TM-T20 / TM-T20II',
+      interfaces: ['usb', 'network'], escpos: true, paperWidthMm: 80, columns: 48,
+      cashDrawer: true, encoding: 'CP437', confirm: null,
+    },
+    'TSP100': {
+      manufacturer: 'Star Micronics', model: 'TSP100',
+      interfaces: ['usb', 'network'], escpos: false, paperWidthMm: 80, columns: 48,
+      cashDrawer: true, encoding: 'Star line mode', confirm: null,
+    },
+    GENERIC_NETWORK: {
+      manufacturer: 'Any', model: 'Network ESC/POS printer',
+      interfaces: ['network'], escpos: true, paperWidthMm: 80, columns: 48,
+      cashDrawer: true, encoding: 'CP437', confirm: null,
+    },
+  };
+
+  /* Which host can actually drive each transport. The browser column is what
+     the capability engine reports; `bridge` is the future native/local relay.
+     Adding that bridge means editing this table only — no UI, registry or
+     configuration change, which is the extensibility requirement. */
+  var TRANSPORT_HOSTS = {
+    bluetooth: { desktop: true,  android: true,  ios: false, bridge: true },
+    usb:       { desktop: true,  android: true,  ios: false, bridge: true },
+    serial:    { desktop: true,  android: false, ios: false, bridge: true },
+    /* Network is deliberately false everywhere in-browser: the only relay,
+       posPrint, accepts LAN addresses but runs in Google Cloud and therefore
+       cannot route to them. It becomes true the day a LAN-side bridge exists. */
+    network:   { desktop: false, android: false, ios: false, bridge: true },
+    airprint:  { desktop: true,  android: false, ios: true,  bridge: true },
+    browser:   { desktop: true,  android: true,  ios: true,  bridge: true },
+  };
+
+  /**
+   * deviceCompatibility(modelKey) — can THIS device work on THIS platform, and
+   * on the others? Derived, never stored.
+   */
+  function deviceCompatibility(modelKey) {
+    var dev = PRINTER_REGISTRY[modelKey];
+    if (!dev) return null;
+    var profile = deviceProfile();
+    var host = profile === 'iphone' || profile === 'ipad' ? 'ios'
+             : profile.indexOf('android') === 0 ? 'android' : 'desktop';
+
+    var per = {};
+    ['desktop', 'android', 'ios', 'bridge'].forEach(function (h) {
+      per[h] = dev.interfaces.some(function (i) { return TRANSPORT_HOSTS[i] && TRANSPORT_HOSTS[i][h]; });
+    });
+
+    var usableHere = dev.interfaces.filter(function (i) {
+      return TRANSPORT_HOSTS[i] && TRANSPORT_HOSTS[i][host];
+    });
+
+    return {
+      device: dev, thisHost: host, usableHere: usableHere,
+      worksHere: usableHere.length > 0,
+      platforms: per,
+      advice: usableHere.length ? null
+        : (per.android || per.desktop
+            ? 'This printer connects over ' + dev.interfaces.join(' or ') +
+              ', which this browser cannot use. It works on Android or desktop today, or through a local bridge.'
+            : 'No supported connection for this device on any current platform.'),
+    };
+  }
+
+  /**
+   * analyzeEnvironment() — the single object the whole UI renders from.
+   * Four layers kept apart on purpose: a platform feature can never leak into
+   * the device counts.
+   */
+  async function analyzeEnvironment() {
+    var caps = capabilities();
+    var summary = await discover();
+    return {
+      /* L1 */ platform: {
+        profile: deviceProfile(), isIOS: caps.platform.isIOS,
+        features: ['camera', 'offline', 'touch', 'webShare', 'notifications', 'browserPrint']
+          .filter(function (k) { return caps[k] && caps[k].supported; }),
+      },
+      /* L2 */ transports: {
+        available:   ['usb', 'bluetooth', 'serial', 'networkManual', 'browserPrint', 'keyboardScanner', 'camera']
+          .filter(function (k) { return caps[k] && caps[k].supported; }),
+        unavailable: ['usb', 'bluetooth', 'serial', 'networkDiscovery']
+          .filter(function (k) { return caps[k] && !caps[k].supported; })
+          .map(function (k) { return { id: k, reason: caps[k].reason }; }),
+        recommended: recommendedTransports(),
+      },
+      /* L3 */ configured: summary.classify ? summary.classify.configured : [],
+      /* L4 */ live: summary.classify ? summary.classify.peripheral : [],
+      hardwareCount: summary.hardwareCount || 0,
+      raw: summary,
+    };
+  }
+
   /**
    * capabilities() — what this browser can actually do, and why not.
    *
@@ -1871,6 +1991,9 @@ window.SokoniHardware = (function () {
     transportPlan:       transportPlan,
     why:                 why,
     deviceProfile:       deviceProfile,
+    PRINTER_REGISTRY:    PRINTER_REGISTRY,
+    deviceCompatibility: deviceCompatibility,
+    analyzeEnvironment:  analyzeEnvironment,
     autoSelect:          autoSelect,
     getPreferences:      getPreferences,
     savePreference:      savePreference,
