@@ -14,9 +14,55 @@ window.BankingPro = (function(){
   const ts  = () => Date.now();
   const uid = () => (window.firebase?.auth?.()?.currentUser?.uid) || localStorage.getItem('sokoniUID') || 'guest';
   const now = () => new Date().toISOString();
-  const isAdmin = () => {
-    try{ return JSON.parse(localStorage.getItem('sokoniUser')||'{}').isAdmin === true; }catch{ return false; }
-  };
+  /* ── Admin authority ──────────────────────────────────────────────────
+     This read localStorage.sokoniUser.isAdmin. Nothing on the platform ever
+     writes that field — every other admin gate (firebase.js, franchise,
+     executive-dashboard, and every Cloud Function) reads Firebase custom
+     claims — so the flag was permanently false and legitimate administrators
+     holding {"admin":true} were refused their own dashboard.
+
+     Custom claims are now the single authority here too, matching the rest of
+     the platform. A claim is minted server-side and carried in a signed ID
+     token, so it cannot be forged from devtools the way a cached JSON blob
+     could.
+
+     Claims are cached in memory because the render path is synchronous.
+     ensureAdmin() populates that cache and, when the cached token predates a
+     recently-granted claim, forces one refresh before deciding — a newly
+     promoted admin would otherwise stay locked out until their token happened
+     to rotate. */
+  let _claims = null, _claimsLoaded = false;
+
+  function _authUser() {
+    try { return window.firebase?.auth?.()?.currentUser || window.firebaseAuth?.currentUser || null; }
+    catch (_) { return null; }
+  }
+
+  async function _loadClaims(force) {
+    const u = _authUser();
+    if (!u || typeof u.getIdTokenResult !== 'function') { _claimsLoaded = true; return null; }
+    try {
+      const res = await u.getIdTokenResult(!!force);
+      _claims = res && res.claims ? res.claims : {};
+    } catch (_) { /* keep whatever we had; never fail open */ }
+    _claimsLoaded = true;
+    return _claims;
+  }
+
+  const _claimsSayAdmin = (c) =>
+    !!(c && (c.admin === true || c.superAdmin === true || c.isAdmin === true || c.isSuperAdmin === true));
+
+  /* Synchronous view of the cached claims — safe for render paths. */
+  const isAdmin = () => _claimsSayAdmin(_claims);
+
+  /* Authoritative check. Loads claims if absent, then retries ONCE with a
+     forced token refresh so a freshly-granted claim is honoured immediately. */
+  async function ensureAdmin() {
+    if (!_claimsLoaded) await _loadClaims(false);
+    if (isAdmin()) return true;
+    await _loadClaims(true);
+    return isAdmin();
+  }
 
   async function fsWrite(collection, data){
     try{
@@ -645,10 +691,26 @@ window.BankingPro = (function(){
   }
 
   /* ── ADMIN DASHBOARD ── */
-  function renderAdminDashboard(paneId){
+  async function renderAdminDashboard(paneId){
     const p=$(paneId||'pane-admin'); if(!p) return;
-    if(!isAdmin()){
-      p.innerHTML=`<div class="bkp-empty" style="padding:60px 20px;"><div style="font-size:48px;margin-bottom:16px;">🔒</div><div style="font-size:15px;font-weight:800;color:white;margin-bottom:8px;">Admin Access Required</div><div style="font-size:12px;color:rgba(255,255,255,0.4);">This section is only available to Sokoni administrators.</div></div>`;
+
+    /* Claims arrive asynchronously; show a neutral state rather than flashing
+       a denial at an administrator whose token simply has not resolved yet. */
+    if(!_claimsLoaded){
+      p.innerHTML=`<div class="bkp-empty" style="padding:60px 20px;"><div style="font-size:15px;color:rgba(255,255,255,0.55);">Checking access…</div></div>`;
+    }
+
+    const allowed = await ensureAdmin();
+    if(!allowed){
+      /* Not signed in is a different problem from not being an admin, and
+         telling a signed-out user they lack privileges sends them hunting for
+         the wrong fix. */
+      const signedIn = !!_authUser();
+      const title = signedIn ? 'Admin Access Required' : 'Sign In Required';
+      const body  = signedIn
+        ? 'This section is only available to Sokoni administrators.'
+        : 'Sign in with an administrator account to view this section.';
+      p.innerHTML=`<div class="bkp-empty" style="padding:60px 20px;"><div style="font-size:48px;margin-bottom:16px;">🔒</div><div style="font-size:15px;font-weight:800;color:white;margin-bottom:8px;">${_esc(title)}</div><div style="font-size:12px;color:rgba(255,255,255,0.4);">${_esc(body)}</div></div>`;
       return;
     }
     const allApps   = JSON.parse(localStorage.getItem('sokoniBankApplications')||'[]');
@@ -733,6 +795,24 @@ window.BankingPro = (function(){
   /* ── INIT & TAB HOOK ── */
   const _rendered = {};
   function init(){
+    /* Warm the claim cache so the Admin tab resolves instantly instead of
+       showing "Checking access…" on first open. Auth may not have restored
+       yet at init, so also refresh once it does. */
+    _loadClaims(false).catch(() => {});
+    try {
+      const a = window.firebase?.auth?.() || window.firebaseAuth;
+      if (a && typeof a.onAuthStateChanged === 'function') {
+        a.onAuthStateChanged(() => {
+          _claimsLoaded = false;
+          _loadClaims(false).then(() => {
+            /* If the admin pane already rendered a denial before the token
+               resolved, re-render it now that the answer is authoritative. */
+            if (_rendered && _rendered.admin && isAdmin()) renderAdminDashboard();
+          }).catch(() => {});
+        });
+      }
+    } catch (_) {}
+
     const origShow = window.showTab;
     window.showTab = function(name, btn, skip){
       origShow && origShow(name,btn,skip);
@@ -768,7 +848,7 @@ window.BankingPro = (function(){
     renderAdminDashboard,
     checkFraudRisk,
     openBkpModal, closeBkpModal,
-    walletTx, getWallet, isAdmin, init,
+    walletTx, getWallet, isAdmin, ensureAdmin, init,
   };
 })();
 
