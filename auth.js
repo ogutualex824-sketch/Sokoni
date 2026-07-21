@@ -790,13 +790,27 @@ function _googleAuthErr(code) {
         case 'auth/missing-or-invalid-nonce':
             return 'Sign-in session expired. Please tap Continue with Google again.';
         case 'auth/internal-error':
+            /* auth/internal-error is Firebase's catch-all for popup failures that
+               don't fit a more specific code. Common causes:
+               — Ad blocker / Privacy Badger blocking accounts.google.com
+               — Browser extension intercepting the OAuth request
+               — Corporate proxy rewriting the response headers
+               — Safari ITP (handled upstream with redirect fallback; if we're here
+                 the redirect also failed — surface actionable guidance)
+               Guide the user toward the most likely self-fix. */
+            return 'Sign-in blocked. Try: (1) disable ad blockers for this site, (2) allow pop-ups and redirects, or (3) use a different sign-in method.';
         case 'auth/cors-unsupported':
-            return 'An unexpected error occurred. Please try again.';
+            return 'Your browser blocked the sign-in request. Allow cross-site access for this site, or try a different browser.';
+        case 'auth/app-check-token-exchange-failed':
+        case 'auth/firebase-app-check-token-is-invalid':
+            return 'Security check failed. Please refresh the page and try again.';
         case 'auth/redirect-cancelled-by-user':
             return ''; /* silent — user cancelled */
+        case 'auth/timeout':
+            return 'Sign-in timed out. Check your connection and try again.';
         default:
             console.warn('[SOKONI Auth] Unhandled Google error code:', code);
-            return 'Google sign-in failed. Please try again.';
+            return 'Google sign-in failed (' + code + '). Please try again.';
     }
 }
 
@@ -830,10 +844,14 @@ async function _handleGoogleResult(result) {
         const parts = (user.displayName || '').split(' ');
         const fallback = {
             uid:          user.uid,
-            name:         user.displayName || user.email.split('@')[0],
+            /* FIX: user.email can be null for Google accounts that were created via
+               phone-number linking or when the Google account has no primary email.
+               Dereferencing null.split() threw a TypeError that surfaced as
+               "Verification failed" even though the user was authenticated. */
+            name:         user.displayName || (user.email || '').split('@')[0] || 'User',
             firstName:    parts[0] || '',
             lastName:     parts.slice(1).join(' ') || '',
-            email:        user.email,
+            email:        user.email || null,
             photoURL:     user.photoURL || '',
             provider:     'google',
             emailVerified: user.emailVerified,
@@ -896,6 +914,19 @@ function _handleGoogleLinkError(err) {
     _resetGoogleBtn();
 }
 
+/* Generate a short 8-char hex correlation ID for each auth attempt.
+   Appears in every console entry and in error messages so a support report
+   or browser console snapshot uniquely identifies the failed attempt. */
+function _authCorrId() {
+    try {
+        const arr = new Uint8Array(4);
+        crypto.getRandomValues(arr);
+        return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (_) {
+        return Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0');
+    }
+}
+
 /* Main entry point — called by onclick="signInWithGoogle()" */
 async function signInWithGoogle() {
     /* Do NOT gate on navigator.onLine — it is unreliable on iOS Safari and
@@ -906,10 +937,12 @@ async function signInWithGoogle() {
         return;
     }
 
+    const _gCorrId = _authCorrId();
     const btn = document.getElementById('googleSignInBtn');
     if (btn) { btn.disabled = true; _googleBtnLabel(btn, 'Connecting to Google…'); }
 
     console.info('[SOKONI Auth] Google sign-in started', {
+        corrId: _gCorrId,
         popupSupported: _isPopupSupported(),
         standalone: !!(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone),
         ua: navigator.userAgent.slice(0, 80),
@@ -981,14 +1014,13 @@ async function signInWithGoogle() {
             await signInWithRedirect(window.firebaseAuth, provider);
         }
     } catch (err) {
-        console.error('[AUTH ERROR] Google sign-in failed');
-        console.error('[AUTH ERROR] error object:', err);
+        console.error('[AUTH ERROR] Google sign-in failed', { corrId: _gCorrId });
         console.error('[AUTH ERROR] code:', err.code, '| message:', err.message);
         console.error('[AUTH ERROR] stack:', err.stack);
         try { console.error('[AUTH ERROR] serialized:', JSON.stringify(err, Object.getOwnPropertyNames(err))); } catch(_){}
         _resetGoogleBtn();
         const msg = err.code ? _googleAuthErr(err.code) : (err.message || 'Google sign-in failed. Please try again.');
-        if (msg) showAuthMsg(msg, 'error');
+        if (msg) showAuthMsg(msg + ' [' + _gCorrId + ']', 'error');
     }
 }
 
@@ -1139,8 +1171,11 @@ async function _handleOAuthResult(result, providerLabel) {
               email: user.email, provider: (providerLabel || '').toLowerCase()
           });
       }
-      if (window.SokoniSessions && window.SokoniSessions.createSession && user.email) {
-          window.SokoniSessions.createSession(user.email).catch(function() {});
+      /* FIX: was `user.email` guard — phone accounts have no email, so their sessions
+         were never created from this path. createSession() uses _getIdentity().uid
+         internally (always available), so the guard here was simply wrong. */
+      if (window.SokoniSessions && window.SokoniSessions.createSession) {
+          window.SokoniSessions.createSession(user.email || null).catch(function() {});
       }
     } catch (sideEffectErr) {
       console.warn('[auth] post-login side effect failed (sign-in still valid):', sideEffectErr);
@@ -1181,10 +1216,9 @@ function _handleProviderLinkError(err, providerLabel) {
 }
 
 async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
-    if (!navigator.onLine) {
-        showAuthMsg(providerLabel + ' Sign-In requires an internet connection.', 'error');
-        return;
-    }
+    /* Do NOT gate on navigator.onLine — it is unreliable on iOS Safari and installed
+       PWAs (frequently reports false even with working internet). Firebase surfaces
+       auth/network-request-failed if genuinely offline, which maps to a clear message. */
     if (!window.firebaseAuth) {
         showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
         return;
@@ -1224,7 +1258,20 @@ async function _signInWithOAuth(providerKey, providerLabel, configureFn) {
                 await signInWithRedirect(window.firebaseAuth, provider);
             }
         } catch (err) {
-            if (err.code === 'auth/popup-blocked') {
+            /* ITP / browser-security errors produce auth/internal-error, auth/cors-unsupported,
+               or auth/web-storage-unsupported from the popup attempt on Safari.
+               Fall back to redirect — same logic as signInWithGoogle() for symmetry. */
+            const _isItpError = (
+                err.code === 'auth/internal-error' ||
+                err.code === 'auth/cors-unsupported' ||
+                err.code === 'auth/web-storage-unsupported'
+            );
+            if (err.code === 'auth/popup-blocked' || _isItpError) {
+                if (_isItpError) {
+                    console.info('[SOKONI Auth] ' + providerLabel + ' popup ITP/security error — falling back to redirect', { code: err.code });
+                } else {
+                    console.info('[SOKONI Auth] ' + providerLabel + ' popup blocked — falling back to redirect');
+                }
                 try { sessionStorage.setItem('sokoniAuthRedirectPending', '1'); } catch (_) {}
                 await signInWithRedirect(window.firebaseAuth, provider);
             } else if (err.code === 'auth/account-exists-with-different-credential') {
@@ -1353,14 +1400,15 @@ async function sendPhoneOTP() {
         }
     }
 
-    if (!navigator.onLine) {
-        showAuthMsg('Phone OTP requires an internet connection.', 'error');
-        return;
-    }
+    /* Do NOT gate on navigator.onLine — unreliable on iOS Safari/PWA.
+       Firebase surfaces auth/network-request-failed when genuinely offline. */
     if (!window.firebaseAuth) {
         showAuthMsg('Firebase not ready. Please refresh the page.', 'error');
         return;
     }
+
+    const _otpCorrId = _authCorrId();
+    console.info('[SOKONI Auth] Phone OTP request', { corrId: _otpCorrId, phone: fullPhone.replace(/\d(?=\d{4})/g, '*') });
 
     const btn = document.getElementById('sendOtpBtn');
     if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
@@ -1390,7 +1438,11 @@ async function sendPhoneOTP() {
         );
 
         if (!_recaptchaVerifier) {
-            _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'sendOtpBtn', {
+            /* Anchor the invisible widget to #recaptcha-container, NOT to #sendOtpBtn.
+               The button is disabled before this point; some browsers suppress reCAPTCHA
+               execution when the anchor element is disabled, causing auth/captcha-check-failed
+               or a silent hang. The dedicated container is always-present and never disabled. */
+            _recaptchaVerifier = new RecaptchaVerifier(window.firebaseAuth, 'recaptcha-container', {
                 size: 'invisible',
                 'expired-callback': function() {
                     try { _recaptchaVerifier.clear(); } catch (_) {}
@@ -1427,7 +1479,7 @@ async function sendPhoneOTP() {
 
         /* Funnel metric */
         try {
-            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_sent', { country: countryCode });
+            if (window.SokoniObservability) window.SokoniObservability.track('auth_otp_sent', { country: countryCode, corrId: _otpCorrId });
         } catch(_) {}
 
     } catch (err) {
@@ -1437,18 +1489,25 @@ async function sendPhoneOTP() {
             _recaptchaVerifier = null;
         }
         const _phoneErrMap = {
-            'auth/invalid-phone-number':            'Invalid phone number. Please use format +254 7XX XXX XXX.',
-            'auth/too-many-requests':               'Too many attempts. Please try again later.',
-            'auth/captcha-check-failed':            'Verification check failed. Please refresh the page and try again.',
-            'auth/quota-exceeded':                  'SMS quota exceeded. Please try again later.',
-            'auth/user-disabled':                   'This account has been disabled.',
-            'auth/network-request-failed':          'Network error. If you use an ad blocker or VPN, try disabling it temporarily, then refresh.',
-            'auth/internal-error':                  'An internal error occurred. Please refresh the page and try again.',
-            'auth/app-check-token-exchange-failed': 'Security check failed. Please refresh the page.',
-            'auth/missing-client-identifier':       'Phone sign-in is not configured. Please contact support.',
-            'auth/operation-not-allowed':           'Phone sign-in is currently disabled. Please contact support.',
+            'auth/invalid-phone-number':              'Invalid phone number. Please check the format (e.g. 0712 345 678).',
+            'auth/too-many-requests':                 'Too many OTP requests from this device. Please wait 5 minutes and try again.',
+            'auth/captcha-check-failed':              'reCAPTCHA check failed. Please refresh the page and try again.',
+            'auth/quota-exceeded':                    'SMS delivery quota reached. Please try again in a few minutes.',
+            'auth/user-disabled':                     'This account has been disabled. Contact support.',
+            'auth/network-request-failed':            'Network error. If you use an ad blocker or VPN, disable it temporarily then refresh.',
+            'auth/internal-error':                    'Phone sign-in failed — internal error. Refresh the page and try again.',
+            'auth/app-check-token-exchange-failed':   'Security check failed. Please refresh the page.',
+            'auth/firebase-app-check-token-is-invalid': 'Security check failed. Please refresh the page.',
+            'auth/missing-client-identifier':         'Phone sign-in is not configured on this device. Please contact support.',
+            'auth/operation-not-allowed':             'Phone sign-in is currently disabled. Please contact support.',
+            'auth/missing-phone-number':              'Please enter a phone number.',
+            'auth/invalid-app-credential':            'reCAPTCHA credential invalid. Please refresh the page and try again.',
+            'auth/web-storage-unsupported':           'Enable cookies and site data in your browser, then try again.',
         };
-        showAuthMsg(_phoneErrMap[err.code] || ('Could not send OTP. Please try again. (' + (err.code || 'unknown') + ')'), 'error');
+        const _phoneErrMsg = _phoneErrMap[err.code]
+            || ('Could not send OTP (' + (err.code || 'unknown') + '). Please refresh and try again.');
+        console.error('[AUTH ERROR] Phone OTP send failed', { corrId: _otpCorrId, code: err.code, message: err.message });
+        showAuthMsg(_phoneErrMsg + ' [' + _otpCorrId + ']', 'error');
     }
 }
 

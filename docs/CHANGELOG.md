@@ -2,6 +2,48 @@
 
 ---
 
+## 2026-07-21 — Enterprise Auth Reliability: Phase 3 — Google Sign-In, Cross-Device OTP & Error Elimination
+
+### Summary
+Root-cause elimination sprint targeting five production failure modes: generic "unexpected error" on Google/Facebook sign-in, Facebook/OAuth failing permanently on Safari (ITP), phone OTP blocked by unreliable `navigator.onLine` on iOS PWA, phone-user sessions never created via `_handleOAuthResult`, and a TypeError crash in the Google fallback profile for accounts without an email address. Adds correlation IDs to every auth attempt and a dedicated reCAPTCHA container for stable verifier anchoring.
+
+### Root Causes Fixed
+
+| # | Severity | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | **Critical** | `auth/internal-error` mapped to "An unexpected error occurred. Please try again." — the #1 reported production error; gives users no recovery path | Replaced with actionable message identifying likely causes (ad blockers, browser security restrictions) and recommending specific steps |
+| 2 | **Critical** | `_signInWithOAuth` inner catch (Facebook/OAuth) only handled `auth/popup-blocked` — ITP errors (`auth/internal-error`, `auth/cors-unsupported`, `auth/web-storage-unsupported`) fell through to the generic message instead of falling back to redirect, causing permanent failure on Safari iOS | Added ITP error detection identical to `signInWithGoogle()`; these codes now trigger `signInWithRedirect` |
+| 3 | **Major** | `navigator.onLine` check in `_signInWithOAuth` (Facebook) and `sendPhoneOTP` blocked auth on iOS Safari and installed PWAs where `onLine` reports `false` even with working internet | Removed both checks; documented why (matches existing behavior in `signInWithGoogle`) |
+| 4 | **Major** | `_handleOAuthResult` guarded `createSession()` with `user.email` — phone accounts have no email, so their sessions were never created in this path; session missing until next page load | Removed `user.email` guard; `createSession()` receives `user.email \|\| null` and uses `_getIdentity().uid` internally |
+| 5 | **Major** | `_handleGoogleResult` fallback profile: `user.email.split('@')[0]` throws TypeError when `user.email` is null (accounts linked via phone or with restricted email sharing) → "Verification failed" shown despite successful authentication | Changed to `(user.email \|\| '').split('@')[0] \|\| 'User'` |
+| 6 | **Moderate** | `RecaptchaVerifier` anchored to `#sendOtpBtn` which is disabled before the verifier is created — some browser/SDK versions suppress reCAPTCHA execution on disabled elements, causing `auth/captcha-check-failed` | Added `<div id="recaptcha-container">` in `login.html`; verifier now anchors to this stable, always-present element |
+
+### Observability
+- Correlation ID (8-char hex) generated at start of every `signInWithGoogle()` and `sendPhoneOTP()` call
+- ID included in all `console.info/error` entries and in error messages shown to users `[a1b2c3d4]` format
+- Enables cross-device support diagnosis from a console screenshot or user report
+- `auth_otp_sent` event now includes `corrId` field
+
+### Error Code Coverage
+- `_googleAuthErr`: Added `auth/app-check-token-exchange-failed`, `auth/firebase-app-check-token-is-invalid`, `auth/timeout`; default now includes the raw error code
+- Phone error map: Added `auth/missing-phone-number`, `auth/invalid-app-credential`, `auth/web-storage-unsupported`, `auth/firebase-app-check-token-is-invalid`; improved messages for `auth/too-many-requests` (mentions 5-minute wait), `auth/quota-exceeded`
+
+### Files Changed
+- `auth.js` — `_googleAuthErr()`: richer messages; `_signInWithOAuth()`: ITP fallback + remove `navigator.onLine`; `sendPhoneOTP()`: remove `navigator.onLine`, correlation ID, RecaptchaVerifier anchor change, expanded error map; `_handleOAuthResult()`: removed `user.email` guard; `_handleGoogleResult()`: safe null check; `_authCorrId()`: new helper
+- `login.html` — `<div id="recaptcha-container">` added before `#sendOtpBtn`
+
+### Security
+- Correlation ID is hex-encoded random bytes (not user data) — safe to display to users and include in support tickets
+- No new attack surface; error messages are more specific but do not expose internal implementation details
+
+### Performance
+- `_authCorrId()` uses `crypto.getRandomValues()` — synchronous, <1ms
+
+### Breaking Changes
+None.
+
+---
+
 ## 2026-07-21 — Enterprise Auth Reliability: Phase 2 — Root Cause Elimination & Session Hardening
 
 ### Summary

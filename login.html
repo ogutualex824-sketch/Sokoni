@@ -143,6 +143,11 @@
           </div>
         </div>
         <p class="phone-format-hint">Enter with or without leading 0 &mdash; e.g. 0712 345 678</p>
+        <!-- Dedicated reCAPTCHA anchor. The invisible widget MUST anchor to a
+             stable, always-visible element. Anchoring to #sendOtpBtn was unreliable
+             because the button is disabled before RecaptchaVerifier is created,
+             which causes execution failures on some browsers/versions. -->
+        <div id="recaptcha-container" style="display:none;" aria-hidden="true"></div>
         <button type="button" class="auth-btn" id="sendOtpBtn" onclick="sendPhoneOTP()" style="margin-top:8px;">
           Send OTP →
         </button>
