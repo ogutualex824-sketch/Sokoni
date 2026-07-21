@@ -2089,6 +2089,7 @@ document.getElementById('btn-google-signin').addEventListener('click', async () 
     provider.addScope('email');
     const result = await _auth.signInWithPopup(provider);
     WIZ.user = result.user;
+    showAuthSpinner(false);
     goToStep(4);
   } catch (err) {
     showAuthSpinner(false);
@@ -2257,6 +2258,7 @@ document.getElementById('btn-email-signin').addEventListener('click', async () =
   try {
     const result = await _auth.signInWithEmailAndPassword(email, password);
     WIZ.user = result.user;
+    showAuthSpinner(false);
     goToStep(4);
   } catch (err) {
     showAuthSpinner(false);
