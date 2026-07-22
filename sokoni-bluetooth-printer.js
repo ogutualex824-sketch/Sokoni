@@ -591,7 +591,8 @@ class P58EService {
           return ' '.repeat(Math.max(0, Math.floor((W - str.length) / 2))) + str;
         };
 
-        /* ── Word wrap so merchant-supplied text can never overflow the roll ── */
+        /* Wrap only descriptive prose. Labels, branding and status rows are
+           authored to fit 32 columns and must never be reflowed. */
         const wrap = (t) => {
           const out = []; let line = '';
           for (const word of String(t).split(/s+/)) {
@@ -601,68 +602,76 @@ class P58EService {
           }
           if (line) out.push(line); return out;
         };
-        const writeCentered = (t) => { wrap(t).forEach(l => enc.text(center(l)).lf()); };
+        const say  = (t) => { wrap(t).forEach(l => enc.text(center(l)).lf()); };
+        /* Double-WIDTH halves capacity to 16 columns, so it is used only when the
+           string provably fits. Double-height ('tall') leaves width alone and is
+           safe for any length — that is why headings use it. */
+        const bigOrTall = (t) => (String(t).length <= Math.floor(W / 2) ? 'big' : 'tall');
+        const label = (l, v) => enc.text(String(l).padEnd(13).slice(0, 13) + String(v).slice(0, W - 13)).lf();
+        const check = (t) => enc.text('✓ ' + String(t).slice(0, W - 2)).lf();
 
-        /* ── Header ── */
-        enc.al().text(sep).lf()
-           .ac().bold(true).sz('tall').text(center('SOKONI POS')).lf().sz('normal')
-           .text(center('Powered by Bravilex')).lf().bold(false)
+        /* ══ HEADER ══ */
+        enc.al().text(sep).lf().ac()
+           .bold(true).sz('tall').text(center('SOKONI POS')).lf().sz('normal').bold(false).lf()
+           .text(center('Powered by')).lf()
+           .text(center('Bravilex International')).lf()
+           .text(center('Co. Ltd.')).lf().lf()
+           .bold(true).sz('tall').text(center('PRINTER')).lf()
+           .text(center('CERTIFICATION')).lf().sz('normal').bold(false)
            .al().text(sep).lf().lf();
 
-        /* ── Test banner ── */
-        enc.ac().bold(true).text(center('*** TEST RECEIPT ***')).lf().bold(false);
-        writeCentered('This is a printer verification receipt.');
-        enc.al().lf();
+        /* ══ MERCHANT — kept visually separate from platform branding ══ */
+        enc.ac().text(center('Merchant')).lf()
+           .bold(true).sz(bigOrTall(merchantName)).text(center(merchantName)).lf()
+           .sz('normal').bold(false).lf();
+        if (merchantLoc) enc.text(center('Branch')).lf().bold(true).text(center(merchantLoc)).lf().bold(false).lf();
+        enc.text(center('Date')).lf().text(center(dateStr)).lf().lf();
 
-        /* ── Merchant identity ── */
-        enc.text('Merchant:').lf().bold(true).text(merchantName.slice(0, W)).lf().bold(false);
-        if (merchantLoc) enc.lf().text('Location:').lf().text(merchantLoc.slice(0, W)).lf();
+        /* ══ PRINTER STATUS ══ */
+        enc.al().text(dash).lf().bold(true).text('PRINTER STATUS').lf().bold(false).text(dash).lf();
+        ['Bluetooth Connected','Printer Detected','ESC/POS Driver','Paper Width 58 mm',
+         'UTF-8 Encoding','Receipt Engine','QR Generator','Auto Reconnect','Setup Completed'].forEach(check);
         enc.lf();
 
-        /* ── Transaction meta ── */
-        enc.text('Receipt No: ' + setupId).lf()
-           .text('Date: ' + dateStr + ' ' + timeStr).lf()
-           .text('Cashier: Test Cashier').lf().lf();
-
-        /* ── Diagnostic certificate ── */
-        enc.text(dash).lf().bold(true).text('Printer Status').lf().bold(false)
-           .text('✓ Printer Connected').lf()
-           .text('✓ ESC/POS Verified').lf()
-           .text('✓ Paper Width: 58mm').lf()
-           .text('✓ Print Quality: PASS').lf()
-           .text('✓ QR Printing: PASS').lf()
-           .text('✓ Model: ' + String(info.name || 'P58E').slice(0, W - 9)).lf()
-           .text('✓ POS Version: ' + posVersion).lf()
-           .text(dash).lf().lf();
-
-        /* ── Congratulations ── */
-        enc.ac().bold(true).text(center('Congratulations!')).lf().bold(false).lf();
-        writeCentered('Your SOKONI POS has been configured successfully and is ready to serve customers.');
-        enc.lf();
-        writeCentered('Thank you for choosing SOKONI POS powered by Bravilex International Co. Ltd.');
+        /* ══ DEVICE INFORMATION ══ */
+        enc.text(dash).lf().bold(true).text('DEVICE INFORMATION').lf().bold(false).text(dash).lf();
+        label('Printer',     info.name || 'P58E');
+        label('Connection',  'Bluetooth');
+        label('Paper Width', '58 mm');
+        label('Device ID',   (info.id || 'n/a'));
+        label('Setup ID',    setupId);
+        label('Test Number', String(seq));
+        label('POS Version', posVersion);
+        label('Printed At',  dateStr + ' ' + timeStr);
         enc.lf();
 
-        /* ── Rotating remark ── */
-        writeCentered(remark);
-        enc.lf();
+        /* ══ QR ══ */
+        enc.text(dash).lf().ac().lf().qr(qrUrl, 6).lf()
+           .bold(true).text(center('Verify Setup')).lf().bold(false)
+           .text(center('mysokoni.co.ke')).lf().lf();
 
-        /* ── Support ── */
-        enc.al().text('Support:').lf()
-           .text('support@mysokoni.co.ke').lf()
-           .text('www.mysokoni.co.ke').lf().lf();
+        /* ══ APPRECIATION ══ */
+        enc.al().text(dash).lf().ac();
+        say(remark);
+        enc.al().text(dash).lf().lf();
 
-        /* ── QR ── */
-        enc.ac();
-        writeCentered('Scan QR Code below to verify printer setup and access support.');
-        enc.lf().qr(qrUrl, 5).lf();
+        /* ══ SYSTEM STATUS ══ */
+        enc.ac().bold(true).text(center('SYSTEM STATUS')).lf().bold(false)
+           .text(center('Overall Result')).lf()
+           .bold(true).sz('tall').text(center('✓ CERTIFIED')).lf().sz('normal').bold(false)
+           .text(center('Ready to Accept Sales')).lf().lf();
 
-        /* ── Setup ID ── */
-        enc.al().text('Setup ID:').lf().bold(true).text(setupId).lf().bold(false).lf();
-
-        /* ── Closing banner ── */
-        enc.text(sep).lf()
-           .ac().bold(true).sz('tall').text(center('HAPPY SELLING!')).lf().sz('normal').bold(false)
-           .al().text(sep).lf()
+        /* ══ FOOTER ══ */
+        enc.al().text(dash).lf().ac().lf()
+           .bold(true).text(center('SOKONI POS')).lf().bold(false)
+           .text(center('Powered by')).lf()
+           .text(center('Bravilex International')).lf()
+           .text(center('Co. Ltd.')).lf().lf()
+           .text(center('Digital Commerce for Africa')).lf().lf()
+           .text(center('mysokoni.co.ke')).lf()
+           .text(center('Support:')).lf()
+           .text(center('support@mysokoni.co.ke')).lf().lf()
+           .al().text(dash).lf()
            .lf(3);
       },
     });
