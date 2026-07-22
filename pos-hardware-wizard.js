@@ -1896,12 +1896,47 @@ window.SokoniHardware = (function () {
     var cutCmd = cutType === 'partial' ? GS + 'V\x41\x00' : GS + 'V\x00';
     var payload = new TextEncoder().encode(ESC + '@' + text + '\n\n\n' + cutCmd);
 
+    /* ── USB (WebUSB) ─────────────────────────────────────────────────────── */
     if (nativeDevice && nativeDevice.opened) {
       var iface = nativeDevice.configuration.interfaces[0];
       var ep    = iface.alternate.endpoints.find(function (e) { return e.direction === 'out'; });
       if (ep) return nativeDevice.transferOut(ep.endpointNumber, payload);
     }
-    return Promise.resolve({ success: false, error: 'USB device not open' });
+
+    /* ── Bluetooth ────────────────────────────────────────────────────────────
+       This function is WebUSB-only: it tests nativeDevice.opened and calls
+       transferOut(). A BluetoothDevice has none of those, so every Bluetooth
+       print fell through to a RESOLVED promise carrying { success:false } — no
+       throw, no message. The merchant paired, tapped Test Print, and nothing
+       happened at all. Bluetooth printing was never implemented here.
+
+       Delegated to the canonical stack rather than reimplemented. Writing GATT
+       here would be a second Bluetooth implementation competing for the same
+       device, which is the defect this page already demonstrates. P58EPrinter
+       owns pairing, MTU chunking, flow control and reconnect; it reaches this
+       device through navigator.bluetooth.getDevices(), which already lists it
+       because the wizard's own pairing granted permission for this origin. */
+    if (window.P58EPrinter) {
+      return (async function () {
+        if (!window.SokoniPrinter || !SokoniPrinter.connected) {
+          var restored = await window.P58EPrinter.autoConnect();
+          if (!restored) {
+            throw new Error(
+              'Printer paired but not connected for printing.\n\n' +
+              'Tap Reconnect Printer, or open Printer Setup to pair.'
+            );
+          }
+        }
+        return window.P58EPrinter.printTestReceipt();
+      })();
+    }
+
+    /* Never fail silently. A resolved { success:false } is indistinguishable
+       from success to every caller on this page. */
+    return Promise.reject(new Error(
+      'Printer service unavailable on this page.\n\n' +
+      'Open Printer Setup to pair and print.'
+    ));
   }
 
   function _buildZPLLabel(opts) {

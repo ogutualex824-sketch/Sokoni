@@ -13,6 +13,13 @@
   <meta name="theme-color" content="#050508" />
   <title>Hardware Setup — SOKONI SmartPOS 3.0</title>
   <script defer src="sokoni-config.js"></script>
+  <!-- Canonical printer stack. The wizard delegates Bluetooth printing to
+       P58EPrinter instead of implementing GATT itself. Not deferred: classic
+       scripts run during parse, so both globals exist before the deferred
+       wizard bundle executes. universal-printer first — the P58E adapter
+       composes its ESC/POS encoder. -->
+  <script src="sokoni-universal-printer.js"></script>
+  <script src="sokoni-bluetooth-printer.js"></script>
   <script defer src="pos-hardware-wizard.js"></script>
   <style>
     /* =========================================================
