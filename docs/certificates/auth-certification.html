@@ -19,11 +19,11 @@ padding:2px 11px;font-size:11px;letter-spacing:.08em;white-space:nowrap}
 @media(max-width:620px){td{display:block;border:0;padding:4px 0}tr{display:block;border-bottom:1px solid #1b1b1b;padding:12px 0}}
 </style></head><body><div class="wrap">
 <h1>Authentication Certification</h1>
-<div class="sub">2026-07-20T10:12:02.401Z &nbsp;·&nbsp; https://mysokoni.co.ke</div>
-<div class="verdict" style="--c:#ff4d4d"><b>FAILED</b></div>
+<div class="sub">2026-07-22T14:56:43.306Z &nbsp;·&nbsp; https://mysokoni.co.ke</div>
+<div class="verdict" style="--c:#71ff00"><b>CERTIFIED</b></div>
 
-<div class="tot"><span>passed <b>6</b></span><span>failed <b>1</b></span>
-<span>skipped <b>5</b></span><span>errored <b>0</b></span></div>
+<div class="tot"><span>passed <b>12</b></span><span>failed <b>0</b></span>
+<span>skipped <b>0</b></span><span>errored <b>0</b></span></div>
 <table>
     <tr>
       <td><span class="pill" style="--c:#71ff00">PASS</span></td>
@@ -41,9 +41,9 @@ padding:2px 11px;font-size:11px;letter-spacing:.08em;white-space:nowrap}
       <td class="ev">SITE_KEY present (6Lf93TktAAAA…, 40 chars)</td>
     </tr>
     <tr>
-      <td><span class="pill" style="--c:#ff4d4d">FAIL</span></td>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">No orphaned blocking-function imports (beforeUserCreated / beforeUserSignedIn)</div><div class="id">static.blocking.orphan-import</div></td>
-      <td class="ev">email-triggers.js imports beforeUserCreated but never calls it<div class="rem">Remove the unused import, THEN verify with Layer 2 that Identity Platform has no blockingFunctions.triggers pointing at a deleted service. A stale registration breaks every sign-in provider with auth/internal-error.</div></td>
+      <td class="ev">no orphaned blocking-function imports in functions/*.js</td>
     </tr>
     <tr>
       <td><span class="pill" style="--c:#71ff00">PASS</span></td>
@@ -58,30 +58,30 @@ padding:2px 11px;font-size:11px;letter-spacing:.08em;white-space:nowrap}
     <tr>
       <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">Auth error handler maps codes rather than emitting one generic string</div><div class="id">static.auth.error-mapping</div></td>
-      <td class="ev">25 distinct auth/* codes mapped to user-facing messages</td>
+      <td class="ev">32 distinct auth/* codes mapped to user-facing messages</td>
     </tr>
     <tr>
-      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">An authenticated Google Cloud account is available</div><div class="id">gcp.auth.active</div></td>
-      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL<div class="rem">Run `gcloud auth login`. Every Layer 2 check is blocked until this succeeds.</div></td>
+      <td class="ev">active account: alexochieng3030@gmail.com</td>
     </tr>
     <tr>
-      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">Active project matches the expected SOKONI project</div><div class="id">gcp.project.active</div></td>
-      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+      <td class="ev">active project = sokoni-aeb26</td>
     </tr>
     <tr>
-      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">Every registered blocking function resolves to a live service</div><div class="id">gcp.identity.blocking-functions-resolve</div></td>
-      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+      <td class="ev">no blocking functions registered — cannot be the cause of a sign-in failure</td>
     </tr>
     <tr>
-      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">Authorized domains include every production host</div><div class="id">gcp.identity.authorized-domains</div></td>
-      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+      <td class="ev">all expected hosts authorised: mysokoni.co.ke, www.mysokoni.co.ke, sokoni-aeb26.web.app</td>
     </tr>
     <tr>
-      <td><span class="pill" style="--c:#ffb020">SKIPPED</span></td>
+      <td><span class="pill" style="--c:#71ff00">PASS</span></td>
       <td><div class="ttl">Cloud Run services backing auth are serving traffic</div><div class="id">gcp.runtime.auth-services-healthy</div></td>
-      <td class="ev">gcloud unavailable: spawnSync gcloud.cmd EINVAL</td>
+      <td class="ev">1002 Cloud Run services, all Ready</td>
     </tr></table></div></body></html>

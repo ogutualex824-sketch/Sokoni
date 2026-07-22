@@ -1,15 +1,15 @@
 {
   "tool": "sokoni-auth-cert",
   "version": 1,
-  "generatedAt": "2026-07-20T10:12:02.401Z",
+  "generatedAt": "2026-07-22T14:56:43.306Z",
   "project": "sokoni-aeb26",
   "origin": "https://mysokoni.co.ke",
-  "verdict": "FAILED",
+  "verdict": "CERTIFIED",
   "totals": {
     "total": 12,
-    "passed": 6,
-    "failed": 1,
-    "skipped": 5,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
     "errored": 0
   },
   "results": [
@@ -23,7 +23,7 @@
       "evidence": "sokoni-config.js and firebase.js present",
       "detail": null,
       "remediation": null,
-      "ms": 5
+      "ms": 2
     },
     {
       "id": "static.authdomain.consistent",
@@ -35,7 +35,7 @@
       "evidence": "authDomain = auth.mysokoni.co.ke (2 files agree)",
       "detail": null,
       "remediation": null,
-      "ms": 4
+      "ms": 2
     },
     {
       "id": "static.appcheck.sitekey",
@@ -47,7 +47,7 @@
       "evidence": "SITE_KEY present (6Lf93TktAAAA…, 40 chars)",
       "detail": null,
       "remediation": null,
-      "ms": 6
+      "ms": 2
     },
     {
       "id": "static.blocking.orphan-import",
@@ -55,11 +55,11 @@
       "layerLabel": "Layer 1 — static repository validation",
       "title": "No orphaned blocking-function imports (beforeUserCreated / beforeUserSignedIn)",
       "severity": "critical",
-      "status": "FAIL",
-      "evidence": "email-triggers.js imports beforeUserCreated but never calls it",
+      "status": "PASS",
+      "evidence": "no orphaned blocking-function imports in functions/*.js",
       "detail": null,
-      "remediation": "Remove the unused import, THEN verify with Layer 2 that Identity Platform has no blockingFunctions.triggers pointing at a deleted service. A stale registration breaks every sign-in provider with auth/internal-error.",
-      "ms": 485
+      "remediation": null,
+      "ms": 239
     },
     {
       "id": "static.blocking.defined-are-exported",
@@ -71,7 +71,7 @@
       "evidence": "no blocking functions defined in source",
       "detail": null,
       "remediation": null,
-      "ms": 130
+      "ms": 81
     },
     {
       "id": "static.secrets.no-plaintext",
@@ -83,7 +83,7 @@
       "evidence": "no plaintext private keys or service-account JSON found",
       "detail": null,
       "remediation": null,
-      "ms": 2130
+      "ms": 1280
     },
     {
       "id": "static.auth.error-mapping",
@@ -92,10 +92,10 @@
       "title": "Auth error handler maps codes rather than emitting one generic string",
       "severity": "medium",
       "status": "PASS",
-      "evidence": "25 distinct auth/* codes mapped to user-facing messages",
+      "evidence": "32 distinct auth/* codes mapped to user-facing messages",
       "detail": null,
       "remediation": null,
-      "ms": 2
+      "ms": 1
     },
     {
       "id": "gcp.auth.active",
@@ -103,11 +103,11 @@
       "layerLabel": "Layer 2 — live Google Cloud validation",
       "title": "An authenticated Google Cloud account is available",
       "severity": "high",
-      "status": "SKIPPED",
-      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "status": "PASS",
+      "evidence": "active account: alexochieng3030@gmail.com",
       "detail": null,
-      "remediation": "Run `gcloud auth login`. Every Layer 2 check is blocked until this succeeds.",
-      "ms": 16
+      "remediation": null,
+      "ms": 2061
     },
     {
       "id": "gcp.project.active",
@@ -115,11 +115,11 @@
       "layerLabel": "Layer 2 — live Google Cloud validation",
       "title": "Active project matches the expected SOKONI project",
       "severity": "high",
-      "status": "SKIPPED",
-      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "status": "PASS",
+      "evidence": "active project = sokoni-aeb26",
       "detail": null,
       "remediation": null,
-      "ms": 0
+      "ms": 1882
     },
     {
       "id": "gcp.identity.blocking-functions-resolve",
@@ -127,11 +127,11 @@
       "layerLabel": "Layer 2 — live Google Cloud validation",
       "title": "Every registered blocking function resolves to a live service",
       "severity": "critical",
-      "status": "SKIPPED",
-      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "status": "PASS",
+      "evidence": "no blocking functions registered — cannot be the cause of a sign-in failure",
       "detail": null,
       "remediation": null,
-      "ms": 0
+      "ms": 2663
     },
     {
       "id": "gcp.identity.authorized-domains",
@@ -139,8 +139,8 @@
       "layerLabel": "Layer 2 — live Google Cloud validation",
       "title": "Authorized domains include every production host",
       "severity": "high",
-      "status": "SKIPPED",
-      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "status": "PASS",
+      "evidence": "all expected hosts authorised: mysokoni.co.ke, www.mysokoni.co.ke, sokoni-aeb26.web.app",
       "detail": null,
       "remediation": null,
       "ms": 0
@@ -151,11 +151,11 @@
       "layerLabel": "Layer 2 — live Google Cloud validation",
       "title": "Cloud Run services backing auth are serving traffic",
       "severity": "medium",
-      "status": "SKIPPED",
-      "evidence": "gcloud unavailable: spawnSync gcloud.cmd EINVAL",
+      "status": "PASS",
+      "evidence": "1002 Cloud Run services, all Ready",
       "detail": null,
       "remediation": null,
-      "ms": 0
+      "ms": 30384
     }
   ]
 }
