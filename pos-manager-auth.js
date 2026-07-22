@@ -972,20 +972,101 @@ window.ManagerAuth = (() => {
   /* ═══════════════════════════════════════════════════════════
      MAIN REQUEST API
   ═══════════════════════════════════════════════════════════ */
+  /**
+   * Server-verified owner/manager PIN. The ONLY approval path that survives when no
+   * manager is enrolled locally.
+   *
+   * Deliberately does not fall back to the local roster: the whole point is that the
+   * local roster is empty or untrustworthy. _verifyPinServer() calls
+   * validateDeviceAccess, which matches against posStaff (branchId, pinHash,
+   * status='active') and is rate-limited server-side, so neither the PIN nor the
+   * attempt count can be forged from the device.
+   *
+   * Returns false — never true — on any outcome that is not an explicit server YES.
+   */
+  async function _serverVerifiedPin(operation) {
+    const opLabel = OPERATIONS[operation]?.label || operation;
+    const maxTries = Math.max(1, _cfg.maxPinAttempts || 3);
+
+    for (let attempt = 1; attempt <= maxTries; attempt++) {
+      const pin = window.prompt(
+        'MANAGER AUTHORIZATION REQUIRED\n\n' + opLabel + '\n\n' +
+        'No manager is enrolled on this device.\n' +
+        'Enter the OWNER or MANAGER PIN to approve.\n\n' +
+        'Attempt ' + attempt + ' of ' + maxTries
+      );
+      if (pin === null) return false;                    /* cancelled is a denial */
+      if (!String(pin).trim()) continue;
+
+      const res = await _verifyPinServer(String(pin).trim());
+
+      if (res === null) {
+        /* Unreachable. A money-moving operation must not be approved on a promise we
+           cannot check — say so plainly instead of failing open. */
+        alert('Cannot reach SOKONI to verify this authorization.\n\n' +
+              'Connect to the internet and try again.\n\n' +
+              'This operation cannot be approved offline.');
+        return false;
+      }
+      if (res.rateLimited) {
+        alert('Too many PIN attempts.\n\nWait a few minutes before trying again.');
+        return false;
+      }
+      if (res.valid) {
+        _writeAudit({
+          operation, operationLabel: opLabel, method: 'pin_server',
+          status: 'approved', managerId: res.employee?.uid || 'server-verified',
+          managerName: res.employee?.name || 'Owner/Manager (server)',
+          fallbackPath: 'no-local-manager',
+        });
+        return true;
+      }
+      /* Wrong PIN — loop and let the operator retry within the bounded count. */
+    }
+
+    alert('Authorization denied.\n\nThe PIN did not match an active manager for this branch.');
+    return false;
+  }
+
   async function request(operation, context = {}) {
-    if (!_cfg.enabled)                        return true;
-    if (!_cfg.enabledOps?.includes(operation)) return true;
+    /* ── Containment: a money-moving gate can never be disabled by the device ──────
+       _cfg is loaded from IndexedDB, which the person holding the till controls, so
+       honouring _cfg.enabled / _cfg.enabledOps for high-risk operations meant any
+       operator could switch off their own refund and void controls by editing local
+       storage. Those two checks now apply only to low-risk operations.
+
+       HIGH_RISK_OPS is the existing list of operations where a forged approval moves
+       money or stock — it was already trusted for the offline decision, and it is the
+       right boundary here too. */
+    const highRisk = HIGH_RISK_OPS.includes(operation);
+
+    if (!highRisk) {
+      if (!_cfg.enabled)                         return true;
+      if (!_cfg.enabledOps?.includes(operation)) return true;
+    }
 
     const managers = await listManagers();
 
     if (!managers.length) {
-      const go = confirm(
-        'Manager Authorization is not set up.\n\n' +
-        'Tap OK to open Manager Setup now, or Cancel to allow this operation without authorization.\n\n' +
-        '(Set up a manager to require authorization for: refunds, discounts, voids, and more.)'
-      );
-      if (go) window.open('manager-auth.html', '_blank');
-      return true;
+      /* This branch used to return true unconditionally — it literally offered
+         "Cancel to allow this operation without authorization". Clearing site data
+         emptied the roster and every refund then approved itself, with the only
+         record written to device-local IndexedDB the same operator could erase.
+
+         Low-risk operations keep the old prompt so a shop that has not finished
+         setup is not blocked from opening a drawer. High-risk operations now fall
+         through to a server-verified PIN, which keeps merchants trading without
+         letting the device authorise itself. */
+      if (!highRisk) {
+        const go = confirm(
+          'Manager Authorization is not set up.\n\n' +
+          'Tap OK to open Manager Setup now, or Cancel to continue without authorization.\n\n' +
+          '(Set up a manager to require authorization for: refunds, discounts, voids, and more.)'
+        );
+        if (go) window.open('manager-auth.html', '_blank');
+        return true;
+      }
+      return _serverVerifiedPin(operation);
     }
 
     const startTime = Date.now();
