@@ -50,9 +50,9 @@ const PLANS = {
   /* ── SELLERS ── */
   seller_free:       { id:'seller_free',       hubType:'seller',       tier:'free',       name:'Seller Free',       price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:10,   photos_per_listing:3,  featured_listings:0, analytics:false, bulk_import:false, priority_support:false, ai_assistant:false, team_members:1, storage_gb:1,  commission_discount_pct:0,  badge_verified:false }},
-  seller_basic:      { id:'seller_basic',      hubType:'seller',       tier:'basic',      name:'Seller Basic',      price:{monthly:99900,   annual:999000   }, trial:{days:14}, grace:{days:3},  isActive:true,
+  seller_basic:      { id:'seller_basic',      hubType:'seller',       tier:'basic',      name:'Seller Basic',      price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
     features:{ listings_limit:100,  photos_per_listing:6,  featured_listings:2, analytics:true,  bulk_import:false, priority_support:false, ai_assistant:false, team_members:2, storage_gb:5,  commission_discount_pct:2,  badge_verified:true  }},
-  seller_pro:        { id:'seller_pro',        hubType:'seller',       tier:'pro',        name:'Seller Pro',        price:{monthly:249900,  annual:2499000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  seller_pro:        { id:'seller_pro',        hubType:'seller',       tier:'pro',        name:'Seller Pro',        price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ listings_limit:500,  photos_per_listing:10, featured_listings:5, analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:5, storage_gb:20, commission_discount_pct:5,  badge_verified:true, api_access:true }},
   seller_enterprise: { id:'seller_enterprise', hubType:'seller',       tier:'enterprise', name:'Seller Enterprise', price:{monthly:749900,  annual:7499000  }, trial:{days:30}, grace:{days:7},  isActive:true,
     features:{ listings_limit:-1,   photos_per_listing:20, featured_listings:-1,analytics:true,  bulk_import:true,  priority_support:true,  ai_assistant:true,  team_members:-1,storage_gb:100,commission_discount_pct:10, badge_verified:true, api_access:true, custom_domain:true, dedicated_account_manager:true }},
@@ -60,35 +60,35 @@ const PLANS = {
   /* ── SERVICE PROVIDERS ── */
   provider_free:     { id:'provider_free',     hubType:'service_provider', tier:'free',  name:'Provider Free',     price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ services_limit:3,    calendar:false, online_booking:true,  analytics:false, priority_listing:false, team_members:1, ai_assistant:false }},
-  provider_basic:    { id:'provider_basic',    hubType:'service_provider', tier:'basic', name:'Provider Basic',    price:{monthly:99900,   annual:999000   }, trial:{days:14}, grace:{days:3},  isActive:true,
+  provider_basic:    { id:'provider_basic',    hubType:'service_provider', tier:'basic', name:'Provider Basic',    price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
     features:{ services_limit:20,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:false, team_members:3, ai_assistant:false }},
   /* ── PROVIDER SUBSCRIPTION TIERS (migrated from subscriptions.html) ──
      These are the plans customers actually purchase. They lived only in a
      hardcoded array on the buying page, so nothing server-side could price,
      validate or activate them. Prices are the page's figures converted to
      cents; annual is the page's per-month annual rate x 12. */
-  starter:           { id:'starter',           hubType:'service_provider', tier:'starter',  name:'Starter',   price:{monthly:49900,   annual:478800   }, trial:{days:14}, grace:{days:3},  isActive:true,
+  starter:           { id:'starter',           hubType:'service_provider', tier:'starter',  name:'Starter',   price:{monthly:49900,   annual:478800   }, trial:{days:3}, grace:{days:3},  isActive:true,
     features:{ services_limit:20,   leads_per_month:30,  commission_pct:10, calendar:true,  online_booking:true,  analytics:false, priority_listing:false, team_members:1,  badge_verified:true }},
-  pro:               { id:'pro',               hubType:'service_provider', tier:'pro',      name:'Pro',       price:{monthly:149900,  annual:1438800  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  pro:               { id:'pro',               hubType:'service_provider', tier:'pro',      name:'Pro',       price:{monthly:149900,  annual:1438800  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:7,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:5,  badge_verified:true, ai_assistant:true }},
-  business:          { id:'business',          hubType:'service_provider', tier:'business', name:'Business',  price:{monthly:499900,  annual:4798800  }, trial:{days:14}, grace:{days:7},  isActive:true,
+  business:          { id:'business',          hubType:'service_provider', tier:'business', name:'Business',  price:{monthly:499900,  annual:4798800  }, trial:{days:3}, grace:{days:7},  isActive:true,
     features:{ services_limit:-1,   leads_per_month:-1,  commission_pct:4,  calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:20, badge_verified:true, ai_assistant:true, bulk_import:true, api_access:true }},
 
-  provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  provider_pro:      { id:'provider_pro',      hubType:'service_provider', tier:'pro',   name:'Provider Pro',      price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ services_limit:-1,   calendar:true,  online_booking:true,  analytics:true,  priority_listing:true,  team_members:10,ai_assistant:true,  bulk_import:true }},
 
   /* ── RESTAURANTS ── */
   restaurant_free:   { id:'restaurant_free',   hubType:'restaurant',   tier:'free',       name:'Restaurant Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ menu_items:20,       online_ordering:false, delivery_zones:1,    table_reservations:false, analytics:false, team_members:1  }},
-  restaurant_basic:  { id:'restaurant_basic',  hubType:'restaurant',   tier:'basic',      name:'Restaurant Basic',  price:{monthly:149900,  annual:1499000  }, trial:{days:14}, grace:{days:3},  isActive:true,
+  restaurant_basic:  { id:'restaurant_basic',  hubType:'restaurant',   tier:'basic',      name:'Restaurant Basic',  price:{monthly:149900,  annual:1499000  }, trial:{days:3}, grace:{days:3},  isActive:true,
     features:{ menu_items:100,      online_ordering:true,  delivery_zones:3,    table_reservations:false, analytics:true,  team_members:5,  ai_assistant:false }},
-  restaurant_pro:    { id:'restaurant_pro',    hubType:'restaurant',   tier:'pro',        name:'Restaurant Pro',    price:{monthly:299900,  annual:2999000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  restaurant_pro:    { id:'restaurant_pro',    hubType:'restaurant',   tier:'pro',        name:'Restaurant Pro',    price:{monthly:299900,  annual:2999000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ menu_items:-1,       online_ordering:true,  delivery_zones:-1,   table_reservations:true,  analytics:true,  team_members:20, ai_assistant:true, kds_integration:true, pos_integration:true }},
 
   /* ── HOTELS ── */
   hotel_free:        { id:'hotel_free',        hubType:'hotel',        tier:'free',       name:'Hotel Free',        price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ room_types:2,        booking_calendar:true, channel_manager:false, analytics:false, team_members:1 }},
-  hotel_pro:         { id:'hotel_pro',         hubType:'hotel',        tier:'pro',        name:'Hotel Pro',         price:{monthly:299900,  annual:2999000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  hotel_pro:         { id:'hotel_pro',         hubType:'hotel',        tier:'pro',        name:'Hotel Pro',         price:{monthly:299900,  annual:2999000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ room_types:-1,       booking_calendar:true, channel_manager:true,  analytics:true,  team_members:20, ai_assistant:true, pos_integration:true }},
   hotel_enterprise:  { id:'hotel_enterprise',  hubType:'hotel',        tier:'enterprise', name:'Hotel Enterprise',  price:{monthly:599900,  annual:5999000  }, trial:{days:30}, grace:{days:7},  isActive:true,
     features:{ room_types:-1,       booking_calendar:true, channel_manager:true,  analytics:true,  team_members:-1, ai_assistant:true, pos_integration:true, custom_domain:true, multi_branch:true }},
@@ -96,7 +96,7 @@ const PLANS = {
   /* ── PHARMACIES ── */
   pharmacy_free:     { id:'pharmacy_free',     hubType:'pharmacy',     tier:'free',       name:'Pharmacy Free',     price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ products_limit:50,   prescription_upload:false, delivery:false,   analytics:false, team_members:2  }},
-  pharmacy_pro:      { id:'pharmacy_pro',      hubType:'pharmacy',     tier:'pro',        name:'Pharmacy Pro',      price:{monthly:149900,  annual:1499000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  pharmacy_pro:      { id:'pharmacy_pro',      hubType:'pharmacy',     tier:'pro',        name:'Pharmacy Pro',      price:{monthly:149900,  annual:1499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ products_limit:-1,   prescription_upload:true,  delivery:true,    analytics:true,  team_members:10, ai_assistant:true, etims:true }},
 
   /* ── DRIVERS ── */
@@ -108,25 +108,25 @@ const PLANS = {
   /* ── PROPERTY AGENTS ── */
   property_free:     { id:'property_free',     hubType:'property_agent',tier:'free',      name:'Property Free',     price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:5,    photos_per_listing:4, featured_listings:0, analytics:false }},
-  property_pro:      { id:'property_pro',      hubType:'property_agent',tier:'pro',       name:'Property Pro',      price:{monthly:299900,  annual:2999000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  property_pro:      { id:'property_pro',      hubType:'property_agent',tier:'pro',       name:'Property Pro',      price:{monthly:299900,  annual:2999000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ listings_limit:-1,   photos_per_listing:20,featured_listings:10,analytics:true,  virtual_tours:true, team_members:5, ai_assistant:true }},
 
   /* ── CAR DEALERS ── */
   car_dealer_free:   { id:'car_dealer_free',   hubType:'car_dealer',   tier:'free',       name:'Car Dealer Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ listings_limit:5,    photos_per_listing:5, featured_listings:0, analytics:false }},
-  car_dealer_pro:    { id:'car_dealer_pro',    hubType:'car_dealer',   tier:'pro',        name:'Car Dealer Pro',    price:{monthly:249900,  annual:2499000  }, trial:{days:14}, grace:{days:5},  isActive:true,
+  car_dealer_pro:    { id:'car_dealer_pro',    hubType:'car_dealer',   tier:'pro',        name:'Car Dealer Pro',    price:{monthly:249900,  annual:2499000  }, trial:{days:3}, grace:{days:5},  isActive:true,
     features:{ listings_limit:-1,   photos_per_listing:20,featured_listings:5, analytics:true,  team_members:5, ai_assistant:true, vehicle_history:true }},
 
   /* ── FREELANCERS ── */
   freelancer_free:   { id:'freelancer_free',   hubType:'freelancer',   tier:'free',       name:'Freelancer Free',   price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ services_limit:3,    portfolio_items:5,  featured_listing:false, analytics:false }},
-  freelancer_pro:    { id:'freelancer_pro',    hubType:'freelancer',   tier:'pro',        name:'Freelancer Pro',    price:{monthly:99900,   annual:999000   }, trial:{days:14}, grace:{days:3},  isActive:true,
+  freelancer_pro:    { id:'freelancer_pro',    hubType:'freelancer',   tier:'pro',        name:'Freelancer Pro',    price:{monthly:99900,   annual:999000   }, trial:{days:3}, grace:{days:3},  isActive:true,
     features:{ services_limit:-1,   portfolio_items:-1, featured_listing:true,  analytics:true, commission_discount_pct:3, ai_assistant:true }},
 
   /* ── RECRUITERS ── */
   recruiter_free:    { id:'recruiter_free',    hubType:'recruiter',    tier:'free',       name:'Recruiter Free',    price:{monthly:0,       annual:0        }, trial:{days:0},  grace:{days:0},  isActive:true,
     features:{ job_posts:3,         cv_database_access:false, analytics:false }},
-  recruiter_pro:     { id:'recruiter_pro',     hubType:'recruiter',    tier:'pro',        name:'Recruiter Pro',     price:{monthly:199900,  annual:1999000  }, trial:{days:14}, grace:{days:3},  isActive:true,
+  recruiter_pro:     { id:'recruiter_pro',     hubType:'recruiter',    tier:'pro',        name:'Recruiter Pro',     price:{monthly:199900,  annual:1999000  }, trial:{days:3}, grace:{days:3},  isActive:true,
     features:{ job_posts:-1,        cv_database_access:true,  analytics:true, featured_posts:5, ai_screening:true, team_members:5 }},
 
   /* ── PREMIUM BUYERS ── */

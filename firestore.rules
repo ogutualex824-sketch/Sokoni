@@ -42,6 +42,27 @@ service cloud.firestore {
           && lng >= 33.9  && lng <= 42.0;
     }
 
+    /* Marketplace product ceiling.
+       Reads the server-maintained counter — rules have no aggregation, so the
+       count and the ceiling are both materialised into productCounters/{uid} by
+       functions/product-limit.js, which is the only writer.
+
+       Fails OPEN, deliberately. A missing counter, a missing field, or -1 all
+       allow the write. The counter is created by a trigger on the seller's first
+       product, so every seller has a window where it does not exist yet, and
+       every seller who published before this shipped has none at all. Denying on
+       absence would lock those merchants out of their own catalogue to enforce a
+       commercial cap — the wrong trade every time. The cap is a billing
+       boundary, not a security boundary. */
+    function withinProductLimit() {
+      let ctr = get(/databases/$(database)/documents/productCounters/$(request.auth.uid));
+      return !exists(/databases/$(database)/documents/productCounters/$(request.auth.uid))
+             || !('maxProducts' in ctr.data)
+             || ctr.data.maxProducts == -1
+             || !('count' in ctr.data)
+             || ctr.data.count < ctr.data.maxProducts;
+    }
+
     function noAdminFields() {
       return !request.resource.data.keys()
                .hasAny(['isAdmin','suspended','banned','adminApproved',
@@ -631,12 +652,25 @@ service cloud.firestore {
       allow delete: if isAuthed() && request.auth.uid == uid;
     }
 
+    /* Server-maintained marketplace product counter.
+       Rules cannot aggregate, so the count AND the ceiling are materialised into
+       one document by functions/product-limit.js and read here with a single
+       get(). Writes are denied to everyone: a seller must not be able to raise
+       their own limit or reset their own count. Absent document = no limit yet
+       resolved, which allows the write — a counter that has not been created must
+       never block a merchant from publishing. */
+    match /productCounters/{sellerUid} {
+      allow read:  if isAuthed() && (sellerUid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
     match /products/{productId} {
       allow read:   if true;
       allow create: if isAuthed()
                     && request.resource.data.sellerUid == request.auth.uid
                     && validPrice('price')
-                    && noAdminFields();
+                    && noAdminFields()
+                    && withinProductLimit();
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.sellerUid == request.auth.uid
