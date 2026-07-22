@@ -1705,7 +1705,6 @@
   };
 
   /* ── Init: auto-run diagnostics when settings tab opens ── */
-  const _origSwitch = typeof SPos !== 'undefined' && SPos.ui && SPos.ui.switchTab;
   document.addEventListener('DOMContentLoaded', function(){
     /* Auto-populate diag cards on first load after PosDB is ready */
     setTimeout(function(){ if (document.getElementById('panel-settings')?.classList.contains('active')) _p7RunDiag(); }, 1200);

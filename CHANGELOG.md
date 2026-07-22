@@ -2,11 +2,12 @@
 
 ### Root Cause Analysis
 
-**Primary cause — iOS jetsam OOM kill from 43 synchronous blocking `<script>` tags.**
+**Primary cause (strongly indicated; not confirmed from crash log or sysdiagnose) — iOS
+memory-pressure termination (jetsam), consistent with 43 synchronous blocking `<script>` tags.**
 
 When a merchant tapped "Open POS", Safari navigated to `pos.html`. The HTML parser
-immediately blocked on 35 back-to-back `<script src="…">` tags (lines 1432–1466) plus 5 more
-at lines 1904–1909. Every blocking script forced Safari's Nitro JIT compiler to:
+immediately blocked on 35 back-to-back `<script src="...">` tags (lines 1432-1466) plus 5 more
+at lines 1904-1909. Every blocking script forced Safari's Nitro JIT compiler to:
 
 1. Halt HTML parsing
 2. Download the script from the network (sequential, not parallel)
@@ -15,14 +16,17 @@ at lines 1904–1909. Every blocking script forced Safari's Nitro JIT compiler t
 
 The combined JS heap from 43 modules (pos.js 2990 lines, pos-manager-auth.js 1285 lines,
 pos-modules.js 839 lines, sokoni-bluetooth-printer.js 1024 lines, etc.) plus the DOM for
-POS modals/panels + WebKit rendering layer + App Check ReCaptchaV3 iframe pushed the Safari
-content process past iOS's per-tab memory limit (~150–200 MB on iPhone 12 and older). The iOS
-kernel's jetsam daemon sent SIGKILL. The tab died silently — no JS error, no console output.
+POS modals/panels + WebKit rendering layer + App Check ReCaptchaV3 iframe is consistent with
+exceeding Safari's content-process memory limit (~150-200 MB on iPhone 12 and older). The
+observed symptom — tab dies silently, no JS error, no console output — matches the standard
+jetsam SIGKILL signature. Without a sysdiagnose or iOS crash log this remains a strong
+inference, not a forensically confirmed root cause.
 
-Evidence: A prior workaround comment existed at pos.html:1929:
+Corroborating evidence: pos.html:1929 contained this developer comment:
   "Deferred 4 s so the JS parse/compile cycle completes first —
    prevents iOS jetsam OOM kill on memory-constrained devices."
-This confirms the developer already identified jetsam but only addressed 2 of 43 modules.
+This shows jetsam was already identified as the mechanism; only 2 of 43 modules were
+addressed by that workaround, leaving 41 synchronous-blocking scripts in place.
 
 **Secondary cause — pos-sync.js auto-inited before IndexedDB was open.**
 
