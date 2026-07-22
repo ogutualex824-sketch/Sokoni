@@ -55,9 +55,15 @@
       }
     } catch (_) { /* fall through */ }
 
-    /* Unknown is not the same as empty, but it must behave as empty here: a
-       page whose cart we cannot read must remain updatable, or an unrelated
-       surface could block every future release. */
+    /* FALLBACK POLICY — not a claim that the cart is empty.
+       If the application cannot expose cart state, AppLifecycle falls back to
+       allowing reloads. Unknown and empty are different facts; they are treated
+       the same here only because the alternative is worse — a surface whose
+       cart cannot be read would otherwise block every future release, silently
+       and permanently.
+
+       Read as a business statement this would be wrong: an unreadable cart is
+       not an empty one, and nothing downstream should infer that it is. */
     return 0;
   }
 
