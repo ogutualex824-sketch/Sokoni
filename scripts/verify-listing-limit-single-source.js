@@ -98,6 +98,34 @@ const CLASSIFICATION = {
 
 const NON_BLOCKING = new Set(['CANONICAL', 'TOOLING', 'DIFFERENT_PRODUCT']);
 
+/* Evidence behind each non-obvious classification, and when it was established.
+ *
+ * Only DIFFERENT_PRODUCT entries need one: they are the classifications that
+ * SUPPRESS a failure, so they are the only ones where being wrong is silent.
+ * Two of the original four were wrong — sub-billing and sasos-core were called
+ * different products on the strength of their module names, while both declare
+ * marketplace seller allowances. The guard reported them as allowed.
+ *
+ * An undated exemption is refused. A classification is a claim about code that
+ * keeps changing, and one nobody has re-checked since it was written is not
+ * evidence — it is a memory of evidence. Age is surfaced on every run so the
+ * question "is this still true?" is asked without anyone having to remember to
+ * ask it. */
+const EVIDENCE = {
+  'functions/provider-onboarding.js': {
+    verified: '2026-07-22',
+    by: 'consumer trace',
+    detail: 'imported only by provider-dispatch.js; module contains zero references ' +
+            'to seller, merchant or marketplace',
+  },
+};
+
+/* Days after which a DIFFERENT_PRODUCT exemption is reported as stale. Ninety
+   is a judgement, not a standard: long enough that it is not noise on every
+   run, short enough that a module can not be quietly rewritten underneath an
+   exemption for a whole release cycle. */
+const EVIDENCE_MAX_AGE_DAYS = 90;
+
 const LEGEND = {
   CANONICAL:         'the source of truth',
   DIFFERENT_PRODUCT: 'separate commercial product — allowed',
@@ -193,6 +221,39 @@ for (const cls of ORDER) {
     if (!NON_BLOCKING.has(cls)) console.log('           ' + ' '.repeat(36) + 'first at ' + f + ':' + hs[0].line);
   });
   console.log('');
+}
+
+/* An exemption without evidence is refused outright. The alternative is a guard
+   whose suppressions rest on whoever last edited the map remembering why — and
+   this map has already been wrong twice. */
+const exempt = [...new Set((byClass.DIFFERENT_PRODUCT || []).map(h => h.file))];
+const undated = exempt.filter(f => !EVIDENCE[f]);
+const stale = [];
+
+for (const f of exempt) {
+  const e = EVIDENCE[f];
+  if (!e) continue;
+  const ageDays = Math.floor((Date.now() - Date.parse(e.verified)) / 86400000);
+  console.log('  EVIDENCE  ' + f);
+  console.log('            verified ' + e.verified + ' (' + ageDays + 'd ago) by ' + e.by);
+  console.log('            ' + e.detail);
+  if (ageDays > EVIDENCE_MAX_AGE_DAYS) stale.push({ file: f, ageDays });
+  console.log('');
+}
+
+if (stale.length) {
+  console.log('  STALE EVIDENCE — re-trace before trusting these exemptions:');
+  stale.forEach(s => console.log('    ' + s.file.padEnd(36) + s.ageDays + ' days old'));
+  console.log('');
+}
+
+if (undated.length) {
+  console.log('  FAIL — DIFFERENT_PRODUCT claimed without evidence:\n');
+  undated.forEach(f => console.log('    ' + f));
+  console.log('\n  Add an EVIDENCE entry naming what was traced and when. An exemption');
+  console.log('  suppresses a failure, so an unverified one fails silently — which is');
+  console.log('  how sub-billing and sasos-core passed while declaring seller limits.\n');
+  process.exit(1);
 }
 
 if (deadLeads.length) {

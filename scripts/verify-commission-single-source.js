@@ -38,10 +38,34 @@ const ALLOWLIST = {
   'sokoni-commission-rates.js':     'generated from commission-config.js; verified in check 2',
   'scripts/verify-commission-single-source.js': 'this guard',
   'scripts/build-commission-snapshot.js':       'the generator',
-  /* Different concepts that legitimately carry rates. Not commission-per-transaction. */
-  'functions/subscription-core.js':    'subscription PLAN pricing (what a seller pays for a plan)',
-  'functions/provider-onboarding.js':  'provider PLAN tiers',
-  'functions/sasos-core.js':           'SaaS plan tiers',
+  /* Different concepts that legitimately carry rates. Not commission-per-transaction.
+
+     The three entries below had inaccurate reasons until 2026-07-22. Each was
+     re-traced to its consumers; the files stay allow-listed and the guard's
+     verdict is unchanged, but the justifications were wrong in ways that would
+     have misled the next reader into trusting a boundary that is not where the
+     text claimed. */
+
+  /* WAS: "subscription PLAN pricing (what a seller pays for a plan)".
+     That is not all it does. ROLE_DEFAULT_COMMISSION and getCommissionRate
+     resolve the rate a seller pays ON A TRANSACTION, under a header calling
+     itself the enforcement API, and finos-utils reaches it at PRECEDENCE 3.
+     It stays allow-listed because that path is opt-in and reachable from
+     exactly one call site — provider-ops.js:134 with subscriptionRole:
+     'provider'. No marketplace call site opts in, so ROLE_DEFAULT_COMMISSION
+     .merchant (0.20, against a canonical 0.08) is unreachable today. If a
+     marketplace call site ever passes subscriptionRole, that stops being true
+     and this entry must be revisited. */
+  'functions/subscription-core.js':    'transaction rate for the PROVIDER compatibility path only; ' +
+                                       'opt-in via subscriptionRole, one call site (provider-ops.js:134)',
+  'functions/provider-onboarding.js':  'provider PLAN tiers; commissionRate is returned to the client ' +
+                                       'and matches the provider compatibility path',
+  /* WAS: "SaaS plan tiers". SASOS_PRODUCTS includes 'marketplace', and
+     marketplace.free carries commission.rate_pct 15 against a canonical 8. It
+     stays allow-listed because rate_pct is read by nothing outside
+     functions/test/sasos-core.test.js — declared, never enforced. */
+  'functions/sasos-core.js':           'contains MARKETPLACE plans, not just SaaS; rate_pct is read ' +
+                                       'only by its own test — declared, never enforced',
   'functions/hr-payroll.js':           'Kenya PAYE/NHIF/NSSF statutory bands',
   'functions/finos-utils.js':          'TAX_CONFIG (VAT/WHT) — tax, not commission',
   'functions/shared/constants.js':     'VAT/WHT/DST tax constants',
