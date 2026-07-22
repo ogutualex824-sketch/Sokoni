@@ -462,7 +462,8 @@
     "predeploy": [
       "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js",
-      "node scripts/perf-guard.js"
+      "node scripts/perf-guard.js",
+      "node scripts/test-inventory.js --gate"
     ]
   },
   "firestore": [
