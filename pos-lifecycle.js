@@ -126,7 +126,7 @@
        that was deferred, so the POS picks up the new version at the first safe
        moment instead of waiting for the next cold start. */
     applyPendingReload(reason) {
-      if (!window.__sokoniReloadPending) return false;
+      if (!window.__sokoniReloadPending) { hideUpdateBanner(); return false; }
       if (hasOpenSale()) return false;
       record(reason || 'deferred-apply', 'APPLIED');
       window.__sokoniReloadPending = false;
@@ -150,19 +150,39 @@
   });
 
   /* Tell the operator rather than leaving them on a version that quietly is not
-     the current one. A banner is honest; silently deferring forever is not. */
-  window.addEventListener('sokoni:reload-deferred', () => {
+     the current one. A banner is honest; silently deferring forever is not.
+
+     pointer-events:none is not cosmetic. The first version omitted it, so a
+     fixed bar at z-index 99999 across the full width of the viewport swallowed
+     every tap in the strip it covered — on a POS that is the bottom row of the
+     product grid and whatever sits at the foot of checkout. Nothing in this
+     banner is interactive; it must never be the thing a cashier's finger hits.
+
+     It is also removed rather than left in place. It announces a reload that
+     has not happened yet, so leaving it up after the deferral resolves would
+     state something untrue and cover the screen indefinitely. */
+  function showUpdateBanner() {
     try {
       if (document.getElementById('sokoni-update-pending')) return;
       const el = document.createElement('div');
       el.id = 'sokoni-update-pending';
       el.textContent = 'Update ready — will apply when this sale is finished';
       el.style.cssText = 'position:fixed;left:0;right:0;bottom:0;z-index:99999;' +
+        'pointer-events:none;' +
         'background:#71ff00;color:#050505;font:600 13px/1.4 system-ui,sans-serif;' +
         'padding:10px 14px;text-align:center';
       document.body.appendChild(el);
     } catch (_) {}
-  });
+  }
+
+  function hideUpdateBanner() {
+    try {
+      const el = document.getElementById('sokoni-update-pending');
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+    } catch (_) {}
+  }
+
+  window.addEventListener('sokoni:reload-deferred', showUpdateBanner);
 
   console.log('[POS lifecycle] reload contract armed — a sale in progress defers updates');
 })();
