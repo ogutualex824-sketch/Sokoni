@@ -145,6 +145,21 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
       patch.reassignedAt      = F.serverTimestamp();
       patch.reassignedBy      = callerUid;
       if (ownerCheck.merchantId) patch.merchantId = ownerCheck.merchantId;
+
+      /* sellerName is rendered on the storefront. One of these products carries
+         the merchant's phone number there — an implementation artifact of the
+         upload path leaking into a customer-facing surface, not a brand.
+         Corrected from the merchant record that was already verified above,
+         never from a literal: the name has one authority, and a hardcoded
+         string here would be a second one that cannot follow a rename.
+         Only applied when it actually differs, so a correct name is not
+         rewritten and reported as a change. */
+      if (ownerCheck.name && before.sellerName !== ownerCheck.name) {
+        patch.sellerName = ownerCheck.name;
+        notes.push('sellerName "' + (before.sellerName || '(empty)') + '" → "' +
+                   ownerCheck.name + '" (from verified ' + ownerCheck.via + '/' +
+                   ownerCheck.merchantId + ')');
+      }
     }
 
     if (ops.includes('normalizeTypes')) {
