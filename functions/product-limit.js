@@ -48,13 +48,17 @@ const F  = admin.firestore.FieldValue;
 const REGION  = 'us-central1';
 const COUNTER = 'productCounters';
 
-/* ── Canonical limits ──────────────────────────────────────────────────────
-   Declared here and nowhere else. subscription-core resolves a plan's explicit
-   limits.maxProducts when the subscription carries one; these are the fallbacks
-   for merchants who have none, which is every merchant on a trial today.
-   -1 means unlimited and is the correct value for a paying plan. */
-const TRIAL_MAX_PRODUCTS = 10;
-const PAID_MAX_PRODUCTS  = -1;
+/* ── Limits come from the canonical catalogue ──────────────────────────────
+   These constants used to be declared here, which made this file the ELEVENTH
+   plan catalogue in a codebase whose defining defect was ten of them. The
+   comment above them claimed "declared here and nowhere else" — it was wrong
+   when written, because nine others already existed under four different field
+   names, and the search that produced it looked for only two of those names.
+   That is the whole failure in miniature: a file that believes it is the only
+   authority, because it could not see the others.
+   Upload authorization is the enforcement point, so it migrates first: whatever
+   the dashboard displays, this is what actually stops a merchant publishing. */
+const catalog = require('./subscription-catalog');
 
 /**
  * Resolve the ceiling for a seller.
@@ -69,28 +73,56 @@ async function resolveMaxProducts(uid) {
   try {
     const core = require('./subscription-core');
     const sub  = await core.resolveSubscription(uid, {});
+
+    /* An explicit per-merchant override on the subscription document still
+       wins — a negotiated enterprise allowance must not be overwritten by a
+       catalogue default. Everything else resolves through the canonical
+       catalogue rather than a constant declared here. */
     if (sub && sub.limits && 'maxProducts' in sub.limits) {
-      return { max: Number(sub.limits.maxProducts), status: sub.status || 'unknown' };
+      return {
+        max: Number(sub.limits.maxProducts),
+        status: sub.status || 'unknown',
+        source: 'subscription-override',
+        catalogVersion: null,
+      };
     }
-    const paying = sub && (sub.status === core.STATUS.ACTIVE || sub.status === core.STATUS.GRACE);
+
+    const ent = catalog.entitlementFor(sub || {});
     return {
-      max:    paying ? PAID_MAX_PRODUCTS : TRIAL_MAX_PRODUCTS,
-      status: (sub && sub.status) || 'none',
+      max:            ent.listingLimit,
+      status:         ent.subscriptionStatus,
+      source:         ent.source,
+      catalogVersion: ent.catalogVersion,
     };
   } catch (_) {
-    return { max: TRIAL_MAX_PRODUCTS, status: 'unresolved' };
+    /* Resolution failed. Fall back to the catalogue's FREE allowance rather
+       than to unlimited — an error must never hand out a larger entitlement
+       than the merchant is owed, and it must never take a shop offline either. */
+    const free = catalog.entitlementFor({});
+    return {
+      max:            free.listingLimit,
+      status:         'unresolved',
+      source:         free.source,
+      catalogVersion: free.catalogVersion,
+    };
   }
 }
 
 /** Recompute and persist the ceiling. Called after any subscription change. */
 async function syncLimit(uid) {
   if (!uid) return null;
-  const { max, status } = await resolveMaxProducts(uid);
+  const { max, status, source, catalogVersion } = await resolveMaxProducts(uid);
+  /* source and catalogVersion are persisted with the ceiling so a counter can
+     be traced to the catalogue generation that produced it. A merchant whose
+     limit looks wrong is then a question with an answer — "this was resolved
+     from v1 before the change" — rather than another investigation. */
   await db.collection(COUNTER).doc(uid).set(
-    { uid, maxProducts: max, status, updatedAt: F.serverTimestamp() },
+    { uid, maxProducts: max, status, source: source || null,
+      catalogVersion: catalogVersion == null ? null : catalogVersion,
+      updatedAt: F.serverTimestamp() },
     { merge: true }
   );
-  return { uid, maxProducts: max, status };
+  return { uid, maxProducts: max, status, source, catalogVersion };
 }
 
 /**
@@ -200,4 +232,4 @@ exports.recountMarketplaceProducts = onCall({ region: REGION }, async (req) => {
   return { uid: target, count, limit: max, status };
 });
 
-exports._internal = { resolveMaxProducts, syncLimit, TRIAL_MAX_PRODUCTS, PAID_MAX_PRODUCTS };
+exports._internal = { resolveMaxProducts, syncLimit, catalog };

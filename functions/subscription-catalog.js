@@ -31,6 +31,12 @@
  * consistency.js, which gates the deploy.
  */
 
+/* Incremented whenever an allowance, price or commission rate changes. Every
+   resolved entitlement carries it, so a consumer can record which generation it
+   acted on — during a migration that turns "these two screens disagree" into
+   "this one resolved v1 and that one resolved v2". */
+const CATALOG_VERSION = 1;
+
 /* Every commercial entitlement lives on one object. Splitting listing limits
    from commission from feature flags is how ten catalogues happened: each new
    concern grew its own table rather than extending the existing one. */
@@ -125,18 +131,31 @@ function entitlementFor(subscription) {
   return {
     plan:               plan.id,
     label:              plan.label,
+    subscriptionStatus: entitled ? status.toUpperCase() : 'INACTIVE',
     listingLimit:       plan.listingLimit,
     commissionRate:     plan.commissionRate,
-    walletEnabled:      plan.walletEnabled,
-    premiumAnalytics:   plan.premiumAnalytics,
-    prioritySupport:    plan.prioritySupport,
-    multiBranch:        plan.multiBranch,
     staffSeats:         plan.staffSeats,
-    subscriptionStatus: entitled ? status.toUpperCase() : 'INACTIVE',
+    /* Feature flags grouped rather than spread across the top level, so adding
+       a capability is one line here instead of a new field every consumer must
+       learn about — the drift that produced ten catalogues began exactly that
+       way, with each new concern growing its own table. */
+    features: {
+      walletEnabled:    plan.walletEnabled,
+      premiumAnalytics: plan.premiumAnalytics,
+      prioritySupport:  plan.prioritySupport,
+      multiBranch:      plan.multiBranch,
+    },
     expiresAt:          sub.expiresAt || sub.currentPeriodEnd || null,
-    /* Stamped so a client rendering a stale entitlement is detectable rather
-       than merely wrong — the divergence that started this whole investigation
-       was invisible because nothing said which catalogue an answer came from. */
+    /* Stamped so a consumer rendering a stale entitlement is detectable rather
+       than merely wrong. The divergence that started this investigation was
+       invisible because nothing said which catalogue an answer came from —
+       every value looked equally authoritative.
+
+       catalogVersion increments when pricing or allowances change, so a
+       consumer can log which generation it resolved. During a migration that is
+       the difference between "the dashboard is wrong" and "the dashboard
+       resolved v1 while upload resolved v2". */
+    catalogVersion:     CATALOG_VERSION,
     source:             'subscription-catalog',
     resolvedAt:         new Date().toISOString(),
   };
