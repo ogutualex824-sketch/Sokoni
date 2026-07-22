@@ -1,4 +1,98 @@
-﻿## [2026-07-22] — P0 Fix: iPhone Safari / PWA Crash on "Open POS" (iOS Jetsam OOM Kill)
+﻿## [2026-07-22] — Subscription & Catalogue Convergence Audit
+
+Scope: the subscription entitlement chain and marketplace catalogue ownership.
+**Not** the payments-migration work committed the same day (`9d72055`, `dbb09af`,
+`5ee7e3a`, `12f4dbb`, `43f519d`, `a29bf44`) — that is a separate thread and is
+not described here.
+
+### Deployed
+
+| Function | Revision | Change |
+|---|---|---|
+| `canPublishProduct` | 00001 → 00002 | resolves through `subscription-catalog` instead of local constants |
+| `onMarketplaceProductCreated` / `Deleted` | 00001 → 00002 | same module, unchanged behaviour |
+| `recountMarketplaceProducts` | 00001 → 00002 | same |
+| `repairCatalogue` | new → 00003 | admin-gated catalogue repair; **deployed, never executed** |
+
+Hosting: `seller.js`, `sokoni-subscriptions.js` — artifact parity `IDENTICAL`.
+
+### Fixed
+
+- **Seller dashboard read the wrong document.** `sokoni-subscriptions.js` looked up
+  `subscriptions/{providerId}` by document id and missed the only live merchant, whose
+  record is keyed by `merchantId`. Both readers now try the direct id, then
+  `where('uid','==',…)`, and report `FOUND` / `NOT_FOUND` / `LOOKUP_ERROR` instead of
+  silently defaulting. (`f564f72`)
+- **The listing banner asked a client plan table.** `seller.js` now calls
+  `canPublishProduct`; an unresolved answer no longer blocks a save. (`0f25511`)
+- **The materialised ceiling had no path to follow its authority.** `syncLimit` existed
+  with no caller in the repository, so a merchant who upgraded stayed capped until
+  something happened to rewrite the counter. Added `onSubscriptionChangedSyncLimit`,
+  filtered to plan/status/limit changes. **Not deployed.** (`bb7e7be`)
+- **`subscription-catalog` declared commission and price it did not own.** The file created
+  to end plan drift carried `commissionRate` 8/6/5/3 against `commission-config`'s flat 3%,
+  and a `priceKES` table. Nothing read either. Removed. (`996a55f`)
+
+### Added — guards
+
+- **`scripts/verify-listing-limit-single-source.js`** — every marketplace listing allowance
+  must come from `subscription-catalog`. Each declaring file carries a classification
+  (`CANONICAL` / `DIFFERENT_PRODUCT` / `ADVERTISED_ONLY` / `DUPLICATE` / `TOOLING`);
+  unclassified fails. `DIFFERENT_PRODUCT` requires dated evidence naming what was traced,
+  flagged stale after 90 days. **Currently failing on 8 files, by design.**
+  (`5de1282`, `35c3028`, `23aa3e5`)
+- **`ADVERTISED_ONLY` blocks deliberately.** `universal-onboarding` shows merchants
+  "Free Trial — 50 listings" while 10 is enforced; `subscriptions.html` shows 3. A promise
+  the platform will not honour is a defect, not an accepted exception.
+- **`verify-commission-single-source.js` re-audited.** Verdict unchanged (PASS), three
+  allowlist justifications corrected. `subscription-core` was described as plan pricing; it
+  also resolves the rate a seller pays *per transaction*, reachable at PRECEDENCE 3 from one
+  opt-in call site. `sasos-core` was described as SaaS tiers; it contains marketplace plans
+  whose `rate_pct` is read only by its own test. No marketplace commission is mispriced —
+  but that now rests on a consumer trace rather than on an unchecked allowlist. (`23aa3e5`)
+
+### Added — documentation
+
+- `docs/SUBSCRIPTION-WRITERS.md` — 12 write sites, 6 modules, 3 document-id conventions;
+  allowed writes and read precedence per writer. (`fcc727a`, `0f4b533`, `7e093ad`)
+- `docs/ADR.md` **ADR-0012** — two subscription pages exist and 16 links point at the wrong
+  one. (`a6c18d4`)
+- `docs/ADR.md` **ADR-0013** — `intasendWebhook` is the canonical activation writer;
+  `activateSubscription` is legacy and must stop accepting a client-supplied plan.
+  Identifier decision left OPEN. (`9ebe273`)
+
+### Not shipped, and why
+
+- **`subscriptions.html` listing numbers were changed and reverted.** The page reads
+  `listings: 20`, which matches `services_limit: 20` on the `service_provider` plan it
+  actually purchases. Aligning it to the marketplace catalogue would have made a coherent
+  page incoherent, to match a catalogue governing a different product. **A number that looks
+  wrong against one authority may be right against the one that actually applies.**
+- **The payment reference model was not renormalised.** A full redesign was drafted on the
+  belief that intents and payments were unlinked, then withdrawn: `intasendWebhook` already
+  derives `uid` and `plan` from `paymentIntents/{ref}` and never consults the client.
+- **`scripts/seed-product-counters.js` was written and not run.** `productCounters` holds zero
+  documents, so nothing is stale; the real gap is that the counter trigger seeds `count` with
+  an increment of 1 against a real catalogue of 116. Grandfathering is paused pending merchant
+  classification — the 113-listing account is an admin account with Unsplash imagery and
+  20,217 recorded sales against 2 payments. (`8dce49a`, `3aea631`)
+
+### Open — security
+
+`activateSubscription` (revision 26, ACTIVE) validates payment ownership and COMPLETE status,
+then writes whatever `plan` the client sent. One of its two callers sources that plan from
+`localStorage`. Hardening direction and regression cases are in ADR-0013. **Not implemented.**
+Exposure today is limited: no `COMPLETE` payment exists in production.
+
+### Open — operational
+
+`repairCatalogue` is deployed and has never run. Three KASS VAPES products carry
+`sellerUid` = an admin account, so the merchant receives permission-denied editing their own
+catalogue. Each document also stores its image twice as base64 (~380KB, ~37% of the 1 MiB
+document limit) alongside the Storage URL. Dry run first; it writes nothing by default.
+
+
+## [2026-07-22] — P0 Fix: iPhone Safari / PWA Crash on "Open POS" (iOS Jetsam OOM Kill)
 
 ### Root Cause Analysis
 
