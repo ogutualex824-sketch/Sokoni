@@ -1326,27 +1326,23 @@ function editProduct(index) {
     const p = prods[index];
     if (!p) return;
 
-    /* Populate fields */
-    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ""; };
-    setVal("editName",        p.name    || "");
-    setVal("editPrice",       p.price   || "");
-
-    /* The edit category dropdown carried 12 generic options; the upload dropdown
-       carries 78 across 20 groups. A product uploaded as "computers" or "vape"
-       had no matching option here, so the <select> silently fell back to its
-       first entry and saveEditProduct then WROTE that wrong category back —
-       editing a product's price quietly reassigned its category. Clone the
-       authoritative upload list so the two can never drift again. */
+    /* Category dropdown is cloned from the authoritative upload list BEFORE the
+       schema populates it, so the product's category has an option to select and
+       cannot be silently truncated. This step is specialised (it rebuilds the
+       <select>), so it stays here rather than in the schema. */
     _syncEditCategoryOptions(p.category);
-    setVal("editCategory",    p.category || "other");
 
-    setVal("editStock",       p.stock != null ? p.stock : "");
-    setVal("editCostPrice",       p.costPrice != null ? p.costPrice : "");
-    setVal("editDeliveryCost",    p.deliveryCost != null ? p.deliveryCost : "");
-    setVal("editLocation",        p.location || "");
-    setVal("editWholesalePrice",  p.wholesalePrice != null ? p.wholesalePrice : "");
-    setVal("editMinWholesaleQty", p.minWholesaleQty != null ? p.minWholesaleQty : "");
-    setVal("editDescription", p.description || "");
+    /* Every ordinary field — name, price, category, stock, cost, delivery,
+       location, wholesale, description — is loaded from the shared schema, so it
+       cannot be populated in one form and forgotten in the other. */
+    if (window.SokoniProductSchema) {
+        window.SokoniProductSchema.populate('edit', p);
+    } else {
+        /* Defensive fallback if the schema script failed to load. */
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+        setVal("editName", p.name); setVal("editPrice", p.price); setVal("editCategory", p.category || "other");
+        setVal("editStock", p.stock); setVal("editDescription", p.description);
+    }
 
     /* Load images into multi-image editor */
     /* Prefer Storage URLs — after the cache-degradation fix a product's `images`
@@ -1386,20 +1382,35 @@ function closeEditModal() {
 
 function saveEditProduct() {
     const msgEl  = document.getElementById("editModalMsg");
-    const name   = document.getElementById("editName")?.value.trim();
-    const price  = Number(document.getElementById("editPrice")?.value || 0);
-    const cat    = document.getElementById("editCategory")?.value || "other";
-    const stock  = document.getElementById("editStock")?.value;
-    const desc   = document.getElementById("editDescription")?.value.trim();
-    const costP  = document.getElementById("editCostPrice")?.value;
-    const delivP = document.getElementById("editDeliveryCost")?.value;
-    const loc    = document.getElementById("editLocation")?.value.trim();
-    const wholeP = document.getElementById("editWholesalePrice")?.value;
-    const wholeQ = document.getElementById("editMinWholesaleQty")?.value;
 
-    if (!name || !price) {
-        if (msgEl) { msgEl.textContent = "⚠️ Name and price are required."; msgEl.style.color = "#ff6b6b"; }
-        return;
+    /* One validation pass and one serialize, both from the shared schema, so the
+       edit and upload forms enforce and collect fields identically. */
+    const schema = window.SokoniProductSchema;
+    let patch, name, price, cat;
+    if (schema) {
+        const v = schema.validate('edit');
+        if (!v.ok) {
+            if (msgEl) { msgEl.textContent = "⚠️ " + v.message; msgEl.style.color = "#ff6b6b"; }
+            return;
+        }
+        patch = schema.serialize('edit');
+        name  = patch.name;
+        price = patch.price;
+        cat   = patch.category || "other";
+    } else {
+        /* Fallback if the schema failed to load — the original hand read. */
+        name  = document.getElementById("editName")?.value.trim();
+        price = Number(document.getElementById("editPrice")?.value || 0);
+        cat   = document.getElementById("editCategory")?.value || "other";
+        if (!name || !price) {
+            if (msgEl) { msgEl.textContent = "⚠️ Name and price are required."; msgEl.style.color = "#ff6b6b"; }
+            return;
+        }
+        patch = { name: name, price: price, category: cat };
+        const s = document.getElementById("editStock")?.value;
+        const d = document.getElementById("editDescription")?.value.trim();
+        if (s !== "") patch.stock = Number(s);
+        if (d) patch.description = d;
     }
 
     const prods = JSON.parse(localStorage.getItem("sellerProducts") || "[]");
@@ -1407,21 +1418,10 @@ function saveEditProduct() {
 
     const oldPrice = Number(prods[_editIndex].price);
 
-    prods[_editIndex].name        = name;
-    prods[_editIndex].price       = price;
-    prods[_editIndex].category    = cat;
-    if (stock !== "") prods[_editIndex].stock = Number(stock);
-    if (desc)  prods[_editIndex].description = desc;
-    /* Empty string means "left blank" → leave the stored value untouched, so
-       clearing a field by accident does not zero a real cost or delivery fee. */
-    if (costP  !== "" && costP  != null) prods[_editIndex].costPrice    = Number(costP);
-    if (delivP !== "" && delivP != null) prods[_editIndex].deliveryCost = Number(delivP);
-    if (loc)                              prods[_editIndex].location     = loc;
-    if (wholeP !== "" && wholeP != null) {
-        const wp = Number(wholeP);
-        prods[_editIndex].wholesalePrice  = wp > 0 ? wp : null;
-        prods[_editIndex].minWholesaleQty = wp > 0 ? Number(wholeQ || 0) : null;
-    }
+    /* Apply the schema patch. null values (e.g. wholesale cleared) are applied
+       deliberately; keys the schema omitted (blank emptyKeeps fields) are left
+       untouched, so an accidental blank never zeroes a stored cost or fee. */
+    Object.keys(patch).forEach(function (k) { prods[_editIndex][k] = patch[k]; });
 
     /* Images: save all from multi-image editor */
     if (_editImages.length) {
@@ -1457,25 +1457,17 @@ function saveEditProduct() {
             const prod = prods[_editIndex];
             if (!prod || !prod.id || !window.firebaseDB) return;
             const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-            const patch = { name: name, price: price, category: cat, updatedAt: m.serverTimestamp() };
-            if (stock !== "") patch.stock = Number(stock);
-            if (desc) patch.description = desc;
-            if (costP  !== "" && costP  != null) patch.costPrice    = Number(costP);
-            if (delivP !== "" && delivP != null) patch.deliveryCost = Number(delivP);
-            if (loc) patch.location = loc;
-            if (wholeP !== "" && wholeP != null) {
-                const wp = Number(wholeP);
-                patch.wholesalePrice  = wp > 0 ? wp : null;
-                patch.minWholesaleQty = wp > 0 ? Number(wholeQ || 0) : null;
-            }
+            /* The same schema patch that updated the local cache, so Firestore and
+               the device never disagree about what an edit changed. */
+            const fsPatch = Object.assign({}, patch, { updatedAt: m.serverTimestamp() });
             /* Only touch images when the editor actually holds Storage URLs — never
                write a base64 blob or an empty array over a good Firestore image. */
             if (_editImages.length && String(_editImages[0]).startsWith('http')) {
-                patch.image = _editImages[0];
-                patch.images = _editImages.slice();
-                patch.imageStorageUrls = _editImages.slice();
+                fsPatch.image = _editImages[0];
+                fsPatch.images = _editImages.slice();
+                fsPatch.imageStorageUrls = _editImages.slice();
             }
-            await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), patch);
+            await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), fsPatch);
         } catch (e) {
             console.warn('[seller] edit Firestore sync deferred:', e && e.message);
         }

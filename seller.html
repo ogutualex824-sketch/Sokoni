@@ -4217,6 +4217,7 @@ class="notification-container"
        "free" because window.SokoniSubscriptions is undefined and sokoni-pay.js
        falls to its "free" fallback before querying Firestore. -->
   <script defer src="sokoni-subscriptions.js"></script>
+  <script src="sokoni-product-schema.js" defer></script>
   <script src="seller.js" defer></script>
   <!-- Fills the localStorage cache seller.js renders from with the CANONICAL
        products collection. Must load after seller.js so displaySellerProducts

@@ -80,17 +80,34 @@ const editable = uploadFields.filter((f) => !(f in EDITABLE_EXCEPTIONS));
 /* cap<Field> → id="editField" (name → editName, costPrice → editCostPrice) */
 const editId = (f) => 'edit' + f.charAt(0).toUpperCase() + f.slice(1);
 
+/* A field is covered when the shared schema owns it — schema.populate and
+   schema.serialize then handle BOTH forms by construction, which is the whole
+   point of Phase 1A. Fields not yet migrated to the schema still require the
+   explicit html + populate + save trio. */
+let schemaKeys = [];
+try { schemaKeys = require(path.join(ROOT, 'sokoni-product-schema.js')).FIELDS.map((f) => f.key); }
+catch (_) { errors.push('  sokoni-product-schema.js did not load — the shared schema is the source of truth.'); }
+
 for (const f of editable) {
   const id = editId(f);
   const inHtml = new RegExp('id="' + id + '"').test(HTML);
+  const inSchema = schemaKeys.indexOf(f) !== -1;
+
+  if (inSchema) {
+    /* The schema guarantees populate + serialize; only the input must exist. */
+    if (!inHtml) errors.push('  ' + f + '  → in schema but #' + id + ' input is MISSING from the edit modal');
+    continue;
+  }
+
   const populated = new RegExp('setVal\\("' + id + '"').test(JS)
     || new RegExp('getElementById\\("' + id + '"\\)').test(JS);
   const readInSave = new RegExp('getElementById\\("' + id + '"\\)').test(JS);
   if (!inHtml || !populated || !readInSave) {
-    errors.push('  ' + f + '  → expected #' + id +
+    errors.push('  ' + f + '  → not in shared schema and hand-wiring incomplete: #' + id +
       '  [html:' + (inHtml ? 'ok' : 'MISSING') +
       ' populate:' + (populated ? 'ok' : 'MISSING') +
-      ' save:' + (readInSave ? 'ok' : 'MISSING') + ']');
+      ' save:' + (readInSave ? 'ok' : 'MISSING') +
+      ']  — add it to sokoni-product-schema.js FIELDS');
   }
 }
 
