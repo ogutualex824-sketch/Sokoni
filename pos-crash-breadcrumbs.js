@@ -288,6 +288,80 @@
     return { previous: prev, current: run };
   };
 
-  console.log('%c breadcrumbs armed — after a crash run sokoniCrashReport() ',
+  /* ── Compare runs ────────────────────────────────────────────────────────
+     Reading several JSON blobs by eye is where a pattern gets missed. This
+     renders the recorded crashes as one table and applies the threshold agreed
+     for this incident: three or more runs ending in the same phase is evidence
+     worth acting on; a scatter across phases is not, and means either broader
+     memory pressure or more than one failure mode.
+
+     The verdict is deliberately conservative — it says "keep collecting" far
+     more readily than "you have your answer", because acting on one anomalous
+     run is how an investigation restarts from scratch. */
+  window.sokoniCrashCompare = function () {
+    var hist = [];
+    try { hist = JSON.parse(localStorage.getItem(HIST) || '[]'); } catch (_) {}
+
+    console.log('%c SOKONI CRASH COMPARISON ', 'background:#ff3c3c;color:#fff;font-weight:bold');
+    if (!hist.length) {
+      console.log('  No crashes recorded yet. Reproduce, reopen, then run this again.');
+      return { runs: [], verdict: 'NO_DATA' };
+    }
+
+    var rows = hist.map(function (r, i) {
+      var last = r.stages && r.stages.length ? r.stages[r.stages.length - 1] : null;
+      return {
+        run:       i + 1,
+        mode:      r.standalone ? 'PWA' : 'Safari',
+        ios:       r.iosVersion || '?',
+        phase:     r.phase || 'BOOT',
+        seq:       last ? last.seq : null,
+        lastStage: r.lastStage,
+        lastResource: (r.network && r.network.lastCompleted && r.network.lastCompleted.name) || null,
+        durationMs: last ? (last.duration != null ? last.duration : last.started) : null,
+        errors:    (r.errors && r.errors.length) || 0,
+      };
+    });
+    console.table(rows);
+
+    /* Which phase dominates, and by how much. */
+    var byPhase = {};
+    rows.forEach(function (r) { byPhase[r.phase] = (byPhase[r.phase] || 0) + 1; });
+    var top = Object.keys(byPhase).sort(function (a, b) { return byPhase[b] - byPhase[a]; })[0];
+    var topCount = byPhase[top];
+
+    /* Same terminal sequence number across runs means the crash lands at the
+       same instruction every time, not merely in the same broad phase. */
+    var seqs = rows.map(function (r) { return r.seq; }).filter(function (s) { return s != null; });
+    var seqStable = seqs.length > 1 && seqs.every(function (s) { return s === seqs[0]; });
+
+    var verdict;
+    if (topCount >= 3) {
+      verdict = 'CONVERGED:' + top;
+      console.log('%c  ' + topCount + ' of ' + rows.length + ' runs ended in ' + top +
+                  ' — threshold met, investigate this subsystem ',
+                  'background:#71ff00;color:#000;font-weight:bold');
+      if (seqStable) console.log('  Every run stopped at seq ' + seqs[0] + ' — the crash is at a fixed point, not timing-dependent.');
+    } else if (rows.length < 3) {
+      verdict = 'INSUFFICIENT_DATA';
+      console.log('  Only ' + rows.length + ' run(s). Collect at least 3 before changing code.');
+    } else {
+      verdict = 'SCATTERED';
+      console.log('  Runs ended in different phases: ' + JSON.stringify(byPhase));
+      console.log('  That suggests broader memory pressure or more than one failure mode.');
+      console.log('  Collect more evidence rather than optimising a phase that only sometimes fails.');
+    }
+
+    console.log('\n  Full artifact — copy(JSON.stringify(sokoniCrashCompare.runs, null, 2))');
+    window.sokoniCrashCompare.runs = hist;
+    return { runs: rows, byPhase: byPhase, seqStable: seqStable, verdict: verdict };
+  };
+
+  window.sokoniCrashClear = function () {
+    try { localStorage.removeItem(HIST); localStorage.removeItem(PREV); localStorage.removeItem(KEY); } catch (_) {}
+    console.log('  crash history cleared');
+  };
+
+  console.log('%c breadcrumbs armed — sokoniCrashReport() | sokoniCrashCompare() ',
               'background:#71ff00;color:#000;font-weight:bold');
 })();
