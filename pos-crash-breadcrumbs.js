@@ -24,6 +24,8 @@
 
   var KEY   = 'sokoni_crash_breadcrumbs';
   var PREV  = 'sokoni_crash_previous';
+  var HIST  = 'sokoni_crash_history';   /* up to MAX_HISTORY incomplete runs */
+  var MAX_HISTORY = 10;
   var t0    = Date.now();
 
   /* Read whatever the previous run left behind BEFORE overwriting it, so a
@@ -37,20 +39,79 @@
          evidence and would push a real crash out of the record. */
       if (previous && previous.lastStage !== 'ready') {
         localStorage.setItem(PREV, raw);
+        /* Append rather than replace. A single PREV slot means the reload after
+           crash 2 destroys crash 1, and the three-matching-runs threshold could
+           never be met — the instrument would quietly defeat its own workflow. */
+        var hist = [];
+        try { hist = JSON.parse(localStorage.getItem(HIST) || '[]'); } catch (_) {}
+        hist.push(previous);
+        while (hist.length > MAX_HISTORY) hist.shift();
+        try { localStorage.setItem(HIST, JSON.stringify(hist)); } catch (_) {}
       }
     }
   } catch (_) {}
 
+  /* ── Boot phases ─────────────────────────────────────────────────────────
+     Dozens of individual script names are not actionable; a phase is. Scripts
+     are mapped to the subsystem they belong to, so the last script to load also
+     names the phase the tab died in — without needing a single hook inside
+     application code. If reports consistently end in one phase, finer
+     instrumentation goes there next, and nowhere else. */
+  var PHASE_OF = [
+    [/^(firebase|firebase-config|sokoni-config)/i,          'FIREBASE'],
+    [/^(auth|security|sokoni-appcheck|sokoni-zero-trust)/i, 'AUTH'],
+    [/^(pos-db|pos-sync|sokoni-offline|idb)/i,              'INDEXEDDB'],
+    [/(print|printer|receipt|bluetooth|p58e)/i,             'PRINTER'],
+    [/^(pos-omni|pos-modules|pos-inventory|pos-products)/i, 'SYNC'],
+    [/^(shared-header|sokoni-nav|sokoni-footer|splash)/i,   'UI'],
+    [/^pos\./i,                                             'UI'],
+  ];
+  function phaseOf(name) {
+    for (var i = 0; i < PHASE_OF.length; i++) if (PHASE_OF[i][0].test(name)) return PHASE_OF[i][1];
+    return 'BOOT';
+  }
+
+  /* One id per launch, so several crash reports can be told apart and compared
+     rather than merged into an average that describes no real run. */
+  function newId() {
+    try {
+      if (window.crypto && crypto.getRandomValues) {
+        var a = new Uint8Array(8); crypto.getRandomValues(a);
+        return Array.prototype.map.call(a, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+      }
+    } catch (_) {}
+    return String(Date.now()) + '-' + Math.floor(Math.random() * 1e6);
+  }
+
+  var ua = navigator.userAgent || '';
+  var iosMatch = ua.match(/OS (\d+)[_.](\d+)/);
+
   var run = {
-    startedAt: new Date().toISOString(),
-    ua:        (navigator.userAgent || '').slice(0, 200),
+    sessionId:  newId(),
+    startedAt:  new Date().toISOString(),
+    launchTime: t0,
+    ua:         ua.slice(0, 200),
+    iosVersion: iosMatch ? iosMatch[1] + '.' + iosMatch[2] : null,
     standalone: !!(window.navigator.standalone || (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches)),
-    lastStage: 'boot',
-    stages:    [],
-    scripts:   [],
-    errors:    [],
-    memory:    [],
+    /* deviceMemory is Chromium-only; recorded when present so a device with a
+       small ceiling is visible, never relied upon. */
+    deviceMemory: (navigator.deviceMemory || null),
+    buildHash:  null,
+    phase:      'BOOT',
+    lastStage:  'boot',
+    stages:     [],
+    scripts:    [],
+    network:    { lastRequested: null, lastCompleted: null },
+    errors:     [],
+    memory:     [],
   };
+
+  /* Build identity, so a report can be tied to the deployed bytes rather than
+     to whatever the repository happens to contain when it is read. */
+  try {
+    var me = document.currentScript && document.currentScript.src;
+    if (me) run.buildHash = me.split('?')[1] || null;
+  } catch (_) {}
 
   function persist() {
     /* Synchronous by design. An async write would not survive the kill. */
@@ -69,9 +130,20 @@
     return m;
   }
 
+  /* Stage duration, not just arrival. The time spent in the last completed
+     stage is usually more informative than its name — a stage that normally
+     takes 20ms and took 4s before the kill points at the subsystem far more
+     precisely than the stage boundary alone. */
+  var seqCounter = 0;
   function stage(name, extra) {
+    var now = Date.now() - t0;
+    var prev = run.stages[run.stages.length - 1];
+    if (prev && prev.finished == null) {
+      prev.finished = now;
+      prev.duration = now - prev.started;
+    }
     run.lastStage = name;
-    var entry = { stage: name, atMs: Date.now() - t0 };
+    var entry = { seq: ++seqCounter, stage: name, started: now, finished: null, duration: null };
     var mem = sample();
     if (mem !== null) { entry.heapMB = mem; run.memory.push({ stage: name, heapMB: mem }); }
     if (extra) entry.detail = extra;
@@ -79,6 +151,34 @@
     persist();
   }
   window.sokoniStage = stage;
+
+  /* ── Network: requested is not the same as evaluated ─────────────────────
+     A script can be requested, arrive, and still kill the tab while being
+     compiled or executed. Recording request start and completion separately
+     from script evaluation distinguishes "died waiting for the network" from
+     "died running what the network delivered". */
+  try {
+    if (window.PerformanceObserver) {
+      new PerformanceObserver(function (list) {
+        var es = list.getEntries();
+        for (var i = 0; i < es.length; i++) {
+          var e = es[i];
+          var nm = String(e.name || '').split('/').pop().split('?')[0];
+          if (!nm) continue;
+          run.network.lastRequested = { name: nm, atMs: Math.round(e.startTime) };
+          if (e.responseEnd) {
+            run.network.lastCompleted = {
+              name: nm,
+              atMs: Math.round(e.responseEnd),
+              ms: Math.round(e.duration),
+              bytes: e.transferSize || null,
+            };
+          }
+        }
+        persist();
+      }).observe({ type: 'resource', buffered: true });
+    }
+  } catch (_) {}
 
   stage('breadcrumbs-installed');
 
@@ -95,7 +195,9 @@
         el.__sokoniWatched = true;
         var name = el.src.split('/').pop().split('?')[0];
         el.addEventListener('load', function () {
-          run.scripts.push({ i: idx, name: name, atMs: Date.now() - t0, ok: true });
+          var ph = phaseOf(name);
+          run.scripts.push({ i: idx, name: name, atMs: Date.now() - t0, ok: true, phase: ph });
+          if (ph !== 'BOOT') run.phase = ph;
           run.lastStage = 'script:' + name;
           persist();
         });
@@ -164,7 +266,9 @@
       console.log('  No incomplete previous run recorded.');
       console.log('  Reproduce the crash, reopen this page, then run sokoniCrashReport() again.');
     } else {
-      console.log('  PREVIOUS RUN DIED AT: ' + prev.lastStage);
+      console.log('  PREVIOUS RUN DIED IN PHASE: ' + (prev.phase || 'BOOT'));
+      console.log('  last stage: ' + prev.lastStage);
+      console.log('  sessionId: ' + (prev.sessionId || 'n/a') + '   iOS ' + (prev.iosVersion || '?'));
       console.log('  reached ' + prev.stages.length + ' stages, ' +
                   prev.scripts.filter(function (s) { return s.ok; }).length + ' scripts loaded');
       console.log('  standalone (PWA): ' + prev.standalone);
