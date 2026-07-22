@@ -3147,8 +3147,42 @@ exports.darajaSTKPush = onCall(
     const checkoutId = stkData.CheckoutRequestID;
     const ts         = admin.firestore.FieldValue.serverTimestamp();
 
+    /* WHERE DID THIS MONEY ACTUALLY LAND?
+       settlement-engine.js books every sale as "100% collected into the Bravilex
+       account first", but the STK above sends BusinessShortCode/PartyB =
+       shopSettings/{sellerUid}.darajaShortCode — the SELLER's own shortcode. The
+       seller receives 100% while the ledger records a commission that was never
+       collected. Stamping the resolved route onto the payment is what lets
+       reconciliation and settlement see which model actually applied, instead of
+       assuming. Resolver default is DIRECT_TO_SELLER, so this records today's
+       reality and changes no money movement. */
+    let _route = "DIRECT_TO_SELLER";
+    try {
+      const _pc = require("./payment-config");
+      const _r  = await _pc.resolveCollectionRoute(db);
+      _route = _r.route;
+      if (_route === _pc.ROUTE_CENTRAL) {
+        /* Central collection is armed in config, but this function still signs
+           with the SELLER's consumer key/passkey. Sending a central shortcode
+           with seller credentials would fail at Safaricom or, worse, collect to
+           the wrong party. Refuse loudly until central Daraja credentials are
+           provisioned in Secret Manager and this call is migrated to them. */
+        throw new HttpsError("failed-precondition",
+          "Central collection (CENTRAL_MOR) is enabled but central Daraja credentials are not provisioned. " +
+          "STK cannot be signed for the platform shortcode yet.");
+      }
+    } catch (e) {
+      if (e instanceof HttpsError) throw e;
+      /* Config unreachable — fall back to recording the live default rather than
+         failing a real sale. */
+    }
+
     /* Record pending payment */
     await db.collection("posPayments").doc(checkoutId).set({
+      /* Which collection model this payment was taken under. Reconciliation must
+         NOT assume central collection for DIRECT_TO_SELLER rows: the platform
+         holds no cash for them and its commission is a receivable, not revenue. */
+      collectionRoute: _route,
       checkoutId,
       merchantRequestId: stkData.MerchantRequestID,
       sellerUid,
