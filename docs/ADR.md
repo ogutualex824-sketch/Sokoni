@@ -347,3 +347,28 @@ pursuing a common cause discards the evidence just gained.
 **Forbidden:** landing a behavioural change in a frozen subsystem, however
 correct, without recording it against the open incident — the next person
 reading the diagnostic output has no way to know the ground moved.
+
+### Incident exit checklist
+
+A P0 is not closed when the symptom stops. It is closed when these are answered,
+in writing, on the incident:
+
+1. **Root cause identified?** Name the component and the mechanism. "It stopped
+   happening" is not a cause.
+2. **Evidence supporting it?** A runtime artifact — crash report, diagnostic
+   output, live bytes — not a code reading. Three findings during this incident
+   were overturned by measurement after looking certain in source.
+3. **Verified on every affected platform?** A fix confirmed on one device says
+   nothing about the others; parser blocking was platform-neutral and its
+   removal still had to be checked per platform.
+4. **Guarded against recurrence?** A regression test, or a ratchet in
+   `scripts/perf-guard.js`. Without one the same defect returns and the next
+   investigation starts from zero.
+5. **Can the instrumentation be removed?** Temporary diagnostics that are never
+   removed become permanent startup cost. Name the commit that removes them.
+6. **What changed in how we work?** Every incident that produces only a code fix
+   has wasted the expensive part. ADR-0010 exists because four collisions in one
+   day were cheaper to prevent than to keep untangling.
+
+Unanswered questions are not a reason to keep an incident open — they are the
+content of the follow-up work, recorded rather than forgotten.
