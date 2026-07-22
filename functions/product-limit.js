@@ -108,21 +108,50 @@ async function resolveMaxProducts(uid) {
   }
 }
 
-/** Recompute and persist the ceiling. Called after any subscription change. */
+/**
+ * Recompute and persist the ceiling. Called after any subscription change.
+ *
+ * GRANDFATHERED FLOOR
+ * A merchant who was trading before the cap existed can hold more listings than
+ * their plan now allows — one held 116 against a free allowance of 10. Writing
+ * the catalogue value straight over that would block their next listing the
+ * instant the counter appeared, turning a billing boundary into a retroactive
+ * penalty for inventory they published when nothing said not to.
+ *
+ * grandfatheredFloor records the allowance they keep. It is honoured here
+ * rather than in the seeding script, because otherwise this very function would
+ * undo it: the first subscription change after the migration would resolve the
+ * catalogue value, overwrite the ceiling, and lock the merchant out — a
+ * regression whose cause would sit two commits away from its symptom.
+ *
+ * It is a floor, not an override. Unlimited still wins, and an upgrade that
+ * raises the catalogue allowance above the floor takes effect normally.
+ */
 async function syncLimit(uid) {
   if (!uid) return null;
   const { max, status, source, catalogVersion } = await resolveMaxProducts(uid);
+
+  const ref  = db.collection(COUNTER).doc(uid);
+  const prev = await ref.get();
+  const floor = prev.exists ? prev.data().grandfatheredFloor : undefined;
+
+  const effective = (max !== -1 && typeof floor === 'number' && floor > max) ? floor : max;
   /* source and catalogVersion are persisted with the ceiling so a counter can
      be traced to the catalogue generation that produced it. A merchant whose
      limit looks wrong is then a question with an answer — "this was resolved
      from v1 before the change" — rather than another investigation. */
-  await db.collection(COUNTER).doc(uid).set(
-    { uid, maxProducts: max, status, source: source || null,
+  await ref.set(
+    { uid, maxProducts: effective, status, source: source || null,
       catalogVersion: catalogVersion == null ? null : catalogVersion,
+      /* Recorded so a ceiling above the catalogue value is self-explaining. A
+         merchant on Free showing 126 is otherwise indistinguishable from a bug,
+         and the next engineer "corrects" it. */
+      catalogMax:     max,
       updatedAt: F.serverTimestamp() },
     { merge: true }
   );
-  return { uid, maxProducts: max, status, source, catalogVersion };
+  return { uid, maxProducts: effective, catalogMax: max, grandfathered: effective !== max,
+           status, source, catalogVersion };
 }
 
 /**
