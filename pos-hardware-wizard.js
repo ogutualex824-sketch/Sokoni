@@ -884,7 +884,29 @@ window.SokoniHardware = (function () {
           throw new Error('USB printer not found. Please reconnect the device.');
         }
       } else if (connType === CONNECTION_TYPES.BLUETOOTH) {
-        // BT connection requires user gesture — mark as connected if previously paired
+        /* This branch used to set STATUS.CONNECTED and nothing else — no
+           requestDevice(), no GATT, no device stored. The wizard reported
+           "Connected" while no Bluetooth device had ever been paired, so the
+           status was cosmetic and every print afterwards had nothing to write
+           to. A connect() that cannot fail is not a connection.
+
+           Pairing now goes through P58EPrinter, the same path /pos-printer-setup
+           uses. connect() is invoked from the Connect button, so we are inside
+           the user gesture the browser requires to open its chooser.
+
+           autoConnect() first: if this device was paired before, getDevices()
+           restores it silently and the merchant sees no chooser at all. */
+        if (!window.P58EPrinter) {
+          throw new Error('Printer service did not load. Reload the page and try again.');
+        }
+        var restored = await window.P58EPrinter.autoConnect();
+        if (!restored) {
+          var paired = await window.P58EPrinter.requestAndPair();
+          if (!paired) throw new Error('Bluetooth pairing was cancelled.');
+        }
+        /* Bluetooth prints are delegated to P58EPrinter, never to transferOut(),
+           so _nativeDevice stays null on purpose — see _escPosPrint. */
+        this._nativeDevice = null;
         this._status = STATUS.CONNECTED;
       } else {
         this._status = STATUS.CONNECTED; // Optimistic for unknown types
