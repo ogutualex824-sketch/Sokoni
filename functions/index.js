@@ -7159,24 +7159,10 @@ exports.onEventLogged = onDocumentCreated("eventLog/{eventId}", async (event) =>
    SEARCH INDEXER â€” Firestore triggers to update searchableTerms
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
-function _buildSearchTerms(doc) {
-  const terms = new Set();
-  const fields = ["name", "title", "category", "description", "tags", "brand", "location", "county"];
-  fields.forEach(function(f) {
-    const val = doc[f];
-    if (!val) return;
-    const str = Array.isArray(val) ? val.join(" ") : String(val);
-    str.toLowerCase().split(/\s+/).forEach(function(word) {
-      if (word.length >= 2) {
-        terms.add(word);
-        for (let i = 2; i <= Math.min(word.length, 6); i++) {
-          terms.add(word.slice(0, i));
-        }
-      }
-    });
-  });
-  return Array.from(terms);
-}
+/* Moved to ./search-terms so the catalogue repair path generates identical
+   terms. Two generators would mean a query that matches a product indexed by
+   the trigger and misses the same product after a repair. */
+const { buildSearchTerms: _buildSearchTerms } = require("./search-terms");
 
 exports.indexProductCreate = onDocumentCreated("products/{productId}", async (event) => {
   if (!event.data) return;
@@ -7745,6 +7731,11 @@ delete exports.syncDocument;
    not a callable — stripped so it is never deployed as a function. */
 const productLimitModule = require('./product-limit');
 Object.assign(exports, productLimitModule);
+
+/* ── Admin-gated catalogue repair ─────────────────────────────────────────
+   Ownership and type repairs on explicitly named product documents. Admin
+   claim required; every write is audited to adminAudit. */
+Object.assign(exports, require('./catalogue-repair'));
 delete exports._internal;
 delete exports._shouldSkip;
 delete exports._updateDecision;
