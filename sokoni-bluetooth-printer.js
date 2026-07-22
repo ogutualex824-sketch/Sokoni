@@ -186,6 +186,25 @@ class P58EService {
       );
     }
 
+    /* ── Pre-flight: is there a radio at all? ─────────────────────────────────
+       navigator.bluetooth exists in Chrome on Windows even when the machine has
+       no Bluetooth adapter or it is switched off. getAvailability() is the only
+       API that answers "is there a usable radio", and asking it BEFORE opening
+       the chooser turns an unexplained failure into a specific instruction. */
+    if (typeof navigator.bluetooth.getAvailability === 'function') {
+      let radioOk = true;
+      try { radioOk = await navigator.bluetooth.getAvailability(); } catch (_) { radioOk = true; }
+      if (!radioOk) {
+        this._setStatus('idle');
+        throw new Error(
+          'Bluetooth is turned off, or this computer has no Bluetooth adapter.\n\n' +
+          'Turn Bluetooth on in Windows Settings > Bluetooth & devices, then tap Retry.\n\n' +
+          'If this computer has no Bluetooth, use a USB or Network printer instead — ' +
+          'or pair the printer from your Android phone.'
+        );
+      }
+    }
+
     this._setStatus('scanning');
     this._emit('scanning', null);
 
@@ -202,8 +221,45 @@ class P58EService {
       });
     } catch(e) {
       this._setStatus('idle');
-      if (e.name === 'NotFoundError') return null;          // user pressed Cancel
-      throw new Error('Bluetooth scan failed: ' + e.message);
+
+      /* NotFoundError is overloaded. Chrome raises it for a cancelled chooser,
+         for "no devices found", AND for "Bluetooth adapter not available" — so
+         treating the whole class as a cancel reported "pairing was cancelled"
+         to a merchant whose Bluetooth was simply switched off. Separate them by
+         message, because the recovery action is different in each case. */
+      const msg = String(e.message || '');
+
+      if (/adapter|not available|turned off|powered off/i.test(msg)) {
+        throw new Error(
+          'Bluetooth is turned off, or this device has no Bluetooth adapter.\n\n' +
+          'Turn Bluetooth on, then tap Retry.\n\n' +
+          '(Reported by the browser as: ' + msg + ')'
+        );
+      }
+
+      if (e.name === 'NotFoundError') {
+        /* Genuine cancel, or the chooser opened and listed nothing. Both are
+           recoverable by the merchant, and neither is an error state. */
+        return null;
+      }
+
+      if (e.name === 'SecurityError') {
+        throw new Error(
+          'The browser blocked Bluetooth access on this page.\n\n' +
+          'This usually means the page is not served over HTTPS, or Bluetooth is ' +
+          'blocked in site permissions. Check the padlock icon in the address bar.\n\n' +
+          '(' + msg + ')'
+        );
+      }
+
+      if (e.name === 'NotAllowedError') {
+        throw new Error(
+          'Bluetooth permission was denied for this site.\n\n' +
+          'Tap the padlock in the address bar, allow Bluetooth, then tap Retry.'
+        );
+      }
+
+      throw new Error('Bluetooth scan failed: ' + msg + '\n\n(' + e.name + ')');
     }
 
     if (!device) { this._setStatus('idle'); return null; }
@@ -859,6 +915,80 @@ class P58EService {
   /* Instance proxy — allows external code to call P58EPrinter.checkCompatibility()
      without needing access to the IIFE-private P58EService class. */
   checkCompatibility () { return P58EService.checkCompatibility(); }
+
+  /* ─────────────────────────────────────────────────────────────
+     DIAGNOSTICS — answers "why is Bluetooth unavailable", not just "it is".
+     Each entry is independently checkable, so a failure names one prerequisite
+     instead of collapsing eight different causes into one message. Async
+     because getAvailability() is the only real test of the radio.
+
+       await P58EPrinter.diagnose()      → { pass, checks[], summary }
+       P58EPrinter.printDiagnostics()    → console table
+  ───────────────────────────────────────────────────────────── */
+  async diagnose () {
+    const ua      = navigator.userAgent || '';
+    const isIOS   = /iP(hone|od|ad)/.test(ua) ||
+                    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const checks  = [];
+    const add = (name, pass, detail, action) => checks.push({ name, pass, detail, action: action || null });
+
+    add('Secure context (HTTPS)', !!window.isSecureContext,
+        window.isSecureContext ? 'Yes' : 'No — Web Bluetooth requires HTTPS',
+        window.isSecureContext ? null : 'Open the site over https://');
+
+    add('Not in an iframe', window.self === window.top,
+        window.self === window.top ? 'Top-level page' : 'Page is framed — Bluetooth is blocked in iframes without allow="bluetooth"',
+        window.self === window.top ? null : 'Open the page directly, not embedded');
+
+    add('Browser supports Web Bluetooth', !!navigator.bluetooth && !isIOS,
+        isIOS ? 'iOS uses WebKit, which does not implement Web Bluetooth on any browser'
+              : (navigator.bluetooth ? 'navigator.bluetooth present' : 'navigator.bluetooth undefined'),
+        (!navigator.bluetooth || isIOS) ? 'Use Chrome or Edge on Android, Windows, macOS or Linux' : null);
+
+    /* The radio itself. This is the check that distinguishes "browser cannot"
+       from "this computer has Bluetooth switched off" — the two are reported
+       identically by requestDevice(). */
+    let radio = null;
+    if (navigator.bluetooth && typeof navigator.bluetooth.getAvailability === 'function') {
+      try { radio = await navigator.bluetooth.getAvailability(); } catch (_) { radio = null; }
+    }
+    add('Bluetooth adapter present and on', radio !== false,
+        radio === true ? 'Available' : radio === false ? 'No adapter, or Bluetooth is switched off' : 'Cannot be determined by this browser',
+        radio === false ? 'Turn Bluetooth on in system settings, then retry' : null);
+
+    add('Silent reconnect supported', !!(navigator.bluetooth && navigator.bluetooth.getDevices),
+        navigator.bluetooth?.getDevices ? 'getDevices() available (Chrome 85+)' : 'Not available — the chooser will open every time',
+        navigator.bluetooth?.getDevices ? null : 'Update Chrome to reconnect without prompting');
+
+    add('Printer engine loaded', !!window.SokoniPrinter,
+        window.SokoniPrinter ? 'SokoniPrinter present' : 'sokoni-universal-printer.js did not load',
+        window.SokoniPrinter ? null : 'Reload the page');
+
+    add('Printer previously paired', !!this._paired,
+        this._paired ? ('Yes — ' + (this._paired.name || 'unnamed device')) : 'No pairing saved on this device',
+        this._paired ? null : 'Tap Connect and choose your printer');
+
+    add('Printer connected now', !!(window.SokoniPrinter && window.SokoniPrinter.connected),
+        window.SokoniPrinter?.connected ? 'Connected' : 'Not connected',
+        window.SokoniPrinter?.connected ? null : 'Tap Reconnect Printer');
+
+    const failed = checks.filter(c => !c.pass);
+    return {
+      pass: failed.length === 0,
+      checks,
+      summary: failed.length ? (failed[0].action || failed[0].detail) : 'Ready to print',
+      environment: { userAgent: ua.slice(0, 180), secureContext: !!window.isSecureContext, platform: navigator.platform || '' },
+    };
+  }
+
+  async printDiagnostics () {
+    const r = await this.diagnose();
+    console.log('%c SOKONI Bluetooth Diagnostics ', 'background:#71ff00;color:#000;font-weight:bold');
+    r.checks.forEach(c => console.log((c.pass ? '  PASS  ' : '  FAIL  ') + c.name + ' — ' + c.detail + (c.action ? '\n         → ' + c.action : '')));
+    console.log(r.pass ? '  ALL CHECKS PASSED' : '  ACTION: ' + r.summary);
+    console.log('  ' + r.environment.userAgent);
+    return r;
+  }
 }
 
 /* ─────────────────────────────────────────────────────────────────
