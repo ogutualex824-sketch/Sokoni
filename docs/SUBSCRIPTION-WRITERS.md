@@ -27,6 +27,44 @@ repair, migration or legacy.
 
 12 write sites, 6 modules.
 
+### Allowed writes
+
+What each writer may legitimately change. A writer doing more than its row says
+is a defect, not an extension.
+
+| Writer | May write |
+|---|---|
+| `intasendWebhook` | create/refresh an active subscription from a settled intent |
+| `activateSubscription` | **nothing new** — candidate for retirement; today duplicates the webhook with a weaker boundary |
+| `healSubscriptionEntitlement` | create-only, never overwrite; repair of a missing entitlement for an already-settled payment |
+| `entitlement-adapters.activate()` | the same 7 fields `activateSubscription` writes, from a ledger entry |
+| `business-bootstrap` | initial onboarding record only |
+| `sub-billing` / `sub-engine` | lifecycle transitions (renew, cancel, grace) — **not** initial activation from payment |
+
+---
+
+## Read precedence
+
+A reader cannot be correct without knowing all three id conventions. Until the
+identifier decision in ADR-0013 is ratified, this is the order that resolves a
+subscription for a given uid:
+
+```
+1. subscriptions/{uid}                        direct doc id — deployed writers use this
+2. subscriptions where uid == <uid>           catches {merchantId} and {autoId} records
+3. providerSubscriptions/{uid}                separate store, provider hub
+4. aiSubscriptions/{uid}                      separate store, AI product
+5. none found → FREE                          never fail closed; a shop stays open
+```
+
+`functions/subscription-core.js` implements 1–4. `sokoni-subscriptions.js`
+implements 1–2 on the client, added 2026-07-22 after a direct-id lookup missed
+the only live merchant.
+
+**Step 2 is what makes the current inconsistency survivable.** It is not a
+substitute for standardising the id — a query cannot distinguish two records for
+the same uid written by two conventions, and nothing today prevents that.
+
 ---
 
 ## Three document-id conventions, and why it matters
