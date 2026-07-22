@@ -425,7 +425,18 @@ async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
  * next page load; a blocked write costs the merchant their product.
  */
 function _cacheSellerProducts(list) {
-    const _strip = (p) => Object.assign({}, p, { image: '', images: [] });
+    /* Strip only base64 data URIs — those are the ~190KB payloads that fill the
+       quota. A Storage URL is ~100 bytes and is the very thing the upload exists
+       to produce, so dropping it would blank a card whose image is safely in
+       Cloud Storage. Keeping URLs is what lets a "stripped" older product still
+       render its real picture on the dashboard instead of the placeholder logo.
+       imageStorageUrls is preserved untouched (Object.assign only overrides the
+       two keys named), so the renderer can fall back to it as well. */
+    const _isData = (v) => typeof v === 'string' && v.startsWith('data:');
+    const _strip = (p) => Object.assign({}, p, {
+        image:  _isData(p.image) ? '' : (p.image || ''),
+        images: Array.isArray(p.images) ? p.images.filter((v) => !_isData(v)) : [],
+    });
     const attempts = [
         ['full',          () => list],
         /* Three, not ten. Measured: a product carrying a base64 preview in both
@@ -844,7 +855,17 @@ async function addProduct(){
                         if (idx !== -1) {
                             cached[idx].image  = storageUrls[0];
                             cached[idx].images = storageUrls;
+                            /* Persist the URLs under their own key too, so the
+                               renderer's imageStorageUrls fallback survives even
+                               if a future strip clears `image`. */
+                            cached[idx].imageStorageUrls = storageUrls;
                             _cacheSellerProducts(cached);
+                            /* Re-render so the card swaps its base64 preview (or a
+                               placeholder, if this entry was stripped to fit) for
+                               the Storage URL now that it exists. Without this the
+                               dashboard keeps showing whatever it painted before
+                               the upload resolved. */
+                            try { if (typeof displaySellerProducts === 'function') displaySellerProducts(); } catch (_) {}
                         }
                     } catch (_) { /* cache is best-effort; the document is written regardless */ }
                 } else {
@@ -979,7 +1000,7 @@ function displaySellerProducts(){
                 <!-- Square image with overlay badges -->
                 <div style="position:relative;aspect-ratio:1/1;overflow:hidden;background:rgba(255,255,255,0.03);flex-shrink:0;">
                     <img
-                        src="${_esc(product.image || 'assets/default-product.png')}"
+                        src="${_esc((product.imageStorageUrls && product.imageStorageUrls[0]) || product.image || 'assets/default-product.png')}"
                         alt="${_esc(product.name)}"
                         style="width:100%;height:100%;object-fit:cover;display:block;"
                         onerror="this.src='assets/default-product.png'"
