@@ -263,3 +263,47 @@ can.
 **Forbidden:** adding a field to a publicly-readable listing collection without
 asking whether it should be world-readable. The rule will not stop you — it
 grants the document, not a field list.
+
+---
+
+## ADR-0009 — Upload incident runbook
+
+**Decision:** `scripts/diagnose-upload.js` is the first action on any "cannot
+publish a product" report. It runs in the browser console on the affected
+account, needs no deployment, and returns a structured artifact whose
+`firstFailingStage` names the owning subsystem.
+
+**Evidence:** a full static search could not explain a reported cap of 3. All
+four plan tables say 10 (`functions/index.js:3683`, `sokoni-revenue.js:28`,
+`sub-billing.js`, `product-limit.js`); the gateway's `upload.maxTokens = 3` has
+no call sites across the 114 pages that load it; storage rules cap size, not
+count; no image or AI-credit quota of 3 exists. When the code cannot explain a
+number, the number is runtime state and only the running system can be asked.
+
+### Response matrix
+
+| `firstFailingStage` | Owner | Action |
+|---|---|---|
+| `auth` | identity | refresh token (`getIdToken(true)`), inspect claims |
+| `counterRead` | data | inspect `productCounters/{uid}`, check trigger logs |
+| `consistency` → `SELLER_KEY_MISMATCH` | data model | products split across `sellerUid`/`sellerId` — fix the query, **not** the counter |
+| `consistency` → `STATUS_FILTER_MISMATCH` | counting | one component filters by status, another does not — reconcile the definition |
+| `consistency` → `COUNTER_DRIFT` | data | run `recountMarketplaceProducts`. **Do not roll back rules** |
+| `firestoreWrite` + `permission-denied` | rules | the deployed rule is the blocker — investigate or roll back |
+| `callable` | functions | inspect Cloud Function logs and revision |
+| none | client | rejection is upstream — client validation, image upload, or storage |
+
+**Consequence — the rule this exists to enforce:** a rollback must follow
+evidence that the suspected component actually denied the request. Reverting
+Firestore rules on suspicion, when the fault is counter drift, removes
+protection and fixes nothing.
+
+**Forbidden:** changing production code during an upload incident before one
+diagnostic artifact exists from an affected account. Every change made before
+the failing stage is identified adds a variable to an investigation that already
+has too many.
+
+**Probe safety:** the diagnostic writes and deletes one product flagged
+`__diagnostic: true`, cleaned up in a `finally` so a later throw cannot orphan
+it. An orphaned probe would inflate the counter being measured — the diagnostic
+would become a cause of the symptom it is investigating.

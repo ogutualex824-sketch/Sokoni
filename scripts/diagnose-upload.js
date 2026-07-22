@@ -24,6 +24,9 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
     generatedAt: new Date().toISOString(),
     claims:  {},
     counter: { stored: null, actual: null, byStatus: {}, drift: null },
+    /* Classified separately from the pass/fail pipeline: "consistency failed" is
+       not actionable, but "SELLER_KEY_MISMATCH" names the owning subsystem. */
+    consistency: { status: 'NOT_REACHED', reason: null, stored: null, actual: null, drift: null, detail: null },
     server:  {},
     pipeline: {
       auth:            'NOT_REACHED',
@@ -32,9 +35,30 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
       consistency:     'NOT_REACHED',
       firestoreWrite:  'NOT_REACHED',
     },
+    /* Each measurement is stamped so a concurrent upload during the run is
+       detectable — otherwise two counts taken seconds apart look like drift. */
+    timestamps: {
+      started:     new Date().toISOString(),
+      tokenIssued: null,
+      counterRead: null,
+      actualCount: null,
+      writeProbe:  null,
+      finished:    null,
+    },
     error: null,
     firstFailingStage: null,
     verdict: null,
+  };
+
+  /* Ordered most-specific first: a seller-key mismatch explains a drift, so
+     reporting the drift instead would send the engineer to the wrong subsystem. */
+  const REASONS = {
+    SELLER_KEY_MISMATCH:   'products are split across sellerUid and sellerId — the two halves of the system disagree about ownership',
+    STATUS_FILTER_MISMATCH:'the stored count matches only ACTIVE products while the collection holds more — one component filters by status, the other does not',
+    COUNTER_DRIFT:         'stored counter and actual product count diverge',
+    TOKEN_STALE:           'the ID token predates a likely plan change and still carries old claims',
+    QUERY_MISMATCH:        'the diagnostic query returned a different shape than expected',
+    STALE_CACHE:           'client-cached values disagree with the server',
   };
 
   const mark = (stage, state, err) => {
@@ -57,6 +81,7 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
     if (!user) throw new Error('not signed in');
     report.uid = user.uid;
     const tok = await user.getIdTokenResult();
+    report.timestamps.tokenIssued = tok.issuedAtTime;
     report.claims = {
       admin:      !!tok.claims.admin,
       superAdmin: !!tok.claims.superAdmin,
@@ -99,6 +124,7 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
       row('maxProducts', d.maxProducts + (d.maxProducts === -1 ? ' (unlimited)' : ''));
       row('status', d.status || '(none)');
     }
+    report.timestamps.counterRead = new Date().toISOString();
     mark('counterRead', 'PASS');
   } catch (e) {
     mark('counterRead', 'FAIL', e);
@@ -129,6 +155,7 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
   try {
     const q = await db.collection('products').where('sellerUid', '==', uid).get();
     report.counter.actual = q.size;
+    report.timestamps.actualCount = new Date().toISOString();
 
     const byStatus = {};
     q.forEach((doc) => {
@@ -151,13 +178,45 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
 
     if (report.counter.stored !== null) {
       report.counter.drift = report.counter.actual - report.counter.stored;
-      row('drift', report.counter.drift === 0
-        ? 'in sync'
-        : `${report.counter.drift > 0 ? '+' : ''}${report.counter.drift} — counter says ` +
-          `${report.counter.stored}, Firestore has ${report.counter.actual}. Run recountMarketplaceProducts.`);
     }
-    mark('consistency', report.counter.drift === 0 || report.counter.drift === null ? 'PASS' : 'FAIL',
-         report.counter.drift ? { code: 'COUNTER_DRIFT', message: 'stored ' + report.counter.stored + ' vs actual ' + report.counter.actual } : null);
+
+    /* ── Classify ───────────────────────────────────────────────────────────
+       Most-specific cause first. A seller-key mismatch or a status-filter
+       mismatch both PRODUCE a drift, so reporting COUNTER_DRIFT when either is
+       present would send the on-call engineer to rebuild counters when the real
+       fault is a query keyed on the wrong field. */
+    const c = report.consistency;
+    c.stored = report.counter.stored;
+    c.actual = report.counter.actual;
+    c.drift  = report.counter.drift;
+
+    const activeCount = report.counter.byStatus.active || 0;
+    const altCount    = report.counter.actualBySellerId;
+
+    if (typeof altCount === 'number' && altCount !== report.counter.actual) {
+      c.status = 'FAIL'; c.reason = 'SELLER_KEY_MISMATCH';
+      c.detail = `sellerUid=${report.counter.actual}, sellerId=${altCount}`;
+    } else if (c.stored !== null && c.drift !== 0 && c.stored === activeCount) {
+      c.status = 'FAIL'; c.reason = 'STATUS_FILTER_MISMATCH';
+      c.detail = `stored ${c.stored} equals ACTIVE-only count; collection holds ${c.actual}`;
+    } else if (c.stored !== null && c.drift !== 0) {
+      c.status = 'FAIL'; c.reason = 'COUNTER_DRIFT';
+      c.detail = `stored ${c.stored} vs actual ${c.actual} (drift ${c.drift > 0 ? '+' : ''}${c.drift})`;
+    } else if (report.claims.tokenIssued &&
+               (Date.now() - new Date(report.claims.tokenIssued).getTime()) > 60 * 60 * 1000) {
+      /* Not a failure on its own — surfaced because a token older than an hour
+         may predate a plan change, which presents as "I upgraded, nothing changed". */
+      c.status = 'WARN'; c.reason = 'TOKEN_STALE';
+      c.detail = 'token older than 1h — refresh with getIdToken(true) and re-run';
+    } else {
+      c.status = 'PASS';
+    }
+
+    row('classification', c.reason ? c.reason + ' — ' + REASONS[c.reason] : 'in sync');
+    if (c.detail) row('detail', c.detail);
+
+    mark('consistency', c.status === 'FAIL' ? 'FAIL' : 'PASS',
+         c.status === 'FAIL' ? { code: c.reason, message: c.detail } : null);
   } catch (e) {
     mark('consistency', 'FAIL', e);
     row('product query', 'FAILED: ' + e.message);
@@ -179,6 +238,7 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
       status:        'draft',
       createdAt:     new Date().toISOString(),
     });
+    report.timestamps.writeProbe = new Date().toISOString();
     mark('firestoreWrite', 'PASS');
     row('firestore create', 'ALLOWED — the rule is not blocking this account');
   } catch (e) {
@@ -214,6 +274,7 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
   } else {
     report.verdict = 'First failure at ' + report.firstFailingStage + '. See report.error.';
   }
+  report.timestamps.finished = new Date().toISOString();
   console.log('  ' + report.verdict);
   console.log('\n  Copy the artifact:  copy(JSON.stringify(report, null, 2))');
   return report;
