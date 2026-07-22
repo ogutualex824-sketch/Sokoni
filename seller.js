@@ -1279,6 +1279,45 @@ function removeEditImage(i) {
 window.addEditImages  = addEditImages;
 window.removeEditImage = removeEditImage;
 
+/**
+ * Make the edit-modal category dropdown offer exactly what the upload form does.
+ *
+ * productCategory (the upload <select>) is the authoritative option list — 78
+ * categories across 20 optgroups. This clones it into editCategory so the edit
+ * modal cannot present a smaller, drifting vocabulary. Cloning the markup keeps
+ * the optgroup structure intact.
+ *
+ * currentCat guarantees the product's existing category is always selectable,
+ * even if it predates the current list or came from another surface. Without it,
+ * a value the dropdown does not contain would not "stick", and the first Save
+ * would overwrite the real category with the visible default — the exact bug
+ * this function exists to end. If the value is unknown, it is added under a
+ * "Current" group so the merchant keeps it rather than silently losing it.
+ */
+function _syncEditCategoryOptions(currentCat) {
+    const src = document.getElementById('productCategory');
+    const dst = document.getElementById('editCategory');
+    if (!dst) return;
+
+    if (src && src.innerHTML.trim()) {
+        dst.innerHTML = src.innerHTML;
+    }
+
+    /* Ensure currentCat exists as an option so setting .value round-trips. */
+    if (currentCat) {
+        const has = Array.prototype.some.call(dst.options, function (o) { return o.value === currentCat; });
+        if (!has) {
+            const g = document.createElement('optgroup');
+            g.label = 'Current';
+            const o = document.createElement('option');
+            o.value = currentCat;
+            o.textContent = currentCat;
+            g.appendChild(o);
+            dst.insertBefore(g, dst.firstChild);
+        }
+    }
+}
+
 function editProduct(index) {
     _editIndex = index;
     _editImages = [];
@@ -1291,12 +1330,32 @@ function editProduct(index) {
     const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v || ""; };
     setVal("editName",        p.name    || "");
     setVal("editPrice",       p.price   || "");
+
+    /* The edit category dropdown carried 12 generic options; the upload dropdown
+       carries 78 across 20 groups. A product uploaded as "computers" or "vape"
+       had no matching option here, so the <select> silently fell back to its
+       first entry and saveEditProduct then WROTE that wrong category back —
+       editing a product's price quietly reassigned its category. Clone the
+       authoritative upload list so the two can never drift again. */
+    _syncEditCategoryOptions(p.category);
     setVal("editCategory",    p.category || "other");
+
     setVal("editStock",       p.stock != null ? p.stock : "");
+    setVal("editCostPrice",       p.costPrice != null ? p.costPrice : "");
+    setVal("editDeliveryCost",    p.deliveryCost != null ? p.deliveryCost : "");
+    setVal("editLocation",        p.location || "");
+    setVal("editWholesalePrice",  p.wholesalePrice != null ? p.wholesalePrice : "");
+    setVal("editMinWholesaleQty", p.minWholesaleQty != null ? p.minWholesaleQty : "");
     setVal("editDescription", p.description || "");
 
     /* Load images into multi-image editor */
-    _editImages = (p.images && p.images.length) ? p.images.slice() : (p.image ? [p.image] : []);
+    /* Prefer Storage URLs — after the cache-degradation fix a product's `images`
+       may have been stripped to save quota while imageStorageUrls kept the real
+       URLs. Reading images first would open the editor with no picture and could
+       save an empty image back. */
+    _editImages = (p.imageStorageUrls && p.imageStorageUrls.length) ? p.imageStorageUrls.slice()
+                : (p.images && p.images.length) ? p.images.slice()
+                : (p.image ? [p.image] : []);
     renderEditImageSlots();
 
     const msgEl = document.getElementById("editModalMsg");
@@ -1332,6 +1391,11 @@ function saveEditProduct() {
     const cat    = document.getElementById("editCategory")?.value || "other";
     const stock  = document.getElementById("editStock")?.value;
     const desc   = document.getElementById("editDescription")?.value.trim();
+    const costP  = document.getElementById("editCostPrice")?.value;
+    const delivP = document.getElementById("editDeliveryCost")?.value;
+    const loc    = document.getElementById("editLocation")?.value.trim();
+    const wholeP = document.getElementById("editWholesalePrice")?.value;
+    const wholeQ = document.getElementById("editMinWholesaleQty")?.value;
 
     if (!name || !price) {
         if (msgEl) { msgEl.textContent = "⚠️ Name and price are required."; msgEl.style.color = "#ff6b6b"; }
@@ -1348,6 +1412,16 @@ function saveEditProduct() {
     prods[_editIndex].category    = cat;
     if (stock !== "") prods[_editIndex].stock = Number(stock);
     if (desc)  prods[_editIndex].description = desc;
+    /* Empty string means "left blank" → leave the stored value untouched, so
+       clearing a field by accident does not zero a real cost or delivery fee. */
+    if (costP  !== "" && costP  != null) prods[_editIndex].costPrice    = Number(costP);
+    if (delivP !== "" && delivP != null) prods[_editIndex].deliveryCost = Number(delivP);
+    if (loc)                              prods[_editIndex].location     = loc;
+    if (wholeP !== "" && wholeP != null) {
+        const wp = Number(wholeP);
+        prods[_editIndex].wholesalePrice  = wp > 0 ? wp : null;
+        prods[_editIndex].minWholesaleQty = wp > 0 ? Number(wholeQ || 0) : null;
+    }
 
     /* Images: save all from multi-image editor */
     if (_editImages.length) {
@@ -1366,9 +1440,46 @@ function saveEditProduct() {
         prods[_editIndex].priceHistory = prods[_editIndex].priceHistory.slice(0, 10);
     }
 
-    localStorage.setItem("sellerProducts", JSON.stringify(prods));
+    /* Through the degrading cache, not a raw setItem: an edit must not be lost to
+       a full quota any more than an upload was. */
+    _cacheSellerProducts(prods);
     displaySellerProducts();
     updateSellerStats();
+
+    /* Persist to Firestore. saveEditProduct previously wrote ONLY localStorage,
+       so every edit — a corrected price, a fixed category, new stock — stayed on
+       the one device and never reached the marketplace, which reads the products
+       collection. Buyers kept seeing the pre-edit product. Fire-and-forget and
+       fully guarded: the local update above already succeeded, and a merchant
+       editing offline still sees their change; it syncs on the next edit online. */
+    (async function () {
+        try {
+            const prod = prods[_editIndex];
+            if (!prod || !prod.id || !window.firebaseDB) return;
+            const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+            const patch = { name: name, price: price, category: cat, updatedAt: m.serverTimestamp() };
+            if (stock !== "") patch.stock = Number(stock);
+            if (desc) patch.description = desc;
+            if (costP  !== "" && costP  != null) patch.costPrice    = Number(costP);
+            if (delivP !== "" && delivP != null) patch.deliveryCost = Number(delivP);
+            if (loc) patch.location = loc;
+            if (wholeP !== "" && wholeP != null) {
+                const wp = Number(wholeP);
+                patch.wholesalePrice  = wp > 0 ? wp : null;
+                patch.minWholesaleQty = wp > 0 ? Number(wholeQ || 0) : null;
+            }
+            /* Only touch images when the editor actually holds Storage URLs — never
+               write a base64 blob or an empty array over a good Firestore image. */
+            if (_editImages.length && String(_editImages[0]).startsWith('http')) {
+                patch.image = _editImages[0];
+                patch.images = _editImages.slice();
+                patch.imageStorageUrls = _editImages.slice();
+            }
+            await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), patch);
+        } catch (e) {
+            console.warn('[seller] edit Firestore sync deferred:', e && e.message);
+        }
+    })();
 
     if (msgEl) { msgEl.innerHTML = "✅ Product updated!"; msgEl.style.color = "#71ff00"; }
     setTimeout(closeEditModal, 1000);

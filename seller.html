@@ -5161,24 +5161,49 @@ class="notification-container"
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
       <div>
         <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Category</label>
+        <!-- Options are cloned from #productCategory at edit time by
+             _syncEditCategoryOptions(). This list was a 12-option subset of the
+             78-option upload dropdown; a product whose category was not among
+             these 12 had it silently overwritten on Save. The single fallback
+             option below is only what shows before the modal is opened. -->
         <select id="editCategory" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;cursor:pointer;">
-          <option value="electronics">📱 Electronics</option>
-          <option value="fashion">👕 Fashion</option>
-          <option value="beauty">💄 Beauty</option>
-          <option value="food">🍎 Food</option>
-          <option value="furniture">🛋️ Furniture</option>
-          <option value="sports">⚽ Sports</option>
-          <option value="automotive">🚗 Automotive</option>
-          <option value="books">📚 Books</option>
-          <option value="health">💊 Health</option>
-          <option value="cleaning">🧹 Cleaning</option>
-          <option value="agriculture">🌾 Agriculture</option>
           <option value="other">🔧 Other</option>
         </select>
       </div>
       <div>
         <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Stock Qty</label>
         <input type="number" id="editStock" min="0" placeholder="e.g. 10" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+      </div>
+    </div>
+
+    <!-- Fields the edit modal was missing. Upload captured cost price, delivery
+         cost, location and wholesale, but Edit could not change any of them, so a
+         merchant who mistyped a delivery fee or wanted to open wholesale had to
+         delete and re-upload. -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Cost Price (KES)</label>
+        <input type="number" id="editCostPrice" min="0" placeholder="what you paid" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Delivery Cost (KES)</label>
+        <input type="number" id="editDeliveryCost" min="0" placeholder="0 = free" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+      </div>
+    </div>
+
+    <div style="margin-bottom:10px;">
+      <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Location</label>
+      <input type="text" id="editLocation" placeholder="e.g. Nairobi CBD" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Wholesale Price (KES)</label>
+        <input type="number" id="editWholesalePrice" min="0" placeholder="optional" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
+      </div>
+      <div>
+        <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Min Wholesale Qty</label>
+        <input type="number" id="editMinWholesaleQty" min="0" placeholder="e.g. 12" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
       </div>
     </div>
 
