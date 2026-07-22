@@ -177,9 +177,20 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
     }
 
     if (ops.includes('stripInlineImages')) {
-      /* Only when Storage already holds the same images. Without that the data
-         URI is the only copy and removing it destroys the product's imagery —
-         a repair that loses data is not a repair. */
+      /* Substitutes only when a syntactically valid http URL is recorded in
+         imageStorageUrls. Without one the data URI is the only copy and removing
+         it destroys the product's imagery — a repair that loses data is not a
+         repair.
+
+         THIS IS A PRESENCE CHECK, NOT AN EXISTENCE CHECK. It does not confirm
+         the Storage object is still there. If an object were deleted while its
+         URL remained on the document, this would strip the inline copy and leave
+         a broken link. Acceptable for a named handful of products whose URLs came
+         from the same upload that wrote the files, and whose substitutions are
+         visible in the dry run. NOT acceptable if this ever runs across a whole
+         catalogue — at that scale a stale URL stops being hypothetical, and the
+         check should become a Storage SDK existence probe rather than raw HEAD
+         requests. */
       const urls = Array.isArray(before.imageStorageUrls)
         ? before.imageStorageUrls.filter(u => typeof u === 'string' && u.startsWith('http')) : [];
       if (urls.length) {
