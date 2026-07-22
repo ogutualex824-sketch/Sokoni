@@ -20,8 +20,8 @@ if (!ADMIN) {
   process.exit(1);
 }
 
-const INDEXES  = ['products_index','stores_index','services_index','jobs_index',
-                  'vehicles_index','property_index','events_index','global_search'];
+const INDEXES  = ['sokoni_products','sokoni_shops','sokoni_services','sokoni_jobs',
+                  'sokoni_vehicles','sokoni_properties','sokoni_events','global_search'];
 
 function algolia(method, path, body) {
   return new Promise((resolve, reject) => {

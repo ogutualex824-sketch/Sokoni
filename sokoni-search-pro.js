@@ -38,7 +38,7 @@ const SokoniSearchPro = (function () {
 
   const INDICES = Object.freeze({
     PRODUCTS:    'sokoni_products',
-    SELLERS:     'sokoni_sellers',
+    SELLERS:     'sokoni_shops',
     SERVICES:    'sokoni_services',
     EVENTS:      'sokoni_events',
     PROPERTIES:  'sokoni_properties',

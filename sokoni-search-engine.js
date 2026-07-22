@@ -1496,22 +1496,24 @@ class SokoniSearchEngine {
     let totalHits  = 0;
 
     const collections = {
-      'sokoni_products':   'products',
-      'sokoni_services':   'services',
-      'sokoni_events':     'events',
-      'sokoni_properties': 'properties',
-      'sokoni_vehicles':   'cars',
-      'sokoni_jobs':       'digitalJobs',
+      'sokoni_products':   { col: 'products',   status: 'active' },
+      'sokoni_services':   { col: 'services',   status: 'active' },
+      'sokoni_events':     { col: 'events',     status: 'live'   },
+      'sokoni_properties': { col: 'properties', status: 'active' },
+      'sokoni_vehicles':   { col: 'vehicles',   status: 'active' },
+      'sokoni_jobs':       { col: 'jobs',       status: 'active' },
     };
 
     const targetIndexes = opts.indexes || Object.keys(collections);
 
     await Promise.allSettled(
       targetIndexes.map(async (indexName) => {
-        const col = collections[indexName];
-        if (!col) return;
+        const spec = collections[indexName];
+        if (!spec) return;
         try {
-          let ref = db.collection(col).where('status', '==', 'active').limit(opts.hitsPerPage || 12);
+          let ref = db.collection(spec.col)
+            .where('status', '==', spec.status)
+            .limit(opts.hitsPerPage || 12);
           if (q) ref = ref.orderBy('name').startAt(q).endAt(q + '');
           const snap = await ref.get();
           const hits = snap.docs.map(d => ({ objectID: d.id, ...d.data() }));

@@ -69,6 +69,7 @@ const SEARCH_INDEXES = [
   'sokoni_brands',
   'sokoni_collections',
   'sokoni_coupons',
+  'global_search',
 ];
 
 /* ── Helpers ────────────────────────────────────────────────────────── */

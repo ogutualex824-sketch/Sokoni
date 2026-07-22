@@ -17,18 +17,18 @@ if (!ADMIN_KEY) {
 }
 
 const INDEXES = [
-  'products_index',
-  'stores_index',
-  'services_index',
-  'jobs_index',
-  'vehicles_index',
-  'property_index',
-  'events_index',
+  'sokoni_products',
+  'sokoni_shops',
+  'sokoni_services',
+  'sokoni_jobs',
+  'sokoni_vehicles',
+  'sokoni_properties',
+  'sokoni_events',
   'global_search',
 ];
 
 const INDEX_SETTINGS = {
-  products_index: {
+  sokoni_products: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(brand)',
@@ -64,7 +64,7 @@ const INDEX_SETTINGS = {
     removeStopWords: ['en'],
     queryLanguages: ['en'],
   },
-  stores_index: {
+  sokoni_shops: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(description)',
@@ -86,7 +86,7 @@ const INDEX_SETTINGS = {
     ],
     queryLanguages: ['en', 'sw'],
   },
-  services_index: {
+  sokoni_services: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(description)',
@@ -108,7 +108,7 @@ const INDEX_SETTINGS = {
     ],
     queryLanguages: ['en', 'sw'],
   },
-  jobs_index: {
+  sokoni_jobs: {
     searchableAttributes: [
       'unordered(title)',
       'unordered(description)',
@@ -132,7 +132,7 @@ const INDEX_SETTINGS = {
     ],
     queryLanguages: ['en', 'sw'],
   },
-  vehicles_index: {
+  sokoni_vehicles: {
     searchableAttributes: [
       'unordered(make)',
       'unordered(model)',
@@ -156,7 +156,7 @@ const INDEX_SETTINGS = {
     ],
     queryLanguages: ['en', 'sw'],
   },
-  property_index: {
+  sokoni_properties: {
     searchableAttributes: [
       'unordered(title)',
       'unordered(description)',
@@ -181,7 +181,7 @@ const INDEX_SETTINGS = {
     ],
     queryLanguages: ['en', 'sw'],
   },
-  events_index: {
+  sokoni_events: {
     searchableAttributes: [
       'unordered(title)',
       'unordered(description)',
@@ -322,7 +322,7 @@ async function main() {
       description: 'Boost verified sellers',
     },
   ];
-  for (const idx of ['products_index', 'stores_index']) {
+  for (const idx of ['sokoni_products', 'sokoni_shops']) {
     const res = await algoliaRequest('POST', `/1/indexes/${idx}/rules/batch`, rules);
     if (res.status === 200) console.log(`  ✓ ${idx}`);
     else console.log(`  ✗ ${idx}:`, res.body);

@@ -31,17 +31,17 @@ console.log(`Auth: Firebase CLI token (${ACCESS_TOKEN.length} chars)`);
 
 /* Collections to backfill */
 const COLLECTIONS = [
-  { col: 'products',    index: 'products_index', global: true },
-  { col: 'sellers',     index: 'stores_index',   global: true },
-  { col: 'stores',      index: 'stores_index',   global: true },
-  { col: 'services',    index: 'services_index', global: true },
-  { col: 'jobs',        index: 'jobs_index',     global: true },
-  { col: 'digitalJobs', index: 'jobs_index',     global: true },
-  { col: 'cars',        index: 'vehicles_index', global: true },
-  { col: 'vehicles',    index: 'vehicles_index', global: true },
-  { col: 'properties',  index: 'property_index', global: true },
-  { col: 'real_estate', index: 'property_index', global: true },
-  { col: 'events',      index: 'events_index',   global: true },
+  { col: 'products',    index: 'sokoni_products',  global: true },
+  { col: 'sellers',     index: 'sokoni_shops',     global: true },
+  { col: 'stores',      index: 'sokoni_shops',     global: true },
+  { col: 'services',    index: 'sokoni_services',  global: true },
+  { col: 'jobs',        index: 'sokoni_jobs',      global: true },
+  { col: 'digitalJobs', index: 'sokoni_jobs',      global: true },
+  { col: 'cars',        index: 'sokoni_vehicles',  global: true },
+  { col: 'vehicles',    index: 'sokoni_vehicles',  global: true },
+  { col: 'properties',  index: 'sokoni_properties', global: true },
+  { col: 'real_estate', index: 'sokoni_properties', global: true },
+  { col: 'events',      index: 'sokoni_events',    global: true },
 ];
 
 /* ── HTTP helpers ────────────────────────────────────────────────── */

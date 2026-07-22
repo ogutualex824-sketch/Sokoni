@@ -1200,46 +1200,72 @@ async function doSearch(rawQuery) {
       const eng = window.sokoniSearch;
       await eng.init();
       const userToken = eng.getUserToken();
-      const activeFilter = activeTab !== "all" ? { hub: activeTab } : {};
-      const res = await eng.search(q, {
-        hitsPerPage: 60,
-        filters:     activeFilter,
-        userToken,
-      });
+
+      /* Tab ID → actual hub value stored in Algolia records.
+         Some tabs use different hub values from their tab ID. */
+      const _TAB_HUB_ALIAS = {
+        products:   "shopping",  // products indexed as hub:"shopping"
+        businesses: "sellers",   // shops/stores indexed as hub:"sellers"
+        properties: "property",  // properties indexed as hub:"property"
+      };
+
+      let activeFilter = {};
+      const searchOpts = { hitsPerPage: 60, userToken };
+      if (activeTab !== "all") {
+        if (activeTab === "professionals") {
+          /* Professionals are indexed in sokoni_users — no hub field set */
+          searchOpts.indexes = ["sokoni_users"];
+        } else {
+          const hubValue = _TAB_HUB_ALIAS.hasOwnProperty(activeTab)
+            ? _TAB_HUB_ALIAS[activeTab]
+            : activeTab;
+          if (hubValue) activeFilter = { hub: hubValue };
+        }
+      }
+
+      const res = await eng.search(q, { ...searchOpts, filters: activeFilter });
       const allHits = Object.entries(res.results || {}).flatMap(([idx, r]) =>
         (r.hits || []).map(h => ({ ...h, _idx: idx, _queryID: r.queryID }))
       );
       if (allHits.length > 0) {
-        allResults = allHits.map(h => {
+        const mapped = allHits.map(h => {
           const tab = _INDEX_TAB[h._idx] || h.tab || h.type || "products";
           const title = h._highlightResult?.name?.value || h._highlightResult?.title?.value || h.name || h.title || "(Untitled)";
-          /* Track view for recently-viewed engine */
           return {
-            id:       h.objectID || h.id || "",
+            id:        h.objectID || h.id || "",
             tab,
-            icon:     _TAB_ICON[tab] || "🔍",
-            title:    title.replace(/<\/?mark>/g, ""),      // strip Algolia highlight tags
-            titleHtml: title,                               // keep for rendering with highlights
-            subtitle: h.category || h.subcategory || "",
-            location: h.location?.area || h.location?.city || h.city || "",
-            price:    h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
-            link:     h.link || h.url || "index.html",
+            icon:      _TAB_ICON[tab] || "🔍",
+            title:     title.replace(/<\/?mark>/g, ""),
+            titleHtml: title,
+            subtitle:  h.category || h.subcategory || "",
+            location:  h.location?.area || h.location?.city || h.city || "",
+            price:     h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
+            link:      h.link || h.url || "index.html",
             thumbnail: h.thumbnail || h.image || null,
-            verified: Boolean(h.seller?.verified || h.verified),
-            _queryID: h._queryID,
-            _idx:     h._idx,
+            verified:  Boolean(h.seller?.verified || h.verified),
+            _queryID:  h._queryID,
+            _idx:      h._idx,
           };
         });
-        counts = {};
-        TABS.slice(1).forEach(t => { counts[t.id] = 0; });
-        allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
-        isLoading = false;
-        renderTabs();
-        renderResults();
-        /* Analytics: record search event */
-        const fn = typeof firebase !== "undefined" && firebase.functions().httpsCallable("recordSearchEvent");
-        if (fn) fn({ type: "search", query: q, resultCount: allHits.length }).catch(() => {});
-        return;
+
+        /* Build counts to check if current tab has Algolia coverage */
+        const tmpCounts = {};
+        TABS.slice(1).forEach(t => { tmpCounts[t.id] = 0; });
+        mapped.forEach(r => { tmpCounts[r.tab] = (tmpCounts[r.tab] || 0) + 1; });
+        const currentTabCount = activeTab === "all" ? allHits.length : (tmpCounts[activeTab] || 0);
+
+        if (currentTabCount > 0) {
+          /* Algolia satisfies the current view — render and stop */
+          allResults = mapped;
+          counts = tmpCounts;
+          isLoading = false;
+          renderTabs();
+          renderResults();
+          const fn = typeof firebase !== "undefined" && firebase.functions().httpsCallable("recordSearchEvent");
+          if (fn) fn({ type: "search", query: q, resultCount: allHits.length }).catch(() => {});
+          return;
+        }
+        /* Active tab has 0 Algolia hits — fall through to Firestore supplement */
       }
     } catch (e) {
       if (e.name !== "AbortError") console.warn("[SOKONI Search] Engine error, falling back to Firestore:", e.message);

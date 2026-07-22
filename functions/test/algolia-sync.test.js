@@ -730,8 +730,8 @@ const SAMPLE_JOB = {
 
   await test('INDEX_SETTINGS covers all 8 expected indexes', async () => {
     const expected = [
-      'products_index','stores_index','services_index','jobs_index',
-      'vehicles_index','property_index','events_index','global_search',
+      'sokoni_products','sokoni_shops','sokoni_services','sokoni_jobs',
+      'sokoni_vehicles','sokoni_properties','sokoni_events','global_search',
     ];
     for (const name of expected) {
       assert.ok(INDEX_SETTINGS[name], `INDEX_SETTINGS missing entry for "${name}"`);
@@ -756,11 +756,11 @@ const SAMPLE_JOB = {
     }
   });
 
-  await test('products_index has isFeatured in customRanking', async () => {
-    const ranks = INDEX_SETTINGS.products_index.customRanking;
+  await test('sokoni_products has isFeatured in customRanking', async () => {
+    const ranks = INDEX_SETTINGS.sokoni_products.customRanking;
     assert.ok(
       ranks.some(r => r.includes('isFeatured')),
-      'products_index customRanking must include isFeatured'
+      'sokoni_products customRanking must include isFeatured'
     );
   });
 

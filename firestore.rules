@@ -175,7 +175,8 @@ service cloud.firestore {
     }
 
     match /providers/{providerId} {
-      allow read:   if isAuthed();
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
+                    || isAuthed();
       allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
       allow update: if isAdmin()
                     || (isAuthed()
@@ -4700,6 +4701,115 @@ service cloud.firestore {
       // CF Admin SDK is the sole writer — client writes are always rejected.
       allow read:  if isAuthed() && resource.data.uid == request.auth.uid;
       allow write: if false; // CF Admin SDK only
+    }
+
+    /* ── Public Search Catalog Collections ─────────────────────────────────
+       These collections hold marketplace listings that must be publicly
+       discoverable via search. Firestore fallback and Path C (search.html)
+       both query them without authentication for anonymous visitors.
+
+       Write paths are strictly admin-only or via Cloud Functions (Admin SDK).
+       PII fields (phone, exact address) should be avoided at the listing level;
+       detailed contact info lives behind auth in the provider/user profile. */
+
+    /* Service listings — plumbers, electricians, tutors, cleaners, etc. */
+    match /services/{serviceId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
+                    || (isAuthed() && resource.data.uid == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* Vehicle listings — cars, motorcycles, trucks */
+    match /vehicles/{vehicleId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
+                    || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.sellerId == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.sellerId == request.auth.uid);
+    }
+
+    /* Car listings (alias collection — same shape as vehicles) */
+    match /cars/{carId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
+                    || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.sellerId == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.sellerId == request.auth.uid);
+    }
+
+    /* Property listings */
+    match /properties/{propertyId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
+                    || (isAuthed() && resource.data.agentId == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.agentId == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.agentId == request.auth.uid);
+    }
+
+    /* Property listings (extended schema) */
+    match /propertyListings/{listingId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
+                    || (isAuthed() && resource.data.agentId == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.agentId == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.agentId == request.auth.uid);
+    }
+
+    /* Digital job listings — freelance / gig economy */
+    match /digitalJobs/{jobId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'published'
+                    || (isAuthed() && resource.data.employerUid == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && request.resource.data.employerUid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.employerUid == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.employerUid == request.auth.uid);
+    }
+
+    /* Job application listing (open calls) — searchable public listings */
+    match /applications/{appId} {
+      allow read:   if resource.data.status == 'open' || resource.data.status == 'active'
+                    || (isAuthed() && resource.data.uid == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+    }
+
+    /* Healthcare providers — publicly discoverable directory */
+    match /healthProviders/{providerId} {
+      allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
+                    || (isAuthed() && resource.data.uid == request.auth.uid)
+                    || isAdmin();
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* Stores (shop catalog entries — same audience as sellers) */
+    match /stores/{storeId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.ownerId == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.ownerId == request.auth.uid
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.ownerId == request.auth.uid);
     }
 
   }

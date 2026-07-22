@@ -123,9 +123,9 @@ const triggers = {
 
   /* ── Production aliases — Firestore collection names → Algolia index names ──
      Each also automatically fans out to global_search via enqueue() in queue.js.
-     stores     → stores_index   (Firestore: 'stores', same data model as sellers)
-     real_estate→ property_index (Firestore: 'real_estate', same as properties)
-     vehicles   → vehicles_index (Firestore: 'vehicles', same as cars)
+     stores     → sokoni_shops      (Firestore: 'stores', same data model as sellers)
+     real_estate→ sokoni_properties (Firestore: 'real_estate', same as properties)
+     vehicles   → sokoni_vehicles   (Firestore: 'vehicles', same as cars)
      vendors    — REMOVED: vendors is already handled by search-sync.js to avoid
                   duplicate triggers (each vendors write was firing 2× functions)
   ── */
