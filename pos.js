@@ -1089,24 +1089,21 @@ const SPos = (function () {
      M-PESA
   ═══════════════════════════════════════════════════════════ */
   const mpesa = {
-    async saveCredentials(creds) {
-      if (!window.firebaseApp) throw new Error('Firebase not loaded — cannot save M-PESA credentials');
-      const uid = window.currentUser?.uid;
-      if (!uid) throw new Error('Must be signed in to save M-PESA credentials');
-      /* Write to Firestore shopSettings/{uid} — read by darajaSTKPush Cloud Function */
-      const { getFirestore, doc, setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      const db = getFirestore(window.firebaseApp);
-      await setDoc(doc(db, 'shopSettings', uid), {
-        darajaConsumerKey:    creds.ck,
-        darajaConsumerSecret: creds.cs,
-        darajaPassKey:        creds.passkey,
-        darajaShortCode:      creds.shortcode,
-        darajaTransactionType:creds.type || 'CustomerPayBillOnline',
-        darajaEnv:            creds.env  || 'production',
-        darajaAccountRef:     (state.settings.businessName || 'SOKONI').slice(0, 12),
-        businessName:         state.settings.businessName || 'SOKONI',
-      }, { merge: true });
-      return true;
+    /* RETIRED — the POS no longer stores merchant M-Pesa credentials.
+       This wrote darajaConsumerSecret and darajaPassKey to Firestore from the
+       till device: live API secrets, in plaintext, on shared shop hardware.
+       Collections are moving to one central SOKONI account whose keys live in
+       Secret Manager and never reach a client (functions/payment-config.js →
+       collectionRoute).
+
+       Kept as a rejecting stub rather than deleted so any caller fails loudly
+       and immediately instead of silently appearing to save. Audited 2026-07-22:
+       shopSettings held ZERO documents, so no till loses a working setup. */
+    async saveCredentials() {
+      throw new Error(
+        'M-Pesa collection is managed by SOKONI centrally — per-merchant Daraja ' +
+        'credentials are no longer stored on the device.'
+      );
     },
 
     async sendSTK() {

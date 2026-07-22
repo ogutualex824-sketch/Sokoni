@@ -439,27 +439,13 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
     <label class="pmt-label">Business Name (shown to customers)</label>
     <input type="text" id="sdjBizNameW" class="pmt-input" placeholder="Your Business Name">
 
-    <label class="pmt-label">Shortcode (Till / Paybill Number) *</label>
-    <div class="pmt-input-wrap">
-      <input type="text" id="sdjShortCodeW" class="pmt-input" placeholder="e.g. 174379" inputmode="numeric">
-    </div>
-
-    <label class="pmt-label">Consumer Key *</label>
-    <div class="pmt-input-wrap">
-      <input type="text" id="sdjConsumerKeyW" class="pmt-input" placeholder="Paste from Daraja portal">
-      <button class="pmt-input-btn" onclick="pmtToggleVis('sdjConsumerKeyW',this)">👁</button>
-    </div>
-
-    <label class="pmt-label">Consumer Secret *</label>
-    <div class="pmt-input-wrap">
-      <input type="password" id="sdjConsumerSecretW" class="pmt-input" placeholder="Paste from Daraja portal">
-      <button class="pmt-input-btn" onclick="pmtToggleVis('sdjConsumerSecretW',this)">👁</button>
-    </div>
-
-    <label class="pmt-label">Passkey *</label>
-    <div class="pmt-input-wrap">
-      <input type="password" id="sdjPassKeyW" class="pmt-input" placeholder="From Safaricom M-Pesa Business portal">
-      <button class="pmt-input-btn" onclick="pmtToggleVis('sdjPassKeyW',this)">👁</button>
+    <!-- Credential inputs removed — merchants no longer supply Daraja keys.
+         See wizSaveCredentials() for the full rationale. -->
+    <div class="pmt-info" style="margin-top:14px;border-left:3px solid var(--sk-accent,#71ff00);padding-left:12px;">
+      <strong>No API keys required.</strong><br>
+      SOKONI collects M-Pesa payments centrally on your behalf and settles them to
+      your wallet automatically. You do not need a Daraja account, a shortcode or
+      a passkey — just your business name above.
     </div>
 
     <div class="pmt-field-group" style="margin-top:0;">
@@ -624,25 +610,16 @@ nav.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:rgb
     <label class="pmt-label" style="margin-top:0;">Business Name</label>
     <input type="text" id="setBizName" class="pmt-input" placeholder="Your Business Name">
 
-    <label class="pmt-label">Shortcode</label>
-    <input type="text" id="setShortCode" class="pmt-input" inputmode="numeric">
-
-    <label class="pmt-label">Consumer Key</label>
-    <div class="pmt-input-wrap">
-      <input type="password" id="setConsumerKey" class="pmt-input" placeholder="••••••••••••">
-      <button class="pmt-input-btn" onclick="pmtToggleVis('setConsumerKey',this)">👁</button>
-    </div>
-
-    <label class="pmt-label">Consumer Secret</label>
-    <div class="pmt-input-wrap">
-      <input type="password" id="setConsumerSecret" class="pmt-input" placeholder="••••••••••••">
-      <button class="pmt-input-btn" onclick="pmtToggleVis('setConsumerSecret',this)">👁</button>
-    </div>
-
-    <label class="pmt-label">Passkey</label>
-    <div class="pmt-input-wrap">
-      <input type="password" id="setPassKey" class="pmt-input" placeholder="••••••••••••">
-      <button class="pmt-input-btn" onclick="pmtToggleVis('setPassKey',this)">👁</button>
+    <!-- Credential fields removed: shortcode, consumer key, consumer secret and
+         passkey are no longer collected from merchants. They were written to
+         Firestore from this form and read back into the DOM. Collection now runs
+         through a single SOKONI account whose keys live in Secret Manager.
+         An explicit notice replaces them so the section does not read as broken. -->
+    <div class="pmt-info" style="margin-top:14px;border-left:3px solid var(--sk-accent,#71ff00);padding-left:12px;">
+      <strong>M-Pesa collection is managed by SOKONI.</strong><br>
+      You no longer need Daraja API keys, a shortcode or a passkey. Payments are
+      collected centrally and settled to your wallet automatically, minus the
+      agreed commission.
     </div>
 
     <div class="pmt-field-group" style="margin-top:0;">
@@ -948,39 +925,34 @@ function wizChooseMpesaType(t) {
   setTimeout(() => wizNext(3), 300);
 }
 
+/* RETIRED — merchant Daraja credentials are no longer collected.
+   This wrote darajaConsumerSecret and darajaPassKey to Firestore straight from a
+   browser form: live M-Pesa API secrets, typed into a web page, stored in
+   plaintext, and read back into the DOM on the next visit. Collections are moving
+   to a single central account whose credentials live in Secret Manager and never
+   reach a client (functions/payment-config.js → collectionRoute).
+
+   The business name is still saved — it is not a credential and other surfaces
+   display it. Nothing else here writes.
+
+   Safe to retire now: an audit on 2026-07-22 found shopSettings with ZERO
+   documents, so no merchant had configured credentials and none is losing a
+   working setup. Doing this later, once real secrets existed, would have meant
+   migrating them instead of simply not collecting them. */
 async function wizSaveCredentials() {
   const get = id => (document.getElementById(id)?.value||'').trim();
-  const bizName     = get('sdjBizNameW');
-  const shortCode   = get('sdjShortCodeW').replace(/\D/g,'');
-  const consumerKey = get('sdjConsumerKeyW');
-  const consumerSec = get('sdjConsumerSecretW');
-  const passKey     = get('sdjPassKeyW');
-  const txType      = get('sdjTxTypeW') || 'CustomerPayBillOnline';
-  const env         = get('sdjEnvW')    || 'production';
-  const msg         = document.getElementById('wiz4Msg');
-  const setMsg      = (t, c='ok') => { if (msg) { msg.textContent = t; msg.className = 'pmt-msg ' + c; } };
-
-  if (!shortCode || !consumerKey || !consumerSec || !passKey) {
-    setMsg('⚠️ Shortcode, Consumer Key, Consumer Secret and Passkey are required.', 'err'); return;
-  }
-  setMsg('Saving…', 'info');
-
+  const msg = document.getElementById('wiz4Msg');
+  const setMsg = (t, c='ok') => { if (msg) { msg.textContent = t; msg.className = 'pmt-msg ' + c; } };
   try {
-    await setDoc(doc(_db, 'shopSettings', _uid), {
-      businessName: bizName,
-      darajaShortCode: shortCode,
-      darajaConsumerKey: consumerKey,
-      darajaConsumerSecret: consumerSec,
-      darajaPassKey: passKey,
-      darajaTransactionType: txType,
-      darajaEnv: env,
-      darajaAccountRef: bizName.slice(0, 12) || 'SOKONI',
-      tillNumber: shortCode,
-      updatedAt: new Date().toISOString(),
-    }, { merge: true });
-    setMsg('✓ Saved. Verifying connection…', 'ok');
+    const bizName = get('sdjBizNameW');
+    if (bizName) {
+      await setDoc(doc(_db, 'shopSettings', _uid), {
+        businessName: bizName,
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
+    }
+    setMsg('✓ Saved. M-Pesa collection is managed by SOKONI — no API keys needed.', 'ok');
     _goToStep(5);
-    setTimeout(() => wizVerify(), 600);
   } catch (e) {
     setMsg('❌ Save failed: ' + e.message, 'err');
   }
@@ -1155,7 +1127,10 @@ async function pmtLoadOverview() {
   try {
     /* Check if configured */
     const snap = await getDoc(doc(_db, 'shopSettings', _uid));
-    const configured = snap.exists() && snap.data().darajaConsumerKey;
+    /* Always "configured": M-Pesa collection is central, so there is nothing a
+       merchant must set up. Keying this off darajaConsumerKey would show a
+       permanent "not set up" prompt pointing at a form that no longer exists. */
+    const configured = true;
 
     const pill  = document.getElementById('pmtStatusPill');
     const card  = document.getElementById('pmtIntegCard');
@@ -1287,50 +1262,37 @@ async function pmtLoadSettings() {
     const d = snap.data();
     const set = (id, val) => { const e = document.getElementById(id); if (e && val != null) e.value = val; };
     set('setBizName',      d.businessName);
-    set('setShortCode',    d.darajaShortCode);
-    set('setConsumerKey',  d.darajaConsumerKey);
-    set('setConsumerSecret', d.darajaConsumerSecret);
-    set('setPassKey',      d.darajaPassKey);
-    const tx = document.getElementById('setTxType'); if (tx && d.darajaTransactionType) tx.value = d.darajaTransactionType;
-    const en = document.getElementById('setEnv');    if (en && d.darajaEnv)             en.value = d.darajaEnv;
+    /* CREDENTIALS ARE NO LONGER SENT TO THE BROWSER.
+       This used to populate darajaConsumerKey / darajaConsumerSecret / darajaPassKey
+       straight into form fields, so a merchant's live M-Pesa secrets were read out
+       of Firestore and placed in the DOM on every visit to this page — readable by
+       any script on the page or anyone with the device. Collection is moving to a
+       central Secret-Manager-backed account (see functions/payment-config.js
+       collectionRoute), so per-merchant credentials are not needed at all.
+       Audited 2026-07-22: zero merchants had credentials stored, so removing this
+       migrates nothing and breaks no one. */
 
+    /* Central collection — active for every merchant, no per-merchant setup. */
     const det = document.getElementById('setMpesaDetail');
     const sts = document.getElementById('setMpesaStatus');
-    if (d.darajaConsumerKey) {
-      if (det) det.textContent = (d.darajaEnv==='sandbox'?'🟡 Sandbox':'🟢 Live') + ' · ' + (d.darajaShortCode||'');
-      if (sts) { sts.textContent = '✅ Active'; sts.className = 'pmt-method-status active'; }
-    } else {
-      if (sts) { sts.textContent = 'Not set'; sts.className = 'pmt-method-status none'; }
-    }
+    if (det) det.textContent = '🟢 Managed by SOKONI';
+    if (sts) { sts.textContent = '✅ Active'; sts.className = 'pmt-method-status active'; }
   } catch(e) {}
 }
 
+/* RETIRED — see wizSaveCredentials above. Saves the business name only; no
+   credential ever leaves the browser for Firestore again. */
 async function pmtSaveSettings() {
   const get = id => (document.getElementById(id)?.value||'').trim();
   const msg = document.getElementById('setMsg');
   const setMsg = (t,c='ok') => { if(msg){msg.textContent=t;msg.className='pmt-msg '+c;} };
-
-  const shortCode   = get('setShortCode').replace(/\D/g,'');
-  const consumerKey = get('setConsumerKey');
-  const consumerSec = get('setConsumerSecret');
-  const passKey     = get('setPassKey');
-  if (!shortCode||!consumerKey||!consumerSec||!passKey) { setMsg('⚠️ All fields required.','err'); return; }
-
   setMsg('Saving…','info');
   try {
     await setDoc(doc(_db,'shopSettings',_uid), {
       businessName: get('setBizName'),
-      darajaShortCode: shortCode,
-      darajaConsumerKey: consumerKey,
-      darajaConsumerSecret: consumerSec,
-      darajaPassKey: passKey,
-      darajaTransactionType: get('setTxType'),
-      darajaEnv: get('setEnv'),
-      darajaAccountRef: get('setBizName').slice(0,12)||'SOKONI',
-      tillNumber: shortCode,
       updatedAt: new Date().toISOString(),
     }, { merge: true });
-    setMsg('✅ Saved!','ok');
+    setMsg('✅ Saved. M-Pesa collection is managed by SOKONI — no API keys needed.','ok');
     pmtLoadSettings();
     pmtLoadOverview();
   } catch(e) { setMsg('❌ '+e.message,'err'); }

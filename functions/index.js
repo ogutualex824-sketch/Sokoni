@@ -3085,7 +3085,20 @@ exports.darajaSTKPush = onCall(
       throw new HttpsError("invalid-argument", "Payment amount must be at least KES 1.");
     }
 
-    /* Load seller's Daraja credentials from Firestore */
+    /* ── LEGACY PATH — per-merchant Daraja credentials ────────────────────────
+       INACTIVE IN PRODUCTION. Audited 2026-07-22: the shopSettings collection
+       held ZERO documents, so this lookup has never succeeded for any merchant
+       and no payment has ever completed through it (posPayments: 0 rows). The
+       client surfaces that used to populate these credentials — payments.html,
+       pos.js, seller.html — have been retired; nothing writes them any more.
+
+       Kept deliberately, per the migration plan: removing it now would leave no
+       STK path at all during the switch to central collection. It is replaced,
+       not deleted, once the central Secret-Manager-backed credentials exist and
+       the centralised flow is verified. Until then this simply throws
+       "not-found", which is the correct and honest outcome.
+
+       The successor is functions/payment-config.js → resolveCollectionRoute(). */
     const settingsSnap = await db.collection("shopSettings").doc(sellerUid).get();
     if (!settingsSnap.exists) {
       throw new HttpsError("not-found", "Daraja credentials not configured. Ask the seller to set them up in their dashboard.");

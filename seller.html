@@ -6341,27 +6341,16 @@ window.SokoniOrders = SokoniOrders;
         <input type="tel" id="sdjShortCode" placeholder="e.g. 522522" style="width:100%;padding:13px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:white;font-size:18px;letter-spacing:3px;font-family:inherit;box-sizing:border-box;outline:none;">
       </div>
 
-      <!-- Consumer Key -->
-      <div>
-        <label style="font-size:10px;font-weight:800;color:rgba(255,255,255,.4);text-transform:uppercase;display:block;margin-bottom:5px;letter-spacing:.5px;">Consumer Key</label>
-        <input type="text" id="sdjConsumerKey" placeholder="From Daraja portal" autocomplete="off" spellcheck="false" style="width:100%;padding:13px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:white;font-size:13px;font-family:monospace;box-sizing:border-box;outline:none;">
-      </div>
-
-      <!-- Consumer Secret -->
-      <div>
-        <label style="font-size:10px;font-weight:800;color:rgba(255,255,255,.4);text-transform:uppercase;display:block;margin-bottom:5px;letter-spacing:.5px;">Consumer Secret</label>
-        <div style="position:relative;">
-          <input type="password" id="sdjConsumerSecret" placeholder="From Daraja portal" autocomplete="off" spellcheck="false" style="width:100%;padding:13px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:white;font-size:13px;font-family:monospace;box-sizing:border-box;outline:none;">
-          <button type="button" onclick="_sdjToggle('sdjConsumerSecret')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.3);font-size:15px;cursor:pointer;padding:4px;">👁</button>
-        </div>
-      </div>
-
-      <!-- Pass Key -->
-      <div>
-        <label style="font-size:10px;font-weight:800;color:rgba(255,255,255,.4);text-transform:uppercase;display:block;margin-bottom:5px;letter-spacing:.5px;">Pass Key (for STK Push)</label>
-        <div style="position:relative;">
-          <input type="password" id="sdjPassKey" placeholder="STK push passkey from Daraja" autocomplete="off" spellcheck="false" style="width:100%;padding:13px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:12px;color:white;font-size:13px;font-family:monospace;box-sizing:border-box;outline:none;">
-          <button type="button" onclick="_sdjToggle('sdjPassKey')" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:rgba(255,255,255,.3);font-size:15px;cursor:pointer;padding:4px;">👁</button>
+      <!-- Consumer Key / Consumer Secret / Pass Key inputs removed.
+           Sellers no longer supply Daraja credentials: they were written to
+           Firestore from this browser and read back into these very fields on
+           each open. Collection is centralised behind Secret Manager. -->
+      <div style="padding:14px;background:rgba(113,255,0,.06);border:1px solid rgba(113,255,0,.22);border-radius:12px;">
+        <div style="font-size:13px;font-weight:800;color:#71ff00;margin-bottom:5px;">No API keys required</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);line-height:1.55;">
+          SOKONI collects M-Pesa payments centrally and settles them to your wallet
+          automatically, minus the agreed commission. You no longer need a Daraja
+          account, consumer key, secret or passkey.
         </div>
       </div>
 
@@ -6432,18 +6421,15 @@ window.openSellerDarajaSettings = async function() {
       const d = snap.data();
       const set = (id, val) => { const e = document.getElementById(id); if (e && val != null) e.value = val; };
       set('sdjBizName',       d.businessName);
-      set('sdjShortCode',     d.darajaShortCode);
-      set('sdjConsumerKey',   d.darajaConsumerKey);
-      set('sdjConsumerSecret',d.darajaConsumerSecret);
-      set('sdjPassKey',       d.darajaPassKey);
-      set('sdjAccountRef',    d.darajaAccountRef);
+      /* Credentials are never sent to the browser again — this previously read
+         darajaConsumerSecret / darajaPassKey out of Firestore and placed them in
+         form fields on every open of this panel. */
       const tx = document.getElementById('sdjTxType');  if (tx && d.darajaTransactionType) tx.value = d.darajaTransactionType;
       const en = document.getElementById('sdjEnv');     if (en && d.darajaEnv)             en.value = d.darajaEnv;
-      /* Show configured badge */
-      if (d.darajaConsumerKey) {
-        const badge = document.getElementById('sdjStatusBadge');
-        if (badge) badge.style.display = 'flex';
-      }
+      /* Collection is central, so M-Pesa is always active for every seller —
+         the badge no longer depends on per-merchant credentials existing. */
+      const badge = document.getElementById('sdjStatusBadge');
+      if (badge) badge.style.display = 'flex';
     }
     /* Load recent payments */
     await _loadPayHistory(uid);
@@ -6482,20 +6468,14 @@ async function _loadPayHistory(uid) {
 
 window.saveSellerDarajaSettings = async function() {
   const get  = id => (document.getElementById(id)?.value || '').trim();
+  /* RETIRED — merchant Daraja credentials are no longer collected or stored.
+     This wrote darajaConsumerSecret and darajaPassKey to Firestore from the
+     seller's browser. Collections move to one central SOKONI account whose keys
+     live in Secret Manager and never reach a client. Business name still saves;
+     no credential does. Audited 2026-07-22: shopSettings held ZERO documents. */
   const bizName      = get('sdjBizName');
-  const shortCode    = get('sdjShortCode').replace(/\D/g,'');
-  const consumerKey  = get('sdjConsumerKey');
-  const consumerSec  = get('sdjConsumerSecret');
-  const passKey      = get('sdjPassKey');
-  const accountRef   = get('sdjAccountRef') || bizName.slice(0,12) || 'SOKONI';
-  const txType       = get('sdjTxType') || 'CustomerPayBillOnline';
-  const env          = get('sdjEnv')    || 'production';
   const msg          = document.getElementById('sdjMsg');
   const setMsg       = (t, c='#71ff00') => { if (msg) { msg.textContent=t; msg.style.color=c; } };
-
-  if (!shortCode || !consumerKey || !consumerSec || !passKey) {
-    setMsg('⚠️ Short Code, Consumer Key, Consumer Secret and Pass Key are required.','#ff6b6b'); return;
-  }
 
   try {
     const user = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
@@ -6504,13 +6484,6 @@ window.saveSellerDarajaSettings = async function() {
 
     await setDoc(doc(db,'shopSettings',uid), {
       businessName:          bizName || null,
-      darajaShortCode:       shortCode,
-      darajaConsumerKey:     consumerKey,
-      darajaConsumerSecret:  consumerSec,
-      darajaPassKey:         passKey,
-      darajaAccountRef:      accountRef.slice(0,12),
-      darajaTransactionType: txType,
-      darajaEnv:             env,
       updatedAt:             serverTimestamp(),
     }, { merge: true });
 
@@ -6545,6 +6518,14 @@ window.saveSellerDarajaSettings = async function() {
     while ((!window.firebaseDB) && tries++ < 30) await new Promise(r => setTimeout(r, 300));
     if (!window.firebaseDB) return;
 
+    /* Banner retired with the credential form it pointed at. It nagged sellers to
+       "set up M-Pesa", and the setup it linked to no longer exists — collection is
+       central now, so there is nothing for a seller to configure. Leaving it would
+       be a permanent prompt to complete an impossible task. */
+    return;
+
+    /* eslint-disable no-unreachable — kept for the migration window; deleted with
+       the legacy STK path once central collection is verified. */
     const snap = await getDoc(doc(db, 'shopSettings', uid));
     if (snap.exists() && snap.data().darajaConsumerKey) return; /* already set up */
 
