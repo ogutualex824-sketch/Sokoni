@@ -277,7 +277,62 @@ const INDEX_SETTINGS = {
       'desc(_freshnessScore)',
     ],
     typoTolerance: true,
-    hitsPerPage: 30,
+    hitsPerPage: 20,
+  },
+
+  /*
+   * sokoni_global — unified cross-type index (canonical name going forward).
+   * Populated by the gs__ fanout in COLLECTION_INDEX_MAP.
+   * Used by search.html Path A "all" tab: single HTTP request replaces 9 parallel queries.
+   * Replaces global_search after next algoliaBackfill run + index copy.
+   *
+   * objectID prefix = "${collection}_${docId}"  (prevents cross-type collisions)
+   * type field       = collection name (products | sellers | services | jobs |
+   *                    vehicles | properties | events | brands | users)
+   */
+  sokoni_global: {
+    searchableAttributes: [
+      'unordered(title)',
+      'unordered(description)',
+      'unordered(category)',
+      'unordered(city,county)',
+      'type',
+      'typeLabel',
+    ],
+    attributesForFaceting: [
+      'searchable(type)',
+      'searchable(typeLabel)',
+      'searchable(category)',
+      'searchable(city)',
+      'searchable(county)',
+      'filterOnly(price)',
+      'filterOnly(verified)',
+      'filterOnly(rating)',
+    ],
+    customRanking: [
+      'desc(isFeatured)',
+      'desc(verified)',
+      'desc(_popularityScore)',
+      'desc(_qualityScore)',
+      'desc(_freshnessScore)',
+    ],
+    ranking: ['typo', 'geo', 'words', 'filters', 'proximity', 'attribute', 'exact', 'custom'],
+    typoTolerance: true,
+    minWordSizefor1Typo: 3,
+    minWordSizefor2Typos: 7,
+    advancedSyntax: true,
+    enablePersonalization: true,
+    hitsPerPage: 20,
+    paginationLimitedTo: 200,
+    attributesToRetrieve: [
+      'objectID', 'type', 'typeLabel', 'title', 'description', 'image', 'url',
+      'category', 'city', 'county', 'price', 'priceFormatted', 'rating', 'verified',
+      '_geoloc', '_popularityScore', '_qualityScore', '_freshnessScore',
+    ],
+    attributesToHighlight: ['title', 'description', 'category'],
+    highlightPreTag:  '<mark>',
+    highlightPostTag: '</mark>',
+    unretrievableAttributes: [],
   },
 
 };
@@ -290,26 +345,50 @@ const EXPECTED_INDEXES = Object.keys(INDEX_SETTINGS);
 ════════════════════════════════════════════════════════════════════════════ */
 
 const KENYAN_SYNONYMS = [
-  { objectID: 'syn-nguo',      type: 'synonym', synonyms: ['nguo','clothes','clothing','fashion','garments'] },
-  { objectID: 'syn-chakula',   type: 'synonym', synonyms: ['chakula','food','meals','restaurant','dining'] },
-  { objectID: 'syn-nyumba',    type: 'synonym', synonyms: ['nyumba','house','home','property','apartment'] },
-  { objectID: 'syn-gari',      type: 'synonym', synonyms: ['gari','car','vehicle','auto','automobile'] },
-  { objectID: 'syn-kazi',      type: 'synonym', synonyms: ['kazi','job','work','employment','career','vacancy'] },
-  { objectID: 'syn-simu',      type: 'synonym', synonyms: ['simu','phone','mobile','smartphone','handset'] },
-  { objectID: 'syn-mzigo',     type: 'synonym', synonyms: ['mzigo','delivery','courier','logistics','shipping'] },
-  { objectID: 'syn-dawa',      type: 'synonym', synonyms: ['dawa','medicine','pharmacy','drugs','medication'] },
-  { objectID: 'syn-pesa',      type: 'synonym', synonyms: ['pesa','money','payment','finance','cash'] },
-  { objectID: 'syn-shule',     type: 'synonym', synonyms: ['shule','school','education','college','university'] },
-  { objectID: 'syn-nairobi',   type: 'synonym', synonyms: ['nairobi','nbi','cbd','city'] },
-  { objectID: 'syn-mombasa',   type: 'synonym', synonyms: ['mombasa','msasa','coast'] },
-  { objectID: 'syn-kisumu',    type: 'synonym', synonyms: ['kisumu','lake city','lakeside'] },
-  { objectID: 'syn-wifi',      type: 'synonym', synonyms: ['wifi','internet','wireless','broadband'] },
-  { objectID: 'syn-laptop',    type: 'synonym', synonyms: ['laptop','computer','pc','notebook'] },
-  { objectID: 'syn-tv',        type: 'synonym', synonyms: ['tv','television','screen','monitor'] },
-  { objectID: 'syn-fridge',    type: 'synonym', synonyms: ['fridge','refrigerator','freezer','cooler'] },
-  { objectID: 'syn-sofa',      type: 'synonym', synonyms: ['sofa','couch','settee','seat'] },
-  { objectID: 'syn-bodaboda',  type: 'synonym', synonyms: ['boda boda','motorcycle','motorbike','piki piki'] },
-  { objectID: 'syn-matatu',    type: 'synonym', synonyms: ['matatu','bus','shuttle','minibus','psa'] },
+  /* ── Swahili ─────────────────────────────────────────────────────── */
+  { objectID: 'syn-nguo',      type: 'synonym', synonyms: ['nguo','clothes','clothing','fashion','garments','attire'] },
+  { objectID: 'syn-chakula',   type: 'synonym', synonyms: ['chakula','food','meals','restaurant','dining','catering'] },
+  { objectID: 'syn-nyumba',    type: 'synonym', synonyms: ['nyumba','house','home','property','apartment','flat'] },
+  { objectID: 'syn-gari',      type: 'synonym', synonyms: ['gari','car','vehicle','auto','automobile','motor'] },
+  { objectID: 'syn-kazi',      type: 'synonym', synonyms: ['kazi','job','work','employment','career','vacancy','nafasi'] },
+  { objectID: 'syn-simu',      type: 'synonym', synonyms: ['simu','phone','mobile','smartphone','handset','cell'] },
+  { objectID: 'syn-mzigo',     type: 'synonym', synonyms: ['mzigo','delivery','courier','logistics','shipping','transport'] },
+  { objectID: 'syn-dawa',      type: 'synonym', synonyms: ['dawa','medicine','pharmacy','drugs','medication','pharmaceuticals'] },
+  { objectID: 'syn-pesa',      type: 'synonym', synonyms: ['pesa','money','payment','finance','cash','funds'] },
+  { objectID: 'syn-shule',     type: 'synonym', synonyms: ['shule','school','education','college','university','tuition'] },
+  { objectID: 'syn-bodaboda',  type: 'synonym', synonyms: ['boda boda','bodaboda','motorcycle','motorbike','piki piki','dispatch rider'] },
+  { objectID: 'syn-matatu',    type: 'synonym', synonyms: ['matatu','bus','shuttle','minibus','psa','transit'] },
+  { objectID: 'syn-mkopo',     type: 'synonym', synonyms: ['mkopo','loan','credit','borrow','lend','financing'] },
+  { objectID: 'syn-biashara',  type: 'synonym', synonyms: ['biashara','business','trade','enterprise','commerce'] },
+  { objectID: 'syn-mteja',     type: 'synonym', synonyms: ['mteja','customer','client','buyer','consumer'] },
+  /* ── Cities & Regions ────────────────────────────────────────────── */
+  { objectID: 'syn-nairobi',   type: 'synonym', synonyms: ['nairobi','nbi','cbd','city center','capital'] },
+  { objectID: 'syn-mombasa',   type: 'synonym', synonyms: ['mombasa','msasa','coast','coastal'] },
+  { objectID: 'syn-kisumu',    type: 'synonym', synonyms: ['kisumu','lake city','lakeside','nyanza'] },
+  { objectID: 'syn-nakuru',    type: 'synonym', synonyms: ['nakuru','rift valley','nax'] },
+  { objectID: 'syn-eldoret',   type: 'synonym', synonyms: ['eldoret','uasin gishu','kaptagat'] },
+  /* ── Electronics & Tech ─────────────────────────────────────────── */
+  { objectID: 'syn-wifi',      type: 'synonym', synonyms: ['wifi','internet','wireless','broadband','4g','fibre'] },
+  { objectID: 'syn-laptop',    type: 'synonym', synonyms: ['laptop','computer','pc','notebook','desktop','chromebook'] },
+  { objectID: 'syn-tv',        type: 'synonym', synonyms: ['tv','television','screen','smart tv','flatscreen'] },
+  { objectID: 'syn-phone',     type: 'synonym', synonyms: ['phone','mobile phone','smartphone','iphone','android','samsung','tecno','infinix','itel'] },
+  { objectID: 'syn-tablet',    type: 'synonym', synonyms: ['tablet','ipad','android tablet','tab'] },
+  { objectID: 'syn-earphone',  type: 'synonym', synonyms: ['earphones','earbuds','headphones','airpods','tws','bluetooth earphones'] },
+  /* ── Appliances & Furniture ─────────────────────────────────────── */
+  { objectID: 'syn-fridge',    type: 'synonym', synonyms: ['fridge','refrigerator','freezer','cooler','deep freezer'] },
+  { objectID: 'syn-sofa',      type: 'synonym', synonyms: ['sofa','couch','settee','seat','recliner','l-shape sofa'] },
+  { objectID: 'syn-washer',    type: 'synonym', synonyms: ['washing machine','washer','laundry machine','dryer'] },
+  { objectID: 'syn-cooker',    type: 'synonym', synonyms: ['cooker','stove','oven','gas cooker','electric cooker','jiko'] },
+  /* ── Fashion & Clothing ─────────────────────────────────────────── */
+  { objectID: 'syn-shoes',     type: 'synonym', synonyms: ['shoes','sneakers','boots','sandals','heels','trainers','footwear'] },
+  { objectID: 'syn-jacket',    type: 'synonym', synonyms: ['jacket','coat','hoodie','sweater','pullover','sweatshirt'] },
+  { objectID: 'syn-handbag',   type: 'synonym', synonyms: ['handbag','purse','clutch','tote bag','shoulder bag'] },
+  /* ── Vehicles ────────────────────────────────────────────────────── */
+  { objectID: 'syn-toyota',    type: 'synonym', synonyms: ['toyota','vitz','corolla','axio','fielder','probox','premio','harrier','prado','land cruiser','rav4','hilux','hiace'] },
+  { objectID: 'syn-pickup',    type: 'synonym', synonyms: ['pickup','truck','lorry','van','cargo van','commercial vehicle'] },
+  /* ── Property ────────────────────────────────────────────────────── */
+  { objectID: 'syn-bedsitter', type: 'synonym', synonyms: ['bedsitter','bedsit','studio','studio apartment','single room','1 bedroom'] },
+  { objectID: 'syn-rent',      type: 'synonym', synonyms: ['rent','to let','for rent','rental','lease','tenancy'] },
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -351,7 +430,12 @@ const INDEX_RULES = [
 ];
 
 /* Rules only apply where the underlying fields exist */
-const RULE_TARGET_INDEXES = ['sokoni_products', 'sokoni_shops'];
+const RULE_TARGET_INDEXES = [
+  'sokoni_products',
+  'sokoni_shops',
+  'sokoni_global',
+  'global_search',   /* legacy — kept until sokoni_global backfill confirmed */
+];
 
 /* ═══════════════════════════════════════════════════════════════════════════
    EXPORTED CLOUD FUNCTIONS

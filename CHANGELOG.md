@@ -1,4 +1,76 @@
-﻿## [2026-07-22] — Image Pipeline & Search Index Production Recovery
+﻿## [2026-07-22] — Search Architecture Overhaul: Algolia-Primary, Unified Index, Infinite Scroll
+
+### Summary
+
+Comprehensive overhaul of SOKONI's search system across six files. Algolia is now the definitive
+search authority — zero results show an empty state and never fall through to Firestore. A unified
+`sokoni_global` index replaces the previous 9-parallel-query approach for the "All" tab. Infinite
+scroll replaces the Load More button. Geo-ranking, category prediction, expanded Kenyan synonyms,
+and a Search Quality Dashboard complete the feature set.
+
+### Files Affected
+
+- `search.html` — Full rewrite of `doSearch()`, `renderResults()`, `triggerSearch()`:
+  Algolia-primary with 0-hit empty state (no Firestore fallback), `sokoni_global` unified index
+  for "all" tab (1 HTTP request instead of 9), `IntersectionObserver` infinite scroll sentinel,
+  non-blocking geo request at page load, category prediction from query text, click tracking via
+  Algolia Insights, 200 ms debounce (down from 350 ms).
+
+- `sokoni-search-engine.js` — `defaultAttributesToRetrieve` updated to include `sokoni_global`
+  compact display fields (`type`, `image`, `url`, `city`, `county`). Removed unused barcode/SKU
+  fields to keep index responses compact.
+
+- `functions/algolia-settings.js` — Added full `sokoni_global` index settings (searchable
+  attributes, facets, geo ranking, typo tolerance, personalization, compact attributesToRetrieve).
+  Expanded `KENYAN_SYNONYMS` from 21 to 37 entries: added sneakers/shoes, Toyota model variants,
+  bedsitter/studio, city aliases (Nakuru, Eldoret), electronics (earphones, tablet, washer),
+  Swahili commerce terms. Added `sokoni_global` to `RULE_TARGET_INDEXES`. Updated
+  `global_search` `hitsPerPage` from 30 → 20.
+
+- `functions/algolia-indexer.js` — All 15 `gs__*` entries in `COLLECTION_INDEX_MAP` renamed
+  from `'global_search'` → `'sokoni_global'`. Updated header comment block.
+
+- `functions/algolia-secured-keys.js` — Added `'sokoni_global'` to `SEARCH_INDEXES` allowlist
+  so secured search keys grant access to the new unified index.
+
+- `search-quality.html` — New admin-only Search Quality Dashboard. Reads from
+  `searchAnalytics/daily_YYYY-MM-DD` (today's live counters) and `searchAnalytics/latest`
+  (yesterday's daily rollup). Displays: Total Queries, CTR, Zero-Result Rate, Search→Purchase
+  conversion, Add-to-Cart rate, avg order value; Top Searches table; Zero-Result Searches table;
+  Top Clicked items; Index Sync Status (pending queue + last event lag).
+
+### Architecture Changes
+
+- **Unified index**: `sokoni_global` replaces the parallel multi-query pattern for the "All"
+  search tab. All document types share one index with a `type` field for facet filtering.
+- **Algolia-only result authority**: Firestore is never queried on 0 hits. Only falls back
+  on true connection/auth failure (`algoliaFailed === true` in catch block).
+- **Infinite scroll**: `IntersectionObserver` sentinel with `rootMargin: "200px"` for
+  pre-emptive next-page load.
+- **Geo ranking**: `aroundLatLng` added to every query when browser grants location permission.
+
+### Migration Steps
+
+1. Create `sokoni_global` index in Algolia dashboard (copy settings from `global_search` or
+   deploy `algolia-settings.js` which will apply settings automatically).
+2. Run a full backfill of all 15 gs__ collections to populate `sokoni_global`.
+3. Once `sokoni_global` has data, `global_search` can be deprecated (kept in SEARCH_INDEXES
+   as a fallback during transition).
+
+### Deployment Requirements
+
+- Deploy Cloud Functions (algolia-settings.js, algolia-secured-keys.js, algolia-indexer.js).
+- Create `sokoni_global` Algolia index + run backfill (see migration steps above).
+- No new Firestore indexes required for search-quality.html (reads existing collections).
+
+### Security
+
+- `search-quality.html` is admin-only (checks `token.admin` or `token.superAdmin`).
+- Secured search keys now include `sokoni_global` in the restrictIndices allowlist.
+
+---
+
+## [2026-07-22] — Image Pipeline & Search Index Production Recovery
 
 ### Summary
 

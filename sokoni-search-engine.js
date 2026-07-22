@@ -66,17 +66,19 @@ const SEARCH_CONFIG = {
     responseFields:            ['hits', 'nbHits', 'nbPages', 'page', 'facets', 'facets_stats', 'queryID', 'userData', 'renderingContent', 'abTestID', 'abTestVariantID'],
   },
 
-  /* Fields returned per search hit — excludes heavy fields never shown in result cards */
+  /* Fields returned per search hit — covers both specialized indexes and the unified global index */
   defaultAttributesToRetrieve: [
     'objectID', 'name', 'title', 'description', 'price', 'originalPrice', 'discountPercent',
+    /* global_search / sokoni_global specific fields */
+    'type', 'image', 'url', 'city', 'county',
+    /* specialized index fields */
     'thumbnail', 'images', 'category', 'subcategory', 'brand', 'hub', 'status', 'rating',
     'reviewCount', 'orderCount', 'viewCount', 'isFeatured', 'isBestseller', 'isNew', 'isOnSale',
     'inStock', 'deliveryOptions', 'condition', 'seller', 'provider', 'organizer', 'agent',
     'location', 'startDate', 'endDate', 'isFree', 'isOnline', 'salary', 'jobType', 'remote',
     'skills', 'deadline', 'listingType', 'furnished', 'bedrooms', 'bathrooms', 'sizeSqm',
     'make', 'model', 'year', 'mileage', 'fuelType', 'transmission', 'bodyType', 'color',
-    'features', 'amenities', 'barcode', 'sku', 'code', 'validTo', 'discountValue',
-    'createdAt', 'updatedAt', '_geoloc', 'hierarchicalCategories', 'tags', 'verified',
+    'features', 'amenities', 'createdAt', 'updatedAt', '_geoloc', 'tags', 'verified',
   ],
 
   /* Cache TTLs */

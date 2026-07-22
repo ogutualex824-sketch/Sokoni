@@ -537,6 +537,9 @@
     .quick-tile .tile-label { font-size: 12px; font-weight: 700; color: var(--text); display: block; }
     .quick-tile .tile-sub   { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; }
 
+    /* ===== INFINITE SCROLL SPINNER ===== */
+    @keyframes sk-spin { to { transform: rotate(360deg); } }
+
     /* ===== BOTTOM NAV ===== */
     .bottom-nav {
       display: none;
@@ -858,15 +861,57 @@ const COLLECTIONS = [
   },
 ];
 
+/* ── Constants ── */
+const HITS_PER_PAGE = 20;
+const UNIFIED_INDEX = 'global_search'; /* renamed to sokoni_global after next backfill */
+
 /* ── State ── */
-let allResults  = [];
-let counts      = {};
-let activeTab   = "all";
-let lastQuery   = "";
+let allResults       = [];
+let counts           = {};
+let activeTab        = "all";
+let lastQuery        = "";
 let debounceTimer;
-let isLoading   = false;
-let activeSort  = "relevance";   /* relevance | price_asc | price_desc | newest */
-let priceFilter = null;          /* null | [min,max] */
+let isLoading        = false;
+let activeSort       = "relevance";   /* relevance | price_asc | price_desc | newest */
+let priceFilter      = null;          /* null | [min,max] */
+let currentSearchPage = 0;            /* Algolia pagination — incremented by infinite scroll */
+let hasMoreResults   = false;         /* true while more Algolia pages remain */
+let totalAlgoliaHits = 0;             /* reported by Algolia nbHits */
+let _scrollObserver  = null;          /* active IntersectionObserver for load-more sentinel */
+
+/* ── Geo: request once per session (non-blocking, best-effort) ── */
+let _userGeo = null;
+if (navigator.geolocation) {
+  navigator.geolocation.getCurrentPosition(
+    p => { _userGeo = `${p.coords.latitude},${p.coords.longitude}`; },
+    () => {},
+    { enableHighAccuracy: false, timeout: 8_000, maximumAge: 300_000 }
+  );
+}
+
+/* ── Global index type → tab mapping ── */
+const _GLOBAL_TYPE_TAB = {
+  products: 'products', foods: 'products',
+  sellers: 'businesses', stores: 'businesses', vendors: 'businesses', brands: 'businesses',
+  services: 'services', providers: 'services', providerProfiles: 'services',
+  digitalJobs: 'jobs', jobs: 'jobs',
+  cars: 'vehicles', vehicles: 'vehicles',
+  properties: 'properties', real_estate: 'properties',
+  events: 'events',
+};
+
+/* ── Category prediction: guess intent from query text ── */
+function _predictCategory(q) {
+  const s = q.toLowerCase();
+  if (/toyota|honda|subaru|suzuki|mazda|nissan|mercedes|bmw|audi|lexus|isuzu|mitsubishi|hyundai|vitz|axio|fielder|probox|hiace|truck|van|pickup|lorry|motorbike|motorcycle|bodaboda|boda boda|piki piki|car for sale|automart/i.test(s)) return 'vehicles';
+  if (/apartment|flat|bedsitter|studio|penthouse|villa|land for sale|plot|acre|property|rent house|to let|bedroom br|estate|real estate|office space|warehouse|shop to let|bungalow|maisonette|for rent/i.test(s)) return 'properties';
+  if (/concert|festival|conference|seminar|workshop|wedding|birthday party|party venue|event venue|live music|stand.up comedy|comedy night|gala|rave|bash/i.test(s)) return 'events';
+  if (/job vacancy|career|internship|attachment|employment|hiring|graduate trainee|recruit|work from home|remote job|sales agent|driver needed|urgent position|apply now/i.test(s)) return 'jobs';
+  if (/plumber|electrician|painter|welder|carpenter|mason|fundi|mechanic|tailor|driver for hire|tutor|cleaner|chef|caterer|graphic design|photographer|videographer|it support/i.test(s)) return 'professionals';
+  if (/doctor|physician|nurse|surgeon|dentist|hospital|clinic|pharmacy|dawa|specialist|dermatologist|gynecologist|physiotherapist|optician|vet|pediatric/i.test(s)) return 'services';
+  if (/lawyer|advocate|solicitor|attorney|legal|litigation|conveyancing|law firm|notary/i.test(s)) return 'services';
+  return null;
+}
 
 /* ── Recent Searches (localStorage) ── */
 const _RS_KEY = "sokoniRecentSearches";
@@ -933,8 +978,15 @@ function renderTabs() {
   tabBar.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       activeTab = btn.dataset.tab;
-      renderTabs();
-      renderResults();
+      currentSearchPage = 0;
+      hasMoreResults    = false;
+      if (_scrollObserver) { _scrollObserver.disconnect(); _scrollObserver = null; }
+      if (lastQuery) {
+        doSearch(lastQuery); /* re-run with specialized index for the new tab */
+      } else {
+        renderTabs();
+        renderResults();
+      }
     });
   });
 }
@@ -1074,8 +1126,10 @@ function renderEmpty(query) {
 
 /* ──────────────────────────────────────────
    RENDER RESULTS
+   appendOnly=true: skip rebuilding the controls shell, just refresh the grid.
+   Used by infinite scroll (page 2, 3, …) to avoid wiping the meta/sort bar.
 ────────────────────────────────────────── */
-function renderResults() {
+function renderResults(appendOnly = false) {
   let filtered = activeTab === "all"
     ? allResults.slice()
     : allResults.filter(r => r.tab === activeTab);
@@ -1084,66 +1138,80 @@ function renderResults() {
   filtered = _sortResults(filtered);
 
   if (filtered.length === 0) {
-    renderEmpty(lastQuery);
+    if (!appendOnly) renderEmpty(lastQuery);
     return;
   }
 
-  const totalLabel = activeTab === "all"
-    ? `<strong>${filtered.length}</strong> results`
-    : `<strong>${filtered.length}</strong> in ${TABS.find(t => t.id === activeTab)?.label || activeTab}`;
+  const visibleCount = filtered.length;
+  const grandTotal   = totalAlgoliaHits > 0 ? totalAlgoliaHits : visibleCount;
+  const tabLabel     = TABS.find(t => t.id === activeTab)?.label || activeTab;
+  const moreSuffix   = grandTotal > visibleCount ? ` of <strong>${grandTotal.toLocaleString()}</strong>` : '';
+  const totalLabel   = activeTab === "all"
+    ? `<strong>${visibleCount}</strong>${moreSuffix} results`
+    : `<strong>${visibleCount}</strong>${moreSuffix} in ${tabLabel}`;
 
-  const priceChips = [
-    { label: "All Prices", val: null },
-    { label: "Under KES 1K", val: [0, 1000] },
-    { label: "KES 1K–5K",   val: [1000, 5000] },
-    { label: "KES 5K–20K",  val: [5000, 20000] },
-    { label: "KES 20K+",    val: [20000, Infinity] },
-  ];
+  if (!appendOnly) {
+    const priceChips = [
+      { label: "All Prices", val: null },
+      { label: "Under KES 1K", val: [0, 1000] },
+      { label: "KES 1K–5K",   val: [1000, 5000] },
+      { label: "KES 5K–20K",  val: [5000, 20000] },
+      { label: "KES 20K+",    val: [20000, Infinity] },
+    ];
+    const pChipsHTML = priceChips.map(c => {
+      const active = priceFilter === c.val ||
+        (priceFilter && c.val && priceFilter[0] === c.val[0] && priceFilter[1] === c.val[1]);
+      return `<button class="price-chip${active ? " price-chip--active" : ""}" data-pmin="${c.val ? c.val[0] : ""}" data-pmax="${c.val ? c.val[1] : ""}">${escHtml(c.label)}</button>`;
+    }).join("");
 
-  const pChipsHTML = priceChips.map(c => {
-    const active = priceFilter === c.val ||
-      (priceFilter && c.val && priceFilter[0] === c.val[0] && priceFilter[1] === c.val[1]);
-    return `<button class="price-chip${active ? " price-chip--active" : ""}" data-pmin="${c.val ? c.val[0] : ""}" data-pmax="${c.val ? c.val[1] : ""}">${escHtml(c.label)}</button>`;
-  }).join("");
+    resultsArea.innerHTML =
+      `<div class="results-meta">
+        <span class="results-meta-count">${totalLabel} for "<strong>${escHtml(lastQuery)}</strong>"</span>
+        <div class="results-sort-wrap">
+          <label class="sort-label">Sort:</label>
+          <select id="sortSelect" class="sort-select">
+            <option value="relevance"${activeSort==="relevance"?" selected":""}>Relevance</option>
+            <option value="price_asc"${activeSort==="price_asc"?" selected":""}>Price ↑</option>
+            <option value="price_desc"${activeSort==="price_desc"?" selected":""}>Price ↓</option>
+          </select>
+        </div>
+       </div>` +
+      `<div class="price-filter-row">${pChipsHTML}</div>` +
+      '<div class="results-grid" id="resultsGrid"></div>';
 
-  resultsArea.innerHTML =
-    `<div class="results-meta">
-      <span class="results-meta-count">${totalLabel} for "<strong>${escHtml(lastQuery)}</strong>"</span>
-      <div class="results-sort-wrap">
-        <label class="sort-label">Sort:</label>
-        <select id="sortSelect" class="sort-select">
-          <option value="relevance"${activeSort==="relevance"?" selected":""}>Relevance</option>
-          <option value="price_asc"${activeSort==="price_asc"?" selected":""}>Price ↑</option>
-          <option value="price_desc"${activeSort==="price_desc"?" selected":""}>Price ↓</option>
-        </select>
-      </div>
-     </div>` +
-    `<div class="price-filter-row">${pChipsHTML}</div>` +
-    '<div class="results-grid" id="resultsGrid"></div>';
-
-  /* Sort select handler */
-  document.getElementById("sortSelect").addEventListener("change", e => {
-    activeSort = e.target.value;
-    renderResults();
-  });
-
-  /* Price chip handlers */
-  resultsArea.querySelectorAll(".price-chip").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const min = btn.dataset.pmin;
-      const max = btn.dataset.pmax;
-      priceFilter = (min === "") ? null : [parseFloat(min), parseFloat(max)];
+    document.getElementById("sortSelect").addEventListener("change", e => {
+      activeSort = e.target.value;
+      currentSearchPage = 0;
+      hasMoreResults = false;
+      if (_scrollObserver) { _scrollObserver.disconnect(); _scrollObserver = null; }
       renderResults();
     });
-  });
+    resultsArea.querySelectorAll(".price-chip").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const min = btn.dataset.pmin;
+        const max = btn.dataset.pmax;
+        priceFilter = (min === "") ? null : [parseFloat(min), parseFloat(max)];
+        renderResults();
+      });
+    });
+  } else {
+    /* appendOnly: update the count label only */
+    const metaEl = resultsArea.querySelector(".results-meta-count");
+    if (metaEl) {
+      metaEl.innerHTML = `${totalLabel} for "<strong>${escHtml(lastQuery)}</strong>"`;
+    }
+  }
 
+  /* ── Fill the results grid (always a full re-render for correctness) ── */
   const grid = document.getElementById("resultsGrid");
+  if (!grid) return;
+
   grid.innerHTML = filtered.map((r, i) => `
     <a class="result-card" href="${escHtml(r.link)}" aria-label="${escHtml(r.title)}"
        data-objectid="${escHtml(r.id)}"
        data-index="${escHtml(r._idx || 'sokoni_products')}"
        data-queryid="${escHtml(r._queryID || '')}"
-       data-position="${i + 1}"
+       data-position="${r._pos || (i + 1)}"
        data-thumbnail="${escHtml(r.thumbnail || '')}">
       ${r.thumbnail
         ? `<img class="result-thumb" src="${escHtml(r.thumbnail)}" alt="" loading="lazy">`
@@ -1159,6 +1227,45 @@ function renderResults() {
       <span class="result-view-btn">View</span>
     </a>
   `).join("");
+
+  /* ── Algolia Insights: click tracking ── */
+  grid.addEventListener("click", e => {
+    const card = e.target.closest(".result-card");
+    if (!card || !window.sokoniSearch?._insights) return;
+    const eng       = window.sokoniSearch;
+    const objectID  = card.dataset.objectid;
+    const index     = card.dataset.index;
+    const queryID   = card.dataset.queryid;
+    const position  = parseInt(card.dataset.position, 10) || 1;
+    const userToken = eng.getUserToken?.() || "anonymous";
+    if (queryID && objectID) {
+      eng._insights.clickedObjectIDsAfterSearch(index, "search_result_clicked", [objectID], [position], queryID, userToken);
+    } else if (objectID) {
+      eng._insights.clickedObjectIDs(index, "search_result_clicked", [objectID], userToken);
+    }
+  }, { passive: true });
+
+  /* ── Infinite scroll sentinel ── */
+  const oldSentinel = document.getElementById("scroll-sentinel");
+  if (oldSentinel) oldSentinel.remove();
+  if (hasMoreResults) {
+    const sentinel = document.createElement("div");
+    sentinel.id = "scroll-sentinel";
+    sentinel.style.cssText = "height:64px;display:flex;align-items:center;justify-content:center;";
+    sentinel.innerHTML = '<div style="width:22px;height:22px;border:2px solid rgba(113,255,0,0.25);border-top-color:#71ff00;border-radius:50%;animation:sk-spin .8s linear infinite;"></div>';
+    resultsArea.appendChild(sentinel);
+
+    if (_scrollObserver) _scrollObserver.disconnect();
+    _scrollObserver = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && !isLoading) {
+        _scrollObserver.disconnect();
+        _scrollObserver = null;
+        currentSearchPage++;
+        doSearch(lastQuery);
+      }
+    }, { rootMargin: "200px" });
+    _scrollObserver.observe(sentinel);
+  }
 }
 
 /* ──────────────────────────────────────────
@@ -1184,7 +1291,9 @@ const _TAB_ICON = {
 };
 
 /* ──────────────────────────────────────────
-   SEARCH — enterprise engine → Firestore fallback
+   SEARCH — Algolia primary · Firestore only on infrastructure failure
+   Policy: Algolia 0 hits → show empty state. NEVER fall through to Firestore
+   just because Algolia found nothing. Only fall through on network/auth error.
 ────────────────────────────────────────── */
 async function doSearch(rawQuery) {
   const q = rawQuery.trim().toLowerCase();
@@ -1192,147 +1301,201 @@ async function doSearch(rawQuery) {
 
   _hideSearchRecs();
   isLoading = true;
-  renderSkeleton();
+  if (currentSearchPage === 0) renderSkeleton();
 
-  /* ── Path A: sokoni-search-engine.js (enterprise Algolia + Firestore fallback) ── */
+  /* ── Category prediction: auto-switch tab before first page ── */
+  if (currentSearchPage === 0 && activeTab === "all") {
+    const predicted = _predictCategory(q);
+    if (predicted) activeTab = predicted;
+  }
+
+  /* ── Path A: Algolia (primary — 0 hits = empty state, not Firestore) ── */
+  let algoliaFailed = false;
   if (window.sokoniSearch) {
     try {
-      const eng = window.sokoniSearch;
+      const eng       = window.sokoniSearch;
       await eng.init();
       const userToken = eng.getUserToken();
 
-      /* Tab ID → actual hub value stored in Algolia records.
-         Some tabs use different hub values from their tab ID. */
+      /* Geo params (present only when browser granted permission) */
+      const geoParams = _userGeo ? { aroundLatLng: _userGeo, aroundRadius: 50_000 } : {};
+
+      /* Tab ID → actual hub value stored in Algolia records */
       const _TAB_HUB_ALIAS = {
-        products:   "shopping",  // products indexed as hub:"shopping"
-        businesses: "sellers",   // shops/stores indexed as hub:"sellers"
-        properties: "property",  // properties indexed as hub:"property"
+        products:   "shopping",
+        businesses: "sellers",
+        properties: "property",
+      };
+      /* Specialized index per tab */
+      const _TAB_INDEX = {
+        products:      "sokoni_products",
+        businesses:    "sokoni_shops",
+        services:      "sokoni_services",
+        jobs:          "sokoni_jobs",
+        properties:    "sokoni_properties",
+        vehicles:      "sokoni_vehicles",
+        events:        "sokoni_events",
+        professionals: "sokoni_users",
       };
 
-      let activeFilter = {};
-      const searchOpts = { hitsPerPage: 60, userToken };
-      if (activeTab !== "all") {
-        if (activeTab === "professionals") {
-          /* Professionals are indexed in sokoni_users — no hub field set */
-          searchOpts.indexes = ["sokoni_users"];
-        } else {
-          const hubValue = _TAB_HUB_ALIAS.hasOwnProperty(activeTab)
-            ? _TAB_HUB_ALIAS[activeTab]
-            : activeTab;
-          if (hubValue) activeFilter = { hub: hubValue };
-        }
-      }
+      let algoliaHits = [], nbHits = 0, nbPages = 1;
 
-      const res = await eng.search(q, { ...searchOpts, filters: activeFilter });
-      const allHits = Object.entries(res.results || {}).flatMap(([idx, r]) =>
-        (r.hits || []).map(h => ({ ...h, _idx: idx, _queryID: r.queryID }))
-      );
-      if (allHits.length > 0) {
-        const mapped = allHits.map(h => {
-          const tab = _INDEX_TAB[h._idx] || h.tab || h.type || "products";
-          const title = h._highlightResult?.name?.value || h._highlightResult?.title?.value || h.name || h.title || "(Untitled)";
-          return {
-            id:        h.objectID || h.id || "",
-            tab,
-            icon:      _TAB_ICON[tab] || "🔍",
-            title:     title.replace(/<\/?mark>/g, ""),
-            titleHtml: title,
-            subtitle:  h.category || h.subcategory || "",
-            location:  h.location?.area || h.location?.city || h.city || "",
-            price:     h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
-            link:      h.link || h.url || "index.html",
-            thumbnail: h.thumbnail || h.image || null,
-            verified:  Boolean(h.seller?.verified || h.verified),
-            _queryID:  h._queryID,
-            _idx:      h._idx,
-          };
+      if (activeTab === "all") {
+        /* ── Single HTTP request to unified index — replaces 9 parallel queries ── */
+        const res = await eng.search(q, {
+          indexes:     [UNIFIED_INDEX],
+          hitsPerPage: HITS_PER_PAGE,
+          page:        currentSearchPage,
+          userToken,
+          ...geoParams,
         });
-
-        /* Build counts to check if current tab has Algolia coverage */
-        const tmpCounts = {};
-        TABS.slice(1).forEach(t => { tmpCounts[t.id] = 0; });
-        mapped.forEach(r => { tmpCounts[r.tab] = (tmpCounts[r.tab] || 0) + 1; });
-        const currentTabCount = activeTab === "all" ? allHits.length : (tmpCounts[activeTab] || 0);
-
-        if (currentTabCount > 0) {
-          /* Algolia satisfies the current view — render and stop */
-          allResults = mapped;
-          counts = tmpCounts;
-          isLoading = false;
-          renderTabs();
-          renderResults();
-          const fn = typeof firebase !== "undefined" && firebase.functions().httpsCallable("recordSearchEvent");
-          if (fn) fn({ type: "search", query: q, resultCount: allHits.length }).catch(() => {});
-          return;
+        const ir   = res.results?.[UNIFIED_INDEX] || {};
+        algoliaHits = (ir.hits || []).map(h => ({ ...h, _idx: UNIFIED_INDEX, _queryID: ir.queryID }));
+        nbHits      = ir.nbHits  || 0;
+        nbPages     = ir.nbPages || 1;
+      } else {
+        /* ── Single HTTP request to the specialized index for this tab ── */
+        const specIndex = _TAB_INDEX[activeTab] || "sokoni_products";
+        const specOpts  = {
+          indexes:     [specIndex],
+          hitsPerPage: HITS_PER_PAGE,
+          page:        currentSearchPage,
+          userToken,
+          ...geoParams,
+        };
+        if (activeTab !== "professionals") {
+          specOpts.filters = { hub: _TAB_HUB_ALIAS[activeTab] || activeTab };
         }
-        /* Active tab has 0 Algolia hits — fall through to Firestore supplement */
+        const res  = await eng.search(q, specOpts);
+        const ir   = res.results?.[specIndex] || {};
+        algoliaHits = (ir.hits || []).map(h => ({ ...h, _idx: specIndex, _queryID: ir.queryID }));
+        nbHits      = ir.nbHits  || 0;
+        nbPages     = ir.nbPages || 1;
       }
+
+      /* ── Normalize hits into display objects ── */
+      const mapped = algoliaHits.map((h, i) => {
+        let tab, link, title, subtitle, location;
+        if (h._idx === UNIFIED_INDEX) {
+          tab      = _GLOBAL_TYPE_TAB[h.type] || "products";
+          link     = h.url || "index.html";
+          title    = h.title || "";
+          subtitle = h.category || "";
+          location = h.city || h.county || "";
+        } else {
+          tab      = _INDEX_TAB[h._idx] || h.tab || h.type || "products";
+          const hi = h._highlightResult;
+          title    = (hi?.name?.value || hi?.title?.value || h.name || h.title || "(Untitled)").replace(/<\/?mark>/g, "");
+          subtitle = h.category || h.subcategory || "";
+          location = h.location?.area || h.location?.city || h.city || "";
+          link     = h.link || h.url || "index.html";
+        }
+        return {
+          id:        h.objectID || "",
+          tab,
+          icon:      _TAB_ICON[tab] || "🔍",
+          title,
+          subtitle,
+          location,
+          price:     h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
+          link,
+          thumbnail: h.thumbnail || h.image || null,
+          verified:  Boolean(h.seller?.verified || h.verified),
+          rating:    h.rating || null,
+          _queryID:  h._queryID,
+          _idx:      h._idx,
+          _pos:      currentSearchPage * HITS_PER_PAGE + i + 1,
+        };
+      });
+
+      /* ── Accumulate results for infinite scroll ── */
+      if (currentSearchPage === 0) {
+        allResults = mapped;
+      } else {
+        allResults = [...allResults, ...mapped];
+      }
+
+      /* Build tab counts from all accumulated results */
+      counts = {};
+      TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+      allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+
+      totalAlgoliaHits = nbHits;
+      hasMoreResults   = currentSearchPage < nbPages - 1;
+
+      const isAppend = currentSearchPage > 0;
+      isLoading = false;
+      if (!isAppend) renderTabs();
+      renderResults(isAppend);
+
+      /* Non-blocking analytics (first page only) */
+      if (!isAppend && typeof firebase !== "undefined") {
+        try { firebase.functions().httpsCallable("recordSearchEvent")({ type: "search", query: q, resultCount: nbHits }).catch(() => {}); } catch (_) {}
+      }
+
+      return; /* ← NEVER fall through on 0 hits */
+
     } catch (e) {
-      if (e.name !== "AbortError") console.warn("[SOKONI Search] Engine error, falling back to Firestore:", e.message);
+      if (e.name === "AbortError") return; /* superseded by newer request */
+      algoliaFailed = true;
+      console.warn("[SOKONI Search] Algolia unavailable, trying fallback:", e.message);
     }
   }
 
-  /* ── Path B: sokoni-typesense-engine.js (secondary enterprise engine) ── */
-  if (window.sokoniTypesenseSearch) {
+  /* ── Path B: Typesense (only on Algolia infrastructure failure) ── */
+  if (window.sokoniTypesenseSearch && algoliaFailed) {
     try {
-      const tsEng   = window.sokoniTypesenseSearch;
+      const tsEng = window.sokoniTypesenseSearch;
       await tsEng._ensureReady();
       if (tsEng._ready) {
         const tsFilter = tsEng.buildFilterBy(activeTab !== "all" ? { hub: activeTab, _skipStatusFilter: false } : {});
-        const tsRes   = await tsEng.search(q, {
+        const tsRes    = await tsEng.search(q, {
           collections: Object.values(_INDEX_TAB).filter((v, i, a) => a.indexOf(v) === i).map(
             tab => Object.entries(_INDEX_TAB).find(([, t]) => t === tab)?.[0]
           ).filter(Boolean).slice(0, 12),
           filterBy: tsFilter,
-          perPage:  60,
+          perPage:  HITS_PER_PAGE,
         });
         const tsHits = Object.entries(tsRes.results || {}).flatMap(([col, r]) =>
           (r.hits || []).map(h => ({ ...h.document, _highlights: h.highlights, _col: col }))
         );
         if (tsHits.length > 0) {
           allResults = tsHits.map(h => {
-            const tab   = _INDEX_TAB[h._col] || "products";
+            const tab    = _INDEX_TAB[h._col] || "products";
             const hlName = h._highlights?.find(hl => hl.field === "name" || hl.field === "title")?.snippet || "";
-            const title = h.name || h.title || "(Untitled)";
+            const title  = h.name || h.title || "(Untitled)";
             return {
-              id:        h.id || "",
-              tab,
-              icon:      _TAB_ICON[tab] || "🔍",
-              title:     title,
-              titleHtml: hlName || title,
-              subtitle:  h.category || h.subcategory || "",
-              location:  h.location_area || h.location_city || "",
-              price:     h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
-              link:      h.link || h.url || "index.html",
-              thumbnail: h.thumbnail || h.image || null,
-              verified:  Boolean(h.sellerVerified || h.verified),
-              _col:      h._col,
-              _source:   "typesense",
+              id: h.id || "", tab, icon: _TAB_ICON[tab] || "🔍",
+              title, titleHtml: hlName || title,
+              subtitle: h.category || "", location: h.location_area || h.location_city || "",
+              price: h.price != null ? "KES " + Number(h.price).toLocaleString() : null,
+              link: h.link || "index.html", thumbnail: h.thumbnail || null,
+              verified: Boolean(h.sellerVerified || h.verified), _source: "typesense",
             };
           });
           counts = {};
           TABS.slice(1).forEach(t => { counts[t.id] = 0; });
           allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+          hasMoreResults = false;
           isLoading = false;
           renderTabs();
           renderResults();
-          /* Analytics: record Typesense search event */
-          tsEng._emitAnalyticsEvent("search", { query: q, hitCount: tsHits.length }).catch?.(() => {});
+          tsEng._emitAnalyticsEvent?.("search", { query: q, hitCount: tsHits.length })?.catch?.(() => {});
           return;
         }
       }
     } catch (tsErr) {
-      if (tsErr.name !== "AbortError") console.warn("[SOKONI Search] Typesense engine error:", tsErr.message);
+      if (tsErr.name !== "AbortError") console.warn("[SOKONI Search] Typesense fallback error:", tsErr.message);
     }
   }
 
-  /* ── Path C: Bounded Firestore client-side search (limit 200 per collection) ── */
+  /* ── Path C: Firestore (only on complete Algolia + Typesense infrastructure failure) ── */
   const fetches = COLLECTIONS.map(async spec => {
     try {
-      const colRef = collection(db, spec.name);
+      const colRef  = collection(db, spec.name);
       const fsQuery = spec.buildQuery ? spec.buildQuery(colRef) : query(colRef, limit(200));
-      const snap = await getDocs(fsQuery);
-      const rows = [];
+      const snap    = await getDocs(fsQuery);
+      const rows    = [];
       snap.forEach(docSnap => {
         const d = docSnap.data();
         const haystack = [
@@ -1341,17 +1504,13 @@ async function doSearch(rawQuery) {
           d.posterName, d.make, d.model, d.specialty, d.practice,
           d.venue, d.tags ? d.tags.join(" ") : null,
         ].filter(Boolean).join(" ").toLowerCase();
-
         if (haystack.includes(q)) {
           rows.push({
-            id:       docSnap.id,
-            tab:      spec.tab,
-            icon:     spec.icon,
-            title:    spec.getTitle(d) || "(Untitled)",
-            subtitle: spec.getSubtitle(d) || "",
+            id: docSnap.id, tab: spec.tab, icon: spec.icon,
+            title: spec.getTitle(d) || "(Untitled)", subtitle: spec.getSubtitle(d) || "",
             location: spec.getLocation(d) || "",
-            price:    spec.getPrice ? spec.getPrice(d) : null,
-            link:     spec.getLink(d, docSnap.id),
+            price: spec.getPrice ? spec.getPrice(d) : null,
+            link: spec.getLink(d, docSnap.id),
           });
         }
       });
@@ -1363,16 +1522,14 @@ async function doSearch(rawQuery) {
   });
 
   const results = await Promise.all(fetches);
-
   allResults = [];
   counts = {};
   TABS.slice(1).forEach(t => { counts[t.id] = 0; });
-
   results.forEach(({ tab, rows }) => {
     allResults.push(...rows);
     counts[tab] = (counts[tab] || 0) + rows.length;
   });
-
+  hasMoreResults = false;
   isLoading = false;
   renderTabs();
   renderResults();
@@ -1383,6 +1540,9 @@ async function doSearch(rawQuery) {
 ────────────────────────────────────────── */
 function triggerSearch(val) {
   lastQuery = val.trim();
+  currentSearchPage = 0;
+  hasMoreResults    = false;
+  if (_scrollObserver) { _scrollObserver.disconnect(); _scrollObserver = null; }
   updateClearBtn();
   updateUrlParam(lastQuery);
   if (lastQuery) {
@@ -1390,7 +1550,7 @@ function triggerSearch(val) {
     if (window.SokoniRecs) SokoniRecs.trackSearch(lastQuery);
   }
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => doSearch(lastQuery), 350);
+  debounceTimer = setTimeout(() => doSearch(lastQuery), 200); /* 200ms search-as-you-type */
 }
 
 searchInput.addEventListener("input", () => triggerSearch(searchInput.value));

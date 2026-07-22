@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <script src="security.js"></script>
+  <script type="module" src="firebase.js"></script>
+  <script src="shared-header.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Search Quality — SOKONI</title>
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="sokoni-tokens.css">
+  <style>
+    :root {
+      --bg:#050505; --sur:rgba(255,255,255,.03); --sur2:rgba(255,255,255,.06);
+      --acc:#71ff00; --acc-dim:rgba(113,255,0,.12); --acc-dim2:rgba(113,255,0,.06);
+      --bor:rgba(255,255,255,.08); --bor2:rgba(255,255,255,.12);
+      --txt:rgba(255,255,255,.9); --sub:rgba(255,255,255,.45); --sub2:rgba(255,255,255,.25);
+      --suc:#22c55e; --suc-dim:rgba(34,197,94,.12);
+      --wrn:#f59e0b; --wrn-dim:rgba(245,158,11,.12);
+      --dng:#ef4444; --dng-dim:rgba(239,68,68,.12);
+      --info:#3b82f6; --info-dim:rgba(59,130,246,.12);
+      --sidebar:220px; --r:10px;
+    }
+    *,*::before,*::after { box-sizing:border-box; margin:0; padding:0 }
+    html,body { height:100%; font-family:system-ui,-apple-system,'Segoe UI',sans-serif }
+    body { background:var(--bg); color:var(--txt); display:flex; font-size:14px; line-height:1.5 }
+    a { color:inherit; text-decoration:none }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width:var(--sidebar); min-height:100vh; background:var(--sur); border-right:1px solid var(--bor);
+      display:flex; flex-direction:column; position:fixed; left:0; top:0; bottom:0; z-index:100; overflow-y:auto;
+    }
+    .sb-logo {
+      padding:20px 16px 16px; border-bottom:1px solid var(--bor); display:flex; align-items:center; gap:10px;
+    }
+    .sb-logo-icon {
+      width:32px; height:32px; background:linear-gradient(135deg,var(--acc),#4fc800);
+      border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0;
+    }
+    .sb-logo-text { font-size:13px; font-weight:700; letter-spacing:.5px }
+    .sb-logo-sub  { font-size:10px; color:var(--sub) }
+    .sb-group     { padding:8px 0 }
+    .sb-label {
+      font-size:10px; font-weight:600; color:var(--sub); letter-spacing:1px;
+      text-transform:uppercase; padding:8px 16px 4px;
+    }
+    .sb-item {
+      display:flex; align-items:center; gap:10px; padding:9px 16px; cursor:pointer;
+      color:var(--txt); transition:background .15s,color .15s; font-size:13px;
+      border:none; background:none; width:100%; text-align:left;
+    }
+    .sb-item:hover  { background:rgba(255,255,255,.06); color:#fff }
+    .sb-item.active { background:var(--acc-dim); color:var(--acc); font-weight:600 }
+    .sb-icon        { font-size:15px; width:18px; text-align:center; flex-shrink:0 }
+    .sb-footer      { margin-top:auto; padding:16px; border-top:1px solid var(--bor) }
+    .sb-user        { display:flex; align-items:center; gap:10px; padding:8px 0 }
+    .sb-avatar {
+      width:30px; height:30px; background:linear-gradient(135deg,var(--acc),#4fc800);
+      border-radius:50%; display:flex; align-items:center; justify-content:center;
+      font-size:12px; font-weight:700; flex-shrink:0;
+    }
+    .sb-user-name { font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .sb-user-role { font-size:10px; color:var(--sub) }
+    .signout-btn {
+      width:100%; margin-top:8px; padding:7px; border-radius:var(--r);
+      border:1px solid var(--bor); background:none; color:var(--sub); cursor:pointer; font-size:12px;
+      transition:background .15s,color .15s;
+    }
+    .signout-btn:hover { background:var(--dng-dim); color:var(--dng) }
+
+    /* ── Main ── */
+    .main    { margin-left:var(--sidebar); flex:1; display:flex; flex-direction:column; min-height:100vh }
+    .topbar  {
+      position:sticky; top:0; z-index:50; background:rgba(5,5,5,.85); backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--bor); padding:12px 24px; display:flex; align-items:center; gap:16px;
+    }
+    .topbar-title { font-size:18px; font-weight:700; flex:1 }
+    .period-btns  { display:flex; gap:4px }
+    .period-btn {
+      padding:5px 14px; border-radius:20px; border:1px solid var(--bor); background:none;
+      color:var(--sub); font-size:12px; cursor:pointer; transition:all .15s;
+    }
+    .period-btn:hover  { border-color:var(--bor2); color:var(--txt) }
+    .period-btn.active { background:var(--acc); color:#000; border-color:var(--acc); font-weight:600 }
+    .refresh-chip {
+      display:flex; align-items:center; gap:6px; padding:5px 12px;
+      border:1px solid var(--bor); border-radius:20px; font-size:11px; color:var(--sub); cursor:pointer;
+      transition:border-color .15s;
+    }
+    .refresh-chip:hover  { border-color:var(--acc); color:var(--acc) }
+    .refresh-dot { width:6px; height:6px; border-radius:50%; background:var(--suc); flex-shrink:0 }
+    .refresh-dot.loading { background:var(--wrn); animation:pulse 1s infinite }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── Content ── */
+    .content { padding:24px; flex:1; overflow-y:auto }
+
+    /* ── KPI grid ── */
+    .kpi-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; margin-bottom:20px }
+    .kpi-card {
+      background:var(--sur); border:1px solid var(--bor); border-radius:var(--r);
+      padding:16px 18px; transition:border-color .2s;
+    }
+    .kpi-card:hover { border-color:var(--bor2) }
+    .kpi-card.accent  { border-color:rgba(113,255,0,.25); background:var(--acc-dim2) }
+    .kpi-card.success { border-color:rgba(34,197,94,.3); background:var(--suc-dim) }
+    .kpi-card.warning { border-color:rgba(245,158,11,.3); background:var(--wrn-dim) }
+    .kpi-card.danger  { border-color:rgba(239,68,68,.3);  background:var(--dng-dim) }
+    .kpi-card.info    { border-color:rgba(59,130,246,.3);  background:var(--info-dim) }
+    .kpi-label { font-size:10px; color:var(--sub); text-transform:uppercase; letter-spacing:.7px; font-weight:600 }
+    .kpi-value {
+      font-size:30px; font-weight:700; margin:6px 0 4px; line-height:1;
+      font-variant-numeric:tabular-nums;
+    }
+    .kpi-card.accent  .kpi-value { color:var(--acc) }
+    .kpi-card.success .kpi-value { color:var(--suc) }
+    .kpi-card.warning .kpi-value { color:var(--wrn) }
+    .kpi-card.danger  .kpi-value { color:var(--dng) }
+    .kpi-card.info    .kpi-value { color:var(--info) }
+    .kpi-sub { font-size:11px; color:var(--sub) }
+    .kpi-bar  { height:3px; background:rgba(255,255,255,.06); border-radius:2px; margin-top:10px }
+    .kpi-bar-fill { height:100%; border-radius:2px; background:currentColor; transition:width .6s ease }
+
+    /* ── Section headers ── */
+    .section-head { font-size:13px; font-weight:600; margin-bottom:14px; color:var(--txt) }
+    .section-sub  { font-size:11px; color:var(--sub); font-weight:400; margin-left:6px }
+
+    /* ── Two-col layout ── */
+    .dual-col { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:20px }
+    .panel    {
+      background:var(--sur); border:1px solid var(--bor); border-radius:var(--r); padding:16px; overflow:hidden;
+    }
+
+    /* ── Tables ── */
+    .sq-table { width:100%; border-collapse:collapse }
+    .sq-table th {
+      font-size:10px; text-transform:uppercase; letter-spacing:.6px; color:var(--sub);
+      padding:0 8px 10px; text-align:left; font-weight:600; border-bottom:1px solid var(--bor);
+    }
+    .sq-table th:not(:first-child) { text-align:right }
+    .sq-table td {
+      padding:9px 8px; font-size:12px; border-bottom:1px solid rgba(255,255,255,.04);
+      font-variant-numeric:tabular-nums; vertical-align:middle;
+    }
+    .sq-table td:not(:first-child) { text-align:right }
+    .sq-table tr:last-child td { border-bottom:none }
+    .sq-table tr:hover td { background:rgba(255,255,255,.02) }
+    .rank-badge {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:20px; height:20px; border-radius:50%; font-size:10px; font-weight:700;
+      background:rgba(255,255,255,.06); color:var(--sub); margin-right:4px;
+    }
+    .rank-badge.top3 { background:var(--acc-dim); color:var(--acc) }
+    .bar-cell { display:flex; align-items:center; gap:8px }
+    .mini-bar { flex:1; height:3px; background:rgba(255,255,255,.06); border-radius:2px }
+    .mini-bar-fill { height:100%; border-radius:2px; background:var(--acc); transition:width .5s }
+    .zero-fill { background:var(--dng) }
+    .count-pill {
+      display:inline-block; padding:1px 8px; border-radius:10px;
+      font-size:11px; font-weight:600; background:rgba(255,255,255,.06);
+    }
+
+    /* ── Latency gauge ── */
+    .latency-row { display:flex; align-items:center; gap:16px; margin-bottom:20px }
+    .lat-gauge-wrap { position:relative; width:120px; height:60px; flex-shrink:0 }
+    .lat-gauge-svg { width:120px; height:60px }
+    .lat-info { flex:1 }
+    .lat-target { font-size:11px; color:var(--sub); margin-top:4px }
+
+    /* ── Trend sparkline ── */
+    .spark-wrap { overflow-x:auto }
+    .spark-svg  { display:block }
+    .spark-label { font-size:10px; fill:rgba(255,255,255,.4) }
+
+    /* ── Status ── */
+    .status-dot {
+      display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px;
+    }
+    .status-dot.green  { background:var(--suc) }
+    .status-dot.yellow { background:var(--wrn) }
+    .status-dot.red    { background:var(--dng) }
+
+    /* ── Index sync panel ── */
+    .sync-row { display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,.04) }
+    .sync-row:last-child { border-bottom:none }
+    .sync-index { font-size:12px; font-family:monospace; color:var(--txt) }
+    .sync-lag   { font-size:12px; font-variant-numeric:tabular-nums; color:var(--sub) }
+    .sync-lag.ok { color:var(--suc) }
+    .sync-lag.warn { color:var(--wrn) }
+    .sync-lag.err  { color:var(--dng) }
+
+    /* ── Loading skeleton ── */
+    .skeleton {
+      background:linear-gradient(90deg,rgba(255,255,255,.04) 25%,rgba(255,255,255,.08) 50%,rgba(255,255,255,.04) 75%);
+      background-size:400% 100%; animation:shimmer 1.4s infinite; border-radius:4px;
+    }
+    @keyframes shimmer { 0%{background-position:100% 0} 100%{background-position:-100% 0} }
+    .skel-val { height:30px; width:80px; margin:6px 0 4px }
+    .skel-sub { height:12px; width:120px }
+
+    /* ── Empty state ── */
+    .empty-state { text-align:center; padding:32px 16px; color:var(--sub) }
+    .empty-icon  { font-size:32px; margin-bottom:8px }
+    .empty-text  { font-size:13px }
+
+    /* ── Auth gate ── */
+    #auth-gate {
+      position:fixed; inset:0; background:var(--bg); display:flex;
+      align-items:center; justify-content:center; z-index:999;
+    }
+    .auth-card {
+      background:var(--sur); border:1px solid var(--bor); border-radius:16px;
+      padding:40px 32px; text-align:center; max-width:320px; width:90%;
+    }
+    .auth-icon  { font-size:40px; margin-bottom:16px }
+    .auth-title { font-size:20px; font-weight:700; margin-bottom:8px }
+    .auth-sub   { font-size:13px; color:var(--sub); margin-bottom:24px }
+    .auth-btn   {
+      display:block; width:100%; padding:12px; border-radius:10px; border:none;
+      background:var(--acc); color:#000; font-size:14px; font-weight:700; cursor:pointer;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width:768px) {
+      .sidebar   { display:none }
+      .main      { margin-left:0 }
+      .dual-col  { grid-template-columns:1fr }
+      .kpi-grid  { grid-template-columns:repeat(2,1fr) }
+    }
+    @media (max-width:480px) {
+      .kpi-grid  { grid-template-columns:1fr }
+      .content   { padding:16px }
+      .topbar    { padding:10px 16px }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div id="auth-gate">
+  <div class="auth-card">
+    <div class="auth-icon">🔒</div>
+    <div class="auth-title">Search Quality</div>
+    <div class="auth-sub">Admin access required to view search metrics.</div>
+    <button class="auth-btn" onclick="window.location='/admin'">Go to Admin Login</button>
+  </div>
+</div>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar" style="display:none">
+  <div class="sb-logo">
+    <div class="sb-logo-icon">⚡</div>
+    <div>
+      <div class="sb-logo-text">SOKONI</div>
+      <div class="sb-logo-sub">Search Quality</div>
+    </div>
+  </div>
+
+  <div class="sb-group">
+    <div class="sb-label">Metrics</div>
+    <button class="sb-item active" onclick="switchSection('overview')">
+      <span class="sb-icon">📊</span> Overview
+    </button>
+    <button class="sb-item" onclick="switchSection('searches')">
+      <span class="sb-icon">🔍</span> Top Searches
+    </button>
+    <button class="sb-item" onclick="switchSection('zeroresults')">
+      <span class="sb-icon">⭕</span> Zero Results
+    </button>
+    <button class="sb-item" onclick="switchSection('sync')">
+      <span class="sb-icon">🔄</span> Index Sync
+    </button>
+  </div>
+
+  <div class="sb-group">
+    <div class="sb-label">Navigation</div>
+    <a class="sb-item" href="/admin-os"><span class="sb-icon">🏠</span> Admin OS</a>
+    <a class="sb-item" href="/search"><span class="sb-icon">🔎</span> Search UI</a>
+  </div>
+
+  <div class="sb-footer">
+    <div class="sb-user">
+      <div class="sb-avatar" id="sb-avatar">?</div>
+      <div>
+        <div class="sb-user-name" id="sb-name">Loading…</div>
+        <div class="sb-user-role">Admin</div>
+      </div>
+    </div>
+    <button class="signout-btn" onclick="firebase.auth().signOut().then(()=>location.href='/login')">
+      Sign Out
+    </button>
+  </div>
+</nav>
+
+<!-- Main -->
+<div class="main" id="main-content" style="display:none">
+  <header class="topbar">
+    <div class="topbar-title">Search Quality Dashboard</div>
+    <div class="period-btns">
+      <button class="period-btn active" onclick="setPeriod('today',this)">Today</button>
+      <button class="period-btn" onclick="setPeriod('yesterday',this)">Yesterday</button>
+      <button class="period-btn" onclick="setPeriod('7d',this)">7 Days</button>
+    </div>
+    <div class="refresh-chip" onclick="loadAll()">
+      <span class="refresh-dot" id="refresh-dot"></span>
+      <span id="last-refresh">Refresh</span>
+    </div>
+  </header>
+
+  <div class="content">
+
+    <!-- KPI row 1 -->
+    <div class="kpi-grid" id="kpi-grid">
+      <div class="kpi-card accent">
+        <div class="kpi-label">Total Queries</div>
+        <div class="kpi-value" id="kpi-queries"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-queries-sub"><span class="skeleton skel-sub"></span></div>
+      </div>
+      <div class="kpi-card" id="kpi-ctr-card">
+        <div class="kpi-label">Click-Through Rate</div>
+        <div class="kpi-value" id="kpi-ctr"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-ctr-sub"><span class="skeleton skel-sub"></span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-ctr-bar" style="width:0"></div></div>
+      </div>
+      <div class="kpi-card" id="kpi-zero-card">
+        <div class="kpi-label">Zero-Result Rate</div>
+        <div class="kpi-value" id="kpi-zero"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-zero-sub"><span class="skeleton skel-sub"></span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-zero-bar" style="width:0"></div></div>
+      </div>
+      <div class="kpi-card" id="kpi-conv-card">
+        <div class="kpi-label">Search → Purchase</div>
+        <div class="kpi-value" id="kpi-conv"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-conv-sub"><span class="skeleton skel-sub"></span></div>
+        <div class="kpi-bar"><div class="kpi-bar-fill" id="kpi-conv-bar" style="width:0"></div></div>
+      </div>
+      <div class="kpi-card" id="kpi-atc-card">
+        <div class="kpi-label">Add to Cart Rate</div>
+        <div class="kpi-value" id="kpi-atc"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-atc-sub"><span class="skeleton skel-sub"></span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Clicks</div>
+        <div class="kpi-value" id="kpi-clicks"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-clicks-sub"><span class="skeleton skel-sub"></span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Purchases via Search</div>
+        <div class="kpi-value" id="kpi-purchases"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-purchases-sub"><span class="skeleton skel-sub"></span></div>
+      </div>
+      <div class="kpi-card info">
+        <div class="kpi-label">Avg Order Value</div>
+        <div class="kpi-value" id="kpi-aov"><span class="skeleton skel-val"></span></div>
+        <div class="kpi-sub" id="kpi-aov-sub"><span class="skeleton skel-sub"></span></div>
+      </div>
+    </div>
+
+    <!-- Top Searches + Zero Results -->
+    <div class="dual-col">
+      <div class="panel">
+        <div class="section-head">
+          Top Searches
+          <span class="section-sub" id="top-period-label">by query count</span>
+        </div>
+        <div id="top-searches-wrap">
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">Loading top searches…</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-head">
+          Zero-Result Searches
+          <span class="section-sub">queries that returned nothing</span>
+        </div>
+        <div id="zero-results-wrap">
+          <div class="empty-state">
+            <div class="empty-icon">⭕</div>
+            <div class="empty-text">Loading zero-result queries…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Top Clicked Items + Filter Usage -->
+    <div class="dual-col">
+      <div class="panel">
+        <div class="section-head">Top Clicked Results</div>
+        <div id="top-clicked-wrap">
+          <div class="empty-state"><div class="empty-text">Loading…</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="section-head">
+          Index Sync Status
+          <span class="section-sub">algoliaSearchEvents queue</span>
+        </div>
+        <div id="sync-wrap">
+          <div class="empty-state"><div class="empty-text">Checking queue…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Funnel overview -->
+    <div class="panel" style="margin-bottom:20px">
+      <div class="section-head">Search Funnel <span class="section-sub">sessions → searches → clicks → conversions</span></div>
+      <div id="funnel-wrap" style="padding:8px 0">
+        <div class="empty-state"><div class="empty-text">Loading funnel…</div></div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+/* ──────────────────────────────────────────────────────────────────
+   Search Quality Dashboard
+   Reads from:
+     - searchAnalytics/latest  (yesterday's daily rollup from CF)
+     - searchAnalytics/daily_YYYY-MM-DD  (today's live counters)
+     - searchQueryStats  (per-query counts)
+     - searchZeroResults (per-query zero-result counts)
+     - searchClickStats  (per-item click/conversion counts)
+     - algoliaSearchEvents (raw events for sync-lag estimate)
+   ──────────────────────────────────────────────────────────────────*/
+
+let _db, _auth, _currentPeriod = 'today', _report = null, _refreshTimer = null;
+
+/* ── Bootstrap ─────────────────────────────────────────────────── */
+window.addEventListener('DOMContentLoaded', () => {
+  const interval = setInterval(() => {
+    if (typeof firebase === 'undefined') return;
+    clearInterval(interval);
+    _db   = firebase.firestore();
+    _auth = firebase.auth();
+    _auth.onAuthStateChanged(async user => {
+      if (!user) { showAuthGate(); return; }
+      const tok = await user.getIdTokenResult();
+      if (!tok.claims.admin && !tok.claims.superAdmin) { showAuthGate(); return; }
+      showDashboard(user);
+      loadAll();
+      _refreshTimer = setInterval(loadAll, 60_000);
+    });
+  }, 80);
+});
+
+function showAuthGate()    { document.getElementById('auth-gate').style.display = 'flex'; }
+function showDashboard(u)  {
+  document.getElementById('auth-gate').style.display  = 'none';
+  document.getElementById('sidebar').style.display     = 'flex';
+  document.getElementById('main-content').style.display = 'flex';
+  const initials = (u.displayName || u.email || 'A').charAt(0).toUpperCase();
+  document.getElementById('sb-avatar').textContent = initials;
+  document.getElementById('sb-name').textContent   = u.displayName || u.email || 'Admin';
+}
+
+/* ── Section switcher ──────────────────────────────────────────── */
+function switchSection(id) {
+  document.querySelectorAll('.sb-item').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  /* All sections visible for now — could toggle panels here */
+}
+
+/* ── Period selector ───────────────────────────────────────────── */
+function setPeriod(p, btn) {
+  _currentPeriod = p;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadAll();
+}
+
+/* ── Helpers ───────────────────────────────────────────────────── */
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function fmtNum(n)  {
+  if (n == null) return '—';
+  if (n >= 1_000_000) return (n/1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)     return (n/1_000).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+function fmtPct(r) { return r == null ? '—' : (r * 100).toFixed(1) + '%' }
+function fmtKes(n) { return n == null ? '—' : 'KES ' + n.toLocaleString('en-KE', {maximumFractionDigits:0}) }
+
+function setDot(loading) {
+  const d = document.getElementById('refresh-dot');
+  d.className = 'refresh-dot' + (loading ? ' loading' : '');
+}
+function setLastRefresh() {
+  document.getElementById('last-refresh').textContent =
+    'Refreshed ' + new Date().toLocaleTimeString('en-KE', {hour:'2-digit',minute:'2-digit'});
+}
+
+/* ── Main load ─────────────────────────────────────────────────── */
+async function loadAll() {
+  setDot(true);
+  try {
+    await Promise.all([loadKpis(), loadTopSearches(), loadZeroResults(), loadTopClicked(), loadSyncStatus()]);
+  } catch(e) {
+    console.error('[SearchQuality]', e);
+  }
+  setDot(false);
+  setLastRefresh();
+}
+
+/* ── KPIs ──────────────────────────────────────────────────────── */
+async function loadKpis() {
+  let data;
+  if (_currentPeriod === 'today') {
+    const snap = await _db.collection('searchAnalytics').doc('daily_' + todayStr()).get();
+    data = snap.exists ? snap.data() : null;
+    document.getElementById('top-period-label').textContent = 'today (live)';
+  } else if (_currentPeriod === 'yesterday') {
+    const snap = await _db.collection('searchAnalytics').doc('latest').get();
+    const rep  = snap.exists ? snap.data() : null;
+    data = rep?.daily || null;
+    document.getElementById('top-period-label').textContent = 'yesterday';
+  } else {
+    /* 7-day: sum up to 7 daily docs */
+    const docs = [], now = new Date();
+    const snaps = await Promise.all(
+      Array.from({length:7},(_,i) => {
+        const d = new Date(now); d.setDate(now.getDate()-i);
+        return _db.collection('searchAnalytics').doc('daily_' + d.toISOString().slice(0,10)).get();
+      })
+    );
+    data = snaps.reduce((acc, s) => {
+      if (!s.exists) return acc;
+      const d = s.data();
+      acc.totalSearches     = (acc.totalSearches     || 0) + (d.totalSearches     || 0);
+      acc.totalClicks       = (acc.totalClicks       || 0) + (d.totalClicks       || 0);
+      acc.totalConversions  = (acc.totalConversions  || 0) + (d.totalConversions  || 0);
+      acc.totalZeroResults  = (acc.totalZeroResults  || 0) + (d.totalZeroResults  || 0);
+      acc.totalAddToCart    = (acc.totalAddToCart    || 0) + (d.totalAddToCart    || 0);
+      acc.totalPurchases    = (acc.totalPurchases    || 0) + (d.totalPurchases    || 0);
+      acc.totalRevenue      = (acc.totalRevenue      || 0) + (d.totalRevenue      || 0);
+      return acc;
+    }, {});
+    document.getElementById('top-period-label').textContent = 'last 7 days';
+    if (!data.totalSearches) data = null;
+  }
+
+  if (!data) {
+    ['kpi-queries','kpi-ctr','kpi-zero','kpi-conv','kpi-atc','kpi-clicks','kpi-purchases','kpi-aov']
+      .forEach(id => { document.getElementById(id).textContent = '—' });
+    ['kpi-queries-sub','kpi-ctr-sub','kpi-zero-sub','kpi-conv-sub','kpi-atc-sub',
+     'kpi-clicks-sub','kpi-purchases-sub','kpi-aov-sub']
+      .forEach(id => { document.getElementById(id).textContent = 'No data yet' });
+    renderFunnel(0, 0, 0, 0);
+    return;
+  }
+
+  const searches   = data.totalSearches    || 0;
+  const clicks     = data.totalClicks      || 0;
+  const convs      = data.totalConversions || 0;
+  const zeroes     = data.totalZeroResults || 0;
+  const atc        = data.totalAddToCart   || 0;
+  const purchases  = data.totalPurchases   || 0;
+  const revenue    = data.totalRevenue     || 0;
+
+  const ctr        = searches ? clicks    / searches : 0;
+  const zeroRate   = searches ? zeroes    / searches : 0;
+  const convRate   = searches ? purchases / searches : 0;
+  const atcRate    = clicks   ? atc       / clicks   : 0;
+  const aov        = purchases? revenue   / purchases: 0;
+
+  document.getElementById('kpi-queries').textContent     = fmtNum(searches);
+  document.getElementById('kpi-queries-sub').textContent = _currentPeriod === '7d' ? 'over 7 days' : 'searches today';
+
+  document.getElementById('kpi-ctr').textContent    = fmtPct(ctr);
+  document.getElementById('kpi-ctr-sub').textContent = fmtNum(clicks) + ' clicks from search';
+  document.getElementById('kpi-ctr-bar').style.width = Math.min(ctr*100*2, 100) + '%';
+  colorCard('kpi-ctr-card', ctr, 0.05, 0.15, true);
+
+  document.getElementById('kpi-zero').textContent    = fmtPct(zeroRate);
+  document.getElementById('kpi-zero-sub').textContent= fmtNum(zeroes) + ' queries with no results';
+  document.getElementById('kpi-zero-bar').style.width= Math.min(zeroRate*100*3, 100) + '%';
+  colorCard('kpi-zero-card', zeroRate, 0.05, 0.15, false);
+
+  document.getElementById('kpi-conv').textContent    = fmtPct(convRate);
+  document.getElementById('kpi-conv-sub').textContent= fmtNum(purchases) + ' purchases via search';
+  document.getElementById('kpi-conv-bar').style.width= Math.min(convRate*100*20, 100) + '%';
+  colorCard('kpi-conv-card', convRate, 0.005, 0.02, true);
+
+  document.getElementById('kpi-atc').textContent    = fmtPct(atcRate);
+  document.getElementById('kpi-atc-sub').textContent= fmtNum(atc) + ' add-to-cart events';
+  colorCard('kpi-atc-card', atcRate, 0.05, 0.12, true);
+
+  document.getElementById('kpi-clicks').textContent    = fmtNum(clicks);
+  document.getElementById('kpi-clicks-sub').textContent= 'search result clicks';
+
+  document.getElementById('kpi-purchases').textContent    = fmtNum(purchases);
+  document.getElementById('kpi-purchases-sub').textContent= fmtKes(revenue) + ' revenue';
+
+  document.getElementById('kpi-aov').textContent    = fmtKes(aov);
+  document.getElementById('kpi-aov-sub').textContent= 'average per search order';
+
+  renderFunnel(searches, clicks, atc, purchases);
+}
+
+/* color KPI card based on value vs thresholds (good = above high, bad = below low) */
+function colorCard(cardId, val, low, high, higherIsBetter) {
+  const card = document.getElementById(cardId);
+  card.className = 'kpi-card';
+  if (higherIsBetter) {
+    if (val >= high)     card.classList.add('success');
+    else if (val >= low) card.classList.add('warning');
+    else                 card.classList.add('danger');
+  } else {
+    if (val <= low)      card.classList.add('success');
+    else if (val <= high)card.classList.add('warning');
+    else                 card.classList.add('danger');
+  }
+}
+
+/* ── Search funnel ─────────────────────────────────────────────── */
+function renderFunnel(searches, clicks, atc, purchases) {
+  const wrap = document.getElementById('funnel-wrap');
+  if (!searches) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-text">No search data for this period.</div></div>';
+    return;
+  }
+  const steps = [
+    { label:'Searches',    count:searches,                pct:100,                    color:'var(--acc)' },
+    { label:'Clicks',      count:clicks,   pct:searches  ? (clicks/searches*100)   :0, color:'var(--info)' },
+    { label:'Add to Cart', count:atc,      pct:searches  ? (atc/searches*100)      :0, color:'var(--wrn)' },
+    { label:'Purchases',   count:purchases,pct:searches  ? (purchases/searches*100):0, color:'var(--suc)' },
+  ];
+  wrap.innerHTML = steps.map(s => `
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+      <div style="width:100px;font-size:12px;color:var(--sub);text-align:right;flex-shrink:0">${s.label}</div>
+      <div style="flex:1;height:22px;background:rgba(255,255,255,.04);border-radius:4px;overflow:hidden">
+        <div style="width:${s.pct.toFixed(1)}%;height:100%;background:${s.color};border-radius:4px;transition:width .6s ease;display:flex;align-items:center;padding-left:8px">
+          <span style="font-size:11px;font-weight:600;color:#000;white-space:nowrap">${s.pct.toFixed(1)}%</span>
+        </div>
+      </div>
+      <div style="width:60px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--sub);text-align:right">${fmtNum(s.count)}</div>
+    </div>
+  `).join('');
+}
+
+/* ── Top searches ──────────────────────────────────────────────── */
+async function loadTopSearches() {
+  const wrap = document.getElementById('top-searches-wrap');
+  try {
+    let snap;
+    if (_currentPeriod !== 'today') {
+      /* Use latest report for yesterday / 7d */
+      const rep = await _db.collection('searchAnalytics').doc('latest').get();
+      const data = rep.exists ? rep.data() : null;
+      const rows = data?.topSearches || [];
+      if (!rows.length) { renderEmptyTable(wrap, '🔍', 'No top-search data yet'); return; }
+      wrap.innerHTML = buildSearchTable(rows, 'count', false);
+      return;
+    }
+    /* Today: read searchQueryStats ordered by count */
+    snap = await _db.collection('searchQueryStats').orderBy('count','desc').limit(20).get();
+    if (snap.empty) { renderEmptyTable(wrap, '🔍', 'No searches recorded today yet'); return; }
+    const rows = snap.docs.map(d => ({ query: d.data().query, count: d.data().count, resultCount: d.data().resultCount }));
+    const max  = rows[0]?.count || 1;
+    wrap.innerHTML = buildSearchTable(rows, max, true);
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-text">Error: ${e.message}</div></div>`;
+  }
+}
+
+function buildSearchTable(rows, maxOrKey, withBar) {
+  const max = withBar ? maxOrKey : Math.max(...rows.map(r => r.count), 1);
+  return `<table class="sq-table">
+    <thead><tr>
+      <th>#</th><th style="width:99%">Query</th><th>Searches</th><th>Results</th>
+    </tr></thead>
+    <tbody>
+    ${rows.slice(0,15).map((r,i) => `
+      <tr>
+        <td><span class="rank-badge ${i<3?'top3':''}">${i+1}</span></td>
+        <td>
+          ${r.query || '(empty)'}
+          ${withBar ? `<div class="mini-bar"><div class="mini-bar-fill" style="width:${(r.count/max*100).toFixed(1)}%"></div></div>` : ''}
+        </td>
+        <td><span class="count-pill">${fmtNum(r.count)}</span></td>
+        <td style="color:${r.resultCount===0?'var(--dng)':'var(--sub)'}">
+          ${r.resultCount == null ? '—' : fmtNum(r.resultCount)}
+        </td>
+      </tr>
+    `).join('')}
+    </tbody>
+  </table>`;
+}
+
+/* ── Zero results ──────────────────────────────────────────────── */
+async function loadZeroResults() {
+  const wrap = document.getElementById('zero-results-wrap');
+  try {
+    let rows;
+    if (_currentPeriod !== 'today') {
+      const rep  = await _db.collection('searchAnalytics').doc('latest').get();
+      const data = rep.exists ? rep.data() : null;
+      rows = data?.zeroResults || [];
+    } else {
+      const snap = await _db.collection('searchZeroResults').orderBy('count','desc').limit(20).get();
+      rows = snap.docs.map(d => ({ query: d.data().query, count: d.data().count }));
+    }
+    if (!rows.length) {
+      wrap.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">✅</div>
+        <div class="empty-text">No zero-result queries. Great search coverage!</div>
+      </div>`;
+      return;
+    }
+    const max = rows[0]?.count || 1;
+    wrap.innerHTML = `<table class="sq-table">
+      <thead><tr><th>#</th><th style="width:99%">Query</th><th>Frequency</th></tr></thead>
+      <tbody>
+      ${rows.slice(0,15).map((r,i) => `
+        <tr>
+          <td><span class="rank-badge ${i<3?'top3':''}">${i+1}</span></td>
+          <td>
+            <span style="color:var(--dng)">${r.query || '(empty)'}</span>
+            <div class="mini-bar">
+              <div class="mini-bar-fill zero-fill" style="width:${(r.count/max*100).toFixed(1)}%"></div>
+            </div>
+          </td>
+          <td><span class="count-pill" style="color:var(--dng)">${fmtNum(r.count)}</span></td>
+        </tr>
+      `).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-text">Error: ${e.message}</div></div>`;
+  }
+}
+
+/* ── Top clicked ───────────────────────────────────────────────── */
+async function loadTopClicked() {
+  const wrap = document.getElementById('top-clicked-wrap');
+  try {
+    let rows;
+    if (_currentPeriod !== 'today') {
+      const rep  = await _db.collection('searchAnalytics').doc('latest').get();
+      const data = rep.exists ? rep.data() : null;
+      rows = (data?.topClicked || []).map(r => ({ objectID: r.objectID, clicks: r.clicks, conversions: r.conversions || 0 }));
+    } else {
+      const snap = await _db.collection('searchClickStats').orderBy('clicks','desc').limit(15).get();
+      rows = snap.docs.map(d => ({
+        objectID: d.data().objectID,
+        clicks:   d.data().clicks || 0,
+        conversions: d.data().conversions || 0,
+      }));
+    }
+    if (!rows.length) { renderEmptyTable(wrap, '🖱️', 'No click data yet'); return; }
+    const max = rows[0]?.clicks || 1;
+    wrap.innerHTML = `<table class="sq-table">
+      <thead><tr>
+        <th>#</th><th style="width:99%">Object ID</th><th>Clicks</th><th>Conv.</th>
+      </tr></thead>
+      <tbody>
+      ${rows.slice(0,12).map((r,i) => `
+        <tr>
+          <td><span class="rank-badge ${i<3?'top3':''}">${i+1}</span></td>
+          <td>
+            <span style="font-family:monospace;font-size:11px;color:var(--sub)">${r.objectID}</span>
+            <div class="mini-bar"><div class="mini-bar-fill" style="width:${(r.clicks/max*100).toFixed(1)}%"></div></div>
+          </td>
+          <td>${fmtNum(r.clicks)}</td>
+          <td style="color:${r.conversions>0?'var(--suc)':'var(--sub2)'}">${fmtNum(r.conversions)}</td>
+        </tr>
+      `).join('')}
+      </tbody>
+    </table>`;
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-text">Error: ${e.message}</div></div>`;
+  }
+}
+
+/* ── Index sync status ─────────────────────────────────────────── */
+async function loadSyncStatus() {
+  const wrap = document.getElementById('sync-wrap');
+  try {
+    /* Check pending items in algoliaIndexQueue */
+    const queueSnap = await _db.collection('algoliaIndexQueue')
+      .where('status', '==', 'pending').limit(50).get();
+    const pending = queueSnap.size;
+
+    /* Estimate sync lag from most recent event in algoliaSearchEvents */
+    const recentSnap = await _db.collection('algoliaSearchEvents')
+      .orderBy('ts', 'desc').limit(1).get();
+    let lagLabel = '—';
+    if (!recentSnap.empty) {
+      const tsVal = recentSnap.docs[0].data().ts;
+      const ms    = tsVal?.toDate ? (Date.now() - tsVal.toDate().getTime()) : null;
+      if (ms != null) {
+        lagLabel = ms < 60_000 ? `${Math.round(ms/1000)}s ago`
+                 : ms < 3_600_000 ? `${Math.round(ms/60_000)}m ago`
+                 : `${Math.round(ms/3_600_000)}h ago`;
+      }
+    }
+
+    const indexes = [
+      'sokoni_global', 'sokoni_products', 'sokoni_shops', 'sokoni_services',
+      'sokoni_events', 'sokoni_properties', 'sokoni_vehicles', 'sokoni_jobs',
+    ];
+
+    wrap.innerHTML = `
+      <div class="sync-row">
+        <span style="font-size:12px;color:var(--sub)">Queue (pending writes)</span>
+        <span class="sync-lag ${pending===0?'ok':pending<10?'warn':'err'}">
+          <span class="status-dot ${pending===0?'green':pending<10?'yellow':'red'}"></span>
+          ${pending} pending
+        </span>
+      </div>
+      <div class="sync-row">
+        <span style="font-size:12px;color:var(--sub)">Last event received</span>
+        <span class="sync-lag ok">${lagLabel}</span>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--bor)">
+        <div style="font-size:10px;color:var(--sub);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">Active Indexes</div>
+        ${indexes.map(idx => `
+          <div class="sync-row">
+            <span class="sync-index">${idx}</span>
+            <span class="sync-lag ok"><span class="status-dot green"></span>Live</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch(e) {
+    wrap.innerHTML = `<div class="empty-state"><div class="empty-text">
+      Queue check unavailable (needs Firestore read access).</div></div>`;
+  }
+}
+
+function renderEmptyTable(wrap, icon, msg) {
+  wrap.innerHTML = `<div class="empty-state"><div class="empty-icon">${icon}</div><div class="empty-text">${msg}</div></div>`;
+}
+</script>
+</body>
+</html>

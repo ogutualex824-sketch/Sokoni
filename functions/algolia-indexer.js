@@ -1025,7 +1025,7 @@ const TRANSFORMERS = {
 ════════════════════════════════════════════════════════════════════════════ */
 
 /* ─── Global search transformer factory ────────────────────────────────────
-   Builds a flattened global_search record from any primary transformed record.
+   Builds a flattened sokoni_global record from any primary transformed record.
    objectID is prefixed: "${collection}_${docId}" to prevent cross-type collisions.
    ─────────────────────────────────────────────────────────────────────────── */
 
@@ -1151,10 +1151,10 @@ const _vendorAsStore = (id, data) => TRANSFORMERS.sellers(id, {
 
    PRODUCTION INDEXES (must already exist in Algolia dashboard):
      sokoni_products  sokoni_shops  sokoni_services  sokoni_jobs
-     sokoni_vehicles  sokoni_properties  sokoni_events  sokoni_brands  sokoni_categories  global_search
+     sokoni_vehicles  sokoni_properties  sokoni_events  sokoni_brands  sokoni_categories  sokoni_global
 
-   globalSearch: true  → document is ALSO written to global_search index
-   indexInGlobal: false → do NOT write a second global_search copy (used by
+   globalSearch: true  → document is ALSO written to sokoni_global index
+   indexInGlobal: false → do NOT write a second sokoni_global copy (used by
                           the gs__ entries themselves to break infinite loop)
 ════════════════════════════════════════════════════════════════════════════ */
 
@@ -1220,13 +1220,13 @@ const COLLECTION_INDEX_MAP = {
   /* ── Events ── */
   events:      { index: 'sokoni_events',    transformer: TRANSFORMERS.events,      globalSearch: true  },
 
-  /* ── Supplementary (dedicated sub-indexes; also in global_search) ── */
+  /* ── Supplementary (dedicated sub-indexes; also in sokoni_global) ── */
   brands:      { index: 'sokoni_brands',     transformer: TRANSFORMERS.brands,      globalSearch: true  },
   categories:  { index: 'sokoni_categories', transformer: TRANSFORMERS.categories,  globalSearch: false },
   collections: { index: 'sokoni_collections',transformer: TRANSFORMERS.collections, globalSearch: false },
   coupons:     { index: 'sokoni_coupons',    transformer: TRANSFORMERS.coupons,     globalSearch: false },
 
-  /* ── Users (admin index — never in global_search) ── */
+  /* ── Users (admin index — never in sokoni_global) ── */
   users:       { index: 'sokoni_users',      transformer: TRANSFORMERS.users,       globalSearch: false },
 
   /* ── Global search shadow entries (one per globalSearch:true collection) ──
@@ -1234,21 +1234,21 @@ const COLLECTION_INDEX_MAP = {
      objectID = "${collection}_${docId}"  (prefixed to avoid cross-type collisions)
      indexInGlobal:false prevents a second-level fanout loop.
   ── */
-  'gs__products':    { index: 'global_search', transformer: _globalTransformer('products'),    globalSearch: false },
-  'gs__foods':       { index: 'global_search', transformer: _globalTransformer('foods'),       globalSearch: false },
-  'gs__sellers':     { index: 'global_search', transformer: _globalTransformer('sellers'),     globalSearch: false },
-  'gs__stores':      { index: 'global_search', transformer: _globalTransformer('stores'),      globalSearch: false },
-  'gs__vendors':     { index: 'global_search', transformer: _globalTransformer('vendors'),     globalSearch: false },
-  'gs__services':    { index: 'global_search', transformer: _globalTransformer('services'),    globalSearch: false },
-  'gs__providers':   { index: 'global_search', transformer: _globalTransformer('providers'),   globalSearch: false },
-  'gs__jobs':        { index: 'global_search', transformer: _globalTransformer('jobs'),        globalSearch: false },
-  'gs__digitalJobs': { index: 'global_search', transformer: _globalTransformer('digitalJobs'), globalSearch: false },
-  'gs__cars':        { index: 'global_search', transformer: _globalTransformer('cars'),        globalSearch: false },
-  'gs__vehicles':    { index: 'global_search', transformer: _globalTransformer('vehicles'),    globalSearch: false },
-  'gs__properties':  { index: 'global_search', transformer: _globalTransformer('properties'),  globalSearch: false },
-  'gs__real_estate': { index: 'global_search', transformer: _globalTransformer('real_estate'), globalSearch: false },
-  'gs__events':      { index: 'global_search', transformer: _globalTransformer('events'),      globalSearch: false },
-  'gs__brands':      { index: 'global_search', transformer: _globalTransformer('brands'),      globalSearch: false },
+  'gs__products':    { index: 'sokoni_global', transformer: _globalTransformer('products'),    globalSearch: false },
+  'gs__foods':       { index: 'sokoni_global', transformer: _globalTransformer('foods'),       globalSearch: false },
+  'gs__sellers':     { index: 'sokoni_global', transformer: _globalTransformer('sellers'),     globalSearch: false },
+  'gs__stores':      { index: 'sokoni_global', transformer: _globalTransformer('stores'),      globalSearch: false },
+  'gs__vendors':     { index: 'sokoni_global', transformer: _globalTransformer('vendors'),     globalSearch: false },
+  'gs__services':    { index: 'sokoni_global', transformer: _globalTransformer('services'),    globalSearch: false },
+  'gs__providers':   { index: 'sokoni_global', transformer: _globalTransformer('providers'),   globalSearch: false },
+  'gs__jobs':        { index: 'sokoni_global', transformer: _globalTransformer('jobs'),        globalSearch: false },
+  'gs__digitalJobs': { index: 'sokoni_global', transformer: _globalTransformer('digitalJobs'), globalSearch: false },
+  'gs__cars':        { index: 'sokoni_global', transformer: _globalTransformer('cars'),        globalSearch: false },
+  'gs__vehicles':    { index: 'sokoni_global', transformer: _globalTransformer('vehicles'),    globalSearch: false },
+  'gs__properties':  { index: 'sokoni_global', transformer: _globalTransformer('properties'),  globalSearch: false },
+  'gs__real_estate': { index: 'sokoni_global', transformer: _globalTransformer('real_estate'), globalSearch: false },
+  'gs__events':      { index: 'sokoni_global', transformer: _globalTransformer('events'),      globalSearch: false },
+  'gs__brands':      { index: 'sokoni_global', transformer: _globalTransformer('brands'),      globalSearch: false },
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
