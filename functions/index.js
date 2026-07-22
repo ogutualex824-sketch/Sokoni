@@ -10437,3 +10437,13 @@ exports.inviteUser            = _adminInvites.inviteUser;
 exports.resendInvitation      = _adminInvites.resendInvitation;
 exports.listInvitations       = _adminInvites.listInvitations;
 exports.reconcileInvitations  = _adminInvites.reconcileInvitations;
+
+/* ── M-Pesa C2B (manual Paybill / QR payments) ──────────────────────────────
+   The leg the platform never had: a customer who pays the Paybill by hand with
+   an order reference, rather than being pushed an STK prompt. Validation and
+   Confirmation are separate URLs because Safaricom registers them separately.
+   Both are unauthenticated by protocol — see the security notes in the module.
+   Register with Safaricom RegisterURL before manual/QR payments can reconcile. */
+const _c2b = require("./mpesa-c2b");
+exports.mpesaC2BValidation   = _c2b.mpesaC2BValidation;
+exports.mpesaC2BConfirmation = _c2b.mpesaC2BConfirmation;
