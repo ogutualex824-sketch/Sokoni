@@ -713,22 +713,39 @@ async function addProduct(){
             sellerProducts = [];
         }
 
-        /* ── Plan listing limit check ── */
-        if(typeof SokoniPay !== "undefined"){
-            const _u = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-            const _pid = _u ? (_u.uid||_u.phone||_u.email||"anon") : "anon";
-            const _plan = await SokoniPay.getProviderPlan(_pid);
-            const _planData = SokoniPay.PLANS[_plan] || SokoniPay.PLANS.free;
-            const _activeCnt = sellerProducts.filter(function(p){ return !p.archived; }).length;
-            if(_planData.listings !== 999 && _activeCnt >= _planData.listings){
-                showNotification(
-                    "Plan limit: " + _planData.listings + " listings on " + _planData.name +
-                    " plan. Upgrade for more →",
-                    "error"
+        /* ── Plan listing limit ─────────────────────────────────────────────
+           Asks the server. This used to read SokoniPay.PLANS, a client-side
+           table saying free:3 / starter:20 — numbers that disagree with the
+           canonical catalogue (free:10) and with each other across the ten
+           tables that existed. Any client table is guessing: the device holding
+           it is the party the limit applies to.
+
+           canPublishProduct resolves through functions/subscription-catalog.js,
+           the same authority that actually enforces the write, so the banner
+           and the enforcement can no longer disagree. It also returns the
+           upgrade copy, so the message is written once server-side.
+
+           Failing to resolve does NOT block the save. A lookup problem must not
+           stop a merchant listing a product, and asserting a plan we could not
+           read is what told a merchant on an active trial they were on Free. */
+        try {
+            const _fn = window.firebaseFunctions ||
+                        (window.firebase && window.firebase.functions && window.firebase.functions());
+            if (_fn) {
+                const { httpsCallable } = await import(
+                    'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js'
                 );
-                setTimeout(function(){ window.location.href = "subscriptions.html"; }, 2000);
-                return;
+                const _res = await httpsCallable(_fn, 'canPublishProduct')({});
+                const _d = (_res && _res.data) || {};
+                if (_d.allowed === false && _d.upgrade) {
+                    showNotification(_d.upgrade.message, "error");
+                    setTimeout(function(){ window.location.href = "subscriptions.html"; }, 2000);
+                    return;
+                }
             }
+        } catch (_) {
+            /* Unresolved — allow the save. The server rule is the real gate and
+               will reject it if the merchant is genuinely over the limit. */
         }
 
         sellerProducts.push(newProduct);
