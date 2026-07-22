@@ -287,9 +287,13 @@
      Six individual digit inputs. Each box handles its own input event and routes
      focus, paste, and backspace correctly.
 
-     iOS AutoFill path: iOS fills the first box with the full 6-digit code despite
-     maxLength=1 (AutoFill bypasses maxLength). The input handler detects value.length
-     > 1 and distributes the digits across all boxes — one-tap autofill works.
+     iOS AutoFill path: iOS offers the full 6-digit code to the box carrying
+     autocomplete="one-time-code", and it RESPECTS that field's maxlength. This
+     comment previously claimed AutoFill bypasses maxLength; it does not, and
+     with maxLength=1 the OS delivered a single character, the value.length > 1
+     branch below never ran, and one-tap autofill filled only the first digit.
+     The first box therefore carries maxLength = len so the whole code can land;
+     the input handler then distributes it across the boxes.
 
      Android keyboard suggestions route to autocomplete="one-time-code" on the first
      box; the same distribute() path handles it.
@@ -308,7 +312,17 @@
       box.type      = 'text';
       box.inputMode = 'numeric';
       box.setAttribute('pattern', '[0-9]*');
-      box.maxLength = 1;
+      /* The FIRST box accepts the whole code; the rest accept one digit.
+         iOS AutoFill respects maxlength — it does NOT bypass it, which is what
+         the comment above this function assumed. With maxLength=1 the OS
+         delivered exactly one character, the `v.length > 1` branch in the input
+         handler never ran, distribute() never fired, and one-tap autofill filled
+         only the first digit. Single-field mode never had the bug because it
+         sets maxLength = len.
+         Typing is unaffected: one typed character takes the single-digit path
+         and advances focus; more than one goes through distribute(), which is
+         the correct behaviour for a fast typist or a keyboard suggestion. */
+      box.maxLength = (i === 0) ? len : 1;
       box.className = 'sk-otp-box';
       box.setAttribute('aria-label', 'Digit ' + (i + 1) + ' of ' + len);
       /* Only the first box carries autocomplete="one-time-code": iOS/Android
@@ -362,7 +376,8 @@
     inputs.forEach(function(box, idx) {
       box.addEventListener('input', function() {
         var v = box.value;
-        /* iOS AutoFill fills the first box with the whole code despite maxLength. */
+        /* The whole code arrived in one box — AutoFill, a keyboard suggestion, or
+           a fast typist. Reachable only because box 0's maxLength is len, not 1. */
         if (v.length > 1) {
           box.value = '';
           distribute(v, idx === 0 ? 0 : idx);

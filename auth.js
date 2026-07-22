@@ -719,9 +719,17 @@ async function completePasswordReset(){
 /* ══════════════════════════════════════════════════════════════
    GOOGLE OAUTH
    Supports:
-   • Desktop  → signInWithPopup
-   • Popup blocked → falls back to signInWithRedirect automatically
-   • Installed PWA / iOS Safari → signInWithRedirect from the start
+   • Desktop, Android Chrome, and REGULAR iOS SAFARI → signInWithPopup
+   • Popup blocked, or an ITP/security error → falls back to signInWithRedirect
+   • Installed PWA and in-app browsers (CriOS/FxiOS) → signInWithRedirect from
+     the start
+
+   This list said "Installed PWA / iOS Safari → signInWithRedirect from the
+   start", which contradicted _isPopupSupported() below: that function returns
+   false only for standalone PWAs and CriOS/FxiOS, and true for regular iOS
+   Safari. Anyone debugging a Safari sign-in failure from this comment would look
+   for a redirect that never happened. Corrected to match the code; the behaviour
+   is unchanged.
    • Account linking → if email already exists with password, links
      Google after the user re-authenticates with their password
 ══════════════════════════════════════════════════════════════ */
@@ -790,15 +798,24 @@ function _googleAuthErr(code) {
         case 'auth/missing-or-invalid-nonce':
             return 'Sign-in session expired. Please tap Continue with Google again.';
         case 'auth/internal-error':
-            /* auth/internal-error is Firebase's catch-all for popup failures that
-               don't fit a more specific code. Common causes:
-               — Ad blocker / Privacy Badger blocking accounts.google.com
-               — Browser extension intercepting the OAuth request
-               — Corporate proxy rewriting the response headers
-               — Safari ITP (handled upstream with redirect fallback; if we're here
-                 the redirect also failed — surface actionable guidance)
-               Guide the user toward the most likely self-fix. */
-            return 'Sign-in blocked. Try: (1) disable ad blockers for this site, (2) allow pop-ups and redirects, or (3) use a different sign-in method.';
+            /* Firebase's catch-all. This message used to read "Sign-in blocked.
+               Try: (1) disable ad blockers for this site, (2) allow pop-ups and
+               redirects, or (3) use a different sign-in method."
+
+               Two of those three suggestions cannot apply to the path that
+               produces this message. auth/popup-blocked is handled upstream by
+               falling back to signInWithRedirect and never reaches here, so a
+               blocked pop-up is not what the user is looking at — and
+               auth/internal-error itself ALSO triggers that same fallback. By the
+               time this string renders, the redirect has failed too, which no
+               pop-up setting affects.
+
+               Sending someone to hunt through Safari settings for a cause that is
+               not there costs them time and tells them nothing. The code is
+               included instead: it is the one thing that makes a support
+               conversation short, and a merchant can read it aloud without
+               owning a Mac or knowing what a console is. */
+            return 'Google sign-in could not be completed (' + code + '). Please try again, or sign in with your email and password.';
         case 'auth/cors-unsupported':
             return 'Your browser blocked the sign-in request. Allow cross-site access for this site, or try a different browser.';
         case 'auth/app-check-token-exchange-failed':
