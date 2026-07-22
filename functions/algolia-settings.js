@@ -49,7 +49,7 @@ function _client() {
 
 const INDEX_SETTINGS = {
 
-  products_index: {
+  sokoni_products: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(brand)',
@@ -95,7 +95,7 @@ const INDEX_SETTINGS = {
     highlightPostTag: '</mark>',
   },
 
-  stores_index: {
+  sokoni_shops: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(description)',
@@ -123,7 +123,7 @@ const INDEX_SETTINGS = {
     hitsPerPage: 24,
   },
 
-  services_index: {
+  sokoni_services: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(description)',
@@ -148,7 +148,7 @@ const INDEX_SETTINGS = {
     hitsPerPage: 24,
   },
 
-  jobs_index: {
+  sokoni_jobs: {
     searchableAttributes: [
       'unordered(title)',
       'unordered(company)',
@@ -174,7 +174,7 @@ const INDEX_SETTINGS = {
     hitsPerPage: 20,
   },
 
-  vehicles_index: {
+  sokoni_vehicles: {
     searchableAttributes: [
       'unordered(make,model)',
       'unordered(description)',
@@ -203,7 +203,7 @@ const INDEX_SETTINGS = {
     hitsPerPage: 20,
   },
 
-  property_index: {
+  sokoni_properties: {
     searchableAttributes: [
       'unordered(title)',
       'unordered(description)',
@@ -230,7 +230,7 @@ const INDEX_SETTINGS = {
     hitsPerPage: 20,
   },
 
-  events_index: {
+  sokoni_events: {
     searchableAttributes: [
       'unordered(name)',
       'unordered(description)',
@@ -351,7 +351,7 @@ const INDEX_RULES = [
 ];
 
 /* Rules only apply where the underlying fields exist */
-const RULE_TARGET_INDEXES = ['products_index', 'stores_index'];
+const RULE_TARGET_INDEXES = ['sokoni_products', 'sokoni_shops'];
 
 /* ═══════════════════════════════════════════════════════════════════════════
    EXPORTED CLOUD FUNCTIONS
@@ -502,7 +502,7 @@ const searchApplySynonyms = onCall(
 /**
  * searchApplyRules
  * Admin-only onCall that applies the three standard query rules to the target
- * indexes (products_index and stores_index only — other indexes lack the fields
+ * indexes (sokoni_products and sokoni_shops only — other indexes lack the fields
  * referenced by the rules).
  *
  * Returns: { appliedToIndexes: string[], ruleCount: number, errors: Array<{index, error}> }

@@ -1150,8 +1150,8 @@ const _vendorAsStore = (id, data) => TRANSFORMERS.sellers(id, {
    Maps every Firestore collection to its Algolia index.
 
    PRODUCTION INDEXES (must already exist in Algolia dashboard):
-     products_index  stores_index  services_index  jobs_index
-     vehicles_index  property_index  events_index  global_search
+     sokoni_products  sokoni_shops  sokoni_services  sokoni_jobs
+     sokoni_vehicles  sokoni_properties  sokoni_events  sokoni_brands  sokoni_categories  global_search
 
    globalSearch: true  → document is ALSO written to global_search index
    indexInGlobal: false → do NOT write a second global_search copy (used by
@@ -1185,40 +1185,40 @@ const COLLECTION_INDEX_MAP = {
   foods:       { index: 'sokoni_products',  transformer: TRANSFORMERS.products,    globalSearch: true  },
 
   /* ── Stores / Sellers ── */
-  sellers:     { index: 'stores_index',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },
-  stores:      { index: 'stores_index',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },
-  vendors:     { index: 'stores_index',     transformer: _vendorAsStore,           globalSearch: true  },
+  sellers:     { index: 'sokoni_shops',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },
+  stores:      { index: 'sokoni_shops',     transformer: TRANSFORMERS.sellers,     globalSearch: true  },
+  vendors:     { index: 'sokoni_shops',     transformer: _vendorAsStore,           globalSearch: true  },
 
   /* ── Services ── */
-  services:    { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
-  providers:   { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
+  services:    { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
+  providers:   { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
   /* providerProfiles is the CANONICAL provider record, written by
      providerPublish (provider-onboarding.js:226) with name, category,
      subcategory, coverage and status:'active'. It was never registered here,
      so enqueue() returned early at algolia-queue.js:84 and no onboarded
-     provider ever reached services_index -- invited providers completed
+     provider ever reached sokoni_services -- invited providers completed
      onboarding and remained unfindable.
-  
+
      Mapped to the SAME index and transformer as `providers`, not a new one.
      TRANSFORMERS.services already reads every field providerPublish writes
      and resolves providerId || sellerId || uid, so no mapper change is needed.
      `providers` is retained: it is a separate admin surface (index.js:484). */
-  providerProfiles: { index: 'services_index',   transformer: TRANSFORMERS.services,    globalSearch: true  },
+  providerProfiles: { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
 
   /* ── Jobs ── */
-  jobs:        { index: 'jobs_index',       transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
-  digitalJobs: { index: 'jobs_index',       transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
+  jobs:        { index: 'sokoni_jobs',      transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
+  digitalJobs: { index: 'sokoni_jobs',      transformer: TRANSFORMERS.digitalJobs, globalSearch: true  },
 
   /* ── Vehicles ── */
-  cars:        { index: 'vehicles_index',   transformer: TRANSFORMERS.cars,        globalSearch: true  },
-  vehicles:    { index: 'vehicles_index',   transformer: TRANSFORMERS.cars,        globalSearch: true  },
+  cars:        { index: 'sokoni_vehicles',  transformer: TRANSFORMERS.cars,        globalSearch: true  },
+  vehicles:    { index: 'sokoni_vehicles',  transformer: TRANSFORMERS.cars,        globalSearch: true  },
 
   /* ── Real Estate ── */
-  properties:  { index: 'property_index',   transformer: TRANSFORMERS.properties,  globalSearch: true  },
-  real_estate: { index: 'property_index',   transformer: TRANSFORMERS.properties,  globalSearch: true  },
+  properties:  { index: 'sokoni_properties', transformer: TRANSFORMERS.properties, globalSearch: true  },
+  real_estate: { index: 'sokoni_properties', transformer: TRANSFORMERS.properties, globalSearch: true  },
 
   /* ── Events ── */
-  events:      { index: 'events_index',     transformer: TRANSFORMERS.events,      globalSearch: true  },
+  events:      { index: 'sokoni_events',    transformer: TRANSFORMERS.events,      globalSearch: true  },
 
   /* ── Supplementary (dedicated sub-indexes; also in global_search) ── */
   brands:      { index: 'sokoni_brands',     transformer: TRANSFORMERS.brands,      globalSearch: true  },

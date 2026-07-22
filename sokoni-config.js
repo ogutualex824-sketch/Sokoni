@@ -66,34 +66,34 @@ window.SOKONI_CONFIG = {
   algoliaSearchKey: "",   // loaded at runtime via getAlgoliaSearchKey CF
 
   /* Primary index */
-  algoliaIndex:    "products_index",
+  algoliaIndex:    "sokoni_products",
 
   /* Production indexes (must match your Algolia dashboard exactly) */
   algoliaIndexes: {
-    products:    "products_index",
-    stores:      "stores_index",
-    services:    "services_index",
-    events:      "events_index",
-    properties:  "property_index",
-    vehicles:    "vehicles_index",
-    jobs:        "jobs_index",
+    products:    "sokoni_products",
+    stores:      "sokoni_shops",
+    services:    "sokoni_services",
+    events:      "sokoni_events",
+    properties:  "sokoni_properties",
+    vehicles:    "sokoni_vehicles",
+    jobs:        "sokoni_jobs",
     global:      "global_search",
   },
 
   /* Sort replicas */
   algoliaReplicas: {
-    products_price_asc:  "products_index_price_asc",
-    products_price_desc: "products_index_price_desc",
-    products_newest:     "products_index_newest",
-    products_rating:     "products_index_rating",
-    products_popular:    "products_index_popular",
-    services_price_asc:  "services_index_price_asc",
-    events_soonest:      "events_index_soonest",
-    properties_price_asc: "property_index_price_asc",
-    vehicles_price_asc:  "vehicles_index_price_asc",
-    vehicles_year_desc:  "vehicles_index_year_desc",
-    jobs_newest:         "jobs_index_newest",
-    jobs_deadline:       "jobs_index_deadline",
+    products_price_asc:  "sokoni_products_price_asc",
+    products_price_desc: "sokoni_products_price_desc",
+    products_newest:     "sokoni_products_newest",
+    products_rating:     "sokoni_products_rating",
+    products_popular:    "sokoni_products_popular",
+    services_price_asc:  "sokoni_services_price_asc",
+    events_soonest:      "sokoni_events_soonest",
+    properties_price_asc: "sokoni_properties_price_asc",
+    vehicles_price_asc:  "sokoni_vehicles_price_asc",
+    vehicles_year_desc:  "sokoni_vehicles_year_desc",
+    jobs_newest:         "sokoni_jobs_newest",
+    jobs_deadline:       "sokoni_jobs_deadline",
   },
 
   /* Secured key endpoint (CF generates short-lived scoped keys) */

@@ -1496,7 +1496,22 @@ function init() {
     searchInput.value = urlQ;
     lastQuery = urlQ;
     updateClearBtn();
-    doSearch(urlQ);
+
+    // sokoni-search-engine.js is deferred and loads after this inline module.
+    // If it hasn't set window.sokoniSearch yet, wait up to 3s before falling
+    // through to Firestore Path C — so direct ?q= links hit Algolia.
+    if (window.sokoniSearch) {
+      doSearch(urlQ);
+    } else {
+      let waited = 0;
+      const poll = setInterval(function () {
+        waited += 50;
+        if (window.sokoniSearch || waited >= 3000) {
+          clearInterval(poll);
+          doSearch(urlQ);
+        }
+      }, 50);
+    }
   } else {
     renderPrompt();
   }
@@ -1554,7 +1569,6 @@ init();
 <script src="auth-guard.js"></script>
 <script src="sokoni-search-recommendations.js" defer></script>
 <script src="sokoni-security.js"></script>
-<script type="module" src="firebase.js"></script>
 <script src="sokoni-guards.js"></script>
 <script src="sokoni-audit.js" defer></script>
 <script src="sokoni-social.js" defer></script>
