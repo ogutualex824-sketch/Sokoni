@@ -56,6 +56,19 @@ function requireAdmin(req) {
 
 const isDataUri = v => typeof v === 'string' && v.startsWith('data:');
 
+const kb = n => Math.round(n / 1024) + 'KB';
+
+/* Approximate stored size of a document. Firestore's real accounting adds field
+   name lengths and per-type overhead, so this undercounts slightly — it is here
+   to show the order of magnitude of what an inline image costs against the 1 MiB
+   per-document limit, not to be an exact billing figure. Reported as an estimate
+   for that reason: a precise-looking number that is quietly wrong is worse than
+   an admitted approximation. */
+function approxDocBytes(obj) {
+  try { return Buffer.byteLength(JSON.stringify(obj) || '', 'utf8'); }
+  catch (_) { return 0; }
+}
+
 /**
  * Confirm a uid genuinely owns a merchant before anything is reassigned to it.
  *
@@ -110,6 +123,7 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
   }
 
   const results = [];
+  let totalFreed = 0;
 
   for (const id of ids) {
     const ref  = db.collection('products').doc(id);
@@ -119,6 +133,7 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
     const before = snap.data();
     const patch  = {};
     const notes  = [];
+    let   freed  = 0;
 
     if (reassignTo && before.sellerUid !== reassignTo) {
       patch.sellerUid = reassignTo;
@@ -154,12 +169,17 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
         ? before.imageStorageUrls.filter(u => typeof u === 'string' && u.startsWith('http')) : [];
       if (urls.length) {
         if (isDataUri(before.image)) {
+          freed += String(before.image).length - String(urls[0]).length;
           patch.image = urls[0];
-          notes.push('image: ' + Math.round(String(before.image).length / 1024) + 'KB data URI → Storage URL');
+          notes.push('image: ' + kb(String(before.image).length) + ' data URI → Storage URL');
         }
         if (Array.isArray(before.images) && before.images.some(isDataUri)) {
+          const wasBytes = before.images.reduce((a, v) => a + (typeof v === 'string' ? v.length : 0), 0);
+          const nowBytes = urls.reduce((a, v) => a + v.length, 0);
+          freed += wasBytes - nowBytes;
           patch.images = urls;
-          notes.push('images[]: ' + before.images.filter(isDataUri).length + ' data URIs → ' + urls.length + ' Storage URLs');
+          notes.push('images[]: ' + before.images.filter(isDataUri).length + ' data URIs (' +
+                     kb(wasBytes) + ') → ' + urls.length + ' Storage URLs');
         }
       } else if (isDataUri(before.image)) {
         notes.push('KEPT inline image — no imageStorageUrls, the data URI is the only copy');
@@ -174,8 +194,16 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
       const merged = Object.assign({}, before, patch);
       patch.searchableTerms = buildSearchTerms(merged);
       patch.nameLower       = String(merged.name || '').toLowerCase();
-      patch.indexedAt       = Date.now();
-      notes.push('searchableTerms rebuilt (' + patch.searchableTerms.length + ' terms)');
+      /* NOT indexedAt. That field is written by the Algolia backfill as part of
+         the Algolia record and means "this document is in the external index".
+         Setting it here would make three products claim a membership they do not
+         have, and the next reconciliation would skip them as already indexed —
+         the repair would have hidden the very problem it was run to expose.
+         This field says only what actually happened: the Firestore terms were
+         rebuilt. External indexing remains outstanding. */
+      patch.searchTermsRebuiltAt = Date.now();
+      notes.push('searchableTerms rebuilt (' + patch.searchableTerms.length + ' terms) — ' +
+                 'NOT indexed to Algolia/Typesense; indexedAt deliberately left absent');
     }
 
     const changed = Object.keys(patch).filter(k => !['reassignedAt', 'reassignedBy'].includes(k));
@@ -186,11 +214,26 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
       await ref.set(patch, { merge: true });
     }
 
+    const sizeBefore = approxDocBytes(before);
+    const sizeAfter  = approxDocBytes(Object.assign({}, before, patch));
+
     results.push({
       id, name: before.name || null,
       status: dryRun ? 'WOULD_CHANGE' : 'REPAIRED',
       fields: changed, notes,
+      size: {
+        beforeApprox: kb(sizeBefore),
+        afterApprox:  kb(sizeAfter),
+        freedApprox:  kb(freed),
+        /* The share of Firestore's 1 MiB ceiling this document was using. Three
+           products at a third of the limit each is the number that explains why
+           a catalogue query is slow, and it is invisible in any console view. */
+        pctOfDocLimitBefore: Math.round(sizeBefore / (1024 * 1024) * 100) + '%',
+        pctOfDocLimitAfter:  Math.round(sizeAfter  / (1024 * 1024) * 100) + '%',
+      },
     });
+
+    totalFreed += freed;
   }
 
   const summary = {
@@ -200,6 +243,8 @@ exports.repairCatalogue = onCall({ region: REGION, memory: '512MiB' }, async (re
     wouldChange: results.filter(r => r.status === 'WOULD_CHANGE').length,
     noChange:  results.filter(r => r.status === 'NO_CHANGE').length,
     notFound:  results.filter(r => r.status === 'NOT_FOUND').length,
+    bytesFreedApprox: totalFreed,
+    bytesFreedHuman:  kb(totalFreed),
     reassignTo, ownerVerifiedVia: ownerCheck?.via || null,
     merchantId: ownerCheck?.merchantId || null,
     merchantName: ownerCheck?.name || null,
