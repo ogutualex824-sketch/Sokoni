@@ -119,6 +119,37 @@ Last updated: 2026-07-21. Related: [[APP_CHECK]] · [[DEFECT_REGISTER]]
 
 ---
 
+## Payment migration — engineering closed, handed to operations
+
+**Status: engineering complete to the provisioning boundary.** Full plan and exit
+criteria: [[PAYMENT_MIGRATION_MOR]].
+
+| Done (engineering) | Commit |
+|---|---|
+| Collection route explicit (`DIRECT_TO_SELLER` \| `CENTRAL_MOR`), inert by default | `9d72055` |
+| M-Pesa C2B validation + confirmation (manual/QR leg) | `dbb09af` |
+| Merchant credential collection retired from every client surface | `5ee7e3a` |
+| Deprecation plan with executable exit criteria | `12f4dbb` |
+| Production acceptance gate (9 end-to-end checks) | `43f519d` |
+
+**Owned by operations — no application code can satisfy these:** provision the
+central Paybill; deploy central Daraja credentials to Secret Manager; register and
+validate the Safaricom C2B URLs; obtain Safaricom + legal clearance for collecting
+and remitting third-party merchant funds; run gate 7½ then the pilot.
+
+**Carry-over caveat:** the audit that retired stage 3 (`shopSettings` = 0 docs)
+is a point-in-time observation. Re-run it before disabling or deleting the legacy
+STK path — a single merchant configuring credentials invalidates it.
+
+## Open operational items (not payment blockers)
+
+| Item | State | Owner |
+|---|---|---|
+| `getTypesenseSearchKey` 403 at Cloud Run (`run.invoker`, quota-blocked) | Search runs on Algolia; Typesense tier dead | infra |
+| catalogue-doctor device check (`mysokoni.co.ke/catalogue-doctor`) | P0 catalogue fix unverified on a real device | founder |
+| Admin invitations — alexochieng3030@, ochisaac@ | Delivered (SendGrid), neither has set a password | founder |
+| Firebase Auth → SendGrid SMTP + 4 stale domain records | Blocked by permission classifier; commands documented | founder/infra |
+
 ## EXTERNAL action required (IAM) — not fixable in code
 
 Three deployed Firebase **callables reject at Cloud Run before the function runs**
