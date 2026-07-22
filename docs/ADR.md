@@ -230,3 +230,36 @@ second module assigns `window.SokoniReceiptEngine`" or "no page loads two printe
 engines" would have blocked the exact regressions this file exists to prevent.
 
 **Forbidden:** merging past a CRITICAL guardian violation.
+
+---
+
+## ADR-0008 — Public listing reads expose whole documents
+
+**Decision:** listing collections are readable anonymously only when the record
+carries an explicit `active` or `published` status; drafts, pending and rejected
+records stay private. Owner and admin escape hatches are preserved.
+`propertyListings` and `healthProviders` are Cloud-Function-write-only.
+
+**Evidence:** audited 2026-07-22 before a rules deploy. `services`, `vehicles`,
+`cars`, `properties`, `propertyListings`, `digitalJobs` are all status-gated;
+`applications` is `isAdmin() || isOwner()` and never public; `stores` is fully
+public as a shopfront. Verified against the rules themselves, not the commit
+message that described them — the message said "added public allow read" for all
+nine, which materially overstated what shipped.
+
+**Consequence — the open item.** Firestore rules gate documents, not fields, so
+an approved `healthProviders` record is anonymously readable *in full*:
+`phone`, `licenseNumber`, `address`, `qualifications`, `bio`. For a healthcare
+directory that is arguably the intent — a patient needs the number, and a
+practising licence is normally a public identifier — but it is bulk-scrapable,
+and SOKONI is ODPC-registered.
+
+The fix, when the directory justifies it, is to split the document rather than
+tighten the rule: a public profile (name, specialty, practice phone, licence,
+clinic location) beside a private operational record (verification notes,
+internal contacts, moderation state). A rule cannot do this; only the data model
+can.
+
+**Forbidden:** adding a field to a publicly-readable listing collection without
+asking whether it should be world-readable. The rule will not stop you — it
+grants the document, not a field list.
