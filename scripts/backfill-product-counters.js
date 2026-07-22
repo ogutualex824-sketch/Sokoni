@@ -10,12 +10,23 @@
  * and `maxProducts` must sit together for `count < maxProducts` to be
  * expressible. That cache is correct and stays.
  *
- * The consequence is that deploying the canonical catalogue did NOT converge
- * existing merchants. canPublishProduct prefers a cached number when one is
- * present, so every counter stamped before 2026-07-22 still carries a value
- * produced by one of the ten superseded catalogues. New merchants resolve
- * canonically; historical ones keep whatever they were given. This script
- * closes that gap once.
+ * THE PREMISE THIS WAS WRITTEN ON WAS WRONG
+ * It was built to converge counters stamped by the ten superseded catalogues,
+ * on the reasoning that canPublishProduct prefers a cached number when one is
+ * present. Production was then measured: productCounters holds ZERO documents.
+ * No ceiling has ever been materialised for anyone, so nothing is stale and
+ * every merchant already resolves canonically through the live path.
+ *
+ * The real gap is the opposite one and this script does not close it. Counters
+ * do not exist, and the trigger that creates one seeds `count` with an
+ * increment of 1 — so the first product a long-standing seller adds records a
+ * catalogue of 1 when they hold 116. Seeding the count from the products
+ * collection is a separate operation with a commercial decision attached
+ * (whether a merchant already past the ceiling is grandfathered), and it is
+ * deliberately not folded in here.
+ *
+ * This script remains correct for what it does: reconcile a ceiling against the
+ * catalogue once counters exist. It is currently a no-op against production.
  *
  * DRY RUN IS THE DEFAULT
  * Nothing is written unless --apply is passed. The dry run prints the exact
