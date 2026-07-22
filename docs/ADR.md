@@ -458,3 +458,85 @@ Exit 1 only on `BEHAVIOUR-DIFFERS` — comment drift is reported, not fatal.
 *Verified by injecting one executable line into a comment-only diff: verdict
 flips to `BEHAVIOUR-DIFFERS`, exit 1; removing it returns to `COMMENT-ONLY`,
 exit 0.*
+
+---
+
+## ADR-0012 — Two subscription pages exist; the broken one is the one everything links to
+
+**Status:** OPEN — engineering has established the facts, the product decision is not made
+**Date:** 2026-07-22
+
+### What was found
+
+SOKONI has two subscription pages.
+
+`plans.html` resolves plans server-side through the `subGetPlans` callable, groups
+them by `hubType`, and offers the tier matching the hub the user is actually in.
+It is correct.
+
+`subscriptions.html` carries a hardcoded `PLANS_DATA` array and purchases the plan
+ids `starter`, `pro`, `business`. In `sub-billing` those three ids are
+`hubType: 'service_provider'`. The page describes them in marketplace language —
+"20 active listings", "Unlimited listings" — while the plans grant
+`services_limit` and `leads_per_month`.
+
+**16 links across the codebase point to `subscriptions.html`. None point to
+`plans.html`.** The correct page is orphaned; the incorrect one is the default
+route.
+
+### It is not hypothetical
+
+`paymentIntents/SKN3550FD490`, created 2026-07-20T22:05Z:
+
+```
+uid       xrH21J5GFbW8PluCZ2ny5nIuf602   ← KASS VAPES, a marketplace merchant
+planId    starter
+hubType   service_provider               ← recorded on the intent itself
+amount    499 KES
+status    created                        ← abandoned, never paid
+```
+
+A merchant selling vape products attempted to buy a service-provider plan. Had
+they completed payment they would hold a subscription whose `hubType` does not
+match the marketplace lookup in `subscription-core.resolveSubscription(uid,
+{role:'merchant', hubType:'merchant'})` — paying KES 499/month while remaining on
+marketplace Free.
+
+Zero completed purchases exist, so no migration is owed. The defect is live and
+reachable, not latent.
+
+### What is NOT wrong
+
+Pricing was suspected and cleared. The page displays KES 499 / 1,499 / 4,999 and
+`sub-billing` charges 49900 / 149900 / 499900 cents — the same figures.
+`subscriptionPlans/{planId}` is empty, so nothing overrides them. The payment
+intent above was minted at exactly the advertised 499. `sub-billing`'s own comment
+records that its prices were transcribed from this page.
+
+An earlier reading of this compared the page against the `seller_*` tiers, which
+the page never purchases, and concluded merchants were charged double. That was
+wrong.
+
+### The decision required
+
+Not an engineering one:
+
+1. **`subscriptions.html` is legacy** — retire it, repoint the 16 links to
+   `plans.html`. Marketplace sellers then reach `seller_basic` / `seller_pro` /
+   `seller_enterprise`, which exist in `sub-billing` and are currently
+   unpurchasable from any client surface.
+2. **`subscriptions.html` is the service-provider page** — its plan ids and prices
+   are already correct; only the marketplace wording is wrong. Marketplace sellers
+   still have no upgrade path.
+
+### Why nothing was changed
+
+The listing numbers on that page were briefly edited to match the marketplace
+catalogue and reverted. The page's `listings: 20` already matched
+`services_limit: 20` on the plan it sells; aligning it to the marketplace
+catalogue would have made a coherent page incoherent, to match a catalogue
+governing a different product.
+
+**A number that looks wrong against one authority may be right against the one
+that actually applies. Establish which product a surface belongs to before
+synchronising its values.**
