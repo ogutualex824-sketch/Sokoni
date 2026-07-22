@@ -7738,6 +7738,14 @@ Object.assign(exports, searchSyncModule); /* spreads searchSync_*_on{Create,Upda
 exports.COLLECTION_REGISTRY = undefined;  /* not a CF — strip from function exports to avoid noise */
 delete exports.COLLECTION_REGISTRY;
 delete exports.syncDocument;
+
+/* ── Marketplace product counter (trial product cap) ──────────────────────
+   Spreads onMarketplaceProductCreated / onMarketplaceProductDeleted /
+   canPublishProduct / recountMarketplaceProducts. _internal is a test seam,
+   not a callable — stripped so it is never deployed as a function. */
+const productLimitModule = require('./product-limit');
+Object.assign(exports, productLimitModule);
+delete exports._internal;
 delete exports._shouldSkip;
 delete exports._updateDecision;
 
