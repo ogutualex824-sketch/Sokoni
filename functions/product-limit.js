@@ -36,7 +36,7 @@
  * merchant's existing catalogue unreachable.
  */
 
-const { onDocumentCreated, onDocumentDeleted } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentDeleted, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const admin = require('firebase-admin');
 
@@ -231,5 +231,67 @@ exports.recountMarketplaceProducts = onCall({ region: REGION }, async (req) => {
   );
   return { uid: target, count, limit: max, status };
 });
+
+/**
+ * Refresh the materialised ceiling whenever a subscription changes.
+ *
+ * WHY THIS TRIGGER EXISTS
+ * syncLimit was written to keep productCounters.maxProducts in step with the
+ * plan, and until now nothing called it — not one caller in the repository. The
+ * ceiling was therefore written once, on the merchant's first product, and never
+ * revisited. A merchant who upgraded stayed capped at their old allowance until
+ * something happened to rewrite the document, which for most of them was never.
+ *
+ * That is the same defect the catalogue migration addressed, one layer down: the
+ * authority was corrected but the cache derived from it had no path to follow.
+ *
+ * DOCUMENT ID IS NOT THE UID
+ * Subscriptions exist under two shapes — subscriptions/{uid} written by
+ * payment-reconciliation, and subscriptions/{autoId} with a `uid` field written
+ * by sub-engine and sub-billing. Assuming the id is the uid is precisely the
+ * mismatch that made a merchant's dashboard report the wrong plan, so the uid is
+ * read from the document first and the id used only as a fallback.
+ *
+ * WHY THE CHANGE IS FILTERED
+ * Three other triggers already fire on this collection. Re-syncing on every
+ * write — including the timestamp-only writes a renewal produces — would add a
+ * transaction per merchant per touch for no change in outcome. Only a plan,
+ * status or negotiated-limit change can move the ceiling, so only those re-sync.
+ */
+exports.onSubscriptionChangedSyncLimit = onDocumentWritten(
+  { document: 'subscriptions/{subId}', region: REGION, memory: '256MiB' },
+  async (event) => {
+    const before = event.data?.before?.data() || null;
+    const after  = event.data?.after?.data()  || null;
+
+    /* A deleted subscription still needs a re-sync: the merchant drops to the
+       free allowance and the cached ceiling must follow them down. `before` is
+       the only remaining source of the uid at that point. */
+    const src = after || before;
+    if (!src) return;
+
+    const uid = src.uid || event.params.subId;
+    if (!uid) return;
+
+    const moved = (a, b) =>
+      String(a?.plan   || a?.planId || a?.tier || '') !== String(b?.plan   || b?.planId || b?.tier || '') ||
+      String(a?.status || '')                         !== String(b?.status || '')                         ||
+      JSON.stringify(a?.limits || null)               !== JSON.stringify(b?.limits || null);
+
+    if (before && after && !moved(before, after)) return;
+
+    try {
+      const r = await syncLimit(uid);
+      console.log('[product-limit] ceiling re-synced for ' + uid +
+                  ' → ' + (r && r.maxProducts) + ' (' + (r && r.status) + ')');
+    } catch (e) {
+      /* Logged, not rethrown. A failed re-sync leaves the previous ceiling in
+         place, which is stale but operable; retrying the trigger would not make
+         a resolution error resolve, and productCounters is converged
+         independently by scripts/backfill-product-counters.js. */
+      console.error('[product-limit] ceiling re-sync FAILED for ' + uid + ': ' + e.message);
+    }
+  }
+);
 
 exports._internal = { resolveMaxProducts, syncLimit, catalog };
