@@ -114,6 +114,25 @@ function maxPrinterEnginesPerPage() {
   return { max, worst };
 }
 
+/* ── Startup cost on the POS page ────────────────────────────────────────
+   Parser-blocking scripts were cut from 41 to 3 during the iPhone crash
+   incident. This locks that in: a ratchet says "no worse than today's verified
+   baseline", which survives contact with a real codebase in a way an idealised
+   budget does not — a guard that fails on day one is disabled by day two.
+
+   The regex matches the WHOLE tag. An earlier ad-hoc measurement used
+   /<script[^>]*src=/ which truncates before the attributes that follow src, so
+   `defer` was invisible and every count taken with it was wrong. That mistake
+   produced three incorrect findings in one day; it is written down here so the
+   next person does not repeat it. */
+function countBlockingScripts(htmlPath) {
+  let t = '';
+  try { t = fs.readFileSync(htmlPath, 'utf8'); } catch (_) { return null; }
+  const tags = [...t.matchAll(/<script\b[^>]*\bsrc=[^>]*>/gi)].map((m) => m[0]);
+  const deferred = tags.filter((tag) => /\bdefer\b|\basync\b|type=["']module["']/.test(tag));
+  return { total: tags.length, blocking: tags.length - deferred.length };
+}
+
 const files = walk(ROOT);
 const report = { amplification: {}, fanOut: {}, staleDelivery: [], totals: {} };
 
@@ -140,6 +159,8 @@ report.totals = {
      THIRD owner; it is not driving the count to one. See the superseded note. */
   receiptEngines: countGlobalAssigners('SokoniReceiptEngine'),
   printerDriverGlobals: countGlobalAssigners('SokoniPrinterDrivers'),
+  posBlockingScripts:  (countBlockingScripts(path.join(ROOT, 'pos.html')) || {}).blocking,
+  posStartupScripts:   (countBlockingScripts(path.join(ROOT, 'pos.html')) || {}).total,
   /* ADR-0001: printerEnginesPerPage baselines at 6. A behavioural audit proved
      those six are a layered stack — transport, document library, fleet manager,
      orchestrator, encoder library, adapter — with zero true duplicates. The
@@ -160,6 +181,7 @@ try { baseline = JSON.parse(fs.readFileSync(BASELINE, 'utf8')).totals; } catch (
 if (AS_JSON) { console.log(JSON.stringify({ report, baseline }, null, 2)); }
 
 const fails = [];
+const warnings = [];   /* WARN_ONLY metrics land here — reported, not fatal */
 if (baseline) {
   /* Derive the ratcheted keys from the baseline rather than hardcoding them.
      A hardcoded list silently stopped enforcing the duplication metrics the
@@ -168,11 +190,16 @@ if (baseline) {
      so a future metric cannot be added and left unenforced. filesScanned is
      excluded: it grows as the repo grows and is context, not a budget. */
   const RATCHET_EXEMPT = new Set(['filesScanned']);
+  /* Warn-only while the right threshold is still being learned. A metric moves
+     out of this set once its baseline has held across a few releases; failing a
+     build on a number nobody trusts yet just teaches people to ignore the gate. */
+  const WARN_ONLY = new Set(['posStartupScripts']);
   for (const k of Object.keys(baseline)) {
     if (RATCHET_EXEMPT.has(k)) continue;
     if (typeof baseline[k] !== 'number' || typeof report.totals[k] !== 'number') continue;
     if (report.totals[k] > baseline[k]) {
-      fails.push(`${k}: ${report.totals[k]} > baseline ${baseline[k]}`);
+      const msg = `${k}: ${report.totals[k]} > baseline ${baseline[k]}`;
+      if (WARN_ONLY.has(k)) warnings.push(msg); else fails.push(msg);
     }
   }
 }
@@ -182,6 +209,8 @@ if (!AS_JSON) {
   console.log('  getAll() inside a loop      : ' + report.totals.amplification + (baseline ? '   (baseline ' + baseline.amplification + ')' : ''));
   console.log('  SokoniReceiptEngine owners  : ' + report.totals.receiptEngines + (baseline && baseline.receiptEngines != null ? '   (baseline ' + baseline.receiptEngines + ', complementary — blocks a 3rd)' : ''));
   console.log('  SokoniPrinterDrivers owners : ' + report.totals.printerDriverGlobals + (baseline && baseline.printerDriverGlobals != null ? '   (baseline ' + baseline.printerDriverGlobals + ', distinct shapes — see ADR-0001)' : ''));
+  console.log('  pos.html blocking scripts   : ' + report.totals.posBlockingScripts + (baseline && baseline.posBlockingScripts != null ? '   (baseline ' + baseline.posBlockingScripts + ')' : ''));
+  console.log('  pos.html total scripts      : ' + report.totals.posStartupScripts + (baseline && baseline.posStartupScripts != null ? '   (baseline ' + baseline.posStartupScripts + ', warn-only)' : ''));
   console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', layered — blocks a 7th)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
   console.log('  forEach(async …) fan-out    : ' + report.totals.fanOut + (baseline ? '   (baseline ' + baseline.fanOut + ')' : ''));
   console.log('  precached but not fresh     : ' + report.totals.staleDelivery + (baseline ? '   (baseline ' + baseline.staleDelivery + ')' : ''));
@@ -189,6 +218,10 @@ if (!AS_JSON) {
   if (report.staleDelivery.length) {
     console.log('\n  STALE DELIVERY RISK');
     report.staleDelivery.forEach((d) => console.log('    ' + d.file + ' — ' + d.reason));
+  }
+  if (warnings.length) {
+    console.log('\n  WARN (not failing yet — threshold still being learned):');
+    warnings.forEach((w) => console.log('    ' + w));
   }
   if (fails.length) {
     console.log('\n  FAIL — a regression was introduced:');

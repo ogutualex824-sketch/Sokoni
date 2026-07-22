@@ -5,8 +5,10 @@
     "staleDelivery": 2,
     "receiptEngines": 2,
     "printerDriverGlobals": 2,
+    "posBlockingScripts": 4,
+    "posStartupScripts": 63,
     "printerEnginesPerPage": 6,
-    "filesScanned": 650
+    "filesScanned": 652
   },
   "recorded": "manual"
 }
