@@ -540,3 +540,80 @@ governing a different product.
 **A number that looks wrong against one authority may be right against the one
 that actually applies. Establish which product a surface belongs to before
 synchronising its values.**
+
+---
+
+## ADR-0013 — Subscription activation: one canonical writer, one open identifier decision
+
+**Status:** PART ACCEPTED (activation), PART OPEN (identifier)
+**Date:** 2026-07-22
+**Evidence:** `docs/SUBSCRIPTION-WRITERS.md` — 12 write sites, 6 modules, 3 id conventions
+
+### Accepted — `intasendWebhook` is the canonical activation writer
+
+`functions/index.js:5688` reads `paymentIntents/{apiRef}`, requires
+`purpose === 'subscription'`, and derives both `uid` and `plan` from that
+server-minted intent. The client is never consulted. This is recorded rather
+than decided: it is already how production activates, and the code says why —
+*"the client-side onSuccess path is fragile (tab close, network drop); this
+webhook is the authoritative signal."*
+
+**Rule:** a subscription entitlement is derived from `paymentIntents`. Any writer
+that takes a plan from a request body is not an activation path.
+
+### Accepted — `activateSubscription` is legacy and must stop trusting the client
+
+`functions/index.js:5754` validates payment ownership and COMPLETE status, then
+writes whatever `plan` arrived in `request.data`. Its two callers both live in
+`subscriptions.html`; `:525` sources that plan from
+`localStorage.sokoniSubscription`, which a standing project rule forbids as a
+business authority.
+
+It must either be deleted — `healSubscriptionEntitlement` already covers webhook
+failure, config-gated and failing closed — or resolve the intent and derive the
+plan exactly as the webhook does. **Not shipped yet:** the regression suite comes
+first (valid activation, plan/intent mismatch rejected, non-subscription payment
+rejected, other user's payment rejected, idempotent replay, legacy ref fails in a
+documented way).
+
+### Open — the canonical document identifier
+
+Three conventions are in the codebase today:
+
+```
+subscriptions/{uid}          webhook, activateSubscription, heal, adapters
+subscriptions/{merchantId}   business-bootstrap    ← the one live record
+subscriptions/{autoId}       sub-billing, sub-engine   (uid as a field)
+```
+
+This is the cause of the lookup failure patched client-side on the same day:
+`sokoni-subscriptions.js` read `subscriptions/{providerId}` and missed the only
+live merchant, whose record is keyed by `merchantId`. That client fix — direct
+id, then `where('uid','==')` — remains correct and remains a symptom fix.
+
+**Recommendation: `{uid}`.** Every deployed writer already uses it, the read path
+in `subscription-core` resolves by `uid`, and the alternative conventions belong
+to modules that are not deployed.
+
+**The migration cost is one document today.** `subscriptions` holds a single
+record. The same decision taken after a hundred merchants onboard is a data
+migration with an entitlement-outage risk; taken now it is one write. That
+asymmetry, not elegance, is the argument for deciding before the next onboarding
+wave.
+
+Ratification is deferred because it is an architecture decision with product
+consequences — `merchantId` may be deliberate if a merchant is ever intended to
+hold subscriptions across multiple owner accounts. **That question should be
+answered explicitly rather than settled by whichever module ships next.**
+
+### Why this ADR exists
+
+Four separate investigations in one session each found a single writer, reasoned
+from it, and reached a wrong conclusion. `activateSubscription` was analysed for
+an hour before `intasendWebhook` was found sixty lines above it in the same file.
+A proposal to renormalise the entire payment reference model was drafted and
+withdrawn on discovering the linkage already existed.
+
+**Before changing a canonical write path, enumerate every writer to the same
+document and classify each as primary, repair, migration or legacy.** One trace
+is a hypothesis; the full set is a finding.
