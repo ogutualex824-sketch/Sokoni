@@ -984,6 +984,54 @@ window.ManagerAuth = (() => {
    *
    * Returns false — never true — on any outcome that is not an explicit server YES.
    */
+  /**
+   * First-run PIN provisioning.
+   *
+   * createBusiness writes the owner's posStaff record with no pinHash, and no UI ever
+   * called setStaffPin — so on a fresh merchant there is no PIN in existence and
+   * validateDeviceAccess (which matches on pinHash) can never succeed. Requiring a PIN
+   * without offering a way to create one would lock every existing merchant out of
+   * refunds, which is worse than the hole it closes.
+   *
+   * Authorisation is decided by the server: setStaffPin runs _assertMerchantAccess and
+   * then permits only an owner/manager (or a staff member changing their own PIN). It
+   * also enforces the PIN policy — 4-6 digits, no repeated digit, no sequential run.
+   * Nothing here is trusted; this only collects the value and asks.
+   */
+  async function _provisionManagerPin() {
+    const merchantId = _merchantId();
+    const branchId   = _branchId();
+    let uid = null;
+    try { uid = window.firebase?.auth?.().currentUser?.uid || null; } catch (_) {}
+
+    if (!merchantId || !branchId || !uid) {
+      alert('Cannot set a PIN on this device yet.\n\nComplete POS setup first, then try again.');
+      return false;
+    }
+
+    const pin = window.prompt(
+      'SET A MANAGER PIN\n\n' +
+      'No manager PIN exists for this branch yet.\n' +
+      'Choose a 4-6 digit PIN. It will be required to approve\n' +
+      'refunds, voids and price overrides.\n\n' +
+      'Cannot be repeated digits (1111) or a run (1234).'
+    );
+    if (pin === null || !String(pin).trim()) return false;
+
+    try {
+      const call = firebase.functions().httpsCallable('smartPosDispatch');
+      await call({ op: 'setStaffPin', merchantId, staffId: branchId + '-' + uid, pin: String(pin).trim() });
+      alert('Manager PIN saved.\n\nEnter it now to approve this operation.');
+      return true;
+    } catch (e) {
+      /* The server refused — wrong role, weak PIN, or unreachable. Show its reason
+         rather than a generic failure; the messages are already merchant-readable. */
+      alert('Could not save the PIN.\n\n' + (e?.message || 'Unknown error') +
+            '\n\nOnly the business owner or a manager can set a PIN.');
+      return false;
+    }
+  }
+
   async function _serverVerifiedPin(operation) {
     const opLabel = OPERATIONS[operation]?.label || operation;
     const maxTries = Math.max(1, _cfg.maxPinAttempts || 3);
@@ -1024,7 +1072,33 @@ window.ManagerAuth = (() => {
       /* Wrong PIN — loop and let the operator retry within the bounded count. */
     }
 
-    alert('Authorization denied.\n\nThe PIN did not match an active manager for this branch.');
+    /* Exhausted the attempts. Before denying outright, offer to create a PIN — on a
+       fresh merchant there is nothing to match against, and "wrong PIN" is
+       indistinguishable from "no PIN exists" from the client's side. The server still
+       decides whether this caller is allowed to set one. */
+    const setup = confirm(
+      'Authorization denied.\n\n' +
+      'The PIN did not match an active manager for this branch.\n\n' +
+      'If no manager PIN has been set up yet, tap OK to create one now.\n' +
+      '(Only the business owner or a manager can do this.)'
+    );
+    if (setup && await _provisionManagerPin()) {
+      /* PIN now exists — give one immediate attempt so the merchant can complete the
+         operation they were in the middle of, rather than starting over. */
+      const pin = window.prompt('Enter the manager PIN to approve:\n\n' + opLabel);
+      if (pin && String(pin).trim()) {
+        const res = await _verifyPinServer(String(pin).trim());
+        if (res && res.valid) {
+          _writeAudit({
+            operation, operationLabel: opLabel, method: 'pin_server',
+            status: 'approved', managerId: res.employee?.uid || 'server-verified',
+            managerName: res.employee?.name || 'Owner/Manager (server)',
+            fallbackPath: 'first-run-provision',
+          });
+          return true;
+        }
+      }
+    }
     return false;
   }
 
