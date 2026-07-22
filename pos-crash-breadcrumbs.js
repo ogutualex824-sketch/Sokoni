@@ -416,6 +416,82 @@
     console.log('  crash history cleared');
   };
 
-  console.log('%c breadcrumbs armed — sokoniCrashReport() | sokoniCrashCompare() ',
+  /* ── On-screen tap diagnostic ────────────────────────────────────────────
+     A merchant's phone has no DevTools, so a console-only diagnostic cannot be
+     run where the fault actually occurs — the evidence stays unreachable on the
+     one device that has it. Visiting the page with ?diag=tap renders the result
+     on screen and copies it to the clipboard.
+
+     This file already loads first on pos.html, so carrying it here needs no new
+     script tag on a page that is otherwise frozen.
+
+     It only runs when the parameter is present: no cost, no DOM, no listeners
+     on a normal load. */
+  function renderTapDiagnostic() {
+    const sel  = new URLSearchParams(location.search).get('sel') || '.product-tile';
+    const card = document.querySelector(sel);
+    const lines = [];
+    const say = (k, v) => lines.push(k + ': ' + v);
+
+    say('url', location.pathname);
+    say('selector', sel);
+
+    if (!card) {
+      say('VERDICT', 'NO ELEMENT MATCHES — nothing rendered, not an overlay problem');
+    } else {
+      const r = card.getBoundingClientRect();
+      say('rect', Math.round(r.width) + 'x' + Math.round(r.height));
+      if (!r.width || !r.height) {
+        say('VERDICT', 'ZERO SIZE — occupies no pixels, a layout problem');
+      } else {
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (!hit) {
+          say('VERDICT', 'NOTHING AT CENTRE — scrolled out of view');
+        } else {
+          let n = hit, id = null, d = 0;
+          while (n && d < 12) { if (n.id) { id = n.id; break; } n = n.parentElement; d++; }
+          const cs = getComputedStyle(hit);
+          const reaches = hit === card || card.contains(hit);
+          say('hit', hit.tagName.toLowerCase() + (hit.className ? '.' + String(hit.className).split(' ')[0] : ''));
+          say('nearestId', id || '(none)');
+          say('display', cs.display);
+          say('pointerEvents', cs.pointerEvents);
+          say('zIndex', cs.zIndex);
+          say('position', cs.position);
+          say('VERDICT', reaches ? 'REACHES TILE — not an overlay problem'
+                                 : 'BLOCKED by ' + (id || hit.tagName.toLowerCase()));
+        }
+      }
+    }
+    /* Include the lifecycle decisions: if the banner ever showed, its record is
+       here, and it answers whether a controllerchange happened at all. */
+    try {
+      const dec = JSON.parse(localStorage.getItem('sokoni_lifecycle_decisions') || '[]');
+      say('lifecycleDecisions', dec.length ? dec.map(x => x.decision + '/' + x.cartItems).join(' ') : 'none');
+    } catch (_) {}
+
+    const text = lines.join('\n');
+    console.log(text);
+
+    const box = document.createElement('pre');
+    box.textContent = text + '\n\n[tap to dismiss]';
+    box.style.cssText = 'position:fixed;inset:8px;z-index:2147483647;overflow:auto;margin:0;' +
+      'background:#050505;color:#71ff00;font:600 12px/1.5 ui-monospace,monospace;' +
+      'padding:14px;border:2px solid #71ff00;border-radius:10px;white-space:pre-wrap';
+    box.addEventListener('click', () => box.remove());
+    document.body.appendChild(box);
+
+    try { navigator.clipboard && navigator.clipboard.writeText(text); } catch (_) {}
+    return text;
+  }
+  window.sokoniTapDiag = renderTapDiagnostic;
+
+  if (/[?&]diag=tap/.test(location.search)) {
+    /* After load so the grid has rendered — running against an empty DOM would
+       report NO ELEMENT and send the investigation somewhere false. */
+    window.addEventListener('load', () => setTimeout(renderTapDiagnostic, 1200));
+  }
+
+  console.log('%c breadcrumbs armed — sokoniCrashReport() | sokoniCrashCompare() | sokoniTapDiag() ',
               'background:#71ff00;color:#000;font-weight:bold');
 })();
