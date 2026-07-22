@@ -31,12 +31,52 @@
     } catch (_) { return false; }
   }
 
+  /* ── Decision record ─────────────────────────────────────────────────────
+     Every evaluation is logged with its inputs, not just its outcome. Without
+     this, "it reloaded while I was serving a customer" and "it never updated"
+     are both unanswerable — you can see that a reload happened or did not, but
+     never why the contract decided it.
+
+     Persisted alongside the crash breadcrumbs so it survives the reload it is
+     describing. A ring buffer, because the useful window is the last few
+     decisions and an unbounded log in localStorage eventually fails to write. */
+  const DECISIONS_KEY = 'sokoni_lifecycle_decisions';
+  const MAX_DECISIONS = 20;
+
+  function record(reason, decision, extra) {
+    const entry = Object.assign({
+      reason,
+      decision,
+      cartItems: (() => { try { return ((window.state && window.state.cartItems) || []).length; } catch (_) { return null; } })(),
+      reloadPending: !!window.__sokoniReloadPending,
+      at: new Date().toISOString(),
+    }, extra || {});
+
+    console.info('[AppLifecycle] ' + decision + ' — ' + reason +
+                 ' (cartItems: ' + entry.cartItems + ')');
+    try {
+      const log = JSON.parse(localStorage.getItem(DECISIONS_KEY) || '[]');
+      log.push(entry);
+      while (log.length > MAX_DECISIONS) log.shift();
+      localStorage.setItem(DECISIONS_KEY, JSON.stringify(log));
+    } catch (_) { /* private mode — the console line is still emitted */ }
+    return entry;
+  }
+
   const AppLifecycle = {
     /* False vetoes the reload. Anything other than an explicit false allows it,
        so an error or an unexpected value fails toward keeping the platform
        updatable rather than toward a POS that can never receive a fix. */
-    canReload() {
-      return !hasOpenSale();
+    canReload(reason) {
+      const open = hasOpenSale();
+      record(reason || 'controllerchange', open ? 'DEFER' : 'ALLOW');
+      return !open;
+    },
+
+    /** Recent decisions, newest last. The answer to "why did it do that?" */
+    decisions() {
+      try { return JSON.parse(localStorage.getItem(DECISIONS_KEY) || '[]'); }
+      catch (_) { return []; }
     },
 
     hasOpenSale,
@@ -47,7 +87,7 @@
     applyPendingReload(reason) {
       if (!window.__sokoniReloadPending) return false;
       if (hasOpenSale()) return false;
-      console.info('[POS lifecycle] applying deferred reload' + (reason ? ' — ' + reason : ''));
+      record(reason || 'deferred-apply', 'APPLIED');
       window.__sokoniReloadPending = false;
       window.location.reload();
       return true;
