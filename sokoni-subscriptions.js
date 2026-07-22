@@ -82,13 +82,30 @@
     if (!db || !uid) return null;
 
     try {
-      const { doc, getDoc } = await import(
+      const { doc, getDoc, collection, query, where, limit, getDocs } = await import(
         'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
       );
-      const snap = await getDoc(doc(db, 'subscriptions', uid));
-      if (!snap.exists()) return null;
 
-      const data = snap.data();
+      /* Subscriptions are owned by a BUSINESS, so business-bootstrap.js writes
+         subscriptions/{merchantId}. Reading subscriptions/{uid} therefore misses
+         every document a POS-provisioned merchant has — verified in production,
+         where the collection held subscriptions/SOK-GL58F7 with status
+         "trialing" and no uid-keyed documents at all.
+
+         Direct id first so anything already resolving keeps working, then a
+         query on the uid field the document carries. No mapping table, and it
+         handles both key shapes. */
+      let data = null;
+      const snap = await getDoc(doc(db, 'subscriptions', uid));
+      if (snap.exists()) data = snap.data();
+
+      if (!data) {
+        const q = query(collection(db, 'subscriptions'), where('uid', '==', uid), limit(1));
+        const qs = await getDocs(q);
+        if (!qs.empty) data = qs.docs[0].data();
+      }
+      if (!data) return null;
+
       const now  = Date.now();
 
       /* Cancelled subscription — treat as free immediately */
@@ -205,25 +222,77 @@
      For backwards compatibility with sokoni-pay.js getProviderPlan().
      Reads from Firestore by provider UID.
   ══════════════════════════════════════════════════════════════ */
-  async function getProviderPlan(providerId) {
-    if (!providerId) return 'free';
+  /**
+   * resolveProviderSubscription(uid) — the subscription, WITH why.
+   *
+   * A subscription belongs to a BUSINESS, not to a user: a shop can have several
+   * staff, and keying by uid would give each of them a separate subscription.
+   * So business-bootstrap.js writes subscriptions/{merchantId}. This reader was
+   * fetching subscriptions/{uid} — a document that does not exist — and every
+   * lookup missed. Verified against production: the collection holds
+   * subscriptions/SOK-GL58F7 with status "trialing" and no uid-keyed documents
+   * at all, so a merchant on an active trial was resolving as free.
+   *
+   * The document carries `uid` as a field, so querying by that field needs no
+   * mapping table and works for both key shapes — the merchantId-keyed documents
+   * that exist today and any uid-keyed ones written elsewhere.
+   *
+   * Returns a status alongside the plan because "free" was doing two jobs. It
+   * meant both "this merchant is on the free plan" and "I could not find out",
+   * and a UI cannot tell those apart — which is how a paying merchant gets told
+   * they are on Free.
+   *
+   *   { status: 'FOUND',        plan, data }
+   *   { status: 'NOT_FOUND',    plan: 'free', reason }   no subscription exists
+   *   { status: 'LOOKUP_ERROR', plan: 'free', reason }   could not determine
+   */
+  async function resolveProviderSubscription(providerId) {
+    if (!providerId) return { status: 'LOOKUP_ERROR', plan: 'free', reason: 'no provider id' };
     const db = window.firebaseDB;
-    if (!db) return 'free';
+    if (!db) return { status: 'LOOKUP_ERROR', plan: 'free', reason: 'firestore not ready' };
 
     try {
-      const { doc, getDoc } = await import(
+      const { doc, getDoc, collection, query, where, limit, getDocs } = await import(
         'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
       );
-      const snap = await getDoc(doc(db, 'subscriptions', providerId));
-      if (!snap.exists()) return 'free';
-      const data = snap.data();
-      /* Respect cancelled status */
-      if (data.status === 'cancelled' || data.status === 'CANCELLED') return 'free';
-      const now = Date.now();
+
+      /* Direct hit first: a document keyed by the id we were given still works,
+         so nothing that already resolved correctly starts failing. */
+      let data = null;
+      const direct = await getDoc(doc(db, 'subscriptions', providerId));
+      if (direct.exists()) data = direct.data();
+
+      /* Otherwise find the business subscription that names this user. */
+      if (!data) {
+        const q = query(collection(db, 'subscriptions'), where('uid', '==', providerId), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) data = snap.docs[0].data();
+      }
+
+      if (!data) return { status: 'NOT_FOUND', plan: 'free', reason: 'no subscription document' };
+
+      if (data.status === 'cancelled' || data.status === 'CANCELLED') {
+        return { status: 'FOUND', plan: 'free', data, reason: 'cancelled' };
+      }
       const exp = data.expiresAt?.toMillis ? data.expiresAt.toMillis() : 0;
-      if (exp && exp < now) return 'free';
-      return data.plan || 'free';
-    } catch (_) { return 'free'; }
+      if (exp && exp < Date.now()) {
+        return { status: 'FOUND', plan: 'free', data, reason: 'expired' };
+      }
+      return { status: 'FOUND', plan: data.plan || 'free', data };
+    } catch (e) {
+      return { status: 'LOOKUP_ERROR', plan: 'free', reason: (e && e.message) || 'query failed' };
+    }
+  }
+
+  /**
+   * getProviderPlan(uid) — plan id only, for existing callers.
+   *
+   * Kept returning a bare string so nothing that consumes it has to change in
+   * the same commit. New callers that need to distinguish "free" from "unknown"
+   * should use resolveProviderSubscription instead.
+   */
+  async function getProviderPlan(providerId) {
+    return (await resolveProviderSubscription(providerId)).plan;
   }
 
   /* ══════════════════════════════════════════════════════════════
@@ -335,6 +404,7 @@
     FEATURE_REQUIREMENTS,
     getMyPlan,
     getProviderPlan,
+    resolveProviderSubscription,
     checkFeature,
     isFeatureAllowed,
     activateSubscription,
