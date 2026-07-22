@@ -643,11 +643,23 @@ async function addProduct(){
     const productCategory =
     document.getElementById("productCategory").value;
 
-    if(productName === "" || productPrice === "" || !_productImages.length){
-
+    /* Name/price validation comes from the shared schema, so upload and edit
+       enforce the same rules. The image requirement is upload-only (edit keeps
+       existing images), so it stays here. A full serialize() migration of the
+       upload path is deferred: upload DEFAULTS blank fields (location→nairobi,
+       minWholesaleQty→10) while edit OMITS them, which needs a create-vs-patch
+       mode in the schema before the two can share serialize without changing
+       upload's business rules. */
+    const _schema = window.SokoniProductSchema;
+    if (_schema) {
+        const v = _schema.validate('product');
+        if (!v.ok || !_productImages.length) {
+            showNotification(!_productImages.length ? "Add at least one photo" : ("⚠️ " + v.message), "error");
+            return;
+        }
+    } else if (productName === "" || productPrice === "" || !_productImages.length) {
         showNotification("Please fill all fields including at least one photo", "error");
         return;
-
     }
 
     /* ── Ownership verification gate for high-value / theft-risk categories ── */

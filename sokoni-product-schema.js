@@ -26,21 +26,29 @@
      `min`      — numeric floor (numbers only).
      A number field with `emptyKeeps:true` leaves the stored value untouched when
      blank, so clearing a box by accident never zeroes a real cost or fee. */
+  /* `ids` overrides the default #<prefix><Suffix> when a form's input id does not
+     follow the convention. The upload form predates the schema and uses bare ids
+     (stockQty, costPrice, …) for five fields; rather than rename that HTML — which
+     the upload handler and other code reference — the schema maps to the real id.
+     Edit uses the convention throughout, so it needs no overrides. */
   var FIELDS = [
     { key: 'name',            suffix: 'Name',            type: 'text',     required: true,  trim: true },
     { key: 'price',           suffix: 'Price',           type: 'number',   required: true,  min: 0 },
     { key: 'category',        suffix: 'Category',        type: 'category' },
-    { key: 'stock',           suffix: 'Stock',           type: 'number',   min: 0, emptyKeeps: true, coerceKey: 'stock' },
-    { key: 'costPrice',       suffix: 'CostPrice',       type: 'number',   min: 0, emptyKeeps: true },
-    { key: 'deliveryCost',    suffix: 'DeliveryCost',    type: 'number',   min: 0, emptyKeeps: true },
+    { key: 'stock',           suffix: 'Stock',           type: 'number',   min: 0, emptyKeeps: true, ids: { product: 'stockQty' } },
+    { key: 'costPrice',       suffix: 'CostPrice',       type: 'number',   min: 0, emptyKeeps: true, ids: { product: 'costPrice' } },
+    { key: 'deliveryCost',    suffix: 'DeliveryCost',    type: 'number',   min: 0, emptyKeeps: true, ids: { product: 'deliveryCost' } },
     { key: 'location',        suffix: 'Location',        type: 'text',     trim: true, emptyKeeps: true },
-    { key: 'wholesalePrice',  suffix: 'WholesalePrice',  type: 'number',   min: 0, emptyKeeps: true },
-    { key: 'minWholesaleQty', suffix: 'MinWholesaleQty', type: 'number',   min: 0, emptyKeeps: true },
+    { key: 'wholesalePrice',  suffix: 'WholesalePrice',  type: 'number',   min: 0, emptyKeeps: true, ids: { product: 'wholesalePrice' } },
+    { key: 'minWholesaleQty', suffix: 'MinWholesaleQty', type: 'number',   min: 0, emptyKeeps: true, ids: { product: 'minWholesaleQty' } },
     { key: 'description',     suffix: 'Description',     type: 'textarea',  trim: true, emptyKeeps: true },
   ];
 
+  function elId(prefix, f) {
+    return (f.ids && f.ids[prefix]) ? f.ids[prefix] : (prefix + f.suffix);
+  }
   function el(prefix, f, doc) {
-    return (doc || document).getElementById(prefix + f.suffix);
+    return (doc || document).getElementById(elId(prefix, f));
   }
 
   /* Load a product into the form identified by prefix ('edit' or 'product'). */
