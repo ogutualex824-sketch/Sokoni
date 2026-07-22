@@ -27,6 +27,7 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
     /* Classified separately from the pass/fail pipeline: "consistency failed" is
        not actionable, but "SELLER_KEY_MISMATCH" names the owning subsystem. */
     consistency: { status: 'NOT_REACHED', reason: null, stored: null, actual: null, drift: null, detail: null },
+    ownership: { authUid: null, canonicalMerchantId: null, sellerUidOnProducts: null, sellerIdOnProducts: null, resolvedKey: null, allQueriesAgree: null },
     server:  {},
     pipeline: {
       auth:            'NOT_REACHED',
@@ -220,6 +221,74 @@ window.sokoniDiagnoseUpload = async function sokoniDiagnoseUpload() {
   } catch (e) {
     mark('consistency', 'FAIL', e);
     row('product query', 'FAILED: ' + e.message);
+  }
+
+  /* ── 4b. Ownership resolution ────────────────────────────────────────────
+     Counts only reveal drift; they cannot say WHY two subsystems disagree.
+     This asks the question directly: which identifier does each part of the
+     platform believe owns this merchant's products?
+
+     If product creation stamps sellerUid = auth.uid while authorization counts
+     by sellerId = merchant document id, every subsystem is individually correct
+     by its own query and they still disagree on how many products exist. That
+     is invisible in a count and obvious here. */
+  head('OWNERSHIP');
+  try {
+    const own = {
+      authUid:             uid,
+      canonicalMerchantId: null,
+      sellerUidOnProducts: null,
+      sellerIdOnProducts:  null,
+      resolvedKey:         null,
+      allQueriesAgree:     null,
+    };
+
+    try { own.canonicalMerchantId = localStorage.getItem('sokoni_merchant_id') || null; } catch (_) {}
+
+    /* Read the identifiers actually written onto this seller's product
+       documents, rather than assuming which field the writer used. */
+    const sample = await db.collection('products').where('sellerUid', '==', uid).limit(5).get();
+    const uids = new Set(), ids = new Set();
+    sample.forEach((d) => {
+      const v = d.data();
+      if (v.sellerUid) uids.add(v.sellerUid);
+      if (v.sellerId)  ids.add(v.sellerId);
+    });
+    own.sellerUidOnProducts = [...uids];
+    own.sellerIdOnProducts  = [...ids];
+
+    /* Agreement means every identifier the platform might key on resolves to
+       the same value. A merchant id that differs from auth.uid is not itself a
+       bug — it is only a bug when one query uses one and another uses the other. */
+    const distinct = new Set([
+      uid,
+      ...uids,
+      ...ids,
+      own.canonicalMerchantId,
+    ].filter(Boolean));
+    own.allQueriesAgree = distinct.size <= 1;
+    own.resolvedKey = own.allQueriesAgree ? uid : '(ambiguous)';
+
+    row('auth.uid', own.authUid);
+    row('canonical merchantId', own.canonicalMerchantId || '(none stored)');
+    row('sellerUid on products', JSON.stringify(own.sellerUidOnProducts));
+    row('sellerId on products', JSON.stringify(own.sellerIdOnProducts));
+    row('all identifiers agree', own.allQueriesAgree);
+    if (!own.allQueriesAgree) {
+      row('distinct identifiers', JSON.stringify([...distinct]));
+      console.warn('  OWNERSHIP DRIFT — subsystems keyed on different identifiers ' +
+                   'will each count a different number of products.');
+      if (report.consistency.status !== 'FAIL') {
+        report.consistency.status = 'FAIL';
+        report.consistency.reason = 'SELLER_KEY_MISMATCH';
+        report.consistency.detail = 'identifiers differ: ' + JSON.stringify([...distinct]);
+        mark('consistency', 'FAIL', { code: 'SELLER_KEY_MISMATCH', message: report.consistency.detail });
+      }
+    }
+    report.ownership = own;
+  } catch (e) {
+    row('ownership', 'CHECK FAILED: ' + e.message);
+    report.ownership = { error: e.message };
   }
 
   /* ── 5. Live write probe ─────────────────────────────────────────────────
