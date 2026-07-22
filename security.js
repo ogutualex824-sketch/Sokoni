@@ -670,15 +670,42 @@ const SokoniSecurity = (() => {
             var _prevPad = document.body.style.paddingBottom;
             var _applyPad = function () {
               var _h = Math.ceil(b.getBoundingClientRect().height || 0);
+              if (!_h) return;                       /* never reserve 0 over a real sheet */
               document.documentElement.style.setProperty("--sk-consent-h", _h + "px");
               document.body.style.paddingBottom =
                 "calc(" + (_prevPad || "0px") + " + " + _h + "px)";
             };
-            if (window.requestAnimationFrame) requestAnimationFrame(_applyPad);
-            else setTimeout(_applyPad, 0);
+
+            /* ONE rAF WAS NOT ENOUGH — measured on production /login:
+                 iPhone 390x844 — reserved 80px, sheet actually rendered 284px
+                 Desktop 1280x720 — reserved 72px, sheet actually rendered 254px
+               The single early frame caught the sheet before its copy, buttons and
+               env(safe-area) padding had laid out, so the strip was ~3x too small and
+               the sheet sat straight on top of the lower third of the form.
+               elementFromPoint at the centre of #googleSignInBtn returned the consent
+               card, and a click on it timed out: Google sign-in (and #sendOtpBtn) were
+               unreachable until consent was accepted — a tap that appeared to do nothing.
+
+               body is position:fixed and flex-centred on the auth pages, so it cannot be
+               scrolled out from under the sheet; the reservation is the ONLY thing that
+               keeps the form clear, which is why it has to be exact.
+
+               A ResizeObserver keeps the reservation locked to the sheet's true height for
+               the life of the banner — through font swaps, wrapping and orientation
+               changes — instead of trusting one early frame. The rAF/timeout below remain
+               as fallbacks for browsers without ResizeObserver. */
+            var _ro = null;
+            if (window.ResizeObserver) {
+              try { _ro = new ResizeObserver(_applyPad); _ro.observe(b); } catch (_) { _ro = null; }
+            }
+            if (window.requestAnimationFrame) {
+              requestAnimationFrame(function () { requestAnimationFrame(_applyPad); });
+            } else setTimeout(_applyPad, 0);
+            setTimeout(_applyPad, 350);              /* late web-font / async layout settle */
             window.addEventListener("resize", _applyPad, { passive: true });
             /* Released by the Accept handler below. */
             b._skRestorePad = function () {
+              if (_ro) { try { _ro.disconnect(); } catch (_) {} _ro = null; }
               window.removeEventListener("resize", _applyPad);
               document.body.style.paddingBottom = _prevPad;
               document.documentElement.style.setProperty("--sk-consent-h", "0px");
@@ -719,6 +746,22 @@ const SokoniSecurity = (() => {
 
         var _pad = function(){
           if (_accepted) return;
+          /* AUTH PAGES ARE A SHEET, NOT A MODAL — and this routine is the modal's.
+             Running it on /login and /signup did two things that together made social
+             sign-in unreachable:
+               1. it republished --sk-consent-h as 0px, cancelling the height the sheet
+                  had just reserved, so body padding stayed at the pre-layout value
+                  (measured: 80px reserved against a 284px sheet on iPhone); and
+               2. it scroll-locked the body (position:fixed), so the form could not be
+                  scrolled out from under the sheet either.
+             Net effect: #googleSignInBtn and #sendOtpBtn sat beneath the consent card,
+             elementFromPoint at their centre returned #_sokoniPrivacyTitle, and taps did
+             nothing until consent was accepted.
+
+             The sheet deliberately does not block the page (background:transparent,
+             pointer-events:none), so it needs neither the lock nor the zeroed variable.
+             Keep only the FAB tidy-up. */
+          if (_isAuthPage) { _liftFabs(0); return; }
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
           /* iOS-compatible scroll-lock. */
           if (!_scrollLocked) {
