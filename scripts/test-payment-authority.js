@@ -44,7 +44,18 @@ const admin = { firestore: { FieldValue: { serverTimestamp: () => 'TS' } } };
       describing behaviour that did not exist. ──────────────────────────── */
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
 const START = '/* ── Server pricing authority';
-const END = "    /* Load seller's Daraja credentials from Firestore */";
+/* Anchored on CODE, not a comment. The previous anchor was the comment
+   "Load seller's Daraja credentials from Firestore", which commit 5ee7e3a
+   rewrote into the LEGACY PATH block when per-merchant credential collection was
+   retired. The pricing block's boundary did not move — only the prose above it
+   changed — but the test could no longer find its end and failed with "could not
+   locate the pricing block", blocking an unrelated hosting deploy.
+   `const settingsSnap = await db.collection("shopSettings")` is the first line
+   after the pricing block and appears exactly once in the file. Code changes
+   only when behaviour changes; a comment can be reworded by any refactor that
+   touches the neighbourhood. The trailing legacy-path comment now falls inside
+   the slice, which is inert — it is a comment, and the slice is executed. */
+const END = '    const settingsSnap = await db.collection("shopSettings")';
 const s = SRC.indexOf(START), e = SRC.indexOf(END, s);
 if (s < 0 || e < 0) {
   console.log('  FAIL  could not locate the pricing block in functions/index.js');
