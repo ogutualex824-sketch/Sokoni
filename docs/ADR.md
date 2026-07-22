@@ -307,3 +307,43 @@ has too many.
 `__diagnostic: true`, cleaned up in a `finally` so a later throw cannot orphan
 it. An orphaned probe would inflate the counter being measured — the diagnostic
 would become a cause of the symptom it is investigating.
+
+---
+
+## ADR-0010 — Subsystem freeze during a P0 investigation
+
+**Decision:** when a P0 investigation opens on a subsystem, that subsystem is
+frozen for the duration. Only instrumentation, or a fix explicitly approved for
+the incident, may land. Normal development resumes when the incident closes.
+
+**Evidence — 2026-07-22, four collisions in one day.** Two agents edited the
+printing stack simultaneously while a convergence audit was in progress. The
+search agent rewrote `firestore.rules` while a subscription rules deploy was
+staged, so shipping one meant shipping the other. A POS startup fix landed
+mid-crash-investigation and was carried to production by an unrelated hosting
+deploy. And a crash instrument was armed against a startup path that had already
+been changed underneath it.
+
+None of those were bad changes — the startup fix cut parser-blocking scripts
+from 41 to 3 and was exactly right. The cost was interpretive: a diagnostic
+measures the build it runs on, so a build that moves during the measurement
+produces evidence about neither the old state nor the new one.
+
+**Consequence:** `firebase deploy --only hosting` ships the whole working tree,
+not the files the author edited. Scope cannot be controlled by intent while a
+second process writes the same tree — it can only be controlled by the tree
+holding still. A freeze is the only mechanism that actually works.
+
+**Record the prediction before testing.** The iPhone crash investigation logged
+its expected outcome per platform before any device ran, so the result is
+falsifiable rather than rationalised afterwards. Do this on every incident: a
+prediction written after the fact explains anything.
+
+**Split investigations the evidence separates.** iPhone crash and Android hang
+were assumed to share a cause. Parser blocking is platform-neutral, so if
+removing it fixes one and not the other, they were never the same defect and
+pursuing a common cause discards the evidence just gained.
+
+**Forbidden:** landing a behavioural change in a frozen subsystem, however
+correct, without recording it against the open incident — the next person
+reading the diagnostic output has no way to know the ground moved.
