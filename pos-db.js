@@ -62,7 +62,12 @@ const PosDB = (function () {
       req.onerror = () => reject(req.error);
       req.onsuccess = () => {
         _db = req.result;
-        _migrateHashPins().then(resolve).catch(resolve);
+        /* Signal consumers (pos-sync, etc.) that IndexedDB is open and ready. */
+        const _notify = () => {
+          window.dispatchEvent(new CustomEvent('pos:db:ready'));
+          resolve();
+        };
+        _migrateHashPins().then(_notify).catch(_notify);
       };
       req.onupgradeneeded = e => {
         const db = e.target.result;
@@ -648,6 +653,7 @@ const PosDB = (function () {
 
   return {
     init,
+    isReady: () => !!_db,
     products, transactions, customers, categories,
     cashiers, shifts, suppliers, purchase_orders,
     stock_movements, receipts, syncQueue, settings, reports,

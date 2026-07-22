@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
+<meta charset="UTF-8">
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
-<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>SOKONI SmartPOS — Checkout</title>
 <style>
@@ -1584,25 +1584,29 @@ body.queue-mode .hotkey-bar      { display: none; }
   </div>
 </div>
 
+<!-- firebase.js is type="module" — deferred by the browser automatically -->
 <script type="module" src="firebase.js"></script>
-<script src="pos-db.js"></script>
-<script src="pos-sync.js"></script>
-<script src="pos-scanner.js"></script>
-<script src="pos-inventory.js"></script>
-<script src="pos-sales.js"></script>
-<script src="pos-customers.js"></script>
-<script src="pos-loyalty-engine.js"></script>
-<script src="sokoni-universal-printer.js"></script>
-<script src="sokoni-bluetooth-printer.js"></script>
-<script src="sokoni-printer-manager.js"></script>
-<script src="sokoni-pos-ios-print.js"></script>
-<script src="sokoni-pos-print-service.js"></script>
-<script src="pos-cash-manager.js"></script>
-<script src="sokoni-pos-performance.js"></script>
-<script src="pos-multi-till.js"></script>
+<!-- All POS scripts deferred — parser never blocks, downloads parallelise,
+     execution order preserved. DOMContentLoaded fires after all defer scripts
+     run, so Checkout.init() sees every module already in window.*. -->
+<script src="pos-db.js" defer></script>
+<script src="pos-sync.js" defer></script>
+<script src="pos-scanner.js" defer></script>
+<script src="pos-inventory.js" defer></script>
+<script src="pos-sales.js" defer></script>
+<script src="pos-customers.js" defer></script>
+<script src="pos-loyalty-engine.js" defer></script>
+<script src="sokoni-universal-printer.js" defer></script>
+<script src="sokoni-bluetooth-printer.js" defer></script>
+<script src="sokoni-printer-manager.js" defer></script>
+<script src="sokoni-pos-ios-print.js" defer></script>
+<script src="sokoni-pos-print-service.js" defer></script>
+<script src="pos-cash-manager.js" defer></script>
+<script src="sokoni-pos-performance.js" defer></script>
+<script src="pos-multi-till.js" defer></script>
 <script src="sokoni-cash-drawer.js" defer></script>
 <script src="pos-manager-auth.js" defer></script>
-<script src="pos-resilience.js"></script>
+<script src="pos-resilience.js" defer></script>
 
 <script>
 /* ================================================================

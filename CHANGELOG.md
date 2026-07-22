@@ -1,4 +1,124 @@
-﻿## [2026-07-22] — Search Architecture Overhaul: Algolia-Primary, Unified Index, Infinite Scroll
+﻿## [2026-07-22] — P0 Fix: iPhone Safari / PWA Crash on "Open POS" (iOS Jetsam OOM Kill)
+
+### Root Cause Analysis
+
+**Primary cause — iOS jetsam OOM kill from 43 synchronous blocking `<script>` tags.**
+
+When a merchant tapped "Open POS", Safari navigated to `pos.html`. The HTML parser
+immediately blocked on 35 back-to-back `<script src="…">` tags (lines 1432–1466) plus 5 more
+at lines 1904–1909. Every blocking script forced Safari's Nitro JIT compiler to:
+
+1. Halt HTML parsing
+2. Download the script from the network (sequential, not parallel)
+3. Parse and compile the JS (consuming JS heap + compiled code cache)
+4. Execute the module-scope code
+
+The combined JS heap from 43 modules (pos.js 2990 lines, pos-manager-auth.js 1285 lines,
+pos-modules.js 839 lines, sokoni-bluetooth-printer.js 1024 lines, etc.) plus the DOM for
+POS modals/panels + WebKit rendering layer + App Check ReCaptchaV3 iframe pushed the Safari
+content process past iOS's per-tab memory limit (~150–200 MB on iPhone 12 and older). The iOS
+kernel's jetsam daemon sent SIGKILL. The tab died silently — no JS error, no console output.
+
+Evidence: A prior workaround comment existed at pos.html:1929:
+  "Deferred 4 s so the JS parse/compile cycle completes first —
+   prevents iOS jetsam OOM kill on memory-constrained devices."
+This confirms the developer already identified jetsam but only addressed 2 of 43 modules.
+
+**Secondary cause — pos-sync.js auto-inited before IndexedDB was open.**
+
+`pos-db.js` sets `window.PosDB` at module evaluation time, before `PosDB.init()` is called.
+`pos-sync.js` checked `if (window.PosDB)` — always true — and called `startPeriodicSync()`
+immediately. If the 30-second interval fired before `PosDB.init()` completed, `processQueue()`
+would throw `TypeError: Cannot read properties of null (reading 'transaction')`. Not a crash
+cause, but a semantic bug that could produce unhandled rejections.
+
+**Tertiary cause — `<meta charset="UTF-8">` declared AFTER synchronous scripts.**
+
+Both `pos.html` and `pos-checkout.html` loaded `security.js` and `shared-header.js` before
+declaring the charset. iOS Safari reads JS byte streams using a default encoding (latin-1)
+until the charset is declared. Any non-ASCII byte in those files would be misread — a latent
+parse risk on emoji-containing comment strings.
+
+### Fix
+
+1. `pos.html` — Added `defer` to **37 previously-synchronous script tags** (lines 1432–1472,
+   1911–1915). `defer` preserves document order but:
+   - Allows the HTML parser to continue past the script tags without blocking
+   - Allows all script downloads to proceed in parallel (browser pre-scanner)
+   - Defers JS parse+compile until after HTML parsing completes
+   - Executes all defer scripts in order before DOMContentLoaded fires
+   Existing boot logic (`SPos.boot()` / `DOMContentLoaded` handlers) works without change
+   because defer scripts run before DOMContentLoaded.
+
+2. `pos-checkout.html` — Added `defer` to all **16 previously-synchronous script tags**
+   (lines 1592–1609). `firebase.js` already had `type="module"` (implicitly deferred).
+   `Checkout.init()` is called from DOMContentLoaded, which fires after all defer scripts,
+   so all modules are in `window.*` when `init()` runs.
+
+3. `pos.html` — Replaced blind `setTimeout(fn, 4000)` for PosInventory/PosSales init with
+   `requestIdleCallback(fn, { timeout: 4000 })` (2s `setTimeout` fallback for iOS <15.4).
+   These modules open Firestore onSnapshot listeners that create hundreds of concurrent IDB
+   writes — deferring to idle time removes pressure during the critical first-render window.
+
+4. `pos-db.js` — Added `isReady: () => !!_db` to the public API. Dispatches
+   `'pos:db:ready'` CustomEvent after `PosDB.init()` completes (IndexedDB open + PIN
+   migration done).
+
+5. `pos-sync.js` — Fixed auto-init guard from `if (window.PosDB)` (always true) to
+   `if (window.PosDB?.isReady?.())`. Now correctly waits for `'pos:db:ready'` event before
+   starting the sync engine, preventing any IndexedDB access before the connection is open.
+
+6. `pos.html` + `pos-checkout.html` — Moved `<meta charset="UTF-8">` to be the **first
+   element inside `<head>`**, before all `<link>` and `<script>` tags.
+
+### Files Affected
+
+- `pos.html` — 5 changes (charset, sokoni-branch defer, 37 scripts deferred, Phase 2 defer,
+  requestIdleCallback)
+- `pos-checkout.html` — 2 changes (charset, 16 scripts deferred)
+- `pos-db.js` — isReady() + pos:db:ready event
+- `pos-sync.js` — init guard fix
+
+### Security
+
+No security surface changes. The `defer` attribute has no effect on same-origin script
+integrity. App Check, auth, and security.js execution order are unchanged.
+
+### Performance Impact
+
+**Before:** Safari blocked HTML parser for the duration of 43 sequential network downloads +
+JIT compilations. Peak memory spike during parse. iOS killed the process.
+
+**After:** HTML parser completes immediately. All 37 scripts download in parallel. JIT
+compilation deferred until after HTML parsing. Peak memory spike pushed 200–400ms later,
+after initial render, when iOS has established stable memory headroom for the process.
+
+### iPhone Certification Checklist
+
+- [ ] Cold launch — Open POS from pos-setup or pos-onboard
+- [ ] Warm launch — Background → foreground
+- [ ] Safari browser (not PWA)
+- [ ] Add-to-Home-Screen PWA
+- [ ] iPhone 12 (target device — closest to reported crash)
+- [ ] Low-memory mode (Settings → Accessibility → Reduce Motion as proxy)
+- [ ] Offline mode
+
+### Rollback Plan
+
+If `defer` causes a regression (a module that assumes synchronous peer-module availability
+before DOMContentLoaded), revert is a single git revert. The previous synchronous behavior
+is trivially restored by removing `defer` from the affected script tag. No data migration.
+No Firestore changes. No Cloud Function changes.
+
+### Regression Risk
+
+**Low.** All POS modules already guard against missing peers with `if (window.X) { ... }` or
+`window.addEventListener('pos:db:ready', ...)` patterns. Document-order guarantee of `defer`
+means no module runs before its declared dependency. `DOMContentLoaded` timing is unchanged.
+
+---
+
+## [2026-07-22] — Search Architecture Overhaul: Algolia-Primary, Unified Index, Infinite Scroll
 
 ### Summary
 

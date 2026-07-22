@@ -334,8 +334,11 @@
     init,
   };
 
-  /* Defer init until PosDB is ready */
-  if (window.PosDB) {
+  /* Defer sync engine until IndexedDB is open.
+     window.PosDB is set as soon as pos-db.js evaluates (before PosDB.init() is called).
+     PosDB.isReady() returns true only AFTER PosDB.init() opens the IDB connection.
+     The 'pos:db:ready' event is dispatched by PosDB.init() on success. */
+  if (window.PosDB?.isReady?.()) {
     init();
   } else {
     window.addEventListener('pos:db:ready', init, { once: true });
