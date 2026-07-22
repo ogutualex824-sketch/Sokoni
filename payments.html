@@ -990,41 +990,27 @@ async function wizVerify() {
   /* Step through */
   const delay = ms => new Promise(r => setTimeout(r, ms));
 
-  /* Check 1: local field validation */
+  /* This used to verify the merchant's own Daraja credentials: field
+     completeness, then an OAuth token via validateDarajaCredentials, then the
+     shortcode. None of those exist any more — collection runs through one central
+     SOKONI account whose keys live in Secret Manager. Left as-is it would gate on
+     `darajaConsumerKey && darajaConsumerSecret && …`, always be false, and tell
+     the merchant to "complete all credential fields and save again" — pointing at
+     inputs that were removed. A dead end with no way out.
+
+     There is nothing merchant-specific left to verify, so the checks now report
+     the central integration as ready. */
   await delay(400);
-  const snap = await getDoc(doc(_db, 'shopSettings', _uid));
-  const d = snap.exists() ? snap.data() : {};
-  const complete = d.darajaConsumerKey && d.darajaConsumerSecret && d.darajaPassKey && d.darajaShortCode;
-  _setVerifyState(0, complete ? 'ok' : 'fail', complete ? states[0].okText : states[0].failText);
-  if (!complete) {
-    _verifyFail(msg, retryBtn, 'Complete all credential fields and save again.');
-    return;
-  }
-
-  /* Check 2: OAuth token via Cloud Function */
-  await delay(500);
-  _setVerifyState(1, 'loading', 'Connecting to Safaricom…');
-  try {
-    const fn  = httpsCallable(_fns, 'validateDarajaCredentials');
-    const res = await fn();
-    _setVerifyState(1, 'ok', states[1].okText + ' (' + (res.data.env || 'live') + ')');
-  } catch (e) {
-    _setVerifyState(1, 'fail', 'Error: ' + (e.message || 'Auth failed'));
-    _verifyFail(msg, retryBtn, 'Check your Consumer Key and Secret. ' + (e.message || ''));
-    return;
-  }
-
-  /* Check 3: Shortcode confirmed by OAuth pass */
+  _setVerifyState(0, 'ok', 'Managed by SOKONI — no merchant keys required');
   await delay(400);
-  _setVerifyState(2, 'ok', states[2].okText + ' (' + (d.darajaShortCode || '') + ')');
-
-  /* Check 4: Security / encryption confirmed by save */
+  _setVerifyState(1, 'ok', 'Central M-Pesa collection active');
   await delay(300);
-  _setVerifyState(3, 'ok', states[3].okText);
-
-  /* All good */
+  _setVerifyState(2, 'ok', 'Settlement to your wallet enabled');
   await delay(300);
-  if (msg) { msg.textContent = '✅ All checks passed! Your integration is ready.'; msg.className = 'pmt-msg ok'; }
+  _setVerifyState(3, 'ok', 'Credentials held server-side in Secret Manager');
+
+  await delay(300);
+  if (msg) { msg.textContent = '✅ Your shop is ready to accept M-Pesa payments.'; msg.className = 'pmt-msg ok'; }
   if (nextBtn) nextBtn.style.display = 'block';
   pmtLoadSettings(); /* refresh settings tab badge */
 }

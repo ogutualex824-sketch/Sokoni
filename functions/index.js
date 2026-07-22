@@ -2958,7 +2958,28 @@ async function _darajaToken(consumerKey, consumerSecret, env) {
   return { token: data.access_token, base };
 }
 
-/* ── darajaSTKPush — called from POS frontend ── */
+/* ── darajaSTKPush — called from POS frontend ──────────────────────────────────
+   STATUS: LEGACY
+
+   Supported for:
+     • Development
+     • Transition to central Merchant-of-Record collection
+
+   NOT intended for new merchant onboarding.
+
+   It collects into the SELLER's own shortcode (shopSettings/{sellerUid}), which
+   is the model the settlement engine does NOT assume — settlement-engine.js books
+   every sale as collected into the Bravilex account first. Verified inactive:
+   an audit on 2026-07-22 found shopSettings and posPayments both EMPTY, so this
+   path has never completed a payment in production.
+
+   Retained deliberately as an implementation reference, a migration aid and a
+   rollback option. Its successor is functions/payment-config.js →
+   resolveCollectionRoute() (CENTRAL_MOR).
+
+   Exit criteria for disabling and then deleting this are tracked, with the
+   command that proves each one, in docs/PAYMENT_MIGRATION_MOR.md.
+──────────────────────────────────────────────────────────────────────────────── */
 exports.darajaSTKPush = onCall(
   { timeoutSeconds: 30, cors: true, enforceAppCheck: true },
   async (request) => {
