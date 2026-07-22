@@ -54,13 +54,29 @@ const CLASSIFICATION = {
   'scripts/verify-listing-limit-single-source.js': 'TOOLING',
   'scripts/verify-commission-single-source.js':    'TOOLING',
 
-  /* Separate commercial products. Collapsing these into the marketplace
-     catalogue would destroy real distinctions — an earlier audit in this
-     session counted them as drift and was wrong. */
+  /* Separate commercial product. Traced 2026-07-22: imported only by
+     provider-dispatch, and the module contains no reference to a seller,
+     merchant or marketplace hub. Service providers only. */
   'functions/provider-onboarding.js': 'DIFFERENT_PRODUCT',
-  'functions/sasos-core.js':          'DIFFERENT_PRODUCT',
-  'functions/sub-billing.js':         'DIFFERENT_PRODUCT',
-  'functions/subscription-core.js':   'DIFFERENT_PRODUCT',
+
+  /* RECLASSIFIED 2026-07-22 — both were DIFFERENT_PRODUCT on the strength of
+     their module names, and both were wrong. This is the failure mode the guard
+     was supposed to prevent: it passed while concealing two marketplace
+     catalogues, which is worse than not having run.
+
+     sub-billing declares hubType:'seller' — seller_free / seller_basic /
+     seller_pro / seller_enterprise, with listings_limit:10 on the free tier.
+     seller_free is the exact planId on the live KASS VAPES subscription, so
+     this is not an adjacent product; it is the same plan under another table.
+     payment-intents imports its PLANS, putting it in the subscription purchase
+     path.
+
+     sasos-core's SASOS_PRODUCTS includes 'marketplace', and marketplace.free
+     grants listings:3 AND products:10 — disagreeing with the canonical
+     catalogue and with itself in the same object. It also carries
+     commission.rate_pct 15 against a canonical 8. */
+  'functions/sub-billing.js': 'DUPLICATE',
+  'functions/sasos-core.js':  'DUPLICATE',
 
   /* Verified 2026-07-22: onbGetPlans returns PLANS[role] straight to the client
      and nothing in the module reads limits.listings. onboardingDispatch is
