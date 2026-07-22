@@ -372,3 +372,58 @@ in writing, on the incident:
 
 Unanswered questions are not a reason to keep an incident open — they are the
 content of the follow-up work, recorded rather than forgotten.
+
+---
+
+## ADR-0011 — A harness must reproduce the production contract
+
+**Decision:** a test that supplies state, triggers an event, or names a target
+which production does not provide has not tested production. It has tested the
+harness. Before a passing test is treated as evidence, the binding it depends on
+must be verified against the real artifact.
+
+**Evidence — three failures in one day, all reading as PASS:**
+
+1. **A deploy target that did not exist.** `product-limit.js` was written but
+   never required by `index.js`, so `firebase deploy --only
+   functions:onMarketplaceProductCreated` would have reported success and
+   shipped nothing. The counter would never have been maintained, and because
+   the rule fails open, the cap would silently never have applied.
+
+2. **A code path that could not fire.** Crash breadcrumbs were armed against a
+   startup path that had already been changed by another commit, so the
+   instrument measured a build that was not the one that crashed.
+
+3. **State production does not expose.** `pos-lifecycle.js` read `window.state`
+   and `window.SPos`; `pos.js` declares `const SPos = (…)()` at the top level of
+   a classic script, which lives in the global *lexical* scope and is not a
+   property of `window`. The harness manufactured `window.state`, so the policy
+   passed 10/10 against the deployed bytes while being structurally unable to
+   observe a real cart.
+
+Each shares one property: **the harness did not reproduce the production
+contract**, and a passing result was indistinguishable from a working one.
+
+**Consequence — the third outcome.** Tests have three results, not two:
+
+| Result | Meaning |
+|---|---|
+| PASS | the behaviour was exercised and was correct |
+| FAIL | the behaviour was exercised and was wrong |
+| **UNTESTABLE** | **the behaviour was never exercised — no conclusion may be drawn** |
+
+Collapsing UNTESTABLE into PASS is how all three above would have shipped.
+
+**Practices this earns:**
+
+- Verify a deploy target resolves before naming it in a deploy command.
+- Verify the artifact hash matches before running behavioural tests against it.
+- Verify a binding exists in the real page before trusting a test that supplies
+  it — reading how the application declares the value settles in one grep what
+  a device check would take a day to surface.
+- Run independent cases in independent processes. Two simulations in one Node
+  process leaked state between them and produced a false failure on the same
+  day.
+
+**Forbidden:** reporting a green test as evidence when the value under test was
+provided by the test.
