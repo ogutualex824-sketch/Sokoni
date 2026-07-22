@@ -31,22 +31,43 @@
  * consistency.js, which gates the deploy.
  */
 
-/* Incremented whenever an allowance, price or commission rate changes. Every
-   resolved entitlement carries it, so a consumer can record which generation it
-   acted on — during a migration that turns "these two screens disagree" into
-   "this one resolved v1 and that one resolved v2". */
+/* Incremented whenever an allowance or price changes. NOT commission — that
+   lives in commission-config.js and versions independently. Every resolved
+   entitlement carries this, so a consumer can record which generation it acted
+   on — during a migration that turns "these two screens disagree" into "this
+   one resolved v1 and that one resolved v2". */
 const CATALOG_VERSION = 1;
 
-/* Every commercial entitlement lives on one object. Splitting listing limits
-   from commission from feature flags is how ten catalogues happened: each new
-   concern grew its own table rather than extending the existing one. */
+/* COMMISSION IS NOT DEFINED HERE — functions/commission-config.js owns it.
+ *
+ * This file originally carried a commissionRate per plan: 8/6/5/3 percent. It
+ * was written on the reasoning stated below, that splitting concerns across
+ * tables is how ten catalogues happened. That reasoning was wrong for this
+ * field, and the result was a file created to end drift which immediately
+ * introduced some: commission-config resolves marketplace at 3% flat, and these
+ * numbers agreed with it on exactly one tier.
+ *
+ * Nothing ever read them. product-limit is the only consumer of this module and
+ * takes listingLimit alone — so the table was dead the day it was written,
+ * which is the same defect as MKT_PLANS in subscription-os and was found the
+ * same way, by asking who reads it rather than what it looks like.
+ *
+ * It also escaped the commission guard, which skips files under functions/ on
+ * the grounds that "the server may resolve plans". A single source of truth for
+ * listings does not get to become a second one for commission.
+ *
+ * A consumer needing a rate calls commission-config.resolveRate(category).
+ */
+
+/* Every LISTING entitlement lives on one object. Splitting listing limits from
+   feature flags is how ten catalogues happened: each new concern grew its own
+   table rather than extending the existing one. */
 const PLANS = Object.freeze({
   FREE: Object.freeze({
     id: 'FREE',
     label: 'Free',
     priceKES: 0,
     listingLimit: 10,
-    commissionRate: 0.08,
     walletEnabled: false,
     premiumAnalytics: false,
     prioritySupport: false,
@@ -58,7 +79,6 @@ const PLANS = Object.freeze({
     label: 'Starter',
     priceKES: 99900,
     listingLimit: 100,
-    commissionRate: 0.06,
     walletEnabled: true,
     premiumAnalytics: false,
     prioritySupport: false,
@@ -70,7 +90,6 @@ const PLANS = Object.freeze({
     label: 'Growth',
     priceKES: 249900,
     listingLimit: -1,            /* -1 is unlimited, everywhere, always */
-    commissionRate: 0.05,
     walletEnabled: true,
     premiumAnalytics: true,
     prioritySupport: false,
@@ -82,7 +101,6 @@ const PLANS = Object.freeze({
     label: 'Enterprise',
     priceKES: 499900,
     listingLimit: -1,
-    commissionRate: 0.03,
     walletEnabled: true,
     premiumAnalytics: true,
     prioritySupport: true,
@@ -133,7 +151,6 @@ function entitlementFor(subscription) {
     label:              plan.label,
     subscriptionStatus: entitled ? status.toUpperCase() : 'INACTIVE',
     listingLimit:       plan.listingLimit,
-    commissionRate:     plan.commissionRate,
     staffSeats:         plan.staffSeats,
     /* Feature flags grouped rather than spread across the top level, so adding
        a capability is one line here instead of a new field every consumer must
