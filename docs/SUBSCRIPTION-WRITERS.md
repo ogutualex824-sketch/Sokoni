@@ -1,5 +1,17 @@
 # Writers to `subscriptions/*`
 
+> The architecture should be understood from execution paths, not names. Treat
+> document writers as the primary evidence, distinguish dormant contradictions
+> from production incidents, and prefer evidence that crosses sources of truth
+> (writers/readers, code/data, static/runtime). Where evidence is incomplete,
+> record the uncertainty explicitly rather than filling the gap with inference.
+
+Everything below is an instance of that paragraph. The unknown provenance of
+`subscriptions/SOK-GL58F7`, the dated evidence attached to each exemption, and
+the conclusions recorded as withdrawn rather than deleted are all there because
+the rule was earned the expensive way on 2026-07-22 — five confident findings
+that did not survive the next trace.
+
 **Built:** 2026-07-22 · **Method:** grep for every `collection('subscriptions').doc(...)` write, then per-writer trigger and deployment check.
 
 Built because four separate investigations in one session each found one writer,
