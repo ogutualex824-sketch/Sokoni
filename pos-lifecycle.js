@@ -20,15 +20,49 @@
 (function () {
   'use strict';
 
-  function hasOpenSale() {
+  /* ── State adapter ───────────────────────────────────────────────────────
+     The ONLY place this file touches application internals. The policy asks
+     "how many items are in the cart"; the adapter answers. If the POS changes
+     how it stores a sale, this function changes and the policy does not.
+
+     The first version read window.state and window.SPos and would never have
+     worked. pos.js declares `const SPos = (function(){ ... })()` at the top
+     level of a classic script, and a top-level const goes into the global
+     LEXICAL scope — it is resolvable by name from another classic script, but
+     it is not a property of window. Both lookups returned undefined, so
+     hasOpenSale() would have answered false forever, canReload() would have
+     answered true forever, and the guard would have shipped doing nothing —
+     while looking exactly like a guard that was never needed.
+
+     That SPos resolves by bare name is not an assumption: pos.html has worked
+     for months with inline handlers like onclick="SPos.cart.addItem(...)",
+     which resolve identifiers through the same global scope chain. */
+  function cartItemCount() {
     try {
-      /* state.cartItems is what the POS actually holds a sale in (pos.js:18).
-         Read defensively — this file must never throw inside a lifecycle
-         handler, or a broken predicate becomes a broken update mechanism. */
-      const items = (window.state && window.state.cartItems) ||
-                    (window.SPos && window.SPos.state && window.SPos.state.cartItems);
-      return Array.isArray(items) && items.length > 0;
-    } catch (_) { return false; }
+      /* Bare identifier, guarded by typeof so it cannot throw where SPos is
+         absent — every page that is not the POS. */
+      if (typeof SPos !== 'undefined' && SPos && SPos.state &&
+          Array.isArray(SPos.state.cartItems)) {
+        return SPos.state.cartItems.length;
+      }
+    } catch (_) { /* fall through */ }
+
+    try {
+      /* Other surfaces may expose a cart on window. Checked second so the POS
+         never depends on it. */
+      if (window.state && Array.isArray(window.state.cartItems)) {
+        return window.state.cartItems.length;
+      }
+    } catch (_) { /* fall through */ }
+
+    /* Unknown is not the same as empty, but it must behave as empty here: a
+       page whose cart we cannot read must remain updatable, or an unrelated
+       surface could block every future release. */
+    return 0;
+  }
+
+  function hasOpenSale() {
+    return cartItemCount() > 0;
   }
 
   /* ── Decision record ─────────────────────────────────────────────────────
@@ -47,7 +81,7 @@
     const entry = Object.assign({
       reason,
       decision,
-      cartItems: (() => { try { return ((window.state && window.state.cartItems) || []).length; } catch (_) { return null; } })(),
+      cartItems: cartItemCount(),
       reloadPending: !!window.__sokoniReloadPending,
       at: new Date().toISOString(),
     }, extra || {});
@@ -80,6 +114,7 @@
     },
 
     hasOpenSale,
+    cartItemCount,
 
     /* Called when the sale completes or the cart is cleared. Applies an update
        that was deferred, so the POS picks up the new version at the first safe
