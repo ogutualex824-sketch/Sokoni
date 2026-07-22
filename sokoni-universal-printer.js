@@ -1647,19 +1647,62 @@ class SPEngine {
 
   /* ── Test print ──────────────────────────────────────────── */
   async testPrint () {
-    await this.printNow('receipt', {
-      businessName: this._cfg.logoText || 'SOKONI SmartPOS',
-      businessAddress: 'Printer Test — ' + (this._cfg.paperWidth || '80mm'),
-      receiptNumber: 'TEST-001',
-      cashierName: 'System',
-      items: [
-        { name: 'Test Item Alpha',      quantity: 1, unitPrice: 1000 },
-        { name: 'Test Item Beta',       quantity: 2, unitPrice: 500  },
-        { name: '58-Char Width Test ===', quantity: 1, unitPrice: 250  },
-      ],
-      totals: { subtotal: 2250, vat: 360, grandTotal: 2610 },
-      payment: { method: 'Cash', amountTendered: 3000, change: 390 },
-      receiptUrl: 'https://mysokoni.co.ke/r/TEST',
+    /* One certification receipt for every entry point.
+       This used to print a simulated sale — "Test Item Alpha", a KES 2,610
+       total, cash tendered, change due — and a receiptUrl of /r/TEST, which
+       404s. It is reached by PrinterManager.testPrint(), which is the Test
+       Print button on the printer setup page, so it was the receipt a merchant
+       was most likely to see first: fake money, on the device they are about to
+       trust with real money.
+
+       P58EPrinter owns the certification template. Delegate to it rather than
+       maintain a second, worse test receipt — the defect here was two
+       implementations of one idea, not the formatting of either. */
+    if (typeof window !== 'undefined' &&
+        window.P58EPrinter &&
+        typeof window.P58EPrinter.printTestReceipt === 'function') {
+      return window.P58EPrinter.printTestReceipt();
+    }
+
+    /* Fallback for printers reached without the P58E profile (USB, Serial,
+       Network, Browser). Same certification framing, no invented transaction. */
+    const now  = new Date();
+    const pad2 = (n) => String(n).padStart(2, '0');
+    await this.printNow('custom', {
+      build: (enc, W) => {
+        const sep = '='.repeat(W), dash = '-'.repeat(W);
+        const center = (s) => {
+          const t = String(s).slice(0, W);
+          return ' '.repeat(Math.max(0, Math.floor((W - t.length) / 2))) + t;
+        };
+        const label = (l, v) => enc.text(String(l).padEnd(13).slice(0, 13) + String(v).slice(0, W - 13)).lf();
+        enc.al().text(sep).lf().ac()
+           .bold(true).sz('tall').text(center('SOKONI POS')).lf().sz('normal').bold(false).lf()
+           .text(center('Powered by')).lf()
+           .text(center('Bravilex International')).lf()
+           .text(center('Co. Ltd.')).lf().lf()
+           .bold(true).sz('tall').text(center('PRINTER')).lf()
+           .text(center('CERTIFICATION')).lf().sz('normal').bold(false)
+           .al().text(sep).lf().lf();
+        enc.text(dash).lf().bold(true).text('PRINTER STATUS').lf().bold(false).text(dash).lf();
+        ['Printer Detected', 'ESC/POS Driver', 'Receipt Engine', 'Setup Completed']
+          .forEach((c) => enc.text('✓ ' + c).lf());
+        enc.lf().text(dash).lf().bold(true).text('DEVICE INFORMATION').lf().bold(false).text(dash).lf();
+        label('Connection', this._profile.connectionType || 'unknown');
+        label('Paper Width', this._cfg.paperWidth || '58mm');
+        label('Printed At', `${pad2(now.getDate())}/${pad2(now.getMonth() + 1)}/${now.getFullYear()} ` +
+                            `${pad2(now.getHours())}:${pad2(now.getMinutes())}`);
+        enc.lf().ac().qr('https://mysokoni.co.ke/support', 6).lf()
+           .bold(true).text(center('Verify Setup')).lf().bold(false)
+           .text(center('mysokoni.co.ke')).lf().lf()
+           .bold(true).sz('tall').text(center('✓ CERTIFIED')).lf().sz('normal').bold(false)
+           .text(center('Ready to Accept Sales')).lf().lf()
+           .al().text(dash).lf().ac()
+           .text(center('SOKONI POS')).lf()
+           .text(center('Powered by Bravilex')).lf()
+           .text(center('support@mysokoni.co.ke')).lf()
+           .lf(3);
+      },
     });
   }
 }
