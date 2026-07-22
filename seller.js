@@ -406,6 +406,52 @@ async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
     }
 }
 
+/**
+ * Write the seller's product cache, degrading rather than failing.
+ *
+ * Three attempts, each giving up more than the last:
+ *   1. everything, including the base64 previews the cards render from
+ *   2. previews dropped from all but the ten newest — the older cards fall back
+ *      to the placeholder, which is a visual downgrade, not a data loss
+ *   3. metadata only
+ *
+ * Returns a string describing what was kept, or null if even metadata would not
+ * fit. NEVER throws and never signals the caller to abort: the caller is
+ * mid-upload, and Firestore is where the product actually lives.
+ *
+ * Why the cache is allowed to lose images at all: they are recoverable. The same
+ * pictures are uploaded to Cloud Storage on the next line, and the Firestore
+ * document carries their URLs. A dropped preview costs one placeholder until the
+ * next page load; a blocked write costs the merchant their product.
+ */
+function _cacheSellerProducts(list) {
+    const _strip = (p) => Object.assign({}, p, { image: '', images: [] });
+    const attempts = [
+        ['full',          () => list],
+        /* Three, not ten. Measured: a product carrying a base64 preview in both
+           "image" and "images[]" costs ~760KB of UTF-16 localStorage, so ten
+           would need 7.6MB against Safari's ~5MB cap and this tier could never
+           fire — every overflow would drop straight to metadata-only. Three fits
+           in ~2.3MB and leaves room for the rest of the record. */
+        ['recent-images', () => list.map((p, i) => (i >= list.length - 3 ? p : _strip(p)))],
+        ['metadata-only', () => list.map(_strip)],
+    ];
+    for (const [label, build] of attempts) {
+        try {
+            localStorage.setItem('sellerProducts', JSON.stringify(build()));
+            return label;
+        } catch (_) { /* try the next, smaller shape */ }
+    }
+    /* Even metadata will not fit. Say what is true — the product is saved and the
+       offline copy is not — rather than "delete old products", which describes
+       neither the cause nor a remedy that helps. */
+    console.warn('[seller] product cache unavailable — browser storage full; Firestore write continues');
+    try {
+        showNotification('Saved. Offline copy skipped — browser storage is full.', 'info');
+    } catch (_) {}
+    return null;
+}
+
 function compressImage(file){
     return new Promise((resolve, reject) => {
         const img = new Image();
@@ -750,12 +796,18 @@ async function addProduct(){
 
         sellerProducts.push(newProduct);
 
-        try {
-            localStorage.setItem("sellerProducts", JSON.stringify(sellerProducts));
-        } catch(storageError) {
-            showNotification("Storage full! Delete old products first.", "error");
-            return;
-        }
+        /* The localStorage copy is a CACHE for offline rendering. Firestore is the
+           product. This used to `return` when the cache write threw, which meant a
+           browser storage limit silently destroyed the upload — the merchant saw
+           "Storage full! Delete old products first." and lost the product without
+           it ever reaching Firestore.
+           It fires at four products, not at a plan limit. compressImage() returns
+           canvas.toDataURL(), so every product carries its picture as base64 in
+           BOTH `image` and `images[]`. Base64 inflates by a third and browsers
+           store strings as UTF-16, so four products is roughly 3 MB against
+           Safari's ~5 MB origin cap.
+           A cache must never be able to block the write it is caching. */
+        _cacheSellerProducts(sellerProducts);
 
         /* ── Firestore + Storage: write product ── */
         /* Capture image files now — _productImages is cleared after displaySellerProducts() */
@@ -780,6 +832,21 @@ async function addProduct(){
                     fsProduct.image  = storageUrls[0];
                     fsProduct.images = storageUrls;
                     fsProduct.imageStorageUrls = storageUrls;
+
+                    /* Swap the cache's base64 for the URLs now that Storage holds
+                       the originals. Without this the cache keeps a ~190KB copy of
+                       every picture forever and refills the quota that was just
+                       freed — the upload succeeds today and the fifth one fails
+                       again tomorrow. A URL is ~100 bytes. */
+                    try {
+                        const cached = JSON.parse(localStorage.getItem('sellerProducts') || '[]');
+                        const idx = cached.findIndex(function (p) { return p && p.id === newProduct.id; });
+                        if (idx !== -1) {
+                            cached[idx].image  = storageUrls[0];
+                            cached[idx].images = storageUrls;
+                            _cacheSellerProducts(cached);
+                        }
+                    } catch (_) { /* cache is best-effort; the document is written regardless */ }
                 } else {
                     /* Base64 fallback — strip very large images to avoid 1MB limit */
                     fsProduct.images = (fsProduct.images || []).map(function(b){
@@ -928,24 +995,31 @@ function displaySellerProducts(){
                     ${product.category ? `<div style="font-size:9px;color:rgba(255,255,255,0.28);font-weight:600;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(product.category)}</div>` : ""}
                 </div>
 
-                <!-- Action row — Edit / Story / Boost / Delete -->
-                <div style="display:flex;justify-content:center;gap:6px;padding:6px 8px 10px;position:relative;z-index:2;">
+                <!-- Action row — Edit / Story / Boost / Delete.
+                     2x2 grid, not a 4-wide flex row. Four buttons sharing a card
+                     column on a phone gave each about 60px, so the icons sat edge
+                     to edge with no room for a label and the tap targets were
+                     32px tall — under the 44px minimum a thumb can hit reliably.
+                     Two columns doubles the width, which is what makes room for
+                     the words: an icon-only row asks the merchant to remember
+                     that a megaphone means "post as story". -->
+                <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px 8px 12px;position:relative;z-index:2;">
                     <button type="button" onclick="editProduct(${index})" title="Edit product"
-                        style="flex:1;height:32px;padding:0;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:white;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;"
+                        style="width:100%;min-height:44px;padding:0 8px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:11px;color:white;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;"
                         onmouseover="this.style.background='rgba(255,255,255,0.16)'"
-                        onmouseout="this.style.background='rgba(255,255,255,0.07)'">✏️</button>
+                        onmouseout="this.style.background='rgba(255,255,255,0.07)'">✏️ <span>Edit</span></button>
                     <button type="button" onclick="promoteProductAsStory('${product.id}',${index})" title="Promote as Story"
-                        style="flex:1;height:32px;padding:0;background:rgba(113,255,0,0.09);border:1px solid rgba(113,255,0,0.22);border-radius:9px;color:#71ff00;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;"
+                        style="width:100%;min-height:44px;padding:0 8px;background:rgba(113,255,0,0.09);border:1px solid rgba(113,255,0,0.22);border-radius:11px;color:#71ff00;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;"
                         onmouseover="this.style.background='rgba(113,255,0,0.2)'"
-                        onmouseout="this.style.background='rgba(113,255,0,0.09)'">📣</button>
+                        onmouseout="this.style.background='rgba(113,255,0,0.09)'">📣 <span>Promote</span></button>
                     <button type="button" onclick="boostProduct('${_esc(product.id)}','${_esc(product.name||'')}')" title="Boost listing"
-                        style="flex:1;height:32px;padding:0;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:9px;color:#fbbf24;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;"
+                        style="width:100%;min-height:44px;padding:0 8px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);border-radius:11px;color:#fbbf24;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;"
                         onmouseover="this.style.background='rgba(251,191,36,0.2)'"
-                        onmouseout="this.style.background='rgba(251,191,36,0.08)'">⚡</button>
+                        onmouseout="this.style.background='rgba(251,191,36,0.08)'">⚡ <span>Boost</span></button>
                     <button type="button" onclick="deleteProduct(${index})" title="Delete product"
-                        style="flex:1;height:32px;padding:0;background:rgba(255,60,60,0.07);border:1px solid rgba(255,60,60,0.2);border-radius:9px;color:#ff6b6b;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;"
+                        style="width:100%;min-height:44px;padding:0 8px;background:rgba(255,60,60,0.07);border:1px solid rgba(255,60,60,0.2);border-radius:11px;color:#ff6b6b;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;"
                         onmouseover="this.style.background='rgba(255,60,60,0.18)'"
-                        onmouseout="this.style.background='rgba(255,60,60,0.07)'">🗑️</button>
+                        onmouseout="this.style.background='rgba(255,60,60,0.07)'">🗑️ <span>Delete</span></button>
                 </div>
 
             </div>
