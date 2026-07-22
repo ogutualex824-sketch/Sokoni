@@ -122,9 +122,36 @@ console.log('\nPayment integrity — the money path\n');
     ? ok('only an explicit provider confirmation can mark an order paid (fails closed)')
     : bad('payment verification does not fail closed');
 
-  /status:\s*_paid\s*\?\s*["']paid["']\s*:\s*["']pending_payment["']/.test(code)
-    ? ok('unverified orders are written as "pending_payment" — DO NOT SHIP')
-    : bad('unverified orders are not distinguishable from paid ones');
+  /* This assertion used to require `status: _paid ? "paid" : "pending_payment"`,
+     which permitted the client to write "paid" whenever it believed payment had
+     succeeded. The implementation was then hardened past that: the client writes
+     "pending_payment" unconditionally and never asserts payment state at all.
+
+     The old assertion therefore failed BECAUSE the weakness it tolerated had
+     been removed — a stale test reporting "DO NOT SHIP" against safer code.
+     Left as it was, the pressure would have been to weaken checkout back until
+     its own test suite was satisfied.
+
+     Rewritten around the invariant that actually holds now, which is stronger
+     and harder to satisfy by accident: the client never sets an authoritative
+     payment state, in any branch. */
+  const statusWrites = [...code.matchAll(/status:\s*([^,\n]+)/g)].map((m) => m[1].trim());
+  const clientAssertsPaid = statusWrites.filter((v) => /["']paid["']/.test(v));
+
+  clientAssertsPaid.length === 0
+    ? ok('the client never writes an authoritative "paid" status — in any branch')
+    : bad('the client writes "paid" in ' + clientAssertsPaid.length + ' place(s): ' + clientAssertsPaid.join(' | '));
+
+  /pending_payment/.test(code)
+    ? ok('orders are created as "pending_payment" and must not be fulfilled until the server confirms')
+    : bad('no pending_payment state — an unverified order is indistinguishable from a paid one');
+
+  /* The server must be the only writer of payment state. If checkout ever gains
+     a paymentVerified or paidAt write, the trust boundary has moved back to the
+     client without anyone noticing. */
+  !/paymentVerified:\s*true/.test(code) && !/paidAt:\s*[^n]/.test(code)
+    ? ok('the client sets neither paymentVerified nor paidAt — only the Admin SDK callback does')
+    : bad('the client writes paymentVerified or paidAt — payment authority has moved back to the client');
 }
 
 /* ── 6. No simulation path may exist in payment code ─────────────────────────

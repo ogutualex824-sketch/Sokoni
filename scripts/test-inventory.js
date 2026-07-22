@@ -59,13 +59,6 @@ const ENV_SIGNALS = [
    only contain suites proven to test current intended behaviour. Each entry
    carries the question that decides where it belongs. */
 const DECLARED = {
-  'test-payment-integrity': {
-    verdict: 'STALE',
-    reason: 'Expects `status: _paid ? "paid" : "pending_payment"`. checkout.html:2494 now ' +
-            'writes `status: "pending_payment"` unconditionally — the client never asserts ' +
-            'payment state at all, rules reject the key, and the Admin SDK callback is the ' +
-            'only authority. Strictly stronger than the test requires. Update the test.',
-  },
   'test-offline-detection': {
     verdict: 'ENV',
     reason: 'Drives a browser against http://localhost:3000 — needs a dev server, not a defect.',
@@ -175,6 +168,54 @@ if (AS_JSON) {
   }
 
   console.log('\n  GATE-READY TODAY: ' + summary.pass + ' suites pass with no external dependency.');
+}
+
+/* ── Release artifact ────────────────────────────────────────────────────
+   Written on every gated run so release quality has a history rather than a
+   memory. Without it, "when did this suite become stale?" and "which gates
+   passed for the build that shipped?" are unanswerable a week later — and both
+   questions came up today about deploys made hours earlier.
+
+   Keyed by commit, so a build can be traced to the evidence that let it out. */
+if (GATE) {
+  try {
+    const { execSync } = require('child_process');
+    let commit = 'unknown';
+    try { commit = execSync('git rev-parse --short HEAD', { cwd: ROOT, encoding: 'utf8' }).trim(); } catch (_) {}
+
+    const dir = path.join(ROOT, 'docs', 'release-gates');
+    fs.mkdirSync(dir, { recursive: true });
+
+    const artifact = {
+      commit,
+      timestamp: new Date().toISOString(),
+      gate: {
+        pass:       summary.pass,
+        fail:       summary.fail,
+        quarantine: summary.quarantine,
+        stale:      summary.stale,
+        env:        summary.env,
+        timeout:    summary.timeout,
+      },
+      blocking: results.filter((r) => r.verdict === 'PASS').map((r) => r.suite),
+      /* Recorded by name so a suite silently leaving the blocking set is
+         visible in a diff between two artifacts. */
+      notBlocking: {
+        quarantine: by('QUARANTINE').map((r) => r.suite),
+        stale:      by('STALE').map((r) => r.suite),
+        env:        by('ENV').map((r) => r.suite),
+        timeout:    by('TIMEOUT').map((r) => r.suite),
+      },
+      verdict: summary.fail === 0 ? 'APPROVED' : 'BLOCKED',
+    };
+
+    fs.writeFileSync(path.join(dir, commit + '.json'), JSON.stringify(artifact, null, 2) + '\n');
+    if (!AS_JSON) console.log('  artifact: docs/release-gates/' + commit + '.json  (' + artifact.verdict + ')');
+  } catch (e) {
+    /* Never block a deploy because the audit trail could not be written — the
+       gate's verdict is the safety property, the artifact is the record of it. */
+    if (!AS_JSON) console.log('  (artifact not written: ' + e.message + ')');
+  }
 }
 
 /* --gate fails only on suites that pass in a clean checkout. ENV and TIMEOUT
