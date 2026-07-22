@@ -1,4 +1,38 @@
-﻿## [2026-07-22] — Subscription & Catalogue Convergence Audit
+﻿## [2026-07-22] — BLOCKED: seller upload fix built, not deployed
+
+`c5f383c` fixes a data-loss defect and **is not in production**. Production still
+serves the old `seller.js`; a merchant uploading a fifth product still sees
+"Storage full! Delete old products first." and still loses the product.
+
+**Blocker:** `scripts/test-payment-authority.js` slices `functions/index.js`
+between two text anchors. The end anchor — `"Load seller's Daraja credentials
+from Firestore"` — was deleted by commit `5ee7e3a` ("stop collecting merchant
+M-Pesa credentials in the browser"), whose purpose was removing exactly that
+code. The test now fails with `could not locate the pricing block`, the deploy
+gate blocks on it, and hosting cannot ship.
+
+The failing test belongs to the payment-migration workstream, not to this one.
+Re-anchoring it means deciding where the new boundary should be, which requires
+reading that refactor and its design documents (`PAYMENT_MIGRATION_MOR.md`,
+`PRODUCTION_RECOVERY_REGISTER.md`, `ARCHITECTURE_ACTIVATION.md`). That has not
+been done here, so the test is handed back rather than mechanically repaired.
+
+**Resolved in the same pass:** `test-subscription-consistency` was also failing,
+and that one was self-inflicted — `scripts/verify-listing-limit-single-source.js`
+declares plan-limit field names in its matcher and quotes real values in its
+classification evidence, so the older ratchet counted the guard itself as the
+fourteenth plan catalogue. Added to that ratchet's SKIP list, exactly as
+`test-subscription-consistency` and `perf-guard` already exclude themselves. A
+script whose job is to find plan catalogues necessarily contains the patterns it
+searches for.
+
+**Unblocking:** repair or re-anchor `test-payment-authority`, then
+`firebase deploy --only hosting`. Do not conclude the upload fix works until
+`FIREBASE_REAL_EXIT=0` and `verify-artifact-parity.js seller.js` reports
+IDENTICAL — two deploys today reported as "in flight" had in fact failed, and the
+parity check was the only thing that said so.
+
+## [2026-07-22] — Subscription & Catalogue Convergence Audit
 
 Scope: the subscription entitlement chain and marketplace catalogue ownership.
 **Not** the payments-migration work committed the same day (`9d72055`, `dbb09af`,

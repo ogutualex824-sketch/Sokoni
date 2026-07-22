@@ -35,7 +35,13 @@ const CANONICAL = 'functions/subscription-catalog.js';
    conflating the two is how a count stops meaning anything. */
 const ALLOWANCE = /\b(listings|listings_limit|maxListings|listingLimit|maxProducts|productLimit)\s*:\s*-?\d+/;
 
-const SKIP = /node_modules|[\\/]\.claude[\\/]|[\\/]\.git[\\/]|[\\/]docs[\\/]|[\\/]archive[\\/]|cf-complete-audit|test-subscription-consistency|perf-guard/;
+/* Guards are skipped for the same reason this file skips itself: a script whose
+   job is to FIND plan catalogues necessarily contains the patterns it searches
+   for, and counting it inflates the very number it exists to hold down.
+   verify-listing-limit-single-source declares the field names in its matcher and
+   quotes real values in its classification evidence, so it read as the fourteenth
+   catalogue and blocked a deploy on its own existence. */
+const SKIP = /node_modules|[\\/]\.claude[\\/]|[\\/]\.git[\\/]|[\\/]docs[\\/]|[\\/]archive[\\/]|cf-complete-audit|test-subscription-consistency|verify-listing-limit-single-source|perf-guard/;
 
 function walk(dir, out = []) {
   let entries = [];
