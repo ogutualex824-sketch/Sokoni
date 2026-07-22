@@ -427,3 +427,34 @@ Collapsing UNTESTABLE into PASS is how all three above would have shipped.
 
 **Forbidden:** reporting a green test as evidence when the value under test was
 provided by the test.
+
+### Artifact parity — companion to ADR-0011
+
+`scripts/verify-artifact-parity.js` answers the question a hash cannot: when the
+deployed bytes differ from the repository, does the deployed **program** differ?
+
+```
+node scripts/verify-artifact-parity.js pos-lifecycle.js sw-register.js
+```
+
+| Verdict | Meaning | Runtime tests |
+|---|---|---|
+| `IDENTICAL` | bytes match | valid |
+| `COMMENT-ONLY` | bytes differ, executable code does not | **valid** |
+| `BEHAVIOUR-DIFFERS` | the deployed program is not this program | **invalid — stop** |
+
+**Why a hash alone misleads in both directions.** Treating any mismatch as "not
+deployed" stalls a release over a comment that cannot affect a test. Treating a
+mismatch as "probably just formatting" is how a real change gets waved through.
+The check removes the judgement call by measuring instead.
+
+The normalisation is deliberately naive about comment-like sequences inside
+string literals. A false `BEHAVIOUR-DIFFERS` only delays a test; a false
+`COMMENT-ONLY` would validate against the wrong program. **When the two errors
+are not symmetric, prefer the harmless one.**
+
+Exit 1 only on `BEHAVIOUR-DIFFERS` — comment drift is reported, not fatal.
+
+*Verified by injecting one executable line into a comment-only diff: verdict
+flips to `BEHAVIOUR-DIFFERS`, exit 1; removing it returns to `COMMENT-ONLY`,
+exit 0.*
