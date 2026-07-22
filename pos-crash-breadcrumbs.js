@@ -256,6 +256,60 @@
   });
   window.addEventListener('pagehide', function (e) { stage('pagehide' + (e.persisted ? ':cached' : '')); });
 
+  /* ── Service worker + connectivity lifecycle ─────────────────────────────
+     controllerchange was shown to cause a reload (sw-register.js), but NOT that
+     a Flight Mode toggle necessarily installs a new worker — controllerchange
+     can fire for several reasons and the distinction decides the fix. These
+     record which actually happened rather than inferring it:
+
+       updatefound + new script URL  -> a genuine update installed
+       controllerchange, no updatefound -> controller replaced, nothing new
+       online/offline with neither   -> reconnect only; the reload is elsewhere */
+  run.sw = { scriptURL: null, state: null, updatefound: false, controllerchange: false, events: [] };
+  run.network = { online: navigator.onLine, transitions: [] };
+
+  function swEvent(name, detail) {
+    run.sw.events.push({ event: name, atMs: Date.now() - t0, detail: detail || null });
+    stage('sw:' + name, detail);
+  }
+
+  try {
+    if (navigator.serviceWorker) {
+      const c = navigator.serviceWorker.controller;
+      if (c) { run.sw.scriptURL = c.scriptURL; run.sw.state = c.state; }
+
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        run.sw.controllerchange = true;
+        const n = navigator.serviceWorker.controller;
+        swEvent('controllerchange', n ? n.scriptURL.split('/').pop() : 'none');
+      });
+
+      navigator.serviceWorker.getRegistration().then((reg) => {
+        if (!reg) return;
+        run.sw.state = (reg.active && reg.active.state) || null;
+        reg.addEventListener('updatefound', () => {
+          run.sw.updatefound = true;
+          swEvent('updatefound', reg.installing ? reg.installing.scriptURL.split('/').pop() : null);
+        });
+      }).catch(() => {});
+    }
+  } catch (_) {}
+
+  /* Connectivity transitions, stamped. If a reload follows an online event with
+     no updatefound, the service worker did not update and the cause is
+     something else — which is the question that cannot be answered by reading
+     code. */
+  window.addEventListener('online',  () => {
+    run.network.online = true;
+    run.network.transitions.push({ to: 'online', atMs: Date.now() - t0 });
+    stage('network:online');
+  });
+  window.addEventListener('offline', () => {
+    run.network.online = false;
+    run.network.transitions.push({ to: 'offline', atMs: Date.now() - t0 });
+    stage('network:offline');
+  });
+
   /* ── Report ────────────────────────────────────────────────────────────── */
   window.sokoniCrashReport = function () {
     var prev = null;

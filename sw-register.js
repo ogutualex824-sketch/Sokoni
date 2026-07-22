@@ -199,6 +199,31 @@
             return;
           }
         } catch (_) {}
+        /* ── Page-level veto ──────────────────────────────────────────────
+           A content page can be replaced under the reader without cost. A till
+           cannot: reloading mid-sale discards the cart and the cashier starts
+           over in front of a customer. That difference is real, but it is not
+           this file's business to know what a sale is.
+
+           So the page decides. window.AppLifecycle.canReload() defaults to
+           true when absent, which is every page except the POS — the guard
+           costs nothing where it does not apply, and no page has to opt in to
+           keep working.
+
+           A page that vetoes owns the reload: it must call
+           AppLifecycle.applyPendingReload() once it is safe, or the update
+           never lands. That is the correct trade — a stale POS is recoverable,
+           a lost sale is not. */
+        try {
+          if (window.AppLifecycle && typeof window.AppLifecycle.canReload === 'function'
+              && window.AppLifecycle.canReload() === false) {
+            console.info('[SOKONI SW] reload deferred — page reports work in progress');
+            window.__sokoniReloadPending = true;
+            window.dispatchEvent(new CustomEvent('sokoni:reload-deferred'));
+            return;
+          }
+        } catch (_) { /* a broken predicate must not block a legitimate update */ }
+
         if (!refreshing) { refreshing = true; window.location.reload(); }
       });
     });
