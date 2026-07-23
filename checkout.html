@@ -1181,6 +1181,45 @@
         </div>
       </div>
 
+      <!-- Section 4 · Impact — invited only AFTER payment method selection, framed
+           as a positive choice rather than a prerequisite. Moved here from the
+           order-summary column; same #coImpactRow, same _updateImpactRow/_setImpact
+           handlers (referenced by id, so the move is behaviour-preserving). -->
+      <div id="coImpactRow" style="margin-top:12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:12px 14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <span style="font-size:12px;font-weight:800;color:#f59e0b;">🌱 Make this order go further</span>
+          <label style="position:relative;width:36px;height:20px;cursor:pointer;display:inline-block;">
+            <input type="checkbox" id="coImpactToggle" style="opacity:0;width:0;height:0;position:absolute;" onchange="_updateImpactRow()">
+            <span id="coImpactSlider" style="position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:999px;transition:.2s;"></span>
+            <span id="coImpactThumb" style="position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;left:3px;top:3px;transition:.2s;"></span>
+          </label>
+        </div>
+        <div id="coImpactOpts" style="display:none;">
+          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;">Add to your order to support community programs:</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;" id="coImpactPresets">
+            <button onclick="_setImpact(this,10)" class="co-impact-btn">KSh 10</button>
+            <button onclick="_setImpact(this,50)" class="co-impact-btn">KSh 50</button>
+            <button onclick="_setImpact(this,100)" class="co-impact-btn active">KSh 100</button>
+            <button onclick="_setImpact(this,200)" class="co-impact-btn">KSh 200</button>
+          </div>
+          <select id="coImpactDest" style="width:100%;padding:7px 10px;background:rgba(30,30,30,1);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:11px;font-family:inherit;outline:none;">
+            <option value="General Foundation">General Foundation</option>
+            <option value="education">Education Programs</option>
+            <option value="health">Healthcare Support</option>
+            <option value="food">Food Security</option>
+            <option value="environment">Environmental Conservation</option>
+            <option value="emergency">Emergency Relief</option>
+          </select>
+        </div>
+        <div id="coImpactSummary" style="font-size:11px;color:rgba(255,255,255,.4);">Optional — your order completes either way. <span style="color:rgba(255,255,255,.3)">No thanks? Just leave this off.</span></div>
+      </div>
+      <style>
+        .co-impact-btn{padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;color:rgba(255,255,255,.6);font-family:inherit;transition:all .15s;}
+        .co-impact-btn.active{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#f59e0b;}
+        #coImpactToggle:checked~#coImpactSlider{background:#f59e0b;}
+        #coImpactToggle:checked~#coImpactThumb{transform:translateX(16px);}
+      </style>
+
       <!-- Section 5 · Commitment — reassurance directly above the primary CTA -->
       <div data-sokoni-pay-reassurance></div>
 
@@ -1209,42 +1248,6 @@
         <span class="os-total-label">Total</span>
         <span class="os-total-val" id="checkoutTotal">KES 0</span>
       </div>
-      <!-- SOKONI Impact Round-Up -->
-      <div id="coImpactRow" style="margin-top:12px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.18);border-radius:12px;padding:12px 14px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <span style="font-size:12px;font-weight:800;color:#f59e0b;">🌱 SOKONI Impact Contribution</span>
-          <label style="position:relative;width:36px;height:20px;cursor:pointer;display:inline-block;">
-            <input type="checkbox" id="coImpactToggle" style="opacity:0;width:0;height:0;position:absolute;" onchange="_updateImpactRow()">
-            <span id="coImpactSlider" style="position:absolute;inset:0;background:rgba(255,255,255,.12);border-radius:999px;transition:.2s;"></span>
-            <span id="coImpactThumb" style="position:absolute;width:14px;height:14px;background:#fff;border-radius:50%;left:3px;top:3px;transition:.2s;"></span>
-          </label>
-        </div>
-        <div id="coImpactOpts" style="display:none;">
-          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px;">Add to your order to support community programs:</div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;" id="coImpactPresets">
-            <button onclick="_setImpact(this,10)" class="co-impact-btn">KSh 10</button>
-            <button onclick="_setImpact(this,50)" class="co-impact-btn">KSh 50</button>
-            <button onclick="_setImpact(this,100)" class="co-impact-btn active">KSh 100</button>
-            <button onclick="_setImpact(this,200)" class="co-impact-btn">KSh 200</button>
-          </div>
-          <select id="coImpactDest" style="width:100%;padding:7px 10px;background:rgba(30,30,30,1);border:1px solid rgba(255,255,255,.1);border-radius:8px;color:rgba(255,255,255,.7);font-size:11px;font-family:inherit;outline:none;">
-            <option value="General Foundation">General Foundation</option>
-            <option value="education">Education Programs</option>
-            <option value="health">Healthcare Support</option>
-            <option value="food">Food Security</option>
-            <option value="environment">Environmental Conservation</option>
-            <option value="emergency">Emergency Relief</option>
-          </select>
-        </div>
-        <div id="coImpactSummary" style="font-size:11px;color:rgba(255,255,255,.4);">Enable to add a community contribution to your order.</div>
-      </div>
-      <style>
-        .co-impact-btn{padding:5px 10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:999px;font-size:11px;font-weight:700;cursor:pointer;color:rgba(255,255,255,.6);font-family:inherit;transition:all .15s;}
-        .co-impact-btn.active{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.4);color:#f59e0b;}
-        #coImpactToggle:checked~#coImpactSlider{background:#f59e0b;}
-        #coImpactToggle:checked~#coImpactThumb{transform:translateX(16px);}
-      </style>
-
       <!-- Estimated delivery -->
       <div id="estDeliveryRow" style="display:none;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.15);border-radius:12px;padding:12px 14px;margin:14px 0 0;">
         <div style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:4px;">📦 ESTIMATED DELIVERY</div>
