@@ -396,7 +396,7 @@ document.querySelectorAll('.tab').forEach(t => {
 
 /* ── Summary ── */
 async function loadSummary() {
-  const [supps, pos, invs] = await Promise.all([PosSuppliers.getAllSuppliers(), PosSuppliers.getAllPOs(), PosSuppliers.getAllInvoices()]);
+  const [supps, pos, invs] = await Promise.all([PosSuppliers.getAllSuppliers(), PosSuppliers.getAllPurchaseOrders(), PosSuppliers.getAllInvoices()]);
   _allSuppliers = supps;
   const openPOs = pos.filter(p => ['draft','sent','partial'].includes(p.status));
   const outstanding = invs.filter(i => i.status !== 'paid').reduce((t, i) => t + i.balance, 0);
@@ -488,7 +488,7 @@ async function saveSupplier() {
 
 /* ══ PURCHASE ORDERS ══ */
 async function loadPOs() {
-  _allPOs = await PosSuppliers.getAllPOs();
+  _allPOs = await PosSuppliers.getAllPurchaseOrders();
   filterPOs();
 }
 
@@ -609,7 +609,7 @@ function receiveFromPO(id) {
 
 /* ══ GRN ══ */
 async function loadGRNTab() {
-  const pos = (await PosSuppliers.getAllPOs()).filter(p => ['sent','partial'].includes(p.status));
+  const pos = (await PosSuppliers.getAllPurchaseOrders()).filter(p => ['sent','partial'].includes(p.status));
   E('grnPO').innerHTML = '<option value="">— Select Open PO —</option>' + pos.map(p => {
     const supp = _allSuppliers.find(s => s.id === p.supplierId);
     return `<option value="${_e(p.id)}">${_e(p.poNumber)} — ${_e(supp?.name||p.supplierId)}</option>`;

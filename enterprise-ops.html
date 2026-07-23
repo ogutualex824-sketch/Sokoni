@@ -755,14 +755,20 @@
 /* ═══════════════════════════════════════════════════════
    FIREBASE INIT
 ═══════════════════════════════════════════════════════ */
-firebase.initializeApp({
-  apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  authDomain: "auth.mysokoni.co.ke",
-  projectId:         "sokoni-aeb26",
-  storageBucket:     "sokoni-aeb26.firebasestorage.app",
-  messagingSenderId: "24799054989",
-  appId:             "1:24799054989:web:e1cf6ca8c281bf1abf26c4"
-});
+/* Guarded + canonical config.
+   This page threw "Firebase App named '[DEFAULT]' already exists with different
+   options": something had already created the default app, and this call passed
+   a DIFFERENT object — a hand-copied config that had drifted from the canonical
+   one (it was missing measurementId). Re-initialising the default app with
+   mismatched options is an error, so auth/firestore below never came up.
+
+   Now: only initialise if no app exists, and take the config from
+   window.SOKONI_FIREBASE_CONFIG — the single source of truth that
+   scripts/verify-firebase-config.js gates on — instead of a local copy that can
+   silently drift. */
+if (!firebase.apps.length) {
+  firebase.initializeApp(window.SOKONI_FIREBASE_CONFIG);
+}
 const auth      = firebase.auth();
 const functions = firebase.functions();
 const db        = firebase.firestore();

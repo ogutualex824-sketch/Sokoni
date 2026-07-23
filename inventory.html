@@ -1865,7 +1865,12 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <!-- ════════════════════ SCRIPTS ════════════════════ -->
 <script type="module" src="firebase.js"></script>
 <script src="auth.js"></script>
-<script src="sokoni-db.js"></script>
+<!-- type="module": sokoni-db.js has top-level `import` statements. Loaded as a
+     classic script it threw "Cannot use import statement outside a module" and
+     never ran, so this page had no database layer at all. The other four pages
+     that load this file already tag it as a module; inventory.html was the
+     only one that did not. module implies defer. -->
+<script type="module" src="sokoni-db.js"></script>
 <script src="sokoni-scale.js" defer></script>
 <script src="sokoni-cache.js" defer></script>
 <script src="sokoni-monitor.js" defer></script>

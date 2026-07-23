@@ -7,6 +7,9 @@
   <link rel="shortcut icon" href="/favicon.ico">
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
+<!-- Canonical Firebase config. Classic script, so it runs before the deferred
+     module below and window.SOKONI_FIREBASE_CONFIG is guaranteed to exist. -->
+<script src="sokoni-config.js"></script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SOKONI CRM — Customer Relationship Management</title>
@@ -508,9 +511,13 @@ import { getFunctions, httpsCallable }  from 'https://www.gstatic.com/firebasejs
 import {
   getFirestore, collection, query, where, orderBy, limit, getDocs
 } from 'https://www.gstatic.com/firebasejs/11.1.0/firebase-firestore.js';
-import { getConfig } from './sokoni-config.js';
+/* sokoni-config.js is a CLASSIC script that assigns window.SOKONI_FIREBASE_CONFIG
+   — it exports nothing. `import { getConfig }` therefore failed with "does not
+   provide an export named 'getConfig'", which aborts the whole module: this page
+   initialised no Firebase app and loaded no CRM data at all. Use the global,
+   which the classic <script> above guarantees is present before this module runs. */
 
-const app    = initializeApp(getConfig());
+const app    = initializeApp(window.SOKONI_FIREBASE_CONFIG);
 const auth   = getAuth(app);
 const fns    = getFunctions(app, 'us-central1');
 const db     = getFirestore(app);

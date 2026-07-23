@@ -1090,7 +1090,13 @@ function renderDriverStats(){
   }
 
   const _seeds=[0.68,0.82,0.55,0.91,0.74,1.08,0.88,1.0];
-  const _base=Math.max(earnings||400,400);
+  /* `earnings` was a bare identifier that is declared nowhere — it threw
+     "earnings is not defined" and aborted renderDriverStats, so the driver
+     dashboard never rendered its weekly chart, and everything after this line
+     in the function was dead. This chart is weekly, and `earned.weekEarnings`
+     (computed at the top of this same function) is the weekly figure; the
+     currentDriver fallback mirrors the pattern used elsewhere in this file. */
+  const _base=Math.max(earned.weekEarnings || currentDriver.earnings || 400, 400);
   const _weekEarn=_seeds.map((m,i)=>i===7?_base:Math.round(_base*m));
   const _weekLabels=['Wk-7','Wk-6','Wk-5','Wk-4','Wk-3','Wk-2','Last','This'];
   window._drvPendingChart={weekEarn:_weekEarn,weekLabels:_weekLabels,trips,rating:currentDriver.rating||5.0};
@@ -2816,9 +2822,9 @@ window.toggleOnline = async function() {
   <script defer src="sokoni-gateway.js"></script>
   <script defer src="sokoni-service-mesh.js"></script>
   <!-- Tracking & Location stack -->
-  <script defer src="sokoni-gps-manager.js"></script>
-  <script defer src="sokoni-tracking.js"></script>
-  <script defer src="sokoni-tracking-manager.js"></script>
+  <script type="module" src="sokoni-gps-manager.js"></script>
+  <script type="module" src="sokoni-tracking.js"></script>
+  <script type="module" src="sokoni-tracking-manager.js"></script>
 </body>
 </html>
 

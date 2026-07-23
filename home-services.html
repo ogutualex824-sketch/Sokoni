@@ -611,7 +611,12 @@ renderTypeChips();
 filterProviders();
 renderHsAskFeed();
 renderQuotesFeed();
-_initFsProviders();
+/* _initFsProviders is a hoisted declaration so this call resolves, but its body
+   reads `_hsProvidersUnsub`, declared with `let` further down — still in the
+   temporal dead zone at this point, so it threw "Cannot access
+   '_hsProvidersUnsub' before initialization" and the live provider listener
+   never started. The microtask runs after this block, once the let is bound. */
+queueMicrotask(function(){ _initFsProviders(); });
 
 /* ── URL HASH DEEP-LINK ── */
 (function(){
