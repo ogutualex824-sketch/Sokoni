@@ -6487,33 +6487,168 @@ async function _processWebhook(req, res, opts) {
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 
 /* â”€â”€ IntaSend â”€â”€ */
+/* Canonical production receiver — IntaSend is configured to POST to this URL.
+   Challenge-based auth (body.challenge); full payment + subscription activation.
+   intasendWebhook is a secondary deployment that receives no real IntaSend traffic. */
 exports.webhookIntasend = onRequest(
-  { timeoutSeconds: 30, cors: false, invoker: "public", secrets: [INTASEND_PRIVATE_KEY] },
+  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
   async (req, res) => {
-    if (req.method !== "POST") return res.status(405).end();
-    await _processWebhook(req, res, {
-      provider:    "intasend",
-      secretKey:   INTASEND_PRIVATE_KEY.value(),
-      getEventId:  (b) => (b && b.invoice && b.invoice.invoice_id) || (b && b.id) || (b && b.tracking_id),
-      parsePayload:(b) => ({
-        status:    ((b.state || b.status || "")).toUpperCase(),
-        amount:    Number((b.value || b.amount || 0)),
-        currency:  b.currency || "KES",
-        phone:     (b.invoice && b.invoice.recipient_phone) || b.phone || "",
-        reference: (b.invoice && b.invoice.invoice_id) || b.tracking_id || "",
-        raw:       b,
-      }),
-      onSuccess: async (payload, eventId) => {
-        if (payload.status !== "COMPLETE") return;
-        await db.collection("webhookPayments").add({
-          provider: "intasend", eventId,
-          amount: payload.amount, currency: payload.currency,
-          phone: payload.phone, reference: payload.reference,
-          status: "completed",
-          serverTs: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      },
+    if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
+
+    const challenge         = String((req.body && req.body.challenge) || "");
+    const expectedChallenge = INTASEND_WEBHOOK_CHALLENGE.value();
+    if (!expectedChallenge) {
+      logger.error("[webhookIntasend] INTASEND_WEBHOOK_CHALLENGE secret is empty — check Secret Manager IAM and secret version");
+      res.status(500).send("Service unavailable");
+      return;
+    }
+    const normKey = Buffer.from("sokoni-intasend-challenge-norm");
+    const a = crypto.createHmac("sha256", normKey).update(challenge).digest();
+    const b = crypto.createHmac("sha256", normKey).update(expectedChallenge).digest();
+    if (!crypto.timingSafeEqual(a, b)) {
+      logger.warn("[webhookIntasend] challenge mismatch — rejecting", {
+        hasChallenge: challenge.length > 0,
+        challengeLen: challenge.length,
+        invoiceId:    req.body?.invoice?.invoice_id || req.body?.invoice_id || "unknown",
+        method:       req.method,
+      });
+      res.status(401).send("Unauthorized");
+      return;
+    }
+
+    const { invoice, value } = req.body || {};
+    const state      = invoice?.state || "FAILED";
+    const apiRef     = invoice?.api_ref || value?.api_ref;
+    const checkoutId = invoice?.id;
+    const amount     = invoice?.net_amount || invoice?.amount;
+
+    if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
+
+    const payRef = db.collection("payments").doc(apiRef);
+    const snap   = await payRef.get();
+    if (!snap.exists) { res.status(200).send("OK"); return; }
+
+    const existing = snap.data();
+    if (existing.status === "COMPLETE") { res.status(200).send("OK"); return; }
+
+    const fsStatus = state === "COMPLETE" ? "COMPLETE" : state === "FAILED" ? "FAILED" : "PENDING";
+
+    let claimed = false;
+    await db.runTransaction(async (txn) => {
+      const s = await txn.get(payRef);
+      if (!s.exists) return;
+      if (s.data().status === "COMPLETE") return;
+      txn.update(payRef, {
+        status:            fsStatus,
+        intasendState:     state,
+        confirmedAmount:   amount,
+        updatedAt:         admin.firestore.FieldValue.serverTimestamp(),
+        webhookReceivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      claimed = true;
     });
+
+    if (!claimed) {
+      console.log(`[webhookIntasend] Already processed (raced): ${apiRef}`);
+      res.status(200).send("OK");
+      return;
+    }
+
+    if (fsStatus === "COMPLETE") {
+      const payData  = existing;
+      const category = payData.meta?.category || "default";
+      let sokoniCut = 0, commissionPct = 0;
+      try {
+        const { calculateCommission } = require('./finos-utils');
+        const commResult = await calculateCommission(db, {
+          orderAmountCents: amount * 100,
+          category,
+          sellerId: payData.uid,
+        });
+        sokoniCut     = commResult.commissionCents ? Math.round(commResult.commissionCents / 100) : 0;
+        commissionPct = commResult.effectiveRate ?? 0;
+      } catch (commErr) {
+        console.error('[webhookIntasend] Commission calc failed — flagging for manual review', commErr.message);
+        commissionPct = null;
+        sokoniCut = 0;
+        await db.collection("commissionReviewQueue").add({
+          ref: apiRef, amount, category, uid: payData.uid,
+          reason: commErr.message,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+
+      await db.collection("commissionLedger").doc(apiRef).set({
+        ref: apiRef, checkoutId, uid: payData.uid,
+        providerName:  payData.meta?.providerName || "",
+        category,
+        commissionPct, sokoniCut,
+        providerNet:   amount - sokoniCut,
+        serviceTotal:  amount,
+        status:        "auto_collected",
+        source:        "webhookIntasend",
+        confirmedAt:   admin.firestore.FieldValue.serverTimestamp(),
+        createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(err => console.error("[webhookIntasend] Commission write failed:", err));
+
+      try {
+        const intentRef  = existing.intentRef || apiRef;
+        const intentSnap = await db.collection("paymentIntents").doc(intentRef).get();
+        if (intentSnap.exists) {
+          const intent = intentSnap.data();
+          if (intent.purpose === "subscription" && intent.planId && intent.uid) {
+            const subRef  = db.collection("subscriptions").doc(intent.uid);
+            const subSnap = await subRef.get();
+            const subData = subSnap.exists ? subSnap.data() : null;
+            if (!subData || subData.paymentRef !== apiRef) {
+              const expiresAt = new Date(Date.now() + 30 * 86400000);
+              await subRef.set({
+                uid:          intent.uid,
+                plan:         intent.planId,
+                planName:     intent.planName || intent.planId,
+                billingCycle: intent.billingCycle || "monthly",
+                status:       "active",
+                paymentRef:   apiRef,
+                amountPaid:   amount,
+                source:       "webhookIntasend",
+                activatedAt:  admin.firestore.FieldValue.serverTimestamp(),
+                expiresAt:    admin.firestore.Timestamp.fromDate(expiresAt),
+                updatedAt:    admin.firestore.FieldValue.serverTimestamp(),
+              });
+              console.log("[webhookIntasend] Subscription auto-activated",
+                { uid: intent.uid, plan: intent.planId, ref: apiRef });
+              db.collection("subscriptionAuditLog").add({
+                uid:       intent.uid,
+                plan:      intent.planId,
+                paymentRef: apiRef,
+                action:    "ACTIVATED",
+                source:    "webhookIntasend",
+                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+              }).catch(e => console.error("[webhookIntasend] Sub-audit log failed:", e.message));
+            }
+          }
+        }
+      } catch (subErr) {
+        console.error("[webhookIntasend] Subscription auto-activation failed",
+          { ref: apiRef, err: subErr.message });
+      }
+
+      try {
+        const intentSnap2 = await db.collection("paymentIntents").doc(apiRef).get();
+        if (intentSnap2.exists && intentSnap2.data().purpose === "subscription") {
+          const adapters = require("./entitlement-adapters");
+          await adapters.shadowCompareSubscription(apiRef, {
+            uid: intentSnap2.data().uid || intentSnap2.data().ownerUid || null,
+          });
+        }
+      } catch (shadowErr) {
+        console.error("[webhookIntasend] shadow comparison skipped",
+          { ref: apiRef, err: shadowErr && shadowErr.message });
+      }
+    }
+
+    res.status(200).send("OK");
   }
 );
 
