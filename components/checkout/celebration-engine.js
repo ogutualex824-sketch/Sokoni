@@ -23,8 +23,14 @@
      // -> { key, tier, emoji, headline, subline, accent, confetti, reward|null, priority }
 
    PRECEDENCE (highest first) — a customer hitting several at once gets the rarest:
-     exact major milestone (1/10/50/100/…) > birthday > fixed-date holiday >
-     every-100th beyond 100 > deterministic surprise (~1 in 8) > default
+     system > campaign > exact milestone (1/10/50/100/…) > birthday >
+     fixed-date holiday > every-100th beyond 100 > surprise (~1 in 8) > default
+
+   EXTENSION WITHOUT ENGINE CHANGES. `ctx.system` and `ctx.campaign` let the caller
+   inject a celebration that outranks the built-ins — a platform-wide moment, or a
+   marketing campaign (Black Friday, Anniversary Sale) — by passing a config
+   object. The engine slots them in by priority; it never needs new code for a new
+   campaign. Each is normalised so a partial object still renders.
    ============================================================================ */
 (function (root) {
   'use strict';
@@ -95,12 +101,27 @@
     return (h % 8) === 0;
   }
 
+  /* Normalise a caller-supplied campaign/system config into a full celebration,
+     filling any missing field from the default so a partial object still renders. */
+  function _normalise(cfg, key, priority) {
+    if (!cfg || typeof cfg !== 'object') return null;
+    return C(cfg.key || key, cfg.tier || null, cfg.emoji || '🎉',
+      cfg.headline || DEFAULT.headline, cfg.subline || DEFAULT.subline,
+      cfg.accent || ACCENT, cfg.confetti !== false, cfg.reward || null, priority);
+  }
+
   function pick(ctx) {
     ctx = ctx || {};
     var n = Math.max(0, parseInt(ctx.orderCount, 10) || 0);
     var mmdd = _mmdd(ctx.dateISO);
 
     var candidates = [];
+
+    /* Injected celebrations outrank everything built-in. */
+    var sys = _normalise(ctx.system, 'system', 200);
+    if (sys) candidates.push(sys);
+    var camp = _normalise(ctx.campaign, 'campaign', 150);
+    if (camp) candidates.push(camp);
 
     if (MILESTONES[n]) candidates.push(MILESTONES[n]);
     if (ctx.birthdayMMDD && mmdd && ctx.birthdayMMDD === mmdd) candidates.push(BIRTHDAY);

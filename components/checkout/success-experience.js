@@ -84,6 +84,11 @@
       '  text-decoration:none;text-align:center;box-sizing:border-box;}',
       '.sk-succ__btn--primary{background:#71ff00;color:#04210a;}',
       '.sk-succ__btn--ghost{background:rgba(255,255,255,.05);color:#fff;border:1px solid rgba(255,255,255,.12);}',
+      '.sk-succ__share{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;}',
+      '.sk-succ__sbtn{flex:1 1 auto;min-width:120px;padding:10px 12px;border-radius:10px;',
+      '  font-size:12px;font-weight:800;cursor:pointer;background:rgba(255,255,255,.05);',
+      '  color:#fff;border:1px solid rgba(255,255,255,.12);font-family:inherit;}',
+      '.sk-succ__sbtn:hover{background:rgba(113,255,0,.1);border-color:rgba(113,255,0,.3);}',
       '.sk-succ__foot{margin-top:20px;font-size:12px;line-height:1.6;color:rgba(255,255,255,.4);}',
       '.sk-succ__foot b{color:rgba(255,255,255,.7);}'
     ].join('');
@@ -97,8 +102,9 @@
 
     var CE = root.SokoniCelebration;
     var cel = CE ? CE.pick({
-      orderCount: data.orderCount, dateISO: data.dateISO,
-      birthdayMMDD: data.birthdayMMDD, orderId: data.orderId
+      orderCount: data.orderCount, dateISO: data.dateISO || data.purchaseDate,
+      birthdayMMDD: data.birthdayMMDD || data.birthday, orderId: data.orderId,
+      campaign: data.campaign, system: data.system
     }) : { emoji: '🎉', headline: 'Order Confirmed', subline: 'Thank you for shopping with SOKONI.',
            accent: '#71ff00', tier: null, reward: null, confetti: false };
 
@@ -114,33 +120,52 @@
     parts.push('<h1 class="sk-succ__h">' + esc(cel.headline) + '</h1>');
     parts.push('<p class="sk-succ__sub">Thank you' + name + '. ' + esc(cel.subline) + '</p>');
 
-    if (cel.reward) {
-      parts.push('<div class="sk-succ__reward">🎁 ' + esc(cel.reward.label) +
-        (cel.reward.detail ? ' <span style="font-weight:600;opacity:.85">— ' + esc(cel.reward.detail) + '</span>' : '') +
-        '</div>');
+    /* Reward is SEPARATE from the celebration: the engine names the reward TYPE
+       (e.g. "Free Delivery"); the actual coupon CODE is issued server-side and
+       arrives as data.couponCode, shown here for the customer to redeem. */
+    if (cel.reward || data.couponCode) {
+      var rl = cel.reward ? esc(cel.reward.label) : 'Reward unlocked';
+      var rd = cel.reward && cel.reward.detail ? ' <span style="font-weight:600;opacity:.85">— ' + esc(cel.reward.detail) + '</span>' : '';
+      var coupon = data.couponCode
+        ? '<div style="margin-top:8px;font-size:13px;font-weight:900;letter-spacing:2px;' +
+          'background:rgba(0,0,0,.35);border-radius:8px;padding:8px 10px;color:#fff;">' +
+          esc(data.couponCode) + '</div>'
+        : '';
+      parts.push('<div class="sk-succ__reward">🎁 ' + rl + rd + coupon + '</div>');
     }
 
     /* Order summary */
     var rows = '';
-    if (data.orderId) rows += row('Order', esc(data.orderId));
+    if (data.orderNumber || data.orderId) rows += row('Order', esc(data.orderNumber || data.orderId));
+    if (data.merchantName) {
+      rows += row('Seller', esc(data.merchantName) +
+        (data.merchantVerified ? ' <span style="color:#71ff00" title="Verified merchant">✓</span>' : ''));
+    }
     rows += row('Status', '<span style="color:#71ff00">✓ Confirmed</span>');
-    if (data.total != null) rows += row('Total paid', money(data.total, data.currency));
+    if (data.paymentMethod) rows += row('Paid via', esc(String(data.paymentMethod).toUpperCase()));
+    var amt = data.amount != null ? data.amount : data.total;
+    if (amt != null) rows += row('Total paid', money(amt, data.currency));
+    if (data.estimatedDelivery) rows += row('Est. delivery', esc(data.estimatedDelivery));
     parts.push('<div class="sk-succ__card">' + rows + '</div>');
 
     /* Loyalty */
-    if (data.points != null && Number(data.points) > 0) {
+    var points = data.loyaltyPoints != null ? data.loyaltyPoints : data.points;
+    if (points != null && Number(points) > 0) {
       parts.push('<div class="sk-succ__card"><div class="sk-succ__pts">' +
-        '<span>⭐</span><b style="color:#71ff00">+' + (Number(data.points) || 0) + '</b>' +
+        '<span>⭐</span><b style="color:#71ff00">+' + (Number(points) || 0) + '</b>' +
         '<span>loyalty points' + (data.tier ? ' · ' + esc(data.tier) + ' member' : '') + '</span></div></div>');
     }
 
-    /* Donation impact */
-    if (data.donation && Number(data.donation.amount) > 0) {
+    /* Donation impact — contract fields, with the older {donation:{amount,cause}}
+       shape still accepted. */
+    var impactAmt = data.impactContribution != null ? data.impactContribution : (data.donation && data.donation.amount);
+    var impactCat = data.impactCategory || (data.donation && data.donation.cause);
+    if (impactAmt != null && Number(impactAmt) > 0) {
       parts.push('<div class="sk-succ__card sk-succ__impact">' +
         '<div class="sk-succ__row"><span class="sk-succ__k">🌍 Your impact</span>' +
-        '<span class="sk-succ__v">' + money(data.donation.amount, data.currency) + '</span></div>' +
-        (data.donation.cause ? '<div class="sk-succ__row"><span class="sk-succ__k">Supporting</span>' +
-          '<span class="sk-succ__v" style="color:#71ff00">' + esc(data.donation.cause) + '</span></div>' : '') +
+        '<span class="sk-succ__v">' + money(impactAmt, data.currency) + '</span></div>' +
+        (impactCat ? '<div class="sk-succ__row"><span class="sk-succ__k">Supporting</span>' +
+          '<span class="sk-succ__v" style="color:#71ff00">' + esc(impactCat) + '</span></div>' : '') +
         '</div>');
     }
 
@@ -156,9 +181,26 @@
         '<a class="sk-succ__link" href="' + esc(data.trackUrl) + '">' + esc(data.trackUrl) + '</a>');
     }
 
+    /* Share your order — natural virality + fewer "where's my order?" tickets.
+       WhatsApp and Copy are pure presentation. Receipt / Invoice only appear when
+       the caller wires a handler, so no business logic lives in the renderer. */
+    var track = data.trackUrl || data.trackingUrl || '';
+    var shareBtns = [];
+    if (track) {
+      shareBtns.push(btn('share-wa', '📱 WhatsApp'));
+      shareBtns.push(btn('share-copy', '🔗 Copy link'));
+    }
+    if (typeof data.onReceipt === 'function') shareBtns.push(btn('share-receipt', '🧾 Download receipt'));
+    if (typeof data.onInvoice === 'function') shareBtns.push(btn('share-invoice', '📄 Save invoice'));
+    if (shareBtns.length) {
+      parts.push('<div class="sk-succ__card" style="text-align:center;">' +
+        '<div class="sk-succ__qrcap" style="margin-bottom:10px;">Share your order</div>' +
+        '<div class="sk-succ__share">' + shareBtns.join('') + '</div></div>');
+    }
+
     /* Actions */
     parts.push('<div class="sk-succ__btns">' +
-      (data.trackUrl ? '<a class="sk-succ__btn sk-succ__btn--primary" href="' + esc(data.trackUrl) + '">📦 Track my order</a>' : '') +
+      (track ? '<a class="sk-succ__btn sk-succ__btn--primary" href="' + esc(track) + '">📦 Track my order</a>' : '') +
       '<a class="sk-succ__btn sk-succ__btn--ghost" href="' + esc(data.continueUrl || '/') + '">Continue shopping</a>' +
       '</div>');
 
@@ -169,11 +211,48 @@
 
     container.className = (container.className ? container.className + ' ' : '') + 'sk-succ';
     container.innerHTML = parts.join('');
+
+    /* ── Share handlers (wired after innerHTML) ── */
+    var byAct = function (a) { return container.querySelector('[data-act="' + a + '"]'); };
+    var waBtn = byAct('share-wa'), copyBtn = byAct('share-copy'),
+        rcBtn = byAct('share-receipt'), invBtn = byAct('share-invoice');
+    if (waBtn) waBtn.addEventListener('click', function () {
+      var msg = 'My SOKONI order ' + (data.orderNumber || data.orderId || '') +
+        ' is confirmed! Track it here: ' + track;
+      window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank', 'noopener');
+    });
+    if (copyBtn) copyBtn.addEventListener('click', function () {
+      var done = function () { copyBtn.textContent = '✅ Copied'; setTimeout(function () { copyBtn.textContent = '🔗 Copy link'; }, 1800); };
+      if (navigator.clipboard) navigator.clipboard.writeText(track).then(done, function () {});
+      else done();
+    });
+    if (rcBtn) rcBtn.addEventListener('click', function () { try { data.onReceipt(data); } catch (e) {} });
+    if (invBtn) invBtn.addEventListener('click', function () { try { data.onInvoice(data); } catch (e) {} });
+
+    /* ── Analytics ── one event per rendered celebration. The renderer stays
+       decoupled: it dispatches a CustomEvent (and calls data.onAnalytics if given)
+       rather than knowing about any analytics vendor. The page forwards it. */
+    var evt = {
+      event: 'checkout_success',
+      celebration_type: cel.key,
+      reward_type: cel.reward ? cel.reward.label : null,
+      coupon: data.couponCode || null,
+      order_number: data.orderNumber || data.orderId || null,
+      order_value: (data.amount != null ? data.amount : data.total) || null,
+      donation: (data.impactContribution != null ? data.impactContribution : (data.donation && data.donation.amount)) || 0,
+      loyalty_points: (data.loyaltyPoints != null ? data.loyaltyPoints : data.points) || 0
+    };
+    try { window.dispatchEvent(new CustomEvent('sokoni:checkout_success', { detail: evt })); } catch (e) {}
+    if (typeof data.onAnalytics === 'function') { try { data.onAnalytics(evt); } catch (e) {} }
+
     return cel;
 
     function row(k, v) {
       return '<div class="sk-succ__row"><span class="sk-succ__k">' + k +
         '</span><span class="sk-succ__v">' + v + '</span></div>';
+    }
+    function btn(act, label) {
+      return '<button type="button" class="sk-succ__sbtn" data-act="' + act + '">' + label + '</button>';
     }
   }
 

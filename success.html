@@ -84,6 +84,8 @@
   <link rel="stylesheet" href="sokoni-premium-v2.css">
 <script src="security.js"></script>
 <script src="shared-header.js" defer></script>
+<script src="/components/checkout/celebration-engine.js" defer></script>
+<script src="/components/checkout/success-experience.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
@@ -93,25 +95,14 @@
 <section class="success-page">
   <div class="success-box">
 
-    <div class="success-animation">
-      <div class="success-circle">
-        ✓
-      </div>
-    </div>
-
-    <h1>Order Placed! 🎉</h1>
-    <p>Thank you for shopping with Sokoni. Your order is being processed.</p>
-
-    <div class="success-order-id" id="successOrderId">Looking up your order...</div>
-
-    <div class="success-points-earned" id="successPointsEarned" style="display:none;">
-      ⭐
-      <span id="pointsEarnedText">You earned 0 loyalty points!</span>
-    </div>
-
-    <div class="success-actions">
-      <a href="track.html" class="success-track-btn">📦 Track My Order</a>
-      <a href="/" class="success-continue-btn">Continue Shopping</a>
+    <!-- CHECKOUT 2.0 — Success Experience mount. The premium presentation
+         (celebration, order summary, loyalty, impact, tracking QR, share, actions)
+         is rendered by components/checkout/success-experience.js from real order
+         data assembled below. This element is the presentation layer ONLY; all
+         verification, ratings, referral and analytics logic stays in this page. -->
+    <div id="successMount">
+      <div class="success-animation"><div class="success-circle">✓</div></div>
+      <p style="color:rgba(255,255,255,.5)">Confirming your order…</p>
     </div>
 
     <div class="success-footer-note">
@@ -234,20 +225,72 @@
   let orders = [];
   try { orders = JSON.parse(localStorage.getItem("sokoniOrders")) || []; } catch(e) {}
   const latest = orders[0];
-  const idEl = document.getElementById("successOrderId");
-  if(latest && idEl){
-    idEl.innerHTML = `Order ID: <strong>${_esc(latest.id)}</strong>`;
-    idEl.onclick = () => window.location.href = `track.html?id=${latest.id}`;
-    idEl.style.cursor = "pointer";
-  }
 
   /* ── Points ── */
   let pts = 0;
   try { pts = JSON.parse(localStorage.getItem("sokoniPoints"))?.history?.[0]?.points || 0; } catch(e) {}
-  if(pts > 0){
-    document.getElementById("successPointsEarned").style.display = "flex";
-    document.getElementById("pointsEarnedText").textContent = `You earned ${pts} loyalty points! View your rewards →`;
+
+  /* ── CHECKOUT 2.0 — assemble the data contract and render ──────────────────
+     The page owns ALL data assembly; the renderer only presents. Nothing here
+     fetches inside the component. Every field is mapped from the real order the
+     checkout wrote to localStorage (see checkout.html newOrder), with safe
+     fallbacks so a partial order still renders. */
+  function renderSuccess(){
+    var mount = document.getElementById('successMount');
+    if (!mount || typeof window.SokoniSuccess === 'undefined') {
+      /* Component not ready (blocked/offline). Leave the fallback tick + a link. */
+      if (mount && latest) mount.innerHTML =
+        '<div class="success-animation"><div class="success-circle">✓</div></div>' +
+        '<h1>Order Confirmed 🎉</h1><p><a href="track.html?id=' + _esc(latest.id) +
+        '" style="color:#71ff00">Track order ' + _esc(latest.id) + ' →</a></p>';
+      return;
+    }
+    var user = {}; try { user = JSON.parse(localStorage.getItem('sokoniUser') || '{}') || {}; } catch(e){}
+    var origin = location.origin || 'https://mysokoni.co.ke';
+    var trackUrl = latest ? (origin + '/track.html?id=' + encodeURIComponent(latest.id)) : (origin + '/track.html');
+    var iso = null;
+    if (latest && latest.timestamp) { try { iso = new Date(latest.timestamp).toISOString().slice(0,10); } catch(e){} }
+
+    var data = {
+      orderId:        latest && latest.id,
+      orderNumber:    latest && latest.id,
+      customerName:   (latest && (latest.buyerName || latest.name)) || user.name || '',
+      merchantName:   latest && latest.sellerName,
+      merchantVerified: !!(latest && (latest.sellerVerified || latest.merchantVerified)),
+      paymentMethod:  latest && (latest.paymentMethod || latest.method),
+      amount:         latest && (latest.total != null ? latest.total : latest.orderTotal),
+      currency:       'KES',
+      loyaltyPoints:  pts,
+      tier:           user.loyaltyTier || user.tier || null,
+      impactContribution: latest && (latest.donation || latest.impactContribution) || null,
+      impactCategory: latest && (latest.donationCause || latest.impactCategory) || null,
+      trackUrl:       trackUrl,
+      continueUrl:    '/',
+      orderCount:     Array.isArray(orders) ? orders.length : 0,
+      birthday:       user.birthday || user.birthdayMMDD || null,   /* 'MM-DD' if present */
+      purchaseDate:   iso,
+      couponCode:     latest && latest.rewardCoupon || null,
+      /* Optional receipt/invoice handlers — wired only if the invoice engine is present. */
+      onReceipt: (window.SokoniInvoice && latest) ? function(){ try { window.SokoniInvoice.download ? window.SokoniInvoice.download(latest) : window.SokoniInvoice.generate(latest); } catch(e){} } : null,
+      onInvoice: (window.SokoniInvoice && latest) ? function(){ try { window.SokoniInvoice.save ? window.SokoniInvoice.save(latest) : window.SokoniInvoice.generate(latest); } catch(e){} } : null
+    };
+
+    try { window.SokoniSuccess.render(mount, data); }
+    catch(e){ if (latest) mount.innerHTML = '<h1>Order Confirmed 🎉</h1><p><a href="'+_esc(trackUrl)+'" style="color:#71ff00">Track your order →</a></p>'; }
   }
+  /* The component scripts are deferred, so they load AFTER this inline script
+     parses. Wait for DOMContentLoaded — deferred scripts have run by then — so
+     SokoniSuccess is defined and we render the real experience, not the fallback. */
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderSuccess);
+  else renderSuccess();
+
+  /* ── Analytics: forward the renderer's event to the page's existing pipeline ── */
+  window.addEventListener('sokoni:checkout_success', function(ev){
+    var d = ev && ev.detail || {};
+    try { if (window.dataLayer) window.dataLayer.push(d); } catch(e){}
+    try { if (typeof window.gtag === 'function') window.gtag('event','checkout_success', d); } catch(e){}
+    try { if (window.SokoniAnalytics && window.SokoniAnalytics.track) window.SokoniAnalytics.track('checkout_success', d); } catch(e){}
+  });
 
   /* ── Multi-dimensional Rating ── */
   const CATEGORIES = [
