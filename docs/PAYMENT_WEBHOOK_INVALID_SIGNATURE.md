@@ -108,11 +108,27 @@ correctly, not to stop verifying.
 2. Compare it with the current verification implementation (`intasendWebhook`).
 3. Update the verification logic ONLY if a mismatch is confirmed — preserving
    authentication, not removing it.
-4. Replay transaction `KBQE4OW` (or an equivalent low-value test transaction) and
-   verify the full chain:
-   - `payments/{ref}` → COMPLETE
-   - subscription activation fires
-   - the merchant's Starter entitlement appears
+4. Do NOT stop at "the webhook returns 200". That proves authentication only.
+   Replay `KBQE4OW` (or an equivalent low-value / sandbox test transaction) and
+   verify the ENTIRE downstream chain, because none of it has ever executed in
+   production — no payment has reached activation, so this is its first real run:
+   ```
+   webhook accepted
+         ↓
+   payments/{ref} → COMPLETE
+         ↓
+   subscription document updated
+         ↓
+   trial → starter
+         ↓
+   product limit removed (canPublishProduct no longer returns the trial cap)
+         ↓
+   pricing page reflects Starter
+         ↓
+   merchant dashboard reflects Starter
+   ```
+   A 200 that does not produce a Starter entitlement end to end means the fix is
+   incomplete — the failure would simply have moved one stage downstream.
 
 ## Related
 - `docs/SUBSCRIPTION_ACTIVATION_VERIFICATION.md` — the earlier read-only
