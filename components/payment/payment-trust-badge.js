@@ -69,16 +69,15 @@
       '.sk-trust-badge__tick{color:#71ff00;font-weight:900;flex:none;}',
       '.sk-trust-badge__pw{font-size:10px;color:rgba(255,255,255,.38);',
       '  text-align:center;margin-top:8px;font-weight:600;}',
-      '.sk-trust-badge__link{display:block;text-decoration:none;',
-      '  transition:transform .2s ease,filter .2s ease;}',
-      '.sk-trust-badge__link:hover{transform:scale(1.02);',
-      '  filter:drop-shadow(0 6px 20px rgba(113,255,0,.22));}',
-      /* aspect-ratio reserves height pre-load → zero CLS. The dark art gets its own
-         rounded corners, soft elevation and a subtle brand glow so it reads as an
-         enterprise gateway panel without a contrasting frame around it. */
-      '.sk-trust-badge__img{display:block;width:100%;height:auto;aspect-ratio:' + RATIO + ';',
-      '  border-radius:18px;box-shadow:0 8px 26px rgba(0,0,0,.34),',
-      '  0 0 0 1px rgba(255,255,255,.04),0 0 32px rgba(113,255,0,.06);}',
+      '.sk-trust-badge__link{display:block;text-decoration:none;}',
+      /* PLAIN image — no glow ring, no rounded/circular mask, no shadow, no
+         background. The badge artwork is self-contained; wrapping it in a glowing
+         rounded box made a FAILED load read as "a circular placeholder with a
+         broken icon". object-fit:contain + a reserved aspect-ratio (zero CLS)
+         keeps it crisp and correctly proportioned; it is simply centred. */
+      '.sk-trust-badge__img{display:block;width:100%;height:auto;object-fit:contain;',
+      '  aspect-ratio:' + RATIO + ';margin:0 auto;background:transparent;',
+      '  border:0;border-radius:0;box-shadow:none;}',
       '.sk-trust-badge__fallback{display:none;align-items:center;justify-content:center;',
       '  gap:8px;padding:14px 16px;border-radius:12px;font-size:12px;font-weight:700;',
       '  color:rgba(255,255,255,.72);background:rgba(113,255,0,.06);',
