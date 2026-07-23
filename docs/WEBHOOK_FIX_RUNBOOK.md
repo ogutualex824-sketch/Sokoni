@@ -36,25 +36,40 @@ If no challenge is configured, set one now — use a random 16-char alphanumeric
 
 ### Step 2: Store the challenge in Secret Manager
 
+First check whether the secret already exists:
+
 ```bash
-# Create the secret (run once — fails if it already exists, which is fine)
-gcloud secrets create INTASEND_WEBHOOK_CHALLENGE \
+gcloud secrets describe INTASEND_WEBHOOK_CHALLENGE --project=sokoni-aeb26 2>&1
+```
+
+**If it does NOT exist** (error: "NOT_FOUND"):
+
+```bash
+# Create and populate in one step (echo -n avoids a trailing newline)
+echo -n "YOUR_CHALLENGE_VALUE" | \
+  gcloud secrets create INTASEND_WEBHOOK_CHALLENGE \
+  --data-file=- \
   --replication-policy=automatic \
   --project=sokoni-aeb26
+```
 
-# Store the value — replace YOUR_CHALLENGE_VALUE; no trailing newline
-printf 'YOUR_CHALLENGE_VALUE' | \
+**If it already EXISTS**:
+
+```bash
+# Add a new version — do not re-run secrets create
+echo -n "YOUR_CHALLENGE_VALUE" | \
   gcloud secrets versions add INTASEND_WEBHOOK_CHALLENGE \
   --data-file=- \
   --project=sokoni-aeb26
+```
 
-# Verify the value was stored without modification
+Then verify the stored value matches the dashboard exactly:
+
+```bash
 gcloud secrets versions access latest \
   --secret=INTASEND_WEBHOOK_CHALLENGE \
   --project=sokoni-aeb26
 ```
-
-The `verify` command will print the raw value. Confirm it matches the dashboard exactly.
 
 ### Step 3: Grant the Gen2 Cloud Function runtime access
 
@@ -109,12 +124,15 @@ curl -s -w "\nHTTP %{http_code}\n" \
   -d '{"challenge":"wrongvalue","invoice":{"invoice_id":"SMOKE-TEST-2","state":"PENDING","api_ref":"SMOKE-TEST-2"}}'
 ```
 
-| Result | Diagnosis |
+| Result (correct + wrong) | Diagnosis |
 |---|---|
-| 200 + 401 | Auth working correctly — proceed to replay |
-| 500 + 500 | Secret not readable — check IAM grant (Step 3) or secret version (Step 2) |
-| 401 + 401 | Challenge value mismatch — re-check dashboard value vs stored secret |
-| 200 + 200 | Should not happen — investigation needed |
+| **200 + 401** | Auth working correctly — proceed to replay |
+| **500 + 500** | Secret not readable — IAM grant missing (Step 3) or secret version absent (Step 2) |
+| **401 + 401** | Challenge value mismatch — re-read dashboard value, re-run Step 2 with corrected value |
+| **200 + 200** | Should not happen — investigation needed |
+
+The 500/401/200 distinction is deliberate: 500 = deployment configuration problem;
+401 = authentication failure (wrong value); 200 = authentication passed.
 
 Check Cloud Logging for startup details:
 ```bash
