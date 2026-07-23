@@ -251,19 +251,134 @@ which document path it reads.
 
 ## Deployment sequence summary
 
+### Phase 1–3 (completed 2026-07-23)
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  1. Retrieve challenge from IntaSend Dashboard              │
-│  2. gcloud secrets create INTASEND_WEBHOOK_CHALLENGE        │
-│  3. printf 'VALUE' | gcloud secrets versions add ...        │
-│  4. gcloud secrets add-iam-policy-binding ... (compute SA)  │
-│  5. gcloud secrets get-iam-policy ... (verify)              │
-│  6. firebase deploy --only functions:intasendWebhook        │
-│  7. Smoke test: correct → 200; wrong → 401                  │
-│  8. Replay KBQE4OW from IntaSend dashboard                  │
-│  9. Verify: payments COMPLETE, subscription written         │
-│ 10. Verify: entitlement active in merchant dashboard        │
+│  1. Confirmed root cause from production logs (challenge)   │
+│  2. Provisioned INTASEND_WEBHOOK_CHALLENGE in Secret Mgr    │
+│  3. Deployed intasendWebhook with challenge auth            │
+│  4. Smoke test: correct → 200; wrong → 401 ✓               │
+│  5. Added intentRef field to initiateSTKPush                │
+│  6. Backfilled payments/SKNTJKAS8 intentRef field           │
 └─────────────────────────────────────────────────────────────┘
+```
+
+### Phase 4 — Path B migration (2026-07-23, commit 8c59a09)
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Confirmed: IntaSend routes to webhookIntasend, not         │
+│  intasendWebhook (Cloud Logging: 157.245.201.212 → 200)     │
+│  IntaSend API /api/v1/webhooks/ requires session auth —     │
+│  URL cannot be changed programmatically with API key.       │
+│                                                             │
+│  Path B: migrated challenge auth + subscription activation  │
+│  into webhookIntasend (the function IntaSend actually calls)│
+│                                                             │
+│  1. Deploy webhookIntasend (firebase deploy)                │
+│  2. Smoke test webhookIntasend: correct → 200; wrong → 401  │
+│  3. Replay KBQE4OW or make new payment via IntaSend Retry   │
+│  4. Verify: payments/<ref> status=COMPLETE                  │
+│  5. Verify: subscriptions/<uid> status=active               │
+│  6. Verify: merchant dashboard shows Starter entitlements   │
+│  7. After stable observation period: decommission           │
+│     intasendWebhook (stub or undeploy)                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Phase 5 — Post-verification reconciliation
+
+**Gates — do not start until all three are true:**
+- `webhookIntasend` smoke test returns HTTP 200 for correct challenge
+- A real IntaSend webhook successfully activates a subscription (end-to-end log evidence)
+- Merchant dashboard shows Starter entitlement active
+
+### Identifying the canonical payment
+
+Open Firestore `payments`. Both KBQE4OW (`SKNTJKAS8`) and the second payment exist.
+The canonical payment is the one whose `subscriptions/{uid}` document was written by
+`webhookIntasend` with `source: "webhookIntasend"` and `status: "active"`.
+
+### Duplicate payment record
+
+The payment **did complete** — the refund is a subsequent financial event.
+Do not overwrite `status`. Separate payment outcome from reconciliation outcome:
+
+```js
+// payments/<duplicateRef>  — Firestore update (merge)
+{
+  // status: "COMPLETE" preserved — payment did succeed
+  reconciliationStatus: "REFUNDED",
+  refundReason:         "Duplicate payment during webhook migration",
+  canonicalPaymentRef:  "<canonicalRef>",
+  refundedAt:           serverTimestamp(),
+  refundedBy:           "admin_reconciliation"
+}
+```
+
+### Duplicate subscription record
+
+Do not delete or overwrite. Mark as reconciled:
+
+```js
+// subscriptions/<duplicateSubscriptionId>  — Firestore update (merge)
+{
+  status:            "duplicate",
+  duplicateOf:       "<canonicalSubscriptionId>",
+  duplicateReason:   "Webhook migration duplicate — paid during broken HMAC auth window",
+  reconciledAt:      serverTimestamp(),
+  reconciledBy:      "admin_reconciliation"
+}
+```
+
+### Issue the refund
+
+Use IntaSend dashboard or `POST /api/v1/send-money/mpesa/` to reverse the duplicate
+payment amount to the merchant's phone. Record the IntaSend refund reference.
+
+### Ledger entry
+
+```js
+// paymentLedger  — Firestore add
+{
+  type:               "refund",
+  originalRef:        "<duplicateRef>",
+  canonicalRef:       "<canonicalRef>",
+  refundRef:          "<intasendRefundRef>",
+  amount:             499,
+  currency:           "KES",
+  reason:             "Webhook migration duplicate",
+  issuedAt:           serverTimestamp()
+}
+```
+
+### Audit log entry
+
+Single immutable `adminActions` document — never update after creation:
+
+```js
+{
+  action:                    "WEBHOOK_MIGRATION_RECONCILIATION",
+  actor:                     "admin",
+  canonicalPaymentRef:       "<ref>",
+  duplicatePaymentRef:       "<ref>",
+  canonicalSubscriptionId:   "<id>",
+  duplicateSubscriptionId:   "<id>",
+  refundIssued:              true,
+  refundRef:                 "<intasendRefundRef>",
+  refundAmount:              499,
+  timestamp:                 serverTimestamp(),
+  notes:                     "Duplicate incurred during Phase 0 webhook migration (2026-07-23)"
+}
+```
+
+### Final state check
+
+```
+subscriptions/<uid>  →  status: "active", plan: "starter"  (exactly one document)
+payments/<canonical> →  status: "COMPLETE"
+payments/<duplicate> →  status: "COMPLETE", reconciliationStatus: "REFUNDED"
 ```
 
 ---
@@ -284,4 +399,5 @@ which document path it reads.
 
 - `docs/PAYMENT_WEBHOOK_INVALID_SIGNATURE.md` — root cause investigation (confirmed evidence)
 - `docs/ENGINEERING_STANDARD.md` — investigation methodology
-- `functions/index.js:5605` — `exports.intasendWebhook`
+- `functions/index.js:6493` — `exports.webhookIntasend` (canonical, Path B migration)
+- `functions/index.js:5613` — `exports.intasendWebhook` (secondary — pending decommission)
