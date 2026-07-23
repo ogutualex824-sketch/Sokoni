@@ -5588,11 +5588,18 @@ exports.initiateSTKPush = onCall(
     const checkoutId = intasendResponse.data?.checkout_id || intasendResponse.data?.id;
     if (!checkoutId) throw new HttpsError("internal", "No checkoutId from IntaSend.");
 
-    /* Persist payment record */
+    /* Persist payment record.
+       intentRef: the paymentIntents document that authorised this STK push.
+       In the current flow ref == intentRef (same SOKONI-generated ID), but
+       storing it explicitly lets the webhook find the intent even if the
+       intent document expires and is later cleaned up before the callback
+       arrives. The webhook reads existing.intentRef and falls back to
+       apiRef for legacy payments that pre-date this field. */
     await db.collection("payments").doc(ref).set({
       ref, checkoutId, phone, amount: amountKES, currency: "KES",
       status:    "PENDING",
       uid:       request.auth.uid,
+      intentRef: ref,
       meta:      meta || {},
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -5741,9 +5748,15 @@ exports.intasendWebhook = onRequest(
          paymentIntents/{ref} (written by createPaymentIntent) carries purpose,
          planId, and uid. The client-side onSuccess path is fragile (tab close,
          network drop); this webhook is the authoritative signal that payment
-         completed. Idempotent: same apiRef → same subscriptions/{uid} doc. */
+         completed. Idempotent: same apiRef → same subscriptions/{uid} doc.
+
+         intentRef resolution: the payment document stores intentRef (set by
+         initiateSTKPush since this fix). For legacy payments without that field
+         we fall back to apiRef, which was the original design (same value when
+         the intent has not expired). */
       try {
-        const intentSnap = await db.collection("paymentIntents").doc(apiRef).get();
+        const intentRef  = existing.intentRef || apiRef;
+        const intentSnap = await db.collection("paymentIntents").doc(intentRef).get();
         if (intentSnap.exists) {
           const intent = intentSnap.data();
           if (intent.purpose === "subscription" && intent.planId && intent.uid) {
