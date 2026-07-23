@@ -46,6 +46,26 @@
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: none; }
 }
+/* Opacity-only entrance for the blanket `body > *` mobile rule below.
+   A keyframe that touches `transform` at all cannot be applied blindly to every
+   child of body: with fill-mode `both` the animation keeps applying its final
+   `transform: none` FOREVER, which outranks the element's own declaration. Any
+   panel that hides itself with `transform: translateX(100%)` — the standard
+   slide-in pattern — is therefore forced permanently OPEN.
+
+   That is not hypothetical: #myAppsPanel on jobs.html sat at translateX(0)
+   covering the full 390x844 viewport, and sokoni-sheet.js then promoted it to
+   z-index 100010, burying the header and making the menu button unclickable.
+   The old defence was a hand-maintained :not() blocklist, which fails OPEN —
+   every new transform-hidden panel is broken until someone remembers to add it.
+
+   Animating opacity only removes the entire class of bug structurally: nothing
+   this rule touches can ever clobber a transform again. `.sk-page` (opt-in, and
+   applied to page content rather than overlays) keeps the sk-page-in slide. */
+@keyframes sk-page-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
 @keyframes sk-slide-up {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -103,7 +123,7 @@
    suppressed elsewhere. */
 @media (max-width: 768px) {
   body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support):not(#sk-offline-bar):not(#sk-offline-banner):not(#sk-spl):not(#sk-splash):not(.sk-drawer):not(#sk-menu-drawer) {
-    animation: sk-page-in 0.28s ease both;
+    animation: sk-page-fade 0.28s ease both;
   }
 }
 

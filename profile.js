@@ -29,8 +29,15 @@ if (_pEmail) _pEmail.innerText = user.email || '';
 /* WISHLIST + CART */
 const wishlist = JSON.parse(localStorage.getItem("wishlist") || "[]");
 const cart     = JSON.parse(localStorage.getItem("cart") || "[]");
-document.getElementById("wishlistCount").innerText  = wishlist.length;
-document.getElementById("cartItemsCount").innerText = cart.length;
+/* Null-guarded like every other lookup in this file. profile.html no longer
+   renders #wishlistCount / #cartItemsCount, and these two lines were the only
+   unguarded ones — so they threw on every load and aborted the whole of the
+   rest of profile.js (orders list, tabs, and the header/menu wiring below). */
+const _wishCountEl = document.getElementById("wishlistCount");
+if (_wishCountEl) _wishCountEl.innerText = wishlist.length;
+
+const _cartCountEl = document.getElementById("cartItemsCount");
+if (_cartCountEl) _cartCountEl.innerText = cart.length;
 
 /* ORDERS */
 let orders = [];

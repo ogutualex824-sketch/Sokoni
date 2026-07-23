@@ -180,63 +180,36 @@
   }
 
   /* ── Nav tab configs ─────────────────────────────────────── */
+  /* ONE bottom nav for every role and every page.
+     This engine overwrites .bottom-nav at runtime, so this array — not the static
+     markup — is what actually renders. The static markup in the pages is aligned
+     to match it exactly, keeping first paint identical to the hydrated state.
+
+     "/" is the canonical homepage, the same target the header logo uses. It was
+     "index.html", which Firebase 301s to "/", costing a round-trip on every Home
+     tap and (until the service worker was fixed) producing ERR_FAILED outright.
+
+     Role-specific destinations (seller Dashboard/Products/Earnings, rider Jobs
+     and Deliveries, admin Users/Reports/Settings) are NOT lost — they remain in
+     the role-aware More drawer and desktop sidebar built from _SUBNAV below. The
+     bottom bar is deliberately the same five customer tabs everywhere so the app
+     never changes shape underneath the user when their role context shifts. */
+  var _CANONICAL_TABS = [
+    { i:'🏠',  l:'Home',     h:'/' },
+    { i:'🛍️', l:'Shop',     h:'category.html?cat=all' },
+    { i:'🛠️', l:'Services', h:'services.html' },
+    { i:'📦',  l:'Orders',   h:'profile.html#orders' },
+    { i:'👤',  l:'Profile',  h:'profile.html' }
+  ];
+
   var _TABS = {
-    buyer: [
-      /* "/" is the canonical homepage — the same target the header logo uses. It was
-         "index.html", which Firebase 301s to "/", costing a round-trip on every Home
-         tap and (until the service worker was fixed) producing ERR_FAILED outright. */
-      { i:'🏠',  l:'Home',       h:'/' },
-      /* "Market", not "Categories" — this engine overwrites .bottom-nav at runtime,
-         so this label is what every buyer page actually renders. The static markup
-         in the pages was aligned to match, keeping first paint identical. */
-      { i:'🛍️', l:'Market', h:'category.html?cat=all' },
-      { i:'🛠️', l:'Services',   h:'services.html' },
-      { i:'📦',  l:'Orders',     h:'profile.html#orders' },
-      { i:'👤',  l:'Profile',    h:'profile.html' }
-    ],
-    seller: [
-      { i:'📊',  l:'Dashboard',  h:'seller.html' },
-      { i:'📦',  l:'Products',   h:'seller.html#products' },
-      { i:'🛒',  l:'Orders',     h:'seller.html#orders' },
-      { i:'💰',  l:'Earnings',   h:'seller-earnings.html' },
-      { i:'⋯',   l:'More',       h:'#', a:'sk-seller-more' }
-    ],
-    rider: [
-      { i:'📊',  l:'Dashboard',  h:'driver.html' },
-      { i:'🗺️', l:'Jobs',       h:'jobs.html' },
-      { i:'🚚',  l:'Deliveries', h:'track.html' },
-      { i:'💰',  l:'Earnings',   h:'profile.html#earnings' },
-      { i:'👤',  l:'Account',    h:'profile.html' }
-    ],
-    driver: [
-      { i:'📊',  l:'Dashboard',  h:'driver.html' },
-      { i:'🚗',  l:'Trips',      h:'driver.html#trips' },
-      { i:'🗺️', l:'Navigation', h:'rider-nav.html' },
-      { i:'💰',  l:'Earnings',   h:'driver.html#earnings' },
-      { i:'👤',  l:'Account',    h:'profile.html' }
-    ],
-    provider: [
-      { i:'📊',  l:'Dashboard',  h:'seller.html' },
-      { i:'📅',  l:'Bookings',   h:'venue-booking.html' },
-      { i:'👥',  l:'Customers',  h:'seller.html#customers' },
-      { i:'💰',  l:'Earnings',   h:'seller.html#earnings' },
-      { i:'👤',  l:'Profile',    h:'profile.html' }
-    ],
-    admin: [
-      { i:'📊',  l:'Dashboard',  h:'admin-os.html' },
-      { i:'🏪',  l:'Marketplace',h:'admin-os.html#marketplace' },
-      { i:'👥',  l:'Users',      h:'admin-os.html#users' },
-      { i:'📈',  l:'Reports',    h:'reliability-center.html' },
-      { i:'⚙️', l:'Settings',   h:'admin-os.html#settings' }
-    ],
-    superAdmin: [
-      { i:'📊',  l:'Dashboard',  h:'super-admin.html' },
-      { i:'🏗️', l:'Platform',   h:'platform.html' },
-      { i:'💵',  l:'Finance',    h:'finos.html' },
-      { i:'🔒',  l:'Security',   h:'trust-safety.html' },
-      { i:'🤖',  l:'AI',         h:'ai-subscriptions.html' },
-      { i:'⚙️', l:'Settings',   h:'super-admin.html#settings' }
-    ]
+    buyer:      _CANONICAL_TABS,
+    seller:     _CANONICAL_TABS,
+    rider:      _CANONICAL_TABS,
+    driver:     _CANONICAL_TABS,
+    provider:   _CANONICAL_TABS,
+    admin:      _CANONICAL_TABS,
+    superAdmin: _CANONICAL_TABS
   };
 
   /* ── Seller sub-nav items (with category metadata for More drawer grouping) ── */
