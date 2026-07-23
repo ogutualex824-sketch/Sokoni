@@ -1,4 +1,156 @@
-﻿## [2026-07-23] — fix(checkout): premium order-summary cards + quantity-aware subtotal
+﻿## [2026-07-23] — fix(nav+ui): one bottom nav everywhere, smaller product imagery
+
+**Bottom navigation standardised** to Home · Shop · Services · Orders · Profile
+across every page that carries it, so the bar means the same thing everywhere:
+
+- `banking.html`, `checkout.html`, `product.html`, `cart.html`, `wishlist.html`
+  labelled the marketplace tab **"Market"**; renamed to **"Shop"**.
+- `life-events.html` had a **"Life Goals"** self-link in the Orders slot — a tab
+  that pointed at the page you were already on, and no way to reach Orders.
+- `subscriptions.html` had **"Sell"** and **"Plans"** instead of Shop/Orders.
+
+All five tabs now resolve: `/`, `category.html?cat=all`, `services.html`,
+`profile.html#orders`, `profile.html`.
+
+**Product imagery reduced** (it dominated the fold, pushing price and Add to
+Cart out of view):
+- `product.css` `.prd-gallery-main` was `aspect-ratio: 1/1` — a full-width square
+  that ate almost the whole phone viewport. Now `4/3` with a `max-height: 56vh`
+  cap. The image uses `object-fit: contain`, so nothing is cropped, only
+  letterboxed into a shorter frame.
+- `cart.html` `.cart-card-img` 80px → 64px.
+- `wishlist.html` row thumbnail 110px → 88px (mobile row layout). The grid card
+  keeps its 1:1 square, per the standing square-card layout rule.
+
+**life-events.html clarity:** the page called itself "Life Events" in the badge
+while the nav and section label said "Life Goals". Unified on **Life Goals** and
+rewrote the hero subline to say what the page actually does — turns a goal into
+a step-by-step checklist that links to the right hub per step. All 14 hub links
+referenced by the cards were verified to exist.
+
+Files affected: `banking.html`, `checkout.html`, `product.html`, `product.css`,
+`cart.html`, `wishlist.html`, `life-events.html`, `subscriptions.html`.
+No database, API, or security changes. No breaking changes.
+
+## [2026-07-23] — fix(food): P0 — paid food orders were silently discarded
+
+Audit of the food checkout flow. The food hub has no product imagery anywhere
+(menu items carry only `id/name/desc/price/popular`; restaurants use an emoji),
+so there were no oversized images to correct — but the audit surfaced three
+defects, one of them a payment-integrity P0. Verified in Chromium before and
+after; zero page errors.
+
+**P0 — order lost after successful payment.** `food-menu.html` called
+`SokoniFood.saveOrder(order)` inside the M-Pesa `onSuccess` callback, but
+`saveOrder` was never defined or exported by `sokoni-food.js` (the module
+exposes `placeOrder`). The call threw `TypeError: saveOrder is not a function`
+*after the customer had already paid*, aborting every remaining step in the
+callback: the Firestore write, commission recording, invoice generation, cart
+clear, and modal close. Net effect — money taken, no order anywhere, cart still
+full. Added `saveOrder()`: local persistence only, idempotent by order id so a
+repeated M-Pesa callback cannot double-write a paid order. Deliberately does
+*not* reuse `placeOrder()`, which runs its own commission side-effect and would
+have double-recorded against the caller's existing `SokoniPay.saveCommission`.
+
+**P1 — food checkout was unreachable from the cart.** The "🍔 Checkout Food"
+CTA linked to `food-order.html`, which is a tracking/history page with no form,
+no payment and no order creation. Food checkout is inherently per-restaurant
+(`openCheckout` filters to a single `restaurantId`), so a single global CTA was
+architecturally wrong. Each vendor group now carries its own
+`food-menu.html?id=<restaurantId>` CTA with that vendor's subtotal; the section
+footer becomes a "Track my food orders" link.
+
+**P2 — checkout wiped other restaurants' unpaid items.** After paying one
+restaurant, `SokoniFood.clearCart()` deleted *all* food items, silently
+discarding unpaid items from other vendors. Now removes only the lines just paid
+for, via the public `removeFromCart` API.
+
+Also confirmed correct and left unchanged: quantity maths in the food path
+(`cart.js`, `sokoni-food.js`, `food-order.html` all multiply by qty) — the
+checkout.html qty defect fixed earlier does **not** exist here.
+
+Files affected: `sokoni-food.js`, `food-menu.html`, `cart.js`, `cart.html`.
+Security: order id is URL-encoded into the vendor CTA href; vendor name escaped
+via `_esc`. No database, API, or breaking changes.
+
+## [2026-07-23] — fix(search): search returned nothing for live listings — five defects in the fallback path
+
+**Reported:** Kass Vapes listed products (e.g. *Cool Mint*) that were visible on
+the store page but returned **no results** on `search.html` — for the product
+name and for the store name alike.
+
+Search is Algolia-first with Firestore as the system of record. Every layer that
+should have caught the disagreement was broken:
+
+1. **`search.html` never fell through.** The policy was *"Algolia 0 hits → empty
+   state, NEVER fall through to Firestore"*. That assumes the Algolia index
+   mirrors Firestore. It does not: the secured search key is fetched at runtime
+   from `getAlgoliaSearchKey`, and indexing depends on Cloud Function triggers,
+   so anything listed while either was unavailable exists in Firestore and not
+   in Algolia. Both cases rendered "No results" over stock that is live.
+2. **The degraded engine was indistinguishable from a genuine miss.**
+   `sokoni-search-engine.js` returns `{ fallback: true, totalHits: 0 }` when it
+   has no key. `search.html` only read the hit count. It now reads `fallback`.
+3. **The Firestore fallback was denied by security rules.** It queried 13
+   collections with **no `where()` clause**. `services`, `providers`,
+   `properties`, `propertyListings`, `vehicles`, `digitalJobs` and
+   `healthProviders` gate reads on `resource.data.status`, and Firestore rejects
+   a *list* query it cannot prove is safe — so those queries were denied
+   wholesale and swallowed by a `catch`. `applications` is admin/owner-read-only
+   and could never be listed by a buyer at all.
+4. **Nothing searched stores.** No collection in the fallback held sellers, so a
+   shop was unfindable by name under any spelling.
+5. **The engine's own fallback could not return a hit under any circumstance.**
+   It called `firebase.firestore()` — the **compat** SDK, which this app does not
+   load (`firebase.js` initialises the modular SDK) — filtered on
+   `status == 'active'` when most live products carry no status field, and
+   matched names with `startAt(q).endAt(q)`, an exact-equality range against an
+   original-case field, so a lower-cased query could never equal `"Cool Mint"`.
+
+**New:** `sokoni-firestore-search.js` — one Firestore search implementation
+shared by `search.html`, the search engine's fallback and the header
+autocomplete. It carries the `where()` guards each collection's rules require,
+searches `sellers` so a store is findable, matches with AND semantics over an
+indexed lookup (`searchableTerms` → `nameLower` prefix) plus a bounded
+session-cached scan for listings the indexer never touched, and applies the
+platform visibility contract (`realtime.js`: hidden only when explicitly so —
+absent status means visible).
+
+A relaxed second pass runs **only** when the strict pass is empty, ranking by
+tokens matched, so `"kass shop"` still finds *Kass Vapes*. It re-uses documents
+already fetched — zero extra reads, and it cannot dilute a strict match.
+
+Files affected:
+- **new** `sokoni-firestore-search.js` — shared Firestore search module
+- **new** `scripts/test-firestore-search.js` — offline test (14 assertions, 14 pass)
+- **new** `docs/SEARCH_FALLBACK_ARCHITECTURE.md`
+- `search.html` — fall-through policy, degraded-engine detection, Path C replaced,
+  duplicate collection specs removed, wrong-tab-prediction recovery
+- `sokoni-search-engine.js` — `_firestoreFallback` rewritten to delegate
+- `shared-header.js` — autocomplete falls back to Firestore before the bare shortcut
+- `service-worker.js` — precache the new module; cache version → `v100`
+- `package.json` — `npm run test:search`
+
+Security: no rule changed or relaxed — the fix makes queries **conform** to the
+existing rules instead of being denied by them. Results stay read-only and
+render through the existing escaped path; hidden/soft-deleted/suspended listings
+are filtered client-side and remain protected by rules.
+
+Performance: 0 extra reads while Algolia is healthy. On a zero-hit query the
+collection scans are capped (150–400 docs each) and cached for 10 minutes per
+session, so the cost is paid once per session, not once per keystroke.
+
+Deployment: hosting only — no Cloud Functions, no rules, no indexes, no schema
+change. Hard reload (or the bumped service-worker version) is required to pick
+up the new module.
+
+Follow-up (not engineering): establish whether Algolia is degraded at all. If
+`getAlgoliaSearchKey` returns no key, the Firestore path is now carrying all
+search traffic — acceptable, but the index backfill / `ALGOLIA_ADMIN_KEY` secret
+should be resolved. Products missing `searchableTerms` can be repaired with
+`node scripts/backfill-search-terms.js --apply`.
+
+## [2026-07-23] — fix(checkout): premium order-summary cards + quantity-aware subtotal
 
 Reworked the checkout Order Summary line items to match the premium card
 treatment already used on the cart and wishlist pages, and fixed a

@@ -220,23 +220,34 @@
 
     .os-title{ font-size:17px; font-weight:800; color:white; margin-bottom:20px; }
 
-    .os-items{ display:flex; flex-direction:column; gap:12px; margin-bottom:20px; }
+    .os-items{ display:flex; flex-direction:column; gap:10px; margin-bottom:20px; }
 
     .os-item{
       display:flex;
       align-items:center;
       gap:12px;
+      background:rgba(255,255,255,0.02);
+      border:1px solid rgba(255,255,255,0.07);
+      border-radius:14px;
+      padding:10px;
+      transition:border-color .2s;
     }
+    .os-item:hover{ border-color:rgba(113,255,0,0.2); }
 
     .os-item img{
-      width:56px; height:56px;
+      width:48px; height:48px;
       object-fit:cover;
-      border-radius:12px;
+      border-radius:10px;
       flex-shrink:0;
+      border:1px solid rgba(255,255,255,0.07);
+      background:#111;
     }
 
-    .os-item-name{ color:white; font-size:13px; font-weight:600; }
-    .os-item-price{ color:#71ff00; font-size:13px; font-weight:700; margin-top:2px; }
+    .os-item-info{ flex:1; min-width:0; }
+    .os-item-name{ color:white; font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .os-item-cat{ font-size:10px; color:rgba(255,255,255,0.35); text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+    .os-item-price{ color:#71ff00; font-size:13px; font-weight:800; margin-top:3px; }
+    .os-item-qty{ flex-shrink:0; font-size:11px; font-weight:800; color:rgba(255,255,255,0.65); background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:4px 9px; white-space:nowrap; }
 
     .os-divider{ border:none; border-top:1px solid rgba(255,255,255,0.07); margin:16px 0; }
 
@@ -1525,7 +1536,7 @@
 
 <nav class="bottom-nav">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
-  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Market</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
   <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
@@ -1594,18 +1605,25 @@ const MAX_REDEEM_PCT = 0.25; // max 25% of order total can be paid with points
 const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const _itemsHTML = [];
 cart.forEach(item => {
-  subtotal += Number(item.price || 0);
+  /* Quantity-aware line total — mirrors the server (createCheckoutSession) so the
+     displayed subtotal matches the amount actually charged when qty > 1. */
+  const qty       = Math.max(1, Math.round(Number(item.qty) || Number(item.quantity) || 1));
+  const lineTotal = Number(item.price || 0) * qty;
+  subtotal += lineTotal;
   /* XSS-safe: escape all user-supplied strings before inserting into innerHTML */
   const safeName  = _esc(item.name);
   const safeImg   = /^(https?:\/\/|assets\/|data:image\/)/.test(item.image||"") ? _esc(item.image) : "assets/default-product.png";
-  const safePrice = Number(item.price||0).toLocaleString();
+  const safeCat   = _esc(item.category || "");
+  const safePrice = lineTotal.toLocaleString();
   _itemsHTML.push(`
     <div class="os-item">
       <img loading="lazy" src="${safeImg}" alt="${safeName}" onerror="this.src='assets/default-product.png'">
-      <div>
+      <div class="os-item-info">
         <div class="os-item-name">${safeName}</div>
+        ${safeCat ? `<div class="os-item-cat">${safeCat}</div>` : ``}
         <div class="os-item-price">KES ${safePrice}</div>
       </div>
+      ${qty > 1 ? `<div class="os-item-qty">×${qty}</div>` : ``}
     </div>
   `);
 });

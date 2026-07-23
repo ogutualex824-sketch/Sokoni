@@ -316,7 +316,13 @@ body.light-mode .yml-price { color: #1a8a00; }
 }
 .prd-gallery-main {
   position: relative;
-  aspect-ratio: 1 / 1;
+  /* Was aspect-ratio: 1/1 — a full-width square, so on a phone the image ate
+     almost the whole viewport and pushed price, variants and Add to Cart below
+     the fold. 4/3 plus a viewport cap shortens it while keeping the product
+     fully visible: the img below uses object-fit:contain, so nothing is
+     cropped, it is only letterboxed into a shorter frame. */
+  aspect-ratio: 4 / 3;
+  max-height: 56vh;
   overflow: hidden;
   cursor: zoom-in;
 }
