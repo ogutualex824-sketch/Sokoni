@@ -782,6 +782,16 @@
       .checkout-grid{ grid-template-columns:1fr; }
       .payment-methods{ grid-template-columns:repeat(3,1fr); }
       .order-summary-box{ position:relative; top:0; }
+      /* PREMIUM CHECKOUT — mobile section order (Phase 1).
+         Desktop keeps its two columns (this block is mobile-only). The top
+         Trust & Security bar already answers "is this safe?" first; here we put
+         the order summary (PURCHASE — "what am I buying?") ABOVE the input column
+         so the sequence reads Trust → Purchase → Delivery → Payment → Impact →
+         Commitment instead of showing the summary only after the pay button.
+         Order-based reorder — no DOM change, so all logic and handlers are intact. */
+      .checkout-grid{ display:flex; flex-direction:column; }
+      .order-summary-box{ order:1; }
+      .checkout-left{ order:2; }
     }
 
     @media(max-width:480px){
