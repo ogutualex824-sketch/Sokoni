@@ -167,7 +167,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:#fff;m
     <div class="bt-card" id="btStartCard" style="display:none;">
       <h2>4️⃣ Start Testing</h2>
       <p style="font-size:13px;color:rgba(255,255,255,0.45);margin-bottom:16px;">The 🐛 bug button will appear on every page. Use it to report issues, rate experiences, and submit ideas as you test.</p>
-      <button class="bt-start-btn" id="btStartBtn" onclick="startBeta()">🚀 Activate Beta Mode</button>
+      <button class="bt-start-btn" id="btStartBtn" onclick="startBeta()">🚀 Sign in to Apply for Beta</button>
     </div>
   </div>
 
@@ -190,13 +190,17 @@ function selectRole(el) {
 }
 
 function startBeta() {
-  var name = document.getElementById('btName').value.trim();
-  var phone = document.getElementById('btPhone').value.trim();
-  if (!name) { (window._skToast||alert)('Please enter your name.'); return; }
-  if (!_selectedRole) { (window._skToast||alert)('Please select your testing role.'); return; }
-
-  var tester = SokoniBeta.registerTester({ name: name, phone: phone, role: _selectedRole });
-  showActiveState(tester);
+  /* Path B — this public landing page carries no authenticated Firebase / App
+     Check context, and the real admission callables (betaApply / betaGetAccess)
+     require both. So the actual application happens on profile.html, which has
+     that context. Route there: a signed-in user lands on the beta card and can
+     apply; an unauthenticated user is sent through the existing sign-in flow and
+     returns to it. Chosen role is passed as a hint the profile card can preselect.
+     This replaces the former local "Activate Beta Mode" (SokoniBeta.registerTester),
+     which only set a device-local flag and never reached the server admission
+     system — which is why no application ever existed. */
+  var role = _selectedRole ? ('?role=' + encodeURIComponent(_selectedRole)) : '';
+  window.location.href = 'profile.html' + role + '#beta';
 }
 
 function showActiveState(tester) {

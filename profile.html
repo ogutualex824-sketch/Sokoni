@@ -1816,6 +1816,29 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       <div class="pi6-role-grid" id="pi6RoleCards"></div>
     </div>
 
+    <!-- ── SOKONI Beta — status + apply, bound to the deployed betaGetAccess /
+         betaApply callables. This authenticated surface (firebase.js provides
+         auth + App Check) is the canonical apply point; beta.html stays a public
+         landing that routes here. No new admission logic — the beta authority
+         layer in functions/beta-access.js remains the single source of truth. -->
+    <div class="up-card" id="betaCard" style="padding:16px;display:none;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+        <span style="font-size:16px;font-weight:900;">SOKONI Beta</span>
+        <span id="betaStatusPill" style="font-size:10px;font-weight:800;padding:3px 9px;border-radius:20px;"></span>
+      </div>
+      <p id="betaCardMsg" style="color:rgba(255,255,255,0.5);font-size:13px;margin-bottom:12px;">Checking your beta access…</p>
+      <div id="betaApplyForm" style="display:none;">
+        <label style="display:block;font-size:10px;font-weight:700;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">I want to join as</label>
+        <select id="betaUserType" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;margin-bottom:10px;">
+          <option value="buyer">🛍️ Buyer</option>
+          <option value="merchant">🏪 Merchant</option>
+          <option value="rider">🏍️ Rider</option>
+          <option value="provider">🔧 Service Provider</option>
+        </select>
+        <button type="button" id="betaApplyBtn" onclick="applyForBeta()" style="width:100%;min-height:46px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#070707;font-weight:900;font-size:14px;border:none;border-radius:12px;cursor:pointer;">Apply for Beta</button>
+      </div>
+    </div>
+
     <!-- ── S7: Business Health ── -->
     <div class="up-card" id="pi7BizHealth" style="padding:14px 16px;display:none;"></div>
 
@@ -3820,6 +3843,72 @@ window.logoutUser = logoutUser;
     if (!f) return Promise.reject(new Error('Firebase not ready'));
     return f.httpsCallable(name)(data || {}).then(function(r){ return r.data; });
   }
+
+  /* ── SOKONI Beta — status + apply ────────────────────────────────────────
+     Uses the _call() helper above (auth + App Check already initialized by
+     firebase.js). Reads state from betaGetAccess; applies via betaApply. No
+     admission logic here — the server (functions/beta-access.js) is the
+     authority. Every state the callables return is handled, plus loading/error. */
+  var _BETA_PILL = {
+    approved:'#71ff00', founder:'#ffd700', internal:'#00d4ff',
+    pending:'#ffb800', waitlisted:'#ffb800',
+    rejected:'#ff5c5c', suspended:'#ff5c5c', none:'rgba(255,255,255,0.3)',
+  };
+  function _betaShow(status, admitted, isStaff) {
+    var card = document.getElementById('betaCard'); if (!card) return;
+    card.style.display = 'block';
+    var pill = document.getElementById('betaStatusPill');
+    var msg  = document.getElementById('betaCardMsg');
+    var form = document.getElementById('betaApplyForm');
+    var s = String(status || 'none').toLowerCase();
+    pill.textContent = isStaff ? 'STAFF' : s.toUpperCase();
+    pill.style.background = (isStaff ? '#00d4ff' : (_BETA_PILL[s] || _BETA_PILL.none));
+    pill.style.color = '#070707';
+    form.style.display = 'none';
+    if (isStaff)                 { msg.textContent = 'Staff access — the beta gate does not apply to you.'; }
+    else if (admitted)           { msg.textContent = 'Your beta access is active. All marketplace actions are unlocked.'; }
+    else if (s === 'pending')    { msg.textContent = 'Application received — under review. We will notify you when a decision is made.'; }
+    else if (s === 'waitlisted') { msg.textContent = 'You are on the waitlist. We will move you in as capacity opens.'; }
+    else if (s === 'rejected')   { msg.textContent = 'This application was not approved. Contact support if you believe this is an error.'; }
+    else if (s === 'suspended')  { msg.textContent = 'Your beta access is suspended. Contact support.'; }
+    else                         { msg.textContent = 'SOKONI is in invite-only beta. Apply below to request access.'; form.style.display = 'block'; _betaPreselectRole(); }
+  }
+  /* Preselect the type from a ?role= hint passed by beta.html. Its role
+     vocabulary (seller/driver/business) differs from betaApply's USER_TYPES
+     (buyer/merchant/rider/provider), so map it. Unknown → leave default. */
+  function _betaPreselectRole() {
+    try {
+      var r = new URLSearchParams(location.search).get('role'); if (!r) return;
+      var map = { buyer:'buyer', merchant:'merchant', seller:'merchant', business:'merchant',
+                  rider:'rider', driver:'rider', provider:'provider' };
+      var t = map[String(r).toLowerCase()]; var sel = document.getElementById('betaUserType');
+      if (t && sel) sel.value = t;
+    } catch (_) {}
+  }
+  function _betaLoad() {
+    if (!(window.firebaseAuth && firebaseAuth.currentUser)) return; /* signed-in only */
+    _call('betaGetAccess').then(function(r){
+      _betaShow(r.betaStatus, r.admitted, r.isStaff);
+    }).catch(function(e){
+      var card=document.getElementById('betaCard'); if(card){ card.style.display='block';
+        document.getElementById('betaCardMsg').textContent='Could not load beta status ('+((e&&e.code)||(e&&e.message)||'error')+'). Refresh to retry.'; }
+    });
+  }
+  window.applyForBeta = function () {
+    var btn = document.getElementById('betaApplyBtn');
+    var type = (document.getElementById('betaUserType')||{}).value || 'buyer';
+    if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+    _call('betaApply', { userType: type }).then(function(r){
+      /* r.unchanged === true means a prior non-pending decision stands; re-render
+         from the authoritative returned status either way. */
+      _betaShow(r.betaStatus, false, false);
+      if (window._skToast) _skToast(r.unchanged ? 'You already have a beta decision on file.' : 'Application submitted — under review.');
+    }).catch(function(e){
+      if (btn) { btn.disabled = false; btn.textContent = 'Apply for Beta'; }
+      if (window._skToast) _skToast('Could not submit ('+((e&&e.code)||(e&&e.message)||'error')+'). Try again.');
+    });
+  };
+  try { window.addEventListener('sokoniAuthReady', _betaLoad); setTimeout(_betaLoad, 1500); } catch(_){}
 
   /* ── State ── */
   var _piLoaded     = {};  // which panels have been loaded
