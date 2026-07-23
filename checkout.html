@@ -844,6 +844,7 @@
   <link rel="stylesheet" href="sokoni-premium-v2.css">
 <script src="shared-header.js" defer></script>
 <script src="/components/payment/payment-trust-badge.js" defer></script>
+<script src="/components/checkout/checkout-trust.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
@@ -1180,10 +1181,16 @@
         </div>
       </div>
 
+      <!-- Section 5 · Commitment — reassurance directly above the primary CTA -->
+      <div data-sokoni-pay-reassurance></div>
+
       <!-- Place Order -->
       <button type="button" class="co-place-btn" onclick="placeOrder()">
         🔒 Place Order — Pay <span id="btnTotal">KES 0</span>
       </button>
+
+      <!-- Value reinforcement at the decision moment (Phase 1 addition) -->
+      <div data-sokoni-why></div>
 
     </div>
 
