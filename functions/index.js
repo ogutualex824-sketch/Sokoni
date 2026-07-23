@@ -5617,7 +5617,15 @@ exports.intasendWebhook = onRequest(
        timingSafeEqual receives same-length buffers regardless of input length. */
     const challenge         = String((req.body && req.body.challenge) || "");
     const expectedChallenge = INTASEND_WEBHOOK_CHALLENGE.value();
-    const normKey           = Buffer.from("sokoni-intasend-challenge-norm");
+    /* Startup guard: a missing or empty secret means the IAM grant or secret
+       version is not in place. 500 is the correct signal — this is a config
+       error, not an auth failure. A 500 does not reveal the secret value. */
+    if (!expectedChallenge) {
+      logger.error("[intasendWebhook] INTASEND_WEBHOOK_CHALLENGE secret is empty — check Secret Manager IAM and secret version");
+      res.status(500).send("Service unavailable");
+      return;
+    }
+    const normKey = Buffer.from("sokoni-intasend-challenge-norm");
     const a = crypto.createHmac("sha256", normKey).update(challenge).digest();
     const b = crypto.createHmac("sha256", normKey).update(expectedChallenge).digest();
     if (!crypto.timingSafeEqual(a, b)) {

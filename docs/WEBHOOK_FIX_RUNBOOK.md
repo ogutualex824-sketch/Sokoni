@@ -2,8 +2,11 @@
 ## Subscription Activation Recovery
 
 **Date:** 2026-07-23
-**Commit:** `9d67dda`
+**Commits:** `9d67dda` (auth fix), `72c966e` (startup guard)
 **Status:** ENGINEERING COMPLETE — awaiting secret provisioning, deploy, and replay
+
+**GCP project:** `sokoni-aeb26`
+**CF runtime service account:** `24799054989-compute@developer.gserviceaccount.com` (Default compute, used by Gen2 CFs)
 
 ---
 
@@ -14,7 +17,7 @@ across the entire collection. No subscription has ever activated via the authori
 path. The cause is confirmed from production request data (see
 `docs/PAYMENT_WEBHOOK_INVALID_SIGNATURE.md`): the code required an `x-intasend-signature`
 header; IntaSend never sends one. IntaSend authenticates with a `challenge` value in the
-request body. The fix is deployed code. This runbook makes it operational.
+request body. The fix is in committed code. This runbook makes it operational.
 
 ---
 
@@ -25,67 +28,102 @@ request body. The fix is deployed code. This runbook makes it operational.
 Go to: **IntaSend Dashboard → Webhooks → Webhook settings**
 
 You will see a "Webhook challenge" or "Security secret" field. Copy that value exactly.
-If no challenge is configured, set one now — use a random 16-char string.
+If no challenge is configured, set one now — use a random 16-char alphanumeric string.
 
 > The challenge value must match exactly (case-sensitive) between the dashboard
-> and Secret Manager.
+> and Secret Manager. The production requests showed `challengeLen = 12`, so the
+> configured value is 12 characters.
 
 ### Step 2: Store the challenge in Secret Manager
 
 ```bash
-# Create the secret
+# Create the secret (run once — fails if it already exists, which is fine)
 gcloud secrets create INTASEND_WEBHOOK_CHALLENGE \
   --replication-policy=automatic \
-  --project=sokoni-app
+  --project=sokoni-aeb26
 
-# Store the value (replace YOUR_CHALLENGE_VALUE — no trailing newline)
+# Store the value — replace YOUR_CHALLENGE_VALUE; no trailing newline
 printf 'YOUR_CHALLENGE_VALUE' | \
   gcloud secrets versions add INTASEND_WEBHOOK_CHALLENGE \
   --data-file=- \
-  --project=sokoni-app
+  --project=sokoni-aeb26
 
-# Verify it was stored correctly
+# Verify the value was stored without modification
 gcloud secrets versions access latest \
   --secret=INTASEND_WEBHOOK_CHALLENGE \
-  --project=sokoni-app
+  --project=sokoni-aeb26
 ```
 
-### Step 3: Grant the Cloud Function access
+The `verify` command will print the raw value. Confirm it matches the dashboard exactly.
+
+### Step 3: Grant the Gen2 Cloud Function runtime access
 
 ```bash
-# Grant the default App Engine service account (used by Gen2 CFs) access
 gcloud secrets add-iam-policy-binding INTASEND_WEBHOOK_CHALLENGE \
-  --member="serviceAccount:sokoni-app@appspot.gserviceaccount.com" \
+  --member="serviceAccount:24799054989-compute@developer.gserviceaccount.com" \
   --role="roles/secretmanager.secretAccessor" \
-  --project=sokoni-app
+  --project=sokoni-aeb26
 ```
 
-### Step 4: Deploy only the webhook function
+Confirm the binding was added:
+
+```bash
+gcloud secrets get-iam-policy INTASEND_WEBHOOK_CHALLENGE \
+  --project=sokoni-aeb26
+```
+
+Expected output includes:
+```
+- members:
+  - serviceAccount:24799054989-compute@developer.gserviceaccount.com
+  role: roles/secretmanager.secretAccessor
+```
+
+### Step 4: Deploy
 
 ```bash
 firebase deploy --only functions:intasendWebhook
 ```
 
-Wait for the deployment to complete. Do not deploy other functions simultaneously.
+Wait for exit code 0. Do not deploy other functions concurrently.
 
-### Step 5: Smoke-test with a challenge-correct ping
+### Step 5: Startup validation — confirm secret is reachable
+
+Send a request with the correct challenge before the replay. This exercises the
+secret-read path and confirms the IAM grant works. It also surfaces the startup guard
+added to the function: if `INTASEND_WEBHOOK_CHALLENGE.value()` is empty, the function
+returns 500 (not 401), which means the IAM grant or secret version is missing.
 
 ```bash
-# This should return 200 OK (body = OK)
-curl -s -o /dev/null -w "%{http_code}" \
-  -X POST https://us-central1-sokoni-app.cloudfunctions.net/intasendWebhook \
+# Should return 200 OK
+# (no payment in Firestore for SMOKE-TEST-1 so the function exits early with 200)
+curl -s -w "\nHTTP %{http_code}\n" \
+  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
   -H "Content-Type: application/json" \
-  -d '{"challenge":"YOUR_CHALLENGE_VALUE","invoice":{"invoice_id":"test","state":"PENDING","api_ref":"SMOKE-TEST-1"}}'
+  -d '{"challenge":"YOUR_CHALLENGE_VALUE","invoice":{"invoice_id":"SMOKE-TEST-1","state":"PENDING","api_ref":"SMOKE-TEST-1"}}'
 
-# This should return 401 Unauthorized
-curl -s -o /dev/null -w "%{http_code}" \
-  -X POST https://us-central1-sokoni-app.cloudfunctions.net/intasendWebhook \
+# Should return 401 Unauthorized
+curl -s -w "\nHTTP %{http_code}\n" \
+  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
   -H "Content-Type: application/json" \
-  -d '{"challenge":"wrong","invoice":{"invoice_id":"test","state":"PENDING","api_ref":"SMOKE-TEST-2"}}'
+  -d '{"challenge":"wrongvalue","invoice":{"invoice_id":"SMOKE-TEST-2","state":"PENDING","api_ref":"SMOKE-TEST-2"}}'
 ```
 
-Expected: `200` for correct challenge, `401` for wrong challenge. If both return 200, the
-secret was not stored correctly. If both return 401, the secret value doesn't match.
+| Result | Diagnosis |
+|---|---|
+| 200 + 401 | Auth working correctly — proceed to replay |
+| 500 + 500 | Secret not readable — check IAM grant (Step 3) or secret version (Step 2) |
+| 401 + 401 | Challenge value mismatch — re-check dashboard value vs stored secret |
+| 200 + 200 | Should not happen — investigation needed |
+
+Check Cloud Logging for startup details:
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="intasendWebhook"' \
+  --project=sokoni-aeb26 --limit=20 --format=json
+```
+
+Confirm no `INTASEND_WEBHOOK_CHALLENGE secret is empty` error entry.
 
 ---
 
@@ -104,14 +142,13 @@ secret was not stored correctly. If both return 401, the secret value doesn't ma
 1. Go to **IntaSend Dashboard → Webhooks → Delivery history**
 2. Find the delivery for `KBQE4OW` (sent 2026-07-20 18:12 UTC)
 3. Click **Retry** or **Resend**
-4. Watch the webhook logs in Cloud Logging
+4. Watch Cloud Logging immediately
 
 ### Option B: Manual replay via curl (if dashboard replay is not available)
 
-Reproduce the exact webhook body structure IntaSend sent (confirmed from `diag.bodySample`):
-
 ```bash
-curl -X POST https://us-central1-sokoni-app.cloudfunctions.net/intasendWebhook \
+curl -s -w "\nHTTP %{http_code}\n" \
+  -X POST https://us-central1-sokoni-aeb26.cloudfunctions.net/intasendWebhook \
   -H "Content-Type: application/json" \
   -d '{
     "challenge": "YOUR_CHALLENGE_VALUE",
@@ -127,97 +164,88 @@ curl -X POST https://us-central1-sokoni-app.cloudfunctions.net/intasendWebhook \
   }'
 ```
 
-> **Warning:** This writes a real COMPLETE record to production Firestore and activates a
-> real subscription. Use only when the Phase 1 smoke test has passed and you are ready
-> to activate the KASS VAPES merchant account (UID `xrH21J5GFbW8PluCZ2ny5nIuf602`).
+> **This writes a real COMPLETE record to production Firestore and activates a real
+> subscription.** Use only after the smoke test passes and you are ready to activate
+> the KASS VAPES merchant account (UID `xrH21J5GFbW8PluCZ2ny5nIuf602`).
 
 ### What to observe during replay
 
-Watch the following in parallel:
+**Cloud Logging** (watch in real time):
 
-**Cloud Logging** (`gcloud logging read 'resource.type="cloud_function" AND resource.labels.function_name="intasendWebhook"' --limit=20`):
+```bash
+gcloud logging read \
+  'resource.type="cloud_run_revision" AND resource.labels.service_name="intasendWebhook"' \
+  --project=sokoni-aeb26 --limit=30 --format=json
+```
 
-| Step | Log line | Means |
+| Step | What to see | Means |
 |---|---|---|
-| Auth pass | No "challenge mismatch" warning | Challenge verified correctly |
-| Payment claimed | `intasendWebhook: Already processed` absent | Transaction claimed |
-| Commission | No `commissionReviewQueue` entry | Rate calculated correctly |
-| Subscription | `Subscription auto-activated { uid, plan, ref }` | Activation executed |
+| Auth pass | No `challenge mismatch` warning | Challenge verified correctly |
+| Payment claimed | No `Already processed (raced)` | Transaction claimed this invocation |
+| Subscription | `Subscription auto-activated { uid, plan, ref }` | Activation block executed |
+| Subscription miss | `[intasendWebhook] Subscription auto-activation failed` | Activation threw — see Phase 3 |
 
 **Firestore** (Firebase console, immediately after replay):
 
-| Collection / Document | Field | Expected value |
+| Path | Field | Expected |
 |---|---|---|
 | `payments/SKNTJKAS8` | `status` | `COMPLETE` |
 | `payments/SKNTJKAS8` | `intasendState` | `COMPLETE` |
-| `subscriptions/{uid}` | `status` | `active` |
-| `subscriptions/{uid}` | `plan` | the plan from the paymentIntent |
-| `subscriptions/{uid}` | `source` | `intasend_webhook` |
-| `subscriptionAuditLog` | new doc | `action: "ACTIVATED"` |
+| `subscriptions/xrH21J5GFbW8PluCZ2ny5nIuf602` | `status` | `active` |
+| `subscriptions/xrH21J5GFbW8PluCZ2ny5nIuf602` | `plan` | planId from the paymentIntent |
+| `subscriptions/xrH21J5GFbW8PluCZ2ny5nIuf602` | `source` | `intasend_webhook` |
+| `subscriptionAuditLog` | new doc | `action: "ACTIVATED"`, `source: "intasend_webhook"` |
 | `commissionLedger/SKNTJKAS8` | `status` | `auto_collected` |
 
 ---
 
-## Phase 3 — If replay reaches payment COMPLETE but subscription stays Free
+## Phase 3 — If replay reaches COMPLETE but subscription stays Free
 
-If you observe `payments/SKNTJKAS8.status = COMPLETE` but the merchant dashboard still
-shows Free / Trial, the activation chain has a second bug. The investigation steps:
+This means the payment path is fixed but the activation path has a second bug.
 
 ### 3a. Check the subscription document was written
 
-```
-Firestore → subscriptions → {uid: xrH21J5GFbW8PluCZ2ny5nIuf602}
-```
+Open Firestore → `subscriptions` → look for document `xrH21J5GFbW8PluCZ2ny5nIuf602`.
 
-If the document does not exist (or still has `plan: seller_free`), the webhook reached
-the subscription block but did not write. Check Cloud Logging for:
-```
-[intasendWebhook] Subscription auto-activation failed
-```
+- If it doesn't exist or still has `plan: seller_free`: activation ran but didn't write — check Cloud Logging for `Subscription auto-activation failed`
+- If the existing subscription doc is `subscriptions/SOK-GL58F7` (keyed by SOK merchant ID, not UID): the webhook wrote to `subscriptions/{uid}` but the entitlement reader reads a different document — this is the Phase 4 keying issue surfacing as a live bug
 
-### 3b. If activation threw — check the paymentIntents document
+### 3b. Check the paymentIntents document lookup
 
-The activation code reads:
+The activation code does:
 ```js
 db.collection("paymentIntents").doc(apiRef).get()
+// where apiRef = invoice?.api_ref = "SKNTJKAS8"
 ```
-where `apiRef = invoice?.api_ref`. From the webhook body above, `api_ref = "SKNTJKAS8"`.
 
-Open Firestore → `paymentIntents/SKNTJKAS8`. If this document does not exist (or has
-a different `api_ref` as its ID), the `intentSnap.exists` check will be false and the
-subscription block is silently skipped with no log entry.
+Open Firestore → `paymentIntents/SKNTJKAS8`. If this doc doesn't exist, the intent lookup silently returns `intentSnap.exists = false` and the subscription block is skipped with no log.
 
-Cross-check: the payment intent was created with ID `SKN3550FD490`. If the `api_ref`
-stored in that document is `SKNTJKAS8`, the lookup uses the wrong ID and will miss it.
-The fix is to look up by `api_ref` field rather than document ID.
+Cross-check: the known intent doc is `paymentIntents/SKN3550FD490`. If that document's `api_ref` field contains `SKNTJKAS8`, then the intent was indexed by `SKN3550FD490` but the webhook looks it up by `SKNTJKAS8` — key mismatch. The fix would be to look up by `api_ref` field query rather than document ID.
 
-### 3c. Check the subscription document key
+### 3c. Check the entitlement reader
 
-The entitlement reader in `getProviderPlan` reads `subscriptions/{uid}`.
-The webhook activation writes `subscriptions/{intent.uid}`.
-If the existing subscription doc is keyed differently (e.g. by SOK merchant ID), the
-written doc will exist but the reader will miss it. This is the architectural keying
-inconsistency flagged in Phase 4 — it would surface as a second bug here.
-
-### 3d. Check the entitlement reader
-
-After a successful subscription write, verify `getProviderPlan` returns the new plan:
-```
-Cloud Logging → function_name="getProviderPlan" → uid = xrH21J5GFbW8PluCZ2ny5nIuf602
-```
+Even if `subscriptions/xrH21J5GFbW8PluCZ2ny5nIuf602` was written correctly, the
+pricing page and dashboard may still show Free if `getProviderPlan` reads a different
+document. Check Cloud Logging for calls to `getProviderPlan` after the replay and see
+which document path it reads.
 
 ---
 
 ## Deployment sequence summary
 
 ```
-Step 1  gcloud secrets create INTASEND_WEBHOOK_CHALLENGE
-Step 2  gcloud secrets versions add ... --data-file=-
-Step 3  gcloud secrets add-iam-policy-binding ...
-Step 4  firebase deploy --only functions:intasendWebhook
-Step 5  Smoke test (correct challenge → 200, wrong → 401)
-Step 6  Replay KBQE4OW from IntaSend dashboard
-Step 7  Verify full chain in Firestore + Cloud Logging
+┌─────────────────────────────────────────────────────────────┐
+│  1. Retrieve challenge from IntaSend Dashboard              │
+│  2. gcloud secrets create INTASEND_WEBHOOK_CHALLENGE        │
+│  3. printf 'VALUE' | gcloud secrets versions add ...        │
+│  4. gcloud secrets add-iam-policy-binding ... (compute SA)  │
+│  5. gcloud secrets get-iam-policy ... (verify)              │
+│  6. firebase deploy --only functions:intasendWebhook        │
+│  7. Smoke test: correct → 200; wrong → 401                  │
+│  8. Replay KBQE4OW from IntaSend dashboard                  │
+│  9. Verify: payments COMPLETE, subscription written         │
+│ 10. Verify: entitlement active in merchant dashboard        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -227,17 +255,15 @@ Step 7  Verify full chain in Firestore + Cloud Logging
 | Invariant | Before | After |
 |---|---|---|
 | Fail-closed on auth failure | HTTP 401 | HTTP 401 |
+| Empty secret detected | No guard | HTTP 500 (config error, not auth bypass) |
 | Constant-time comparison | `timingSafeEqual` on hex strings | `timingSafeEqual` on 32-byte HMAC digests |
 | No secret in logs | Correct | Correct — only `challengeLen` (integer) logged |
 | No bypass | Correct | Correct — auth failure returns immediately |
-
-The change is a drop-in replacement. The verification mechanism changed; the security
-posture (fail-closed, constant-time, no secret exposure) is identical.
 
 ---
 
 ## Related documents
 
-- `docs/PAYMENT_WEBHOOK_INVALID_SIGNATURE.md` — root cause investigation
-- `docs/ENGINEERING_STANDARD.md` — methodology used in this investigation
-- `functions/index.js:5605` — `exports.intasendWebhook` (the changed function)
+- `docs/PAYMENT_WEBHOOK_INVALID_SIGNATURE.md` — root cause investigation (confirmed evidence)
+- `docs/ENGINEERING_STANDARD.md` — investigation methodology
+- `functions/index.js:5605` — `exports.intasendWebhook`
