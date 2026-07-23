@@ -1,4 +1,51 @@
-﻿## [2026-07-24] — fix(overlay+nav): beta gate could be covered by the header; finish bottom-nav standardisation
+﻿## [2026-07-24] — fix(checkout): a buyer using a promo code was charged more than they were quoted
+
+**The defect.** `orderTotal` — the figure shown in the summary, on the pay button
+and beside every payment method — subtracts promo and loyalty discounts and adds
+the platform fee / optional Impact contribution. The amount actually charged is
+`serverTotal` from `createCheckoutSession`, which is `serverSubtotal +
+safeDeliveryFee` and nothing else: the callable accepts only
+`{ cartItems, deliveryFee }`, so it has no promo or loyalty argument to apply.
+
+Promo codes are live and hardcoded client-side (`SAVE5`, `SAVE10`, `MEGA20`,
+`FREEDEL`) and loyalty redemption is reachable. So a buyer who applied a code was
+quoted the discounted figure and then billed the undiscounted one, silently.
+
+This was never an exploit — the charge has always been server-authoritative
+(`stkAmount = serverTotal`, with an explicit "never default to client orderTotal"
+guard) — so a buyer could not *underpay*. The harm ran the other way: we promised
+a discount we did not honour.
+
+**The fix — an asymmetric guard.** Once the session returns, if the server's
+authoritative total is HIGHER than what we quoted, checkout now reconciles the
+displayed total to the server figure (`_serverTotalOverride`, applied at the end
+of `updateTotals()` so summary, pay button and all payment-method amounts move
+together), tells the buyer plainly that a discount could not be applied, and
+requires a second, informed tap.
+
+The opposite direction is deliberately left alone: the platform fee and the
+Impact contribution make the quote HIGHER than the charge, which harms nobody. A
+symmetric "totals must match" assertion would have broken both of those
+legitimate flows in production, which is why this guard is one-directional.
+
+`amount:` now falls back `stkAmount ?? _serverTotalOverride ?? orderTotal`, so a
+repeat tap (where the session already exists and `stkAmount` is null) still bills
+a server-produced figure rather than a client-computed one.
+
+Verified in Chromium: a 2 × KES 1,000 cart quotes KES 2,000; a 20% promo drops the
+display to KES 1,600 (the defect); a higher server total reconciles every
+displayed amount to it. No page errors. `test-payment-authority` 22 passed /
+0 failed, `test-overlays` 10 checks, `test-seller-dashboard` 22 checks.
+
+**Still open (product decision):** discounts are presented but not honoured at
+all. The proper resolution is either to validate promo codes and loyalty
+redemption server-side inside `createCheckoutSession` (with atomic point
+deduction) and fold them into `serverTotal`, or to withdraw the inputs. This
+change only guarantees the buyer is never charged more than the price they see.
+
+Files affected: `checkout.html`. No database or API changes.
+
+## [2026-07-24] — fix(overlay+nav): beta gate could be covered by the header; finish bottom-nav standardisation
 
 **`sokoni-beta-gate.js` was a full-screen blocking gate at a hardcoded
 `z-index:99998` — below the global header (`--sk-z-header`, 100001).** Same

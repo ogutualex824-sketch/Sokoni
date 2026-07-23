@@ -1562,6 +1562,11 @@
 
 let selectedPayment = "mpesa";
 let orderTotal = 0;
+/* Set once createCheckoutSession has told us the authoritative charge and it is
+   HIGHER than what we quoted (see the guard in the pay handler). From then on the
+   UI shows the amount the buyer will actually be charged, not the discounted
+   figure we could not honour. */
+let _serverTotalOverride = null;
 let _impactAmt = 100; /* default contribution */
 
 function _updateImpactRow() {
@@ -1723,6 +1728,11 @@ function updateTotals(){
   /* Add optional Impact contribution to total */
   const impactOn = document.getElementById('coImpactToggle')?.checked;
   if (impactOn) orderTotal += _impactAmt;
+
+  /* Once the server has quoted a higher authoritative total, that figure wins
+     everywhere the total is shown — summary, pay button and every payment-method
+     amount below — so the buyer cannot be shown one price and charged another. */
+  if (_serverTotalOverride != null) orderTotal = _serverTotalOverride;
 
   if(subtotalEl) subtotalEl.textContent = "KES " + subtotal.toLocaleString();
   if(totalEl)    totalEl.textContent    = "KES " + orderTotal.toLocaleString();
@@ -2137,6 +2147,33 @@ async function sendStkPush(){
       _sessionId = sessionRes.data.sessionId;
       stkAmount  = sessionRes.data.serverTotal;
 
+      /* NEVER charge more than we quoted.
+         orderTotal (what the UI shows) subtracts promo and loyalty discounts and
+         adds the platform fee / optional Impact contribution. serverTotal — the
+         amount actually charged — is serverSubtotal + deliveryFee only, because
+         createCheckoutSession accepts no promo or loyalty argument. So whenever a
+         buyer applies a promo code or redeems points, the quote lands UNDER the
+         charge and they were silently billed the difference.
+
+         Guard that one direction only. If the server wants MORE than we quoted,
+         reconcile the displayed total to the authoritative figure, say so plainly,
+         and require a second, informed tap. The opposite case (platform fee,
+         Impact contribution) charges LESS than quoted, harms nobody, and must keep
+         working — a symmetric "totals must match" check would break it. */
+      if (stkAmount > orderTotal + 1) {
+        _serverTotalOverride = stkAmount;
+        updateTotals();
+        btn.disabled  = false;
+        btn.innerHTML = '🔒 Pay KES ' + stkAmount.toLocaleString();
+        showPushToast(
+          "⚠️ Price updated",
+          "A discount on this order could not be applied. The total is KES " +
+            stkAmount.toLocaleString() + ". Tap Pay to continue at this price.",
+          "orange"
+        );
+        return;
+      }
+
       /* Notify buyer if some items were out of stock and removed from session */
       const oos = sessionRes.data.outOfStockItems;
       if (Array.isArray(oos) && oos.length > 0) {
@@ -2272,7 +2309,11 @@ async function sendStkPush(){
     btn.innerHTML = '🔄 Retry Payment';
   })
   .run({
-    amount:       stkAmount ?? orderTotal, /* stkAmount set by server; fallback is belt-and-suspenders only */
+    /* stkAmount is set by the server on the tap that creates the session. On a
+       repeat tap the session already exists, so that block is skipped and
+       stkAmount is null — fall back to _serverTotalOverride, which is also a
+       server figure (serverTotal), before ever falling back to a client total. */
+    amount:       stkAmount ?? _serverTotalOverride ?? orderTotal,
     currency:     "KES",
     phone_number: phone,
     email:        user?.email || "",
