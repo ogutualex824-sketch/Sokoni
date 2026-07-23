@@ -69,9 +69,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .ph-body{max-width:1000px;margin:0 auto;padding:16px 16px;}
 
 /* CATEGORY TABS */
-.ph-cat-bar{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:14px;}
+.ph-cat-bar{display:flex;flex-wrap:nowrap;gap:6px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;margin-bottom:14px;}
 .ph-cat-bar::-webkit-scrollbar{display:none;}
-.ph-cat{padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
+/* flex:0 0 auto is load-bearing. A flex item defaults to flex-shrink:1, so on a
+   phone the chips were squeezed to fit the bar's width instead of overflowing
+   into the scrollable row. Their text is white-space:nowrap with 16px of side
+   padding, so it spilled out of the collapsed boxes and the chips rendered on
+   top of each other, unreadable. Do not remove without restoring an equivalent. */
+.ph-cat{flex:0 0 auto;padding:8px 16px;border-radius:20px;font-size:12px;font-weight:800;cursor:pointer;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.4);white-space:nowrap;font-family:inherit;transition:all .2s;}
 .ph-cat.active,.ph-cat:hover{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.3);color:#10b981;}
 
 /* FILTER ROW */

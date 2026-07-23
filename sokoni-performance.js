@@ -179,7 +179,14 @@
       if (
         src &&
         /\.(jpe?g|png)(\?[^#]*)?$/i.test(src) &&
-        !/^assets\//i.test(src) &&
+        /* Was /^assets\//i — RELATIVE paths only. Brand assets referenced with a
+           leading slash ("/assets/branding/payment/intasend-trust-badge.jpeg",
+           which is how the IntaSend trust badge component loads it) did not match,
+           so they got a .webp <source> for a twin that does not exist. Measured:
+           /assets/branding/payment/intasend-trust-badge.webp returned 404 and the
+           badge fell back to the remote S3 URL, which then failed too — the trust
+           badge rendered as nothing on checkout. Match both forms. */
+        !/^\/?assets\//i.test(src) &&
         _sameOrigin &&
         !_isMapTile &&
         img.parentElement &&

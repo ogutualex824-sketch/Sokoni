@@ -1,4 +1,46 @@
-﻿## [2026-07-23] — fix(overlay+nav): menu ✕ was unclickable and left the page blurred
+﻿## [2026-07-23] — fix(checkout+property): drop phantom M-Pesa fee, real payment logos, unbreak trust badge, fix category chips
+
+**Property category chips rendered on top of each other (mobile P1).**
+`.ph-cat-bar` in `property-hub.html` is `display:flex; overflow-x:auto`, but the
+`.ph-cat` chips had no `flex-shrink:0`. A flex item defaults to `flex-shrink:1`,
+so instead of overflowing into the scrollable row the chips were *squeezed* to
+fit the bar's width; with `white-space:nowrap` and 16px side padding the text
+spilled out of the collapsed boxes and the chips overlapped, unreadable.
+Added `flex:0 0 auto` to the chip and `flex-wrap:nowrap` +
+`-webkit-overflow-scrolling:touch` to the bar. Verified at 360px and 390px:
+9 chips, one row, zero overlaps, zero squeezed, bar scrollable (1329px of
+content in a 328px viewport).
+
+**The 1% "M-PESA Fee" is removed from checkout.** It was added to the displayed
+total on the client only. `createCheckoutSession` computes the authoritative
+charge as `serverTotal = serverSubtotal + safeDeliveryFee` and has never applied
+an M-Pesa fee, so this line quoted the buyer *more* than we actually charge.
+Removing it makes the quote match the charge — the summary row, the total
+arithmetic and the now-dead element lookup are all gone.
+
+**Real payment brand marks** replace the emoji stand-ins for the methods we hold
+artwork for: M-Pesa (`assets/mpesa.PNG`), Card (`visa.PNG` + `mastercard.PNG`
+side by side) and PayPal (`paypal.PNG`). Methods with no artwork (Airtel, T-Kash,
+Equity, MTN, EcoCash, Chipper, Bank) keep their emoji. Sized to the emoji's
+optical height with `object-fit:contain` so the cards stay on one grid. Note the
+files really are uppercase `.PNG`; Firebase Hosting is case-sensitive and the
+references match exactly.
+
+**The IntaSend trust badge was rendering as nothing.** Not the badge component's
+fault — `sokoni-performance.js` wraps raster images in `<picture>` + a WebP
+`<source>`, and its skip-list was `/^assets\//i`, which matches only RELATIVE
+paths. The badge loads `/assets/branding/payment/intasend-trust-badge.jpeg` with
+a leading slash, so it was not skipped, got a `.webp` twin that does not exist,
+404'd, and fell back to the remote S3 URL — which failed too. Widened to
+`/^\/?assets\//i`. Verified: the `.webp` 404 is gone, the local JPEG returns 200
+and decodes (naturalWidth 1170), no remote fallback.
+
+Files affected: `property-hub.html`, `checkout.html`, `sokoni-performance.js`.
+No database or API changes. Payments: strictly safer — the client no longer
+displays a fee the server never charges; the authoritative server total is
+untouched.
+
+## [2026-07-23] — fix(overlay+nav): menu ✕ was unclickable and left the page blurred
 
 **The menu left the home page blurred (root cause).** `sokoni-drawers.css` set
 `--sk-d-z: 9500` / `--sk-d-bkdp-z: 9499`, i.e. *below* the fixed top nav

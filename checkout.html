@@ -167,6 +167,13 @@
     }
 
     .pay-method-icon{ font-size:30px; line-height:1; }
+    /* Real brand marks (assets/) replace the emoji stand-ins for the methods we
+       actually hold artwork for. Sized to the emoji's optical height so the
+       cards stay on the same grid, and object-fit:contain keeps each logo's
+       aspect ratio rather than stretching it. */
+    .pay-method-icon img{ height:30px; width:auto; max-width:100%; object-fit:contain; display:block; margin:0 auto; }
+    .pay-method-icon .pay-logo-pair{ display:flex; align-items:center; justify-content:center; gap:6px; }
+    .pay-method-icon .pay-logo-pair img{ height:22px; }
     .pay-method-label{ font-size:12px; font-weight:700; color:white; }
     .pay-method-sub{ font-size:10px; color:rgba(255,255,255,0.38); }
 
@@ -967,7 +974,7 @@
 
           <div class="pay-method-card active-pay-mpesa" id="payMpesa" onclick="selectPayment('mpesa')">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">📱</div>
+            <div class="pay-method-icon"><img src="assets/mpesa.PNG" alt="M-Pesa" loading="lazy" width="60" height="30"></div>
             <div class="pay-method-label">M-Pesa</div>
             <div class="pay-method-sub">STK Push</div>
           </div>
@@ -995,7 +1002,7 @@
 
           <div class="pay-method-card" id="payCard" onclick="selectPayment('card')">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">💳</div>
+            <div class="pay-method-icon"><span class="pay-logo-pair"><img src="assets/visa.PNG" alt="Visa" loading="lazy" width="44" height="22"><img src="assets/mastercard.PNG" alt="Mastercard" loading="lazy" width="36" height="22"></span></div>
             <div class="pay-method-label">Card</div>
             <div class="pay-method-sub">Visa / Mastercard</div>
           </div>
@@ -1025,7 +1032,7 @@
 
           <div class="pay-method-card" id="payPaypal" onclick="selectPayment('paypal')">
             <div class="pay-check">✓</div>
-            <div class="pay-method-icon">🅿️</div>
+            <div class="pay-method-icon"><img src="assets/paypal.PNG" alt="PayPal" loading="lazy" width="60" height="30"></div>
             <div class="pay-method-label">PayPal</div>
             <div class="pay-method-sub">International</div>
           </div>
@@ -1264,7 +1271,6 @@
       <div class="os-row" id="platformFeeRow" style="display:none"><span class="os-row-label" style="display:flex;align-items:center;gap:5px;">Platform Fee <span id="platformFeeRate" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" id="platformFeeVal">KES 0</span></div>
       <div class="os-row" id="promoRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">Promo Discount</span><span class="os-row-val" style="color:#71ff00;" id="promoSavingRow">—</span></div>
       <div class="os-row" id="loyaltyDiscountRow" style="display:none"><span class="os-row-label" style="color:#71ff00;">🏆 Points Redeemed <span id="loyaltyPtsUsedLabel" style="font-size:10px;background:rgba(113,255,0,0.1);color:#71ff00;border-radius:4px;padding:1px 5px;font-weight:700;"></span></span><span class="os-row-val" style="color:#71ff00;" id="loyaltyDiscountVal">—</span></div>
-      <div class="os-row"><span class="os-row-label">M-PESA Fee</span><span class="os-row-val" id="mpesaFeeRow">KES 0</span></div>
       <div class="os-total-row">
         <span class="os-total-label">Total</span>
         <span class="os-total-val" id="checkoutTotal">KES 0</span>
@@ -1593,7 +1599,6 @@ const itemsEl = document.getElementById("checkoutItems");
 const totalEl = document.getElementById("checkoutTotal");
 const subtotalEl = document.getElementById("summarySubtotal");
 const btnTotalEl = document.getElementById("btnTotal");
-const mpesaFeeEl = document.getElementById("mpesaFeeRow");
 
 let subtotal = 0;
 let promoDiscount = 0;
@@ -1691,10 +1696,14 @@ function toggleLoyaltyRedeem(checked) {
 }
 
 function updateTotals(){
-  const mpesaFee    = selectedPayment === "mpesa" ? Math.round(subtotal * 0.01) : 0;
+  /* The 1% "M-PESA Fee" is gone. It was added to the displayed total on the
+     client only — createCheckoutSession computes the authoritative charge as
+     `serverTotal = serverSubtotal + safeDeliveryFee` and has never applied a
+     M-Pesa fee. So this line inflated what the buyer was quoted above what we
+     actually charge. Removing it makes the quote match the charge. */
   const promoSaving = Math.round(subtotal * (promoDiscount/100));
   _platformFee      = _platformFeeRate > 0 ? Math.round(subtotal * _platformFeeRate / 100) : 0;
-  const baseTotal   = subtotal + mpesaFee + deliveryFee + _platformFee - promoSaving;
+  const baseTotal   = subtotal + deliveryFee + _platformFee - promoSaving;
   const loyaltyDisc = _calcLoyaltyDiscount(baseTotal);
   orderTotal        = Math.max(0, baseTotal - loyaltyDisc);
 
@@ -1718,7 +1727,6 @@ function updateTotals(){
   if(subtotalEl) subtotalEl.textContent = "KES " + subtotal.toLocaleString();
   if(totalEl)    totalEl.textContent    = "KES " + orderTotal.toLocaleString();
   if(btnTotalEl) btnTotalEl.textContent = "KES " + orderTotal.toLocaleString();
-  if(mpesaFeeEl) mpesaFeeEl.textContent = mpesaFee > 0 ? "KES " + mpesaFee.toLocaleString() : "—";
 
   /* Platform fee row */
   const pfRow = document.getElementById("platformFeeRow");
