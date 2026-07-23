@@ -843,6 +843,7 @@
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">
 <script src="shared-header.js" defer></script>
+<script src="/components/payment/payment-trust-badge.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
 </head>
 <body>
@@ -1248,11 +1249,11 @@
       <div style="margin-top:18px;text-align:center;padding:18px 14px 16px;background:rgba(255,255,255,0.015);border:1px solid rgba(255,255,255,0.06);border-radius:16px;position:relative;">
         <div style="position:absolute;top:0;left:50%;transform:translateX(-50%) translateY(-50%);background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.2);border-radius:999px;padding:3px 12px;font-size:9px;font-weight:800;color:rgba(113,255,0,0.75);letter-spacing:1.5px;white-space:nowrap;">SECURE PAYMENTS</div>
 
-        <!-- IntaSend official trust badge — do NOT recreate this image -->
-        <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;transition:transform 0.2s ease,filter 0.2s ease;" onmouseover="this.style.transform='scale(1.04)';this.style.filter='drop-shadow(0 4px 16px rgba(113,255,0,0.2))'" onmouseout="this.style.transform='';this.style.filter=''" aria-label="IntaSend security certification — opens in new tab">
-          <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png" width="260" alt="IntaSend Secure Payments — PCI-DSS Compliant" loading="lazy" decoding="async" style="max-width:100%;height:auto;display:block;margin:0 auto;" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling&&(this.nextElementSibling.style.display='flex'));">
-          <span style="display:none;align-items:center;justify-content:center;gap:8px;padding:12px 16px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.16);border-radius:10px;color:rgba(255,255,255,0.7);font-size:12px;font-weight:700;"><i class="fas fa-lock" aria-hidden="true"></i> Secured by IntaSend</span>
-        </a>
+        <!-- Canonical trust badge (components/payment/payment-trust-badge.js).
+             Panel already shows its own "SECURE PAYMENTS" pill above, so the
+             component's cap label is suppressed. Local official artwork, CDN
+             fallback, aspect-ratio reserved for zero CLS. -->
+        <div data-sokoni-trust-badge data-label="false"></div>
 
         <!-- Accepted payment methods -->
         <div style="margin-top:14px;border-top:1px solid rgba(255,255,255,0.06);padding-top:12px;">
@@ -1367,14 +1368,8 @@
       📨 Send STK Push
     </button>
 
-    <!-- IntaSend Trust Badge — M-Pesa modal -->
-    <div id="intasendTrustBadge" style="margin-top:20px;text-align:center;">
-      <a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:inline-block;" aria-label="IntaSend security certification">
-        <img src="https://intasend-prod-static.s3.amazonaws.com/img/trust-badges/intasend-trust-badge-with-mpesa-hr-dark.png" width="240" alt="IntaSend Secure Payments — PCI-DSS Compliant" loading="lazy" decoding="async" style="max-width:100%;height:auto;display:block;margin:0 auto;" onerror="this.style.display='none';this.nextElementSibling&&(this.nextElementSibling&&(this.nextElementSibling.style.display='flex'));">
-        <span style="display:none;align-items:center;justify-content:center;gap:6px;padding:10px 14px;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.16);border-radius:10px;color:rgba(255,255,255,0.65);font-size:12px;font-weight:700;">🔐 Secured by IntaSend</span>
-      </a>
-      <strong><a href="https://intasend.com/security" target="_blank" rel="noopener noreferrer" style="display:block;color:rgba(255,255,255,0.35);text-decoration:none;font-size:10px;margin-top:6px;font-weight:600;">Secured by IntaSend Payments</a></strong>
-    </div>
+    <!-- Canonical trust badge — M-Pesa modal (components/payment/payment-trust-badge.js) -->
+    <div data-sokoni-trust-badge data-max="300" style="margin-top:20px;"></div>
 
   </div>
 </div>

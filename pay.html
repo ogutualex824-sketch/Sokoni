@@ -7,6 +7,7 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <script src="security.js"></script>
   <script src="shared-header.js"></script>
+  <script src="/components/payment/payment-trust-badge.js" defer></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#050505">
@@ -655,12 +656,10 @@
       </div>
     </div>
 
-    <!-- Trust -->
-    <div class="pay-trust" aria-label="Security certifications">
-      <div class="pay-trust-item"><span aria-hidden="true">🔒</span> SSL Encrypted</div>
-      <div class="pay-trust-item"><span aria-hidden="true">🛡️</span> PCI DSS</div>
-      <div class="pay-trust-item"><span aria-hidden="true">✓</span> Buyer Protected</div>
-    </div>
+    <!-- Official trust badge (components/payment/payment-trust-badge.js) replaces
+         the emoji trust chips: PCI-DSS / Visa / Mastercard / Sectigo, one asset,
+         consistent with checkout. -->
+    <div data-sokoni-trust-badge></div>
 
   </div>
 
