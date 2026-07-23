@@ -3479,11 +3479,26 @@ function loadReviews(){
 
   import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
     var db = window.firebaseDB;
-    var q = m.query(m.collection(db,'reviews'), m.orderBy('createdAt','desc'), m.limit(100));
+    /* Two equality filters, no orderBy: /reviews only exposes approved rows, and
+       a query without that clause is denied outright — which is why this panel
+       was always empty. Equality-only queries are served by the automatic
+       single-field indexes, so this needs no composite index. Sorting moves to
+       the client, which also fixes the old shape: it fetched the newest 100
+       reviews platform-wide and then filtered to this user, so anyone whose
+       reviews were not among the most recent 100 saw none of them. */
+    var q = m.query(
+      m.collection(db,'reviews'),
+      m.where('revieweeUid','==',_user.uid),
+      m.where('status','==','approved'),
+      m.limit(100)
+    );
     _profReviewsUnsub = m.onSnapshot(q, function(snap){
-      snap = {docs: snap.docs.filter(function(d){ return d.data().revieweeUid===_user.uid; })};
-
-      var reviews = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      var reviews = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
+        .sort(function(a,b){
+          var at = a.createdAt && a.createdAt.seconds ? a.createdAt.seconds : 0;
+          var bt = b.createdAt && b.createdAt.seconds ? b.createdAt.seconds : 0;
+          return bt - at;
+        });
       if(!reviews.length){
         el.innerHTML = '<div class="up-empty"><div class="up-empty-icon">&#11088;</div>No reviews yet. Complete transactions to earn reviews.</div>';
         return;
@@ -6890,7 +6905,11 @@ window.logoutUser = logoutUser;
   <script defer src="sokoni-event-bus.js"></script>
   <script defer src="sokoni-observability.js"></script>
   <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-orders.js"></script>
+  <!-- type="module": sokoni-orders.js has top-level `import` statements (it pulls db
+     from firebase.js). Loaded as a classic script it threw "Cannot use import
+     statement outside a module" on every profile load and never ran at all, so
+     the Firestore-backed orders list was silently dead. module implies defer. -->
+<script type="module" src="sokoni-orders.js"></script>
 <script src="sokoni-merchant-diag.js" defer></script>
 </body>
 </html>
