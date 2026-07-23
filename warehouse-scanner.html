@@ -916,7 +916,10 @@ function renderHistory(){
     });
   });
 }
-const modeLabels = {receive:'Receive',pick:'Pick',count:'Stock-Check',transfer:'Transfer'};
+/* modeLabels is already declared earlier in this same script block; the second
+   `const` threw "Identifier 'modeLabels' has already been declared" — a
+   SyntaxError that killed the whole block, so the scanner page ran no JS at
+   all. The two literals were identical, so the earlier one is kept. */
 
 /* ── ESC CLOSE CAMERA ── */
 document.addEventListener('keydown', e=>{

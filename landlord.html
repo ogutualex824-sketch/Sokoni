@@ -2513,18 +2513,23 @@ Date: ${formattedIssue}
   function printNotice(){
     const text = document.getElementById("noticeGeneratedText")?.value;
     if(!text) return;
-    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"></script>
-<script src="auth-guard.js"></script><meta charset="UTF-8"><title>Notice</title>
+    /* EVERY closing script tag in this template must escape its slash. The HTML
+       parser terminates the surrounding inline block at the first literal one,
+       even inside a template literal — that is exactly what happened here:
+       "Unexpected end of input", and the entire landlord script never ran. The
+       inline print handler below already did this correctly; the others did not. */
+    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"><\/script>
+<script src="auth-guard.js"><\/script><meta charset="UTF-8"><title>Notice</title>
     <style>body{font-family:'Courier New',monospace;padding:40px;color:#111;font-size:12px;line-height:1.8;max-width:700px;margin:0 auto;}pre{white-space:pre-wrap;word-wrap:break-word;}@media print{body{padding:20px;}}</style>
-    <script src="shared-header.js" defer></script>
+    <script src="shared-header.js" defer><\/script>
 </head><body>
 <pre>${text.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
 
-<script src="sokoni-audit.js" defer></script>
-<script src="sokoni-social.js" defer></script>
-<script src="sokoni-referral.js" defer></script>
-  <script defer src="kass-widget.js"></script>
+<script src="sokoni-audit.js" defer><\/script>
+<script src="sokoni-social.js" defer><\/script>
+<script src="sokoni-referral.js" defer><\/script>
+  <script defer src="kass-widget.js"><\/script>
 </body></html>`;
     const _blob = new Blob([html], {type:'text/html'}); const _url = URL.createObjectURL(_blob); window.open(_url,'_blank'); setTimeout(()=>URL.revokeObjectURL(_url),15000);
   }
@@ -3064,20 +3069,20 @@ Both parties should retain a signed copy of this agreement.
   function printAgreement(){
     const text = document.getElementById("agreementText")?.value;
     if(!text){ showNotif("Generate agreement first","error"); return; }
-    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"></script>
-<script src="auth-guard.js"></script><meta charset="UTF-8"><title>Tenancy Agreement</title>
+    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"><\/script>
+<script src="auth-guard.js"><\/script><meta charset="UTF-8"><title>Tenancy Agreement</title>
     <style>
       body{font-family:'Courier New',monospace;padding:40px;color:#111;font-size:11.5px;line-height:1.9;max-width:760px;margin:0 auto;}
       pre{white-space:pre-wrap;word-wrap:break-word;}
       @media print{body{padding:20px;}}
-    </style><script src="shared-header.js" defer></script>
+    </style><script src="shared-header.js" defer><\/script>
 </head>
     <body>
 <pre>${text.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
 
-<script src="sokoni-audit.js" defer></script>
-  <script defer src="kass-widget.js"></script>
+<script src="sokoni-audit.js" defer><\/script>
+  <script defer src="kass-widget.js"><\/script>
 </body></html>`;
     const _blob2 = new Blob([html], {type:'text/html'}); const _url2 = URL.createObjectURL(_blob2); window.open(_url2,'_blank'); setTimeout(()=>URL.revokeObjectURL(_url2),15000);
   }
@@ -3117,16 +3122,16 @@ Both parties should retain a signed copy of this agreement.
   function printSavedAgreement(ref){
     const a = getAgreements().find(x=>x.ref===ref);
     if(!a) return;
-    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"></script>
-<script src="auth-guard.js"></script><meta charset="UTF-8"><title>Tenancy Agreement — ${a.tName}</title>
+    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"><\/script>
+<script src="auth-guard.js"><\/script><meta charset="UTF-8"><title>Tenancy Agreement — ${a.tName}</title>
     <style>body{font-family:'Courier New',monospace;padding:40px;font-size:11.5px;line-height:1.9;max-width:760px;margin:0 auto;}pre{white-space:pre-wrap;word-wrap:break-word;}@media print{body{padding:20px;}}</style>
-    <script src="shared-header.js" defer></script>
+    <script src="shared-header.js" defer><\/script>
 </head><body>
 <pre>${a.agreementText.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</pre>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
 
-<script src="sokoni-audit.js" defer></script>
-  <script defer src="kass-widget.js"></script>
+<script src="sokoni-audit.js" defer><\/script>
+  <script defer src="kass-widget.js"><\/script>
 </body></html>`;
     const _blob3 = new Blob([html], {type:'text/html'}); const _url3 = URL.createObjectURL(_blob3); window.open(_url3,'_blank'); setTimeout(()=>URL.revokeObjectURL(_url3),15000);
   }
@@ -3195,12 +3200,12 @@ Both parties should retain a signed copy of this agreement.
     if(!unit) return;
     const bill = (unit.waterBills||[]).find(b=>b.month===month);
     if(!bill){ showNotif("No bill for this month","error"); return; }
-    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"></script>
-<script src="auth-guard.js"></script><meta charset="UTF-8"><title>Water Bill</title>
+    const html = `<!DOCTYPE html><html data-require-auth="true"><head><script src="security.js"><\/script>
+<script src="auth-guard.js"><\/script><meta charset="UTF-8"><title>Water Bill</title>
     <style>body{font-family:Arial,sans-serif;padding:40px;max-width:600px;margin:0 auto;color:#111;}
     .header{text-align:center;margin-bottom:30px;}.amount{font-size:28px;font-weight:900;color:#0066cc;text-align:center;margin:20px 0;}
     table{width:100%;border-collapse:collapse;margin:16px 0;}td{padding:10px 0;border-bottom:1px solid #eee;}td:last-child{text-align:right;font-weight:700;}
-    @media print{body{padding:20px;}}</style><script src="shared-header.js" defer></script>
+    @media print{body{padding:20px;}}</style><script src="shared-header.js" defer><\/script>
 </head><body>
     <div class="header"><h1>💧 Water Bill</h1><h2>${prop?.name||"Property"}</h2></div>
     <table>
@@ -3216,8 +3221,8 @@ Both parties should retain a signed copy of this agreement.
     <p style="text-align:center;">Pay via M-Pesa: ${prop?.phone||"[Landlord Phone]"}</p>
     <p style="text-align:center;color:#999;font-size:12px;">Status: ${bill.paid?"PAID ✅":"PENDING ⏳"}</p>
     <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
-    <script src="sokoni-audit.js" defer></script>
-  <script defer src="kass-widget.js"></script>
+    <script src="sokoni-audit.js" defer><\/script>
+  <script defer src="kass-widget.js"><\/script>
 </body></html>`;
     const bl = new Blob([html],{type:'text/html'}); const u2 = URL.createObjectURL(bl); window.open(u2,'_blank'); setTimeout(()=>URL.revokeObjectURL(u2),15000);
   }

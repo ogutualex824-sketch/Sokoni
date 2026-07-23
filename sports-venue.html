@@ -234,7 +234,11 @@ function renderBook(el) {
       ${HOURS.map(h=>{
         const taken = bookedSlots.includes(h);
         const sel = selectedSlots.includes(h) && !taken;
-        return `<button class="vn-slot${taken?' booked':sel?' selected':''}" onclick="${taken?'':'toggleSlot(\\''+h+'\\')'}">${h}${taken?'<br><span style="font-size:8px;">Booked</span>':''}</button>`;
+        /* \' not \\' — inside a template literal \\ is an escaped backslash, so
+           the quote that followed CLOSED the string and the expression failed to
+           parse ("Missing } in template expression"), killing the whole block.
+           The onclick attribute is delimited by ", so a plain ' is valid here. */
+        return `<button class="vn-slot${taken?' booked':sel?' selected':''}" onclick="${taken?'':'toggleSlot(\''+h+'\')'}">${h}${taken?'<br><span style="font-size:8px;">Booked</span>':''}</button>`;
       }).join('')}
     </div>
     ${selectedSlots.length ? `

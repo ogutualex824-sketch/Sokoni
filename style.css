@@ -14970,7 +14970,12 @@ input[type="search"],
   border: 1px solid rgba(255,255,255,0.1) !important;
   border-radius: 14px !important;
   color: white !important;
-  font-size: 14px !important;
+  /* 16px, not 14px. iOS Safari auto-zooms the viewport when a focused text
+     control is under 16px and will not zoom back out. This selector is BOTH
+     `!important` and class+element specific, so it outranked every 16px floor
+     in premium.css / mobile.css / sokoni-responsive.css — every search bar on
+     the platform zoomed on tap. Measured on car-hub.html and mechanics.html. */
+  font-size: 16px !important;
   font-family: inherit !important;
   outline: none !important;
   box-sizing: border-box !important;

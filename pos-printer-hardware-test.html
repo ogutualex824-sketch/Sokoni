@@ -39,6 +39,11 @@ main{max-width:860px;margin:0 auto;padding:24px 16px}
 /* Step cards */
 .step{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
 .step-header{padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;user-select:none}
+/* This page loads none of the shared stylesheets, so it misses the platform's
+   16px floor. iOS Safari zooms the viewport on focus for any text control under
+   16px and will not zoom back out — awkward on a tool used one-handed next to a
+   printer. Checkboxes/radios are excluded: they never trigger the zoom. */
+input:not([type="checkbox"]):not([type="radio"]),select,textarea{font-size:16px}
 .step-num{width:28px;height:28px;border-radius:50%;background:var(--bg3);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--txt2);flex-shrink:0}
 .step-num.pass{background:var(--pass);border-color:var(--pass);color:#000}
 .step-num.fail{background:var(--fail);border-color:var(--fail);color:#fff}
@@ -147,13 +152,13 @@ td.warn{color:var(--warn)}
     <label style="display:flex;align-items:center;gap:8px;color:var(--txt2)">
       Chunk size (bytes)
       <input id="cfg-chunk" type="number" min="20" max="512" value="128"
-        style="width:72px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--txt);font-family:inherit;font-size:12px"
+        style="width:84px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--txt);font-family:inherit;font-size:16px"
         onchange="state.chunkSize=Math.max(20,Math.min(512,parseInt(this.value)||128));this.style.borderColor='var(--acc)'">
     </label>
     <label style="display:flex;align-items:center;gap:8px;color:var(--txt2)">
       Inter-packet delay (ms)
       <input id="cfg-delay" type="number" min="0" max="500" value="60"
-        style="width:72px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--txt);font-family:inherit;font-size:12px"
+        style="width:84px;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:4px 8px;color:var(--txt);font-family:inherit;font-size:16px"
         onchange="state.chunkDelay=Math.max(0,Math.min(500,parseInt(this.value)||60));this.style.borderColor='var(--acc)'">
     </label>
     <label style="display:flex;align-items:center;gap:8px;color:var(--txt2)">

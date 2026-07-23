@@ -137,6 +137,11 @@ body{font-family:'Inter','Segoe UI',system-ui,sans-serif;background:var(--bg);co
 </head>
 <body>
 <script src="splash.js"></script>
+<!-- Required: the analytics block below calls SokoniCommission.pct("food_delivery").
+     Without this the page threw "SokoniCommission is not defined" and the whole
+     analytics render died. Commission rates must come from this generated
+     snapshot of functions/commission-config.js — never a hardcoded local rate. -->
+<script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-food.js"></script>
 
 <nav class="fn">
@@ -382,7 +387,7 @@ function editItem(itemId) {
       <div><label class="fd-label">Price (KES)</label><input id="miPrice" class="fd-input" type="number" value="${Number(item.price||0)}"></div>
       <div><label class="fd-label">Emoji</label><input id="miEmoji" class="fd-input" value="${esc(item.emoji||'')}"></div>
     </div>
-    <label class="fd-label">Description</label><input id="miDesc" class="fd-input" value="${esc(item.desc||'')}">`
+    <label class="fd-label">Description</label><input id="miDesc" class="fd-input" value="${esc(item.desc||'')}">
     <button class="fd-submit-btn" onclick="saveItem('${itemId}')">Save Changes</button>
     <div id="miMsg" style="font-size:12px;margin-top:8px;min-height:14px;"></div>
   `);
@@ -515,7 +520,11 @@ function renderAnalytics() {
   /* Build real daily revenue from Firestore-loaded _vendorOrders */
   const days7 = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
   const today7 = new Date().getDay(); /* 0=Sun */
-  const reorder = [...Array(7)].map((_,i)=>days7[(today7-7+i+7)%7]);
+  /* The second `const reorder` that stood here re-declared the one above — a
+     SyntaxError that killed this whole block. It was also WRONG: its offset
+     (today7-7+i) resolves to today+i, labelling the chart forwards from today,
+     whereas dayRev below derives targetDay as (today7-6+di), i.e. the last 7
+     days. Keeping the earlier declaration makes the labels match the data. */
   const dayRev = reorder.map((_, di) => {
     const targetDay = (today7 - 6 + di + 7) % 7;
     return orders.filter(o => {

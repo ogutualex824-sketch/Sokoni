@@ -868,9 +868,15 @@ async function runSecurityChecks() {
   /* 4. XSS protection */
   check('XSS sanitization via _escH()',
     () => {
-      const xss = '<script>alert(1)</script>';
+      /* The closing tag must be written with an escaped slash. The HTML parser
+         ends the surrounding block at the first literal closing script tag even
+         inside a JS string or a comment, so this test case was truncating the
+         whole inline script and throwing "Invalid or unexpected token" — no
+         commissioning check ran at all. Escaped, it is the same string to JS
+         but invisible to the HTML parser. */
+      const xss = '<script>alert(1)<\/script>';
       const escaped = xss.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return escaped === '&lt;script&gt;alert(1)&lt;/script&gt;';
+      return escaped === '&lt;script&gt;alert(1)&lt;\/script&gt;';
     },
     'All dynamic HTML uses _escH() / _esc() escape helper — no innerHTML from raw user input'
   );

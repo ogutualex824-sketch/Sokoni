@@ -420,10 +420,15 @@ function updateListing(id){
 window.updateListing = updateListing;
 
 function markSold(id){
+  /* The _skConfirm(...) call was never closed: the lone `}` below shut the
+     callback but left both the call's paren and markSold's own brace open, so
+     the block failed to parse ("missing ) after argument list") and NO script
+     on this dashboard ran. */
   _skConfirm('Mark this listing as sold/rented?',function(){
-  P.updateListing(id,{status:'sold'});
-  renderTab('listings');
-  (window._skToast||alert)('✅ Listing marked as sold/rented.');
+    P.updateListing(id,{status:'sold'});
+    renderTab('listings');
+    (window._skToast||alert)('✅ Listing marked as sold/rented.');
+  });
 }
 window.markSold=markSold;
 

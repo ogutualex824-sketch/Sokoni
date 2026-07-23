@@ -497,7 +497,10 @@ function timeAgo(ts){
   return Math.floor(d/86400000)+"d ago";
 }
 
-function _esc(s){ return String(s||"").replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
+/* _esc is already defined at the top of this same script block; re-declaring it
+   here as a function threw "Identifier '_esc' has already been declared", which
+   is a SyntaxError — the ENTIRE block failed to parse, so nothing on this page
+   ran at all. The surviving const above escapes the same five characters. */
 
 function renderList(list){
   const el      = document.getElementById("rqList");
