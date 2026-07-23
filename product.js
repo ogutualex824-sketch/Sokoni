@@ -11,6 +11,38 @@ if(_urlId && String(product?.id) !== String(_urlId)){
     }catch(e){}
 }
 
+/* ── Firestore fallback ────────────────────────────────────────────────────
+   Until now this page resolved the product ONLY from localStorage — selectedProduct
+   (seeded by openProduct on a feed tap) then the seller's own sellerProducts. Any
+   arrival with a ?id the device had not already cached could not resolve and fell
+   straight to "Product Not Found": search results, recommendations, category pages,
+   shared links, deep links, QR codes, a fresh session, another device. Firestore is
+   the canonical source; fetch the product document by id, cache it, and let the
+   existing synchronous render run on reload. Only a genuine miss (or an offline
+   failure) reaches the Not Found state now. */
+var _prdFetching = false;
+if(_urlId && String(product && product.id) !== String(_urlId)){
+    product = null;                 /* never render a stale / mismatched cached product */
+    _prdFetching = true;
+    (async function(){
+        try{
+            var _m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+            var _snap = await _m.getDoc(_m.doc(_m.getFirestore(), 'products', String(_urlId)));
+            if(_snap.exists()){
+                localStorage.setItem('selectedProduct', JSON.stringify(Object.assign({ id: _snap.id }, _snap.data())));
+                location.reload();  /* the synchronous path above now resolves it from cache */
+                return;
+            }
+        }catch(e){ /* network/offline — fall through to Not Found */ }
+        /* Every source failed. Replace the skeleton with the real Not Found. */
+        try{
+            var _c = document.getElementById('productPageContainer');
+            if(_c) _c.innerHTML = '<h1 style="color:white;text-align:center;padding:100px;">Product Not Found &#128546;</h1>';
+            var _sk = document.getElementById('productSkeleton'); if(_sk) _sk.remove();
+        }catch(_){}
+    })();
+}
+
 /* Set page title, meta and JSON-LD dynamically */
 if(product){
     document.title = `${product.name} — KES ${Number(product.price).toLocaleString()} | SOKONI`;
@@ -187,9 +219,15 @@ const container = document.getElementById(
 /* SAFETY CHECK */
 
 var _skEl = document.getElementById('productSkeleton');
-if(_skEl) _skEl.remove();
+/* Keep the skeleton up while the Firestore fallback resolves the id — it reloads
+   on success or reveals Not Found on failure. Removing it here would flash
+   "Product Not Found" for a product that very likely exists. */
+if(!_prdFetching && _skEl) _skEl.remove();
 
-if(!product){
+if(_prdFetching){
+    /* The async Firestore fallback owns the outcome for this id. Do nothing. */
+}
+else if(!product){
 
     container.innerHTML = `
 
