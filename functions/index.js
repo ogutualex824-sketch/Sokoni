@@ -2199,7 +2199,7 @@ exports.createCheckoutSession = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-    const { cartItems, deliveryFee } = request.data || {};
+    const { cartItems, deliveryFee, promoCode } = request.data || {};
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       throw new HttpsError("invalid-argument", "cartItems must be a non-empty array.");
     }
@@ -2273,7 +2273,51 @@ exports.createCheckoutSession = onCall(
 
     /* Cap delivery fee at KES 5,000 to prevent inflated totals */
     const safeDeliveryFee = Math.max(0, Math.min(5000, Math.round(Number(deliveryFee) || 0)));
-    const serverTotal     = Math.round(serverSubtotal + safeDeliveryFee);
+
+    /* ── Promo code ────────────────────────────────────────────────────────────
+       checkout.html used to hold its own hardcoded map of codes (SAVE5/SAVE10/
+       MEGA20) and subtract the discount from the figure it DISPLAYED. This
+       function knew nothing about any of it, so serverTotal — the amount actually
+       charged — never included the discount and the buyer was billed more than
+       they were quoted.
+
+       The discount is now decided HERE, by validatePromoCode in finos-utils: the
+       one validator that already checks active state, the date window, usage and
+       per-user limits, minimum order value and category, and caps the amount. A
+       client-supplied code is only ever an input to that check — the client can
+       never assert a discount, only name a code. An invalid or expired code is
+       ignored rather than fatal, so a bad code can never block a real purchase;
+       the buyer is told via promoError and simply pays full price. */
+    let promoDiscount = 0;
+    let promoApplied  = null;
+    let promoError    = null;
+    const _promoCode = String(promoCode || "").trim().toUpperCase();
+    if (_promoCode) {
+      try {
+        const { validatePromoCode } = require('./finos-utils');
+        const _res = await validatePromoCode(db, {
+          code:             _promoCode,
+          buyerUid:         request.auth.uid,
+          orderAmountCents: Math.round(serverSubtotal * 100),
+        });
+        if (_res.valid) {
+          /* Never let a discount exceed the goods value — delivery is still owed. */
+          promoDiscount = Math.min(
+            Math.round((_res.discountCents || 0) / 100),
+            Math.round(serverSubtotal)
+          );
+          promoApplied = { code: _res.promoCode, promoId: _res.promoId, discount: promoDiscount };
+        } else {
+          promoError = _res.error || "Promo code could not be applied";
+        }
+      } catch (e) {
+        /* A promo lookup failure must never take down checkout. */
+        console.error("[createCheckoutSession] promo validation failed:", e);
+        promoError = "Promo code could not be verified";
+      }
+    }
+
+    const serverTotal = Math.max(0, Math.round(serverSubtotal + safeDeliveryFee - promoDiscount));
 
     if (serverTotal < 1) {
       throw new HttpsError("invalid-argument", "Cart total is too low.");
@@ -2289,6 +2333,9 @@ exports.createCheckoutSession = onCall(
       items:       sessionItems,
       serverTotal,
       deliveryFee: safeDeliveryFee,
+      promoCode:   promoApplied ? promoApplied.code : null,
+      promoId:     promoApplied ? promoApplied.promoId : null,
+      promoDiscount,
       status:      "pending",
       expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt:   admin.firestore.FieldValue.serverTimestamp(),
@@ -2300,6 +2347,11 @@ exports.createCheckoutSession = onCall(
       serverTotal,
       itemCount:       sessionItems.length,
       outOfStockItems: outOfStockItems.length > 0 ? outOfStockItems : undefined,
+      /* So the page can show the discount it actually received, and explain a
+         code that was rejected, instead of asserting a discount of its own. */
+      promoApplied:    promoApplied || undefined,
+      promoDiscount:   promoDiscount || undefined,
+      promoError:      promoError || undefined,
     };
   }
 );

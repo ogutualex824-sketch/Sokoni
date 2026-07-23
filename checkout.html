@@ -1567,6 +1567,9 @@ let orderTotal = 0;
    UI shows the amount the buyer will actually be charged, not the discounted
    figure we could not honour. */
 let _serverTotalOverride = null;
+/* The promo code the buyer typed. Only ever a NAME sent to the server — the
+   discount itself is decided by validatePromoCode inside createCheckoutSession. */
+let _appliedPromoCode = null;
 let _impactAmt = 100; /* default contribution */
 
 function _updateImpactRow() {
@@ -2143,7 +2146,13 @@ async function sendStkPush(){
         qty:       Math.max(1, Math.round(Number(i.qty) || Number(i.quantity) || 1)),
       })).filter(i => i.productId);
 
-      const sessionRes = await createSession({ cartItems: cartForSession, deliveryFee: deliveryFee || 0 });
+      const sessionRes = await createSession({
+        cartItems:   cartForSession,
+        deliveryFee: deliveryFee || 0,
+        /* A NAME, not a discount. The server validates it and folds any discount
+           into serverTotal — the client cannot assert a price reduction. */
+        promoCode:   _appliedPromoCode || undefined,
+      });
       _sessionId = sessionRes.data.sessionId;
       stkAmount  = sessionRes.data.serverTotal;
 
@@ -2160,15 +2169,41 @@ async function sendStkPush(){
          and require a second, informed tap. The opposite case (platform fee,
          Impact contribution) charges LESS than quoted, harms nobody, and must keep
          working — a symmetric "totals must match" check would break it. */
-      if (stkAmount > orderTotal + 1) {
-        _serverTotalOverride = stkAmount;
-        updateTotals();
+      const _quoted = orderTotal;
+
+      /* The server's figure is the truth, in both directions — it now includes any
+         validated promo discount. Adopt it everywhere the total is shown so the
+         page can never display one price while charging another. */
+      _serverTotalOverride = stkAmount;
+      updateTotals();
+
+      /* Tell the buyer if the code they typed was refused, and why. */
+      const _pErr = sessionRes.data.promoError;
+      const _pOk  = sessionRes.data.promoApplied;
+      const _dMsg = document.getElementById("discountMsg");
+      if (_dMsg && _appliedPromoCode) {
+        if (_pOk) {
+          _dMsg.innerHTML = `✅ <strong>${_esc(_pOk.code)}</strong> applied — you save KES ` +
+            Number(_pOk.discount || 0).toLocaleString();
+          _dMsg.style.color = "#71ff00";
+        } else if (_pErr) {
+          _dMsg.textContent = "❌ " + _pErr;
+          _dMsg.style.color = "#ff6b6b";
+        }
+      }
+
+      /* Only the harmful direction needs consent. If the server wants MORE than we
+         quoted, stop and make the buyer tap again at the real price. Charging LESS
+         than quoted (platform fee, Impact contribution, an applied discount) harms
+         nobody, so it proceeds — a symmetric check would break those flows. */
+      if (stkAmount > _quoted + 1) {
         btn.disabled  = false;
         btn.innerHTML = '🔒 Pay KES ' + stkAmount.toLocaleString();
         showPushToast(
           "⚠️ Price updated",
-          "A discount on this order could not be applied. The total is KES " +
-            stkAmount.toLocaleString() + ". Tap Pay to continue at this price.",
+          (_pErr ? _pErr + ". " : "A discount on this order could not be applied. ") +
+            "The total is KES " + stkAmount.toLocaleString() +
+            ". Tap Pay to continue at this price.",
           "orange"
         );
         return;
@@ -2992,27 +3027,24 @@ function applyDiscount(){
   const code   = (codeEl?.value||"").trim().toUpperCase();
   if(!code){ if(msgEl){ msgEl.textContent="Enter a discount code."; msgEl.style.color="#ff6b6b"; } return; }
 
-  /* Check seller promo codes */
-  let codes = [];
-  try { codes = JSON.parse(localStorage.getItem("sokoniPromoCodes"))||[]; } catch(e){}
-  let found = codes.find(c => c.code===code && c.expiresAt>Date.now());
+  /* This used to decide the discount right here, from a hardcoded map
+     ({SAVE5:5, SAVE10:10, MEGA20:20, FREEDEL:0}) plus a localStorage list, and
+     subtract it from the DISPLAYED total. createCheckoutSession knew nothing
+     about any of it, so the amount actually charged never included the discount
+     and the buyer was billed more than the price they had been shown.
 
-  /* Also check loyalty redemption codes (SAVE5, SAVE10, MEGA20, FREEDEL) */
-  const loyaltyCodes = { "SAVE5":5, "SAVE10":10, "MEGA20":20, "FREEDEL":0 };
-  if(!found && loyaltyCodes[code] !== undefined){
-    found = { code, discount: loyaltyCodes[code], uses:0, expiresAt:Date.now()+99999999 };
-    if(code === "FREEDEL"){ deliveryFee = 0; }
+     The client no longer asserts a discount — it only names a code. The code
+     travels with the checkout session and is validated server-side by
+     validatePromoCode (active state, date window, usage and per-user limits,
+     minimum order value, category, capped amount), and the discount comes back
+     inside the authoritative serverTotal. A code that does not exist server-side
+     is not a real code, so there is nothing left to check locally. */
+  _appliedPromoCode = code;
+  promoDiscount = 0;   /* never guess — the server decides and reports back */
+  if(msgEl){
+    msgEl.innerHTML = `🔒 <strong>${_esc(code)}</strong> will be verified and applied at payment.`;
+    msgEl.style.color = "rgba(255,255,255,0.7)";
   }
-
-  if(!found){
-    if(msgEl){ msgEl.textContent="❌ Invalid or expired code."; msgEl.style.color="#ff4444"; }
-    return;
-  }
-  promoDiscount = found.discount;
-  found.uses = (found.uses||0)+1;
-  localStorage.setItem("sokoniPromoCodes", JSON.stringify(codes));
-  const saving = Math.round(subtotal * promoDiscount/100);
-  if(msgEl){ msgEl.innerHTML=`✅ <strong>${_esc(found.code)}</strong> applied — ${promoDiscount > 0 ? promoDiscount+"% off (save KES "+saving.toLocaleString()+")" : "Free delivery applied!"}`;  msgEl.style.color="#71ff00"; }
   updateTotals();
 }
 

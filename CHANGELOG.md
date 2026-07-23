@@ -1,4 +1,61 @@
-﻿## [2026-07-24] — fix(checkout): a buyer using a promo code was charged more than they were quoted
+﻿## [2026-07-24] — feat(checkout): promo codes are now real — validated server-side and inside the charged total
+
+Completes the previous entry. That change stopped the buyer being *overcharged*;
+this one makes the discount actually happen.
+
+**Nothing new was built.** A full promo system already existed and was simply not
+wired to checkout: the `promotions` collection, `createPromotion` (admin),
+`promotionUsage`, ledger attribution with platform/seller funding splits, and
+`validatePromoCode` in `finos-utils` — which already checks active state, the
+start/end window, global usage limit, per-user limit, minimum order value and
+category, and caps the discount. Per the Platform Constitution (extend, don't
+rebuild) that validator is now the single decider.
+
+**Server — `createCheckoutSession`:**
+- accepts an optional `promoCode` (a NAME, never an amount),
+- calls `validatePromoCode` with `orderAmountCents = serverSubtotal * 100`,
+- subtracts the validated discount, clamped so it can never exceed the goods
+  value — delivery is still owed — giving
+  `serverTotal = serverSubtotal + safeDeliveryFee − promoDiscount`,
+- persists `promoCode` / `promoId` / `promoDiscount` on the checkout session,
+- returns `promoApplied` / `promoDiscount` / `promoError`.
+
+An invalid, expired or exhausted code is **ignored, never fatal** — a bad code
+can never block a real purchase; the buyer is told and pays full price. A promo
+lookup that throws is caught for the same reason.
+
+**Client — `checkout.html`:** `applyDiscount()` no longer decides anything. The
+hardcoded `{SAVE5:5, SAVE10:10, MEGA20:20, FREEDEL:0}` map and the localStorage
+code list are gone. It captures the typed code into `_appliedPromoCode`, sends it
+with the session, and renders whatever the server reports. The displayed total now
+adopts `serverTotal` in **both** directions, so the page can never show one price
+and charge another; the re-tap prompt still fires only when the server wants MORE
+than quoted.
+
+Because the client can only name a code and never assert a price reduction, a
+crafted request cannot manufacture a discount — the only thing it can do is
+propose a code the server then validates.
+
+Verified in Chromium: a 2 × KES 1,000 cart quotes KES 2,000; typing `MEGA20` now
+leaves the total at KES 2,000 (previously it dropped to KES 1,600 while still
+charging 2,000) and reports "will be verified and applied at payment"; a server
+total of KES 1,800 reconciles every displayed amount. No page errors.
+`predeploy-syntax-gate` 1031 files parse; `test-payment-authority` 22 passed /
+0 failed.
+
+Deployment: `createCheckoutSession` is an EXISTING deployed function, so this is
+an update rather than a new function and does not consume Cloud Run function
+quota. Until it is deployed the server simply ignores `promoCode` and charges
+full price — which the client now also displays, so the two never disagree.
+
+Still not honoured: **loyalty point redemption**, which diverges the same way.
+`loyaltyCheckoutOrchestrate` / `loyaltyPreflightCheck` exist in
+`loyalty-enterprise.js` and are the obvious next wiring; until then the guard
+keeps the buyer from being charged above the displayed price.
+
+Files affected: `functions/index.js`, `checkout.html`.
+
+## [2026-07-24] — fix(checkout): a buyer using a promo code was charged more than they were quoted
 
 **The defect.** `orderTotal` — the figure shown in the summary, on the pay button
 and beside every payment method — subtracts promo and loyalty discounts and adds
