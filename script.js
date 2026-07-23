@@ -848,7 +848,11 @@ function openProduct(id){
     if(!p) return;
     localStorage.setItem("selectedProduct", JSON.stringify(p));
     if(typeof sokoniTrackProductView === "function") sokoniTrackProductView(p);
-    window.location.href = "product.html";
+    /* Include the canonical id in the URL, not just the localStorage cache. The
+       cache makes the first render instant; the ?id makes the page shareable,
+       refreshable and deep-linkable — on any of those the product.js Firestore
+       fallback resolves it even when selectedProduct is absent. */
+    window.location.href = "product.html?id=" + encodeURIComponent(id);
 }
 
 window.openProduct = openProduct;
