@@ -247,7 +247,7 @@
     { i:'📋',  l:'Inventory',    h:'inventory.html',           cat:'core'  },
     { i:'📈',  l:'Analytics',    h:'seller-analytics.html',    cat:'grow'  },
     { i:'📣',  l:'Marketing',    h:'seller.html#marketing',    cat:'grow'  },
-    { i:'⚡',  l:'Flash Sales',  h:'flash-sales.html',         cat:'grow'  },
+    { i:'⚡',  l:'Flash Sales',  h:'seller.html#flash',        cat:'grow'  },
     { i:'🎁',  l:'Loyalty',      h:'loyalty-merchant.html',    cat:'grow'  },
     { i:'🏪',  l:'MiniShop',     h:'minishop-admin.html',      cat:'grow'  },
     { i:'💳',  l:'Payments',     h:'seller.html#payments',     cat:'money' },
@@ -261,7 +261,7 @@
     { i:'🗓️', l:'Availability', h:'availability-manager.html', cat:'tools' },
     { i:'🔴',  l:'Live Dashboard',h:'seller.html#live',        cat:'tools' },
     { i:'👥',  l:'Customers',    h:'seller.html#customers',    cat:'tools' },
-    { i:'⚙️', l:'Settings',     h:'seller.html#settings',     cat:'tools' }
+    { i:'⚙️', l:'Settings',     h:'account-centre.html',      cat:'tools' }
   ];
 
   var _SUBNAV_CATS = [

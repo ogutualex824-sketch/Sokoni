@@ -1,4 +1,70 @@
-﻿## [2026-07-22] — BLOCKED: seller upload fix built, not deployed
+﻿## [2026-07-23] — fix(checkout): premium order-summary cards + quantity-aware subtotal
+
+Reworked the checkout Order Summary line items to match the premium card
+treatment already used on the cart and wishlist pages, and fixed a
+quantity-related display defect surfaced while doing so.
+
+Layout / UI (`checkout.html`):
+- Each `.os-item` is now a bordered, padded card (rgba surface + hover accent)
+  instead of a bare flex row, so the summary reads as premium and the image no
+  longer visually dominates two lines of text.
+- Product thumbnail reduced from 56×56 to a tidy 48×48 with its own border/bg,
+  proportionate to the denser right-hand summary column.
+- Line items now show the product **category** and a **×qty** chip when quantity
+  is greater than one, matching the information density of the cart cards.
+
+Bug fix (`checkout.html`):
+- The displayed subtotal summed `item.price` **without** multiplying by `qty`,
+  so a buyer with quantity > 1 saw a subtotal (and derived M-Pesa fee / promo /
+  platform-fee / total estimates) **lower** than the amount actually charged.
+  The charge itself was already correct (server-authoritative `serverTotal` from
+  `createCheckoutSession`, which receives per-line `qty`); only the client-side
+  display diverged. Subtotal now computes `price × qty` per line, so the shown
+  total matches the charged total.
+
+Security: unchanged — all user strings remain HTML-escaped via `_esc` before
+insertion; category is escaped the same way. No new inputs are trusted.
+Payments: no change to the authoritative charge path (still server-computed).
+Files affected: `checkout.html`. No database, API, or breaking changes.
+
+## [2026-07-23] — fix(seller-nav): stop content pages ejecting logged-in users home + repair two dead menu links
+
+**Root cause of "Inventory opens the home page" (desktop + mobile).**
+`auth.js`'s `_alreadyLoggedInGuard` redirects an already-signed-in user to
+`index.html` on `DOMContentLoaded`. It is meant only for the login/signup forms,
+but it had no page gate, and `auth.js` is also included on six content pages:
+`inventory.html`, `inv-products.html`, `inv-product.html`, `inv-dashboard.html`,
+`inv-ai.html`, `marketing-hub.html`. On every one of those, a logged-in seller
+was bounced to the home page the instant the page loaded. The Inventory *link*
+was correct all along — the destination page ejected the user home.
+
+Fix: gated the guard to run only when the current page is `login`/`signup`
+(matching both `.html` and cleanUrls forms), so `auth.js` can be safely included
+on any page without hijacking navigation.
+
+**Two dead links in the seller More drawer / sidebar** (`sokoni-nav-engine.js`
+`_SUBNAV`, which builds the mobile "More" menu and the desktop Seller Hub sidebar
+on all seller pages):
+
+- **Flash Sales** pointed to `flash-sales.html`, which does not exist (the real
+  file is `flashsale.html`, and that is the *buyer-facing* deals storefront, not
+  the seller's flash manager). Repointed to `seller.html#flash`, the in-dashboard
+  Flash Sale section — consistent with how Products/Orders/Marketing/Disputes
+  deep-link into `seller.html`.
+- **Settings** pointed to `seller.html#settings`; `settings` is not a valid page
+  key, so the router silently fell back to Overview — i.e. the button went "home".
+  Repointed to `account-centre.html`, the real account/settings hub.
+
+Audit scope: verified every internal route in `seller.html`
+(`showDashPage` / `sdSwitchTab`) resolves and all 23 external `.html` targets it
+links to exist on disk; the two dead links above were the only broken
+destinations in the seller nav menus.
+
+Files affected: `auth.js`, `sokoni-nav-engine.js`. No database, API, or security
+changes (the guard fix is strictly more restrictive — it never redirects on
+content pages now). No breaking changes.
+
+## [2026-07-22] — BLOCKED: seller upload fix built, not deployed
 
 `c5f383c` fixes a data-loss defect and **is not in production**. Production still
 serves the old `seller.js`; a merchant uploading a fifth product still sees

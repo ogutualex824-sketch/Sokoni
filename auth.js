@@ -48,6 +48,20 @@ window.onunhandledrejection = function(e) {
    (first load after hard-refresh, token refresh, etc.).
 ───────────────────────────────────────────────────────────────────────────── */
 (function _alreadyLoggedInGuard() {
+    /* CRITICAL: this guard bounces an already-signed-in user OFF the auth forms,
+       so it must run ONLY on login/signup. auth.js is also included on CONTENT
+       pages for its auth helpers (inventory.html, inv-products.html,
+       inv-product.html, inv-dashboard.html, inv-ai.html, marketing-hub.html).
+       Ungated, it redirected every logged-in visitor of those pages to
+       index.html on DOMContentLoaded — the reported "Inventory opens the home
+       page" bug: the link was correct, the destination page ejected the user
+       home. cleanUrls serves login.html as /login, so match both forms. */
+    var _page = (location.pathname.split('/').pop() || '').toLowerCase();
+    if (_page !== 'login.html' && _page !== 'login' &&
+        _page !== 'signup.html' && _page !== 'signup') {
+        return;
+    }
+
     function _redir() {
         var dest = sessionStorage.getItem('sokoniLoginRedirect') || 'index.html';
         sessionStorage.removeItem('sokoniLoginRedirect');
