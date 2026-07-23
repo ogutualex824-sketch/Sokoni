@@ -77,7 +77,12 @@ window.SokoniBetaGate = (() => {
     wrap.setAttribute('role', 'dialog');
     wrap.setAttribute('aria-modal', 'true');
     wrap.style.cssText = [
-      'position:fixed', 'inset:0', 'z-index:99998', 'display:flex',
+      /* Was a hardcoded z-index:99998 — BELOW the global header (--sk-z-header,
+         100001). This is a full-screen blocking gate, so per
+         docs/OVERLAY_ARCHITECTURE.md ("If it covers the header, it must out-rank
+         the header") it belongs on the sheet tier, not under the nav. At 99998
+         the header painted over it and its controls could be intercepted. */
+      'position:fixed', 'inset:0', 'z-index:var(--sk-z-sheet,100010)', 'display:flex',
       'align-items:flex-end', 'justify-content:center',
       'background:rgba(0,0,0,.62)', 'animation:skBetaFade .2s ease',
     ].join(';');

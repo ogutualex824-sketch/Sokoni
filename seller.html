@@ -4411,7 +4411,7 @@ class="notification-container"
        Those sections did not go away — they are in the Seller Tools grid in the body
        (#sdmToolsGrid), which is the same list the More drawer used to show. -->
   <a class="sdm-tab" href="/">🏠<span>Home</span></a>
-  <a class="sdm-tab" href="category.html?cat=all">🛍️<span>Market</span></a>
+  <a class="sdm-tab" href="category.html?cat=all">🛍️<span>Shop</span></a>
   <a class="sdm-tab" href="services.html">🛠️<span>Services</span></a>
   <button type="button" class="sdm-tab" id="sdmtab-orders" onclick="sdSwitchTab('orders')">
     🛒<span>Orders</span>
@@ -5723,12 +5723,12 @@ window.deleteSellerAccount=deleteSellerAccount;
   document.addEventListener('DOMContentLoaded', renderSellerBadges);
 })();
 </script>
-<nav class="bottom-nav">
+<nav class="bottom-nav" role="navigation" aria-label="Main navigation">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="requests.html" class="bnav-item"><span class="bnav-emoji">🔍</span><span>Requests</span></a>
-  <a href="profile.html" class="bnav-item active-bnav"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script>
 /* Nav state init */

@@ -1,4 +1,55 @@
-﻿## [2026-07-23] — fix(checkout+property): drop phantom M-Pesa fee, real payment logos, unbreak trust badge, fix category chips
+﻿## [2026-07-24] — fix(overlay+nav): beta gate could be covered by the header; finish bottom-nav standardisation
+
+**`sokoni-beta-gate.js` was a full-screen blocking gate at a hardcoded
+`z-index:99998` — below the global header (`--sk-z-header`, 100001).** Same
+defect class as the site-menu drawer fixed yesterday: per
+`docs/OVERLAY_ARCHITECTURE.md`, *"If it covers the header, it must out-rank the
+header."* A blocking gate the header can paint over is one a user may be unable
+to dismiss. Moved to the sheet tier, `var(--sk-z-sheet,100010)`.
+
+This was also the cause of BOTH failures in `scripts/test-overlays.js` — the
+"legacy overlays below the header ROSE from 212 to 213" counter was counting the
+beta gate. `test-overlays` now **PASSES (10 checks)**; it was failing before this
+change. (`admin.html`'s `.adm-lock-overlay` / `#firstRunPin2` are part of the
+pinned 212-item legacy baseline, not a regression, and are untouched.)
+
+**Bottom-nav standardisation completed.** Remaining pages moved to
+Home · Shop · Services · Orders · Profile:
+
+| Page | Was |
+|---|---|
+| `help.html` | Home·Shop·**Support·Messages**·Profile |
+| `support.html` | Home·Shop·**Help·Messages**·Profile |
+| `property-listing.html` | Home·Shop·Services·**Messages**·Profile |
+| `search.html` | Home·Shop·Services·**Messages**·Profile |
+| `revenue.html` | Home·**Seller·Analytics·Revenue**·Profile |
+| `sports-venue.html` | Home·**Sports·Tournaments·Venues**·Profile |
+| `sports-tournament.html` | Home·**Sports·Tournaments·Venues**·Profile |
+| `seller.html` | mobile tab bar said **"Market"** → "Shop" |
+
+Every `.bnav-item` bottom nav across the site now emits the same five
+destinations. Two non-bottom-nav components keep their contextual items by
+design: `search.html`'s own search tab bar and `sports-tournament.html`'s
+sub-nav.
+
+Files affected: `sokoni-beta-gate.js`, `help.html`, `support.html`,
+`property-listing.html`, `search.html`, `revenue.html`, `sports-venue.html`,
+`sports-tournament.html`, `seller.html`. No database, API, or payment changes.
+
+**Known issue, NOT fixed — needs a product decision.** Checkout displays
+`orderTotal` (which subtracts promo and loyalty discounts and adds the platform
+fee) but charges `serverTotal` from `createCheckoutSession`, which is only
+`serverSubtotal + safeDeliveryFee`. The server takes no promo/loyalty argument,
+so a buyer entering a client-side promo code (`SAVE5`/`SAVE10`/`MEGA20`) or
+redeeming loyalty points is shown a discount that is never applied to the
+charge. The charge itself is correctly server-authoritative
+(`stkAmount = serverTotal`), so this is not an exploit — but the buyer is quoted
+less than they pay. Fixing it means either honouring discounts server-side
+(validated, with atomic loyalty deduction) or withdrawing the inputs; both are
+product calls and a hard client-side block would break legitimate flows
+(platform fee, optional Impact contribution) that diverge the same way.
+
+## [2026-07-23] — fix(checkout+property): drop phantom M-Pesa fee, real payment logos, unbreak trust badge, fix category chips
 
 **Property category chips rendered on top of each other (mobile P1).**
 `.ph-cat-bar` in `property-hub.html` is `display:flex; overflow-x:auto`, but the
@@ -156,6 +207,42 @@ checkout.html qty defect fixed earlier does **not** exist here.
 Files affected: `sokoni-food.js`, `food-menu.html`, `cart.js`, `cart.html`.
 Security: order id is URL-encoded into the vendor CTA href; vendor name escaped
 via `_esc`. No database, API, or breaking changes.
+
+## [2026-07-23] — perf(search): 15.5s → 7.7s cold, 2.5s → 1.5s warm
+
+Measured on the deployed site after the correctness fixes below: results were
+correct but arrived **15.5s** after navigation. The paths ran in series, and the
+two that cannot answer today ran first — engine init (a cold-start Cloud
+Function call for the Algolia secured key) → the Algolia attempt (4.1s, ending
+in `Invalid Application-ID or API key`) → Typesense (1.6s, unreachable) → only
+then Firestore (1.7s), the path that actually holds the catalogue.
+
+Four changes, each backed by that profile:
+
+- **Firestore now runs in parallel with Algolia**, not after it. Algolia still
+  wins when it returns hits. Page 0 only — infinite-scroll pages stay an Algolia
+  concern.
+- **Firestore is consulted before Typesense.** It is the system of record and is
+  already in flight; waiting on a secondary index to then merge only adds
+  latency to an answer we already hold. Typesense runs only if Firestore is
+  genuinely empty, and is capped at 1.2s.
+- **Session circuit breakers.** An engine that throws a credential or transport
+  error will throw identically on the next keystroke, so it is skipped for the
+  rest of the session. A zero-hit result never trips a breaker — an index can
+  legitimately miss one query and answer the next.
+- **`skipFirestoreFallback`** — the engine's own Firestore fallback was doing the
+  same reads `search.html` then repeated, and the results were discarded. The
+  page now tells the engine not to bother.
+- The `?q=` bootstrap waited up to 3s for the deferred engine before starting
+  any search; reduced to 800ms now that Firestore no longer waits behind it.
+
+Verified live (3 cold runs, fresh browser context each): 12.8s / 7.6s / 7.7s —
+median **7.7s**; typed queries **1.5–2.0s** (`mint` 5, `vape` 19, `kass vapes`
+13, `toyota` 2). The remaining cold cost is page load plus Firebase/App Check
+initialisation (~2s to DOM-ready, the rest before the first Firestore read
+succeeds) — platform-wide, not specific to search.
+
+Files affected: `search.html`, `sokoni-search-engine.js`. Hosting deploy only.
 
 ## [2026-07-23] — fix(search): Algolia client never reached the index — two request-layer defects
 

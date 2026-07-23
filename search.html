@@ -667,8 +667,6 @@
 
 <!-- ===== FIREBASE + SEARCH LOGIC ===== -->
 <script type="module">
-import { collection, query, where, limit, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
 /* ── Firestore handle ──
    This page used to call initializeApp(FB, "search-page") and read through that
    private app. App Check is configured in exactly one place — firebase.js:111 —
@@ -686,6 +684,13 @@ import { collection, query, where, limit, orderBy, getDocs } from "https://www.g
    defect — tracked separately, not changed here. */
 import { db } from "./firebase.js";
 
+/* Firestore fallback search — the single implementation shared with
+   sokoni-search-engine.js. It carries the where() clauses firestore.rules
+   requires for each collection (a list query without them is denied outright),
+   searches sellers so a store is findable by name, and applies the platform
+   visibility contract. See sokoni-firestore-search.js for the full rationale. */
+import { firestoreSearch } from "./sokoni-firestore-search.js";
+
 /* ── Tab definitions ── */
 const TABS = [
   { id: "all",           label: "All",           icon: "✨" },
@@ -699,167 +704,9 @@ const TABS = [
   { id: "professionals", label: "Professionals",  icon: "👷" },
 ];
 
-/* ── Per-collection Firestore query modifiers.
-   Each returns a Firebase Query — limit(200) on all to prevent unbounded reads. ── */
-const _q = (col, ...constraints) => query(col, ...constraints, limit(200));
-
-/* ── Collection specs ── */
-const COLLECTIONS = [
-  {
-    name: "products",
-    tab: "products",
-    icon: "🛍️",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => d.category || d.sellerName || "",
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
-    getLink:     (d, id) => "product.html?id=" + id,
-  },
-  {
-    name: "services",
-    tab: "services",
-    icon: "🔧",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || d.title || "",
-    getSubtitle: d => d.category || d.providerName || "",
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
-    getLink:     (d, id) => "services.html?id=" + id,
-  },
-  {
-    name: "digitalJobs",
-    tab: "jobs",
-    icon: "💼",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => d.category || d.posterName || "",
-    getLocation: d => d.location || "",
-    getPrice:    d => d.budget != null ? "KES " + Number(d.budget).toLocaleString() : null,
-    getLink:     (d, id) => "opportunity.html?id=" + id,
-  },
-  {
-    name: "applications",
-    tab: "jobs",
-    icon: "📋",
-    buildQuery: col => _q(col, where("status", "==", "open")),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => d.category || d.type || "Job",
-    getLocation: d => d.location || "",
-    getPrice:    d => d.salary != null ? "KES " + Number(d.salary).toLocaleString() : null,
-    getLink:     (d, id) => "opportunity.html?id=" + id,
-  },
-  {
-    name: "properties",
-    tab: "properties",
-    icon: "🏠",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => [d.type, d.bedrooms ? d.bedrooms + " bed" : null].filter(Boolean).join(" · "),
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
-    getLink:     (d, id) => "property.html?id=" + id,
-  },
-  {
-    name: "propertyListings",
-    tab: "properties",
-    icon: "🏡",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => [d.type, d.bedrooms ? d.bedrooms + " bed" : null, d.bathrooms ? d.bathrooms + " bath" : null].filter(Boolean).join(" · "),
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() + (d.period ? "/" + d.period : "") : null,
-    getLink:     (d, id) => "property.html?id=" + id,
-  },
-  {
-    name: "bnbListings",
-    tab: "properties",
-    icon: "🛏️",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => [d.type || "BnB", d.guests ? d.guests + " guests" : null].filter(Boolean).join(" · "),
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.pricePerNight != null ? "KES " + Number(d.pricePerNight).toLocaleString() + "/night" : null,
-    getLink:     (d, id) => "bnb.html?id=" + id,
-  },
-  {
-    name: "vehicles",
-    tab: "vehicles",
-    icon: "🚗",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || d.title || [d.make, d.model].filter(Boolean).join(" ") || "",
-    getSubtitle: d => [d.make, d.model, d.year].filter(Boolean).join(" · "),
-    getLocation: d => d.location || "",
-    getPrice:    d => d.price != null ? "KES " + Number(d.price).toLocaleString() : null,
-    getLink:     (d, id) => "car-hub.html?tab=browse&id=" + id,
-  },
-  {
-    name: "entEvents",
-    tab: "events",
-    icon: "🎉",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.title || d.name || "",
-    getSubtitle: d => [d.category || d.type, d.venue || d.location].filter(Boolean).join(" · "),
-    getLocation: d => d.location || d.venue || d.city || "",
-    getPrice:    d => d.ticketPrice != null ? "KES " + Number(d.ticketPrice).toLocaleString() : (d.free ? "Free" : null),
-    getLink:     (d, id) => "entertainment.html?event=" + id,
-  },
-  {
-    name: "mechanics",
-    tab: "businesses",
-    icon: "🔧",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || "",
-    getSubtitle: d => d.type || d.spec || "Auto Service",
-    getLocation: d => d.location || "",
-    getPrice:    null,
-    getLink:     (d, id) => "car-hub.html?tab=mechanics",
-  },
-  {
-    name: "entVenues",
-    tab: "businesses",
-    icon: "🎭",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || "",
-    getSubtitle: d => d.type || d.category || "Venue",
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.capacity ? "Capacity: " + d.capacity : null,
-    getLink:     (d, id) => "entertainment.html?venue=" + id,
-  },
-  {
-    name: "providers",
-    tab: "professionals",
-    icon: "👷",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || "",
-    getSubtitle: d => d.category || "Professional",
-    getLocation: d => d.location || "",
-    getPrice:    d => d.rate != null ? "KES " + Number(d.rate).toLocaleString() : null,
-    getLink:     (d, id) => "provider.html?id=" + id,
-  },
-  {
-    name: "healthProviders",
-    tab: "professionals",
-    icon: "🏥",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || d.title || "",
-    getSubtitle: d => d.specialty || d.category || "Healthcare",
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.consultationFee != null ? "KES " + Number(d.consultationFee).toLocaleString() : null,
-    getLink:     (d, id) => "healthcare.html?provider=" + id,
-  },
-  {
-    name: "lawyers",
-    tab: "professionals",
-    icon: "⚖️",
-    buildQuery: col => _q(col),
-    getTitle:    d => d.name || "",
-    getSubtitle: d => d.specialty || d.practice || "Legal Professional",
-    getLocation: d => d.location || d.city || "",
-    getPrice:    d => d.hourlyRate != null ? "KES " + Number(d.hourlyRate).toLocaleString() + "/hr" : null,
-    getLink:     (d, id) => "legal-hub.html?lawyer=" + id,
-  },
-];
+/* Collection specs, their rule-required query guards and result mapping now
+   live in sokoni-firestore-search.js — one implementation shared with the
+   search engine's own fallback, so the two cannot drift. */
 
 /* ── Constants ── */
 const HITS_PER_PAGE = 20;
@@ -878,6 +725,19 @@ let currentSearchPage = 0;            /* Algolia pagination — incremented by i
 let hasMoreResults   = false;         /* true while more Algolia pages remain */
 let totalAlgoliaHits = 0;             /* reported by Algolia nbHits */
 let _scrollObserver  = null;          /* active IntersectionObserver for load-more sentinel */
+
+/* ── Session circuit breakers ──
+   A search engine that has already failed once with a credential or transport
+   error will fail the same way for every keystroke that follows. Measured on
+   the live site: a dead Algolia attempt cost 4.1s and an unreachable Typesense
+   1.6s — on EVERY query, ahead of the Firestore pass that actually answers.
+   One failure per session is diagnosis; repeating it is just latency, so each
+   engine is skipped for the rest of the session after it throws.
+   A zero-hit result never trips a breaker: an index can legitimately miss one
+   query and answer the next. Only a thrown error does. */
+let _algoliaDown   = false;
+let _typesenseDown = false;
+const _TS_BUDGET_MS = 1200;           /* cap on the Typesense attempt */
 
 /* ── Geo: request once per session (non-blocking, best-effort) ── */
 let _userGeo = null;
@@ -1291,9 +1151,22 @@ const _TAB_ICON = {
 };
 
 /* ──────────────────────────────────────────
-   SEARCH — Algolia primary · Firestore only on infrastructure failure
-   Policy: Algolia 0 hits → show empty state. NEVER fall through to Firestore
-   just because Algolia found nothing. Only fall through on network/auth error.
+   SEARCH — Algolia primary · Firestore backs it up
+   Policy (revised): fall through to Firestore whenever Algolia produces no
+   hits, not only when it errors.
+
+   The previous policy — "0 hits = empty state, NEVER fall through" — assumes
+   the Algolia index is a complete mirror of Firestore. It is not. The secured
+   search key comes from getAlgoliaSearchKey at runtime; when that call is
+   unavailable the engine silently returns { fallback: true, totalHits: 0 },
+   which is indistinguishable from a genuine miss under the old rule. Indexing
+   also depends on Cloud Function triggers, so any product created while the
+   indexer was down is absent from Algolia while sitting in Firestore. Under
+   the old policy both cases rendered "No results" for goods that exist, which
+   is the worst answer a marketplace can give a buyer.
+
+   Cost: the extra Firestore pass runs only on zero-hit queries, and its
+   collection scans are cached for the session.
 ────────────────────────────────────────── */
 async function doSearch(rawQuery) {
   const q = rawQuery.trim().toLowerCase();
@@ -1309,9 +1182,26 @@ async function doSearch(rawQuery) {
     if (predicted) activeTab = predicted;
   }
 
-  /* ── Path A: Algolia (primary — 0 hits = empty state, not Firestore) ── */
+  /* ── Firestore starts NOW, in parallel with Algolia ──
+     Measured cold on the live site: results appeared 15.5s after navigation
+     because the paths ran in series — engine init (a cold-start Cloud Function
+     call for the secured key) → the Algolia attempt → Typesense → only then
+     Firestore, the one path that actually answers today. Firestore is ~1.7s
+     cold and needs no key, so it runs alongside; Algolia still wins when it has
+     hits. On later queries the session breaker skips Algolia entirely, so this
+     costs nothing extra — and the reads are the same ones the next query would
+     have made anyway, since the scans are session-cached.
+     Page 0 only: infinite-scroll pages are an Algolia concern. */
+  const fsPromise = (currentSearchPage === 0)
+    ? firestoreSearch(db, q, { limit: 120 }).catch(fsErr => {
+        console.warn("[SOKONI Search] Firestore search failed:", fsErr && fsErr.message);
+        return [];
+      })
+    : null;
+
+  /* ── Path A: Algolia (primary — falls through to Firestore on 0 hits) ── */
   let algoliaFailed = false;
-  if (window.sokoniSearch) {
+  if (window.sokoniSearch && !_algoliaDown) {
     try {
       const eng       = window.sokoniSearch;
       await eng.init();
@@ -1338,7 +1228,7 @@ async function doSearch(rawQuery) {
         professionals: "sokoni_users",
       };
 
-      let algoliaHits = [], nbHits = 0, nbPages = 1;
+      let algoliaHits = [], nbHits = 0, nbPages = 1, degraded = false;
 
       if (activeTab === "all") {
         /* ── Single HTTP request to unified index — replaces 9 parallel queries ── */
@@ -1348,11 +1238,16 @@ async function doSearch(rawQuery) {
           page:        currentSearchPage,
           userToken,
           ...geoParams,
+          skipFirestoreFallback: true,
         });
         const ir   = res.results?.[UNIFIED_INDEX] || {};
         algoliaHits = (ir.hits || []).map(h => ({ ...h, _idx: UNIFIED_INDEX, _queryID: ir.queryID }));
         nbHits      = ir.nbHits  || 0;
         nbPages     = ir.nbPages || 1;
+        /* The engine sets fallback:true when it never reached Algolia (no
+           secured key, or getAlgoliaSearchKey unavailable). Without this the
+           degraded response is indistinguishable from a genuine zero-hit. */
+        degraded    = res.fallback === true;
       } else {
         /* ── Single HTTP request to the specialized index for this tab ── */
         const specIndex = _TAB_INDEX[activeTab] || "sokoni_products";
@@ -1362,6 +1257,7 @@ async function doSearch(rawQuery) {
           page:        currentSearchPage,
           userToken,
           ...geoParams,
+          skipFirestoreFallback: true,
         };
         if (activeTab !== "professionals") {
           specOpts.filters = { hub: _TAB_HUB_ALIAS[activeTab] || activeTab };
@@ -1371,6 +1267,7 @@ async function doSearch(rawQuery) {
         algoliaHits = (ir.hits || []).map(h => ({ ...h, _idx: specIndex, _queryID: ir.queryID }));
         nbHits      = ir.nbHits  || 0;
         nbPages     = ir.nbPages || 1;
+        degraded    = res.fallback === true;
       }
 
       /* ── Normalize hits into display objects ── */
@@ -1408,54 +1305,99 @@ async function doSearch(rawQuery) {
         };
       });
 
-      /* ── Accumulate results for infinite scroll ── */
-      if (currentSearchPage === 0) {
-        allResults = mapped;
-      } else {
-        allResults = [...allResults, ...mapped];
-      }
-
-      /* Build tab counts from all accumulated results */
-      counts = {};
-      TABS.slice(1).forEach(t => { counts[t.id] = 0; });
-      allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
-
-      totalAlgoliaHits = nbHits;
-      hasMoreResults   = currentSearchPage < nbPages - 1;
-
       const isAppend = currentSearchPage > 0;
-      isLoading = false;
-      if (!isAppend) renderTabs();
-      renderResults(isAppend);
 
-      /* Non-blocking analytics (first page only) */
-      if (!isAppend && typeof firebase !== "undefined") {
-        try { firebase.functions().httpsCallable("recordSearchEvent")({ type: "search", query: q, resultCount: nbHits }).catch(() => {}); } catch (_) {}
+      /* Zero hits on the first page is not proof the goods do not exist — it is
+         equally the signature of a degraded key or an unindexed listing. Hand
+         over to Typesense/Firestore rather than render an empty state over
+         stock that is live in Firestore. Later pages keep what they have. */
+      if (!isAppend && mapped.length === 0) {
+        algoliaFailed = true;
+        console.info("[SOKONI Search] Algolia returned 0 hits" +
+          (degraded ? " (engine degraded — no secured key)" : "") +
+          " — falling through to Firestore for \"" + q + "\"");
+      } else {
+        /* ── Accumulate results for infinite scroll ── */
+        if (currentSearchPage === 0) {
+          allResults = mapped;
+        } else {
+          allResults = [...allResults, ...mapped];
+        }
+
+        /* Build tab counts from all accumulated results */
+        counts = {};
+        TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+        allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+
+        totalAlgoliaHits = nbHits;
+        hasMoreResults   = currentSearchPage < nbPages - 1;
+
+        isLoading = false;
+        if (!isAppend) renderTabs();
+        renderResults(isAppend);
+
+        /* Non-blocking analytics (first page only) */
+        if (!isAppend && typeof firebase !== "undefined") {
+          try { firebase.functions().httpsCallable("recordSearchEvent")({ type: "search", query: q, resultCount: nbHits }).catch(() => {}); } catch (_) {}
+        }
+
+        return;
       }
-
-      return; /* ← NEVER fall through on 0 hits */
 
     } catch (e) {
       if (e.name === "AbortError") return; /* superseded by newer request */
       algoliaFailed = true;
-      console.warn("[SOKONI Search] Algolia unavailable, trying fallback:", e.message);
+      /* A thrown error is an engine fault (credentials, transport), not a miss
+         — it will recur identically on every later query, so stop paying for it. */
+      _algoliaDown = true;
+      console.warn("[SOKONI Search] Algolia unavailable, skipping it for this session:", e.message);
     }
   }
 
-  /* ── Path B: Typesense (only on Algolia infrastructure failure) ── */
-  if (window.sokoniTypesenseSearch && algoliaFailed) {
+  /* ── Path C: Firestore — awaited here because it has been running all along.
+     It is consulted BEFORE Typesense: it is the system of record, it is already
+     in flight, and waiting on a secondary index that then has to be merged
+     would only add latency to an answer we already hold. Typesense is tried
+     below only if Firestore genuinely found nothing. */
+  let fsRows = fsPromise ? await fsPromise : [];
+  if (fsRows.length) {
+    allResults = fsRows;
+    counts = {};
+    TABS.slice(1).forEach(t => { counts[t.id] = 0; });
+    allResults.forEach(r => { counts[r.tab] = (counts[r.tab] || 0) + 1; });
+
+    /* A wrong prediction (e.g. "kass shop" guessed as Products) would render an
+       empty tab while results sit one tab away. Fall back to All in that case. */
+    if (activeTab !== "all" && !counts[activeTab]) activeTab = "all";
+
+    totalAlgoliaHits = 0;   /* Firestore returns one complete page */
+    hasMoreResults   = false;
+    isLoading        = false;
+    renderTabs();
+    renderResults();
+    return;
+  }
+
+  /* ── Path B: Typesense (only when neither Algolia nor Firestore answered) ── */
+  if (window.sokoniTypesenseSearch && algoliaFailed && !_typesenseDown) {
     try {
       const tsEng = window.sokoniTypesenseSearch;
       await tsEng._ensureReady();
       if (tsEng._ready) {
         const tsFilter = tsEng.buildFilterBy(activeTab !== "all" ? { hub: activeTab, _skipStatusFilter: false } : {});
-        const tsRes    = await tsEng.search(q, {
-          collections: Object.values(_INDEX_TAB).filter((v, i, a) => a.indexOf(v) === i).map(
-            tab => Object.entries(_INDEX_TAB).find(([, t]) => t === tab)?.[0]
-          ).filter(Boolean).slice(0, 12),
-          filterBy: tsFilter,
-          perPage:  HITS_PER_PAGE,
-        });
+        /* Budgeted: an unreachable Typesense host took 1.6s per query on the
+           live site before failing, delaying the Firestore pass that answers. */
+        const tsRes    = await Promise.race([
+          tsEng.search(q, {
+            collections: Object.values(_INDEX_TAB).filter((v, i, a) => a.indexOf(v) === i).map(
+              tab => Object.entries(_INDEX_TAB).find(([, t]) => t === tab)?.[0]
+            ).filter(Boolean).slice(0, 12),
+            filterBy: tsFilter,
+            perPage:  HITS_PER_PAGE,
+          }),
+          new Promise((_, rej) =>
+            setTimeout(() => rej(new Error("Typesense budget exceeded")), _TS_BUDGET_MS)),
+        ]);
         const tsHits = Object.entries(tsRes.results || {}).flatMap(([col, r]) =>
           (r.hits || []).map(h => ({ ...h.document, _highlights: h.highlights, _col: col }))
         );
@@ -1485,52 +1427,20 @@ async function doSearch(rawQuery) {
         }
       }
     } catch (tsErr) {
-      if (tsErr.name !== "AbortError") console.warn("[SOKONI Search] Typesense fallback error:", tsErr.message);
+      if (tsErr.name !== "AbortError") {
+        _typesenseDown = true;
+        console.warn("[SOKONI Search] Typesense unavailable, skipping it for this session:", tsErr.message);
+      }
     }
   }
 
-  /* ── Path C: Firestore (only on complete Algolia + Typesense infrastructure failure) ── */
-  const fetches = COLLECTIONS.map(async spec => {
-    try {
-      const colRef  = collection(db, spec.name);
-      const fsQuery = spec.buildQuery ? spec.buildQuery(colRef) : query(colRef, limit(200));
-      const snap    = await getDocs(fsQuery);
-      const rows    = [];
-      snap.forEach(docSnap => {
-        const d = docSnap.data();
-        const haystack = [
-          d.title, d.name, d.category, d.location, d.city,
-          d.description, d.type, d.spec, d.sellerName, d.providerName,
-          d.posterName, d.make, d.model, d.specialty, d.practice,
-          d.venue, d.tags ? d.tags.join(" ") : null,
-        ].filter(Boolean).join(" ").toLowerCase();
-        if (haystack.includes(q)) {
-          rows.push({
-            id: docSnap.id, tab: spec.tab, icon: spec.icon,
-            title: spec.getTitle(d) || "(Untitled)", subtitle: spec.getSubtitle(d) || "",
-            location: spec.getLocation(d) || "",
-            price: spec.getPrice ? spec.getPrice(d) : null,
-            link: spec.getLink(d, docSnap.id),
-          });
-        }
-      });
-      return { tab: spec.tab, rows };
-    } catch (err) {
-      console.warn("[SOKONI Search] Collection", spec.name, "error:", err.message);
-      return { tab: spec.tab, rows: [] };
-    }
-  });
-
-  const results = await Promise.all(fetches);
+  /* ── Nothing anywhere: genuine empty state ── */
   allResults = [];
   counts = {};
   TABS.slice(1).forEach(t => { counts[t.id] = 0; });
-  results.forEach(({ tab, rows }) => {
-    allResults.push(...rows);
-    counts[tab] = (counts[tab] || 0) + rows.length;
-  });
-  hasMoreResults = false;
-  isLoading = false;
+  totalAlgoliaHits = 0;
+  hasMoreResults   = false;
+  isLoading        = false;
   renderTabs();
   renderResults();
 }
@@ -1684,15 +1594,17 @@ function init() {
     updateClearBtn();
 
     // sokoni-search-engine.js is deferred and loads after this inline module.
-    // If it hasn't set window.sokoniSearch yet, wait up to 3s before falling
-    // through to Firestore Path C — so direct ?q= links hit Algolia.
+    // Wait briefly for it so a direct ?q= link can still hit Algolia — but only
+    // briefly: doSearch now starts its Firestore pass in parallel, so every
+    // millisecond spent here is pure dead time before the path that answers.
+    // The old 3s ceiling was a third of the measured 9s cold-start latency.
     if (window.sokoniSearch) {
       doSearch(urlQ);
     } else {
       let waited = 0;
       const poll = setInterval(function () {
         waited += 50;
-        if (window.sokoniSearch || waited >= 3000) {
+        if (window.sokoniSearch || waited >= 800) {
           clearInterval(poll);
           doSearch(urlQ);
         }
@@ -1768,7 +1680,7 @@ init();
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="messages.html" class="bnav-item"><span class="bnav-emoji">💬</span><span>Messages</span></a>
+  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 </body>
