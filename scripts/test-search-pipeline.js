@@ -49,8 +49,35 @@ ck('foods indexed alongside products', foodsIdx === writeIdx, foodsIdx + ' vs ' 
 /* ── every retrieval path filters on status, so uploads must set it ───────── */
 console.log('\n── Products are written with the field search filters on ──');
 
+/* The CLIENT fallback is asserted differently from the server paths, and the
+   difference is deliberate.
+
+   This used to require a literal where('status','==','active') in
+   sokoni-search-engine.js. That assertion encoded a contract the data does not
+   honour: most live products carry no `status` field at all, and a Firestore
+   equality filter EXCLUDES documents missing the field — so the filter it was
+   demanding made the client fallback incapable of returning a hit under any
+   circumstance. Satisfying this test as written would break search.
+
+   The real contract (docs: status + isVisible, ABSENT = visible; soft-delete is
+   an archive) now lives in sokoni-firestore-search.js::isVisibleDoc, which the
+   engine delegates to. Assert THAT: the engine must route through the module,
+   and the module must reject the hidden states. */
+const fsSearch = fs.readFileSync('sokoni-firestore-search.js', 'utf8');
+
+ck('client fallback delegates to sokoni-firestore-search',
+   /import\(\s*['"]\.\/sokoni-firestore-search\.js['"]\s*\)/.test(engine) === true);
+ck('shared module enforces the visibility contract',
+   /function\s+isVisibleDoc/.test(fsSearch) === true &&
+   /if\s*\(!isVisibleDoc\(/.test(fsSearch) === true);
+ck('hidden states are excluded (archived/deleted/hidden/removed/banned)',
+   ['archived', 'deleted', 'hidden', 'removed', 'banned']
+     .every(s => new RegExp(s + '\\s*:\\s*1').test(fsSearch)));
+ck('an absent status stays visible (no equality filter on status)',
+   /where\(\s*'status'\s*,\s*'=='\s*,\s*'active'\s*\)/.test(engine) === false);
+
+/* The server paths hold a genuine index-backed filter and are unchanged. */
 const filtersOnStatus = [
-  ["client fallback (sokoni-search-engine.js)", /where\(\s*'status'\s*,\s*'=='\s*,\s*'active'\s*\)/.test(engine)],
   ["server fallback (search-service.js)",       /where\(\s*'status'\s*,\s*'=='\s*,\s*'active'\s*\)/.test(service)],
   ["typesense filter (search-service.js)",      /status:=active/.test(service)],
 ];

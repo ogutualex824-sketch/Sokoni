@@ -79,15 +79,45 @@ for (const f of fs.readdirSync(ROOT)) {
 if (offenders.length) bad('pages still initialising from a non-existent global: ' + offenders.join(', '));
 else ok('no page initialises Firebase from _sokoniConfig / __sokoniConfig');
 
-/* Every page using the canonical config must actually load sokoni-config.js first. */
+/* Every page using the canonical config must actually load sokoni-config.js first.
+
+   The path test used to be /src=["']sokoni-config\.js["']/ — bare filename only.
+   It therefore reported enterprise-ops.html as broken for loading the script as
+   src="/sokoni-config.js", which is a perfectly valid absolute reference and does
+   work in the browser. That was a scanner blind spot, not a defect: the page loads
+   the config at line 749 and first uses it at line 770.
+
+   Accept the absolute and ./-relative forms, and — since the claim this check
+   makes is that the config loads FIRST — actually verify the ordering against the
+   first real `window.SOKONI_FIREBASE_CONFIG` dereference rather than any mention
+   of the name (a comment referencing it must not trip the check). */
+const CFG_TAG = /<script[^>]+src=["'](?:\.?\/)?sokoni-config\.js["']/i;
+
+/* Comments must not count as a dereference. crm.html explains the load order in
+   an HTML comment ABOVE its own <script> tag, so a naive search found
+   "window.SOKONI_FIREBASE_CONFIG" at line 11, the tag at line 12, and wrongly
+   called it out of order — the real use is at line 520. Blank the comment bodies
+   while preserving length, so byte offsets stay comparable. */
+const maskComments = (src) => src
+  .replace(/<!--[\s\S]*?-->/g,  m => ' '.repeat(m.length))
+  .replace(/\/\*[\s\S]*?\*\//g, m => ' '.repeat(m.length));
+
 const missing = [];
+const outOfOrder = [];
 for (const f of fs.readdirSync(ROOT)) {
   if (!f.endsWith('.html')) continue;
   const s = fs.readFileSync(path.join(ROOT, f), 'utf8');
-  if (s.includes('SOKONI_FIREBASE_CONFIG') && !/src=["']sokoni-config\.js["']/.test(s)) missing.push(f);
+  if (!s.includes('SOKONI_FIREBASE_CONFIG')) continue;
+  const tag = s.match(CFG_TAG);
+  if (!tag) { missing.push(f); continue; }
+  const code = maskComments(s);
+  const use  = code.search(/window\.SOKONI_FIREBASE_CONFIG/);
+  if (use !== -1 && code.indexOf(tag[0]) > use) outOfOrder.push(f);
 }
 if (missing.length) bad('uses SOKONI_FIREBASE_CONFIG without loading sokoni-config.js: ' + missing.join(', '));
 else ok('every page using the canonical config loads sokoni-config.js');
+if (outOfOrder.length) bad('loads sokoni-config.js AFTER first use: ' + outOfOrder.join(', '));
+else ok('sokoni-config.js is loaded before the config is dereferenced');
 
 console.log(fail ? '\n  ' + fail + ' FAILURE(S)\n' : '\n  Firebase config is canonical and consistent.\n');
 process.exit(fail ? 1 : 0);

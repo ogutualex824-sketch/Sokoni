@@ -1,4 +1,81 @@
-﻿## [2026-07-24] — feat(checkout): loyalty redemption is real, server-decided and settled atomically
+﻿## [2026-07-24] — chore(gates): production hardening pass 1 — repair two release gates that were lying
+
+First increment of the enterprise hardening pass. All 76 audit suites in
+`scripts/` were executed: **61 exit 0, 15 non-zero**. Triage of the 15 found that
+the two most alarming failures were defects in the GATES THEMSELVES, not in the
+product — and one of them, once repaired, proved a stronger invariant than it had
+ever checked.
+
+**1. `test-search-pipeline` demanded a filter that breaks search.** It required a
+literal `where('status','==','active')` in `sokoni-search-engine.js`. That encodes a
+contract the data does not honour: most live products carry no `status` field, and
+a Firestore equality filter EXCLUDES documents missing the field — so satisfying
+this test would make the client fallback incapable of returning any hit. The filter
+had already been removed for exactly that reason (`sokoni-search-engine.js:1557`).
+
+The real contract (status + isVisible, ABSENT = visible, soft-delete = archive)
+lives in `sokoni-firestore-search.js::isVisibleDoc`. Verified the engine delegates
+to it (`:1588` → module `firestoreSearch` at `:589`) and that visibility is enforced
+on both scan paths (`:625`, `:694`), rejecting `isVisible === false`,
+`suspended === true` and `archived/deleted/hidden/removed/banned`. The test now
+asserts that contract, including an explicit guard that re-adding the equality
+filter FAILS. 11 passed/1 failed → **15 passed / 0 failed**.
+
+**2. `verify-firebase-config` reported a working page as broken.** Its path test was
+`/src=["']sokoni-config\.js["']/` — bare filename only — so `enterprise-ops.html`
+was flagged for loading `src="/sokoni-config.js"`, a valid absolute reference that
+works (config at `:749`, first use at `:770`). Blind spot, not a defect.
+
+Widened to accept absolute and `./` forms and, since the check *claims* the config
+loads FIRST, it now actually verifies that ordering. That immediately flagged
+`crm.html` — which on inspection was a false positive of the new check: the match
+was inside an HTML comment at `:11`, above the tag at `:12`, with the real
+dereference at `:520`. Comment bodies are now blanked (length-preserving, so byte
+offsets stay comparable) before the ordering test. **4 passed / 0 failed**, and the
+gate now enforces load ORDER, which nothing previously checked.
+
+No production code changed in this increment — the audit found the gates wrong,
+not the app. Regression check: search 15/0, firebase-config 0 failures,
+payment-authority 22/0, overlays 10, seller-dashboard 22.
+
+Files affected: `scripts/test-search-pipeline.js`, `scripts/verify-firebase-config.js`.
+
+### Documented, deliberately NOT changed — needs a commercial decision
+
+`verify-listing-limit-single-source` fails with 57 declarations across 10 files.
+Two distinct problems, evidenced:
+
+- **ADVERTISED_ONLY — the pricing page promises limits the platform does not
+  enforce.** `subscriptions.html:250` advertises the Free plan at `listings:3`,
+  while the canonical `functions/subscription-catalog.js:70` enforces
+  `listingLimit:10`. Higher tiers diverge the same way (advertised 20/999/999 vs
+  enforced 100/-1/-1). Customers are shown numbers the system does not honour.
+- **DUPLICATE — marketplace limits declared independently** in
+  `functions/index.js` (`maxListings`), `functions/sasos-core.js`,
+  `functions/sub-billing.js` (`listings_limit`), rather than importing the
+  catalogue.
+
+Not fixed here, and deliberately so: deciding WHICH number is correct is a
+commercial decision about what the business sells, not an engineering one, and
+consolidating limits across billing/entitlement code is money-adjacent refactoring
+that must not be guessed at the tail of a session. **Smallest safe next step:**
+confirm the intended per-tier listing limits, correct
+`functions/subscription-catalog.js` alone if the advertised figures are the true
+ones, then migrate the three backend duplicates to import the catalogue one file at
+a time, re-running `verify-listing-limit-single-source` after each.
+
+### Classified as environment/harness, not product defects
+
+- `test-auth-email` C3 — "Execution context was destroyed… because of a
+  navigation". This is the already-signed-in guard correctly redirecting off
+  login.html; the harness evaluates across that navigation. Suite also creates real
+  Firebase accounts, so it is environment-dependent.
+- `test-inventory` exit 124 — not a hang: it is a META-runner that executes all 76
+  suites, so it exceeded the per-script timeout in the sweep.
+- `test-workspace-rules` ("harness error: fetch failed"), `verify-email.sh`,
+  `verify-domain-cutover` — require credentials/network unavailable locally.
+
+## [2026-07-24] — feat(checkout): loyalty redemption is real, server-decided and settled atomically
 
 Closes the last of the quote-vs-charge divergences. Same defect as the promo
 codes, with a forgery hole on top: `checkout.html` computed the points discount
@@ -359,6 +436,103 @@ checkout.html qty defect fixed earlier does **not** exist here.
 Files affected: `sokoni-food.js`, `food-menu.html`, `cart.js`, `cart.html`.
 Security: order id is URL-encoded into the vendor CTA href; vendor name escaped
 via `_esc`. No database, API, or breaking changes.
+
+## [2026-07-24] — fix(platform): every remaining unreachable collection + the queries that could never be permitted
+
+Second pass over the same defect class, this time exhaustively rather than by
+symptom. Two scanners drove it: one listing every collection the client touches
+that has **no `match` block** (Firestore denies those by default), and one
+listing every client **list query on a rule-gated collection that carries no
+matching `where()`** (Firestore denies those outright — it will not run a query
+it cannot prove is safe).
+
+**56 collections had no rule block.** Not all of them should — the audit
+separated them by what they are:
+
+- **Hubs that were simply dead** — healthcare (6 collections), construction (7),
+  digital/freelance (5), marketing (2). Now carry least-privilege rules: public
+  read for catalogue and review data, owner-and-counterparty read for private
+  records, admin-only for the rest.
+- **Runtime config and public signals** — `featureFlags` (read by
+  `sokoni-service-mesh.js` on every page load; the read failed and the mesh
+  silently fell back to defaults) and `searchTrending`: public read, admin/CF
+  write.
+- **Search telemetry** — `searchClicks`, `searchImpressions`, `searchAnalytics`:
+  append-only for a signed-in user writing their own row, admin read. Anonymous
+  telemetry is not accepted; an unauthenticated write endpoint is a spam endpoint.
+- **Ops dashboards** (20 collections: `ecc*`, `launch_*`, `ts*Stats`,
+  `workflow*`, `finosAudit`, `redisJobAudit`, `auditLog`, `support_tickets`,
+  `ai*`, …) — admin read. These were denied to admins too, which is why the ops
+  screens rendered empty.
+- **Money, queues and audit trails** (`refunds`, `settlements`, `paymentLedger`,
+  `payoutQueue`, `notificationQueue`, `analyticsEvents`, `eventLog`,
+  `webhookLogs`, `fraudLog`, `fraudBlocklist`) — written explicitly as
+  server-only. Their client-side writes have always failed and **must keep
+  failing**: `sokoni-payment-engine.js`, `sokoni-wap-definitions.js`,
+  `sokoni-fraud-engine.js` and `sokoni-webhook-engine.js` all attempt to write
+  financial ledgers from the browser. The rule now records that intent instead
+  of leaving it to the default. Moving those writes into Cloud Functions is
+  outstanding work, flagged not fixed.
+
+**The privacy defect this exposed.** Several hubs did not filter by owner at all
+— they requested the entire collection and narrowed it in the browser:
+
+- `sokoni-health.js` — 9 listeners over lab bookings, medicine orders,
+  telemedicine sessions, home-care requests and appointments. Every patient's
+  medical records were fetched to every other patient's device, then hidden with
+  a `.filter()`. Had these collections been given permissive rules to "make the
+  hub work", that would have been a data breach rather than an empty screen.
+- `digital.html` — proposals, contracts and **500 chat messages** from every
+  conversation on the platform, bucketed by chat id client-side.
+- `profile.html` — bookings, same pattern.
+
+All rewritten to filter server-side on the owner field. Equality-only queries
+with client-side sorting, so **no new composite index is required** — consistent
+with the standing index-governance rule.
+
+**Other guard-less queries fixed:** the public provider directory
+(`realtime.js`, `sokoni-db.js` — no `status` clause, so hub pages showed no
+providers at all), property listings (`property-hub.html`), the digital job
+board (`digital.html`), and the health provider directory. Admin-only screens
+that appear in the scan are left alone: `isAdmin()` makes those queries provably
+safe for an admin and correctly denies everyone else.
+
+**Field-name mismatches** between what clients write and what rules check:
+`healthAppointments` is written by `functions/healthcare-hub.js::bookAppointment`
+with `patientUid`, while the client listener queried `uid` — aligned to
+`patientUid`. `digitalJobs` is written with `posterUid` while the rule names
+`employerUid` — the proposals rule now accepts either, so a client sees
+proposals on their own job whichever field their job document carries.
+
+**Algolia secured key** (`functions/algolia-secured-keys.js`, deployed):
+the key restricted results with `filters: 'status:active OR status:published'` —
+an allowlist, while the platform's visibility contract treats an **absent**
+status as visible and most live products carry no status field. Once the
+credentials are valid that filter would have hidden the bulk of the catalogue
+from every non-admin searcher. Replaced with the negated form: visible unless
+explicitly withdrawn (`NOT status:archived AND NOT …`).
+
+**Found, not fixed — needs a decision:**
+`functions/healthcare-hub.js` (registerHealthProvider, bookAppointment with
+idempotency and slot locking, getMyAppointments, getProviderAppointments, …) is
+**never required or re-exported by `functions/index.js`**, so none of it is
+deployed. `/healthAppointments` is `write: if false` (correctly — booking must
+be server-side), which means appointments can be neither created by the client
+nor created by the server. The healthcare hub cannot function until that cluster
+is wired up and deployed; that is a functions deployment with quota implications,
+not a code fix, so it is flagged rather than done.
+
+Files affected: `firestore.rules` (+~290 lines), `sokoni-health.js`,
+`sokoni-db.js`, `realtime.js`, `digital.html`, `profile.html`,
+`property-hub.html`, `functions/algolia-secured-keys.js`.
+Deployed: Firestore rules, hosting, `getAlgoliaSearchKey`. No index changes, no
+schema changes.
+
+Verification: rules compiled and released cleanly; release gate ran 47 suites
+PASS / 0 FAIL before the hosting deploy. End-to-end behaviour of the owner-scoped
+flows needs authenticated buyer/seller/provider sessions, which are outside what
+I can exercise — and this machine remains App Check-throttled, so any live probe
+from here returns false denials until it expires.
 
 ## [2026-07-23] — fix(shop/service/review/request/sale): five flows were denied by missing or unsatisfiable security rules
 
