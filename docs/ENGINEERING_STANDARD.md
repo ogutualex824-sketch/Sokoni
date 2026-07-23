@@ -31,6 +31,17 @@ Separate explicitly what is NOT yet known. Constrain the investigation to
 resolving these. Do not investigate outside them until they are eliminated.
 **"Unknown" is an acceptable, honest outcome.**
 
+### Stop rule
+
+**When every remaining question has exactly one external observation that can
+resolve it, stop analyzing and wait for that observation.** More static analysis
+past this point produces motion, not evidence, and risks manufacturing a
+conclusion the runtime has not yet supplied. A question is *evidence-gated* (waits
+for a runtime observation — a replay, a device check, a production read) or
+*analysis-gated* (more reading/tracing can still advance it). Keep analyzing only
+what is analysis-gated; hand off or wait on everything evidence-gated, each with a
+named owner and a single next observation.
+
 ## 4. Architecture map
 
 Before proposing any change, enumerate **every writer and every reader** of the
