@@ -235,14 +235,42 @@
      fetches inside the component. Every field is mapped from the real order the
      checkout wrote to localStorage (see checkout.html newOrder), with safe
      fallbacks so a partial order still renders. */
+  /* ── EMERGENCY BRAKE — feature flag `checkoutSuccessV2` (default ON) ─────────
+     Instant fallback to the original success UI without a redeploy. Resolution,
+     most specific first:
+       localStorage.checkoutSuccessV2 = 'off' | 'on'   (per-device: QA, opt-out)
+       window.SOKONI_FLAGS.checkoutSuccessV2 === false  (global/remote kill + %-rollout)
+     Absent both, V2 is on. Turning it off renders the LEGACY experience below —
+     the same order-id + points + track/continue the page shipped before v2.1 — so
+     "off" is a genuine revert, not a blank mount. */
+  function _successV2On(){
+    try { var ls = localStorage.getItem('checkoutSuccessV2'); if (ls === 'off') return false; if (ls === 'on') return true; } catch(e){}
+    try { if (window.SOKONI_FLAGS && window.SOKONI_FLAGS.checkoutSuccessV2 === false) return false; } catch(e){}
+    return true;
+  }
+
+  /* The original (pre-v2) success presentation. Kept as the flag's OFF state. */
+  function renderLegacySuccess(mount){
+    if (!mount) return;
+    var idHtml = latest ? 'Order ID: <strong>' + _esc(latest.id) + '</strong>' : 'Order confirmed';
+    var ptsHtml = (pts > 0)
+      ? '<div class="success-points-earned" style="display:flex;">⭐ <span>You earned ' + pts + ' loyalty points!</span></div>' : '';
+    mount.innerHTML =
+      '<div class="success-animation"><div class="success-circle">✓</div></div>' +
+      '<h1>Order Placed! 🎉</h1><p>Thank you for shopping with Sokoni. Your order is being processed.</p>' +
+      '<div class="success-order-id"' + (latest ? ' style="cursor:pointer" onclick="location.href=\'track.html?id=' + _esc(latest.id) + '\'"' : '') + '>' + idHtml + '</div>' +
+      ptsHtml +
+      '<div class="success-actions"><a href="track.html' + (latest ? '?id=' + _esc(latest.id) : '') + '" class="success-track-btn">📦 Track My Order</a>' +
+      '<a href="/" class="success-continue-btn">Continue Shopping</a></div>';
+  }
+
   function renderSuccess(){
     var mount = document.getElementById('successMount');
-    if (!mount || typeof window.SokoniSuccess === 'undefined') {
-      /* Component not ready (blocked/offline). Leave the fallback tick + a link. */
-      if (mount && latest) mount.innerHTML =
-        '<div class="success-animation"><div class="success-circle">✓</div></div>' +
-        '<h1>Order Confirmed 🎉</h1><p><a href="track.html?id=' + _esc(latest.id) +
-        '" style="color:#71ff00">Track order ' + _esc(latest.id) + ' →</a></p>';
+    if (!mount) return;
+
+    /* Flag OFF, or the component failed to load → legacy experience. */
+    if (!_successV2On() || typeof window.SokoniSuccess === 'undefined') {
+      renderLegacySuccess(mount);
       return;
     }
     var user = {}; try { user = JSON.parse(localStorage.getItem('sokoniUser') || '{}') || {}; } catch(e){}
