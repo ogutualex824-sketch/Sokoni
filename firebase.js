@@ -410,6 +410,15 @@ if (!window.firebase) {
   };
 }
 
+/* Shared "a user has actually signed in" signal. onAuthStateChanged (below)
+   resolves it the instant the SDK restores a session. The redirect-result
+   handler awaits it to tell a GENUINE failure apart from iOS Safari's spurious
+   getRedirectResult error — where ITP blocks the authDomain's storage so
+   getRedirectResult throws auth/internal-error, yet the session is restored and
+   onAuthStateChanged fires with the user regardless. */
+let _sokoniUserSeenResolve = null;
+const _sokoniUserSeen = new Promise((resolve) => { _sokoniUserSeenResolve = resolve; });
+
 /* ══════════════════════════════════════════════════════════════════
    GOOGLE REDIRECT RESULT
    After signInWithRedirect() the browser returns to this page.
@@ -460,6 +469,25 @@ if (!window.firebase) {
       return;
     }
     if (!silent.includes(err.code)) {
+      /* iOS Safari / ITP FALSE POSITIVE. After a real redirect sign-in, ITP can
+         make getRedirectResult throw auth/internal-error (or
+         auth/web-storage-unsupported) even though the sign-in SUCCEEDED and
+         onAuthStateChanged is about to fire with the user. Dispatching the error
+         banner here told signed-in users their sign-in failed. Wait briefly for
+         the auth-state signal; if the user materialises, the sign-in worked —
+         stay silent. A genuine failure (no user within the window) still surfaces
+         below, so nothing is masked. Bounded wait: never hangs the page. */
+      if (err.code === 'auth/internal-error' || err.code === 'auth/web-storage-unsupported') {
+        const _user = await Promise.race([
+          _sokoniUserSeen,
+          new Promise((resolve) => setTimeout(() => resolve(null), 4000)),
+        ]);
+        if (_user) {
+          console.warn('[SOKONI Auth] getRedirectResult threw', err.code,
+            '— but the session was restored (onAuthStateChanged fired). Suppressing false error.');
+          return;
+        }
+      }
       /* Log the real error code so production failures can be diagnosed from
          console snapshots. Never exposes sensitive data — code is an enum string. */
       console.warn('[SOKONI Auth] getRedirectResult error:', err.code, err.message);
@@ -545,6 +573,10 @@ onAuthStateChanged(auth, async (user) => {
   window.__sokoniCurrentUid = user?.uid || null;
 
   if (user) {
+    /* Tell the redirect-result handler a real session exists, so it can suppress
+       iOS Safari's false auth/internal-error. Fires once; harmless if never awaited. */
+    if (_sokoniUserSeenResolve) { _sokoniUserSeenResolve(user); _sokoniUserSeenResolve = null; }
+
     localStorage.setItem("loggedIn", "true");
 
     /* Register this device for the multi-device session list. Not awaited —
