@@ -274,7 +274,9 @@ window._loadInventory=function(){
 };
 
 // ── Receive ──
-_addRcvItem();
+/* _addRcvItem is a function EXPRESSION assigned to window on the next line, so
+   it does not hoist — calling it here threw "_addRcvItem is not defined". */
+queueMicrotask(function(){ _addRcvItem(); });
 window._addRcvItem=function(){
   _rcvCount++;
   var div=document.createElement('div');div.className='item-row';div.id='ri'+_rcvCount;

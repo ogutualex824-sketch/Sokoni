@@ -193,8 +193,12 @@ firebase.auth().onAuthStateChanged(function(u){ _uid = u ? u.uid : null; });
 var due = new Date(); due.setDate(due.getDate()+30);
 document.getElementById('cDueDate').value = due.toISOString().split('T')[0];
 
-// Add initial line item
-_addLine();
+// Add initial line item.
+// _addLine is a function EXPRESSION assigned to window further down, so it does
+// not hoist — calling it here threw "_addLine is not defined" and killed the
+// rest of this block. The microtask runs once this script has finished, by
+// which point the assignment exists.
+queueMicrotask(function(){ _addLine(); });
 
 window._switchTab = function(el, pane){
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });

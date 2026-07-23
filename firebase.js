@@ -408,6 +408,23 @@ if (!window.firebase) {
       return getApps().find(a => a.name === name) || initializeApp(cfg, name);
     },
   };
+
+  /* Announce that window.firebase now exists.
+     This file is a MODULE, so it is deferred and always runs AFTER the classic
+     inline scripts on a page. Anything touching the global `firebase.*` compat
+     shim at top level therefore runs too early and throws "firebase is not
+     defined". Pages can wait on this event instead of guessing.
+
+     subscription-os.html already did `addEventListener('firebaseReady', init)`,
+     but nothing in the codebase ever dispatched it — so its init never ran at
+     all. Dispatching here makes that listener (and any future one) work.
+     Fired on window AND document so either target works, and a late listener
+     can still check window.firebase directly. */
+  try {
+    window.__sokoniFirebaseReady = true;
+    window.dispatchEvent(new Event('firebaseReady'));
+    document.dispatchEvent(new Event('firebaseReady'));
+  } catch (_) { /* never let a listener error break auth bootstrap */ }
 }
 
 /* Shared "a user has actually signed in" signal. onAuthStateChanged (below)
