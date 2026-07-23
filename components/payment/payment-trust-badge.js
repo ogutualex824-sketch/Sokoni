@@ -13,6 +13,10 @@
         Optional attributes on the placeholder:
             data-label="false"      hide the "SECURE PAYMENTS" cap label
             data-max="380"          override max width in px (default 440)
+            data-trust-list         render the "Trusted Checkout" reassurance list
+                                    ABOVE the badge (Encrypted · Buyer Protection ·
+                                    Verified Merchant · Secure Gateway). Use on the
+                                    full checkout panel; omit in compact modals.
      The script fills every placeholder on DOMContentLoaded and again if more are
      injected later (checkout modals, dynamically rendered panels).
 
@@ -47,20 +51,34 @@
     var s = document.createElement('style');
     s.id = STYLE_ID;
     s.textContent = [
-      '.sk-trust-badge{display:block;width:100%;max-width:440px;margin:16px auto;',
+      /* Generous vertical breathing room — this is a trust anchor, not a chip. */
+      '.sk-trust-badge{display:block;width:100%;max-width:440px;margin:24px auto;',
       '  padding:0 16px;box-sizing:border-box;text-align:center;}',
-      '.sk-trust-badge__cap{display:inline-block;margin:0 auto 8px;padding:3px 12px;',
+      '.sk-trust-badge__cap{display:inline-block;margin:0 auto 10px;padding:3px 12px;',
       '  font-size:9px;font-weight:800;letter-spacing:1.5px;line-height:1;',
       '  color:rgba(113,255,0,.75);background:rgba(113,255,0,.08);',
       '  border:1px solid rgba(113,255,0,.2);border-radius:999px;white-space:nowrap;}',
+      /* Trusted-Checkout reassurance list (opt-in via data-trust-list). */
+      '.sk-trust-badge__list{margin:0 auto 12px;max-width:300px;text-align:left;}',
+      '.sk-trust-badge__list-h{font-size:11px;font-weight:800;letter-spacing:.4px;',
+      '  color:rgba(255,255,255,.82);text-align:center;margin-bottom:8px;}',
+      '.sk-trust-badge__list ul{list-style:none;margin:0;padding:0;',
+      '  display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;}',
+      '.sk-trust-badge__list li{display:flex;align-items:center;gap:6px;',
+      '  font-size:11px;font-weight:600;color:rgba(255,255,255,.6);}',
+      '.sk-trust-badge__tick{color:#71ff00;font-weight:900;flex:none;}',
+      '.sk-trust-badge__pw{font-size:10px;color:rgba(255,255,255,.38);',
+      '  text-align:center;margin-top:8px;font-weight:600;}',
       '.sk-trust-badge__link{display:block;text-decoration:none;',
       '  transition:transform .2s ease,filter .2s ease;}',
       '.sk-trust-badge__link:hover{transform:scale(1.02);',
-      '  filter:drop-shadow(0 4px 16px rgba(113,255,0,.18));}',
-      /* aspect-ratio reserves height pre-load → zero CLS; the dark art gets its own
-         rounded corners + soft shadow so it reads as an enterprise gateway panel. */
+      '  filter:drop-shadow(0 6px 20px rgba(113,255,0,.22));}',
+      /* aspect-ratio reserves height pre-load → zero CLS. The dark art gets its own
+         rounded corners, soft elevation and a subtle brand glow so it reads as an
+         enterprise gateway panel without a contrasting frame around it. */
       '.sk-trust-badge__img{display:block;width:100%;height:auto;aspect-ratio:' + RATIO + ';',
-      '  border-radius:14px;box-shadow:0 6px 22px rgba(0,0,0,.28);}',
+      '  border-radius:18px;box-shadow:0 8px 26px rgba(0,0,0,.34),',
+      '  0 0 0 1px rgba(255,255,255,.04),0 0 32px rgba(113,255,0,.06);}',
       '.sk-trust-badge__fallback{display:none;align-items:center;justify-content:center;',
       '  gap:8px;padding:14px 16px;border-radius:12px;font-size:12px;font-weight:700;',
       '  color:rgba(255,255,255,.72);background:rgba(113,255,0,.06);',
@@ -74,6 +92,7 @@
     el.setAttribute('data-sk-trust-done', '1');
 
     var showLabel = el.getAttribute('data-label') !== 'false';
+    var showList  = el.hasAttribute('data-trust-list');
     var max = el.getAttribute('data-max');
 
     el.classList.add('sk-trust-badge');
@@ -83,9 +102,25 @@
       ? '<span class="sk-trust-badge__cap" aria-hidden="true">SECURE PAYMENTS</span>'
       : '';
 
+    /* "Trusted Checkout" reassurance — psychological prep before the gateway.
+       Prepended above the badge only where opted in. Static text; no interpolation. */
+    var list = showList
+      ? '<div class="sk-trust-badge__list">' +
+          '<div class="sk-trust-badge__list-h">Trusted Checkout</div>' +
+          '<ul>' +
+            '<li><span class="sk-trust-badge__tick" aria-hidden="true">✔</span>Encrypted Payment</li>' +
+            '<li><span class="sk-trust-badge__tick" aria-hidden="true">✔</span>Buyer Protection</li>' +
+            '<li><span class="sk-trust-badge__tick" aria-hidden="true">✔</span>Verified Merchant</li>' +
+            '<li><span class="sk-trust-badge__tick" aria-hidden="true">✔</span>Secure Gateway</li>' +
+          '</ul>' +
+          '<div class="sk-trust-badge__pw">Powered by IntaSend</div>' +
+        '</div>'
+      : '';
+
     /* Build via DOM (not innerHTML with interpolation) so nothing user-derived is
        ever concatenated into markup. Values here are all static constants. */
     el.innerHTML =
+      list +
       cap +
       '<a class="sk-trust-badge__link" href="https://intasend.com/security" ' +
         'target="_blank" rel="noopener noreferrer" ' +
