@@ -69,28 +69,95 @@ implementation:
 This section documents the implementation only. Whether it matches the
 provider's mechanism is the subject of the hypothesis below.
 
-## Working hypothesis (needs confirmation — NOT established fact)
+## Runtime evidence — the captured webhook request (decisive)
 
-Based on the rejected callbacks, the `invalid_signature` status, and the webhook
-diagnostics (notably `hasChallengeField` in the captured request), the current
-verification implementation **may not match the webhook authentication mechanism
-configured for this IntaSend integration** — i.e. the code verifies an
-`x-intasend-signature` HMAC header while the incoming webhook may authenticate by
-a different mechanism (for example a `challenge` value in the body).
+The webhook logs an inert `diag` object per rejected callback. These are the
+actual production requests IntaSend sent for KBQE4OW, read 2026-07-23:
 
-This is a hypothesis derived from static analysis and the captured diagnostics.
-It has NOT been confirmed against the provider's contract. It must be verified
-against:
+| Field | Value | What it establishes |
+|---|---|---|
+| `signatureHeaders` | `""` (empty) | IntaSend sent **no** signature header |
+| `headerNames` | `host, cache-control, x-forwarded-ssl, x-forwarded-proto, content-length, sentry-trace, baggage, …` | `x-intasend-signature` is **absent** |
+| `hasChallengeField` | `true` | the request body **contains** a `challenge` |
+| `challengeLen` | `12` | the challenge is a 12-char value |
+| `bodyKeys` | `invoice_id, state, provider, charges, net_amount, currency, value, account, api_ref, provider_ref, challenge, …` | |
+| `bodySample` | `{"invoice_id":"KBQE4OW","state":"PENDING",…}` | correct transaction; `invoice_id` = the tracking ref |
+| `rawBodyLen` | 537 / 540 | body is intact — rules out body mutation (unknown B) |
+| `sourceIp` | `157.245.201.212` | (an IntaSend egress IP) |
 
-- IntaSend's current webhook documentation
-- the IntaSend dashboard webhook configuration for this account
-- the configured webhook secret / challenge value
+### Harness unknowns A–E, resolved by this evidence
 
-before any code change.
+- **A — does IntaSend sign as the code expects?** No. It sends a body `challenge`,
+  not a header HMAC. The code's assumption is contradicted by the request.
+- **B — does Cloud Functions modify the body before verification?** No. `rawBodyLen`
+  is present and consistent; not the cause.
+- **C — hashing the wrong payload?** Moot — there is no signature to compare against.
+- **D — wrong secret / env / header?** **Wrong HEADER / wrong MECHANISM.** The code
+  reads `x-intasend-signature`; that header does not exist (`signatureHeaders=""`).
+- **E — failure before signature validation?** No. It fails **at** signature
+  validation, because the required input (a signature header) is absent.
 
-Scope note: because `payments COMPLETE = 0` across the entire collection, this
-appears to affect every IntaSend webhook, not only KBQE4OW — but that breadth is
-part of the same hypothesis and should be confirmed the same way.
+### First divergence (Phase 3)
+
+| Step | Expected | Observed | Evidence |
+|---|---|---|---|
+| read signature | `x-intasend-signature` header present | header absent | `diag.signatureHeaders=""`, `headerNames` lacks it |
+| authenticate | HMAC(body, key) == header sig | nothing to compare; check fails | `status: invalid_signature`, HTTP 401 |
+| (intended) auth model | verify body `challenge` == configured value | challenge present but never checked | `hasChallengeField=true`, `challengeLen=12` |
+
+The first divergence is at the very first read of the verification block: the code
+requires a header IntaSend does not send.
+
+## Confirmed root cause (was a hypothesis; now supported by the production request)
+
+The production request shows IntaSend authenticates this webhook with a `challenge`
+value in the request BODY, and sends no signature header. The deployed
+`intasendWebhook` authenticates by requiring an `x-intasend-signature` HEADER and
+HMACing the body. The required input is absent from every request, so verification
+can never pass and every callback is rejected `invalid_signature` (HTTP 401).
+
+Still to be confirmed by the payments owner (config, not mechanism): the exact
+challenge value and where it is stored (IntaSend dashboard webhook config). The
+MECHANISM is established by the request data; the SECRET VALUE to compare against
+is not visible in these logs and must come from the dashboard.
+
+Scope: `payments COMPLETE = 0` across the entire collection is consistent with
+this affecting every IntaSend webhook, not only KBQE4OW.
+
+---
+
+## Harness deliverables
+
+**Timeline**
+```
+2026-07-20 18:12:01Z  payments/SKNTJKAS8 created (PENDING), checkoutId bff55f40-…
+2026-07-20 18:12:03Z  webhook #1 (state PENDING)    → invalid_signature → 401
+2026-07-20 18:12:03Z  webhook #2 (state PROCESSING) → invalid_signature → 401
+2026-07-20 18:12:33Z  webhook #3                    → invalid_signature → 401
+                      payment never marked COMPLETE; activation never runs
+2026-07-23            trace: signatureHeaders="", hasChallengeField=true → root cause
+```
+
+**Root cause (one sentence):** IntaSend authenticates its webhook with a `challenge`
+value in the request body and sends no signature header, but `intasendWebhook`
+requires an `x-intasend-signature` HMAC header — so every callback fails
+verification and returns 401 before the payment can be marked COMPLETE.
+
+**Fix (one sentence, for the payments owner to implement):** replace the
+`x-intasend-signature` HMAC check with IntaSend's documented body-`challenge`
+verification (compare `req.body.challenge` to the challenge configured in the
+IntaSend dashboard, constant-time), preserving fail-closed behaviour.
+
+**Proof (the one replay that resolves this — NOT yet performed; owner + IntaSend
+config required):** replay KBQE4OW (or an equivalent sandbox transaction) and
+observe the full chain — webhook 200 → payment COMPLETE → subscription written →
+Starter entitlement in the dashboard and pricing page. Until that replay is
+observed, the fix is unproven, per the Committed→Deployed→Parity→Runtime→Customer
+Outcome invariant.
+
+## Working hypothesis — SUPERSEDED (retained for history)
+
+Previously stated as a hypothesis before the `diag` request data was read:
 
 ## Security note
 
