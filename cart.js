@@ -121,6 +121,11 @@ function renderFoodSection(foodItems){
                 </button>
               </div>
             </div>`).join('')}
+          <div class="cart-vendor-cta">
+            <a href="food-menu.html?id=${encodeURIComponent(rid)}" class="cart-checkout-food">
+              🍔 Checkout ${_esc(v.name)} — KES ${v.subtotal.toLocaleString()}
+            </a>
+          </div>
         </div>`).join('');
 
     const foodTotal = calcFoodTotal();
@@ -131,9 +136,7 @@ function renderFoodSection(foodItems){
         </div>
         ${groups}
         <div class="cart-section-cta">
-          <a href="food-order.html" class="cart-checkout-food">
-            🍔 Checkout Food — KES ${foodTotal.toLocaleString()}
-          </a>
+          <a href="food-order.html" class="cart-track-orders">📋 Track my food orders</a>
         </div>`;
 }
 

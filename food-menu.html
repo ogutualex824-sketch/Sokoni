@@ -391,8 +391,10 @@ function placeOrder(){
       if(window.SokoniInvoice){
         SokoniInvoice.generate({type:'food',buyerName:name,buyerPhone:phone,items:cart.map(c=>({name:c.name,category:'Food',qty:c.qty,price:c.price})),subtotal,total,paymentMethod:'M-Pesa · '+ref,paymentRef:ref,sellerName:_rest.name,notes:addr});
       }
-      /* Clear food cart */
-      SokoniFood.clearCart();
+      /* Clear ONLY the items just paid for. This checkout is scoped to a single
+         restaurant, so clearCart() would also delete unpaid items the customer
+         still has from other restaurants. */
+      cart.forEach(c => SokoniFood.removeFromCart(c.cartId));
       closeCheckout();
       window.location.href = 'food-order.html?id=' + orderId;
     }

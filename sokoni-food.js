@@ -406,6 +406,22 @@ window.SokoniFood = (function () {
     return order;
   }
 
+  /* Persist an order that the CALLER has already built and whose side-effects the
+     caller owns (Firestore write, commission, invoice) — this is the food-menu
+     checkout's post-payment path. Use placeOrder() instead when you want this
+     module to build the order and run those side-effects for you; calling both
+     would double-record commission.
+     Idempotent by order id: M-Pesa success callbacks can fire more than once, and
+     a paid order must never be written twice. */
+  function saveOrder(order){
+    if(!order || !order.id) return null;
+    const orders=lsArr(ORDERS_KEY);
+    if(orders.some(o=>o.id===order.id)) return order;
+    orders.unshift({ uid:uid(), createdAt:Date.now(), ...order });
+    lsSet(ORDERS_KEY,orders.slice(0,300));
+    return order;
+  }
+
   function getOrders(){ return lsArr(ORDERS_KEY); }
   function getOrderById(id){ return getOrders().find(o=>o.id===id); }
 
@@ -466,7 +482,7 @@ window.SokoniFood = (function () {
   return {
     RESTAURANTS,MENUS,CATEGORIES,SYSTEM_PROMOS,
     getCart,addToCart,removeFromCart,updateQty,clearCart,getCartCount,getCartByVendor,
-    placeOrder,getOrders,getOrderById,updateOrderStatus,STATUS_LABELS,STATUS_ICONS,
+    placeOrder,saveOrder,getOrders,getOrderById,updateOrderStatus,STATUS_LABELS,STATUS_ICONS,
     validatePromo,usePromo,
     saveRating,getRatings,getRestaurantRating,starsHTML,
     updateRiderLocation,getRiderLocation,getAvailableOrders,getVendorOrders,
