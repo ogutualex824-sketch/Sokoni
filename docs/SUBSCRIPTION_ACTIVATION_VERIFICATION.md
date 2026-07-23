@@ -79,3 +79,67 @@ activation stage never receives a completed payment to process.
 - `docs/ADR.md` ADR-0013 — canonical activation writer (same staleness caveat).
 - Methodology: verify against the exact production path, not a proxy
   (`feedback_audit_methodology`).
+
+---
+
+# Addendum — Trial Lifecycle Observation (Read-only)
+
+**Date:** 2026-07-23
+**Type:** Read-only observation appended to the verification above. Recorded
+separately to preserve the original conclusions; no implementation changes
+recommended.
+
+## Observation
+
+The production subscription record currently reflects the legacy trial model:
+
+- Trial duration: **14 days**
+- Activation: **automation** (`activatedBy: automation`, `autoActivated: true`)
+- Current status: **still within the trial period** (started 2026-07-20,
+  `trialEndsAt` 2026-08-03; today is inside the window, so expiry logic has not
+  yet had cause to fire)
+
+The current implementation, however, defines new trial durations of:
+
+- Seller Basic: **3 days**
+- Seller Pro: **3 days**
+- Enterprise: **30 days**
+
+(`functions/sub-billing.js`, `trial:{days:…}`)
+
+## Result
+
+No production evidence was found during this verification that the new 3-day
+trial creation path has yet created a subscription. The sole trial on record is
+14 days and automation-created, matching none of the new values (3 / 3 / 30).
+
+Therefore the following lifecycle has not yet been exercised in production:
+
+```
+Trial Creation → 3-Day Trial → Trial Expiry → Feature Restriction → Upgrade Prompt
+```
+
+## Relationship to the earlier verification
+
+This mirrors the earlier payment finding.
+
+| Lifecycle | Deployment status | Production evidence |
+|---|---|---|
+| Payment → Activation | Deployed | No completed payment observed |
+| 3-Day Trial → Expiry | Deployed | No production trial created under the new model observed |
+
+## Conclusion
+
+No defect is identified by this observation. The finding is simply that these
+production lifecycles have not yet been exercised. "Not observed yet" is distinct
+from "does not work."
+
+Confirmation requires an end-to-end acceptance test using:
+
+- a newly created 3-day trial,
+- natural or simulated expiry,
+- a real completed subscription payment.
+
+No implementation changes are recommended based on this observation. The
+subscription/trial and payment-confirmation code is actively owned by the
+payments workstream.
