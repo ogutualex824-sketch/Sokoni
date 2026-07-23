@@ -138,15 +138,19 @@ this affecting every IntaSend webhook, not only KBQE4OW.
 2026-07-23            trace: signatureHeaders="", hasChallengeField=true → root cause
 ```
 
-**Root cause (one sentence):** IntaSend authenticates its webhook with a `challenge`
-value in the request body and sends no signature header, but `intasendWebhook`
-requires an `x-intasend-signature` HMAC header — so every callback fails
-verification and returns 401 before the payment can be marked COMPLETE.
+**Root cause (one sentence):** the production callbacks do not contain the
+`x-intasend-signature` header the webhook requires (they contain a `challenge`
+field instead), so every callback fails authentication and returns 401 before the
+payment can be marked COMPLETE. *(Established from the request data. That the
+`challenge` field is IntaSend's authentication mechanism is NOT asserted here — its
+semantics must come from IntaSend's documentation, not from its mere presence.)*
 
 **Fix (one sentence, for the payments owner to implement):** replace the
-`x-intasend-signature` HMAC check with IntaSend's documented body-`challenge`
-verification (compare `req.body.challenge` to the challenge configured in the
-IntaSend dashboard, constant-time), preserving fail-closed behaviour.
+`x-intasend-signature` HMAC check with IntaSend's **documented** webhook
+authentication mechanism (the request data shows a `challenge` field and no
+signature header, but the correct verification must be taken from IntaSend's docs +
+dashboard config, not inferred from the payload), preserving constant-time,
+fail-closed behaviour.
 
 **Proof (the one replay that resolves this — NOT yet performed; owner + IntaSend
 config required):** replay KBQE4OW (or an equivalent sandbox transaction) and
