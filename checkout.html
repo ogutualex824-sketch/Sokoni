@@ -1688,10 +1688,15 @@ function setPlatformFee(ratePct){
 })();
 
 function _calcLoyaltyDiscount(baseTotal) {
-  if (!_loyaltyRedeeming || _loyaltyBalance <= 0) return 0;
-  const maxDiscount = Math.floor(baseTotal * MAX_REDEEM_PCT);
-  const pointsValue = Math.floor(_loyaltyBalance * POINTS_TO_KES);
-  return Math.min(maxDiscount, pointsValue);
+  /* Always 0 — the client no longer decides this.
+     It used to compute a discount from _loyaltyBalance, which is read out of
+     localStorage.sokoniLoyalty (a number the buyer's own browser owns), and
+     subtract it from the DISPLAYED total. createCheckoutSession never applied it,
+     so redeeming points quoted a price we then did not honour.
+     The toggle is now pure INTENT: it is sent as redeemLoyalty, the real balance
+     is read server-side from loyaltyAccounts/{uid}, and the discount comes back
+     inside the authoritative serverTotal. */
+  return 0;
 }
 
 function toggleLoyaltyRedeem(checked) {
@@ -2152,6 +2157,10 @@ async function sendStkPush(){
         /* A NAME, not a discount. The server validates it and folds any discount
            into serverTotal — the client cannot assert a price reduction. */
         promoCode:   _appliedPromoCode || undefined,
+        /* INTENT, not an amount. The server reads the real point balance from
+           loyaltyAccounts/{uid} and decides the discount; the browser's
+           localStorage copy is never trusted. */
+        redeemLoyalty: _loyaltyRedeeming === true ? true : undefined,
       });
       _sessionId = sessionRes.data.sessionId;
       stkAmount  = sessionRes.data.serverTotal;
@@ -2189,6 +2198,19 @@ async function sendStkPush(){
         } else if (_pErr) {
           _dMsg.textContent = "❌ " + _pErr;
           _dMsg.style.color = "#ff6b6b";
+        }
+      }
+
+      /* Report what the points redemption actually achieved (or why it did not). */
+      if (_loyaltyRedeeming) {
+        const _lDisc = Number(sessionRes.data.loyaltyDiscount || 0);
+        const _lErr  = sessionRes.data.loyaltyError;
+        if (_lDisc > 0) {
+          showPushToast("🎁 Points applied",
+            "KES " + _lDisc.toLocaleString() + " off using " +
+              Number(sessionRes.data.loyaltyPoints || 0).toLocaleString() + " points.", "green");
+        } else if (_lErr) {
+          showPushToast("Points not applied", _lErr, "orange");
         }
       }
 

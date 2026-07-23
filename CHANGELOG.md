@@ -1,4 +1,52 @@
-﻿## [2026-07-24] — feat(checkout): promo codes are now real — validated server-side and inside the charged total
+﻿## [2026-07-24] — feat(checkout): loyalty redemption is real, server-decided and settled atomically
+
+Closes the last of the quote-vs-charge divergences. Same defect as the promo
+codes, with a forgery hole on top: `checkout.html` computed the points discount
+from `_loyaltyBalance`, which is read from `localStorage.sokoniLoyalty` — a number
+the buyer's own browser owns — and subtracted it from the **displayed** total.
+`createCheckoutSession` never applied it, so redeeming points quoted a price we
+did not honour.
+
+**Server decides, client only signals intent.** `createCheckoutSession` accepts
+`redeemLoyalty: true`, reads the real balance from `loyaltyAccounts/{uid}`, and
+caps the discount by both that balance and `MAX_REDEEM_PCT` (25%) of the goods
+value at `POINTS_TO_KES` (0.50/point) — the same constants the page used, now
+applied where they cannot be edited. The browser can no longer assert a balance
+or an amount.
+
+**Points are not deducted at session creation** — an abandoned checkout must never
+burn them. The intended redemption is written onto the session
+(`loyaltyPoints` / `loyaltyDiscount`) and settled inside the very
+`verifyPayment` transaction that marks the session `consumed`, so points can only
+be spent by a payment that actually completed. Deduction uses
+`FieldValue.increment(-points)`: it needs no read (that transaction has already
+begun writing, and Firestore forbids a read after a write) and is atomic.
+Double-spending one session is already impossible — its status must be `pending`
+to reach that code. Each settlement also writes a `loyaltyRedemptions` audit row
+(uid, orderId, sessionId, points, discount).
+
+**Discount flooring.** Promo and loyalty together may never drive the charge below
+KES 1 — the gateway cannot bill zero and a free order must not become a KES 0 STK
+push. When the combined discount would breach that, the loyalty portion is trimmed
+first, because points are refundable and a promo code is not.
+
+Client: `_calcLoyaltyDiscount()` now returns 0 unconditionally and the toggle is
+pure intent; the displayed total continues to adopt `serverTotal`, and the page
+reports what the redemption actually achieved, or why it did not apply.
+
+Verified in Chromium with a **forged 99,999-point balance** planted in
+localStorage: toggling redemption leaves the total at KES 2,000 (it would
+previously have knocked off up to 25%), `_calcLoyaltyDiscount` returns 0, only the
+intent flag is sent, and a server total of KES 1,500 reconciles every displayed
+amount. No page errors. `predeploy-syntax-gate` 1031 files parse;
+`test-payment-authority` 22 passed / 0 failed.
+
+Files affected: `functions/index.js` (`createCheckoutSession`, `verifyPayment`),
+`checkout.html`. New collection: `loyaltyRedemptions` (audit trail).
+`createCheckoutSession` and `verifyPayment` are both existing deployed functions,
+so this is an update and consumes no new Cloud Run quota.
+
+## [2026-07-24] — feat(checkout): promo codes are now real — validated server-side and inside the charged total
 
 Completes the previous entry. That change stopped the buyer being *overcharged*;
 this one makes the discount actually happen.
@@ -312,6 +360,83 @@ Files affected: `sokoni-food.js`, `food-menu.html`, `cart.js`, `cart.html`.
 Security: order id is URL-encoded into the vendor CTA href; vendor name escaped
 via `_esc`. No database, API, or breaking changes.
 
+## [2026-07-23] — fix(shop/service/review/request/sale): five flows were denied by missing or unsatisfiable security rules
+
+Audit of the shop → service → review → request → sale lifecycle against the
+live project. The failures share one root cause with the search bug fixed
+below: **Firestore denies a list query it cannot prove is safe, and denies
+everything under a path with no rule block at all** — and every caller swallowed
+the denial in a `catch`, so each surfaced as "nothing here" rather than an error.
+
+Live state established first (unauthenticated reads against production):
+`sellers` is **empty**, `shops`/`ratings`/`orderEvents`/`entRequests` had **no
+rule block**, and `services`, `providers`, `reviews`, `venues`, `lawyers`,
+`bnbListings`, `healthProviders`, `vehicles`, `properties`, `digitalJobs` are
+all **empty collections** — so several "broken" screens are in fact correctly
+showing nothing. Only `products` (many), `mechanics` (1) and `businesses` (1)
+hold data.
+
+**Rules added** (`firestore.rules`, least privilege, deployed and compiled clean):
+
+- `shops/{uid}` — public read, admin/CF create, and an owner update restricted by
+  an explicit allowlist of presentation fields. `status` is deliberately excluded:
+  it is the approval flag `automation-engine.js` sets, and `noAdminFields()` does
+  not cover it, so without the allowlist a seller could self-approve.
+- `orderEvents/{orderId}/events` — the sale's audit trail. Read and append are
+  limited to parties of the parent order via a new `isOrderParticipant()` helper;
+  events are append-only (no update). Previously **every** read and write was
+  denied, so a buyer's order timeline was always empty and each `_writeEvent()`
+  during checkout failed silently.
+- `entRequests/{requestId}` — entertainment enquiry requests: owner/admin read,
+  authenticated owner create. Every submission previously failed.
+- `ratings/{ratingId}` — public read, writes server-only. `product.js` reads
+  seller ratings; a rating a buyer can write directly is a rating a buyer can
+  forge.
+
+**Client fixes:**
+
+- `business.html` — the services list queried `/services` with no `status` clause
+  and was denied wholesale, so a business with services showed "No services yet".
+  Now filters `status in ['active','published']`.
+- `business.html` reviews — rewired to the canonical `submitReview` / `getReviews`
+  Cloud Functions ([[Reviews Engine]]). The direct write could never satisfy
+  `claimsOwner()`: the payload carried `reviewerUid` but no `uid`, and set no
+  `status`, which the read rule requires to be `approved`. The duplicate-check
+  query ahead of it was denied for the same missing-status reason, which is why
+  the user saw "Could not submit review" before any write was attempted. The CF
+  owns duplicate detection, rate limiting, eligibility, sanitising, moderation
+  state and the rating summary. Error handling now surfaces the CF's specific
+  failure instead of a generic retry prompt, and the card renderer accepts both
+  the canonical and the legacy row shape.
+- `profile.html` — the "my reviews" panel fetched the newest 100 reviews
+  platform-wide and filtered client-side to the current user, which was both
+  denied (no status clause) and wrong (a user whose reviews were not in the
+  newest 100 saw none). Now two equality filters — `revieweeUid` + `status` —
+  which need no composite index, sorted client-side.
+- `sokoni-db.js::listenReviews` — same missing status clause, plus an unbounded
+  listen over the whole collection. Now approved-only, `limit(100)`, sorted
+  client-side.
+- `store.html` — shop metadata reads are individually guarded, and the store's
+  identity (name, logo, location) is now recovered from the seller's own products
+  when no shop document is readable. This matters today: `/shops` is readable
+  after this release but **empty**, and `/sellers` is empty too, so without the
+  fallback every store page renders as an unnamed, logo-less shell despite a live
+  catalogue.
+
+**Verification status — partial, and honestly so.** The rules compiled and
+released cleanly (CLI-confirmed), and `/shops` was observed readable immediately
+after the rules deploy. End-to-end verification of the review, request and sale
+flows requires an authenticated buyer and seller session, which I do not have.
+Worse, repeated automated browser runs from this machine tripped **App Check
+throttling** (403, ~24h backoff) — after which every Firestore read is denied,
+including `products` whose rule is `allow read: if true`. Any live check from
+this machine will show false denials until that expires; real devices are
+unaffected.
+
+Files affected: `firestore.rules`, `business.html`, `profile.html`,
+`sokoni-db.js`, `store.html`. Rules deploy + hosting deploy. No index changes,
+no schema changes, no Cloud Function changes.
+
 ## [2026-07-23] — perf(search): 15.5s → 7.7s cold, 2.5s → 1.5s warm
 
 Measured on the deployed site after the correctness fixes below: results were
@@ -425,11 +550,15 @@ should have caught the disagreement was broken:
 4. **Nothing searched stores.** No collection in the fallback held sellers, so a
    shop was unfindable by name under any spelling.
 5. **The engine's own fallback could not return a hit under any circumstance.**
-   It called `firebase.firestore()` — the **compat** SDK, which this app does not
-   load (`firebase.js` initialises the modular SDK) — filtered on
-   `status == 'active'` when most live products carry no status field, and
-   matched names with `startAt(q).endAt(q)`, an exact-equality range against an
-   original-case field, so a lower-cased query could never equal `"Cool Mint"`.
+   It filtered on `status == 'active'` when most live products carry no status
+   field, matched names with `startAt(q).endAt(q)` — an exact-equality range
+   against an original-case field, so a lower-cased query could never equal
+   `"Cool Mint"` — and mapped only the specialised index names, so the unified
+   `global_search` index the page asks for on the All tab resolved to nothing.
+   *(Correction to an earlier draft of this entry: it also called
+   `firebase.firestore()`, which I described as unavailable. That was wrong —
+   `firebase.js` installs a compat shim at `window.firebase`, so the call itself
+   worked. The three defects above are what made it return nothing.)*
 
 **New:** `sokoni-firestore-search.js` — one Firestore search implementation
 shared by `search.html`, the search engine's fallback and the header

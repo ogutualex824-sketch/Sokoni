@@ -2199,7 +2199,7 @@ exports.createCheckoutSession = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-    const { cartItems, deliveryFee, promoCode } = request.data || {};
+    const { cartItems, deliveryFee, promoCode, redeemLoyalty } = request.data || {};
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       throw new HttpsError("invalid-argument", "cartItems must be a non-empty array.");
     }
@@ -2317,7 +2317,60 @@ exports.createCheckoutSession = onCall(
       }
     }
 
-    const serverTotal = Math.max(0, Math.round(serverSubtotal + safeDeliveryFee - promoDiscount));
+    /* ── Loyalty point redemption ──────────────────────────────────────────────
+       Same defect as the promo codes: checkout.html subtracted a points discount
+       from the DISPLAYED total while reading the balance out of
+       localStorage.sokoniLoyalty — a number the buyer's own browser owns. The
+       charge never included it, so redeeming points quoted a price we then did
+       not honour.
+
+       The client now sends only INTENT (redeemLoyalty: true). The balance is read
+       here from loyaltyAccounts/{uid}, and the discount is decided here, capped by
+       both the real balance and MAX_REDEEM_PCT of the goods value. The points are
+       NOT deducted yet — an abandoned checkout must never burn them. The intended
+       redemption is recorded on the session and settled in the verifyPayment
+       transaction that consumes it. */
+    const POINTS_TO_KES  = 0.5;   /* 1 point = KES 0.50  — mirrors checkout.html */
+    const MAX_REDEEM_PCT = 0.25;  /* at most 25% of goods value paid with points */
+    let loyaltyDiscount = 0;
+    let loyaltyPoints   = 0;
+    let loyaltyError    = null;
+    if (redeemLoyalty === true) {
+      try {
+        const _lSnap = await db.collection("loyaltyAccounts").doc(request.auth.uid).get();
+        const _bal   = _lSnap.exists ? Math.max(0, Math.floor(Number(_lSnap.data().balance) || 0)) : 0;
+        if (_bal <= 0) {
+          loyaltyError = "No loyalty points available to redeem";
+        } else {
+          loyaltyDiscount = Math.floor(Math.min(
+            _bal * POINTS_TO_KES,
+            Math.round(serverSubtotal) * MAX_REDEEM_PCT
+          ));
+          loyaltyPoints = loyaltyDiscount > 0 ? Math.ceil(loyaltyDiscount / POINTS_TO_KES) : 0;
+          if (loyaltyDiscount <= 0) loyaltyError = "Order too small to redeem points";
+        }
+      } catch (e) {
+        console.error("[createCheckoutSession] loyalty lookup failed:", e);
+        loyaltyError = "Loyalty balance could not be verified";
+      }
+    }
+
+    /* Discounts may never take the charge below KES 1 — the gateway cannot bill
+       zero, and a free order must not silently become a KES 0 STK push. Trim the
+       loyalty portion first (points are refundable; a promo code is not). */
+    const _grossTotal = Math.round(serverSubtotal + safeDeliveryFee);
+    let   _discount   = promoDiscount + loyaltyDiscount;
+    if (_discount > _grossTotal - 1) {
+      const _allowed = Math.max(0, _grossTotal - 1);
+      const _trim    = _discount - _allowed;
+      loyaltyDiscount = Math.max(0, loyaltyDiscount - _trim);
+      loyaltyPoints   = loyaltyDiscount > 0 ? Math.ceil(loyaltyDiscount / POINTS_TO_KES) : 0;
+      promoDiscount   = Math.min(promoDiscount, _allowed - loyaltyDiscount);
+      _discount       = promoDiscount + loyaltyDiscount;
+      if (promoApplied) promoApplied.discount = promoDiscount;
+    }
+
+    const serverTotal = Math.max(0, _grossTotal - _discount);
 
     if (serverTotal < 1) {
       throw new HttpsError("invalid-argument", "Cart total is too low.");
@@ -2336,6 +2389,10 @@ exports.createCheckoutSession = onCall(
       promoCode:   promoApplied ? promoApplied.code : null,
       promoId:     promoApplied ? promoApplied.promoId : null,
       promoDiscount,
+      /* Settled by verifyPayment when this session is consumed — never here, or an
+         abandoned checkout would burn the buyer's points. */
+      loyaltyPoints,
+      loyaltyDiscount,
       status:      "pending",
       expiresAt:   admin.firestore.Timestamp.fromDate(expiresAt),
       createdAt:   admin.firestore.FieldValue.serverTimestamp(),
@@ -2352,6 +2409,9 @@ exports.createCheckoutSession = onCall(
       promoApplied:    promoApplied || undefined,
       promoDiscount:   promoDiscount || undefined,
       promoError:      promoError || undefined,
+      loyaltyDiscount: loyaltyDiscount || undefined,
+      loyaltyPoints:   loyaltyPoints || undefined,
+      loyaltyError:    loyaltyError || undefined,
     };
   }
 );
@@ -2608,6 +2668,35 @@ exports.verifyIntasendPayment = onRequest(
             db.collection("checkoutSessions").doc(String(sessionId)),
             { status: "consumed", orderId, consumedAt: admin.firestore.FieldValue.serverTimestamp() }
           );
+
+          /* Settle a loyalty redemption in the SAME transaction that consumes the
+             session, so the points can only ever be spent by a payment that
+             actually completed. createCheckoutSession deliberately did not deduct
+             them — an abandoned checkout must not burn a buyer's points.
+
+             increment() is used rather than read-modify-write: it needs no read
+             (this transaction has already begun writing, and Firestore forbids a
+             read after a write), and it is atomic. Spending the same session twice
+             is already impossible — the status must be "pending" to get here. */
+          const _pts = Math.max(0, Math.floor(Number(sessionDoc.loyaltyPoints) || 0));
+          if (_pts > 0 && sessionDoc.uid) {
+            tx.set(
+              db.collection("loyaltyAccounts").doc(String(sessionDoc.uid)),
+              {
+                balance:      admin.firestore.FieldValue.increment(-_pts),
+                lastRedeemed: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+            tx.set(db.collection("loyaltyRedemptions").doc(), {
+              uid:       String(sessionDoc.uid),
+              orderId,
+              sessionId: String(sessionId),
+              points:    _pts,
+              discount:  Math.max(0, Math.round(Number(sessionDoc.loyaltyDiscount) || 0)),
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
         }
       });
 
