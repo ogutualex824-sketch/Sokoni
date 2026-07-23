@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Checkout 2.0 — Success Experience Preview</title>
+<!-- DEV PREVIEW (feature/checkout-2.0). Not linked in production; renders the
+     Celebration Engine × Success Experience across milestones so the flagship
+     finish can be reviewed and screenshotted before it is wired into checkout. -->
+<style>
+  body{margin:0;background:#050505;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:24px 12px;}
+  h2{text-align:center;font-size:14px;letter-spacing:1px;text-transform:uppercase;color:#71ff00;margin:0 0 24px;}
+  .grid{display:flex;flex-wrap:wrap;gap:20px;justify-content:center;align-items:flex-start;}
+  .panel{width:400px;max-width:100%;background:#0a0a0a;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px 4px;}
+  .panel > .tag{text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin-bottom:4px;font-weight:700;}
+</style>
+</head>
+<body>
+  <h2>SOKONI Checkout 2.0 — Success Experience</h2>
+  <div class="grid" id="grid"></div>
+
+  <script src="/components/checkout/celebration-engine.js"></script>
+  <script src="/components/checkout/success-experience.js"></script>
+  <script>
+    var SCENARIOS = [
+      { tag: 'First order', data: { customerName:'Alex', orderId:'SK-2026-000001', orderCount:1, dateISO:'2026-03-04', total:1450, points:60, tier:'New', trackUrl:'https://mysokoni.co.ke/track/SK-2026-000001' } },
+      { tag: '100th order — Gold + reward', data: { customerName:'Alex', orderId:'SK-2026-019384', orderCount:100, dateISO:'2026-03-04', total:2350, points:180, tier:'Gold', donation:{amount:50,cause:'Education Fund'}, trackUrl:'https://mysokoni.co.ke/track/SK-2026-019384' } },
+      { tag: 'Christmas (7th order)', data: { customerName:'Wanjiku', orderId:'SK-2026-004500-noSurprise', orderCount:7, dateISO:'2026-12-25', total:3900, points:95, tier:'Silver', donation:{amount:100,cause:'Rider Welfare'}, trackUrl:'https://mysokoni.co.ke/track/SK-2026-004500' } },
+      { tag: 'Everyday order (default)', data: { customerName:'Otieno', orderId:'SK-2026-011020-x', orderCount:23, dateISO:'2026-03-04', total:780, points:40, tier:'Bronze', trackUrl:'https://mysokoni.co.ke/track/SK-2026-011020' } }
+    ];
+    var grid = document.getElementById('grid');
+    SCENARIOS.forEach(function (s) {
+      var panel = document.createElement('div');
+      panel.className = 'panel';
+      var tag = document.createElement('div'); tag.className = 'tag'; tag.textContent = s.tag;
+      var slot = document.createElement('div');
+      panel.appendChild(tag); panel.appendChild(slot); grid.appendChild(panel);
+      SokoniSuccess.render(slot, s.data);
+    });
+  </script>
+</body>
+</html>
