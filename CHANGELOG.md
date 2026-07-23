@@ -322,6 +322,52 @@ and a Search Quality Dashboard complete the feature set.
 
 ---
 
+## [2026-07-23] — fix(webhook): IntaSend challenge authentication replaces broken HMAC check
+
+### Root cause
+
+Every IntaSend payment callback since launch was rejected with HTTP 401.
+`payments/COMPLETE = 0` across the entire collection. No subscription has ever activated
+via the authoritative webhook path.
+
+Confirmed from production request data (`diag` object logged per rejected callback,
+commit `eccc87b`):
+- `diag.signatureHeaders = ""` — IntaSend sent no `x-intasend-signature` header
+- `diag.hasChallengeField = true`, `challengeLen = 12` — IntaSend authenticates via a `challenge` field in the request body
+- The deployed code required an HMAC header and rejected every callback before any payment processing
+
+### Fix
+
+`functions/index.js — intasendWebhook` only.
+
+1. New secret `INTASEND_WEBHOOK_CHALLENGE` added to `defineSecret` declarations
+2. Auth block replaced:
+   - Removed: reads `x-intasend-signature` header, HMAC-SHA256 of raw body
+   - Added: reads `req.body.challenge`, compares against `INTASEND_WEBHOOK_CHALLENGE` secret
+   - Both values normalised to 32-byte HMAC digests before `timingSafeEqual` — prevents length oracle
+
+### Security
+
+Behaviour on failure is unchanged: HTTP 401, fail-closed. No secret values in logs.
+Constant-time comparison maintained.
+
+### Files affected
+
+- `functions/index.js` — 2 edits: `defineSecret` declaration + auth block (25 lines net new, 10 removed)
+- `docs/WEBHOOK_FIX_RUNBOOK.md` — deployment steps, smoke test, replay procedure, Phase 3 debug guide
+
+### Required before production activation
+
+1. `gcloud secrets create INTASEND_WEBHOOK_CHALLENGE` + store the dashboard challenge value
+2. `firebase deploy --only functions:intasendWebhook`
+3. Smoke test (correct challenge → 200, wrong → 401)
+4. Replay KBQE4OW from IntaSend dashboard
+5. Verify full chain: `payments/COMPLETE` → subscription written → entitlement active
+
+See `docs/WEBHOOK_FIX_RUNBOOK.md` for exact commands.
+
+---
+
 ## [2026-07-22] — Image Pipeline & Search Index Production Recovery
 
 ### Summary
