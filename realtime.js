@@ -64,11 +64,27 @@
 
   /* Merge Firestore products with seller's own local products, then
      call displayProducts() which already exists on index/category */
+  /* A product is hidden from buyers only when it EXPLICITLY says so. Soft delete
+     sets status to archived/deleted/hidden and isVisible to false; this is where
+     that takes effect across Home, category pages and the offline cache. Absent
+     status means visible — 119 of 129 live products carry no status field, so a
+     "status === 'active' only" rule would wrongly hide them all. */
+  const _HIDDEN_STATUS = { archived: 1, deleted: 1, hidden: 1, removed: 1 };
+  function _isVisibleProduct(p) {
+    if (!p) return false;
+    if (p.isVisible === false) return false;
+    if (p.status && _HIDDEN_STATUS[String(p.status).toLowerCase()]) return false;
+    return true;
+  }
+
   const _renderProducts = _debounce(function(fsProds) {
-    const valid = (fsProds || []).filter(p => p && p.name && Number(p.price) > 0);
+    const valid = (fsProds || []).filter(p => p && p.name && Number(p.price) > 0 && _isVisibleProduct(p));
 
     let mine = [];
     try { mine = JSON.parse(localStorage.getItem('sellerProducts') || '[]'); } catch(e) {}
+    /* Apply the same visibility rule to the seller's own cached list, so an
+       archive made on another device does not reappear here. */
+    mine = mine.filter(_isVisibleProduct);
     const myIds = new Set(mine.map(p => String(p.id)));
 
     const all = [

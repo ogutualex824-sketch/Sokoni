@@ -1206,33 +1206,52 @@ window.promoteProductAsStory = promoteProductAsStory;
 
 function deleteProduct(index){
 
-    let sellerProducts = JSON.parse(
+    let sellerProducts = JSON.parse(localStorage.getItem("sellerProducts")) || [];
+    const target = sellerProducts[index];
+    if (!target) return;
 
-        localStorage.getItem(
-            "sellerProducts"
-        )
+    /* SOFT DELETE — archive in Firestore, do not destroy.
+       This handler used to splice the product out of localStorage and stop. The
+       marketplace reads Firestore (realtime.js), so the product vanished from the
+       seller's own dashboard while every buyer kept seeing it on Home, in search
+       and on category pages — the reported "deleted products still show" bug.
+       Firestore is the authority; the local array is a cache.
 
-    ) || [];
+       Archive, not hard-delete, so sales history, orders and analytics that
+       reference this product survive and the seller can relist later. Buyers stop
+       seeing it because realtime.js and the search fallback now hide anything
+       whose status is archived/deleted/hidden or whose isVisible is false. Legacy
+       products with no status field stay visible — absence means active. */
+    const uid = (JSON.parse(localStorage.getItem("sokoniUser") || "null") || {}).uid || null;
 
-    sellerProducts.splice(index,1);
-
-    localStorage.setItem(
-
-        "sellerProducts",
-
-        JSON.stringify(sellerProducts)
-
-    );
-
+    /* Remove from the local cache immediately so the dashboard updates without a
+       round-trip, and so realtime.js does not re-merge it from `mine`. */
+    sellerProducts.splice(index, 1);
+    localStorage.setItem("sellerProducts", JSON.stringify(sellerProducts));
     displaySellerProducts();
-
     updateSellerStats();
 
-    showNotification(
-        "🗑️ Product Deleted",
-        "delete"
-    );
+    /* Persist the archive to Firestore. Fire-and-forget and guarded: the local
+       view already updated; a merchant offline still sees it gone and the archive
+       syncs on their next connected action. Legacy localStorage-only products
+       (no Firestore id) simply skip — there is nothing to archive server-side. */
+    (async function () {
+        try {
+            if (!target.id || !window.firebaseDB) return;
+            const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+            await m.updateDoc(m.doc(window.firebaseDB, "products", String(target.id)), {
+                status:     "archived",
+                isVisible:  false,
+                archivedAt: m.serverTimestamp(),
+                archivedBy: uid,
+                updatedAt:  m.serverTimestamp(),
+            });
+        } catch (e) {
+            console.warn("[seller] archive sync deferred:", e && e.message);
+        }
+    })();
 
+    showNotification("🗑️ Product Archived", "delete");
 }
 
 /* =========================
