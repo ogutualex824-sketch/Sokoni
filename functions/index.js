@@ -22,7 +22,8 @@ function _getAnthropicClient() {
 const db = admin.firestore();
 
 const ANTHROPIC_API_KEY    = defineSecret("ANTHROPIC_API_KEY");
-const INTASEND_PRIVATE_KEY = defineSecret("INTASEND_PRIVATE_KEY");
+const INTASEND_PRIVATE_KEY       = defineSecret("INTASEND_PRIVATE_KEY");
+const INTASEND_WEBHOOK_CHALLENGE = defineSecret("INTASEND_WEBHOOK_CHALLENGE");
 const ALGOLIA_ADMIN_KEY    = defineSecret("ALGOLIA_ADMIN_KEY");
 const sokoniAt             = require("./sokoni-at");
 const SOKONI_HMAC_KEY      = defineSecret("SOKONI_HMAC_KEY");
@@ -5603,18 +5604,32 @@ exports.initiateSTKPush = onCall(
 
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
-  { timeoutSeconds: 30, secrets: [INTASEND_PRIVATE_KEY], invoker: "public", minInstances: 1 },
+  { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
   async (req, res) => {
     if (req.method !== "POST") { res.status(405).send("Method Not Allowed"); return; }
 
-    /* Verify HMAC-SHA256 signature */
-    const privateKey = INTASEND_PRIVATE_KEY.value();
-    const sig        = req.headers["x-intasend-signature"] || "";
-    const rawBody    = req.rawBody || Buffer.from(JSON.stringify(req.body));
-    const expected   = crypto.createHmac("sha256", privateKey)
-                             .update(rawBody).digest("hex");
-    const sigBuf = Buffer.from(sig.length === expected.length ? sig : "0".repeat(expected.length), "hex");
-    if (!crypto.timingSafeEqual(sigBuf, Buffer.from(expected, "hex"))) { res.status(401).send("Unauthorized"); return; }
+    /* Verify IntaSend challenge — IntaSend authenticates webhooks with a `challenge`
+       value in the request body, not a header-based HMAC. Production evidence:
+         diag.signatureHeaders = ""           → no x-intasend-signature header sent
+         diag.hasChallengeField = true        → body carries a challenge field
+         diag.challengeLen = 12              → 12-char value set in IntaSend dashboard
+       Both values are normalised to a 32-byte HMAC digest before comparison so
+       timingSafeEqual receives same-length buffers regardless of input length. */
+    const challenge         = String((req.body && req.body.challenge) || "");
+    const expectedChallenge = INTASEND_WEBHOOK_CHALLENGE.value();
+    const normKey           = Buffer.from("sokoni-intasend-challenge-norm");
+    const a = crypto.createHmac("sha256", normKey).update(challenge).digest();
+    const b = crypto.createHmac("sha256", normKey).update(expectedChallenge).digest();
+    if (!crypto.timingSafeEqual(a, b)) {
+      logger.warn("[intasendWebhook] challenge mismatch — rejecting", {
+        hasChallenge: challenge.length > 0,
+        challengeLen: challenge.length,
+        invoiceId:    req.body?.invoice?.invoice_id || req.body?.invoice_id || "unknown",
+        method:       req.method,
+      });
+      res.status(401).send("Unauthorized");
+      return;
+    }
 
     const { invoice, value } = req.body || {};
     const state      = invoice?.state || "FAILED";
