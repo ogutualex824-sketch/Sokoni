@@ -5646,11 +5646,13 @@ exports.intasendWebhook = onRequest(
       return;
     }
 
-    const { invoice, value } = req.body || {};
-    const state      = invoice?.state || "FAILED";
-    const apiRef     = invoice?.api_ref || value?.api_ref;
-    const checkoutId = invoice?.id;
-    const amount     = invoice?.net_amount || invoice?.amount;
+    /* IntaSend sends a flat payload per official docs — all fields at root level.
+       The `invoice` fallback handles any future nested-object variant gracefully. */
+    const invoice    = req.body?.invoice || {};
+    const state      = String(invoice.state    || req.body?.state    || "FAILED").toUpperCase();
+    const apiRef     = invoice.api_ref         || req.body?.api_ref;
+    const checkoutId = invoice.id              || req.body?.invoice_id;
+    const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
@@ -6516,11 +6518,13 @@ exports.webhookIntasend = onRequest(
       return;
     }
 
-    const { invoice, value } = req.body || {};
-    const state      = invoice?.state || "FAILED";
-    const apiRef     = invoice?.api_ref || value?.api_ref;
-    const checkoutId = invoice?.id;
-    const amount     = invoice?.net_amount || invoice?.amount;
+    /* IntaSend sends a flat payload per official docs — all fields at root level.
+       The `invoice` fallback handles any future nested-object variant gracefully. */
+    const invoice    = req.body?.invoice || {};
+    const state      = String(invoice.state    || req.body?.state    || "FAILED").toUpperCase();
+    const apiRef     = invoice.api_ref         || req.body?.api_ref;
+    const checkoutId = invoice.id              || req.body?.invoice_id;
+    const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
