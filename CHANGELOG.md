@@ -1,4 +1,46 @@
-﻿## [2026-07-23] — fix(nav+ui): one bottom nav everywhere, smaller product imagery
+﻿## [2026-07-23] — fix(overlay+nav): menu ✕ was unclickable and left the page blurred
+
+**The menu left the home page blurred (root cause).** `sokoni-drawers.css` set
+`--sk-d-z: 9500` / `--sk-d-bkdp-z: 9499`, i.e. *below* the fixed top nav
+(`#sk-top-nav`, z-index **100001**). Every `.sk-drawer` renders its close button
+in the top ~58px of the screen — exactly where that nav sits. Measured in
+Chromium at 1440×900: the menu ✕ centres at (1112, 26) and
+`document.elementFromPoint` there returns **`BUTTON#sk-notif-btn`**, not the ✕.
+
+So tapping ✕ hit the Notifications button instead. The drawer never closed, and
+its blurred backdrop stayed over the page. This is precisely the rule in
+`docs/OVERLAY_ARCHITECTURE.md` — *"If it covers the header, it must out-rank the
+header"* — and the menu's backdrop covers and blurs the whole header.
+
+Raised to `100020` / `100019`: above the top nav (100001) and the marketing
+popup (100010), still below the privacy consent gate (300001), which must stay
+on top. Verified after the fix: backdrop `is-active` removed, opacity 0,
+`pointer-events:none`, `sk-body-locked` + `sk-drawer-active` cleared from body,
+no blur overlay left, and the underlying page links are clickable again.
+`--sk-z-drawer` (600) in `sokoni-tokens.css` is a different token and is
+unchanged, so the drawer-vs-sheet distinction still holds.
+
+**Header Profile button reloaded the home page.** `index.html` hardcoded
+`<a href="login.html" id="sk-nav-avatar">`. For a signed-in user that lands on
+login.html, where auth.js's already-logged-in guard immediately redirects to
+`index.html` — so tapping Profile just reloaded Home. Now points to
+`profile.html`, which carries `data-require-auth` + `auth-guard.js` and shows an
+inline sign-in gate for signed-out users. This is what the bottom nav already
+linked to.
+
+**property-hub.html** bottom nav was Home/Property/BnB/Landlord/Services;
+standardised to Home · Shop · Services · Orders · Profile.
+
+Files affected: `sokoni-drawers.css`, `index.html`, `property-hub.html`.
+No database, API, or security changes. No breaking changes.
+
+Not reproduced: `notifications.html` loads clean locally (0 page errors, 0
+console errors, no navigation away, auth gate not shown), and the Notification
+Centre already uses `--sk-z-sheet`. Two pre-existing overlay-test failures
+(`sokoni-beta-gate.js` at 99998, `admin.html #firstRunPin2` at 500) are
+unrelated to this change and were confirmed present with it reverted.
+
+## [2026-07-23] — fix(nav+ui): one bottom nav everywhere, smaller product imagery
 
 **Bottom navigation standardised** to Home · Shop · Services · Orders · Profile
 across every page that carries it, so the bar means the same thing everywhere:
@@ -72,6 +114,55 @@ checkout.html qty defect fixed earlier does **not** exist here.
 Files affected: `sokoni-food.js`, `food-menu.html`, `cart.js`, `cart.html`.
 Security: order id is URL-encoded into the vendor CTA href; vendor name escaped
 via `_esc`. No database, API, or breaking changes.
+
+## [2026-07-23] — fix(search): Algolia client never reached the index — two request-layer defects
+
+Found by tracing the deployed page in a real browser after the fallback work
+below. Both are in `sokoni-search-engine.js` and both predate this sprint.
+
+**1. `_fetch` threw before any request was sent.** `search()` destructured its
+own defaults into locals but passed `_fetch` the caller's **raw** `opts`. Every
+caller on `search.html` omits `facets`, so `_fetch` read `facets.length` on
+`undefined` and threw `Cannot read properties of undefined (reading 'length')`.
+The throw was caught by the page's Algolia handler, which logged "Algolia
+unavailable" — so Algolia failed on **every query on the search page**,
+regardless of index health. `search()` now passes normalised options, and
+`_fetch` carries its own defaults for any other caller.
+
+**2. Malformed multi-query request.** Algolia's `/1/indexes/*/queries` requires
+`requests[].params` to be a **URL-encoded query string**; the client posted a
+JSON object. Algolia answered `400 — Expecting a string (near 1:40)` for every
+request, so no search on this client had ever reached an index. Added
+`AlgoliaBrowserClient._encodeParams()` and applied it in `multiSearch()`
+(single-index `search()` routes through it too).
+
+With both fixed, requests now parse — and Algolia answers
+`Invalid Application-ID or API key`. The `getAlgoliaSearchKey` CF is healthy and
+returns a 1,256-char secured key for app `FF2WSTR4YC`, so the `ALGOLIA_SEARCH_KEY`
+secret holds a value that Algolia does not accept (wrong key, or an app that no
+longer exists). **Algolia is therefore not serving search today** — the Firestore
+path added below is carrying all traffic. Resolving the secret is a separate,
+credential-side task.
+
+Also noted while verifying, not fixed here (needs decisions beyond this change):
+- The `sellers` collection is **empty in production**, and `/shops` has **no rule
+  in `firestore.rules`**, so a shop's own document is unreadable. Store metadata
+  on `store.html` therefore falls back to an empty `sellers` doc, and search
+  cannot return a dedicated store row. A shop-name query still returns that
+  shop's products, because products carry `sellerName` / `businessName`
+  (`businessName` added to the search fields in this change).
+- The secured key restricts results with `filters: 'status:active OR
+  status:published'`. Once the key is valid, any product whose `status` is absent
+  or different will be filtered out of Algolia results even though the platform
+  visibility contract treats it as visible.
+
+Verified in a real browser against `https://mysokoni.co.ke` after deploy:
+`cool mint` → 3 results (both COOL MINT products), `kass` / `kass vapes` → 12
+results (the seller's full catalogue), `vape` → 19, `mint` → 5. No
+permission-denied warnings for any collection.
+
+Files affected: `sokoni-search-engine.js`, `sokoni-firestore-search.js`.
+No database, API, rules or index changes. Hosting deploy only.
 
 ## [2026-07-23] — fix(search): search returned nothing for live listings — five defects in the fallback path
 

@@ -28,8 +28,19 @@
   --sk-d-w-md:    min(90vw, 480px);
   --sk-d-w-lg:    min(90vw, 520px);
   --sk-d-hdr-h:   52px;
-  --sk-d-z:       9500;
-  --sk-d-bkdp-z:  9499;
+  /* These were 9500 / 9499 — BELOW the fixed top nav (#sk-top-nav, z-index
+     100001). Every .sk-drawer puts its close button in the top ~58px of the
+     screen, which is exactly where that nav sits, so the nav painted over the
+     drawer header and swallowed the click: elementFromPoint on the ✕ returned
+     #sk-notif-btn, not the ✕. Tapping the menu's ✕ therefore hit Notifications,
+     the drawer never closed, and the blurred backdrop stayed on screen — the
+     reported "menu leaves the home page blurred".
+
+     Must sit above the top nav (100001) and the marketing popup (100010), and
+     BELOW the privacy consent gate (300001), which has to stay on top of
+     everything. */
+  --sk-d-z:       100020;
+  --sk-d-bkdp-z:  100019;
   --sk-d-dur:     0.3s;
   --sk-d-ease:    cubic-bezier(0.34, 1.1, 0.64, 1);
 }

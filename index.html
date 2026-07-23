@@ -204,7 +204,12 @@
         <span aria-hidden="true">🛒</span>
         <span id="sk-nav-cart-pip" style="display:none;" aria-label="0 items">0</span>
       </a>
-      <a href="login.html" id="sk-nav-avatar" aria-label="Profile">👤</a>
+      <!-- Was href="login.html". For a signed-in user that landed on login.html,
+           where auth.js's already-logged-in guard immediately redirected to
+           index.html — so tapping Profile just reloaded the home page. profile.html
+           carries data-require-auth + auth-guard.js, so it sends a signed-OUT user
+           to login itself. This is also what the bottom nav already links to. -->
+      <a href="profile.html" id="sk-nav-avatar" aria-label="Profile">👤</a>
       <button type="button" class="sk-nav-icon-btn" id="sk-theme-btn" aria-label="Toggle theme" title="Toggle theme"
               onclick="if(window.SokoniTheme){SokoniTheme.toggle();}">
         <span id="sk-theme-icon" aria-hidden="true">🌙</span>
