@@ -182,12 +182,41 @@ browser the anonymous read **succeeds** (`exists: true`), and `permission-denied
 appears only under headless, i.e. it is an **App Check artifact of automation**,
 not a rules divergence. See the correction note under 0d.
 
-**Cause: NOT YET ESTABLISHED.** What is certain is that the storefront renders
-demo data instead of the 129 real products, and that this persists in a normal
-browser. What is *not* established is why — it is **not** a permissions failure.
-Candidates still open: the feed's query never runs, runs against the wrong
-source, fails for an unrelated reason, or mock data is rendered and never
-replaced. This needs isolating before any fix.
+**ROOT CAUSE — instrumented, in a headed production session:**
+
+```
+@firebase/app-check: Requests throttled due to 403 error.
+                     Attempts allowed again after 01d:00m:00s
+[SOKONI] Security verification failed. Please refresh and try again.
+[RT] products: Missing or insufficient permissions.
+__sokoniAppCheckReady -> resolved: "rejected"
+```
+
+**App Check fails with 403 for real browsers on production, then throttles that
+client for 24 hours.** Firestore reads are denied *downstream of that*, the
+catalogue listener never delivers, and the demo fallback is never replaced.
+
+**It is intermittent, which is why earlier readings disagreed.** Both states were
+observed on production in headed sessions:
+- App Check **succeeds** → anonymous `products` read returns `exists: true`,
+  product pages load normally.
+- App Check **403 / throttled** → reads denied, storefront shows demo data.
+
+That intermittency is exactly what produced the contradictory evidence and the
+withdrawn rules theory. Firestore rules are **not** implicated: when App Check
+holds a token, the identical anonymous read succeeds.
+
+**Pipeline confirmed by instrumentation, not inference:**
+`sokoni-db.js` → HTTP 200 and imports cleanly on demand · `_homeMergeFirestore`
+is defined and ready · but `window.SokoniDB` stays undefined and the
+`sokoni:catalogue` `appcheck-ready` event **never fires**, because the block
+awaits `__sokoniAppCheckReady`, which resolves **"rejected"**.
+
+**Where to look:** the App Check 403 itself — ReCaptcha site-key/domain
+registration for `mysokoni.co.ke`, or App Check enforcement configured without a
+working provider for this origin. The 24-hour throttle makes each failure
+long-lived for that client, so a user who hits it once sees a demo catalogue for
+a day.
 
 It is the *fallback* that makes this severe regardless of cause — the page looks
 fully populated, so a catalogue failure produces no visible symptom.
