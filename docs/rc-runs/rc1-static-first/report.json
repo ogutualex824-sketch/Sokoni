@@ -1,0 +1,325 @@
+{
+  "label": "rc1-static-first",
+  "backend": "static(ui-only)",
+  "startedAt": "2026-07-24T05:28:57.031Z",
+  "privileged": false,
+  "suites": [
+    {
+      "id": "RC-01",
+      "title": "Seller Journey",
+      "verdict": "BLOCKED",
+      "steps": [
+        {
+          "name": "Seed seller identity (+ premium claim)",
+          "status": "BLOCKED",
+          "detail": "static backend has no auth — run against emulator or production",
+          "evidence": [],
+          "at": "2026-07-24T05:28:57.067Z"
+        },
+        {
+          "name": "Create shop document",
+          "status": "BLOCKED",
+          "detail": "static backend cannot write Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:28:57.068Z"
+        },
+        {
+          "name": "Upload product",
+          "status": "BLOCKED",
+          "detail": "static backend cannot write Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:28:57.068Z"
+        },
+        {
+          "name": "Edit product (price change persists)",
+          "status": "BLOCKED",
+          "detail": "static backend cannot write Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:28:57.069Z"
+        },
+        {
+          "name": "Search reflects the product (searchableTerms present)",
+          "status": "BLOCKED",
+          "detail": "static backend cannot read Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:28:57.070Z"
+        },
+        {
+          "name": "Delete product = archive (soft-delete contract)",
+          "status": "BLOCKED",
+          "detail": "static backend cannot write Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:28:57.070Z"
+        },
+        {
+          "name": "Seller dashboard renders (UI)",
+          "status": "BLOCKED",
+          "detail": "seller session injection into the browser is the next backend capability",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\rc1-static-first\\rc-01-seller\\seller-dashboard.png"
+            }
+          ],
+          "at": "2026-07-24T05:28:57.071Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-02",
+      "title": "Buyer Journey",
+      "verdict": "PARTIAL",
+      "steps": [
+        {
+          "name": "Home renders a product grid",
+          "status": "PASS",
+          "detail": "106 card-like nodes",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\rc1-static-first\\rc-02-buyer\\home.png"
+            }
+          ],
+          "at": "2026-07-24T05:29:04.387Z"
+        },
+        {
+          "name": "Category page renders",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\rc1-static-first\\rc-02-buyer\\category.png"
+            }
+          ],
+          "at": "2026-07-24T05:29:10.104Z"
+        },
+        {
+          "name": "Checkout math: subtotal = Σ price×qty",
+          "status": "PASS",
+          "detail": "subtotal KES 47,200 = qty-correct",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\rc1-static-first\\rc-02-buyer\\checkout.png"
+            },
+            {
+              "type": "assertion",
+              "expected": 47200,
+              "shown": "KES 47,200"
+            }
+          ],
+          "at": "2026-07-24T05:29:15.309Z"
+        },
+        {
+          "name": "Order history persists (authenticated)",
+          "status": "BLOCKED",
+          "detail": "static backend has no auth — run against emulator or production",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.309Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-03",
+      "title": "Payment → Subscription Journey",
+      "verdict": "BLOCKED",
+      "steps": [
+        {
+          "name": "Payment initiated (STK push accepted)",
+          "status": "BLOCKED",
+          "detail": "needs live INTASEND secrets — run on staging with secrets, not locally (createCheckoutSession + IntaSend)",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.323Z"
+        },
+        {
+          "name": "Webhook accepted (HMAC challenge verified)",
+          "status": "BLOCKED",
+          "detail": "needs INTASEND_WEBHOOK_CHALLENGE to sign a valid webhook",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.323Z"
+        },
+        {
+          "name": "Payment state → COMPLETE",
+          "status": "BLOCKED",
+          "detail": "depends on webhook step, which needs secrets",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.324Z"
+        },
+        {
+          "name": "Subscription activated",
+          "status": "BLOCKED",
+          "detail": "gated on payment COMPLETE (secrets)",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.324Z"
+        },
+        {
+          "name": "Entitlement updated + UI reflects plan",
+          "status": "BLOCKED",
+          "detail": "gated on subscription activation (secrets)",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.324Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-04",
+      "title": "Inventory Journey",
+      "verdict": "BLOCKED",
+      "steps": [
+        {
+          "name": "Seed probe product at stock 10",
+          "status": "BLOCKED",
+          "detail": "static backend cannot write Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.330Z"
+        },
+        {
+          "name": "Place order for qty 2 (decrement path)",
+          "status": "BLOCKED",
+          "detail": "static backend cannot write Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.331Z"
+        },
+        {
+          "name": "Stock is now 8",
+          "status": "BLOCKED",
+          "detail": "static backend cannot read Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.331Z"
+        },
+        {
+          "name": "Search + seller view agree on 8",
+          "status": "BLOCKED",
+          "detail": "static backend cannot read Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.332Z"
+        },
+        {
+          "name": "Realtime + offline cache reflect change",
+          "status": "BLOCKED",
+          "detail": "realtime listener + IndexedDB offline assertion is a later capability",
+          "evidence": [],
+          "at": "2026-07-24T05:29:19.332Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-05",
+      "title": "Search Journey",
+      "verdict": "PARTIAL",
+      "steps": [
+        {
+          "name": "Search page loads and accepts a query",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\rc1-static-first\\rc-05-search\\search-query.png"
+            }
+          ],
+          "at": "2026-07-24T05:29:19.338Z"
+        },
+        {
+          "name": "Input font ≥16px (no iOS zoom on the search field)",
+          "status": "PASS",
+          "detail": "16px",
+          "evidence": [
+            {
+              "type": "assertion",
+              "searchInputFontPx": 16
+            }
+          ],
+          "at": "2026-07-24T05:29:24.345Z"
+        },
+        {
+          "name": "Warm-cache path present (localStorage)",
+          "status": "PASS",
+          "detail": "cache keys present",
+          "evidence": [],
+          "at": "2026-07-24T05:29:24.353Z"
+        },
+        {
+          "name": "Typo + bilingual (kiatu/viatu) resolve",
+          "status": "BLOCKED",
+          "detail": "synonym/typo resolution needs seeded catalog on a data backend",
+          "evidence": [],
+          "at": "2026-07-24T05:29:24.357Z"
+        },
+        {
+          "name": "Deleted product disappears from results",
+          "status": "BLOCKED",
+          "detail": "static backend cannot read Firestore",
+          "evidence": [],
+          "at": "2026-07-24T05:29:24.357Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-06",
+      "title": "PWA Journey",
+      "verdict": "PASS",
+      "steps": [
+        {
+          "name": "Manifest linked and valid",
+          "status": "PASS",
+          "detail": "SOKONI — Kenya's Global Marketplace, 5 icons",
+          "evidence": [
+            {
+              "type": "assertion",
+              "name": "SOKONI — Kenya's Global Marketplace",
+              "icons": 5
+            }
+          ],
+          "at": "2026-07-24T05:29:24.373Z"
+        },
+        {
+          "name": "Service worker registers",
+          "status": "PASS",
+          "detail": "none",
+          "evidence": [
+            {
+              "type": "assertion",
+              "serviceWorker": "none"
+            }
+          ],
+          "at": "2026-07-24T05:29:29.509Z"
+        },
+        {
+          "name": "Offline fallback page renders",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\rc1-static-first\\rc-06-pwa\\offline.png"
+            }
+          ],
+          "at": "2026-07-24T05:29:36.295Z"
+        },
+        {
+          "name": "Service-worker file is served and versioned",
+          "status": "PASS",
+          "detail": "/service-worker.js v=sokoni-20260723-app-shell-v100",
+          "evidence": [
+            {
+              "type": "assertion",
+              "path": "/service-worker.js",
+              "bytes": 49332,
+              "version": "sokoni-20260723-app-shell-v100"
+            }
+          ],
+          "at": "2026-07-24T05:29:36.678Z"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-07-24T05:29:36.889Z",
+  "summary": {
+    "suites": 6,
+    "pass": 10,
+    "fail": 0,
+    "blocked": 20
+  }
+}
