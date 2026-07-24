@@ -156,9 +156,17 @@ exports.initiateWalletTopUp = onCall(
     let invoiceId = null;
     try {
       const IntaSend = require('intasend-node');
+      /* intasend-node takes THREE POSITIONAL args:
+             IntaSend(publishable_key, secret_key, test_mode)
+         This was called as IntaSend(key, { testMode }) — so the secret landed in
+         the publishable slot and an OBJECT became secret_key. The client sends
+         `Authorization: Bearer ${secret_key}`, i.e. "Bearer [object Object]",
+         and IntaSend answered HTTP 500 on every STK push. test_mode was also
+         left undefined. Matches the working call in payment-orchestrator.js. */
       const client = new IntaSend(
-        INTASEND_KEY.value(),
-        { testMode: process.env.NODE_ENV !== 'production' }
+        '',                                        /* publishable key — unused for collection */
+        INTASEND_KEY.value(),                      /* secret key */
+        process.env.FUNCTIONS_EMULATOR === 'true'  /* test mode only under the emulator */
       );
 
       const response = await client.collection().charge({
@@ -178,7 +186,15 @@ exports.initiateWalletTopUp = onCall(
       // IntaSend failure — mark transaction failed and surface a clean error
       await txRef.update({ status: 'failed' });
       await walletRef.update({ pendingTopUp: null });
-      console.error('[wallet] IntaSend STK push error:', err.message);
+      /* err.message was `undefined` for IntaSend transport errors, so the real
+         cause (HTTP 500 from a malformed Authorization header) never reached the
+         logs — only a generic "contact support". Log whatever the error actually
+         carries, without leaking the credential. */
+      console.error('[wallet] IntaSend STK push error:', {
+        message: err && err.message,
+        status:  err && (err.status || err.statusCode),
+        body:    (() => { try { return JSON.stringify(err).slice(0, 500); } catch (_) { return String(err); } })(),
+      });
       throw new HttpsError('unavailable', 'Unable to initiate M-Pesa prompt. Please try again or contact support.');
     }
 
@@ -224,9 +240,17 @@ exports.confirmWalletTopUp = onCall(
     let invoiceStatus = null;
     try {
       const IntaSend = require('intasend-node');
+      /* intasend-node takes THREE POSITIONAL args:
+             IntaSend(publishable_key, secret_key, test_mode)
+         This was called as IntaSend(key, { testMode }) — so the secret landed in
+         the publishable slot and an OBJECT became secret_key. The client sends
+         `Authorization: Bearer ${secret_key}`, i.e. "Bearer [object Object]",
+         and IntaSend answered HTTP 500 on every STK push. test_mode was also
+         left undefined. Matches the working call in payment-orchestrator.js. */
       const client = new IntaSend(
-        INTASEND_KEY.value(),
-        { testMode: process.env.NODE_ENV !== 'production' }
+        '',                                        /* publishable key — unused for collection */
+        INTASEND_KEY.value(),                      /* secret key */
+        process.env.FUNCTIONS_EMULATOR === 'true'  /* test mode only under the emulator */
       );
 
       const result = await client.collection().status(tx.invoiceId);
@@ -733,7 +757,8 @@ exports.sweepStaleWalletTopUps = onSchedule(
       if (tx.invoiceId) {
         try {
           const IntaSend = require('intasend-node');
-          const client   = new IntaSend(INTASEND_KEY.value(), { testMode: process.env.NODE_ENV !== 'production' });
+          /* Positional args — see the note at the STK push call site. */
+          const client   = new IntaSend('', INTASEND_KEY.value(), process.env.FUNCTIONS_EMULATOR === 'true');
           const result   = await client.collection().status(tx.invoiceId);
           const state    = (result?.invoice?.state || result?.state || '').toUpperCase();
           if (state === 'COMPLETE') {

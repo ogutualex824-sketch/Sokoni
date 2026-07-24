@@ -1,3 +1,73 @@
+## [2026-07-24] — fix(wallet): STK push sent `Bearer [object Object]` to IntaSend and got HTTP 500
+
+`intasend-node` takes **three positional arguments**:
+
+```js
+IntaSend(publishable_key, secret_key, test_mode)
+```
+
+`wallet.js` called it with two, the second being an options object:
+
+```js
+new IntaSend(INTASEND_KEY.value(), { testMode: process.env.NODE_ENV !== 'production' })
+```
+
+So the secret landed in the *publishable* slot, an **object became `secret_key`**, and
+`test_mode` was left undefined. The client builds
+`Authorization: Bearer ${secret_key}` — it was literally sending
+`Bearer [object Object]`. IntaSend answered **HTTP 500** on every top-up, the handler
+threw `unavailable`, and the buyer saw *"Unable to initiate M-Pesa prompt … contact
+support."* That message was the only symptom, which is why this read as a payments
+outage rather than a two-argument mistake.
+
+`payment-orchestrator.js` had always called it correctly — the two call sites had
+silently diverged.
+
+### Evidence
+
+Production logs, 2026-07-24 17:49 (real iPhone), three attempts:
+
+```
+Callable request verification passed          ← auth fine
+IntaSend Request HTTP Error Code: 500         ← gateway refused
+[wallet] IntaSend STK push error: undefined   ← cause invisible
+→ HTTP 503 to the client
+```
+
+Credential verified directly, read-only, with a bogus invoice id so nothing could be
+charged:
+
+| Host | Status | Meaning |
+|---|---|---|
+| `payment.intasend.com` | **200** "Invoice … does not exist" | key valid for **live** |
+| `sandbox.intasend.com` | **401** "Invalid token for sandbox environment" | live key rejected by sandbox |
+
+The key was never the problem, and `test_mode` must stay false in production — had the
+old expression evaluated true, it would have failed the other way.
+
+### Changes
+
+* `functions/wallet.js` — all **three** call sites corrected to the positional
+  signature, `test_mode` now `FUNCTIONS_EMULATOR === 'true'`, matching
+  `payment-orchestrator.js`.
+* `functions/wallet.js` — error logging no longer relies on `err.message`, which was
+  `undefined` for IntaSend transport errors and hid the real cause. Logs status and a
+  truncated body; the credential is never logged.
+* `sokoni-zero-trust.js` — separate latent race: `guard()` read `auth.currentUser`
+  synchronously, so a signed-in user whose session had not yet rehydrated was treated
+  as `unauthenticated` and, for a financial op, **failed closed**. Now resolves auth
+  state first (bounded, 8s). A genuinely signed-out user is still blocked — this
+  changes *when* the question is asked, not the answer. **Not** the reported fault:
+  `sokoni-zero-trust.js` is not loaded on `checkout.html`, so that path was inert.
+
+**Deployed:** `initiateWalletTopUp`, `confirmWalletTopUp`, `sweepStaleWalletTopUps`.
+`run.invoker` binding confirmed to have survived the redeploy (401 + function JSON, not
+403 + HTML). **Not deployed:** the `sokoni-zero-trust.js` change (hosting).
+**Database:** none. **API:** none. **Breaking:** none.
+
+**Still unproven:** the STK prompt itself. That needs one real top-up on a real
+handset — everything up to the gateway handshake is now verified, the prompt is not.
+
 ## [2026-07-24] — refactor(providers): one registry, one client, five surfaces; the demo directory is gone
 
 `providers` is now the single canonical service-provider registry, and every
