@@ -1,4 +1,304 @@
-﻿## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
+## [2026-07-24] — fix(search): one malformed product was blocking Algolia indexing for every product batched with it
+
+Found by the variant acceptance probe, which failed twice for a reason that had
+nothing to do with variants. **Pre-existing, live, and unrelated to the feature
+under test.**
+
+### What was happening
+
+`products/1784487444890` ("PEACH MANGO ICE") stores a base64 `data:` URI as its
+image — 195,425 bytes in `images`, 195,397 in `image`, 397,980 for the whole
+document. The live transformer passed it straight through, producing a
+**195,884-byte** Algolia record against a **10,000-byte** limit.
+
+**Algolia rejects the entire batch when one record is oversized.** Worse, the
+queue's error handler then marked *every* item in the group failed — not just
+the offender — so the same poison record failed them all again on each retry
+until the whole set reached the DLQ:
+
+```
+gs__products | upsert | failed | products_VP99 …
+ERR: Record at the position 4 objectID=products_1784487444890 is too big
+     size=195884/10000 bytes
+```
+
+26+ consecutive failures on one document in a single 30-entry window. New and
+edited products were not reaching the index.
+
+### Why it was invisible
+
+`algolia-backfill.js` already carried both defences — `safeImageUrl()` rejects
+data URIs, `enforceSize()` caps records at 9KB. Neither had ever been ported to
+the live path. The **recovery path was hardened and the runtime path was not**,
+which is the `runtime path ≠ recovery path` pattern already recorded in
+KNOWN_LIMITATIONS. Reading either file alone looks correct.
+
+### The fix — three defences
+
+New `functions/algolia-sanitize.js`, imported by **both** paths so they cannot
+diverge again:
+
+1. **Sanitise before batching.** Base64 `data:` URIs are stripped from every
+   image field (flat `imageUrl`/`thumbnail`, the `images[]` array, and
+   `seller.logo`). The poison record measures **400,658 → 602 bytes** and
+   **still indexes** — search keeps the product rather than losing it.
+2. **Isolate, never cascade.** `_flushIsolating` retries a rejected batch one
+   record at a time, so only a genuine offender is marked failed. An irreducible
+   record is held out *before* the batch is sent. The happy path still costs
+   exactly one batch call.
+3. **Actionable diagnostics.** Every isolation logs the `objectID`, the
+   collection/docId, and the measured size against the limit.
+
+`objectID` is preserved through every trimming step, so a degraded record stays
+findable and repairable.
+
+### Verification
+
+`npm run test:algolia-isolation` — **14 checks**. The Algolia stub reproduces
+the real all-or-nothing rejection semantics, and the suite first proves the
+incident reproduces *without* the fix (whole batch rejected, nothing indexed)
+before proving it does not with it. Covers: valid records untouched, offender
+sanitised and still indexed, unfixable record isolated before the batch,
+neighbours unaffected, diagnostics name the objectID and reason, and the queue
+continues with subsequent batches.
+
+### Recovery
+
+153 queue entries driven to `dlq` status by the poison record were reset to
+`pending` with `attempts: 0` so the fixed drain could reprocess them.
+
+### Files
+
+`functions/algolia-sanitize.js` (new), `functions/algolia-queue.js`,
+`functions/scripts/algolia-backfill.js` (now imports the shared helpers instead
+of carrying its own), `scripts/test-algolia-batch-isolation.js` (new),
+`package.json`.
+
+**Deployed:** `processAlgoliaQueue`. **No breaking changes.**
+
+### Recommended follow-up (not implemented)
+
+`seller-wiring.js` persists product images as base64 data URIs. Rejecting or
+normalising them at save time would stop oversized documents entering any
+downstream system rather than defending at each consumer — but existing products
+depend on current behaviour for rendering, so it needs its own change.
+
+## [2026-07-24] — feat(variants): saved product variants integrated across display, search, indexing and filtering
+
+The seller forms already captured colour, size, storage, pack size, volume and
+material. Nothing downstream read them. This wires that data through the product
+page, the product cards, search, the Algolia index and category filters.
+
+Scope was explicitly display/consumption — the upload form and edit modal were
+**not** modified.
+
+### Two defects found in the existing pipeline (fixed)
+
+**1 — `indexProductUpdate` could not see a variant edit, and extending it would
+have looped.** The guard was a fixed `TEXT_FIELDS` list compared with `!==`.
+That is wrong in both directions: array fields compare by *reference*, so two
+snapshots of an unchanged array always look changed; and any field outside the
+list — a seller adding colours — always looks unchanged and leaves the product's
+terms stale. Adding the variant arrays to that list would therefore have re-armed
+the very infinite update loop the list was written to prevent.
+
+Replaced with an idempotence check: regenerate the terms, write only if they
+differ from what is stored. Self-limiting (the trigger's own write produces
+identical terms on the next pass), field-list-free, and correct for any field
+`search-terms.js` learns later.
+
+Measured on live data: **0 of 129 products** currently carry an array in those
+fields, so the loop was **latent, never firing** — this is a fix for a trap, not
+an incident.
+
+**2 — colour swatches drew invisible circles.** The old swatch used the colour
+*name* directly as a CSS background. `Navy` works; `Multicolour` and `Beige` are
+not CSS colours and rendered transparent, with no text label to fall back on.
+Names now map to hex, `Multicolour` to a gradient, and every chip carries its
+name as text so an unmapped custom colour still reads.
+
+### Product page — declared values replace guesswork
+`getVariantHTML` offered every clothing item XS–3XL because a regex matched the
+word "shirt". That presented a guess as stock. Saved values are now authoritative
+and the category guess survives only as a fallback for products that predate
+variants. Attributes with no values render nothing — no empty headings.
+
+Preselection now happens only when an attribute has exactly one option; with
+several, an implicit first choice is a choice the shopper did not make.
+
+`selectedVariants` joins `selectedSize`/`selectedColor` on the cart and order
+payloads, since material and pack size have no legacy field to land in.
+
+### Cards, search, index, filters
+- **Cards** — one quiet line between name and price: `Black • XL`,
+  `Black • 256GB`, `500ml`. Capped at two parts. Absent entirely when a product
+  declares nothing, so pre-variant products keep their exact current layout.
+- **Search terms** — variant values indexed at minimum length 1 (the 2-character
+  floor silently dropped sizes `S`/`M`/`L`), plus number/unit splitting so
+  `256 gb` matches a product stored as `256GB`.
+- **Algolia** — variant fields are `unordered()` searchable attributes and
+  refinable facets; always emitted as arrays so facet counts stay correct across
+  products created before variants existed.
+- **Filters** — category page facets are derived from the products **in view**,
+  not from a per-category table. A Material filter appears in Fashion only when
+  a fashion product actually declares a material, single-option attributes are
+  suppressed, and irrelevant categories render no bar at all. OR within an
+  attribute, AND across them.
+
+### One definition, not five
+Normalisation, grouping and the card summary live in `sokoni-product-schema.js`;
+term generation and Algolia normalisation in `functions/search-terms.js`, shared
+by the live trigger and the backfill script. Cloud Functions bundle only
+`functions/`, so the browser schema cannot be required there — `npm run
+check:variants` asserts the two key lists are identical, because a value saved
+under a key the indexer does not read is unsearchable with no error anywhere.
+
+### Verification
+- `npm run check:variants` — 33 checks: parity, term generation, and every shape
+  a real document holds (missing, null, empty, scalar, non-string, whitespace).
+- Trigger simulation against the real generator: converges in exactly 1 write;
+  a colours-only edit regenerates terms; a removed colour stops matching; an
+  unrelated write costs 0 writes; 81 terms / 535 bytes for a fully-populated
+  product.
+- Real browser (Playwright, 430px): correct groups per category, 0 empty
+  headings, 0 page errors; a hostile `"><img src=x onerror=…>` colour renders as
+  text and does not fire; pre-variant product falls back to the legacy chips;
+  filter AND/OR and the filtered-empty state verified with recovery.
+
+### Files
+`sokoni-product-schema.js`, `product.js`, `product.html`, `script.js`,
+`category.js`, `category.html`, `index.html`, `style.css`,
+`sokoni-firestore-search.js` (cache key → v2, since v1 payloads were slimmed
+without the variant fields), `functions/search-terms.js`, `functions/index.js`,
+`functions/algolia-indexer.js`, `functions/algolia-admin.js`,
+`functions/scripts/algolia-backfill.js`, `scripts/check-variant-parity.js`,
+`package.json`.
+
+**No breaking changes.** No database migration: every read path treats a missing
+attribute as absent.
+
+﻿## [2026-07-24] — security(wishlist): stored XSS in the saved-items card + premium polish
+
+Asked for polish on the cart / wishlist / checkout product listings; found a
+security defect while reading the wishlist renderer.
+
+### Stored XSS — `wishlist.html` (fixed)
+Product **name**, **category** and **image URL** were interpolated **raw** into
+the card template:
+
+```js
+<h3 class="wish-card-name">${p.name}</h3>
+<img src="${p.image || '...'}" alt="${p.name}">
+```
+
+A product saved as `<img src=x onerror=…>` executed on render. `cart.js` has
+carried `_esc()` and `_safeImgSrc()` all along — this page never adopted them.
+Both helpers added; every field now escaped; `javascript:`/`data:` image URIs
+rejected.
+
+Second path: the share button serialised the product name into an inline
+`onclick` string literal, escaping single quotes **only** — double quotes and
+backslashes still broke out. It now takes an **index** (`shareWish(idx)`) and
+looks the product up in JS, so no user text is ever parsed as code.
+
+Verified: no raw `${p.name}` / `${p.image}` / `${p.category}` remain; `_esc`
+renders the payload inert. **Not** verified by live render — the page is
+Firebase-auth-gated and a localStorage stub does not satisfy it, so the proof is
+inspection plus unit test, not an end-to-end hostile-product render.
+
+### Self-inflicted breakage, caught before it mattered
+The first draft of the fix put a literal closing-script sequence inside a JS
+template string, in a comment *about* escaping. The HTML parser ended the script
+block there and orphaned the rest of the file — `Unexpected end of input`, the
+whole wishlist dead. Found because a render test returned zero cards and the
+cause was checked rather than blamed on the harness; confirmed mine via
+`git stash`. A warning now sits in that function. Live check after deploy:
+**2 inline blocks, 0 syntax errors.**
+
+### Polish
+Wishlist card typography ran 2px smaller than cart and checkout on every line
+(name 11→13px, category 9→10px, price 13→15px) — that gap is what made it feel
+like a lesser surface. Now matched to `.cart-card-*` / `.os-item-*`, mobile
+breakpoint included. The share button's 9-property inline style became a class.
+
+**Cart and checkout were already premium** (`.cart-page-card`, `.os-item`: dark
+surface, subtle border, green hover, `#71ff00` price) — checkout was reworked
+2026-07-23. Nothing changed there.
+
+**Not changed:** the wishlist's pink/purple accent (9+ usages) is a deliberate
+saved-items identity. Unifying it with the `#71ff00` platform accent is a design
+decision, not polish.
+
+### ⚠️ Flagged, NOT verified — same pattern elsewhere
+A heuristic grep for raw `${x.name|title|description|category}` interpolation
+hits **12+ files**. Spot-checks show it is *partly* real, not uniformly:
+- `product.js` — has escape helpers (10 uses) yet still interpolates raw
+  `${p.name}` at ~857/861: **partial** escaping.
+- `services.html` — **zero** escape calls.
+
+This is a pattern worth a proper audit, not a list of confirmed holes; a grep
+cannot tell a genuine sink from trusted data. There is currently **no scanner**
+for this class, despite escaping being a standing platform rule — the wishlist
+hole survived precisely because nothing checks.
+
+Files: `wishlist.html`. Hosting deploy only.
+
+## [2026-07-24] — fix(ui): full-screen frosted layer over the wallet — WebKit blurs at opacity:0
+
+**Reported:** the wallet page covered by a dim blurred layer, content ("a sheet
+with details") visible behind it, nothing usable.
+
+**Root cause — not wallet-specific.** WebKit composites `backdrop-filter` **even
+at `opacity: 0`**. A fully transparent element still renders its blur, producing
+a full-screen frosted sheet with nothing on it to explain why.
+
+This is **already documented in this codebase**: `security.js:880-893` records
+the identical bug on the privacy scrim ("the black scrim stayed invisible while
+the blur kept rendering … exactly what was reported on iPhone Safari"). It was
+fixed there and then reintroduced elsewhere.
+
+**The actual culprit was shared, not local.** `#sk-drawer-backdrop`
+(`sokoni-drawers.css`) is `position:fixed; inset:0` with an **unconditional**
+`backdrop-filter`, sitting at `opacity:0` whenever the drawer is closed — i.e.
+almost always — and `shared-header.js:398` injects that stylesheet into **every
+page**. The wallet is simply where it was noticed.
+
+Fixes, both deployed:
+- `sokoni-drawers.css` — blur moved to `#sk-drawer-backdrop.is-active`; closed
+  state gets `visibility:hidden` (transition-delayed so the fade still animates).
+- `wallet.html` — same treatment for its ten `.overlay` sheets; blur scoped to
+  `.overlay.open .ovl-backdrop`, and the missing `-webkit-backdrop-filter` added
+  (older iOS previously got no blur when open while still paying for it closed).
+
+Verified: closed → `backdrop-filter: none`, `visibility: hidden`; open →
+`blur(4px)`, sheet renders sharp, unchanged from before.
+
+### Correction — a correct hypothesis withdrawn on bad evidence
+This cause was identified early, tested in **Playwright's WebKit**, observed to
+render sharp, and **wrongly withdrawn as refuted**. Playwright's WebKit build
+does not reproduce the iOS Safari behaviour. The explanation was only recovered
+by reading the comment left by whoever hit it in `security.js`.
+**This bug class is not detectable by the automated browser testing available
+here — the static scan is the detector.** Noted in the scanner header.
+
+### New: `npm run scan:hidden-blur`
+`scripts/scan-hidden-backdrop-blur.js` finds `position:fixed/absolute` elements
+that are `opacity:0` without `visibility:hidden` while carrying an un-gated
+`backdrop-filter`. Its first version reported **139 findings, nearly all noise**
+(CSS comments parsed as selectors); after stripping comments and requiring a
+genuine same-or-descendant match plus a positioned covering element, it reports
+**6 real ones**. A scanner with that false-positive rate is worse than none.
+
+Remaining, not fixed (separate pages, same one-line pattern):
+`index.html` `.n-panel` · `pos.css` `.modal-overlay` ·
+`inv-products.html` `.inv-modal-overlay` · `sokoni-inv-shell.css`
+`.inv-cmd-overlay` · `compact-grid.css` `.compare-icon-btn` (small, low impact).
+`index.html` is the highest-traffic and would be the one to do next.
+
+Files: `sokoni-drawers.css`, `wallet.html`, `scripts/scan-hidden-backdrop-blur.js`,
+`package.json`. Hosting deploy only — no rules, functions, indexes or schema.
+
+## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
 
 Production incident. A merchant on an active paid STARTER plan saw a 10-product
 limit while the upload engine accepted 13. Both numbers were correct for the
@@ -199,6 +499,92 @@ internally, which is the actual security boundary for a Firebase callable.
 
 Verification order: re-probe both (expect 403 → 401), then one authenticated export
 → `dataExportQueue` doc → `processDataExport` → Storage object → status `ready`.
+
+## [2026-07-24] — feat(search): multi-entity indexing + sync certified; two phantom defects withdrawn
+
+**Root cause of "search is product-only" — two independent things, only one a defect:**
+
+1. **Defect (fixed).** Nine collections the platform actually writes to were
+   registered in neither `COLLECTION_INDEX_MAP` nor the sync triggers, so
+   `enqueue()` returned early (`algolia-queue.js:84`) and their documents could
+   never reach any index. Naming drift is the root: the architecture was built
+   around `events`/`properties`/`sellers`; the app writes `entEvents`,
+   `propertyListings`, `businesses`. Registered all nine (reusing existing
+   transformers — a shop is a shop wherever it lives), added triggers, extended
+   the backfill. **+3 previously unreachable records recovered** (129 → 132).
+2. **Not a defect.** Jobs, properties, vehicles and events have **zero**
+   Firestore documents. A pipeline cannot index data that does not exist; those
+   acceptance rows are *pending*, not *failing*. No records were fabricated to
+   make them look green.
+
+**Staged deploy** (10 functions, not 27): `processAlgoliaQueue` — essential, as
+the triggers only enqueue and the drain resolves the mapping — plus create/
+update/delete triggers for the three collections holding production data.
+The other six stay registered but undeployed; 18 functions for empty
+collections buys nothing today.
+
+**Sync certified** on `businesses`→`sokoni_shops`:
+`create=PASS update=PASS delete=PASS`, each observed after a full drain interval
+and before cleanup. Measured latency **331–333s**, matching the documented
+`every 5 minutes` schedule — indexing is eventually consistent by design.
+
+### Two findings withdrawn — measurement error, not system error
+An earlier probe reported `create=FAIL, delete=FAIL`. Both were artefacts: it
+waited **75s** against a **5-minute** drain, measuring the scheduler rather than
+the pipeline. The refuting evidence was inside the same run — `update=PASS`
+returned the record from Algolia, which could only exist if create had already
+synced. The corrected probe (330s/step) returned PASS on all three.
+
+The probe also left an orphan in `sokoni_shops`/`global_search`, because cleanup
+verified Firestore only — the exact gap that matters when delete-sync is the
+thing under test. Removed, verified at 0; the probe now purges from every store
+on every exit path, **after** recording the verdict so cleanup cannot manufacture
+a PASS.
+
+Recorded in `docs/RELEASE_ACCEPTANCE.md`: a section on testing asynchronous
+paths (match the observation window to the execution window; positive controls;
+verify the instrument itself), plus a cross-cutting row so "my new shop isn't in
+search yet" gets the 5-minute answer instead of an investigation.
+
+Files: `functions/algolia-indexer.js`, `functions/algolia-sync.js`,
+`functions/scripts/algolia-backfill.js`. 10 functions deployed.
+
+## [2026-07-24] — feat(search-health): optional backends — `status` now means customer impact
+
+`searchHealth` reported the entire search subsystem as `degraded` (HTTP 206)
+because Typesense was unavailable — while customer search was completely healthy
+on Algolia. That overstates impact, and an alert that overstates impact gets
+muted, which is worse than no alert at all.
+
+Engines are now classified **required vs optional**:
+- `algolia` — `required: true`. Authoritative; serves customer traffic.
+- `typesense` — `required: false`. Secondary backend held for redundancy; no
+  production feature depends on it.
+
+The payload now answers two distinct questions instead of conflating them:
+- **`status`** — *can a customer search right now?* Driven only by required
+  engines. `ok` (200) / `degraded` (206) / `down` (503).
+- **`redundancy`** — *are the secondary backends healthy?* Reported separately,
+  never inflating `status`.
+
+Secondary state is not hidden: each engine still carries `required`, `status`,
+`failure`, `host` and latency, so operators keep full visibility. Queue-depth
+warnings likewise only degrade the headline when they belong to a required
+engine — a backlog on a dead optional backend is not a customer problem.
+
+Live after deploy:
+```
+status     : ok         <- customer-facing
+redundancy : degraded   <- secondary backends
+HTTP       : 200
+algolia    required=true  ok    HEALTHY      364ms
+typesense  required=false down  DNS_FAILURE  host=4kn6y5bfcxv8o702p-1.a2.typesense.net
+```
+
+Adding a Typesense cluster is now a deliberate infrastructure milestone rather
+than something forced by a red health check. See [[KNOWN_LIMITATIONS]] §1b.
+
+Files: `functions/search-health.js`. One function deployed.
 
 ## [2026-07-24] — feat(search-health): failure taxonomy — the probe now names the layer that failed
 

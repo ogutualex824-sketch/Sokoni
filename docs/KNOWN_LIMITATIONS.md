@@ -375,6 +375,42 @@ payment-received → order/subscription-activated path. Untouched this cycle; no
 evidence it currently works end-to-end.
 **Owner:** Payments. **Unblocks:** Orders (inventory deduction), subscriptions.
 
+**Agreed approach — map the deployed system BEFORE testing its behaviour.**
+Each phase must produce its artifact before the next begins, so every phase
+rests on evidence rather than on reading the repository:
+
+| Phase | Question | Artifact |
+|---|---|---|
+| 1 · Deployment | Which webhook URL is IntaSend *configured* to call, and which runtime endpoint receives it? | a verified webhook endpoint |
+| 2 · Reachability | Which candidate handlers are actually deployed and reachable? | a runtime map of deployed entry points |
+| 3 · Topology | How does the live callback flow through modules to produce business effects? | a documented execution path |
+| 4 · Certification | Sequence, cause, outcome, idempotency, failure shape | RC results tied to that documented path |
+
+Phases 1–2 are **deployment questions, not code questions.** A perfectly
+implemented endpoint that the provider is not configured to call must never
+become the subject of certification — and `healthcare-hub.js` (fully written,
+never exported, therefore unreachable) is the precedent for why reachability is
+checked separately from existence.
+
+Known starting facts (established 2026-07-24, no payments work performed):
+- `paymentRef` appears to be the canonical correlating identifier.
+- Supporting modules exist: `payment-reconciliation.js`, `payment-adapters.js`,
+  `payment-trust.js`, `payment-state-machine.js`.
+- IntaSend-related logic appears in **six** files (`financial-os.js`, `finos.js`,
+  `finos-admin.js`, `finos-automation.js`, `finos-utils.js`, `impact.js`).
+  **This is a topology unknown, not a duplication finding** — those may be a
+  layered pipeline (terminate / verify / orchestrate / persist / admin / shared)
+  rather than competing implementations. Phase 3 decides which.
+
+**Certification design (differs from search):** search had an internally
+scheduled window, so "wait past the documented interval" worked. Payments crosses
+an external boundary, so correlate immutable identifiers instead of waiting a
+fixed duration, and treat **`UNRESOLVED`** as a first-class outcome — a timeout
+must trigger reconciliation, never a PASS/FAIL guess. Idempotency must certify
+BOTH replay safety (same operation twice → one effect) and intent separation
+(distinct operations on one entity → each effect exactly once); see the
+entity-scoped key list under Maintenance hazards.
+
 ### 2. Algolia production credentials — ✅ RESOLVED 2026-07-24
 Both keys were being rejected with `Invalid Application-ID or API key`. Root
 cause was **not** the keys: they belonged to Algolia app **`F2XND3V1FW`**, while
@@ -429,6 +465,215 @@ These are **pending**, not **broken** — listed so the distinction stays honest
   claim awaits an unthrottled client.
 
 ---
+
+## Security — output encoding is not enforced anywhere
+
+### XSS sink audit (2026-07-24) — 1 fixed, inventory open
+
+A stored XSS was found and fixed in `wishlist.html` (product name, category and
+image URL interpolated raw into the saved-items card). Auditing outward from it
+found the same shape widely, and — more importantly — **no mechanism enforcing
+output encoding at all**. The rule is a platform standard; nothing checks it.
+The wishlist hole survived for exactly that reason, while `cart.js`, rendering
+the *same product objects*, escaped correctly.
+
+**Inventory** — `npm run scan:xss` (`scripts/scan-xss-sinks.js`):
+
+| Bucket | Count | Meaning |
+|---|---|---|
+| CONFIRMED | **208** | bare `${obj.field}` into an HTML sink, in a file with **no escape helper at all** |
+| REVIEW | **156** | same, but the file escapes elsewhere — could be oversight or safe by construction |
+
+Spot-verified as genuine: `unboxing.html:449` renders `${r.comment}` — a
+user-written review — straight into HTML.
+
+**These are sinks, not proven vulnerabilities.** Static analysis cannot tell
+whether a value is user-controlled, already encoded upstream, or on a reachable
+path. Confirm before claiming any individual one.
+
+**Scanner design notes** (it took three passes to become trustworthy):
+its first version reported **1011** findings — counting `${esc(x)}`,
+`${JSON.stringify(x)}` and internal constants like `${role.label}`. It now flags
+only a **bare property access** whose field name is user free text, excludes
+`label`/`desc` (internal enum text in this codebase), and skips scratch dirs.
+Validated against ground truth: `wishlist.html`, `cart.js` and `checkout.html`
+— all known-clean — report **0**.
+
+**Context matters, and the tool reports it** — the same value needs different
+handling per sink:
+- `js-handler` (`onclick="…${x}…"`) — HTML-escaping is **not** sufficient; pass
+  an index/id and look the value up in JS (see `shareWish()` in wishlist.html).
+- `url-attr` (`src`/`href`) — needs scheme validation; `javascript:`/`data:`
+  survive HTML-escaping.
+- `attr` / `text` — quote-aware HTML escaping.
+
+**The structural fix, not yet done:** five different helper names are in use
+(`_esc`, `esc`, `_h`, `escapeHtml`, `escapeHTML`) and no shared abstraction, so
+there is nothing obvious to reach for. A single exported helper plus
+`scan:xss` in `predeploy` would make new raw interpolations hard to add and
+trivial to detect. Until then this depends on manual discipline, which is what
+already failed once.
+
+**Also fixed:** `wishlist.js` carried the identical unescaped template. It is
+**dead code** — no page loads it; it survives only in the service-worker
+precache — so it was not exploitable, but it was a landmine for anyone wiring it
+up. Escaped rather than deleted (another process writes this repo).
+
+## Architectural — two definitions of an indexed document
+
+### Backfill and live indexing produce different records
+**Evidence (2026-07-24, both observed in production `sokoni_services`):**
+
+| Path | Record produced |
+|---|---|
+| Live trigger → `algolia-indexer.js` `TRANSFORMERS.services` | **28 fields** — `name, nameLower, description, category, subcategory, price, priceMax, priceType, currency, duration, images, thumbnail, tags, provider, rating, reviewCount, viewCount, orderCount, availability, remote, isFeatured, featuredLevel, location, hub, status, createdAt, updatedAt, _popularityScore` (derives `nameLower`, builds a `provider` sub-object) |
+| `functions/scripts/algolia-backfill.js` `transformDoc` | **6 fields** — `name, county, providerId, isActive, indexedAt, objectID` |
+
+The backfill script carries its **own, separate** transformation implementation
+rather than reusing the 13 transformers in `algolia-indexer.js`.
+
+**Consequence:** a document recovered by backfill is *present but less
+discoverable* than the same document indexed through the live pipeline. This is
+the concrete root cause of the `"clinic"` relevance gap — the seeded
+`healthProviders` record has `clinic` and `specialization` in Firestore, and
+neither field exists in its indexed record, so no query can match them.
+
+**Blast radius:** the 132 records recovered by the 2026-07-24 backfill are all
+thin. It self-heals for any document that is subsequently written (the trigger
+upgrades it to the full schema) but **never** for documents that are never
+edited again.
+
+**Acceptance criterion for the fix:**
+> Running a backfill over an unchanged dataset must produce the same indexed
+> representation as if every document had been reprocessed through the live
+> pipeline.
+
+Deliberately **not** fixed during the sync-certification run, to keep evidence
+gathering separate from design change.
+
+**Wider pattern worth carrying:** *runtime path ≠ recovery path*, in the same
+family as *happy path ≠ degraded path*. Each pair looks equivalent at the
+architecture level and diverged in practice; only runtime inspection surfaced it.
+
+**Partial progress (2026-07-24, variants):** the variant attributes were added
+to *both* paths from a **single shared normaliser** —
+`functions/search-terms.js::variantAttributes`, imported by the live transformer
+and by `algolia-backfill.js`. So variants specifically cannot diverge. The
+underlying 6-vs-28-field gap on every *other* field is unchanged and this item
+stays open; the fix is to make the backfill call the 13 transformers rather than
+carry its own `transformDoc`.
+
+### ✅ FIXED — one oversized product was blocking Algolia indexing for every product batched with it (2026-07-24)
+
+**Fix deployed:** `functions/algolia-sanitize.js` (new, shared by the live queue
+path *and* the backfill) + `_flushIsolating` in `algolia-queue.js`.
+`processAlgoliaQueue` redeployed. Regression test:
+`npm run test:algolia-isolation` — 14 checks, including a stub that reproduces
+Algolia's real all-or-nothing batch rejection.
+
+Three defences, in order:
+1. **Sanitise before batching** — base64 `data:` URIs are stripped from every
+   image field; the poison record measures **400,658 → 602 bytes** and still
+   indexes, so search keeps the product instead of losing it.
+2. **Isolate, never cascade** — a rejected batch is retried one record at a
+   time, so only a genuine offender is marked failed. An irreducible record is
+   held out *before* the batch is sent.
+3. **Actionable diagnostics** — every isolation logs the `objectID`, the
+   collection/docId and the measured size against the limit.
+
+**Recovery performed:** 153 queue entries that had been driven to `dlq` status
+by the poison record were reset to `pending` with `attempts: 0` so the fixed
+drain could reprocess them. (`algoliaQueueDLQ` also holds 279 archived copies;
+they are a record of the incident, not a second backlog.)
+
+**Still open, separate:** the product itself
+(`products/1784487444890`, "PEACH MANGO ICE") still stores a 195KB base64 image
+in Firestore. It now indexes safely with its image stripped, but it has an
+`imageStorageUrls` field holding a real URL — the transformer could prefer that
+so the product keeps a picture in search results. See the save-time safeguard
+below.
+
+**Save-time safeguard — ⚠️ RECOMMENDED, not implemented.** `seller-wiring.js`
+persists product images as base64 data URIs. Rejecting or normalising them at
+the point of save would stop oversized documents entering any downstream system,
+rather than defending against them at every consumer. Must be done carefully:
+existing products depend on the current behaviour for rendering.
+
+*Original diagnosis retained below for the record.*
+
+### One oversized product is blocking Algolia indexing for every product batched with it — HISTORICAL
+
+**Found 2026-07-24** while running the variant acceptance probe. Not caused by
+the variant work; the probe merely surfaced it.
+
+`products/1784487444890` ("PEACH MANGO ICE") stores a **base64 data URI** as its
+image:
+
+| Field | Size |
+|---|---|
+| `images` | 195,425 bytes |
+| `image` | 195,397 bytes |
+| *whole document* | 397,980 bytes |
+
+The live transformer passes that straight through, producing a **195,884-byte**
+Algolia record against a **10,000-byte** limit. **Algolia rejects the entire
+batch when one record is oversized**, so every product queued in the same batch
+fails with it:
+
+```
+gs__products | upsert | failed | products_VP99 …
+ERR: Record at the position 4 objectID=products_1784487444890 is too big
+     size=195884/10000 bytes
+```
+
+**26+ consecutive failed queue entries** were observed in one 30-entry window
+(`VP*`, `TC*`, `SP*`, `S*`, `P*`) — all reporting the *same* poison record.
+Deletes drain normally (`status=done`), so the queue and drain are healthy; only
+batched upserts are poisoned.
+
+**Consequence:** new and edited products are **not reaching `gs__products`**.
+This is why the variant end-to-end probe could not observe its record in Algolia
+within 7 minutes — twice.
+
+**This is the `runtime path ≠ recovery path` pattern again.** `algolia-backfill.js`
+already carries **both** defences from earlier work — `safeImageUrl()` (rejects
+base64 data URIs) and `enforceSize()` (9,000-byte guard). The **live queue path
+has neither**. The recovery path was hardened; the runtime path was not.
+
+**Fix (not yet applied — needs a decision):**
+1. Port `safeImageUrl()` + `enforceSize()` into the live path (`algolia-queue.js`
+   before batching, or the transformer itself).
+2. Skip and record an oversized record instead of failing its whole batch — one
+   bad document must not be able to stall indexing for everything around it.
+3. Repair `products/1784487444890` (move the base64 image to Storage; it already
+   has an `imageStorageUrls` field).
+4. Re-drain the failed queue entries.
+
+**Acceptance test:** with a deliberately oversized document present in a batch,
+every *other* document in that batch must still index.
+
+### Live Algolia index settings have drifted from the repo — ⚠️ OPEN
+**Evidence (2026-07-24, read from the live `sokoni_products` index):**
+
+| | Live index | `functions/algolia-admin.js` |
+|---|---|---|
+| `searchableAttributes` | 7 | 15 |
+| `attributesForFaceting` | 7 | 26 |
+
+`algoliaSetupIndexes` is an admin-only `onCall`, so a settings change committed
+to the repo stays **inert** until someone with an admin claim invokes it — and
+evidently that has not happened for several changes.
+
+The variant work pushed its six searchable attributes and six facets
+**additively** onto the live values (7 → 13 each, verified by re-reading the
+index), deliberately *not* pushing the file wholesale: re-aligning relevance and
+filtering for eight unrelated attributes is its own decision needing its own
+relevance testing, not a side effect of a variant change.
+
+**To close:** decide whether the repo or the live index is authoritative, then
+either invoke `algoliaSetupIndexes` from an admin session or correct the file.
+`node scripts/push-variant-index-settings.js` (no flag) prints the live-vs-repo
+diff without writing.
 
 ## Maintenance hazards (safe today, worth cleaning)
 
