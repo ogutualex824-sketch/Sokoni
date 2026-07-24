@@ -26,6 +26,7 @@
  */
 const { chromium } = require('playwright');
 const http = require('http'), fs = require('fs'), path = require('path');
+const { Gate } = require('./lib/gate-result');
 
 const PORT = Number(process.env.PROBE_PORT || 8134);
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
@@ -106,14 +107,23 @@ const INJECT = [
 
 async function injectStub(page) {
   await page.addInitScript(function (records) {
-    /* Poll for the real module, then swap its two read methods. Everything
-       else — normalize, esc, emptyStateHtml, the category buckets — stays as
-       shipped, so this exercises the real filtering and rendering code. */
-    var iv = setInterval(function () {
-      if (!window.SokoniProviders) return;
-      clearInterval(iv);
+    /* Intercept the assignment rather than polling for it.
+
+       A 25ms poll lost a race on the homepage: firebase.js sets
+       window.firebaseDB quickly, the page's own boot sees both globals and
+       calls the REAL list() — which App Check denies — before the swap lands.
+       The section then stays hidden and the probe reports "nothing rendered",
+       a probe defect indistinguishable from a product defect. Defining a
+       setter guarantees the wrap happens at the instant the module publishes
+       itself, with no window in between. */
+    var _sp;
+    Object.defineProperty(window, 'SokoniProviders', {
+      configurable: true,
+      get: function () { return _sp; },
+      set: function (v) { _sp = v; if (v) patch(v); },
+    });
+    function patch(SP) {
       window.firebaseDB = window.firebaseDB || { __stub: true };
-      var SP = window.SokoniProviders;
       SP.list = function (opts) {
         opts = opts || {};
         var out = records.slice();
@@ -135,13 +145,28 @@ async function injectStub(page) {
         var hit = records.filter(function (p) { return p.uid === uid; })[0] || null;
         return Promise.resolve({ provider: hit, error: null });
       };
-    }, 25);
+    }
   }, INJECT);
 }
 
 (async () => {
   await new Promise(res => srv.listen(PORT, res));
   const browser = await chromium.launch();
+
+  /* Two gates, because the two passes are different classes of evidence and
+     averaging them would overstate what is known. The live pass talks to the
+     real project; the injected pass proves rendering against fixtures and is
+     NOT production evidence, so it never claims to be. */
+  const live = new Gate({
+    name: 'provider-directory-live',
+    evidence: 'browser-run', environment: 'local',
+  });
+  const render = new Gate({
+    name: 'provider-directory-render',
+    evidence: 'browser-run', environment: 'local', confidence: 'medium',
+  });
+  render.note('Fixtures are the real production records, injected client-side. ' +
+              'This proves the render path, not the Firestore read.');
   let failures = 0;
 
   for (const spec of PAGES) {
@@ -176,9 +201,26 @@ async function injectStub(page) {
     if (isErrState) console.log('    state         : read FAILED (page reported it honestly)');
     if (errors.length) console.log('    js errors     : ' + errors.slice(0, 3).join(' | '));
 
-    if (leaked.length) { failures++; console.log('    ** FAIL: demo data still rendering'); }
-    if (spec.expectReal && !found.length && !isErrState) {
-      failures++; console.log('    ** FAIL: no real provider rendered and no error reported');
+    /* Deleted demo data reappearing is observable regardless of connectivity —
+       it is baked into the page — so this stays a real PASS/FAIL. */
+    if (leaked.length) live.fail(spec.url + ': no demo data rendered', leaked.join(', '));
+    else               live.pass(spec.url + ': no demo data rendered');
+
+    if (found.length) {
+      live.pass(spec.url + ': real providers rendered', found.join(', '));
+    } else if (isErrState) {
+      /* The page correctly reported that it could not load. That is the page
+         behaving well AND the observation being impossible — the assertion
+         about real data is BLOCKED, not failed. Conflating the two is what
+         made the earlier run print FAIL for something never tested. */
+      live.pass(spec.url + ': failed read is reported honestly');
+      live.blocked(spec.url + ': real providers rendered',
+        'Firestore read blocked (App Check refuses localhost) — not observed');
+    } else if (spec.expectReal) {
+      live.fail(spec.url + ': real providers rendered',
+        'neither providers nor an error state were shown');
+    } else {
+      live.pass(spec.url + ': section correctly hidden when empty');
     }
     await ctx.close();
   }
@@ -191,9 +233,18 @@ async function injectStub(page) {
   await page.goto('http://localhost:' + PORT + '/provider-profile.html?uid=H7p6ktBHogM5GcBy6mz8negKVbG2',
     { waitUntil: 'domcontentloaded' });
   let body = '';
-  for (let i = 0; i < 60; i++) {
+  /* Must exceed sokoni-providers.js READ_TIMEOUT_MS (8s) plus module boot,
+     or the probe samples the skeleton and reports "nothing shown" for a page
+     that was about to render its error state correctly. */
+  /* Wait for a DECISIVE signal, not merely for the body to be non-empty. The
+     nav and the cookie banner alone clear 40 characters before the read has
+     resolved, so a length test broke out on the very first sample and reported
+     "neither the provider nor an error was shown" for a page that renders its
+     error state correctly three seconds later. Only the provider's name or the
+     error string settles the question. */
+  for (let i = 0; i < 100; i++) {
     body = await page.evaluate(() => document.body.innerText);
-    if (!/Loading|^\s*$/.test(body) && body.length > 40) break;
+    if (/Ann|Could not load this profile|Provider not available|No provider selected/i.test(body)) break;
     await page.waitForTimeout(250);
   }
   const title = await page.title();
@@ -208,9 +259,15 @@ async function injectStub(page) {
      provider". Only silence — neither the provider nor an explanation — is a
      failure here. The injected pass below proves the render path itself. */
   const honestErr = /Could not load this profile/i.test(body);
-  if (honestErr) console.log('    state         : read FAILED (page reported it honestly)');
-  if (!body.includes('Ann') && !honestErr) {
-    failures++; console.log('    ** FAIL: neither the provider nor an error was shown');
+  if (body.includes('Ann')) {
+    live.pass('provider-profile: renders the provider');
+  } else if (honestErr) {
+    live.pass('provider-profile: failed read is reported honestly');
+    live.blocked('provider-profile: renders the provider',
+      'Firestore read blocked (App Check refuses localhost) — not observed');
+  } else {
+    live.fail('provider-profile: renders the provider',
+      'neither the provider nor an error was shown');
   }
 
   await ctx.close();
@@ -248,9 +305,12 @@ async function injectStub(page) {
     console.log('    invented stars: ' + (fakeStars ? '** YES **' : 'none'));
     console.log('    profile links : ' + (linksOk ? 'provider-profile.html?uid=' : '** MISSING **'));
     if (errs.length) console.log('    js errors     : ' + errs.slice(0, 2).join(' | '));
-    if (!found.length) { failures++; console.log('    ** FAIL: real records did not render'); }
-    if (leaked.length) { failures++; console.log('    ** FAIL: demo data rendered'); }
-    if (fakeStars)     { failures++; console.log('    ** FAIL: stars on an unrated provider'); }
+    if (found.length) render.pass(spec.url + ': real records render', found.join(', '));
+    else               render.fail(spec.url + ': real records render', 'nothing rendered');
+    if (leaked.length) render.fail(spec.url + ': no demo data', leaked.join(', '));
+    else               render.pass(spec.url + ': no demo data');
+    if (fakeStars)     render.fail(spec.url + ': no stars on an unrated provider');
+    else               render.pass(spec.url + ': no stars on an unrated provider');
     await c2.close();
   }
 
@@ -276,13 +336,18 @@ async function injectStub(page) {
   console.log('    pending fields: ' + (/has not added a description|not published yet/i.test(b3) ? 'prompted, not invented' : 'none shown'));
   console.log('    invented stars: ' + (/★★★★★/.test(b3) ? '** YES **' : 'none'));
   if (e3.length) console.log('    js errors     : ' + e3.slice(0, 2).join(' | '));
-  if (!b3.includes('Ann')) { failures++; console.log('    ** FAIL: profile did not render'); }
-  if (/★★★★★/.test(b3))  { failures++; console.log('    ** FAIL: stars on an unrated provider'); }
+  if (b3.includes('Ann')) render.pass('provider-profile: renders the provider');
+  else                    render.fail('provider-profile: renders the provider');
+  if (/★★★★★/.test(b3)) render.fail('provider-profile: no stars on an unrated provider');
+  else                    render.pass('provider-profile: no stars on an unrated provider');
   await c3.close();
 
   await browser.close();
   srv.close();
 
-  console.log('\n  ' + (failures ? failures + ' FAILURE(S)' : 'all checks passed') + '\n');
-  process.exit(failures ? 1 : 0);
+  const liveCode   = live.finish();
+  const renderCode = render.finish();
+  /* Worst outcome wins: any FAIL(1) beats any BLOCKED(2) beats PASS(0). */
+  process.exit((liveCode === 1 || renderCode === 1) ? 1
+             : (liveCode === 2 || renderCode === 2) ? 2 : 0);
 })().catch(e => { console.error('probe failed: ' + e.message); srv.close(); process.exit(1); });

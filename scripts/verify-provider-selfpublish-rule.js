@@ -48,6 +48,7 @@
 
 const https = require('https');
 const { execSync } = require('child_process');
+const { Gate } = require('./lib/gate-result');
 
 const PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-aeb26';
 /* Public client key and app id — both shipped in firebase.js. Not secrets. */
@@ -99,11 +100,13 @@ const admin = () => ({ Authorization: 'Bearer ' + adminToken(), 'x-goog-user-pro
   const DEBUG_TOKEN = '11111111-2222-4333-8444-555555555555';
 
   let uid = null, dbgName = null;
-  const results = [];
-  const check = (label, ok, detail) => {
-    results.push({ label, ok });
-    console.log('  ' + (ok ? 'PASS' : '** FAIL **').padEnd(11) + label + '   ' + (detail || ''));
-  };
+  const gate = new Gate({
+    name: 'provider-selfpublish',
+    evidence: 'production-probe',
+    environment: 'production',
+  });
+  const check = (label, ok, detail) =>
+    ok ? gate.pass(label, detail) : gate.fail(label, detail);
 
   try {
     console.log('\n  PROVIDER SELF-PUBLISH RULE — live check   project ' + PROJECT + '\n');
@@ -113,18 +116,21 @@ const admin = () => ({ Authorization: 'Bearer ' + adminToken(), 'x-goog-user-pro
       '/v1/projects/' + PROJECT + '/apps/' + encodeURIComponent(APP_ID) + '/debugTokens',
       { displayName: 'tmp-selfpublish-verify', token: DEBUG_TOKEN }, admin());
     if (created.status >= 400) {
-      console.error('  Could not create an App Check debug token: HTTP ' + created.status +
-                    ' ' + created.body.slice(0, 200));
-      console.error('  Without one, every write is denied by App Check and nothing is tested.\n');
-      process.exit(2);
+      /* Not a rule failure — the rule was never exercised. Without an App
+         Check token every write is denied upstream, so a "denied" result here
+         would carry no information about the rule at all. */
+      gate.blocked('rule enforcement could not be observed',
+        'App Check debug token could not be created: HTTP ' + created.status);
+      throw new Error('__setup__');
     }
     dbgName = JSON.parse(created.body).name;
     const ex = await req('POST', AC_HOST,
       '/v1/projects/' + PROJECT + '/apps/' + encodeURIComponent(APP_ID) +
       ':exchangeDebugToken?key=' + API_KEY, { debugToken: DEBUG_TOKEN });
     if (ex.status >= 400) {
-      console.error('  exchangeDebugToken failed: HTTP ' + ex.status + ' ' + ex.body.slice(0, 200) + '\n');
-      process.exit(2);
+      gate.blocked('rule enforcement could not be observed',
+        'exchangeDebugToken failed: HTTP ' + ex.status);
+      throw new Error('__setup__');
     }
     const appCheckToken = JSON.parse(ex.body).token;
 
@@ -136,8 +142,9 @@ const admin = () => ({ Authorization: 'Bearer ' + adminToken(), 'x-goog-user-pro
         { email, password: pass, returnSecureToken: true });
     }
     if (up.status >= 400) {
-      console.error('  Could not obtain a probe account: ' + up.status + ' ' + up.body.slice(0, 200) + '\n');
-      process.exit(2);
+      gate.blocked('rule enforcement could not be observed',
+        'no signed-in probe account: HTTP ' + up.status);
+      throw new Error('__setup__');
     }
     const acct = JSON.parse(up.body);
     uid = acct.localId;
@@ -155,13 +162,18 @@ const admin = () => ({ Authorization: 'Bearer ' + adminToken(), 'x-goog-user-pro
     /* ── 0. CONTROL — rules must actually be reachable ───────────────────── */
     const r0 = await req('POST', FS_HOST, createUrl, { fields: { uid: S(uid) } }, asUser);
     const ctrlOk = r0.status < 400;
-    check('control: bare {uid} create is allowed', ctrlOk, 'HTTP ' + r0.status);
     if (!ctrlOk) {
-      console.error('\n  Rules are not being reached — every write is being rejected upstream.');
-      console.error('  Nothing below would be meaningful, so the run stops here.');
-      console.error('  ' + r0.body.replace(/\s+/g, ' ').slice(0, 200) + '\n');
-      results.push({ label: 'run aborted: control failed', ok: false });
+      /* The control is what separates "the rule rejected this" from "nothing
+         reached the rule". When it fails, every downstream denial is
+         uninformative — so they are recorded as unobserved, not as passes. */
+      gate.blocked('control: bare {uid} create is allowed', 'HTTP ' + r0.status +
+        ' — writes are being rejected before rules are evaluated');
+      gate.blocked('create status:"active" is DENIED', 'not observed: control failed');
+      gate.blocked('create status:"pending" is ALLOWED', 'not observed: control failed');
+      gate.blocked('update own record to "active" is DENIED', 'not observed: control failed');
+      gate.note('Rules were not reached. ' + r0.body.replace(/\s+/g, ' ').slice(0, 160));
     } else {
+      gate.pass('control: bare {uid} create is allowed', 'HTTP ' + r0.status);
       await rm();
 
       /* ── 1. status:'active' on create must be denied ───────────────────── */
@@ -194,8 +206,12 @@ const admin = () => ({ Authorization: 'Bearer ' + adminToken(), 'x-goog-user-pro
       }
     }
   } catch (e) {
-    console.error('\n  probe error: ' + e.message);
-    results.push({ label: 'probe threw', ok: false });
+    /* __setup__ means a blocked assertion was already recorded above with its
+       specific cause; anything else is an unexpected throw, which is equally
+       an inability to observe rather than a rule failure. */
+    if (e.message !== '__setup__') {
+      gate.blocked('probe completed without error', e.message);
+    }
   } finally {
     console.log('');
     if (uid) {
@@ -214,9 +230,6 @@ const admin = () => ({ Authorization: 'Bearer ' + adminToken(), 'x-goog-user-pro
     }
   }
 
-  const failed = results.filter(r => !r.ok);
-  console.log('\n  ' + (failed.length
-    ? failed.length + ' of ' + results.length + ' assertions FAILED'
-    : results.length + '/' + results.length + ' assertions passed — self-publish is blocked in production') + '\n');
-  process.exit(failed.length ? 1 : 0);
+  /* Exit code distinguishes the three outcomes: 0 PASS, 1 FAIL, 2 BLOCKED. */
+  process.exit(gate.finish());
 })();
