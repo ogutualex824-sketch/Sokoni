@@ -682,6 +682,45 @@ Changing the handler and the configuration simultaneously makes a failure
 impossible to attribute — the same reasoning recorded in
 `INTASEND_WEBHOOK_AUDIT.md`.
 
+### Acceptance criterion
+
+> Exactly one webhook endpoint is designated as the production authority, and every
+> piece of payment-side business logic — payment finalization, commission, wallet
+> crediting, subscription activation, entitlements, audit logging — is reachable
+> through that endpoint.
+
+Four things must agree: **documentation, deployment, dashboard configuration, and
+code.** Three are machine-checkable:
+
+```bash
+node scripts/verify-webhook-authority.js <endpointName>
+```
+
+It prints a capability matrix across every IntaSend `onRequest` export and exits 1
+if the named endpoint is missing any. Measured 2026-07-24:
+
+```
+CAPABILITY                    intasendWebhook   webhookIntasend
+payment finalization          yes               yes
+commission ledger             yes               yes
+subscription activation       yes               yes
+entitlement materialisation   NO                yes
+wallet credit (FinOS)         NO                yes
+audit logging                 yes               yes
+```
+
+The **dashboard registration is not checkable from the repository** and is reported
+UNKNOWN. Code agreeing with itself is not the same as code agreeing with the
+dashboard.
+
+### Why this blocks the acceptance payment
+
+Until one authority is settled, **a live payment cannot be interpreted**. It could
+exercise an endpoint without the new logic, and the result would read as the
+integration failing when it was never invoked — a false negative dressed as an
+acceptance test, which would send the next investigation hunting for a defect in
+code that never ran. Resolve this BEFORE spending a qualifying payment, not after.
+
 **Superseded scope:** ADR-0013's "Accepted — `intasendWebhook` is the canonical
 activation writer" is downgraded to OPEN until this is decided. Its other rulings
 (entitlement derives from `paymentIntents`; a writer taking a plan from a request
