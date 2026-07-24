@@ -38,6 +38,19 @@
  * them is expected and correct (e.g. processDataExport).
  *
  * Read-only. It changes nothing; it prints the gcloud commands for what it finds.
+ *
+ * WHAT A CLEAN RUN DOES AND DOES NOT MEAN — read before trusting a green result.
+ * This detects exactly ONE failure mode: the Cloud Run service behind an
+ * HTTP-reachable function is missing the `roles/run.invoker` binding, so requests
+ * are rejected before the function executes. A clean run means:
+ *
+ *     "No endpoint in the audited set exhibits this specific IAM misconfiguration."
+ *
+ * It does NOT mean "all callable functions are correctly configured." It says
+ * nothing about whether the function's own authorization logic is right, whether
+ * App Check is enforced, whether Firestore Rules behave as intended, or whether the
+ * business logic works. Those need their own checks. Do not let a green table here
+ * stand in for any of them.
  */
 
 const fs   = require('fs');
@@ -128,43 +141,58 @@ const kindOf = (f) =>
   else                targets = CRITICAL;
 
   const at = token();
-  const rows = [];
 
-  for (const id of targets) {
+  async function auditOne(id) {
     const meta = byId.get(id);
-    if (!meta) { rows.push({ id, kind: '—', verdict: 'NOT-DEPLOYED' }); continue; }
+    if (!meta) return { id, kind: '—', verdict: 'NOT-DEPLOYED' };
 
     const kind = kindOf(meta);
     if (!['callable', 'https'].includes(kind)) {
       /* Invoked by Eventarc/Scheduler, never public HTTP — a missing binding here
          is correct, not a defect. Reported so the difference is documented. */
-      rows.push({ id, kind, verdict: 'SKIP', note: 'not HTTP-invoked' });
-      continue;
+      return { id, kind, verdict: 'SKIP', note: 'not HTTP-invoked' };
     }
 
-    const svc = id.toLowerCase();                       // TRAP 1
-    const got = await runGet(at, `/v2/projects/${PROJECT}/locations/${REGION}/services/${svc}`);
-    if (got.status !== 200) {                            // TRAP 2 — prove it exists
-      rows.push({ id, kind, verdict: 'NO-SERVICE', note: `GET service HTTP ${got.status}` });
-      continue;
-    }
-    const ingress = (got.json && got.json.ingress) || '?';
+    const svc  = id.toLowerCase();                      // TRAP 1
+    const base = `/v2/projects/${PROJECT}/locations/${REGION}/services/${svc}`;
 
-    const pol = await runGet(at, `/v2/projects/${PROJECT}/locations/${REGION}/services/${svc}:getIamPolicy`);
+    /* Policy FIRST. If it names an invoker the service must exist, so the extra
+       existence round-trip is only needed for the empty case — which is exactly
+       the case TRAP 2 makes ambiguous (missing resource also yields an empty
+       policy). Halves the API calls across a --all sweep without losing rigour. */
+    const pol = await runGet(at, `${base}:getIamPolicy`);
     const members = (((pol.json || {}).bindings) || [])
       .filter((b) => b.role === 'roles/run.invoker')
       .flatMap((b) => b.members || []);
+
+    if (!members.length) {                               // TRAP 2 — disambiguate
+      const got = await runGet(at, base);
+      if (got.status !== 200) {
+        return { id, kind, verdict: 'NO-SERVICE', note: `GET service HTTP ${got.status}` };
+      }
+    }
     const open = members.includes('allUsers');
 
     let code = null;
     if (DO_PROBE) code = await probe(id);
 
-    const verdict = open
-      ? (DO_PROBE && code === 403 ? 'FAIL' : 'PASS')
-      : 'FAIL';
-
-    rows.push({ id, kind, ingress, invoker: members.join(',') || '(none)', probe: code, verdict });
+    const verdict = open ? (DO_PROBE && code === 403 ? 'FAIL' : 'PASS') : 'FAIL';
+    return { id, kind, invoker: members.join(',') || '(none)', probe: code, verdict };
   }
+
+  /* Bounded worker pool — a --all sweep is ~1200 services and would take about a
+     quarter of an hour issued serially. Order is preserved via the index. */
+  const CONCURRENCY = Number(process.env.SOKONI_AUDIT_CONCURRENCY || 12);
+  const rows = new Array(targets.length);
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, targets.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= targets.length) return;
+      rows[i] = await auditOne(targets[i]);
+      if (!AS_JSON && targets.length > 50 && i % 100 === 0 && i) process.stderr.write(`  …${i}/${targets.length}\n`);
+    }
+  }));
 
   if (AS_JSON) { console.log(JSON.stringify(rows, null, 2)); }
   else {
