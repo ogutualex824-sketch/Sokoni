@@ -58,9 +58,19 @@ function normalize(src) {
     .trim();
 }
 
-function fetch(url) {
+function fetch(url, hops = 0) {
   return new Promise((resolve, reject) => {
     https.get(url, { headers: { 'Cache-Control': 'no-cache' } }, (res) => {
+      /* Follow redirects. Firebase Hosting runs cleanUrls:true, so every
+         `name.html` is served with a 301 to `/name`. Without this the tool
+         reports UNREACHABLE for EVERY html artifact and can verify none of them —
+         a blind spot, not a parity failure. Bounded to 5 hops to avoid loops. */
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if (hops >= 5) return reject(new Error('too many redirects'));
+        const next = new URL(res.headers.location, url).toString();
+        return resolve(fetch(next, hops + 1));
+      }
       if (res.statusCode !== 200) { res.resume(); return reject(new Error('HTTP ' + res.statusCode)); }
       let body = '';
       res.setEncoding('utf8');
@@ -86,7 +96,12 @@ function fetch(url) {
       /* Cache-buster in the URL as well as the header — a CDN that ignores the
          header would otherwise return the previous build and the whole check
          would confirm the thing it exists to detect. */
-      liveSrc = await fetch(ORIGIN + '/' + rel + '?parity=' + Date.now());
+      /* Request the CANONICAL served path. Under cleanUrls, index.html is served
+         at `/` and `/index.html` 301-redirects to itself (a loop the redirect
+         follower would otherwise exhaust). Every other page is reachable at its
+         own path and the follower handles its foo.html -> /foo hop. */
+      const servedPath = (rel === 'index.html') ? '' : rel;
+      liveSrc = await fetch(ORIGIN + '/' + servedPath + '?parity=' + Date.now());
     } catch (e) {
       results.push({ file: rel, verdict: 'UNREACHABLE', detail: e.message });
       continue;

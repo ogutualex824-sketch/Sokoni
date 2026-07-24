@@ -1,4 +1,38 @@
-﻿## [2026-07-24] — fix(privacy): the live GDPR/DPA data-export endpoint queued requests nothing processed
+﻿## [2026-07-24] — chore(gates): artifact-parity could not verify any HTML page; now confirms deployed == source
+
+Hardening pass 2, cont. `verify-artifact-parity` compares the DEPLOYED program
+against the repo per file (stripping comments/whitespace so a reformat is not
+mistaken for a behavioural change). Ran it against sokoni-aeb26.web.app on the
+files touched this session and hit a blind spot: it could not verify a single HTML
+page.
+
+**Blind spot 1 — redirects.** `fetch()` rejected any non-200. Firebase Hosting runs
+`cleanUrls:true`, so every `name.html` 301-redirects to `/name`. Result:
+`checkout.html` and every other page reported UNREACHABLE (HTTP 301) — the tool
+could verify JS and CSS but no HTML, i.e. none of the pages where most behaviour
+lives. Added bounded (≤5-hop) redirect following.
+
+**Blind spot 2 — the index self-loop.** With redirects followed, `index.html` then
+reported "too many redirects". Traced it: `/index.html` 301-redirects to ITSELF
+(`301 -> /index.html`), while `/` serves the page 200. That is a latent Firebase
+cleanUrls quirk — not user-facing, since links use `/`, and hosting redirect
+config is out of scope for a test-tooling change — so the tool now requests the
+canonical served path (`index.html` → `/`, every other page → its own path, whose
+single clean-URL hop the follower handles).
+
+**Outcome — a genuine parity result, not just a greener gate.** With the tool
+fixed, verified 19 deployed artifacts against source across every flow touched this
+session — checkout, cart, wishlist, product, index, seller, property-hub,
+subscriptions, banking, help, support, and the JS/CSS (`sokoni-nav-engine`, `auth`,
+`sokoni-firestore-search`, `sokoni-search-engine`, `sokoni-drawers`,
+`sokoni-beta-gate`, `sokoni-performance`, `product.css`) — **all IDENTICAL**. The
+deployed client program is a faithful mirror of the repository; runtime behaviour
+matches source.
+
+Files affected: `scripts/verify-artifact-parity.js` (test tooling only; no product
+or hosting change).
+
+## [2026-07-24] — fix(privacy): the live GDPR/DPA data-export endpoint queued requests nothing processed
 
 Hardening pass 2, cont. `verify-architecture` flagged a duplicate export,
 `requestDataExport`, in `functions/index.js`. It was not cosmetic.
