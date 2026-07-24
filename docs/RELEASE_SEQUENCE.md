@@ -158,6 +158,40 @@ would refund their own fee. For a subscription, assert the opposite — that
 `walletCreditedAt` is **absent** and the log records `wallet credit skipped
 (subscription)` — then follow the subscription/entitlement chain instead.
 
+## Standing gate — every payment-related release
+
+Not a one-off for this release. Any change touching payments, commission, wallets
+or settlement must pass all five before going live. Detailed steps for 1–4 are in
+the RC section above.
+
+| # | Scenario | Asserts |
+|---|---|---|
+| 1 | **Happy path** | marketplace payment completes; payment, commission, wallet and ledger all correct |
+| 2 | **Replay** | resend the same delivery — no second wallet credit, no second commission |
+| 3 | **Recovery** | induced wallet failure — payment stays COMPLETE, webhook still 200, surfaced to `commissionReviewQueue` rather than retried forever |
+| 4 | **Subscription path** | subscription payment does **not** credit the merchant wallet (`walletCreditedAt` absent) |
+| 5 | **Refund / Reversal** | ledger reversal and audit trail — ⚠️ **see below** |
+
+### ⚠️ Scenario 5 has nothing to certify yet
+
+There is **no reversal handler**. IntaSend's Reversal, Send Money and Wallet
+Transfer events are enabled in the dashboard but no code path processes them
+(verified: neither webhook branches on any purpose except `subscription`).
+
+Consequences, in order of severity:
+
+1. **A reversal in IntaSend is invisible to SOKONI.** The merchant keeps the wallet
+   credit for a payment that was reversed at the gateway.
+2. `adminSubProcessRefund` marks a refund `status:'processed'` and notifies the
+   merchant, with **zero gateway calls** — a ledger-only refund that moves no money
+   (`sub-billing.js`, no HTTP/IntaSend references anywhere in the module).
+
+FinOS already has the primitive this needs — `debitWalletTxn`, with clawback
+precedent at `finos.js:292`. As with the credit path, the work is wiring, not
+building. Until then, scenario 5 should be recorded as **NOT IMPLEMENTED** rather
+than passed or waived: a checklist row that is quietly skipped becomes a row nobody
+remembers was never true.
+
 ## Loyalty settlement — deployed, NOT runtime-verified
 
 `loyaltyRedemptions` was also empty at the same reading, so the atomic
