@@ -563,6 +563,50 @@ underlying 6-vs-28-field gap on every *other* field is unchanged and this item
 stays open; the fix is to make the backfill call the 13 transformers rather than
 carry its own `transformDoc`.
 
+### `algoliaQueue` never reclaims a stale `processing` job — ⚠️ BUILT BUT FRAGILE
+
+**Evidence (2026-07-24):** two independent measurements ~7 minutes apart both
+returned `{done: 306, processing: 1}`. The same entry was also present *before*
+the batch-poisoning fix. It is not moving.
+
+`_claimBatch` selects `where('status', 'in', ['pending', 'failed'])`. An item is
+set to `processing` before the Algolia call; if that invocation crashes, times
+out, or is evicted, nothing ever sets it back. **No query can reach it again** —
+it is orphaned permanently, and it is invisible because a stuck job looks
+identical to a busy one.
+
+Severity is low today (one record, not a cascade) but the *shape* is the same as
+the incident above: a failure mode with no recovery path, silent by construction.
+
+**Fix when revisited:** reclaim jobs where
+
+```
+status = 'processing' AND updatedAt < now - <timeout margin>
+```
+
+The margin **must exceed the maximum legitimate processing time**, or the
+reclaim races an active worker and the same document gets indexed twice
+concurrently. `processAlgoliaQueue`'s configured timeout is the floor for that
+threshold, not the target.
+
+### Base64 images are created at save time — ⚠️ PRODUCER-SIDE, not implemented
+
+`seller-wiring.js` persists product images as base64 `data:` URIs. Consumer
+hardening is done (see below), but the producer still manufactures oversized
+documents. Deliberately kept as a **separate** concern from the consumer fix so
+regression analysis stays clean.
+
+**Migration path (do NOT simply reject legacy products):**
+1. Detect a base64 image on save.
+2. Upload it to Cloud Storage.
+3. Replace the field with the storage URL.
+4. Remove the embedded data.
+
+That preserves compatibility for existing listings while stopping new oversized
+documents from being created. `products/1784487444890` already has an
+`imageStorageUrls` field, so at least some products have a real URL available
+for step 3 today.
+
 ### ✅ FIXED — one oversized product was blocking Algolia indexing for every product batched with it (2026-07-24)
 
 **Fix deployed:** `functions/algolia-sanitize.js` (new, shared by the live queue
