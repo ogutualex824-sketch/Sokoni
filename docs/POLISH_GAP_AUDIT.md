@@ -51,7 +51,12 @@ equivalent to a successful production run.
 
 | Item | Evidence | Method | Last verified |
 |---|---|---|---|
-| **Product create → Algolia enqueue** | Product created through the real write path reached Firestore with correct variant terms in **22s** and was **never indexed within 608s**. Queue held **6 entries for the probe document, all `delete`, zero `upsert`** | Runtime — end-to-end probe + Firestore queue inspection | 2026-07-24 |
+| **Product create → Algolia record** | Product created through the real write path reached Firestore with correct variant terms in **22s** and was **never present in `sokoni_products` within 608s**, across two independent probe runs | Runtime — end-to-end probe | 2026-07-24 |
+
+> ⚠️ **The stated cause was withdrawn.** See *Revised findings*: "zero `upsert`
+> entries in the queue" was an artefact of the probe, not a fact about the
+> system. The **symptom** above still stands and is unexplained; the **cause**
+> is once again unknown.
 
 **Scope note.** The probe's deletes fanned out to **both** `gs__products` and
 `products`, so the delete path works for both targets while the create path
@@ -66,15 +71,31 @@ produced neither.
 | Queue broken | The delete handler's `enqueue` wrote successfully in the same window |
 | Drain broken | Queue drained to `{done:306, dlq:0}` |
 
-**So the failure sits inside the create handler, between invocation and
-`enqueue`.** No `ERROR`-severity entries were emitted, which makes it a **silent
-no-op** rather than a crash — the most expensive shape, because every health
-indicator stays green while work never enters the system.
+**The queue-based half of this diagnosis is WITHDRAWN.** `enqueue` derives a
+**deterministic** document id:
 
-Remaining candidates, **not yet distinguished**: `_shouldSkip` returning true on
-a document that should pass (probe used `status:'active'`, no `_noIndex`), or
-`enqueue` failing in a way the handler swallows. Next step is instrumenting or
-reading the handler's own structured logs — not more inference.
+```js
+const queueId = `${collection}_${docId}`;   // one queue doc per (collection, docId)
+```
+
+so a create's `upsert` entry and a later `delete` entry for the same product
+write to **the same document**. The probe purges on exit, which **overwrote the
+upsert entry with a delete before the queue was ever inspected**. "6 entries, all
+delete, zero upsert" was therefore guaranteed by the probe's own cleanup — it
+could not have observed an upsert even if one existed.
+
+**What survives:** the product never appeared in `sokoni_products` within 608s,
+twice, and the purge happened *after* that window — so the drain had ~2 cycles
+to act while the entry should still have been present. That symptom is real and
+unexplained.
+
+**What does not survive:** any claim about whether the create path enqueues.
+Not proven either way.
+
+**Probe redesign required before the next attempt:** sample the queue *during*
+the observation window, not after cleanup. A deterministic queue id means
+cleanup is destructive to the evidence, so the queue must be read while the
+product still exists.
 
 ---
 
@@ -167,6 +188,7 @@ Kept rather than overwritten, so the reasoning trail survives.
 | 2026-07-24 | Variant Algolia leg failed because the probe created the product as `status: 'draft'`, which `_shouldSkip` excludes | **Wrong.** Re-run with an indexable product failed identically. The draft skip is real but was not the cause | A second probe with `status:'active'` |
 | 2026-07-24 | Algolia leg blocked by batch poisoning; expected to pass once fixed | **Partly wrong.** Batch poisoning was real and is fixed, but a *second, independent* defect — the create path never enqueuing — also blocks it | Post-fix re-probe, which failed for a different reason |
 | 2026-07-24 | Homepage-inventory and scroll-freeze fixes listed as verified | Removed from ✅ — no runtime evidence was presented in this session | Applying rule 1 to inherited claims |
+| 2026-07-24 | "The create path enqueues nothing — 6 queue entries, all `delete`, zero `upsert`" | **Withdrawn.** `enqueue` uses a deterministic queue id (`${collection}_${docId}`), so the probe's own purge **overwrote** the upsert entry with a delete before the queue was read. The observation was manufactured by the cleanup and could never have shown otherwise. Symptom (never indexed in 608s, twice) stands; **cause is unknown again** | Reading `enqueue` after asserting the conclusion — the order that should have been reversed |
 
 ---
 
