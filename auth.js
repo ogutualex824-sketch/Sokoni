@@ -992,13 +992,25 @@ async function signInWithGoogle() {
        {"message":"App attestation failed."} with __sokoniAppCheckState
        'rejected' before any click.
 
-       This does NOT weaken App Check and does NOT bypass it — it fails fast
-       with an accurate message instead of sending the user through a doomed
-       OAuth round-trip, and it never masks the underlying error (the code and
-       correlation id are logged, and the message carries the id).
+       CORRECTION 2026-07-24 — the guard was stricter than the backend.
+       Verified against the live App Check service config:
+
+         firestore.googleapis.com         ENFORCED
+         firebasestorage.googleapis.com   ENFORCED
+         identitytoolkit.googleapis.com   UNENFORCED   ← sign-in
+
+       Auth does NOT require an App Check token. A rejected attestation
+       therefore cannot fail the OAuth call, and aborting here turned a
+       harmless, known-intermittent condition into a hard sign-in outage —
+       the reported symptom. Blocking client-side bought no protection,
+       because the backend never checked.
+
+       DEPENDENCY: this reasoning rests on identitytoolkit being UNENFORCED.
+       If App Check enforcement is ever enabled for Authentication, revisit
+       this — proceeding would then produce a genuine, confusing failure.
 
        'pending'  → wait, bounded, exactly as the OTP path does.
-       'rejected' → stop here.
+       'rejected' → log and proceed (see above).
        'timeout'/'exchanged'/'disabled'/absent → proceed; Firebase queues the
        call internally and may still succeed once a token arrives. */
     let _acState = window.__sokoniAppCheckState || 'absent';
@@ -1011,21 +1023,16 @@ async function signInWithGoogle() {
         showAuthMsg('', '');
     }
     if (_acState === 'rejected') {
-        console.error('[AUTH ERROR] Google sign-in aborted before OAuth — App Check rejected', {
+        /* Log, but DO NOT abort — see the enforcement note above. A rejected
+           attestation cannot fail the sign-in while identitytoolkit is
+           UNENFORCED, so returning here manufactures an outage that the
+           backend would not have produced. Proceed and let the real result
+           decide; the catch below reports any genuine failure accurately. */
+        console.warn('[SOKONI Auth] App Check rejected — proceeding anyway', {
             corrId: _gCorrId, appCheckState: _acState,
+            note: 'identitytoolkit.googleapis.com does not enforce App Check; '
+                + 'attestation is not required for this call.',
         });
-        console.error('[AUTH ERROR] serialized:', JSON.stringify({
-            stage: 'appcheck-precheck', code: 'sokoni/appcheck-rejected',
-            appCheckState: _acState, corrId: _gCorrId,
-            hint: 'exchangeRecaptchaV3Token was refused (App attestation failed). '
-                + 'Not an OAuth fault — the Google round-trip was never started.',
-        }));
-        _resetGoogleBtn();
-        showAuthMsg(
-            'Security check failed, so sign-in could not start. Please refresh the page '
-            + 'and try again. If it keeps happening, use your email and password. '
-            + '[' + _gCorrId + ']', 'error');
-        return;   /* fail fast — no retry loop, no doomed OAuth round-trip */
     }
 
     try {
@@ -1503,9 +1510,13 @@ async function sendPhoneOTP() {
             new Promise(r => setTimeout(() => r('timeout'), 10000)),
         ]);
         if (_acStatus === 'rejected') {
-            showAuthMsg('Security check failed. Please refresh the page and try again.', 'error');
-            if (btn) { btn.disabled = false; btn.textContent = 'Send OTP →'; }
-            return;
+            /* Log, do not abort — identitytoolkit.googleapis.com is UNENFORCED
+               for App Check, so attestation is not required to send an OTP.
+               Aborting here produced the reported "OTP never sends" outage.
+               Revisit if App Check enforcement is enabled for Authentication. */
+            console.warn('[SOKONI Auth] App Check rejected — sending OTP anyway', {
+                corrId: _otpCorrId, appCheckState: _acStatus,
+            });
         }
         /* 'exchanged' or 'timeout' — proceed. Timeout lets Firebase handle it (it queues
            the auth call internally and may still succeed when the token arrives). */
