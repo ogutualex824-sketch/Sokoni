@@ -155,3 +155,27 @@ not know where the canonical one lives.
 
 Candidates worth auditing next, by the same method: pricing, inventory ceilings,
 and anything else where two subsystems each hold a table of the same business fact.
+
+### The method, reusable
+
+1. Identify a business fact that should have exactly one authority.
+2. Enumerate every definition **and every consumer**. The consumers matter more —
+   a duplicate table nobody reads is dead code; a duplicate table one screen reads
+   is an incident waiting for a merchant to find it.
+3. Designate the canonical authority.
+4. Migrate consumers, ordered by blast radius: display-only first, billing writers
+   last.
+5. Add a permanent verification guard.
+6. Remove transitional mirrors only after the guard passes.
+
+Step 5 is the one that makes the property durable. Duplicate tables rarely appear
+because somebody decided to violate the architecture; they appear because a
+developer needed a value, could not confidently locate the canonical source, and
+created another. A guard changes that dynamic — a new authority fails verification
+instead of silently joining the codebase. Steps 1–4 without step 5 buy a clean
+snapshot that decays.
+
+Step 6 is last for the reason this incident demonstrates in reverse: the mirror
+here is load-bearing precisely because the migration is incomplete. Removing a
+compatibility layer before its consumers have moved reintroduces the original
+failure for every consumer left behind.
