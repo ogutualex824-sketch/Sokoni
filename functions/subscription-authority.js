@@ -170,9 +170,27 @@ async function materialiseEntitlements(uid, reason = 'unspecified') {
       updatedAt:        now,
     }, { merge: true });
 
-    /* Compatibility mirror. Field-path form so it merges into the existing
-       subscription map rather than replacing a sibling hub. `features` carries
-       the key the legacy client asks for by name (quota('listings_limit')). */
+    /* ── TRANSITIONAL COMPATIBILITY MIRROR — SCHEDULED FOR REMOVAL ──────────
+       This exists ONLY so screens written against the old read path correct
+       themselves without being rewritten on the day of the incident.
+
+       It is NOT a second source of truth: both values are computed above, in
+       one place, and this write is derived. But a derived copy that outlives
+       its purpose becomes exactly the thing this module was built to remove —
+       two synchronised representations of one fact.
+
+       REMOVAL CONDITION (all three, then delete this block):
+         1. No client reads users/{uid}.subscription.* for entitlements.
+            Check:  grep -rn "subscription\[" --include=*.js --include=*.html .
+                    grep -rn "FREE_DEFAULTS\|listings_limit" sokoni-*.js
+         2. sokoni-subscription.js is retired or reads SokoniAuthority.
+         3. scripts/verify-listing-limit-single-source.js passes, proving no
+            file still declares its own limits.
+
+       Until then this is load-bearing. See docs/ENTITLEMENT_MIGRATION.md.
+       Field-path form so it merges into the existing subscription map rather
+       than replacing a sibling hub; `features` carries the key the legacy
+       client asks for by name (quota('listings_limit')). */
     await db().collection('users').doc(uid).set({
       [`subscription.${SELLER_HUB}`]: {
         planId:    ent.plan,
