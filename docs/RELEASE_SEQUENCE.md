@@ -26,6 +26,29 @@
 > reconciliation, subscription exclusion — is meaningful only once you are certain
 > the payment exercises the intended code path.
 
+## Note for whoever runs the first payment
+
+> Do not use the first marketplace payment to "test payments". Use it to certify
+> that the repository, deployed infrastructure, external configuration and runtime
+> behaviour all describe the same payment system. If they disagree, treat the
+> disagreement as the bug before looking for bugs inside the code.
+
+Every defect worth finding on this project lived at a boundary between two systems,
+not inside one:
+
+| Boundary | What was wrong |
+|---|---|
+| Repository ↔ Deployment | code existed, was never deployed |
+| Deployment ↔ IAM | callable deployed, not invokable (403) |
+| Deployment ↔ Third-party config | webhook implementation and dashboard can diverge |
+| Runtime ↔ UI | payment wrote one authority, interface read another |
+| Documentation ↔ Implementation | ADR named one canonical path, work landed in another |
+| Tooling ↔ Repository | command reported success, intended state never changed |
+
+None was diagnosable from one side alone. Each was found by comparing two sources
+that were each internally consistent — which is why "the code looks right" was true
+and useless in every case.
+
 **Production certification begins where static analysis ends.** This repository can
 prove architecture, invariants and internal consistency. It cannot prove that the
 deployed system, third-party configuration and runtime behaviour agree. That is what
