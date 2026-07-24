@@ -61,7 +61,46 @@ Confirm each step, not just the endpoints:
 
 Step 2 is the one that was previously broken and is the highest-value assertion: the
 deployed `requestDataExport` used to write only `dataExportRequests`, never the queue
-document, so the worker never fired.
+document, so the worker never fired. It is the seam between the synchronous callable
+and the asynchronous pipeline — a request can return success while the pipeline never
+starts.
+
+### Baseline observed 2026-07-24 (read-only, production)
+
+| Collection | Documents |
+|---|---|
+| `dataExportRequests` | **0** |
+| `dataExportQueue` | **0** |
+
+No export request has ever been recorded in production. Combined with the IAM
+blockage (403 until the bindings were applied), that makes RC-07 a **high-priority**
+runtime certification, not a formality: the obligation has never been fulfilled
+end to end.
+
+### Acceptance criteria
+
+| Stage | Evidence |
+|---|---|
+| Export request accepted | `dataExportRequests/{requestId}` exists with expected initial state |
+| Queue handoff | `dataExportQueue/{requestId}` created ← highest-value |
+| Worker execution | queue item processed, status advances |
+| Artifact generation | object created at `data-exports/{uid}/{requestId}.json` |
+| Completion | status reaches `ready` (or expected terminal state) |
+| Cleanup | test artifacts and temporary test data handled per operational process |
+
+**Triggering is a deliberate decision, not an automation step.** The request must
+come from an authenticated session that has been explicitly designated for testing.
+Do not manufacture production PII-processing activity purely to automate this. The
+verification side is already fully observable with the existing tooling — the open
+question is whether the live workflow executes, not whether it can be inspected.
+
+## Loyalty settlement — deployed, NOT runtime-verified
+
+`loyaltyRedemptions` was also empty at the same reading, so the atomic
+points-deduction path added on 2026-07-24 has never executed in production: no
+completed payment has exercised it. Describe it as **implemented and deployed,
+pending runtime verification** — not certified. It should be covered by the
+payment/inventory RC path, where a real completed order is the trigger.
 
 ## What a green audit does and does not mean
 
