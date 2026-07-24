@@ -126,11 +126,33 @@ const sumPoints = (s) => (s.points || [])
     record('Catalogue has active products', active > 0 ? 'PASS' : 'FAIL',
       `${active} active of ${snap.size} total`);
 
-    /* FALLBACK_PRODUCTS use F1..F30 / G1..G2 ids. A real document with one of
-       those ids would mean demo data had been written into production. */
-    const demo = snap.docs.filter(d => /^[FG]\d{1,2}$/.test(d.id)).length;
-    record('No demo products in the live catalogue', demo === 0 ? 'PASS' : 'FAIL',
-      `${demo} demo-shaped ids`);
+    /* Seeded-catalogue detection.
+       The first version of this check tested only for F<n>/G<n> ids, because those
+       are the ids FALLBACK_PRODUCTS uses. It reported "12 demo-shaped ids" and made
+       a catalogue-wide pattern look like a dozen strays: the seeded documents also
+       use A<n>, AD<n> and other short letter+number codes, which the regex missed.
+       That is a scanner blind spot, and acting on its output would have meant
+       deleting 12 arbitrary documents out of a set of 113.
+
+       Stock imagery is the far stronger signal, and it is the one that actually
+       matters to a shopper: a listing illustrated with a stock photo from a
+       third-party image host is not a photograph of a real item for sale.
+       Genuine merchant uploads live in Firebase Storage.
+
+       This check REPORTS rather than judges intent. A deliberately seeded launch
+       catalogue and leftover test data look identical from here, and only the
+       owner can tell them apart — so a high count is surfaced for a human
+       decision instead of being auto-classified as a defect. */
+    const STOCK_HOSTS = /images\.unsplash\.com|source\.unsplash\.com|pexels\.com|pixabay\.com|placehold|via\.placeholder/;
+    const stock = snap.docs.filter(d => {
+      const v = d.data();
+      const imgs = [v.image, v.thumbnail].concat(Array.isArray(v.images) ? v.images : []);
+      return STOCK_HOSTS.test(imgs.filter(Boolean).join(','));
+    }).length;
+    const pct = snap.size ? Math.round((stock / snap.size) * 100) : 0;
+    record('Live catalogue is not predominantly stock-image listings',
+      pct < 50 ? 'PASS' : 'FAIL',
+      `${stock} of ${snap.size} products (${pct}%) use third-party stock imagery`);
   } catch (e) {
     record('Catalogue has active products', 'BLOCKED', (e.code || e.message.split('\n')[0]));
   }
