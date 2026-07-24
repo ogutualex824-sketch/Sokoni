@@ -1634,5 +1634,29 @@
     "legacy": true,
     "adoptedFromProduction": "2026-07-12",
     "needsAttribution": true
+  },
+  "healthAppointments|patientUid:ASCENDING,dateTime:DESCENDING": {
+    "legacy": true,
+    "feature": "Platform",
+    "query": "healthAppointments: patientUid ASCENDING, dateTime DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "healthAppointments|providerId:ASCENDING,dateTime:ASCENDING": {
+    "legacy": true,
+    "feature": "Platform",
+    "query": "healthAppointments: providerId ASCENDING, dateTime ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "healthProviders|status:ASCENDING,rating:DESCENDING": {
+    "legacy": true,
+    "feature": "Platform",
+    "query": "healthProviders: status ASCENDING, rating DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "healthProviders|status:ASCENDING,specialization:ASCENDING,rating:DESCENDING": {
+    "legacy": true,
+    "feature": "Platform",
+    "query": "healthProviders: status ASCENDING, specialization ASCENDING, rating DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
   }
 }
