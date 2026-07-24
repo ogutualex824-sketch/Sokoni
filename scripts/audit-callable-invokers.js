@@ -113,15 +113,29 @@ const runGet = (at, p) => new Promise((res) => {
   }).on('error', () => res({ status: 0, json: null }));
 });
 
-/* Unauthenticated POST. 401 => the request REACHED the function and its own auth
-   rejected it (healthy). 403 => rejected at the invocation layer, before the code. */
+/* Unauthenticated POST.
+     401 => the request REACHED the function and its own auth rejected it (healthy).
+     403 => AMBIGUOUS. Two different things return 403 and they mean opposites:
+              · Cloud Run IAM rejecting before the container  -> an HTML error page
+              · the function itself throwing permission-denied -> callable JSON,
+                e.g. {"error":{"message":"Admin access required.",
+                                "status":"PERMISSION_DENIED"}}
+            The second is a HEALTHY admin function. Judging on status alone marked
+            getCommissionLedger and markCommissionPaid as unreachable when both were
+            running fine and correctly refusing an anonymous caller.
+   So the body is read, not just the code: JSON => the function ran. */
 const probe = (name) => new Promise((res) => {
   const data = JSON.stringify({ data: {} });
   const req = https.request({
     host: `${REGION}-${PROJECT}.cloudfunctions.net`, path: `/${name}`, method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
-  }, (r) => { r.resume(); res(r.statusCode); });
-  req.on('error', () => res(0));
+  }, (r) => {
+    let b = '';
+    r.setEncoding('utf8');
+    r.on('data', (d) => { if (b.length < 400) b += d; });
+    r.on('end', () => res({ code: r.statusCode, ranFunction: /^\s*[{[]/.test(b) }));
+  });
+  req.on('error', () => res({ code: 0, ranFunction: false }));
   req.write(data); req.end();
 });
 
@@ -191,11 +205,16 @@ const kindOf = (f) =>
     }
     const open = members.includes('allUsers');
 
-    let code = null;
-    if (DO_PROBE) code = await probe(id);
+    let code = null, ranFunction = null;
+    if (DO_PROBE) { const r = await probe(id); code = r.code; ranFunction = r.ranFunction; }
 
-    const verdict = open ? (DO_PROBE && code === 403 ? 'FAIL' : 'PASS') : 'FAIL';
-    return { id, kind, invoker: members.join(',') || '(none)', probe: code, verdict };
+    /* A 403 only means 'unreachable' when it came from the invocation layer. If the
+       body is callable JSON the function ran and refused the caller itself, which is
+       a healthy admin endpoint, not a blocked one. */
+    const blockedAtInvocation = DO_PROBE && code === 403 && ranFunction === false;
+    const verdict = blockedAtInvocation ? 'FAIL' : (open ? 'PASS' : 'FAIL');
+    return { id, kind, invoker: members.join(',') || '(none)', probe: code,
+             ranFunction, verdict };
   }
 
   /* Bounded worker pool — a --all sweep is ~1200 services and would take about a
