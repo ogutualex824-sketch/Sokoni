@@ -1,4 +1,53 @@
-﻿## [2026-07-24] — chore(gates): artifact-parity could not verify any HTML page; now confirms deployed == source
+﻿## [2026-07-24] — deploy+finding(privacy): GDPR export code fix is LIVE, but an IAM invoker gap still blocks it
+
+RC step 1 executed, and runtime probing immediately found what static analysis
+could not — validating the decision to shift from audits to runtime validation.
+
+**Deployed (update, no new quota).** `requestDataExport`, `getDataExportStatus`,
+`processDataExport` were redeployed to `sokoni-aeb26` (all three "Successful update
+operation"; predeploy syntax + commission gates passed). The deployed
+`requestDataExport` is now the correct data-export version (writes
+`dataExportQueue`, enforces App Check) rather than the account-manager shadow.
+`functions:list` confirms all three are live, with `processDataExport` bound to a
+`firestore.document.created` trigger.
+
+**New runtime blocker — the flow is still broken, now for a different reason.**
+Probing the deployed callables anonymously to check health returned:
+
+    createCheckoutSession   HTTP 401   (reachable; function ran, rejected no-auth)
+    scheduleAccountDeletion HTTP 401   (reachable)
+    requestDataExport       HTTP 403   (Cloud Run IAM blocked the invocation)
+    getDataExportStatus     HTTP 403   (same)
+
+A 403 is a Google-frontend/IAM rejection BEFORE the container — it means `allUsers`
+lacks `roles/run.invoker` on these two services. Neither function sets `invoker` in
+source (nor does `createCheckoutSession`), so this is purely deployed IAM STATE, not
+code — the documented `run.invoker` gap class in this repo. The Firebase callable
+SDK sends a Firebase ID token, which is not an IAM principal, so the BROWSER call
+gets 403 too: a user's GDPR/DPA export request cannot reach the function at all.
+Granting `allUsers` invoker is the correct, standard config for a Firebase callable
+(the function still enforces `request.auth` + App Check internally, exactly as the
+401 functions do) — it restores reachability, it does not weaken security.
+
+**Could not fix here.** gcloud is non-functional in this environment (its Python
+shim is missing), so the IAM grant must be run where gcloud works:
+
+    gcloud run services add-iam-policy-binding requestDataExport \
+      --region=us-central1 --member=allUsers --role=roles/run.invoker --project=sokoni-aeb26
+    gcloud run services add-iam-policy-binding getDataExportStatus \
+      --region=us-central1 --member=allUsers --role=roles/run.invoker --project=sokoni-aeb26
+
+After granting, re-probe: both should flip 403 → 401. THEN run one real
+authenticated export and walk request → `dataExportQueue` doc → `processDataExport`
+→ Storage `data-exports/{uid}/{requestId}.json` → `getDataExportStatus = ready`.
+Only then is the item runtime-verified. Note: this same IAM gap likely affects the
+other functions the repo already documents (bootstrapDevice, getBusinessConfig,
+getTypesenseSearchKey) — a focused IAM audit is the sensible follow-up.
+
+No repository code changed in this step (deploy + probe only). This entry records
+the deployment and the finding.
+
+## [2026-07-24] — chore(gates): artifact-parity could not verify any HTML page; now confirms deployed == source
 
 Hardening pass 2, cont. `verify-artifact-parity` compares the DEPLOYED program
 against the repo per file (stripping comments/whitespace so a reformat is not
