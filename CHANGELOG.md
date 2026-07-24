@@ -1,4 +1,117 @@
-﻿## [2026-07-24] — deploy+finding(privacy): GDPR export code fix is LIVE, but an IAM invoker gap still blocks it
+﻿## [2026-07-24] — evidence(privacy): GDPR export 403 root cause CONFIRMED by direct policy read (was hypothesis)
+
+Upgrades the previous entry's *hypothesis* to a verified root cause, and corrects a
+faulty intermediate reading. No code or infrastructure changed — read-only.
+
+**Why this was re-verified.** The prior entry asserted "`allUsers` lacks
+`run.invoker`". The runtime probes only established that the request is rejected
+BEFORE the function executes; several invocation-layer conditions produce an
+identical external 403. That claim was not yet evidence.
+
+**A false refutation, caught.** The first policy read appeared to DISPROVE the
+hypothesis — it reported no `run.invoker` on all four services, including the two
+that work. That reading was worthless: it queried camelCase names
+(`requestDataExport`), which do not exist as Cloud Run services, and
+`:getIamPolicy` returns an EMPTY POLICY for a non-existent resource instead of 404.
+Cloud Functions v2 lowercases the underlying service name. A follow-up `GET` on the
+service itself returned 404 and exposed the mistake. (A `services.list` cross-check
+was also unusable — it caps at 500 of ~1581 and its pagination returned HTTP 500 —
+so each service was fetched directly by lowercase name.)
+
+**Confirmed root cause — controlled comparison.** Direct read of each Cloud Run
+service (v2 API, `run.googleapis.com`):
+
+    service                   ingress                 run.invoker    probe
+    createcheckoutsession     INGRESS_TRAFFIC_ALL     allUsers       401 reachable
+    scheduleaccountdeletion   INGRESS_TRAFFIC_ALL     allUsers       401 reachable
+    requestdataexport         INGRESS_TRAFFIC_ALL     (NONE)         403 blocked
+    getdataexportstatus       INGRESS_TRAFFIC_ALL     (NONE)         403 blocked
+    processdataexport         INGRESS_TRAFFIC_ALL     (NONE)         n/a (Firestore-triggered)
+
+`ingress` is identical across all five, which excludes it as the cause. The only
+variable that differs is the `run.invoker` binding, and it partitions exactly along
+the 401/403 split. Neither the working nor the broken functions set `invoker` in
+source, so this is deployed IAM state — and the redeploy did not restore it.
+
+`processdataexport` also lacks the binding; that is harmless, because it is invoked
+by its Firestore `document.created` trigger rather than over HTTP.
+
+**Remediation (unchanged, now evidence-backed), to run where gcloud works:**
+
+    gcloud run services add-iam-policy-binding requestdataexport \
+      --region=us-central1 --member=allUsers --role=roles/run.invoker --project=sokoni-aeb26
+    gcloud run services add-iam-policy-binding getdataexportstatus \
+      --region=us-central1 --member=allUsers --role=roles/run.invoker --project=sokoni-aeb26
+
+Note the LOWERCASE service names — the camelCase form silently targets nothing.
+This matches the two working callables rather than inventing a policy, and does not
+weaken security: the functions still enforce `request.auth` and App Check
+internally, which is the actual security boundary for a Firebase callable.
+
+Verification order: re-probe both (expect 403 → 401), then one authenticated export
+→ `dataExportQueue` doc → `processDataExport` → Storage object → status `ready`.
+
+## [2026-07-24] — fix(healthcare+property): appointment booking made functional; property listings auto-activate
+
+Two acceptance blockers from the write-path audit ([[RELEASE_ACCEPTANCE]]),
+closed per product decisions.
+
+### Healthcare appointments — 🚫 → operational (deployed)
+Booking had **no valid execution path**: `functions/healthcare-hub.js` (15 CFs)
+was never required or re-exported from `functions/index.js` so none were
+deployed, while `/healthAppointments` is `write:false` (booking must be
+server-side for slot-locking + idempotency). The UI compounded it by funnelling
+doctor visits, teleconsults **and** lab tests all through
+`SokoniHealth.saveAppointment`, a direct write the rules deny.
+
+- **Deployed all 15 healthcare CFs** (wired into `index.js`; verified live —
+  HTTP 401 = present + App-Check-gated, not 404). No quota block.
+- **`saveAppointment` → `bookAppointment` CF.** The appointment id doubles as the
+  idempotency key, so a double-tap books once. `dateTime` is assembled from the
+  UI's separate date/time fields into the ISO instant the CF expects. Specific
+  errors surfaced (slot taken / provider unavailable / sign-in needed) instead
+  of a generic failure.
+- **Status changes → `updateAppointmentStatus` CF**, which releases the slot lock
+  on cancel/complete so the time becomes bookable again — something a client
+  `updateDoc` could never do. `updateAppointment` now only accepts a status
+  transition.
+- **Teleconsult → `saveTelemedicine`, lab → `saveLabBooking`** (`healthcare.html`)
+  — their own owner-writable collections, instead of the server-only appointments
+  collection they could never write to.
+- **`getMyAppointments`** filters `status` in memory rather than chaining a
+  `.where()` after `.orderBy()`, which would have needed a 3-field composite
+  index. Two 2-field composites (`patientUid+dateTime`, `providerId+dateTime`)
+  added and deployed.
+
+**Residual (data/ops, not code):** booking requires an **active** `healthProviders`
+doc. Providers self-register as `pending`; an admin approves via
+`approveHealthProvider`. A beta must seed ≥1 approved provider or the screen
+correctly reports "provider not available". Tracked in [[KNOWN_LIMITATIONS]].
+
+### Property listings — visibility trap closed
+Decision: **auto-activate on create.** `property-hub.html::_savePropertyListing`
+wrote `status:'pending'`, but the read rule only exposes `active`/`published` —
+so a new listing was invisible to every buyer with no activation path. Now
+writes `status:'active'`; visible immediately. Comment marks where a moderation
+step would re-enter if wanted. (BnB unaffected — `bnbListings` reads are public.)
+
+### Also
+- `sokoni-orders.js::createOrder` (dead, escrow-at-create, rule-incompatible) now
+  carries a ⚠️ do-not-reuse-without-redesign banner so it isn't wired into
+  checkout by mistake.
+
+Files: `functions/index.js`, `functions/healthcare-hub.js`, `sokoni-health.js`,
+`healthcare.html`, `property-hub.html`, `sokoni-orders.js`,
+`firestore.indexes.json`, `docs/RELEASE_ACCEPTANCE.md`, `docs/KNOWN_LIMITATIONS.md`.
+Deployed: 15 functions (create), 2 indexes, hosting. No rules change, no schema
+change.
+
+Verification: CFs confirmed live (HTTP 401 gated); rules/indexes compiled and
+released clean. End-to-end booking needs an authenticated patient session + a
+seeded active provider — not exercisable from this dev machine (App Check
+throttled). Static write-path is sound.
+
+## [2026-07-24] — deploy+finding(privacy): GDPR export code fix is LIVE, but an IAM invoker gap still blocks it
 
 RC step 1 executed, and runtime probing immediately found what static analysis
 could not — validating the decision to shift from audits to runtime validation.
