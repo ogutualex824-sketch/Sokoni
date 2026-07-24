@@ -1,9 +1,49 @@
-# RC1 Run — rc1-static-first
+# RC1 Run — rc1-static-coverage
 
 - Backend: `static(ui-only)`
-- Started: 2026-07-24T05:28:57.031Z
+- Started: 2026-07-24T05:49:06.152Z
 - Privileged claims: refused
 - Summary: **10 pass · 0 fail · 20 blocked**
+
+## Release Candidate Coverage
+
+| Suite | Result |
+|---|---|
+| RC-01 Seller Journey | BLOCKED (Auth/Backend/Capability) |
+| RC-02 Buyer Journey | PASS (Partial) |
+| RC-03 Payment → Subscription Journey | BLOCKED (Secrets) |
+| RC-04 Inventory Journey | BLOCKED (Backend/Capability) |
+| RC-05 Search Journey | PASS (Partial) |
+| RC-06 PWA Journey | PASS |
+
+```
+PASS:    10
+FAIL:    0
+BLOCKED: 20
+```
+
+**Untested capabilities:**
+
+- Seller authentication
+- Shop creation
+- Product creation
+- Product mutation
+- Search indexing
+- Product soft-delete
+- Seller dashboard rendering
+- Order persistence
+- Payment initiation
+- Payment callback verification
+- Payment state machine
+- Subscription activation
+- Entitlement propagation
+- Inventory seed
+- Inventory mutation
+- Inventory decrement
+- Inventory consistency
+- Realtime/offline sync
+- Search synonyms
+- Search invalidation
 
 ## RC-01 — Seller Journey  →  BLOCKED
 

@@ -110,8 +110,8 @@ async function main() {
   writeMarkdown(report, evidenceRoot);
 
   console.log('\n' + '─'.repeat(70));
-  console.log('SUMMARY  ' + JSON.stringify(report.summary));
-  console.log('report:  ' + path.relative(ROOT, path.join(evidenceRoot, 'report.md')));
+  console.log(coverageText(report));
+  console.log('\nreport:  ' + path.relative(ROOT, path.join(evidenceRoot, 'report.md')));
   // Exit non-zero only on a genuine FAIL, never on BLOCKED (env, not defect).
   process.exit(report.summary.fail > 0 ? 1 : 0);
 }
@@ -150,11 +150,12 @@ async function runStep(step, ctx) {
   try {
     const out = await step.run(ctx);
     const status = out && out.status ? out.status : 'PASS';
-    return { name: step.name, status, detail: out && out.detail || '',
-             evidence: [...ctx.evidence], at: started };
+    return { name: step.name, capability: step.capability || null, status,
+             detail: out && out.detail || '', evidence: [...ctx.evidence], at: started };
   } catch (e) {
     const blocked = e instanceof BlockedError || e.blocked;
-    return { name: step.name, status: blocked ? 'BLOCKED' : 'FAIL',
+    return { name: step.name, capability: step.capability || null,
+             status: blocked ? 'BLOCKED' : 'FAIL',
              detail: String(e.message).slice(0, 160), evidence: [...ctx.evidence], at: started };
   }
 }
@@ -167,6 +168,55 @@ function summarize(report) {
   return { suites: report.suites.length, pass, fail, blocked };
 }
 
+/* Why a suite could not be certified, in one word, taken from its blocked steps.
+   Shown next to the verdict so a reader sees the CAUSE without opening the run. */
+function blockedCategory(detail) {
+  const d = String(detail || '').toLowerCase();
+  if (/secret|webhook|intasend|hmac/.test(d))                 return 'Secrets';
+  if (/auth|sign|claim|credential|invalid_client|privileged/.test(d)) return 'Auth';
+  if (/emulator|jdk|firestore|backend cannot|no backend/.test(d))     return 'Backend';
+  return 'Capability';
+}
+
+/* The headline artefact: what was actually exercised before a release.
+   `untested` comes from each step's declared `capability`, so it is explicit
+   metadata rather than a guess parsed out of an error message. */
+function coverage(report) {
+  const rows = report.suites.map(s => {
+    const cats = [...new Set(s.steps.filter(st => st.status === 'BLOCKED')
+                                    .map(st => blockedCategory(st.detail)))];
+    const label = s.verdict === 'PASS' ? 'PASS'
+      : s.verdict === 'PARTIAL' ? 'PASS (Partial)'
+      : s.verdict === 'FAIL' ? 'FAIL'
+      : `BLOCKED${cats.length ? ' (' + cats.join('/') + ')' : ''}`;
+    return { id: s.id, title: s.title, label };
+  });
+  const untested = [];
+  for (const s of report.suites) for (const st of s.steps) {
+    if (st.status !== 'PASS' && st.capability && !untested.includes(st.capability)) {
+      untested.push(st.capability);
+    }
+  }
+  return { rows, untested };
+}
+
+function coverageText(report) {
+  const { rows, untested } = coverage(report);
+  const w = Math.max(...rows.map(r => (r.id + ' ' + r.title).length)) + 2;
+  const L = [];
+  L.push('Release Candidate Coverage', '');
+  for (const r of rows) L.push(`  ${(r.id + ' ' + r.title).padEnd(w)}${r.label}`);
+  L.push('', 'Coverage:');
+  L.push(`  PASS:    ${String(report.summary.pass).padStart(4)}`);
+  L.push(`  FAIL:    ${String(report.summary.fail).padStart(4)}`);
+  L.push(`  BLOCKED: ${String(report.summary.blocked).padStart(4)}`);
+  if (untested.length) {
+    L.push('', 'Untested capabilities:');
+    for (const c of untested) L.push(`  - ${c}`);
+  }
+  return L.join('\n');
+}
+
 function writeMarkdown(report, dir) {
   const L = [];
   L.push(`# RC1 Run — ${report.label}`, '');
@@ -174,6 +224,22 @@ function writeMarkdown(report, dir) {
   L.push(`- Started: ${report.startedAt}`);
   L.push(`- Privileged claims: ${report.privileged ? 'allowed' : 'refused'}`);
   L.push(`- Summary: **${report.summary.pass} pass · ${report.summary.fail} fail · ${report.summary.blocked} blocked**`, '');
+
+  /* Coverage first — a release reader must see what was actually exercised
+     before wading into per-step detail. */
+  const { rows, untested } = coverage(report);
+  L.push('## Release Candidate Coverage', '');
+  L.push('| Suite | Result |', '|---|---|');
+  for (const r of rows) L.push(`| ${r.id} ${r.title} | ${r.label} |`);
+  L.push('', '```', `PASS:    ${report.summary.pass}`,
+         `FAIL:    ${report.summary.fail}`,
+         `BLOCKED: ${report.summary.blocked}`, '```', '');
+  if (untested.length) {
+    L.push('**Untested capabilities:**', '');
+    for (const c of untested) L.push(`- ${c}`);
+    L.push('');
+  }
+
   for (const s of report.suites) {
     L.push(`## ${s.id} — ${s.title}  →  ${s.verdict}`, '');
     for (const st of s.steps) {

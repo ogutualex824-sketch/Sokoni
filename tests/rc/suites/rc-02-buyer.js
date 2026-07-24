@@ -8,7 +8,7 @@ const { BlockedError } = require('../backends/backend-interface');
 module.exports = {
   id: 'RC-02', title: 'Buyer Journey',
   steps: [
-    { name: 'Home renders a product grid', async run(ctx) {
+    { name: 'Home renders a product grid', capability: 'Catalog browse', async run(ctx) {
         const page = await ctx.ui();
         await page.goto(ctx.baseUrl() + '/index.html', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1800);
@@ -18,7 +18,7 @@ module.exports = {
         if (cards < 1) return { status: 'BLOCKED', detail: 'grid empty without live data' };
         return { detail: `${cards} card-like nodes` };
     }},
-    { name: 'Category page renders', async run(ctx) {
+    { name: 'Category page renders', capability: 'Category browse', async run(ctx) {
         const page = await ctx.ui();
         await page.goto(ctx.baseUrl() + '/category.html?cat=all', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1500);
@@ -26,7 +26,7 @@ module.exports = {
         await ctx.shot('category');
         if (errs) throw new Error(`page errors: ${page._rcErrors[0]}`);
     }},
-    { name: 'Checkout math: subtotal = Σ price×qty', async run(ctx) {
+    { name: 'Checkout math: subtotal = Σ price×qty', capability: 'Checkout pricing', async run(ctx) {
         // Seed a cart in localStorage and let checkout.html compute — the exact
         // path the qty-subtotal fix corrected. Pure client, no auth needed.
         const page = await ctx.ui();
@@ -49,7 +49,7 @@ module.exports = {
         if (!sub.includes('47,200')) throw new Error(`subtotal wrong: expected 47,200, got "${sub.trim()}"`);
         return { detail: `subtotal ${sub.trim()} = qty-correct` };
     }},
-    { name: 'Order history persists (authenticated)', async run(ctx) {
+    { name: 'Order history persists (authenticated)', capability: 'Order persistence', async run(ctx) {
         await ctx.backend.ensureUser(ctx.dataset.IDENTITIES.buyer); // throws BlockedError on static
         throw new BlockedError('order write+read as buyer needs authenticated backend');
     }},

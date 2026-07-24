@@ -6,7 +6,7 @@
 module.exports = {
   id: 'RC-06', title: 'PWA Journey',
   steps: [
-    { name: 'Manifest linked and valid', async run(ctx) {
+    { name: 'Manifest linked and valid', capability: 'PWA manifest', async run(ctx) {
         const page = await ctx.ui();
         await page.goto(ctx.baseUrl() + '/index.html', { waitUntil: 'domcontentloaded' });
         await page.waitForTimeout(1000);
@@ -21,7 +21,7 @@ module.exports = {
         ctx.record('assertion', { name: manifest.name || manifest.short_name, icons: (manifest.icons || []).length });
         return { detail: `${manifest.name || manifest.short_name}, ${(manifest.icons || []).length} icons` };
     }},
-    { name: 'Service worker registers', async run(ctx) {
+    { name: 'Service worker registers', capability: 'Service worker registration', async run(ctx) {
         const page = await ctx.ui();
         await page.goto(ctx.baseUrl() + '/index.html', { waitUntil: 'domcontentloaded' });
         const reg = await page.evaluate(async () => {
@@ -37,7 +37,7 @@ module.exports = {
         if (String(reg).startsWith('error')) throw new Error(reg);
         return { detail: reg };
     }},
-    { name: 'Offline fallback page renders', async run(ctx) {
+    { name: 'Offline fallback page renders', capability: 'Offline fallback', async run(ctx) {
         const page = await ctx.ui();
         const resp = await page.goto(ctx.baseUrl() + '/offline.html', { waitUntil: 'domcontentloaded' })
           .catch(() => null);
@@ -46,7 +46,7 @@ module.exports = {
         const hasText = await page.evaluate(() => (document.body.textContent || '').trim().length > 20);
         if (!hasText) throw new Error('offline.html empty');
     }},
-    { name: 'Service-worker file is served and versioned', async run(ctx) {
+    { name: 'Service-worker file is served and versioned', capability: 'Service worker versioning', async run(ctx) {
         const page = await ctx.ui();
         const info = await page.evaluate(async (base) => {
           for (const p of ['/service-worker.js', '/sw.js']) {

@@ -14,22 +14,22 @@ const NEEDS_SECRETS = 'needs live INTASEND secrets — run on staging with secre
 module.exports = {
   id: 'RC-03', title: 'Payment → Subscription Journey',
   steps: [
-    { name: 'Payment initiated (STK push accepted)', async run() {
+    { name: 'Payment initiated (STK push accepted)', capability: 'Payment initiation', async run() {
         throw new BlockedError(NEEDS_SECRETS + ' (createCheckoutSession + IntaSend)');
     }},
-    { name: 'Webhook accepted (HMAC challenge verified)', async run() {
+    { name: 'Webhook accepted (HMAC challenge verified)', capability: 'Payment callback verification', async run() {
         throw new BlockedError('needs INTASEND_WEBHOOK_CHALLENGE to sign a valid webhook');
     }},
-    { name: 'Payment state → COMPLETE', async run(ctx) {
+    { name: 'Payment state → COMPLETE', capability: 'Payment state machine', async run(ctx) {
         // Ready: read the order/payment doc and assert status once the webhook
         // path can run. Guarded so it BLOCKS rather than falsely passes.
         if (!ctx.backendUp) throw new BlockedError(NEEDS_SECRETS);
         throw new BlockedError('depends on webhook step, which needs secrets');
     }},
-    { name: 'Subscription activated', async run() {
+    { name: 'Subscription activated', capability: 'Subscription activation', async run() {
         throw new BlockedError('gated on payment COMPLETE (secrets)');
     }},
-    { name: 'Entitlement updated + UI reflects plan', async run() {
+    { name: 'Entitlement updated + UI reflects plan', capability: 'Entitlement propagation', async run() {
         throw new BlockedError('gated on subscription activation (secrets)');
     }},
   ],
