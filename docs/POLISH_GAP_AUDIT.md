@@ -55,10 +55,26 @@ equivalent to a successful production run.
 
 **Scope note.** The probe's deletes fanned out to **both** `gs__products` and
 `products`, so the delete path works for both targets while the create path
-produced neither. That points at the create trigger specifically rather than a
-queue-wide fault — **not yet proven**; next step is `algoliaSync_products_create`
-function logs to separate *not deployed* / *deployed but skipping* / *deployed
-but erroring*.
+produced neither.
+
+**Narrowed 2026-07-24 (Runtime — Cloud Function logs + deployment list):**
+
+| Ruled out | Evidence |
+|---|---|
+| Not deployed | `algoliaSync_products_create` is **ACTIVE** |
+| Never fired | Invoked at **13:27:11Z**, matching the probe's create; its paired delete ran 13:38:15Z |
+| Queue broken | The delete handler's `enqueue` wrote successfully in the same window |
+| Drain broken | Queue drained to `{done:306, dlq:0}` |
+
+**So the failure sits inside the create handler, between invocation and
+`enqueue`.** No `ERROR`-severity entries were emitted, which makes it a **silent
+no-op** rather than a crash — the most expensive shape, because every health
+indicator stays green while work never enters the system.
+
+Remaining candidates, **not yet distinguished**: `_shouldSkip` returning true on
+a document that should pass (probe used `status:'active'`, no `_noIndex`), or
+`enqueue` failing in a way the handler swallows. Next step is instrumenting or
+reading the handler's own structured logs — not more inference.
 
 ---
 
