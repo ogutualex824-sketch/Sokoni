@@ -761,10 +761,35 @@ async function completePasswordReset(){
    1. Standalone PWA — window.open() exits the PWA into full Safari; the
       popup result never comes back to the app context.
    2. In-app browsers (CriOS/FxiOS) — popups are suppressed by the host app. */
+/* Embedded webviews inside host apps. These are NOT browsers the user chose —
+   they are a WebView the host app controls, and window.open() is either ignored
+   outright or opens a chrome-less sheet whose postMessage never reaches the
+   opener, so signInWithPopup either throws
+   auth/operation-not-supported-in-this-environment or hangs with no error at all.
+
+   This case was missed entirely. The list below used to be only CriOS|FxiOS,
+   described in the comment as "in-app browsers" — but CriOS and FxiOS are Chrome
+   and Firefox on iOS, which are ordinary standalone browsers, while the actual
+   in-app webviews were never matched. Verified by simulating each environment
+   against the real function: Facebook (FBAN) and Instagram both selected the
+   popup flow.
+
+   That matters here more than it would elsewhere. A large share of traffic to a
+   marketplace arrives by someone tapping a shared product link inside Facebook,
+   Instagram or WhatsApp, and every one of those users was being handed the one
+   flow their browser cannot complete. */
+const _IN_APP_BROWSER = /FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|WhatsApp|TikTok|musical_ly|Snapchat|Twitter|LinkedInApp|Pinterest|; wv\)/i;
+
 function _isPopupSupported() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                       || window.navigator.standalone === true;
+    /* Standalone PWA — window.open() exits the PWA into full Safari and the
+       result never returns to the app context. */
     if (isStandalone) return false;
+    /* Host-app webviews — see above. */
+    if (_IN_APP_BROWSER.test(navigator.userAgent)) return false;
+    /* Chrome and Firefox on iOS. Both are WKWebView-based and have historically
+       been unreliable with the popup result round-trip, so they stay on redirect. */
     if (/CriOS|FxiOS/.test(navigator.userAgent)) return false;
     /* Regular iOS Safari, Android Chrome, and all desktop browsers support
        popups. Firebase signInWithPopup works correctly on all of these. */
@@ -1059,7 +1084,14 @@ async function signInWithGoogle() {
                 const _isItpError = (
                     popupErr.code === 'auth/internal-error' ||
                     popupErr.code === 'auth/cors-unsupported' ||
-                    popupErr.code === 'auth/web-storage-unsupported'
+                    popupErr.code === 'auth/web-storage-unsupported' ||
+                    /* Thrown by embedded webviews that cannot host a popup at all.
+                       It was missing from this list, so it fell through to the
+                       `throw popupErr` branch below: the user was shown a failure
+                       on a device where redirect would have worked. Any environment
+                       that cannot support the popup is precisely the environment
+                       that should fall back, not surface an error. */
+                    popupErr.code === 'auth/operation-not-supported-in-this-environment'
                 );
                 if (popupErr.code === 'auth/popup-blocked' || _isItpError) {
                     /* Transparent fallback to redirect.
