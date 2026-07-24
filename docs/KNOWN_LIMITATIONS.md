@@ -175,11 +175,22 @@ Evidence:
 | Source of those names | hardcoded in `sokoni-mock-data.js`, `script.js`, `category.js` |
 | Real product names (e.g. `PEACH MANGO ICE`) | never rendered anonymously |
 
-**Same root cause as 0d:** the anonymous client read of `products` is denied, so
-the demo fallback engages. It is the *fallback* that makes this severe — the
-page looks fully populated, so a total public-catalogue failure produces no
-visible symptom. This is the "demo-fallback masks failures" pattern, in
-production, on the storefront.
+**⚠️ CORRECTION — the cause first recorded here was WRONG.** This was initially
+attributed to anonymous `products` reads being denied by deployed rules. That
+attribution came from headless automation and does **not** hold: in a **headed**
+browser the anonymous read **succeeds** (`exists: true`), and `permission-denied`
+appears only under headless, i.e. it is an **App Check artifact of automation**,
+not a rules divergence. See the correction note under 0d.
+
+**Cause: NOT YET ESTABLISHED.** What is certain is that the storefront renders
+demo data instead of the 129 real products, and that this persists in a normal
+browser. What is *not* established is why — it is **not** a permissions failure.
+Candidates still open: the feed's query never runs, runs against the wrong
+source, fails for an unrelated reason, or mock data is rendered and never
+replaced. This needs isolating before any fix.
+
+It is the *fallback* that makes this severe regardless of cause — the page looks
+fully populated, so a catalogue failure produces no visible symptom.
 
 **Impact:**
 - Every merchant's listing is invisible to logged-out visitors — no acquisition
@@ -194,20 +205,49 @@ production, on the storefront.
 separate question for that review: whether a demo fallback should ever engage in
 production at all, given it converts an outage into silently fake content.
 
-### 0d. Uncached product pages fail for logged-out visitors — 🚫 conversion impact
+### 0d. ❌ WITHDRAWN — "uncached product pages fail" does NOT reproduce
 
-**Symptom:** opening a product by URL shows "Product Not Found" for a product
+**This entry was wrong and is retained only so the correction is on the record.**
+
+Originally filed as a conversion-impacting bug: opening a product by URL showed
+"Product Not Found" for a live product, attributed to anonymous
+`products/{id}` reads being denied by deployed rules.
+
+**Re-tested properly and it does not hold.** In a **headed** browser, sampling
+the page over 15s, the product page loads correctly: `notFound: false`, gallery
+present from 6s, and a manual read in the same session returns `exists: true`.
+
+**Where the error came from.** The first "headed" check reported a single
+observation at a fixed instant and agreed with the headless run, so the artifact
+looked like a reproduction. Time-sampling shows the page simply had not finished
+loading. `permission-denied` appears **only under headless automation** — App
+Check rejects it — so it was never evidence about rules.
+
+| Original hypothesis | Corrected verdict |
+|---|---|
+| Rules deny anonymous reads | ❌ **wrong** — headed read succeeds |
+| App Check / automation artifact | ✅ **this was the actual cause** |
+
+**Consequences for other records:** the "deployed rules deny anonymous
+`products` reads" claim — repeated in RC-09 and used to argue a repo-vs-production
+rules divergence — is **unsupported**. There is no evidence of rules drift. The
+security-review question framed around reconciling rules should be treated as
+withdrawn unless independently re-established.
+
+*Original entry follows, retained for the post-mortem:*
+
+**Symptom:** opening a product by URL showed "Product Not Found" for a product
 that exists and is `status: active`.
 
-**Root cause (isolated, not inferred):** the anonymous client read of
-`products/{id}` returns **`permission-denied`**. Ruled out, each by test:
+**Claimed root cause (SINCE DISPROVEN):** the anonymous client read of
+`products/{id}` returns `permission-denied`:
 
-| Hypothesis | Result |
+| Hypothesis | Result as recorded at the time |
 |---|---|
-| Headless/automation artifact | ✗ reproduces in a **headed** browser |
-| App Check blocking the request | ✗ App Check responses were **200** |
-| Product genuinely missing | ✗ exists, `status: active` (Admin SDK) |
-| Firestore rules denying the read | ✅ `permission-denied` on the client read |
+| Headless/automation artifact | ✗ believed ruled out — **this was the mistake** |
+| App Check blocking the request | ✗ believed ruled out (App Check returned 200) |
+| Product genuinely missing | ✗ correctly ruled out — exists, `status: active` |
+| Firestore rules denying the read | ✅ claimed — **not supported** |
 
 **Blast radius — precise, not assumed:**
 - ✅ Tapping a product **from the feed works**: `openProduct` seeds
