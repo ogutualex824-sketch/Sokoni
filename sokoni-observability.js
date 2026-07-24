@@ -153,6 +153,11 @@
     return `${String(message).slice(0, 120)}|${source}|${lineno}`;
   }
 
+  /* UNUSED — kept only to document why it must not be used again.
+     obsIngestTelemetry is an onCall, so its raw HTTPS URL rejects a plain POST
+     with 400. Telemetry now goes through the Firebase SDK's httpsCallable,
+     which builds the `data` envelope and attaches the App Check token. Do not
+     reintroduce a direct fetch() to this URL. */
   function _cfEndpoint() {
     return CF_ENDPOINT_TMPL.replace('{projectId}', _cfg.projectId);
   }
@@ -215,19 +220,38 @@
    * Try Cloud Function first; fall back to Firestore REST.
    */
   async function _send(payload) {
-    // Primary: Cloud Function
+    /* Primary: Cloud Function.
+
+       obsIngestTelemetry is an onCall (observability-engine.js:204) with
+       enforceAppCheck:true — NOT an onRequest. A callable requires the payload
+       wrapped in a `data` envelope and an App Check header; a bare POST of the
+       raw object is rejected with 400 on EVERY flush. That is what filled the
+       browser console with repeating
+
+         POST .../obsIngestTelemetry 400 (Bad Request)
+
+       Telemetry still arrived, because the Firestore REST fallback below caught
+       it — so the failure was invisible except as console noise, and every
+       flush paid for a doomed round-trip first. Two consequences worth naming:
+       the noise buries real errors during debugging (it buried the auth error
+       we were hunting), and "the fallback works" is not the same as "the
+       primary path works".
+
+       Fixed by calling it AS a callable via the Firebase SDK, which builds the
+       envelope and attaches the App Check token itself. If the SDK is not on
+       the page we skip straight to the Firestore fallback rather than issuing a
+       request that is known to fail. */
     try {
-      const resp = await fetch(_cfEndpoint(), {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(payload),
-        keepalive: true,
-      });
-      if (resp.ok) {
+      const fns = window.firebase && window.firebase.functions
+        ? window.firebase.functions()
+        : null;
+      if (fns && typeof fns.httpsCallable === 'function') {
+        await fns.httpsCallable('obsIngestTelemetry')(payload);
         _health.eventsFlushed += payload.events ? payload.events.length : 1;
         _debugLog('flushed', payload.events?.length ?? 1, 'events via CF');
         return true;
       }
+      /* No SDK on this page — do not fire a bare POST at a callable. */
     } catch (_) { /* fall through to Firestore */ }
 
     // Fallback: Firestore REST
