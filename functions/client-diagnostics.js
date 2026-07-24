@@ -40,13 +40,37 @@ exports.logClientDiagnostic = onCall(
   { cors: true, enforceAppCheck: true, region: 'us-central1' },
   async (request) => {
     const uid = request.auth && request.auth.uid;
-    if (!uid) throw new HttpsError('unauthenticated', 'Sign in required.');
+
+    /* AUTH FAILURES ARE UNAUTHENTICATED BY DEFINITION.
+       Requiring a uid here meant the one category of failure that most needs
+       reporting could never be reported: a user whose sign-in fails has no uid,
+       so every OAuth/OTP error was rejected by this function and died in that
+       user's console. Measured 2026-07-24: errorLog, clientDiagnostics and
+       _sokoniTelemetry were ALL empty, while "Google sign-in doesn't work on my
+       phone" was an open, repeatedly-reported production issue with no server-side
+       evidence of any kind to diagnose it from.
+
+       Anonymous reports are accepted ONLY from auth surfaces, so this is not a
+       general-purpose open logging endpoint. Three things still bound it:
+         - enforceAppCheck is on, so the caller must pass attestation;
+         - the rate limit below applies to anonymous callers on a tighter budget;
+         - uid/email stay null and are never read from the payload, so an
+           anonymous report can never be attributed to a real account.
+       Everything else keeps requiring a signed-in caller. */
+    const surface = String((request.data && request.data.surface) || '');
+    const isAuthSurface = /^auth-/.test(surface);
+    if (!uid && !isAuthSurface) throw new HttpsError('unauthenticated', 'Sign in required.');
 
     /* 'default' is deliberately NOT in _SECURITY_ACTIONS (redis-rate-limiter.js:37),
        so if Redis is down this fails OPEN. Telemetry must never break the app it
        is observing — a merchant losing the board because diagnostics were
        throttled would be a worse outcome than losing a log line. */
-    try { await checkRateLimit(request, 'default', { maxRequests: 60, windowSeconds: 60 }); }
+    /* Anonymous callers get a tighter budget than signed-in ones: they are
+       identified only by App Check + IP, so the blast radius of a misbehaving
+       client is wider. 10/min is far above what a real sign-in attempt needs. */
+    try { await checkRateLimit(request, 'default', uid
+            ? { maxRequests: 60, windowSeconds: 60 }
+            : { maxRequests: 10, windowSeconds: 60 }); }
     catch (e) {
       if (e && e.code === 'resource-exhausted') return { ok: false, throttled: true };
       /* any other limiter failure is ignored — see above */
@@ -66,9 +90,13 @@ exports.logClientDiagnostic = onCall(
       context:    cut(typeof d.context === 'string' ? d.context : JSON.stringify(d.context || {}), MAX.context),
 
       /* Identity is taken from the verified token, never from the payload — a
-         client cannot attribute its errors to another merchant. */
-      uid,
-      email:      (request.auth.token && request.auth.token.email) || null,
+         client cannot attribute its errors to another merchant. Both are null for
+         an anonymous auth-surface report, which is correct: there is no verified
+         identity to record, and reading one from the payload would let a caller
+         attribute a failure to somebody else's account. */
+      uid:        uid || null,
+      email:      (request.auth && request.auth.token && request.auth.token.email) || null,
+      anonymous:  !uid,
 
       /* Merchant + order context, so a support case does not need the merchant
          to explain which order they were looking at. */
