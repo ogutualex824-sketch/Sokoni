@@ -264,7 +264,12 @@
 <section class="pv-hero">
   <div class="pv-hero-badge">✅ Verified Providers</div>
   <h1>Trusted Professionals,<br><span>Ready to Serve You</span></h1>
-  <p class="pv-hero-sub">Every provider on this page has been ID-verified, background-checked and rated by real SOKONI customers.</p>
+  <!-- This used to claim every provider was "ID-verified, background-checked
+       and rated by real SOKONI customers". The page now renders the real
+       registry, which includes providers who have not completed verification,
+       so the blanket claim was no longer true. Verification is stated per
+       card by the ✅ badge instead. -->
+  <p class="pv-hero-sub">Browse service providers across Kenya. Look for the ✅ Verified badge — those providers have completed SOKONI identity verification.</p>
   <div class="pv-controls">
     <input type="text" class="pv-search" id="pvSearch" placeholder="🔍 Search providers or services…" oninput="filterProviders()">
     <button type="button" class="pv-cat-btn active" onclick="setCat('all',this)">All</button>
@@ -279,10 +284,13 @@
 
 <!-- STATS BAR -->
 <div class="pv-stats">
-  <div class="pv-stat"><div class="pv-stat-num" id="pvTotalCount">0</div><div class="pv-stat-label">Verified Providers</div></div>
-  <div class="pv-stat"><div class="pv-stat-num">4.8★</div><div class="pv-stat-label">Avg Rating</div></div>
-  <div class="pv-stat"><div class="pv-stat-num">Same Day</div><div class="pv-stat-label">Response Time</div></div>
-  <div class="pv-stat"><div class="pv-stat-num">47</div><div class="pv-stat-label">Counties Covered</div></div>
+  <!-- Every figure here is computed from the providers actually loaded. The
+       previous values ("4.8★", "Same Day", "47 Counties") were fixed strings
+       printed regardless of what the page contained. -->
+  <div class="pv-stat"><div class="pv-stat-num" id="pvTotalCount">—</div><div class="pv-stat-label">Providers</div></div>
+  <div class="pv-stat"><div class="pv-stat-num" id="pvVerifiedCount">—</div><div class="pv-stat-label">Verified</div></div>
+  <div class="pv-stat"><div class="pv-stat-num" id="pvAvgRating">—</div><div class="pv-stat-label">Avg Rating</div></div>
+  <div class="pv-stat"><div class="pv-stat-num" id="pvAreaCount">—</div><div class="pv-stat-label">Areas Covered</div></div>
 </div>
 
 <!-- MAIN -->
@@ -325,101 +333,156 @@
 
 <script src="nav-active.js" defer></script>
 <script src="sw-register.js" defer></script>
+<script src="sokoni-providers.js" defer></script>
 <script>
-var PROVIDERS = [
-  /* ── HEALTH ── */
-  {id:1, name:'Dr. Amina Hassan', role:'General Practitioner', cat:'health', location:'Westlands, Nairobi', rating:4.9, reviews:142, price:'KES 1,500/visit', desc:'KMPDB-registered GP with 12 years experience. Home visits available. Speaks English, Swahili & Somali.', tags:['Home Visits','Lab Tests','Prescriptions'], icon:'👩‍⚕️', initials:'AH'},
-  {id:2, name:'PhysioKe Clinic',   role:'Physiotherapist',      cat:'health', location:'CBD, Nairobi',      rating:4.8, reviews:87,  price:'KES 2,000/session', desc:'Sports injury rehabilitation, back pain & stroke recovery. KPT certified. Mobile sessions available.', tags:['Sports','Rehab','Stroke'], icon:'🏥', initials:'PK'},
-  {id:3, name:'Nurse Joy Wanjiku', role:'Home Nurse',           cat:'health', location:'Kiambu County',     rating:5.0, reviews:63,  price:'KES 800/day',      desc:'Registered nurse offering post-surgery care, IV drips, wound dressing and elderly care at home.', tags:['Post-Surgery','IV Drips','Elderly'], icon:'👩‍⚕️', initials:'JW'},
-  /* ── HOME ── */
-  {id:4, name:'Benson Plumbing',   role:'Master Plumber',       cat:'home',   location:'Nairobi & Kiambu',  rating:4.7, reviews:210, price:'KES 500/hr',       desc:'Licensed plumber. Pipe repairs, bathroom fitting, water tanks, borehole connections. Same-day available.', tags:['Pipes','Boreholes','Bathrooms'], icon:'🔧', initials:'BP'},
-  {id:5, name:'Wired Kenya',       role:'Certified Electrician',cat:'home',   location:'Nairobi County',    rating:4.9, reviews:178, price:'KES 700/hr',       desc:'ERC-licensed electrical contractor. Solar installation, wiring, fault finding, KPLC connections.', tags:['Solar','Wiring','KPLC'], icon:'⚡', initials:'WK'},
-  {id:6, name:'CleanPro Services', role:'Cleaning Specialist',  cat:'home',   location:'All Nairobi',       rating:4.8, reviews:325, price:'KES 2,500/clean',  desc:'Deep cleaning, carpet & sofa cleaning, fumigation and office cleaning. Eco-friendly products.', tags:['Deep Clean','Fumigation','Office'], icon:'🧹', initials:'CP'},
-  {id:7, name:'Fix It Fast KE',    role:'Handyman',             cat:'home',   location:'Nairobi / Thika',   rating:4.6, reviews:94,  price:'KES 400/hr',       desc:'General repairs: doors, locks, furniture assembly, painting, tiling, TV wall mounting and more.', tags:['Repairs','Painting','Tiling'], icon:'🔨', initials:'FF'},
-  /* ── LEGAL ── */
-  {id:8, name:'Adv. Peter Kamau',  role:'Advocate',             cat:'legal',  location:'Upper Hill, Nairobi',rating:4.9, reviews:56, price:'KES 5,000/consult','desc':'LSK member with 15 years experience. Land, family, employment and business law. Virtual consultations available.', tags:['Land','Family','Business'], icon:'⚖️', initials:'PK'},
-  {id:9, name:'SwiftNotary KE',    role:'Commissioner for Oaths',cat:'legal', location:'CBD Nairobi',       rating:4.8, reviews:198, price:'KES 300/doc',      desc:'Fast document notarization, affidavits, statutory declarations. Open 7 days. Walk-ins welcome.', tags:['Notary','Affidavits','Declarations'], icon:'📜', initials:'SN'},
-  /* ── BEAUTY ── */
-  {id:10,name:'Glam By Ciku',      role:'Hair & Makeup Artist', cat:'beauty', location:'Kilimani, Nairobi', rating:5.0, reviews:412, price:'KES 1,500+',       desc:'Bridal makeup, everyday glam, loc maintenance and natural hair care. Home visits available.', tags:['Bridal','Natural Hair','Locs'], icon:'💄', initials:'GC'},
-  {id:11,name:'NailsByAisha',      role:'Nail Technician',      cat:'beauty', location:'Thika Road',        rating:4.9, reviews:267, price:'KES 800+',         desc:'Gel, acrylic, polygel, nail art. CIBTAC certified. Hygiene guaranteed. Home visits in Nairobi & environs.', tags:['Gel','Acrylic','Nail Art'], icon:'💅', initials:'NA'},
-  {id:12,name:'Barber Code KE',    role:'Barber',               cat:'beauty', location:'Westlands / Ruiru', rating:4.8, reviews:509, price:'KES 400+',         desc:'Premium haircuts, beard sculpting, hot towel shaves. Home visits and studio bookings.', tags:['Haircuts','Beards','Shaves'], icon:'✂️', initials:'BC'},
-  /* ── TECH ── */
-  {id:13,name:'TechFixit Kenya',   role:'Device Repair Tech',   cat:'tech',   location:'CBD, Nairobi',      rating:4.7, reviews:341, price:'KES 500+',         desc:'Phone, laptop and tablet repairs. Screen replacement, battery, motherboard. 90-day warranty.', tags:['Phone Repair','Laptop','Warranty'], icon:'💻', initials:'TF'},
-  {id:14,name:'DevWeb KE',         role:'Web Developer',        cat:'tech',   location:'Remote / Nairobi',  rating:4.9, reviews:78,  price:'KES 15,000+',      desc:'Full-stack web development, e-commerce shops, mobile apps. React, Node, Firebase. Fast turnaround.', tags:['React','E-commerce','Apps'], icon:'👨‍💻', initials:'DW'},
-  {id:15,name:'CCTV Pro Kenya',    role:'Security Systems',     cat:'tech',   location:'Nairobi & Machakos',rating:4.8, reviews:156, price:'KES 8,000+',       desc:'CCTV installation, access control, electric fence. NCA-registered. 24/7 support.', tags:['CCTV','Access Control','Fence'], icon:'📷', initials:'CP'},
-  /* ── TRANSPORT ── */
-  {id:16,name:'QuickMove KE',      role:'Moving Services',      cat:'transport',location:'All Kenya',       rating:4.8, reviews:423, price:'KES 3,000+',       desc:'Household & office moving. Fully insured. Truck available Mon–Sun. Packing materials provided.', tags:['Movers','Insured','Packing'], icon:'🚚', initials:'QM'},
-  {id:17,name:'Driver On Demand',  role:'Professional Driver',  cat:'transport',location:'Nairobi Metro',   rating:4.9, reviews:218, price:'KES 800/hr',       desc:'Licensed chauffeur for airport transfers, events, executive travel. Clean car, punctual, discreet.', tags:['Airport','Executive','Events'], icon:'🚗', initials:'DD'},
-];
+/* ── Provider directory ───────────────────────────────────────────────────────
+   Reads the canonical `providers` registry through SokoniProviders. The 17
+   hardcoded entries that used to live here were removed: they were invented
+   people with invented ratings and job counts, they outranked real providers
+   by sheer volume, and no amount of onboarding could ever add to them.
 
+   The category buttons on this page are broad buckets (health / home / legal /
+   …) while the registry stores fine-grained slugs (`laundry`, `plumbing`,
+   `mc`). BUCKETS maps one to the other; anything unmapped still reaches the
+   "all" view, so a provider in a new category is never invisible. ────────── */
+var BUCKETS = {
+  health:    ['healthcare', 'clinic', 'pharmacy', 'home-doctor', 'lab-test', 'hospital'],
+  home:      ['cleaning', 'laundry', 'plumbing', 'electrical', 'home-repairs',
+              'gardening', 'security', 'interior-design'],
+  legal:     ['legal', 'accounting'],
+  beauty:    ['hair-beauty', 'beauty', 'fitness'],
+  tech:      ['phone-repair', 'computer-repair', 'electronics-repair',
+              'graphic-design', 'marketing', 'virtual-assistant'],
+  transport: ['delivery-service', 'courier', 'boda-delivery', 'mechanics'],
+};
+
+var PROVIDERS = [];          /* populated from Firestore; never hardcoded */
 var _activeCat = 'all';
+var _loadError = null;
 
 function setCat(cat, btn) {
   _activeCat = cat;
-  document.querySelectorAll('.pv-cat-btn').forEach(function(b) {
-    b.classList.remove('active');
-  });
+  document.querySelectorAll('.pv-cat-btn').forEach(function (b) { b.classList.remove('active'); });
   if (btn) btn.classList.add('active');
   filterProviders();
 }
 
+function _inBucket(p, bucket) {
+  if (bucket === 'all') return true;
+  var slugs = BUCKETS[bucket] || [bucket];
+  var have = [p.category].concat(p.categories || []).filter(Boolean)
+    .map(function (c) { return String(c).toLowerCase(); });
+  return slugs.some(function (s) { return have.indexOf(s) !== -1; });
+}
+
 function filterProviders() {
-  var q = (document.getElementById('pvSearch').value || '').toLowerCase();
-  var list = PROVIDERS.filter(function(p) {
-    if (_activeCat !== 'all' && p.cat !== _activeCat) return false;
+  var q = ((document.getElementById('pvSearch') || {}).value || '').toLowerCase();
+  var list = PROVIDERS.filter(function (p) {
+    if (!_inBucket(p, _activeCat)) return false;
     if (!q) return true;
-    return (p.name + p.role + p.location + p.tags.join(' ') + p.desc).toLowerCase().includes(q);
+    return (p.name + ' ' + p.businessName + ' ' + p.categoryLabel + ' ' +
+            p.serviceType + ' ' + p.location + ' ' + (p.skills || []).join(' ') + ' ' +
+            p.description).toLowerCase().indexOf(q) !== -1;
   });
   renderGrid(list);
 }
 
 function renderGrid(list) {
   var grid = document.getElementById('pvGrid');
-  var countEl = document.getElementById('pvTotalCount');
-  if (countEl) countEl.textContent = PROVIDERS.length;
+  if (!grid) return;
+  var esc = SokoniProviders.esc;
 
   if (!list.length) {
-    grid.innerHTML = '<div class="pv-empty" style="grid-column:1/-1;"><div class="pv-empty-icon">🔍</div><h3>No providers found</h3><p>Try a different search or category</p></div>';
+    /* A failed read and an empty registry say different things and must not
+       share a message — SokoniProviders keeps them apart. */
+    grid.innerHTML = SokoniProviders.emptyStateHtml(_loadError, null);
     return;
   }
 
-  grid.innerHTML = list.map(function(p) {
-    var stars = '★'.repeat(Math.floor(p.rating)) + (p.rating % 1 >= 0.5 ? '½' : '');
-    var waNum = (p.whatsapp||p.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-    var waMsg = encodeURIComponent('Hi '+p.name+', I found you on SOKONI and would like to book your service.');
-    return '<div class="pv-card" id="pv-card-'+p.id+'">'
+  grid.innerHTML = list.map(function (p) {
+    var waNum = String(p.phone || '').replace(/\D/g, '').replace(/^0/, '254');
+    var waMsg = encodeURIComponent('Hi ' + p.name + ', I found you on SOKONI and would like to book your service.');
+    var pid   = p.uid;
+    var jsId  = "'" + String(pid).replace(/'/g, "\\'") + "'";
+    var jsNm  = "'" + String(p.name).replace(/'/g, "\\'") + "'";
+    var initials = String(p.name).trim().split(/\s+/).map(function (w) { return w[0]; })
+      .join('').slice(0, 2).toUpperCase();
+
+    return '<div class="pv-card" id="pv-card-' + esc(pid) + '">'
       + '<div class="pv-card-banner" style="background:linear-gradient(135deg,#0d1a05,#1a2a0a);">'
-      + '<div class="pv-verified-badge">✅ Verified</div>'
-      + '<div class="pv-price-tag">'+p.price+'</div>'
+      /* The badge reflects the record. An unverified provider is not labelled
+         verified — that claim is the whole value of the badge. */
+      + (p.verified ? '<div class="pv-verified-badge">✅ Verified</div>' : '')
+      + (p.rate != null ? '<div class="pv-price-tag">KES ' + Number(p.rate).toLocaleString()
+          + (p.rateType ? ' ' + esc(p.rateType) : '') + '</div>' : '')
       + '</div>'
       + '<div class="pv-card-body">'
       + '<div class="pv-avatar-row">'
-      + '<div class="pv-avatar" style="font-size:26px;">'+p.icon+'</div>'
+      + (p.photo
+          ? '<img class="pv-avatar" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '" style="object-fit:cover;">'
+          : '<div class="pv-avatar" style="font-size:22px;font-weight:800;">' + esc(initials) + '</div>')
       + '</div>'
-      + '<div class="pv-name">'+p.name+'</div>'
-      + '<div class="pv-role">'+p.role+'</div>'
+      + '<div class="pv-name"><a href="' + esc(p.profileUrl) + '" style="color:inherit;text-decoration:none;">'
+      + esc(p.name) + '</a></div>'
+      + '<div class="pv-role">' + esc(p.serviceType || p.categoryLabel) + '</div>'
       + '<div class="pv-meta">'
-      + '<div class="pv-meta-chip"><span class="pv-rating">'+p.rating+'★</span><span style="color:rgba(255,255,255,0.3);margin-left:2px;">('+p.reviews+')</span></div>'
-      + '<div class="pv-meta-chip">📍 '+p.location+'</div>'
+      /* No rating is rendered until one exists — a "0★" on a new provider
+         reads as a bad score rather than as no data. */
+      + (p.rating
+          ? '<div class="pv-meta-chip"><span class="pv-rating">' + p.rating.toFixed(1) + '★</span>'
+            + '<span style="color:rgba(255,255,255,0.3);margin-left:2px;">(' + p.reviewCount + ')</span></div>'
+          : '<div class="pv-meta-chip" style="color:rgba(255,255,255,0.4);">New</div>')
+      + (p.location ? '<div class="pv-meta-chip">📍 ' + esc(p.location) + '</div>' : '')
       + '</div>'
-      + '<div class="pv-desc">'+p.desc+'</div>'
-      + '<div class="pv-tags">'+p.tags.map(function(t){ return '<span class="pv-tag">'+t+'</span>'; }).join('')+'</div>'
+      + (p.description ? '<div class="pv-desc">' + esc(p.description) + '</div>' : '')
+      + '<div class="pv-tags">'
+      + (p.skills || []).slice(0, 4).map(function (t) { return '<span class="pv-tag">' + esc(t) + '</span>'; }).join('')
+      + '</div>'
       + '<div class="pv-actions">'
-      + '<button type="button" class="pv-btn-book" onclick="openBookModal('+p.id+')">Book Now</button>'
-      + (waNum ? '<a href="https://wa.me/'+waNum+'?text='+waMsg+'" target="_blank" class="pv-btn-wa" title="WhatsApp">💬 WA</a>' : '')
-      + '<button type="button" class="pv-btn-wa" style="text-decoration:none;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:\''+(p.uid||p.id)+'\',otherName:\''+p.name.replace(/'/g,"\\'") +'\',type:\'customer-provider\',context:\''+p.role.replace(/'/g,"\\'")+'\'}):location.href=\'messages.html\'" title="Message in-app">✉️</button>'
-      + '<button type="button" class="pv-btn-follow" id="pvFollow-'+p.id+'" onclick="pvToggleFollow('+p.id+',\''+p.name+'\')" title="Follow provider">'
+      + '<a href="' + esc(p.profileUrl) + '" class="pv-btn-book" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">View &amp; Book</a>'
+      + (waNum ? '<a href="https://wa.me/' + esc(waNum) + '?text=' + waMsg + '" target="_blank" rel="noopener" class="pv-btn-wa" title="WhatsApp">💬 WA</a>' : '')
+      + '<button type="button" class="pv-btn-wa" style="text-decoration:none;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:' + esc(jsId) + ',otherName:' + esc(jsNm) + ',type:\'customer-provider\',context:\'' + esc(String(p.categoryLabel).replace(/'/g, "\\'")) + '\'}):location.href=\'messages.html\'" title="Message in-app">✉️</button>'
+      + '<button type="button" class="pv-btn-follow" id="pvFollow-' + esc(pid) + '" onclick="pvToggleFollow(' + esc(jsId) + ',' + esc(jsNm) + ')" title="Follow provider">'
       + '<i class="fas fa-user-plus"></i></button>'
       + '</div>'
-      + '<div class="pv-follower-count" id="pvFollowers-'+p.id+'"></div>'
+      + '<div class="pv-follower-count" id="pvFollowers-' + esc(pid) + '"></div>'
       + '</div></div>';
   }).join('');
+
+  initPvFollows(list);
 }
 
+/* Stats are computed from the loaded set. They used to be four fixed numbers
+   ("4.8★", "47 counties") printed regardless of what the page showed. */
+function updateStats() {
+  var total = PROVIDERS.length;
+  var rated = PROVIDERS.filter(function (p) { return p.rating; });
+  var avg   = rated.length
+    ? (rated.reduce(function (a, p) { return a + p.rating; }, 0) / rated.length).toFixed(1) + '★'
+    : '—';
+  var verified = PROVIDERS.filter(function (p) { return p.verified; }).length;
+  var areas = {};
+  PROVIDERS.forEach(function (p) { if (p.location) areas[p.location.toLowerCase()] = 1; });
+
+  function put(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+  put('pvTotalCount', total);
+  put('pvAvgRating', avg);
+  put('pvVerifiedCount', verified);
+  put('pvAreaCount', Object.keys(areas).length);
+}
+
+function loadProviders() {
+  return SokoniProviders.list({}).then(function (r) {
+    PROVIDERS = r.providers;
+    _loadError = r.error;
+    updateStats();
+    filterProviders();
+  });
+}
 var _bookingProviderId = null;
 
 function openBookModal(pid) {
-  var p = PROVIDERS.find(function(x) { return x.id === pid; });
+  var p = PROVIDERS.find(function(x) { return String(x.uid) === String(pid); });
   if (!p) return;
   _bookingProviderId = pid;
   var modal = document.getElementById('pvBookModal');
@@ -441,26 +504,30 @@ function closeBookModal() {
 
 /* ── Provider Follow ── */
 var _pvFollowState = {};
-(function initPvFollows(){
+/* Was a self-invoking IIFE that ran once at parse time, when the grid was
+   still empty — every getElementById below returned null and no follow button
+   was ever wired. Now called by renderGrid with the list it just drew, so the
+   buttons exist by the time they are looked up. */
+function initPvFollows(list){
   try { _pvFollowState = JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); } catch(e){}
-  PROVIDERS.forEach(function(p){
-    var btn = document.getElementById('pvFollow-'+p.id);
-    var cntEl = document.getElementById('pvFollowers-'+p.id);
+  (list || PROVIDERS).forEach(function(p){
+    var btn = document.getElementById('pvFollow-'+p.uid);
+    var cntEl = document.getElementById('pvFollowers-'+p.uid);
     if(!btn) return;
-    var key = 'provider--'+p.id;
+    var key = 'provider--'+p.uid;
     var isF = !!_pvFollowState[key];
     btn.classList.toggle('following', isF);
     btn.title = isF ? 'Unfollow' : 'Follow';
     if(window.SokoniDB){
-      SokoniDB.isFollowing('provider', String(p.id)).then(function(f){
+      SokoniDB.isFollowing('provider', String(p.uid)).then(function(f){
         btn.classList.toggle('following', f);
       });
-      SokoniDB.getFollowerCount('provider', String(p.id)).then(function(cnt){
+      SokoniDB.getFollowerCount('provider', String(p.uid)).then(function(cnt){
         if(cntEl && cnt > 0) cntEl.textContent = cnt + ' follower' + (cnt!==1?'s':'');
       });
     }
   });
-})();
+}
 
 function pvToggleFollow(pid, pname) {
   var btn = document.getElementById('pvFollow-'+pid);
@@ -499,7 +566,7 @@ function confirmBooking() {
   if (!phone.match(/^0[17]\d{8}$/)) { (window._skToast||alert)('Enter a valid phone number (07... or 01...)'); return; }
   if (!date) { (window._skToast||alert)('Please select a date and time'); return; }
 
-  var p = PROVIDERS.find(function(x) { return x.id === _bookingProviderId; });
+  var p = PROVIDERS.find(function(x) { return String(x.uid) === String(_bookingProviderId); });
   var notes = (document.getElementById('pvBookNotes') || {}).value || '';
 
   var booking = {
@@ -536,10 +603,21 @@ document.getElementById('pvBookModal').addEventListener('click', function(e) {
   if (e.target === this) closeBookModal();
 });
 
-/* Init */
-document.addEventListener('DOMContentLoaded', function() {
-  renderGrid(PROVIDERS);
-});
+/* Init — sokoni-providers.js is deferred and firebase.js is a module, so
+   neither is guaranteed to exist at DOMContentLoaded. Wait for both rather
+   than racing them, and say so plainly if they never arrive. */
+(function boot(attempt) {
+  attempt = attempt || 0;
+  if (window.SokoniProviders && window.firebaseDB) { loadProviders(); return; }
+  if (attempt > 40) {
+    var grid = document.getElementById('pvGrid');
+    if (grid && window.SokoniProviders) {
+      grid.innerHTML = SokoniProviders.emptyStateHtml(new Error('init timeout'), null);
+    }
+    return;
+  }
+  setTimeout(function () { boot(attempt + 1); }, 150);
+}(0));
 </script>
 
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation">

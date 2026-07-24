@@ -30,6 +30,25 @@ service cloud.firestore {
       return isAuthed() && request.resource.data.uid == request.auth.uid;
     }
 
+    /* True when the caller is a party to the given order — buyer (under any of
+       the four id fields orders have accumulated), seller, assigned driver, or
+       an admin. Used by the orderEvents trail so the timeline is visible to
+       exactly the people the /orders rule already admits, and nobody else. */
+    function isOrderParticipant(orderId) {
+      return isAdmin() || (
+        isAuthed() &&
+        exists(/databases/$(database)/documents/orders/$(orderId)) &&
+        (
+          get(/databases/$(database)/documents/orders/$(orderId)).data.uid               == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.userId            == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.buyerId           == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.buyerUid          == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.sellerUid         == request.auth.uid ||
+          get(/databases/$(database)/documents/orders/$(orderId)).data.assignedDriverUid == request.auth.uid
+        )
+      );
+    }
+
     function uidUnchanged() {
       return !request.resource.data.diff(resource.data)
                .affectedKeys()
@@ -198,7 +217,21 @@ service cloud.firestore {
     match /providers/{providerId} {
       allow read:   if resource.data.status == 'active' || resource.data.status == 'approved'
                     || isAuthed();
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
+      /* `status` is NOT covered by noAdminFields(), so until this clause any
+         signed-in user could create providers/{their-uid} with
+         status:'active' and appear immediately as a live provider in global
+         search, on providers.html and in the homepage strip — self-publishing
+         straight past the application review that onboarding-professional.html
+         and services.html both submit. That was latent while `providers` was
+         empty and unread; it became reachable the moment the registry started
+         serving the directory.
+
+         A client may only create a record in the pending state. Promotion to
+         'active' or 'approved' is an admin action (see the update rule below,
+         which already blocks status changes by the owner). */
+      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields()
+                    && (!request.resource.data.keys().hasAny(['status'])
+                        || request.resource.data.status == 'pending');
       allow update: if isAdmin()
                     || (isAuthed()
                         && resource.data.uid == request.auth.uid
@@ -1187,6 +1220,78 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.shopOwnerId == request.auth.uid);
+    }
+
+    /* ── shops/{uid} — the canonical storefront document ──
+       Had NO rule block, so every read was denied by default: store.html could
+       not load a shop's name, logo, banner or policies, product.html could not
+       show which shop sells an item, and the wallet could not resolve a seller's
+       shop. The document is created server-side (automation-engine.js writes
+       shops/{userId} when a seller application is approved) and read by buyers,
+       so: public read, server-only create, and an owner update restricted to
+       presentation fields.
+
+       `status` is deliberately NOT in the owner's allowlist — it is the approval
+       flag the CF sets, and letting a seller write it would be self-approval.
+       noAdminFields() does not cover `status`, so the allowlist does. */
+    match /shops/{uid} {
+      allow read:   if true;
+      allow create: if isAdmin();          // Cloud Functions / admin only
+      allow update: if isAdmin()
+                    || (isAuthed()
+                        && request.auth.uid == uid
+                        && uidUnchanged()
+                        && noAdminFields()
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['name','storeName','tagline','bio','about','description',
+                                       'logo','logoUrl','banner','bannerUrl','themeColor',
+                                       'phone','email','website','address','city','mapsLink',
+                                       'instagram','tiktok','facebook','twitter','youtube','linkedin',
+                                       'hours','openingHours','returnPolicy','returnText',
+                                       'packagingNote','delMethod','delTime','zones','updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    /* ── orderEvents/{orderId}/events — the sale's audit trail / timeline ──
+       Had no rule block, so `sokoni-orders.js::listenOrderEvents` and the
+       matching helper in sokoni-db.js were denied for everyone: the order
+       tracking timeline a buyer sees after paying was always empty, and every
+       _writeEvent() call during checkout failed silently.
+
+       Visibility follows the parent order — the same participants the
+       /orders rule admits. The get() costs one document read per query, which
+       is the price of not duplicating participant ids onto every event. */
+    match /orderEvents/{orderId} {
+      allow read:  if isOrderParticipant(orderId);
+      allow write: if false;               // the trail lives in /events below
+
+      match /events/{eventId} {
+        allow read:   if isOrderParticipant(orderId);
+        /* Append-only: a participant may add an event, nobody may rewrite one. */
+        allow create: if isOrderParticipant(orderId) && noAdminFields();
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
+
+    /* ── entRequests — entertainment booking / enquiry requests ──
+       Client-created in entertainment-hub.js. No rule meant every submission
+       failed, so the hub's request form could never produce a request. */
+    match /entRequests/{requestId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ── ratings — public seller/product rating rows, read by product.js ──
+       No rule block meant the rating summary on a product page was always
+       denied. Writes stay server-side: a rating a buyer can write directly is a
+       rating a buyer can forge. */
+    match /ratings/{ratingId} {
+      allow read:  if true;
+      allow write: if false;               // CF-only
     }
 
     match /sellers/{uid} {
@@ -4845,6 +4950,306 @@ service cloud.firestore {
                         && uidUnchanged() && noAdminFields());
       allow delete: if isAdmin() || (isAuthed() && resource.data.ownerId == request.auth.uid);
     }
+
+    /* ══════════════════════════════════════════════════════════════════
+       HUB COLLECTIONS THAT HAD NO RULE BLOCK  (added 2026-07-23)
+
+       Every path below was unreachable: with no match block, Firestore
+       denies by default, so these hubs could neither list nor create
+       anything. Their client engines swallowed the denial, so each one
+       presented as an empty screen rather than an error.
+
+       Access model, applied consistently:
+         • catalogue / listing data  → public read, owner-authored writes
+         • a person's own records    → readable by that person, the provider
+                                        serving them, and admins — nobody else
+         • money, audit and queue    → admin read, writes server-side only
+       ══════════════════════════════════════════════════════════════════ */
+
+    /* ── Healthcare ──
+       Medical records. Read is restricted to the patient (uid), the provider
+       handling the case (providerId), and admins. Note the matching client
+       change: sokoni-health.js used to fetch EVERY row and filter by uid in
+       the browser, which no owner-scoped rule can permit — and which would
+       have shipped one patient's bookings to every other patient's device. */
+    match /healthLabBookings/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid));
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid)
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    /* pharmacyId is included because a pharmacy works its own dispensing queue
+       (SokoniHealth.listenPharmacyOrders) — the fulfilling party is as much a
+       participant in the order as the provider who prescribed it. */
+    match /healthMedOrders/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid
+                                       || resource.data.pharmacyId == request.auth.uid));
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid)
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /healthTelemedicine/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid));
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid)
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /healthHomeServices/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid));
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid)
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    /* Emergency requests: the requester and admins. A dispatcher acts through
+       a Cloud Function, which bypasses rules. */
+    match /healthEmergency/{docId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if isAuthed() && noAdminFields();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    /* Provider reviews are public by design — that is the point of them. */
+    match /healthReviews/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ── Construction hub ── */
+    match /constructProviders/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /constructEquipment/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+    match /constructProjects/{docId} {
+      allow read:   if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+    /* An RFQ is visible to its author, and to providers while it is open —
+       that is how a provider finds work to quote on. */
+    match /constructRFQs/{docId} {
+      allow read:   if resource.data.status == 'open'
+                    || isAdmin()
+                    || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
+    }
+    /* A quotation is between one provider and the RFQ's author. The get() on
+       the parent RFQ is what lets the buyer see quotes addressed to them
+       without denormalising their uid onto every quotation. */
+    match /constructQuotations/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.providerUid == request.auth.uid)
+                    || (isAuthed()
+                        && exists(/databases/$(database)/documents/constructRFQs/$(resource.data.rfqId))
+                        && get(/databases/$(database)/documents/constructRFQs/$(resource.data.rfqId)).data.uid == request.auth.uid);
+      allow create: if isAuthed()
+                    && request.resource.data.providerUid == request.auth.uid
+                    && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.providerUid == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /constructOrders/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerUid == request.auth.uid));
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerUid == request.auth.uid)
+                        && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /constructReviews/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ── Digital / freelance hub ──
+       Owner fields here are named per role, so claimsOwner() (which checks a
+       plain `uid`) does not apply — each block names the field the client
+       actually writes. */
+    match /digitalGigs/{docId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.sellerUid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.sellerUid == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin() || (isAuthed() && resource.data.sellerUid == request.auth.uid);
+    }
+    /* A proposal is between the freelancer who wrote it and the job's owner.
+       Job ownership is checked against digitalJobs, which has its own rule. */
+    match /digitalProposals/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && resource.data.freelancerUid == request.auth.uid)
+                    || (isAuthed()
+                        && exists(/databases/$(database)/documents/digitalJobs/$(resource.data.jobId))
+                        && (get(/databases/$(database)/documents/digitalJobs/$(resource.data.jobId)).data.employerUid == request.auth.uid
+                            /* digital.html writes the job owner as posterUid; the
+                               /digitalJobs rule names employerUid. Both are accepted
+                               here so a client can see proposals on their own job
+                               whichever field their job document carries. */
+                            || get(/databases/$(database)/documents/digitalJobs/$(resource.data.jobId)).data.posterUid == request.auth.uid));
+      allow create: if isAuthed() && request.resource.data.freelancerUid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.freelancerUid == request.auth.uid) && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /digitalContracts/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.clientUid == request.auth.uid
+                                       || resource.data.freelancerUid == request.auth.uid));
+      allow create: if isAuthed() && request.resource.data.clientUid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && (resource.data.clientUid == request.auth.uid
+                                       || resource.data.freelancerUid == request.auth.uid)
+                        && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    /* Chat messages: only the sender may write, and only the two parties to
+       the chat may read. Membership is carried by chatId, which is composed
+       from both uids — so a reader must be one of them. */
+    match /digitalMessages/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.senderUid == request.auth.uid
+                                       || resource.data.chatId.matches('.*' + request.auth.uid + '.*')));
+      allow create: if isAuthed()
+                    && request.resource.data.senderUid == request.auth.uid
+                    && request.resource.data.chatId is string
+                    && noAdminFields();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+    match /digitalReviews/{docId} {
+      allow read:   if true;
+      allow create: if isAuthed() && request.resource.data.reviewerUid == request.auth.uid && noAdminFields();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /* ── Marketing services ── */
+    match /marketingProviders/{docId} {
+      allow read:   if true;
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin() || (isOwner() && uidUnchanged() && noAdminFields());
+      allow delete: if isAdmin();
+    }
+    match /marketingBookings/{docId} {
+      allow read:   if isAdmin()
+                    || (isAuthed() && (resource.data.uid == request.auth.uid
+                                       || resource.data.providerId == request.auth.uid));
+      allow create: if claimsOwner() && noAdminFields();
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.providerId == request.auth.uid && noAdminFields());
+      allow delete: if isAdmin();
+    }
+
+    /* ── Runtime configuration and public search signals ──
+       featureFlags is read by sokoni-service-mesh.js on every page load; with
+       no rule the read failed and the mesh fell back to defaults silently. */
+    match /featureFlags/{flagId} {
+      allow read:  if true;
+      allow write: if isAdmin();
+    }
+    match /searchTrending/{docId} {
+      allow read:  if true;
+      allow write: if false;              // written by the search pipeline
+    }
+
+    /* Client-side search telemetry. Append-only for a signed-in user writing
+       their own row; nobody but an admin reads it. Anonymous telemetry is not
+       accepted — an unauthenticated write endpoint is a spam endpoint. */
+    match /searchClicks/{docId} {
+      allow read:   if isAdmin();
+      allow create: if claimsOwner();
+      allow update, delete: if false;
+    }
+    match /searchImpressions/{docId} {
+      allow read:   if isAdmin();
+      allow create: if claimsOwner();
+      allow update, delete: if false;
+    }
+    match /searchAnalytics/{docId} {
+      allow read:   if isAdmin();
+      allow create: if claimsOwner();
+      allow update, delete: if false;
+    }
+
+    /* ── Operations dashboards ──
+       Read-only to admins. These were all denied outright, which is why the
+       ops screens rendered empty for admins too. Writes stay with Cloud
+       Functions except where the console itself files a record. */
+    match /eccAlerts/{docId}            { allow read: if isAdmin(); allow write: if false; }
+    match /eccSystemHealth/{docId}      { allow read: if isAdmin(); allow write: if false; }
+    match /eccIncidents/{docId}         { allow read: if isAdmin(); allow write: if isAdmin(); }
+    match /eccAuditLog/{docId}          { allow read: if isAdmin(); allow create: if isAdmin(); allow update, delete: if false; }
+    match /intelligenceLog/{docId}      { allow read: if isAdmin(); allow write: if false; }
+    match /paymentAuthorizations/{docId}{ allow read: if isAdmin(); allow write: if false; }
+    match /workflowInstances/{docId}    { allow read: if isAdmin(); allow write: if false; }
+    match /workflowApprovals/{docId}    { allow read: if isAdmin(); allow write: if isAdmin(); }
+    match /finosAudit/{docId}           { allow read: if isAdmin(); allow write: if false; }
+    match /launch_metrics/{docId}       { allow read: if isAdmin(); allow write: if false; }
+    match /launch_failures/{docId}      { allow read: if isAdmin(); allow write: if false; }
+    match /redisJobAudit/{docId}        { allow read: if isAdmin(); allow write: if false; }
+    match /auditLog/{docId}             { allow read: if isAdmin(); allow write: if false; }
+    match /support_tickets/{docId}      { allow read: if isAdmin(); allow write: if isAdmin(); }
+    match /tsQueryStats/{docId}         { allow read: if isAdmin(); allow write: if false; }
+    match /tsClickStats/{docId}         { allow read: if isAdmin(); allow write: if false; }
+    match /typesenseQueue/{docId}       { allow read: if isAdmin(); allow write: if false; }
+    match /aiUsage/{docId}              { allow read: if isAdmin(); allow write: if false; }
+    match /aiCreditLedger/{docId}       { allow read: if isAdmin(); allow write: if false; }
+    match /aiPromotions/{docId}         { allow read: if isAdmin(); allow write: if isAdmin(); }
+
+    /* ── Money, queues and audit trails — server-owned ──
+       Listed explicitly so the intent is recorded rather than left to the
+       default. Client engines that attempt these writes (sokoni-payment-engine,
+       sokoni-wap-definitions, sokoni-fraud-engine, sokoni-webhook-engine) are
+       writing to ledgers a browser must never be trusted with; their writes
+       have always failed and must keep failing. The correct home for them is a
+       Cloud Function, which bypasses these rules. */
+    match /refunds/{docId}         { allow read: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid); allow write: if false; }
+    match /settlements/{docId}     { allow read: if isAdmin(); allow write: if false; }
+    match /paymentLedger/{docId}   { allow read: if isAdmin(); allow write: if false; }
+    match /payoutQueue/{docId}     { allow read: if isAdmin() || (isAuthed() && resource.data.sellerUid == request.auth.uid); allow write: if false; }
+    match /notificationQueue/{docId} { allow read: if isAdmin(); allow write: if false; }
+    match /analyticsEvents/{docId} { allow read: if isAdmin(); allow write: if false; }
+    match /eventLog/{docId}        { allow read: if isAdmin(); allow write: if false; }
+    match /webhookLogs/{docId}     { allow read: if isAdmin(); allow write: if false; }
+    match /fraudLog/{docId}        { allow read: if isAdmin(); allow write: if false; }
+    match /fraudBlocklist/{docId}  { allow read: if isAdmin(); allow write: if false; }
 
   }
 }

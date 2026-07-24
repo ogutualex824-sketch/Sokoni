@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en" data-splash="1">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Provider — SOKONI</title>
+  <meta name="description" content="View and book a verified service provider on SOKONI.">
+  <meta property="og:type" content="profile">
+  <meta property="og:title" content="Provider — SOKONI">
+  <meta property="og:description" content="View and book a verified service provider on SOKONI.">
+  <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
+  <meta property="og:site_name" content="SOKONI">
+  <meta property="og:locale" content="en_KE">
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#71ff00">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="SOKONI">
+  <script src="security.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="mobile.css">
+  <link rel="stylesheet" href="premium.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #050505; color: #fff; min-height: 100vh; }
+
+    .pp-nav {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 20px; background: rgba(10,10,10,0.96);
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(12px); gap: 12px;
+    }
+    .pp-back {
+      color: rgba(255,255,255,0.7); text-decoration: none; font-size: 14px; font-weight: 600;
+      padding: 8px 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+    }
+    .pp-back:hover { border-color: #71ff00; color: #71ff00; }
+    .pp-nav-logo { height: 30px; }
+
+    .pp-wrap { max-width: 860px; margin: 0 auto; padding: 22px 18px 120px; }
+
+    /* Skeleton while loading — a spinner-free placeholder that matches the
+       final layout so the page does not jump when data lands. */
+    .pp-skel { animation: ppPulse 1.4s ease-in-out infinite; }
+    @keyframes ppPulse { 0%,100% { opacity:.42 } 50% { opacity:.8 } }
+    .pp-skel-bar { background: rgba(255,255,255,0.08); border-radius: 8px; height: 14px; margin-bottom: 10px; }
+
+    .pp-hero {
+      background: linear-gradient(135deg, rgba(113,255,0,0.07), rgba(0,0,0,0));
+      border: 1px solid rgba(255,255,255,0.07); border-radius: 18px;
+      padding: 24px; display: flex; gap: 18px; align-items: flex-start; flex-wrap: wrap;
+    }
+    .pp-avatar {
+      width: 84px; height: 84px; border-radius: 20px; flex-shrink: 0;
+      background: linear-gradient(135deg, #0d1a05, #1a2a0a);
+      border: 1px solid rgba(113,255,0,0.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 32px; font-weight: 800; color: #71ff00;
+      object-fit: cover;
+    }
+    .pp-head { flex: 1; min-width: 200px; }
+    .pp-name { font-size: 23px; font-weight: 800; line-height: 1.2; margin-bottom: 6px; word-break: break-word; }
+    .pp-biz { font-size: 13px; color: rgba(255,255,255,0.5); margin-bottom: 8px; }
+    .pp-badges { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 9px; }
+    .pp-badge {
+      display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700;
+      padding: 5px 10px; border-radius: 999px;
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.75);
+    }
+    .pp-badge.ok { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
+    .pp-badge.warn { background: rgba(255,180,0,0.09); border-color: rgba(255,180,0,0.28); color: #ffb400; }
+    .pp-meta { font-size: 13px; color: rgba(255,255,255,0.6); line-height: 1.7; }
+
+    .pp-section { margin-top: 22px; }
+    .pp-section h2 {
+      font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+      color: rgba(255,255,255,0.42); font-weight: 800; margin-bottom: 11px;
+    }
+    .pp-card {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 14px; padding: 17px; font-size: 14px; line-height: 1.65;
+      color: rgba(255,255,255,0.8);
+    }
+    .pp-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .pp-chip {
+      font-size: 12px; font-weight: 600; padding: 7px 13px; border-radius: 999px;
+      background: rgba(113,255,0,0.07); border: 1px solid rgba(113,255,0,0.2); color: #a8ff66;
+    }
+
+    /* A field the provider has not filled in yet is shown as a prompt, never
+       as invented content and never as a blank panel. */
+    .pp-pending {
+      font-size: 13px; color: rgba(255,255,255,0.4); font-style: italic;
+      border: 1px dashed rgba(255,255,255,0.14); border-radius: 12px; padding: 14px;
+    }
+
+    .pp-actions {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+      background: rgba(8,8,8,0.97); backdrop-filter: blur(14px);
+      border-top: 1px solid rgba(255,255,255,0.08);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+      display: flex; gap: 10px; max-width: 860px; margin: 0 auto;
+    }
+    .pp-btn {
+      flex: 1; padding: 14px 16px; border-radius: 12px; font-size: 14px; font-weight: 800;
+      font-family: inherit; cursor: pointer; border: 1px solid transparent; text-align: center;
+      text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 7px;
+      min-height: 48px;
+    }
+    .pp-btn.primary { background: #71ff00; color: #000; }
+    .pp-btn.ghost { background: rgba(113,255,0,0.07); border-color: rgba(113,255,0,0.22); color: #71ff00; }
+    .pp-btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+    .pp-state { text-align: center; padding: 60px 20px; }
+    .pp-state-icon { font-size: 42px; margin-bottom: 12px; }
+    .pp-state h2 { font-size: 17px; margin-bottom: 7px; color: #fff; }
+    .pp-state p { font-size: 13.5px; color: rgba(255,255,255,0.55); margin-bottom: 18px; line-height: 1.6; }
+
+    @media (max-width: 520px) {
+      .pp-name { font-size: 20px; }
+      .pp-avatar { width: 68px; height: 68px; font-size: 26px; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="pp-nav">
+  <a href="javascript:history.length>1?history.back():location.href='providers.html'" class="pp-back">‹ Back</a>
+  <a href="/"><img src="/assets/logosokoni.png" alt="SOKONI" class="pp-nav-logo"></a>
+  <a href="providers.html" class="pp-back">All providers</a>
+</nav>
+
+<main class="pp-wrap" id="ppWrap">
+  <!-- Loading skeleton, replaced once the read resolves -->
+  <div class="pp-hero pp-skel" id="ppSkeleton">
+    <div class="pp-avatar" style="background:rgba(255,255,255,0.06);border-color:rgba(255,255,255,0.08);"></div>
+    <div class="pp-head">
+      <div class="pp-skel-bar" style="width:58%;height:20px;"></div>
+      <div class="pp-skel-bar" style="width:38%;"></div>
+      <div class="pp-skel-bar" style="width:72%;"></div>
+    </div>
+  </div>
+</main>
+
+<script src="firebase.js" type="module"></script>
+<script src="sokoni-providers.js" defer></script>
+<script src="nav-active.js" defer></script>
+<script src="sw-register.js" defer></script>
+<script>
+(function () {
+  'use strict';
+
+  var params = new URLSearchParams(location.search);
+  /* `uid` is canonical. `id` is accepted because the search adapter emitted it
+     historically and those links are already out in the wild. */
+  var uid = params.get('uid') || params.get('id') || '';
+  var wrap = document.getElementById('ppWrap');
+  var _p = null;
+
+  function esc(s) {
+    return (window.SokoniProviders ? SokoniProviders.esc(s)
+      : String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'));
+  }
+
+  function state(icon, title, body, actionHtml) {
+    wrap.innerHTML = '<div class="pp-state"><div class="pp-state-icon">' + icon + '</div>'
+      + '<h2>' + esc(title) + '</h2><p>' + esc(body) + '</p>' + (actionHtml || '') + '</div>';
+  }
+
+  function initials(name) {
+    return String(name || '?').trim().split(/\s+/).map(function (w) { return w[0]; })
+      .join('').slice(0, 2).toUpperCase();
+  }
+
+  function render(p) {
+    _p = p;
+    document.title = p.name + ' — SOKONI';
+
+    var pending = {};
+    (p.profilePending || []).forEach(function (k) { pending[k] = true; });
+
+    var h = [];
+
+    /* ── Hero ── */
+    h.push('<div class="pp-hero">');
+    h.push(p.photo
+      ? '<img class="pp-avatar" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '">'
+      : '<div class="pp-avatar">' + esc(initials(p.name)) + '</div>');
+    h.push('<div class="pp-head">');
+    h.push('<div class="pp-name">' + esc(p.name) + '</div>');
+    if (p.businessName && p.businessName !== p.name) {
+      h.push('<div class="pp-biz">' + esc(p.businessName) + '</div>');
+    }
+
+    h.push('<div class="pp-badges">');
+    if (p.verified) h.push('<span class="pp-badge ok">✅ Verified</span>');
+    h.push('<span class="pp-badge">' + p.emoji + ' ' + esc(p.categoryLabel) + '</span>');
+    h.push(p.available
+      ? '<span class="pp-badge ok">● Available</span>'
+      : '<span class="pp-badge warn">● Unavailable</span>');
+    h.push('</div>');
+
+    h.push('<div class="pp-meta">');
+    if (p.serviceType) h.push('🛠️ ' + esc(p.serviceType) + '<br>');
+    /* Only the area the provider chose to publish. Exact address and GPS are
+       never rendered here — they are not written until the provider adds them
+       and are not part of a public listing. */
+    if (p.location) h.push('📍 ' + esc(p.location) + '<br>');
+    /* A rating is shown only once one exists. A brand-new provider shows no
+       stars rather than a zero that reads as a bad score. */
+    if (p.rating) {
+      h.push('⭐ ' + p.rating.toFixed(1)
+        + (p.reviewCount ? ' · ' + p.reviewCount + ' review' + (p.reviewCount === 1 ? '' : 's') : '')
+        + '<br>');
+    } else {
+      h.push('<span style="color:rgba(255,255,255,0.4)">New on SOKONI — no reviews yet</span><br>');
+    }
+    if (p.jobsCompleted > 0) h.push('✅ ' + p.jobsCompleted + ' jobs completed<br>');
+    if (p.rate != null) {
+      h.push('💰 KES ' + Number(p.rate).toLocaleString()
+        + (p.rateType ? ' ' + esc(p.rateType) : '') + '<br>');
+    }
+    h.push('</div></div></div>');
+
+    /* ── Services / skills ── */
+    if (p.skills && p.skills.length) {
+      h.push('<div class="pp-section"><h2>Services</h2><div class="pp-chips">');
+      p.skills.forEach(function (s) { h.push('<span class="pp-chip">' + esc(s) + '</span>'); });
+      h.push('</div></div>');
+    }
+
+    /* ── About ── */
+    h.push('<div class="pp-section"><h2>About</h2>');
+    h.push(p.description
+      ? '<div class="pp-card">' + esc(p.description) + '</div>'
+      : '<div class="pp-pending">' + esc(p.name)
+        + ' has not added a description yet.</div>');
+    h.push('</div>');
+
+    /* ── Pricing ── */
+    if (p.rate == null && pending.pricing) {
+      h.push('<div class="pp-section"><h2>Pricing</h2>'
+        + '<div class="pp-pending">Pricing not published yet — message '
+        + esc(p.name.split(' ')[0]) + ' for a quote.</div></div>');
+    }
+
+    /* ── Hours ── */
+    if (pending.workingHours) {
+      h.push('<div class="pp-section"><h2>Working hours</h2>'
+        + '<div class="pp-pending">Working hours not published yet.</div></div>');
+    }
+
+    wrap.innerHTML = h.join('');
+    renderActions(p);
+  }
+
+  function renderActions(p) {
+    var bar = document.createElement('div');
+    bar.className = 'pp-actions';
+    var first = esc(p.name.split(' ')[0]);
+
+    if (p.acceptsBookings && p.available) {
+      bar.innerHTML += '<button type="button" class="pp-btn primary" id="ppBook">📩 Book ' + first + '</button>';
+    } else {
+      bar.innerHTML += '<button type="button" class="pp-btn primary" disabled>Not accepting bookings</button>';
+    }
+    if (p.chatEnabled) {
+      bar.innerHTML += '<button type="button" class="pp-btn ghost" id="ppChat">💬 Message</button>';
+    }
+    document.body.appendChild(bar);
+
+    var bookBtn = document.getElementById('ppBook');
+    if (bookBtn) bookBtn.addEventListener('click', book);
+    var chatBtn = document.getElementById('ppChat');
+    if (chatBtn) chatBtn.addEventListener('click', chat);
+  }
+
+  function chat() {
+    if (window.SokoniInbox && _p) {
+      SokoniInbox.openChat({
+        otherUid: _p.uid, otherName: _p.name,
+        type: 'customer-provider',
+        context: _p.categoryLabel + ' · SOKONI Services',
+      });
+    } else {
+      location.href = 'messages.html';
+    }
+  }
+
+  function book() {
+    if (!_p) return;
+    /* Booking is auth-gated: a booking document is owned by the customer who
+       created it, so an anonymous visitor has nothing to attach it to and
+       firestore.rules would reject the write. Send them to sign in and back. */
+    var auth = window.firebaseAuth;
+    if (!auth || !auth.currentUser) {
+      location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
+      return;
+    }
+    if (typeof window.SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+      SokoniPay.bookNow({
+        providerName: _p.name,
+        category: _p.category || 'default',
+        serviceDesc: (_p.skills || []).slice(0, 2).join(', ') || 'Professional Service',
+        providerPhone: _p.phone || '',
+      }, function () { location.href = 'bookings.html'; });
+    } else {
+      location.href = 'bookings.html?provider=' + encodeURIComponent(_p.uid);
+    }
+  }
+
+  function load() {
+    if (!uid) {
+      state('🔍', 'No provider selected',
+        'This link is missing a provider reference.',
+        '<a href="providers.html" class="pp-btn ghost" style="display:inline-flex;max-width:220px;margin:0 auto;">Browse providers</a>');
+      return;
+    }
+    SokoniProviders.get(uid).then(function (r) {
+      if (r.error) {
+        /* A failed read is reported as a failed read. It must not render as
+           "provider not found", which would tell the visitor something untrue
+           about this provider. */
+        state('⚠️', 'Could not load this profile',
+          'This is a connection problem on our side. Please try again.',
+          '<button type="button" class="pp-btn ghost" style="display:inline-flex;max-width:220px;margin:0 auto;" onclick="location.reload()">Retry</button>');
+        return;
+      }
+      if (!r.provider) {
+        state('👤', 'Provider not available',
+          'This provider does not exist or is not currently listed on SOKONI.',
+          '<a href="providers.html" class="pp-btn ghost" style="display:inline-flex;max-width:220px;margin:0 auto;">Browse providers</a>');
+        return;
+      }
+      render(r.provider);
+    });
+  }
+
+  /* sokoni-providers.js and firebase.js are both deferred/module, so wait for
+     window load rather than DOMContentLoaded — at DOMContentLoaded neither
+     window.SokoniProviders nor window.firebaseDB is guaranteed to exist. */
+  function boot(attempt) {
+    attempt = attempt || 0;
+    if (window.SokoniProviders && window.firebaseDB) return load();
+    if (attempt > 40) {   /* ~6s, then report honestly instead of hanging */
+      state('⚠️', 'Could not load this profile',
+        'The page did not finish initialising. Please reload.',
+        '<button type="button" class="pp-btn ghost" style="display:inline-flex;max-width:220px;margin:0 auto;" onclick="location.reload()">Reload</button>');
+      return;
+    }
+    setTimeout(function () { boot(attempt + 1); }, 150);
+  }
+  window.addEventListener('load', function () { boot(0); });
+}());
+</script>
+</body>
+</html>

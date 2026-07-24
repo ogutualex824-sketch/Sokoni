@@ -228,7 +228,11 @@ const SPECS = [
     location: d => d.location || d.city || '',
     price: d => kes(d.rate),
     thumb: d => d.photo || d.image || null,
-    link: (d, id) => 'provider.html?id=' + encodeURIComponent(id),
+    /* provider.html is the provider's OWN dashboard and reads only ?tab= and
+       ?cat= — it never read the id this link passed it, so every provider
+       result opened the setup wizard instead of the provider. The public
+       profile is provider-profile.html, which reads ?uid=. */
+    link: (d, id) => 'provider-profile.html?uid=' + encodeURIComponent(d.uid || id),
   },
   {
     col: 'healthProviders', tab: 'professionals', icon: '🏥', scan: 150,

@@ -113,16 +113,25 @@
      2. PROVIDER SYNC — write to Firestore providers collection
   ═══════════════════════════════════════════════════════════════ */
 
-  /* Generic: write any provider/listing object to Firestore */
+  /* Generic: write any provider/listing object to Firestore.
+
+     THIS NO LONGER WRITES TO `providers`.
+     `providers` is the canonical service-provider registry (see
+     sokoni-providers.js) and is keyed by Auth uid, one document per account.
+     This function used to mirror localStorage into it under a synthesised
+     `hub_uid_nameOrPhone` id, on a 500ms timer, from any page that happened to
+     touch a watched key. That produced a second row for a provider who already
+     had a uid-keyed document — the exact duplicate the registry exists to
+     prevent — and stamped `status:'available'`, which is not one of the
+     statuses firestore.rules will serve, so the rows were unreadable clutter
+     that still counted against every scan.
+
+     Hub-specific registries below are unaffected: `lawyers` and `mechanics`
+     are separate collections that the search adapter reads in their own right.
+     Providers now reach the canonical registry through the onboarding path
+     only (scripts/onboard-providers.js, or providerPublish). */
   function _writeProvider(hub, id, data) {
     if (!id || !_uid) return;
-    _fsSet('providers', String(id), {
-      ...data,
-      uid: _uid,
-      hub: hub,
-      status: data.status || 'available',
-      updatedAt: new Date().toISOString(),
-    });
     /* Also write to hub-specific collection if applicable */
     if (hub === 'legal') {
       _fsSet('lawyers', String(id), { ...data, uid: _uid });
@@ -368,31 +377,19 @@
     'mechanics'        : { ls: 'sokoniMechanics',        fn: ['renderMechanics'] },
   };
 
+  /* Copying Firestore providers into localStorage was a bridge for hub pages
+     that could only render from a local array. Those pages now query the
+     registry directly through SokoniProviders, so the bridge is not just
+     redundant — it forked the data: a provider edited in Firestore kept
+     rendering from whatever stale copy had been written to localStorage
+     first, because the merge below only ever ADDED unseen ids and never
+     refreshed one it had already cached.
+
+     Retained as a no-op rather than deleted because provider-wiring.js is
+     injected on every page and the public API is called elsewhere. */
   async function _pullProvidersForHub(hub) {
-    const cfg = HUB_DISCOVER_MAP[hub];
-    if (!cfg) return;
-
-    const fsProviders = await _fsGetAll('providers');
-    const hubProviders = fsProviders.filter(p => p.hub === hub || p.type === hub);
-    if (!hubProviders.length) return;
-
-    /* Merge into localStorage so existing render functions pick them up */
-    try {
-      const local = JSON.parse(localStorage.getItem(cfg.ls) || '[]');
-      const localIds = new Set(local.map(p => String(p.id || p.name || '')));
-      const toAdd = hubProviders.filter(p => !localIds.has(String(p.id || p.name || '')));
-      if (toAdd.length) {
-        const merged = [...local, ...toAdd];
-        localStorage.setItem(cfg.ls, JSON.stringify(merged));
-      }
-    } catch(e) {}
-
-    /* Call render functions if they exist */
-    cfg.fn.forEach(fnName => {
-      if (typeof window[fnName] === 'function') {
-        try { window[fnName](); } catch(e) {}
-      }
-    });
+    if (!HUB_DISCOVER_MAP[hub]) return;
+    return;
   }
 
   /* ═══════════════════════════════════════════════════════════════

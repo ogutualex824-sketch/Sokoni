@@ -237,7 +237,11 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   if (!d.plan)         throw new HttpsError('failed-precondition', 'Subscription not activated.');
 
   const providerId = d.providerId || await _genProviderId();
-  const qrData     = `https://mysokoni.co.ke/provider/${providerId}`;
+  /* /provider/{providerId} has no hosting rewrite — firebase.json routes
+     /shop, /@, /card and /pay, but not /provider — so every QR code and
+     profile link built from it resolved to a 404. The public profile page is
+     provider-profile.html and it is keyed by uid. */
+  const qrData     = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;
 
   const batch = _db().batch();
   const ref   = _db().collection('providerProfiles').doc(uid);
@@ -260,6 +264,43 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
     featured: false, verified: false, searchable: true,
     updatedAt: _ts(),
+  }, { merge: true });
+
+  /* ── Publish to the canonical discovery registry ──────────────────────────
+     `providers` is the registry every provider-facing surface reads: global
+     search (sokoni-firestore-search.js), providers.html, services.html, the
+     Cleaning hub and the homepage strip, all via sokoni-providers.js.
+
+     Publishing wrote only providerProfiles until now, so a provider who
+     completed this entire flow — subscription, legal agreement, custom auth
+     claim and all — was invisible everywhere a customer could look. The two
+     collections are not rivals: providerProfiles holds the private working
+     record (draft, plan, coverage, pricing config), `providers` holds the
+     public listing. This is the one place that projects one onto the other.
+
+     Keyed by uid, matching scripts/onboard-providers.js, so a provider who was
+     onboarded by script and later publishes through this flow updates the same
+     document instead of gaining a second listing. */
+  const cats = [draft.profile.category, draft.profile.subcategory]
+    .map(c => _san(c, 100)).filter(Boolean);
+  batch.set(_db().collection('providers').doc(uid), {
+    uid, providerId,
+    name:        _san(draft.profile.name, 120),
+    category:    cats[0] || '',
+    categories:  cats,
+    description: _san(draft.profile.bio, 2000),
+    location:    _san((draft.coverage && (draft.coverage.area || draft.coverage.city)) || '', 160),
+    city:        _san((draft.coverage && draft.coverage.city) || '', 100),
+    skills:      (draft.profile.qualifications || []).slice(0, 10).map(q => _san(q, 200)),
+    status:      'active',
+    searchable:  true,
+    isPublic:    true,
+    acceptsBookings: true,
+    available:   true,
+    /* Verification and featuring are admin decisions and are never granted by
+       the act of publishing. merge:true leaves an existing admin value alone. */
+    rating: 0, reviewCount: 0, jobsCompleted: 0,
+    publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
   // Create availability doc
@@ -286,7 +327,7 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
-  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider/${providerId}` };
+  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider-profile.html?uid=${uid}` };
 };
 
 /* ── 6. providerGetProfile ───────────────────────────────────────────────────── */
@@ -469,7 +510,8 @@ exports._h.providerGenerateQR = _h.providerGenerateQR = async (req) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Profile not found.');
   const { providerId } = snap.data();
   if (!providerId) throw new HttpsError('failed-precondition', 'Publish your profile first.');
-  const qrData = `https://mysokoni.co.ke/provider/${providerId}`;
+  /* Same 404 as providerPublish — see the note there. */
+  const qrData = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;
   await _db().collection('providerProfiles').doc(uid).update({ qrCode: qrData, updatedAt: _ts() });
   return { qrCode: qrData, providerId };
 };

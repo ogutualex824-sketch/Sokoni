@@ -104,7 +104,9 @@
     const type = (item.type || 'product').toLowerCase();
     const id = item.id || '';
     if (type === 'service')  return 'services.html?id=' + encodeURIComponent(id);
-    if (type === 'provider') return 'provider.html?id=' + encodeURIComponent(id);
+    /* provider-profile.html is the public profile; provider.html is the
+       provider's own dashboard and ignores an id entirely. */
+    if (type === 'provider') return 'provider-profile.html?uid=' + encodeURIComponent(id);
     if (type === 'business' || type === 'mechanic')
                              return 'mechanic.html?id=' + encodeURIComponent(id);
     return 'product.html?id=' + encodeURIComponent(id);

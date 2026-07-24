@@ -12,6 +12,16 @@ import {
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
 
+/* Search keeps a warm catalogue cache (in-session 10 min, localStorage 30 min)
+   so queries match locally instead of hitting the network. Without an explicit
+   invalidation a seller who adds or removes a product and searches for it
+   immediately is served the pre-write scan and concludes search is broken —
+   the write succeeded, the cache simply had not expired. Any product write must
+   therefore drop that collection's cached copy. */
+function _invalidateProductSearchCache() {
+  try { window.SokoniFirestoreSearch?.invalidateScanCache?.('products'); } catch (_) {}
+}
+
 /* Helper — returns the current authenticated user's UID.
    Prefers auth.currentUser (JWT-verified). Falls back to localStorage
    ONLY as a same-tick fallback before Firebase Auth initialises. */
@@ -88,13 +98,28 @@ const SokoniDB = {
      PROVIDERS
   ════════════════════════════════════════ */
 
+  /**
+   * `providers` is the canonical service-provider registry and holds ONE
+   * document per account, keyed by Auth uid.
+   *
+   * This used to key the document by the phone number's digits. Two
+   * consequences, both live: a provider who re-registered with a different
+   * number got a second listing, and an account already onboarded under its
+   * uid got a second, competing document the moment it used this form. Keying
+   * by uid makes the write idempotent — re-registering updates the one record
+   * that account owns.
+   *
+   * firestore.rules require `uid == request.auth.uid` on create, so an
+   * unauthenticated caller cannot write here at all; failing fast with a clear
+   * error beats a rules rejection surfacing as a silent catch upstream.
+   */
   async saveProvider(profile) {
-    const id = (profile.phone || profile.id || Date.now())
-      .toString().replace(/\D/g, '');
-    await setDoc(doc(db, 'providers', id), {
-      ...profile, _localId: profile.id || id, uid: _uid(), updatedAt: serverTimestamp()
+    const uid = _uid();
+    if (!uid) throw new Error('Sign in before saving a provider profile');
+    await setDoc(doc(db, 'providers', uid), {
+      ...profile, _localId: profile.id || null, uid, updatedAt: serverTimestamp()
     }, { merge: true });
-    return id;
+    return uid;
   },
 
   async getProvider(id) {
@@ -171,7 +196,9 @@ const SokoniDB = {
      PROVIDERS — listen for all registered providers
   ════════════════════════════════════════ */
   listenProviders(callback, limitN = 50) {
-    const q = query(collection(db, 'providers'), orderBy('updatedAt', 'desc'), limit(limitN));
+    /* status guard is required by /providers; ordering moves to the client so
+       no composite index is needed. */
+    const q = query(collection(db, 'providers'), where('status', 'in', ['active', 'approved']), limit(limitN));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => _log.warn('[SokoniDB] providers:', err.message)
@@ -337,10 +364,23 @@ const SokoniDB = {
     return id;
   },
 
+  /* Approved reviews only — /reviews gates reads on status, so the previous
+     unfiltered listener was denied for every caller and delivered nothing.
+     A single equality filter needs no composite index; ordering is done on the
+     client so none is required, and the limit stops an unbounded read of the
+     whole collection as review volume grows. */
   listenReviews(callback) {
-    const q = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'));
+    const q = query(
+      collection(db, 'reviews'),
+      where('status', '==', 'approved'),
+      limit(100)
+    );
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(
+        snap.docs
+          .map(d => ({ _fsId: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+      ),
       err  => _log.warn('[SokoniDB] reviews:', err.message)
     );
   },
@@ -516,11 +556,13 @@ const SokoniDB = {
       sellerUid: uid || product.sellerUid || '',
       _syncedAt: serverTimestamp(),
     }, { merge: true });
+    _invalidateProductSearchCache();
     return product.id;
   },
 
   async deleteProduct(productId) {
     await deleteDoc(doc(db, 'products', String(productId)));
+    _invalidateProductSearchCache();
   },
 
   async loadProducts(opts = {}) {

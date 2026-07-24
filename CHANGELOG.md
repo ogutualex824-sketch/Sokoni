@@ -1,3 +1,331 @@
+## [2026-07-24] — refactor(providers): one registry, one client, five surfaces; the demo directory is gone
+
+`providers` is now the single canonical service-provider registry, and every
+provider-facing surface reads it through one client. Onboarding a provider once
+puts them on the homepage, providers.html, services.html, the Cleaning hub, the
+public profile page and global search — which was not previously true of any of
+them except search.
+
+### What the directory actually was
+
+Five sources of truth that disagreed:
+
+| Source | What it held |
+|---|---|
+| `providers.html` | 17 hardcoded providers, zero Firestore reads |
+| `services.html` | `localStorage` merged ahead of 65 hardcoded `DEMO_PROVIDERS` |
+| `cleaning.html` | 8 hardcoded providers |
+| `provider-wiring.js` | mirrored `localStorage` into `providers` on a 500ms timer |
+| `providerProfiles` | a second Firestore registry written by the deployed CF |
+
+Roughly 90 invented people, several with invented five-star ratings and job
+counts ("4.9★ · 1120+ jobs"), five of them fake mamafua competing directly with
+the real one. No real provider could outrank them and, on three of those pages,
+no real provider could appear at all.
+
+### The new shape
+
+- **`sokoni-providers.js`** — the one client. Applies the `status in [active,
+  approved]` rules guard, normalises the field-name drift left by several
+  historical writers, expands category buckets (Cleaning shows `laundry` too),
+  escapes for `innerHTML`, and caches for 2 minutes.
+- **`provider-profile.html`** — the public profile that did not exist.
+- Hardcoded arrays deleted from `providers.html`, `services.html`,
+  `cleaning.html`; a Firestore-backed featured strip added to `index.html`.
+
+### Bugs found and fixed on the way
+
+**A blocked read rendered as an empty marketplace.** Firestore's `getDocs` does
+not reject when the backend is unreachable — it serves the local persistence
+cache and resolves normally. On a cold page that cache is empty, so an App Check
+rejection arrived as a successful snapshot of zero documents and rendered
+*"No providers yet — be the first to offer this service"*. Caught by the browser
+probe, not by reasoning. `snap.metadata.fromCache && snap.size === 0` now
+separates "the server told us it is empty" from "we never reached the server".
+
+**A blocked read could also hang forever.** `getDoc` in particular never settles
+while the SDK retries a backend it will not reach, leaving the profile page on
+its loading skeleton indefinitely. Reads now carry an 8-second ceiling.
+
+**Search results opened the wrong page.** The adapter emitted
+`provider.html?id=…`, but `provider.html` is the provider's own dashboard and
+reads only `?tab=` and `?cat=` — it never read that id. Every provider result
+opened the setup wizard. Repointed to `provider-profile.html?uid=` here and in
+`sokoni-recommendations.js`.
+
+**Every QR code and published profile link was a 404.** `providerPublish` and
+`providerGenerateQR` built `https://mysokoni.co.ke/provider/{providerId}`;
+`firebase.json` rewrites `/shop`, `/@`, `/card` and `/pay`, but not `/provider`.
+
+**`SokoniDB.saveProvider` keyed documents by phone digits.** A provider who
+re-registered with a different number got a second listing, and an account
+already onboarded under its uid got a competing document. Now uid-keyed, making
+the write idempotent.
+
+**Publishing did not publish.** `providerPublish` wrote only `providerProfiles`,
+so a provider who completed the entire flow — subscription, legal agreement,
+custom auth claim — was invisible everywhere a customer could look. It now also
+writes the canonical `providers` record. The two collections are not rivals:
+`providerProfiles` holds the private working record, `providers` holds the
+public listing.
+
+**Ratings were invented at three separate sites.** `services.html` painted five
+filled stars via `p.rating||5` on providers who had never been rated;
+`registerProvider` wrote `rating: 5.0` into new records; `providers.html` shipped
+a fixed "4.8★ / 47 Counties" stats bar regardless of contents. Unrated providers
+now read "New on SOKONI" and the stats are computed from what is loaded.
+
+### Security
+
+`noAdminFields()` covers `verified`, `featured` and `approved` — but **not
+`status`**. Any signed-in user could create `providers/{their-own-uid}` with
+`status:'active'` and appear immediately as a live provider in global search and
+on the homepage, bypassing the application review that both onboarding forms
+submit. Latent while the registry was empty and unread; reachable the moment it
+started serving the directory. The create rule now permits `pending` only;
+promotion stays an admin action. **Rules are edited but NOT deployed — deploy
+`firestore:rules` to close this.**
+
+### Verification
+
+`scripts/probe-provider-directory.js` — real Chromium, two passes:
+
+- **Live pass**: App Check refuses browser reads from `localhost`, so this can
+  only prove that no demo name survives on any page (it does not) and that a
+  blocked read is reported as a blocked read (it is, on 3–4 of 4 samples; the
+  403 is intermittent, so runs disagree).
+- **Injected pass**: the two real production records are injected client-side to
+  exercise the render path App Check hides. Green on all five surfaces every
+  run — correct providers, correct category filtering (Ann on the Cleaning hub,
+  King Bruce not), `provider-profile.html?uid=` links, no invented stars,
+  pending fields prompted rather than fabricated.
+
+Read-path correctness is evidenced separately over REST by
+`scripts/audit-provider-onboarding.js`. `scripts/check-inline-js.js` is new —
+inline `<script>` blocks are parsed by nothing in this repo's toolchain, so a
+broken edit reached production as a blank page; it now fails at the gate.
+
+**Not evidence of production correctness.** No page in this change has been
+loaded against a reachable Firestore from an App Check-registered origin. That
+requires a deploy or a registered debug token.
+
+### Files
+
+`sokoni-providers.js`, `provider-profile.html`, `scripts/check-inline-js.js`,
+`scripts/probe-provider-directory.js` (new); `providers.html`, `services.html`,
+`cleaning.html`, `index.html`, `provider-wiring.js`, `sokoni-db.js`,
+`sokoni-firestore-search.js`, `sokoni-recommendations.js`,
+`functions/provider-onboarding.js`, `firestore.rules` (modified).
+
+### Deployment
+
+1. `firebase deploy --only firestore:rules` — closes the self-publish gap
+2. `firebase deploy --only functions:providerDispatch` — publishing writes `providers`
+3. `firebase deploy --only hosting` — the pages
+
+Deploying hosting alone leaves the self-publish gap open. Order matters.
+
+### Migration
+
+No data migration. `providerProfiles` is empty in production, so there is
+nothing to move; if it later holds records, `providerPublish` projects them
+forward on the next publish.
+
+---
+
+## [2026-07-24] — fix(auth+wallet): sign-in and wallet top-up were blocked by a client guard and a missing IAM binding
+
+Two separate production faults, two different layers. Neither was in the logic
+each appeared to be in.
+
+### 1 · Wallet STK push — blocked at Cloud Run, never reached the function
+
+`initiateWalletTopUp` had **no `run.invoker` binding**, so requests were rejected
+by Cloud Run IAM before the function executed. Same fault on
+`bookLegalConsultation`.
+
+Verified by response body, not status code alone — a 403 from IAM returns HTML,
+a rejection from the function returns callable JSON:
+
+| Endpoint | Before | After |
+|---|---|---|
+| `initiateWalletTopUp` | 403 + HTML | **401 + function JSON** |
+| `bookLegalConsultation` | 403 + HTML | **401 + function JSON** |
+
+`allUsers` / `roles/run.invoker` applied to both. Confirmed the services existed
+before reading their policies — `getIamPolicy` returns an empty policy for a
+non-existent resource, which reads identically to "no bindings". The function
+already carries `INTASEND_PRIVATE_KEY`, so no secret work was needed.
+
+### 2 · Google sign-in and phone OTP — a client guard stricter than its backend
+
+Both paths aborted before contacting Firebase when App Check reported
+`rejected`. The guard existed to avoid a "doomed OAuth round-trip". Live App
+Check configuration shows the round-trip was never doomed:
+
+```
+firestore.googleapis.com         ENFORCED
+firebasestorage.googleapis.com   ENFORCED
+identitytoolkit.googleapis.com   UNENFORCED   ← sign-in
+```
+
+Authentication does not require an App Check token. Since App Check is known to
+403 intermittently, a transient rejection produced a hard sign-in outage the
+backend would have allowed. Blocking client-side bought no protection, because
+nothing server-side was checking.
+
+Both guards now log and proceed. The `pending` wait is unchanged, error handling
+is unchanged, and App Check is **not** weakened — enforcement is server-side and
+untouched. The dependency is recorded in-code: if App Check enforcement is ever
+enabled for Authentication, this decision must be revisited.
+
+Ruled out by direct verification, not assumption: authorized domains
+(`mysokoni.co.ke`, `www`, `auth.` all present), Google and Facebook IdPs (enabled,
+client IDs set), phone sign-in (enabled), OAuth redirect URIs (both registered),
+App Check reCAPTCHA registration (site secret set), and the custom auth domain
+(`/__/auth/handler` and `/__/auth/iframe` both 200).
+
+**Files:** `auth.js` (3 hunks). **Infrastructure:** 2 Cloud Run IAM bindings.
+**Database:** none. **API:** none. **Breaking:** none.
+
+e document
+
+Onboarded two existing accounts into the `providers` registry, and audited every
+account in the project against it. **No Auth user was created and no account was
+duplicated.** The audit also established that most of the provider *directory*
+is not data-driven at all, which bounds what onboarding can achieve — see
+**Discoverability is narrower than it looks** below.
+
+### The premise correction
+
+The task named the account by phone: **+254 748 346 783**. Enumerating all 34
+Auth users shows **no account carries that number**. The account is real, but is
+keyed on email:
+
+| | |
+|---|---|
+| uid | `H7p6ktBHogM5GcBy6mz8negKVbG2` |
+| Auth displayName | `Ann` |
+| Auth email | `momanyi07@gmail.com` (no phone on the Auth record) |
+| sign-in | password |
+| created / last login | 2026-07-21 |
+
+`0748346783` occurs in exactly one place in the entire database:
+`applications/e0cOABIkbtu2Vb1suG5y` — a business application submitted
+2026-07-21, `status: pending`, name **"Langa'ta mamafua"**, category `cleaning`,
+hub `home-services`. That application also carries `momanyiann07@mail.com`,
+which matches **no** Auth account and is very likely a typo of her gmail. Every
+field written for her was copied from that application or her Auth record;
+nothing was invented.
+
+A single targeted `accounts:lookup` by phone is **not** sufficient evidence for
+a negative here — the same call returned zero for FRED (`+254714582086`) whose
+Auth record demonstrably carries that number. The no-duplicate guarantee rests
+on the full 34-user enumeration, not the lookup.
+
+### Onboarded
+
+| Account | uid | Category | Verified |
+|---|---|---|---|
+| Ann — "Langa'ta mamafua" | `H7p6ktBHog…` | `laundry` / label **Mama Fua** | `true` (explicitly authorised) |
+| King Bruce — Artist / MC | `aOdQxmUGLC…` | `mc` / entertainment | `false` — nothing on file to verify against |
+
+Nine documents per account, all keyed by uid: `providers`, `providerSettings`,
+`providerNotifications`, `providerAnalytics`, `providerSubscriptions` (plan
+`free_trial`, 14-day trial, 20% commission — mirrors `PLANS.free_trial` in
+`functions/provider-onboarding.js`), `wallets` (opens at zero), and
+`notificationPrefs`, plus the `users` link and — for Ann —
+`applications/e0cOABIkbtu2Vb1suG5y` moved `pending → approved`.
+
+Counters start at 0. No rating, review count or completed-job figure was seeded.
+
+### Held — 4 accounts, with reasons
+
+These were **not** skipped for convenience; each one's own data says it does not
+belong in the `providers` professionals directory, and filing it there would
+break the task's own "correct category" requirement.
+
+- **John wa Pork** — `accountType=seller`, `businessType=butchery`. A shop, not a
+  bookable professional; belongs in `sellers`. `upload_health_permit` unticked.
+- **FRED** — `accountType=rider`, `driverStatus=pending_verification`. Licence,
+  good-conduct certificate and insurance all unticked. Publishing an unverified
+  rider as bookable bypasses a safety control, not a profile-completeness step.
+- **T.M.M & Partners Advocates** — `accountStatus=invited` (never completed),
+  `businessType=law_firm`. Advocates are regulated; no LSK practising number on
+  file, and legal professionals are read from the dedicated `lawyers` registry.
+- **Joseph / Automate Joe** — already carries `mechanicId=automate-joe`,
+  `featured=true`, `searchIndexed=true`. Mechanics are read from the `mechanics`
+  collection; a second record would be the exact duplicate this work prevents.
+
+### Discoverability is narrower than it looks
+
+Before this change the `providers` collection **did not exist** — zero
+documents. Every "verified provider" a visitor has ever seen on this platform is
+a hardcoded array. Writing Firestore data therefore reaches only the surfaces
+that actually read Firestore:
+
+| Surface | Reads `providers`? | Ann visible? |
+|---|---|---|
+| `search.html` (global search) | yes — `sokoni-firestore-search.js`, guard `status in [active, approved]` | **yes** |
+| `providers.html` | no — hardcoded 17-entry `PROVIDERS` array | no |
+| `services.html` | no — `localStorage` + hardcoded 65-entry `DEMO_PROVIDERS` | no |
+| `cleaning.html` | no — hardcoded array | no |
+| `index.html` (homepage) | no — never queries `providers` | no |
+
+Verified by simulating the live adapter against production: `providers` holds 2
+documents, both pass the status guard, and every required query — *Ann*,
+*Mama Fua*, *Laundry*, *mamafua*, *cleaning*, *washing*, *house cleaning* —
+returns her.
+
+Two further gaps found, **not** fixed here:
+
+1. **Search results link to a page that ignores the id.** The adapter emits
+   `provider.html?id=<uid>`, but `provider.html` reads only `?tab=` and `?cat=`
+   — there is no `id` handler. Clicking a provider result opens the *provider's
+   own dashboard*, not the provider's public profile. This affects every
+   provider result, not just Ann's.
+2. **Two parallel provider registries.** The canonical Cloud Function workflow
+   (`providerPublish`) writes `providerProfiles/{uid}`, but global search reads
+   `providers/{...}`. A provider onboarded through the deployed CF would not be
+   findable by search at all.
+
+### Files
+
+- `scripts/audit-provider-onboarding.js` — **new**, read-only, no `--apply` by design
+- `scripts/onboard-providers.js` — **new**, dry-run default, uid-keyed so a re-run cannot duplicate
+
+### Database
+
+New collections: `providers`, `providerSettings`, `providerNotifications`,
+`providerAnalytics`, `providerSubscriptions`, `notificationPrefs`, `wallets`.
+`applications/e0cOABIkbtu2Vb1suG5y` → `approved`. No index changes; the existing
+`providers (status ASC, updatedAt DESC)` index covers the search guard.
+
+### Security
+
+`providers` rules already gate reads on `status in [active, approved]` and deny
+client writes to `status` / `verified` / `approved`; both writes went through
+the Admin REST path, which is the intended channel. `providerSettings`,
+`providerNotifications` and `providerAnalytics` are `allow write: if false` —
+server-only — and were written accordingly. Personal data published: name,
+business name, area and phone, for two accounts only, each of which had already
+submitted those details for the purpose of being listed.
+
+### Left for the account holder
+
+`photo`, `kycDocuments`, `exactLocation`, `bio`, `pricing`, `workingHours`,
+`serviceRadius` — recorded in `profilePending` on each document, written as
+absent, never invented.
+
+### Caches
+
+No server-side cache to purge. `sokoni-firestore-search.js` holds a 10-minute
+session scan cache and a 30-minute `localStorage` catalogue cache, so a visitor
+with a warm cache may not see her for up to 30 minutes. New sessions see her
+immediately.
+
+---
+
 ## [2026-07-24] — fix(search): one malformed product was blocking Algolia indexing for every product batched with it
 
 Found by the variant acceptance probe, which failed twice for a reason that had
