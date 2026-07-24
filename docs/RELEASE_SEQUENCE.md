@@ -1,5 +1,36 @@
 # Release sequence — callable surface & runtime certification
 
+> ## ⛔ STOP — read before starting runtime certification
+>
+> **Do not begin runtime certification until the canonical webhook is resolved
+> across the ADRs, deployment, and the IntaSend dashboard.**
+>
+> Two IntaSend collection webhooks are deployed and have diverged. ADR-0013 names
+> `intasendWebhook`; the entitlement and FinOS wallet paths live in
+> `webhookIntasend`. A payment routed to the wrong one succeeds at payment,
+> commission and subscription while **silently skipping entitlement
+> materialisation and the wallet credit**.
+>
+> That is not a failed test — it is an **uninterpretable** one. The result reads as
+> the integration failing when it was never invoked, and sends the next
+> investigation hunting for a defect in code that never ran.
+>
+> ```bash
+> node scripts/verify-webhook-authority.js <endpointName>   # exits 1 if incomplete
+> ```
+>
+> The dashboard registration cannot be inferred from source — confirm it by hand.
+> See **ADR-0014**.
+>
+> Everything below — wallet credit, entitlement materialisation, replay resistance,
+> reconciliation, subscription exclusion — is meaningful only once you are certain
+> the payment exercises the intended code path.
+
+**Production certification begins where static analysis ends.** This repository can
+prove architecture, invariants and internal consistency. It cannot prove that the
+deployed system, third-party configuration and runtime behaviour agree. That is what
+the qualifying marketplace payment is for.
+
 Companion to `CALLABLE_INVOKER_GAPS.md` (what is unreachable) and
 `CALLABLE_INVOKER_REVIEW.md` (who is supposed to call it).
 
