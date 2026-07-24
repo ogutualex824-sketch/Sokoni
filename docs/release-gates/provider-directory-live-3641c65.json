@@ -1,0 +1,84 @@
+{
+  "gate": "provider-directory-live",
+  "status": "BLOCKED",
+  "counts": {
+    "pass": 9,
+    "fail": 0,
+    "blocked": 4
+  },
+  "evidence": "browser-run",
+  "environment": "local",
+  "commit": "3641c65",
+  "workingTreeDirty": true,
+  "confidence": "low",
+  "startedAt": "2026-07-24T16:52:44.070Z",
+  "finishedAt": "2026-07-24T16:53:23.561Z",
+  "assertions": [
+    {
+      "status": "PASS",
+      "label": "/providers.html: no demo data rendered",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/providers.html: failed read is reported honestly",
+      "detail": null
+    },
+    {
+      "status": "BLOCKED",
+      "label": "/providers.html: real providers rendered",
+      "detail": "Firestore read blocked (App Check refuses localhost) — not observed"
+    },
+    {
+      "status": "PASS",
+      "label": "/cleaning.html: no demo data rendered",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/cleaning.html: failed read is reported honestly",
+      "detail": null
+    },
+    {
+      "status": "BLOCKED",
+      "label": "/cleaning.html: real providers rendered",
+      "detail": "Firestore read blocked (App Check refuses localhost) — not observed"
+    },
+    {
+      "status": "PASS",
+      "label": "/services.html: no demo data rendered",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/services.html: failed read is reported honestly",
+      "detail": null
+    },
+    {
+      "status": "BLOCKED",
+      "label": "/services.html: real providers rendered",
+      "detail": "Firestore read blocked (App Check refuses localhost) — not observed"
+    },
+    {
+      "status": "PASS",
+      "label": "/index.html: no demo data rendered",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/index.html: section correctly hidden when empty",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "provider-profile: failed read is reported honestly",
+      "detail": null
+    },
+    {
+      "status": "BLOCKED",
+      "label": "provider-profile: renders the provider",
+      "detail": "Firestore read blocked (App Check refuses localhost) — not observed"
+    }
+  ],
+  "notes": []
+}
