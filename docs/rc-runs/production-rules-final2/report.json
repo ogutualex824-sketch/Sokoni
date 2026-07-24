@@ -1,0 +1,122 @@
+{
+  "label": "production-rules-final2",
+  "backend": "production(admin)",
+  "startedAt": "2026-07-24T07:13:56.597Z",
+  "privileged": false,
+  "suites": [
+    {
+      "id": "RC-09",
+      "title": "Firestore Rules (client-side authorization)",
+      "verdict": "PARTIAL",
+      "steps": [
+        {
+          "name": "Seed: one product owned by the RC seller, one owned by another seller",
+          "capability": "Rules fixture",
+          "status": "PASS",
+          "detail": "owned by oXrgbq2oBwadJSfsk0NypDCAXVT2, foreign by rc-not-this-seller-uid",
+          "evidence": [
+            {
+              "type": "assertion",
+              "ownedBy": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+              "foreignBy": "rc-not-this-seller-uid"
+            }
+          ],
+          "at": "2026-07-24T07:13:56.605Z"
+        },
+        {
+          "name": "Anonymous direct read of products is denied (deployed posture)",
+          "capability": "Rules: public read",
+          "status": "PASS",
+          "detail": "denied (permission-denied) — catalogue still served to visitors via another path",
+          "evidence": [
+            {
+              "type": "rules",
+              "label": "anon read product",
+              "op": "get",
+              "path": "products/rc-rules-owned",
+              "expect": "deny",
+              "actual": "deny",
+              "code": "permission-denied",
+              "uid": null
+            }
+          ],
+          "at": "2026-07-24T07:14:01.779Z"
+        },
+        {
+          "name": "NEGATIVE CONTROL: signed-in user CAN read their own users/{uid} doc",
+          "capability": "Rules: control validity",
+          "status": "BLOCKED",
+          "detail": "control refused (permission-denied) — a signed-in user cannot even read their own users doc, which the rules explicitly allow. Client ops are blanket-denied (Ap",
+          "evidence": [
+            {
+              "type": "rules",
+              "label": "self read users doc",
+              "op": "get",
+              "path": "users/oXrgbq2oBwadJSfsk0NypDCAXVT2",
+              "expect": "allow",
+              "actual": "deny",
+              "code": "permission-denied",
+              "uid": "oXrgbq2oBwadJSfsk0NypDCAXVT2"
+            }
+          ],
+          "at": "2026-07-24T07:14:23.322Z"
+        },
+        {
+          "name": "CONTROL: signed-out write is denied",
+          "capability": "Rules: anonymous write",
+          "status": "BLOCKED",
+          "detail": "negative control invalid — client operations are blanket-denied before rules are evaluated (App Check rejects the headless browser). Deny results here are NOT r",
+          "evidence": [],
+          "at": "2026-07-24T07:14:39.342Z"
+        },
+        {
+          "name": "Seller CANNOT update another seller's product",
+          "capability": "Rules: cross-seller isolation",
+          "status": "BLOCKED",
+          "detail": "negative control invalid — client operations are blanket-denied before rules are evaluated (App Check rejects the headless browser). Deny results here are NOT r",
+          "evidence": [],
+          "at": "2026-07-24T07:14:39.343Z"
+        },
+        {
+          "name": "Seller CANNOT reassign ownership (sellerUid is immutable)",
+          "capability": "Rules: ownership immutability",
+          "status": "BLOCKED",
+          "detail": "negative control invalid — client operations are blanket-denied before rules are evaluated (App Check rejects the headless browser). Deny results here are NOT r",
+          "evidence": [],
+          "at": "2026-07-24T07:14:39.344Z"
+        },
+        {
+          "name": "Seller CANNOT delete another seller's product",
+          "capability": "Rules: cross-seller delete",
+          "status": "BLOCKED",
+          "detail": "negative control invalid — client operations are blanket-denied before rules are evaluated (App Check rejects the headless browser). Deny results here are NOT r",
+          "evidence": [],
+          "at": "2026-07-24T07:14:39.345Z"
+        },
+        {
+          "name": "Buyer CANNOT write a seller-owned product (control: seller could, above)",
+          "capability": "Rules: buyer isolation",
+          "status": "BLOCKED",
+          "detail": "negative control invalid — client operations are blanket-denied before rules are evaluated (App Check rejects the headless browser). Deny results here are NOT r",
+          "evidence": [],
+          "at": "2026-07-24T07:14:39.346Z"
+        },
+        {
+          "name": "Admin-only collection rejects an ordinary authenticated user",
+          "capability": "Rules: admin-only collections",
+          "status": "BLOCKED",
+          "detail": "negative control invalid — client operations are blanket-denied before rules are evaluated (App Check rejects the headless browser). Deny results here are NOT r",
+          "evidence": [],
+          "at": "2026-07-24T07:14:52.570Z"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-07-24T07:14:58.349Z",
+  "summary": {
+    "suites": 1,
+    "pass": 2,
+    "fail": 0,
+    "blocked": 7
+  }
+}

@@ -43,7 +43,7 @@ function makeBackend(name, opts) {
 }
 
 const ALL_SUITES = ['rc-01-seller', 'rc-02-buyer', 'rc-03-payment',
-                    'rc-04-inventory', 'rc-05-search', 'rc-06-pwa'];
+                    'rc-04-inventory', 'rc-05-search', 'rc-06-pwa', 'rc-09-rules'];
 
 async function main() {
   const backendName = arg('backend', 'static');
@@ -158,9 +158,64 @@ function makeCtx({ backend, backendUp, browser, dataset, suiteDir, allowPrivileg
           localStorage.setItem('loggedIn', 'true');
           localStorage.setItem('sokoniUser', JSON.stringify(u));
         }, { uid: res.uid, email: identity.email, name: identity.displayName });
+
+        /* Wait for the credential to actually PROPAGATE to the Firestore client.
+           signInWithEmailAndPassword resolves before the SDK has applied the new
+           auth state everywhere, so an immediate write can be evaluated as
+           unauthenticated and denied. That made the rules suite non-deterministic
+           — the owner-can-write control passed on one run and failed the next
+           with identical code. A flaky security test is worse than none. */
+        await p.waitForFunction(
+          (uid) => !!(window.firebase && window.firebase.auth().currentUser
+                      && window.firebase.auth().currentUser.uid === uid),
+          res.uid, { timeout: 15000 }).catch(() => {});
+        await p.waitForTimeout(1500);
       }
       return res;
     },
+    /* Sign the browser OUT so the next identity starts clean — otherwise a
+       "denied" result could just be the previous user's session lingering. */
+    async signOut() {
+      if (!page) return;
+      await page.evaluate(async () => {
+        try { await window.firebase.auth().signOut(); } catch (_) {}
+        localStorage.removeItem('loggedIn');
+        localStorage.removeItem('sokoniUser');
+      }).catch(() => {});
+      await page.waitForTimeout(400);
+    },
+
+    /* Run a Firestore operation FROM THE BROWSER, so the deployed security
+       rules actually apply (the Admin SDK bypasses them entirely). Returns a
+       structured result — never throws — so a suite can compare expected vs
+       actual and record the error code for denied operations. */
+    async clientOp({ op, path, data }) {
+      const p = await this.ui();
+      /* The page must be ON the app origin for window.firebase to exist. A fresh
+         context sits at about:blank, and signOut() does not navigate — so a
+         signed-out scenario would otherwise report BLOCKED instead of actually
+         testing anonymous access. Navigate if we are not already there. */
+      if (!p.url().startsWith(backend.baseUrl())) {
+        await p.goto(backend.baseUrl() + '/index.html', { waitUntil: 'domcontentloaded' });
+      }
+      await p.waitForFunction(() => !!window.firebase, { timeout: 20000 })
+        .catch(() => { throw new BlockedError('window.firebase unavailable for client op'); });
+      return p.evaluate(async ([op, path, data]) => {
+        const db = window.firebase.firestore();
+        const uid = (window.firebase.auth().currentUser || {}).uid || null;
+        try {
+          if (op === 'get')         await db.doc(path).get();
+          else if (op === 'set')    await db.doc(path).set(data || {});
+          else if (op === 'update') await db.doc(path).update(data || {});
+          else if (op === 'delete') await db.doc(path).delete();
+          else return { ok: false, code: 'bad-op', msg: 'unknown op ' + op, uid };
+          return { ok: true, uid };
+        } catch (e) {
+          return { ok: false, uid, code: e.code || '', msg: String(e.message || e).slice(0, 120) };
+        }
+      }, [op, path, data]);
+    },
+
     /* The privacy/cookie gate blurs and covers the page. It is dismissed before
        capture so the evidence artifact shows the thing under test rather than a
        consent dialog — the assertions are unaffected either way. */
