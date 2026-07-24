@@ -168,10 +168,63 @@ every explanation still owes evidence.
 | Drain processed it incorrectly | ❔ **Unknown** | — | Queue sampling stopped at t+90s; state at 670s unobserved |
 | Batch poisoning | ✅ **Fixed** | High | Runtime — `{done:147, dlq:152}` → `{done:306, dlq:0}`, two samples |
 
-### Leading hypothesis — a deterministic-id race between two triggers
+### ✅ ROOT CAUSE CONFIRMED — deterministic-id race between two triggers
 
-**Not yet proven**, but it is the only mechanism consistent with every
-observation, and it is checkable:
+**Verdict: SUPPORTS. Confirmed by direct observation**, probe v4, 2026-07-24.
+Evidence: Runtime. Confidence: **High** — the mutation itself was recorded, not
+inferred from disagreeing snapshots.
+
+```
+t+  0.8s  product        (none)              → created HTTP 200
+t+  2.1s  queue:primary  (start)             → absent
+t+  6.8s  queue:primary  absent              → upsert/pending      ← create trigger
+t+  7.9s  queue:gs       absent              → upsert/pending
+t+ 12.3s  queue:primary  upsert/pending      → partial/pending     ← OVERWRITE
+t+136.3s  algolia        (start)             → absent (HTTP 404)
+t+225.6s  queue:primary  partial/pending     → partial/done        ← drain "succeeded"
+t+225.9s  queue:gs       upsert/pending      → upsert/done
+```
+
+`upsert/pending` **existed** at t+6.8s and **became** `partial/pending` at
+t+12.3s on the same deterministic document id, with no delete between them. The
+overwrite is an observed event.
+
+**The full mechanism, now evidenced end to end:**
+
+1. Product created → `algoliaSync_products_create` enqueues **`upsert`** at
+   `products_<id>` (t+6.8s).
+2. `indexProductCreate` writes `searchableTerms` + `nameLower` back onto the
+   same product document.
+3. That write fires `algoliaSync_products_update`, which enqueues **`partial`**
+   at the **same** deterministic queue id — **destroying the pending upsert**
+   (t+12.3s).
+4. The drain applies `buildPartialUpdate` to an object that **never received its
+   creating upsert**, and marks the entry **`done`** (t+225.6s).
+5. The product is **absent from `sokoni_products`** for the full 660s window,
+   with no error, no retry and no DLQ entry.
+
+**Why the global index is unaffected:** `enqueue` coerces every non-delete
+global write to `upsert` (`operation === 'delete' ? 'delete' : 'upsert'`), so
+`gs__products_<id>` kept a full upsert and completed correctly. The primary
+index is the only casualty — which is why this was invisible to any check that
+only asked whether indexing "worked".
+
+**Blast radius:** every product created through the normal flow. The create
+path's own bookkeeping write destroys its indexing work.
+
+**Attribution — remaining gap.** `algoliaSync_products_update` is the only
+component that enqueues `partial`, so step 3 is attributed by code path rather
+than by observation. Per the agreed sequence this should be confirmed
+**read-only first** (Cloud Function execution windows against t+12.3s, plus the
+`beforeData` signature, which only the update trigger sets) before any
+instrumentation is considered.
+
+---
+
+### Original hypothesis (retained — now confirmed)
+
+Recorded before the evidence existed, and left in place so the reasoning trail
+survives:
 
 1. Product is created → `algoliaSync_products_create` enqueues **`upsert`** at
    queue id `products_<id>`.
