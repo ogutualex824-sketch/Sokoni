@@ -35,6 +35,23 @@ equivalent to a successful production run.
 | **Static** | Code inspection only |
 | **None** | Not yet examined |
 
+## Confidence — how much weight to place on it
+
+A third axis, independent of the other two. Evidence quality says *what kind* of
+observation backs a row; confidence says *how much* of it there was.
+
+| Confidence | Meaning |
+|---|---|
+| **High** | Multiple independent observations agree |
+| **Medium** | Single direct observation |
+| **Low** | Weak signal or partial observation |
+| **Withdrawn** | Previously asserted, later invalidated |
+
+Runtime evidence at **Medium** is not the same as Runtime at **High**: the batch
+drain was sampled twice, minutes apart, by different means — the create-path
+symptom has two probe runs but one method, and every proposed *cause* for it is
+currently Withdrawn or absent.
+
 ## Governing rules
 
 1. **A row without evidence is ❔, never ✅.** "I read the code and it looks
