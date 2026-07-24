@@ -130,15 +130,43 @@ including failures — but always after the verdict, never before it.
 **Symptom and candidate causes, tracked separately.** One confirmed symptom;
 every explanation still owes evidence.
 
-| Claim | Status | Evidence |
-|---|---|---|
-| Product missing from `sokoni_products` after create | 🔴 **Verified symptom** | Runtime — two independent probe runs, 608s each, purge after the window |
-| `algoliaSync_products_create` deployed | ✅ | Runtime — function list shows **ACTIVE** |
-| `algoliaSync_products_create` invoked | ✅ | Runtime — logs show an invocation at 13:27:11Z matching the probe |
-| Queue write missing | ❔ **Unknown** | Prior claim withdrawn — probe cleanup destroyed the evidence |
-| Trigger guard skipped the work | ❔ **Unknown** | Not examined |
-| Drain processed it incorrectly | ❔ **Unknown** | Not examined |
-| Batch poisoning | ✅ **Fixed** | Runtime — backlog drained `{done:147, dlq:152}` → `{done:306, dlq:0}` |
+| Claim | Status | Confidence | Evidence |
+|---|---|---|---|
+| Product missing from `sokoni_products` after create | 🔴 **Verified symptom** | High | Runtime — three probe runs, latest ABSENT after 670s |
+| `algoliaSync_products_create` deployed | ✅ | Medium | Runtime — function list shows **ACTIVE** |
+| `algoliaSync_products_create` invoked | ✅ | Medium | Runtime — invocation at 13:27:11Z matching the probe |
+| Queue write missing | ✅ **DISPROVEN** | High | Runtime — phase-separated probe observed **both** entries: `products_<id>` and `gs__products_<id>` |
+| **Primary queue entry is `partial`, not `upsert`, for a brand-new product** | 🔴 **Verified** | High | Runtime — queue sampled at t+2s..t+90s: `products_<id>` = **`partial/pending`**, fanout = `upsert/pending` |
+| Drain processed it incorrectly | ❔ **Unknown** | — | Queue sampling stopped at t+90s; state at 670s unobserved |
+| Batch poisoning | ✅ **Fixed** | High | Runtime — `{done:147, dlq:152}` → `{done:306, dlq:0}`, two samples |
+
+### Leading hypothesis — a deterministic-id race between two triggers
+
+**Not yet proven**, but it is the only mechanism consistent with every
+observation, and it is checkable:
+
+1. Product is created → `algoliaSync_products_create` enqueues **`upsert`** at
+   queue id `products_<id>`.
+2. `indexProductCreate` writes `searchableTerms` + `nameLower` **back onto the
+   same product document**.
+3. That write fires `algoliaSync_products_update` → enqueues **`partial`** — and
+   `enqueue` uses a *deterministic* id, so it **overwrites the `upsert`** before
+   the drain (every 5 min) ever sees it.
+4. The drain then applies `buildPartialUpdate` to an object that **does not yet
+   exist in Algolia**, because the full upsert that would have created it was
+   destroyed in step 3.
+
+The `gs__` fanout entry is `upsert` because `enqueue` coerces every non-delete
+global write to `upsert` (`operation === 'delete' ? 'delete' : 'upsert'`) — which
+is why the two entries disagree, and is itself the clue that the primary entry
+was rewritten rather than created as `partial`.
+
+**Why this is the same class as the batch poisoning:** the system's own
+bookkeeping write triggers a second event that silently destroys the first one's
+work. No error, no retry, no DLQ.
+
+**To confirm or kill it:** sample the queue at t+1s and again at t+10s. If the
+primary entry is `upsert` first and `partial` after, the race is proven.
 
 **Scope note.** The probe's deletes fanned out to **both** `gs__products` and
 `products`, so the delete path works for both targets while the create path
