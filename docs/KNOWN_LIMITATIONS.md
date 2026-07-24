@@ -65,6 +65,31 @@ itself**, so signing is refused and the job dies at the final step. This is an
 IAM misconfiguration, not application logic — the same class as the
 `run.invoker` gap closed earlier the same day.
 
+**Verified before recommending the IAM change** (three checks, not assumed):
+
+1. **Runtime identity confirmed** — the *deployed* revision
+   `processdataexport-00005-xuv` runs as
+   `24799054989-compute@developer.gserviceaccount.com`, not some other SA.
+2. **Failing call confirmed** — `file.getSignedUrl({action:'read', expires})`
+   at `data-export.js:429`, i.e. the Cloud Storage signed-URL API that requires
+   blob signing. The permission in the log matches that call.
+3. **Signing is the ONLY blocker — proven empirically.** The upload (`file.save`)
+   runs *before* signing, and the artifact was found in the bucket at
+   `data-exports/<uid>/<requestId>.json`. So data collection, serialisation and
+   the Storage write all succeed; there is no second Storage IAM issue queued
+   behind this one. Only URL signing fails.
+
+**Blast radius today:** the bucket contained exactly one artifact — the RC probe's
+(since removed). No real user export was found orphaned, which indicates no
+production user has exercised this path yet. The defect is real but has not yet
+denied a live data-subject request.
+
+**Retention note:** because the artifact is written *before* signing, every
+failed export still leaves a JSON file containing that user's personal data in
+Storage. Once real users hit this path, failures will accumulate personal data
+with no delivery mechanism. Worth a lifecycle/TTL rule on `data-exports/`
+independent of the fix above.
+
 Remediation (privileged; must be run by a project admin — an automated attempt
 was correctly refused by tooling):
 

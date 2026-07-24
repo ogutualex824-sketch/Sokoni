@@ -13,6 +13,12 @@
      ready      — artifact at data-exports/{uid}/{requestId}.json + downloadUrl
      failed     — carries a reason
 
+   CLEANUP CAVEAT: a run leaves a real artifact at
+   data-exports/<uid>/<requestId>.json in Cloud Storage, because the worker
+   uploads BEFORE it signs. backend.cleanup() only removes Firestore docs, so
+   that object must be deleted separately after a production run — it contains
+   the beta identity's exported personal data.
+
    SCOPE HONESTY: requestDataExport is onCall with enforceAppCheck:true, so the
    callable ENTRY cannot be exercised from headless Chromium (same App Check wall
    as RC-09). This suite therefore certifies the WORKER path — trigger, artifact,
