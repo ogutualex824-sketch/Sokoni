@@ -89,6 +89,12 @@
   var _riskCacheExpiry   = 0;
   var _initialized       = false;
   var _sessionStart      = Date.now();
+  /* Upper bound on waiting for Firebase to restore a persisted session before
+     treating the visitor as signed out. Generous enough for a cold start on a
+     slow mobile connection, short enough that a genuinely signed-out user is
+     not left staring at a spinner. */
+  var AUTH_READY_TIMEOUT_MS = 8000;
+
   var _cf                = null;  // firebase.functions()
   var _db                = null;  // firebase.firestore()
   var _auth              = null;  // firebase.auth()
@@ -196,6 +202,38 @@
 
   function _currentUser() {
     return (_auth && _auth.currentUser) || null;
+  }
+
+  /* Firebase restores a persisted session ASYNCHRONOUSLY. `auth.currentUser` is
+     null until that completes, so reading it synchronously makes a signed-in
+     user look unauthenticated. For a financial op that fails CLOSED, and the
+     shopper is told to contact support in the middle of checkout — the reported
+     symptom. Resolve auth state first, then decide.
+
+     Bounded so a stalled SDK can never hang a checkout; on timeout we fall back
+     to whatever `currentUser` holds, which is the same answer as before this
+     existed. An actually signed-out user is still blocked — this changes WHEN
+     the question is asked, not the answer. */
+  var _authReady = null;
+  function _awaitAuthReady() {
+    if (!_auth) return Promise.resolve(null);
+    if (_auth.currentUser) return Promise.resolve(_auth.currentUser);
+    if (_authReady) return _authReady;
+    _authReady = new Promise(function (resolve) {
+      var settled = false;
+      var unsub;
+      function finish(u) {
+        if (settled) return;
+        settled = true;
+        try { if (unsub) unsub(); } catch (_) {}
+        resolve(u || null);
+      }
+      try {
+        unsub = _auth.onAuthStateChanged(function (u) { finish(u); });
+      } catch (_) { finish(null); return; }
+      setTimeout(function () { finish(_auth && _auth.currentUser); }, AUTH_READY_TIMEOUT_MS);
+    });
+    return _authReady;
   }
 
   function _callable(name) {
@@ -671,6 +709,11 @@
       }
 
       var user = _currentUser();
+      if (!user) {
+        /* Not "signed out" yet — possibly just not restored. Ask again once
+           Firebase has settled (see _awaitAuthReady). */
+        user = await _awaitAuthReady();
+      }
       if (!user) {
         return { allowed: false, riskScore: 100, reason: 'unauthenticated' };
       }
