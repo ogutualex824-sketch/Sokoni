@@ -295,6 +295,15 @@ const processSubscriptionChange = onCall(
 
     } else { /* upgrade */
       if (!payRef) throw new HttpsError('invalid-argument', 'paymentRef required for upgrade.');
+      /* FAST PATH ONLY — not the guard.
+         This read used to BE the idempotency guard: get() -> if(exists) return,
+         with the claim written later by set(). Two concurrent deliveries of the
+         same payRef both saw the document absent, both proceeded, and both ran
+         `increment(planDef.credits)` below — granting the plan's credits twice.
+         set() cannot fail on an existing document, so nothing stopped the second.
+
+         The real claim is now batch.create() below, which is atomic. This read is
+         kept only to avoid doing pointless work on an obvious replay. */
       const idem = await db().collection('aiPaymentRefs').doc(payRef).get();
       if (idem.exists) return { success: true, idempotent: true };
 
@@ -310,7 +319,11 @@ const processSubscriptionChange = onCall(
         updatedAt: now,
       }, { merge: true });
 
-      batch.set(db().collection('aiPaymentRefs').doc(payRef), { uid, newPlan, billing, processedAt: now });
+      /* create(), NOT set(). This is the atomic idempotency claim: if another
+         delivery of the same payRef has already claimed it, the whole batch —
+         including the credit increment above — fails with ALREADY_EXISTS and is
+         discarded. set() would silently overwrite and let both grant credits. */
+      batch.create(db().collection('aiPaymentRefs').doc(payRef), { uid, newPlan, billing, processedAt: now });
 
       /* Credit included monthly credits on upgrade */
       if (planDef.credits > 0) {
@@ -330,7 +343,20 @@ const processSubscriptionChange = onCall(
     /* Invalidate unified entitlement cache */
     batch.set(db().collection('entitlements').doc(uid), { updatedAt: now, needsRefresh: true }, { merge: true });
 
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      /* The upgrade path claims its payRef with create(). A concurrent delivery
+         of the same reference already holds it, so this batch is rejected whole
+         — the credit increment included. Reporting success/idempotent is correct:
+         the work was done once, by the delivery that won the claim. */
+      const already = e && (e.code === 6 || /ALREADY_EXISTS/i.test(String(e.message || '')));
+      if (already) {
+        logger.info(`[SubOS] duplicate delivery rejected by idempotency claim: payRef=${payRef}`);
+        return { success: true, idempotent: true };
+      }
+      throw e;
+    }
     logger.info(`[SubOS] ${action}: uid=${uid} product=${product} plan=${newPlan}`);
     return { success: true, action, newPlan };
   }

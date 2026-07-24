@@ -878,15 +878,32 @@ async function _svcPaymentVoid({ authRef }, inst) {
 }
 
 async function _svcPaymentRefund({ orderId, amount, reason, uid }, inst) {
-  /* Idempotent: use orderId as refund doc ID */
+  /* Idempotent: orderId as refund doc ID, claimed with create().
+
+     This was get() -> if(exists) return -> set(). Two concurrent calls both saw
+     the document absent and both ran set(). The deterministic id means that
+     still yields ONE document, so this never double-refunded — but set() has no
+     precondition, so a late second call would overwrite a refund that had already
+     progressed, resetting status back to "processing" and losing whatever state
+     the first had reached.
+
+     create() carries the precondition: the second caller fails with
+     ALREADY_EXISTS and returns the same idempotent answer without touching the
+     existing record. The read below stays as a cheap fast path. */
   const ref = db.collection("refunds").doc(`${orderId}_refund`);
   const existing = await ref.get();
   if (existing.exists) return { refunded: true, refundId: ref.id };
-  await ref.set({
-    orderId, amount: Number(amount), reason, uid,
-    status: "processing", createdAt: Date.now(), wf: inst.id,
-    serverTs: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  try {
+    await ref.create({
+      orderId, amount: Number(amount), reason, uid,
+      status: "processing", createdAt: Date.now(), wf: inst.id,
+      serverTs: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    const already = e && (e.code === 6 || /ALREADY_EXISTS/i.test(String(e.message || '')));
+    if (!already) throw e;
+    /* A concurrent call won the claim — its record stands, untouched. */
+  }
   return { refunded: true, refundId: ref.id };
 }
 
@@ -972,14 +989,26 @@ async function _svcOrderStatus({ orderId, status, metadata }, inst) {
 
 /* FIXED: idempotent — orderId as doc ID */
 async function _svcInvoice({ orderId, uid, sellerUid, items, total, commission }, inst) {
+  /* create(), not set() — same reasoning as _svcPaymentRefund above. The
+     deterministic orderId means a concurrent pair never produced two invoices,
+     but set() has no precondition, so a late second call would overwrite an
+     invoice that had already moved on from "issued". An invoice is a financial
+     document; silently rewriting one that downstream accounting has already read
+     is worse than refusing to write. The read below stays as a fast path. */
   const ref = db.collection("invoices").doc(orderId);
   const existing = await ref.get();
   if (existing.exists) return { generated: true, invoiceId: orderId };
-  await ref.set({
-    orderId, uid, sellerUid, items: items ?? [], total, commission,
-    status: "issued", issuedAt: Date.now(), wf: inst.id,
-    serverTs: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  try {
+    await ref.create({
+      orderId, uid, sellerUid, items: items ?? [], total, commission,
+      status: "issued", issuedAt: Date.now(), wf: inst.id,
+      serverTs: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (e) {
+    const already = e && (e.code === 6 || /ALREADY_EXISTS/i.test(String(e.message || '')));
+    if (!already) throw e;
+    /* A concurrent call issued it first — that invoice stands. */
+  }
   return { generated: true, invoiceId: orderId };
 }
 

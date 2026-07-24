@@ -6736,6 +6736,83 @@ exports.webhookIntasend = onRequest(
         createdAt:     admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true }).catch(err => console.error("[webhookIntasend] Commission write failed:", err));
 
+      /* ── FinOS merchant wallet credit ──────────────────────────────────────
+         Until now this webhook recorded the commission split and stopped. The
+         merchant's wallet was never credited: FinOS's crediting engine is
+         reachable only through finosRecordTransaction (an onCall), and nothing
+         on the payment path invoked it. Commission was calculated, the
+         merchant's net was written to commissionLedger.providerNet — and then
+         no money moved into their balance.
+
+         FinOS is the canonical authority, so this calls its existing primitive
+         rather than touching a balance directly. No new collection, no new
+         balance field, no second ledger.
+
+         SUBSCRIPTIONS ARE EXCLUDED, and this is not an optimisation. A
+         subscription payment flows merchant -> platform: payData.uid is the
+         merchant PAYING US. Crediting their wallet with the "net" would hand
+         them back most of the fee they just paid. Only marketplace sales credit
+         a merchant.
+
+         IDEMPOTENCY: _walletTxRef() generates a RANDOM document id, so a second
+         call would append a second ledger entry AND increment the balance again.
+         The guard is therefore the caller's responsibility: this reads
+         payments/{apiRef} inside the transaction and refuses if walletCreditedAt
+         is already set. Reads precede writes, as Firestore requires. A duplicate
+         webhook delivery cannot double-credit.
+
+         GATEWAY FEES ARE NOT DEDUCTED, because nothing in the commission engine
+         models them (grep: finos-utils has no gateway/processing fee concept —
+         only an EXTERNAL_GATEWAY ledger account name). Crediting
+         `amount - sokoniCut` matches commissionLedger.providerNet exactly, so
+         the two agree. Inventing a fee here would create a number no other
+         system knows about. Recorded as a gap for Finance to define. */
+      try {
+        const _isSubscription =
+          category === "subscription" || payData.meta?.category === "subscription";
+        const _sellerId = payData.uid;
+        const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
+
+        if (_isSubscription) {
+          console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
+        } else if (!_sellerId || _netCents <= 0) {
+          console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        } else {
+          const { creditWalletTxn } = require('./finos-utils');
+          const _payDoc = db.collection("payments").doc(apiRef);
+          const _credited = await db.runTransaction(async (txn) => {
+            const snap = await txn.get(_payDoc);
+            if (!snap.exists) return false;
+            if (snap.data().walletCreditedAt) return false;   /* already credited */
+            creditWalletTxn(txn, db, _sellerId, 'seller', _netCents, {
+              description: `Sale ${apiRef} (gross ${amount}, commission ${sokoniCut})`,
+              orderId: apiRef,
+              type: 'sale',
+            });
+            txn.update(_payDoc, {
+              walletCreditedAt:  admin.firestore.FieldValue.serverTimestamp(),
+              walletCreditCents: _netCents,
+              walletCreditedTo:  _sellerId,
+            });
+            return true;
+          });
+          console.log(`[webhookIntasend] wallet ${_credited ? 'credited' : 'already credited'}`,
+            { ref: apiRef, seller: _sellerId, netCents: _netCents });
+        }
+      } catch (walletErr) {
+        /* Never fail the webhook on a wallet error: the payment is captured and
+           authoritative, and returning non-200 would make IntaSend retry a
+           delivery whose payment work is already done. The credit is recoverable
+           from commissionLedger + the absent walletCreditedAt marker. */
+        console.error("[webhookIntasend] WALLET CREDIT FAILED — recoverable, payment stands:",
+          { ref: apiRef, err: walletErr.message });
+        await db.collection("commissionReviewQueue").add({
+          ref: apiRef, uid: payData.uid, amount,
+          reason: "wallet credit failed: " + walletErr.message,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        }).catch(() => {});
+      }
+
       try {
         const intentRef  = existing.intentRef || apiRef;
         const intentSnap = await db.collection("paymentIntents").doc(intentRef).get();
