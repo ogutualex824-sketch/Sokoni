@@ -1,4 +1,60 @@
-﻿## [2026-07-24] — evidence(privacy): GDPR export 403 root cause CONFIRMED by direct policy read (was hypothesis)
+﻿## [2026-07-24] — feat(gate): repeatable callable-reachability audit; three "suspect" functions cleared
+
+Turns the ad-hoc 401/403 probing into a release gate, and in doing so NARROWS the
+problem rather than expanding it.
+
+**New: `scripts/audit-callable-invokers.js`** (read-only; changes nothing).
+For each function it reads the deployed inventory (`functions:list --json`,
+cached), reads the underlying Cloud Run service's IAM policy, optionally sends an
+unauthenticated probe, and reports PASS/FAIL — printing ready-to-run gcloud
+commands for anything unreachable. Exits non-zero on FAIL so it can gate a release.
+
+    node scripts/audit-callable-invokers.js            # critical set (fast)
+    node scripts/audit-callable-invokers.js --probe    # + unauthenticated probe
+    node scripts/audit-callable-invokers.js --all      # all 1192 HTTP-reachable fns
+
+It encodes the three traps that cost real time during the investigation:
+1. Cloud Run service names are **lowercase** — `requestDataExport` is not a
+   service, `requestdataexport` is. The camelCase form audits nothing.
+2. `:getIamPolicy` returns an **empty policy** for a non-existent resource rather
+   than 404, so a wrong name reads as "no bindings" — a false negative that looks
+   like evidence. The tool now proves the service EXISTS first.
+3. `services.list` is unusable here (caps at 500 of ~1600; pagination returns HTTP
+   500), so every service is fetched directly by name.
+
+Event- and schedule-triggered functions are **SKIPPED, not failed** — they are
+invoked by Eventarc/Scheduler and never over public HTTP, so a missing invoker
+binding is correct for them (e.g. `processDataExport`, classified `event`).
+Deployed inventory: 1153 callable + 39 https (need the binding), 240 event + 162
+schedule (correctly do not).
+
+**Finding — the blast radius is 2 functions, not 5.** The repo's documented
+`run.invoker` gap list is STALE. Probed with policy + HTTP:
+
+    createCheckoutSession   allUsers  401  PASS      bootstrapDevice        allUsers  401  PASS
+    verifyIntasendPayment   allUsers  400  PASS      getBusinessConfig      allUsers  401  PASS
+    applyPromoCode          allUsers  401  PASS      getTypesenseSearchKey  allUsers  200  PASS
+    scheduleAccountDeletion allUsers  401  PASS      sokoniChat             allUsers  400  PASS
+    cancelAccountDeletion   allUsers  401  PASS      bookAppointment        allUsers  401  PASS
+    revokeAllSessions       allUsers  401  PASS
+    requestDataExport       (none)    403  FAIL
+    getDataExportStatus     (none)    403  FAIL
+
+`bootstrapDevice`, `getBusinessConfig` and `getTypesenseSearchKey` — the three the
+repo records as having 403 IAM gaps — all now hold `allUsers` and are reachable.
+That prior note should be treated as resolved. Only the two GDPR callables fail.
+
+**Checked, not assumed: `getTypesenseSearchKey` returning 200 unauthenticated is
+correct.** It looked like it might hand a search key to anonymous callers. It does —
+and that is the intended design: `functions/typesense-secured-keys.js` mints a
+SCOPED key via `_generateScopedKey` with `filter_by`, `expires_at` and per-IP rate
+limiting (2000/h anonymous vs 50k admin). Anonymous visitors must be able to search;
+a short-lived, filter-scoped, rate-limited search-only key is the standard pattern.
+Not a leak — recorded so nobody "fixes" it later.
+
+Files affected: `scripts/audit-callable-invokers.js` (new, read-only tooling).
+
+## [2026-07-24] — evidence(privacy): GDPR export 403 root cause CONFIRMED by direct policy read (was hypothesis)
 
 Upgrades the previous entry's *hypothesis* to a verified root cause, and corrects a
 faulty intermediate reading. No code or infrastructure changed — read-only.
@@ -51,6 +107,49 @@ internally, which is the actual security boundary for a Firebase callable.
 Verification order: re-probe both (expect 403 → 401), then one authenticated export
 → `dataExportQueue` doc → `processDataExport` → Storage object → status `ready`.
 
+## [2026-07-24] — fix(search-cache): a just-listed product was unsearchable until the cache expired
+
+Found while writing the seller-journey diagnostic table — i.e. before the
+acceptance run hit it as a false negative.
+
+The warm catalogue cache added earlier today (in-session 10 min, localStorage
+30 min, 3 min soft-revalidate) had **no invalidation on write**. A seller who
+created or deleted a product and searched for it immediately was served the
+pre-write scan: the write had succeeded, the cache simply had not expired. That
+is exactly acceptance step "confirm it appears in search", and it would have
+been triaged as a search defect rather than a caching one.
+
+Product writes now drop the cached copy for that collection:
+- `sokoni-db.js::saveProduct` / `deleteProduct` → `_invalidateProductSearchCache()`
+- `seller-wiring.js::_writeProduct` → same, via the `window.SokoniFirestoreSearch`
+  global (classic-script safe, optional-chained)
+
+`invalidateScanCache(col)` already cleared both the session map and the
+localStorage copy; nothing outside the tests had ever called it.
+
+Tests: `npm run test:search` 23/23 still pass.
+Files: `sokoni-db.js`, `seller-wiring.js`. Hosting deploy.
+
+## [2026-07-24] — docs(rc): acceptance harness made diagnostic, not just pass/fail
+
+`docs/RELEASE_ACCEPTANCE.md` now carries **failure → likely cause** tables for
+the seller journey, the buyer journey, the appointment sequence (incl. the
+two-client concurrency check), plus a cross-cutting table for symptoms that look
+like product defects but aren't — App Check throttling (every read denied,
+including `read: if true` collections), guard-less list queries, the Algolia
+credential breaker, and stale search cache.
+
+Every listed cause is grounded in a rule, trigger or code path read during the
+write-path audit, so a red result names a suspect instead of "it's broken".
+Rows that don't match any mapped cause are themselves signal: an unmapped
+defect class.
+
+Also documented in `KNOWN_LIMITATIONS.md`: appointment idempotency is coupled to
+client behaviour (the client-generated appointment id is the idempotency key, so
+"a retry books once" holds only while each new attempt generates a fresh id).
+Unreachable through the current UI; worth a server-side guard before a mobile
+app, partner API or retry middleware starts driving bookings.
+
 ## [2026-07-24] — fix(healthcare+property): appointment booking made functional; property listings auto-activate
 
 Two acceptance blockers from the write-path audit ([[RELEASE_ACCEPTANCE]]),
@@ -83,10 +182,17 @@ doctor visits, teleconsults **and** lab tests all through
   index. Two 2-field composites (`patientUid+dateTime`, `providerId+dateTime`)
   added and deployed.
 
-**Residual (data/ops, not code):** booking requires an **active** `healthProviders`
-doc. Providers self-register as `pending`; an admin approves via
-`approveHealthProvider`. A beta must seed ≥1 approved provider or the screen
-correctly reports "provider not available". Tracked in [[KNOWN_LIMITATIONS]].
+**Residual cleared the same day:** booking requires an **active**
+`healthProviders` doc, and none existed. Added
+`scripts/seed-health-provider.js` (Firestore REST + gcloud token, matching the
+`backfill-search-terms.js` pattern; dry-run by default, `--apply` to write) and
+seeded `seed-provider-general-001` — Dr. Amina Wanjiru, general_practice,
+KES 1500, Nairobi, `status:'active'`. The document shape is copied
+field-for-field from `registerHealthProvider` + `approveHealthProvider`, so it is
+indistinguishable from a genuinely approved provider. Verified by query: 1 active
+bookable provider. Tagged `isSeed:true` so it can be found and removed before
+public launch. Two more indexes added for the provider directory
+(`status+rating`, `status+specialization+rating`).
 
 ### Property listings — visibility trap closed
 Decision: **auto-activate on create.** `property-hub.html::_savePropertyListing`
