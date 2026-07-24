@@ -158,6 +158,42 @@ export TTL (age-based, e.g. matching `EXPORT_TTL_MS`), so retention is enforced
 by infrastructure rather than depending on application cleanup paths that only
 run on the happy path.
 
+### 0d. Uncached product pages fail for logged-out visitors — 🚫 conversion impact
+
+**Symptom:** opening a product by URL shows "Product Not Found" for a product
+that exists and is `status: active`.
+
+**Root cause (isolated, not inferred):** the anonymous client read of
+`products/{id}` returns **`permission-denied`**. Ruled out, each by test:
+
+| Hypothesis | Result |
+|---|---|
+| Headless/automation artifact | ✗ reproduces in a **headed** browser |
+| App Check blocking the request | ✗ App Check responses were **200** |
+| Product genuinely missing | ✗ exists, `status: active` (Admin SDK) |
+| Firestore rules denying the read | ✅ `permission-denied` on the client read |
+
+**Blast radius — precise, not assumed:**
+- ✅ Tapping a product **from the feed works**: `openProduct` seeds
+  `localStorage.selectedProduct`, so the synchronous path resolves and Firestore
+  is never consulted.
+- 🚫 Any **uncached arrival fails**: shared links, refresh, SEO/direct traffic,
+  search results, recommendations, category deep-links — for logged-out users.
+
+The Firestore fallback in `product.js` exists precisely to serve those arrivals;
+deployed rules block it. This is the same divergence recorded in RC-09: deployed
+rules deny anonymous `products` reads while the checked-out `firestore.rules`
+says `allow read: if true`. **This finding is evidence about which side is
+intended** — the repo file would restore these journeys — but deploying rules is
+a security change and is deliberately left to a reviewed decision, not made here.
+
+**Fixed in code (not the cause):** `product.js` swallowed the error
+(`catch(e){ /* fall through to Not Found */ }`), presenting a permissions failure
+as a missing product. It now distinguishes the two, logs the real code, and shows
+"We couldn't load this product" with a browse action instead of blaming the
+catalogue. That improves the message only — **the journey stays broken until the
+rules divergence is resolved.**
+
 ### 1b. Typesense cluster does not exist — ⚠️ redundancy gap, NOT a launch blocker
 The configured cluster hostname **does not resolve**:
 `4kn6y5bfcxv8o702p-1.a2.typesense.net` → `ENOTFOUND`.

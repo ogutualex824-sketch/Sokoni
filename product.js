@@ -21,6 +21,9 @@ if(_urlId && String(product?.id) !== String(_urlId)){
    existing synchronous render run on reload. Only a genuine miss (or an offline
    failure) reaches the Not Found state now. */
 var _prdFetching = false;
+/* Why the lookup failed, so the user is told the truth rather than "not found"
+   for a product that exists. Empty until a failure occurs. */
+var _prdLoadError = '';
 if(_urlId && String(product && product.id) !== String(_urlId)){
     product = null;                 /* never render a stale / mismatched cached product */
     _prdFetching = true;
@@ -33,11 +36,36 @@ if(_urlId && String(product && product.id) !== String(_urlId)){
                 location.reload();  /* the synchronous path above now resolves it from cache */
                 return;
             }
-        }catch(e){ /* network/offline — fall through to Not Found */ }
-        /* Every source failed. Replace the skeleton with the real Not Found. */
+        }catch(e){
+            /* Do NOT swallow this. The catch previously discarded the error and
+               fell through to "Product Not Found", so a product that exists and
+               is active was reported to the user as missing. Observed in
+               production: an anonymous read of products/{id} returns
+               `permission-denied`, and every uncached arrival — a shared link, a
+               refresh, a search result, a category deep-link — rendered
+               "Product Not Found" for a live product.
+
+               A permissions failure and a genuinely absent product are different
+               conditions and must not present identically. */
+            _prdLoadError = (e && e.code) ? String(e.code) : 'unavailable';
+            try{ console.error('[product] lookup failed for', _urlId, '-', _prdLoadError, e && e.message); }catch(_){}
+        }
+        /* Every source failed. Replace the skeleton with an accurate message. */
         try{
+            var _denied = _prdLoadError === 'permission-denied';
+            var _msg = _denied
+                ? 'We couldn’t load this product'
+                : 'Product Not Found &#128546;';
+            var _sub = _denied
+                ? 'This is a temporary problem on our side, not a missing product. Please try again, or browse from the home page.'
+                : 'This item may have been removed or is no longer available.';
             var _c = document.getElementById('productPageContainer');
-            if(_c) _c.innerHTML = '<h1 style="color:white;text-align:center;padding:100px;">Product Not Found &#128546;</h1>';
+            if(_c) _c.innerHTML =
+                '<div style="text-align:center;padding:80px 24px;">'
+              + '<h1 style="color:white;font-size:20px;margin:0 0 10px;">' + _msg + '</h1>'
+              + '<p style="color:rgba(255,255,255,0.45);font-size:13px;line-height:1.6;max-width:320px;margin:0 auto 22px;">' + _sub + '</p>'
+              + '<a href="/" style="display:inline-block;padding:12px 26px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;font-weight:900;border-radius:12px;text-decoration:none;font-size:13px;">Browse Products</a>'
+              + '</div>';
             var _sk = document.getElementById('productSkeleton'); if(_sk) _sk.remove();
         }catch(_){}
     })();
