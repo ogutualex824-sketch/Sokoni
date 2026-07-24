@@ -365,8 +365,15 @@
 (function () {
   'use strict';
   var FS  = window.SokoniFinOS;
-  var db  = firebase.firestore;
+  /* Removed `var db = firebase.firestore;` — it ran at top level before the
+     deferred firebase.js module existed, throwing "firebase is not defined",
+     and nothing ever read `db` (the live accessor is _db() below, called lazily
+     after auth). The single-firebase init call is guarded further down. */
   var _db = () => firebase.firestore();
+  function _whenFirebaseReady(fn) {
+    if (window.firebase) { fn(); return; }
+    window.addEventListener('firebaseReady', fn, { once: true });
+  }
 
   /* ── Navigation ── */
   document.querySelectorAll('.fn-nav-item[data-panel]').forEach(function (el) {
@@ -404,9 +411,11 @@
   /* ─────────────────────────────────────────────────────────────
      OVERVIEW
   ──────────────────────────────────────────────────────────────*/
-  firebase.auth().onAuthStateChanged(function (user) {
-    if (!user) return;
-    _loadOverview();
+  _whenFirebaseReady(function () {
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      _loadOverview();
+    });
   });
 
   function _loadOverview() {

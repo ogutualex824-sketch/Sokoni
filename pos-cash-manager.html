@@ -365,26 +365,41 @@ body{background:var(--bg);color:var(--txt);font-family:'Inter',-apple-system,sys
 <script>
 'use strict';
 
-const app  = firebase.apps[0] || firebase.initializeApp((window.SOKONI_FIREBASE_CONFIG || (()=>{ console.error('[SOKONI] Firebase config missing — sokoni-config.js must load first.'); throw new Error('SOKONI_FIREBASE_CONFIG unavailable'); })()));
-const auth = firebase.auth();
-const db   = firebase.firestore();
-const fn   = firebase.functions();
-const _posDispatch = (op, data) =>
-  fn.httpsCallable('smartPosDispatch')({ op, ...(data || {}) }).then(r => r.data);
+/* firebase.js is a deferred MODULE, so it runs AFTER this classic block and
+   `firebase` was undefined here — the old top-level `const app = firebase...`
+   threw "firebase is not defined" and killed the entire block, so none of the
+   25 functions below were ever defined and every onclick was dead.
+   These are declared now (kept global so those functions can close over them)
+   but ASSIGNED once firebaseReady fires, immediately before the auth listener,
+   which is this page's only entry point. */
+let app, auth, db, fn, _posDispatch;
+function _whenFirebaseReady(cb) {
+  if (window.firebase) { cb(); return; }
+  window.addEventListener('firebaseReady', cb, { once: true });
+}
 
 let _merchantId = null;
 let _isManager  = false;
 
 /* ── Auth ── */
-auth.onAuthStateChanged(async u => {
-  if (!u) { window.location.href = 'pos.html'; return; }
-  const token = await u.getIdTokenResult(true);
-  _isManager  = !!(token.claims.admin || token.claims.superAdmin ||
-                   token.claims.manager || token.claims.supervisor);
-  if (!_isManager) { window.location.href = 'pos.html'; return; }
-  _merchantId = token.claims.merchantId || localStorage.getItem('sokoni_merchant_id') || u.uid;
-  loadOverview();
-  setDefaultDates();
+_whenFirebaseReady(function () {
+  app  = firebase.apps[0] || firebase.initializeApp((window.SOKONI_FIREBASE_CONFIG || (()=>{ console.error('[SOKONI] Firebase config missing — sokoni-config.js must load first.'); throw new Error('SOKONI_FIREBASE_CONFIG unavailable'); })()));
+  auth = firebase.auth();
+  db   = firebase.firestore();
+  fn   = firebase.functions();
+  _posDispatch = (op, data) =>
+    fn.httpsCallable('smartPosDispatch')({ op, ...(data || {}) }).then(r => r.data);
+
+  auth.onAuthStateChanged(async u => {
+    if (!u) { window.location.href = 'pos.html'; return; }
+    const token = await u.getIdTokenResult(true);
+    _isManager  = !!(token.claims.admin || token.claims.superAdmin ||
+                     token.claims.manager || token.claims.supervisor);
+    if (!_isManager) { window.location.href = 'pos.html'; return; }
+    _merchantId = token.claims.merchantId || localStorage.getItem('sokoni_merchant_id') || u.uid;
+    loadOverview();
+    setDefaultDates();
+  });
 });
 
 /* ── Helpers ── */

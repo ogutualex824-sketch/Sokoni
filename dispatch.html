@@ -166,12 +166,23 @@
   var _deliveries = [], _riders = [], _fraudAlerts = [], _queueItems = [];
   var _selectedId = null;
 
-  /* ── Init ── */
-  firebase.auth().onAuthStateChanged(function (user) {
-    if (!user) return;
-    _initMap();
-    _initTabs();
-    _subscribeAll();
+  /* ── Init ──
+     firebase.js is a MODULE, so it is deferred and runs AFTER this classic
+     block; calling firebase.auth() synchronously here threw "firebase is not
+     defined". Only this init call waits for the firebaseReady signal — every
+     function above and the window.* handlers below stay synchronous, so the
+     inline onclick attributes still resolve immediately. */
+  function _whenFirebaseReady(fn) {
+    if (window.firebase) { fn(); return; }
+    window.addEventListener('firebaseReady', fn, { once: true });
+  }
+  _whenFirebaseReady(function () {
+    firebase.auth().onAuthStateChanged(function (user) {
+      if (!user) return;
+      _initMap();
+      _initTabs();
+      _subscribeAll();
+    });
   });
 
   function _initMap() {

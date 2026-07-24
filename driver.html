@@ -2525,13 +2525,22 @@ window.toggleOnline = async function() {
     var _dispatchUnsub = null;
     var _riderUid      = null;
 
-    /* ── Bootstrap after auth ── */
-    firebase.auth().onAuthStateChanged(function (user) {
-      if (!user) return;
-      _riderUid = user.uid;
-      _loadPerformanceMetrics();
-      _loadWalletBalance();
-      _subscribeDispatch();
+    /* ── Bootstrap after auth ──
+       firebase.js is a deferred module and runs after this classic block, so
+       firebase.auth() here threw "firebase is not defined". Guard just this
+       entry call behind firebaseReady; the IIFE's declarations are untouched. */
+    function _whenFirebaseReady(cb) {
+      if (window.firebase) { cb(); return; }
+      window.addEventListener('firebaseReady', cb, { once: true });
+    }
+    _whenFirebaseReady(function () {
+      firebase.auth().onAuthStateChanged(function (user) {
+        if (!user) return;
+        _riderUid = user.uid;
+        _loadPerformanceMetrics();
+        _loadWalletBalance();
+        _subscribeDispatch();
+      });
     });
 
     /* ── Shift management ── */
