@@ -68,10 +68,12 @@ module.exports = {
        a logged-out load of mysokoni.co.ke renders 91 priced items, so the
        catalogue reaches visitors through a different path, not raw client reads.
 
-       NOTE — the repo's firestore.rules says `allow read: if true` for products
-       while production DENIES it. The working-tree file is modified and
-       undeployed, so deploying it as-is would LOOSEN this collection to public
-       client reads. Flagged rather than silently encoded into the expectation. */
+       NOTE — deployed Firestore behaviour does not match the checked-out
+       firestore.rules, which says `allow read: if true` for products. Which side
+       is intended is NOT established here: the working tree copy may simply be
+       newer than what is deployed, and this observation cannot distinguish that
+       from a deliberate tightening. Reconcile the two before the next rules
+       deployment rather than assuming either is correct. */
     { name: 'Anonymous direct read of products is denied (deployed posture)',
       capability: 'Rules: public read', async run(ctx) {
         await ctx.signOut();

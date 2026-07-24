@@ -450,9 +450,34 @@ exports.processDataExport = onDocumentCreated(
       log.error('Data export failed', { requestId, error: err.message, stack: err.stack });
 
       try {
+        /* Record WHY, not just THAT it failed.
+           Previously this wrote only {status,failedAt}: the raw cause went to
+           Cloud Logging and nothing reached the document, so a data-subject
+           request failed opaquely — the user saw "failed" with no explanation
+           and support could not diagnose it without log access. That is poor
+           for any job and materially worse for a GDPR right-of-access request.
+
+           Two fields, deliberately separated:
+           • failureReason — SAFE, generic, user-facing. Never the raw error, so
+             internal implementation details are not exposed (see the error
+             handling standard: meaningful errors, no internals to end users).
+           • failureCode — short, stable, for support/ops correlation with the
+             Cloud Logging entry above, which still holds the full message. */
+        const raw = String(err && err.message || '');
+        const failureCode =
+          /storage|bucket|upload/i.test(raw)      ? 'storage_unavailable'
+          : /permission|denied|iam/i.test(raw)    ? 'permission_denied'
+          : /quota|resource-exhausted|limit/i.test(raw) ? 'quota_exceeded'
+          : /timeout|deadline/i.test(raw)         ? 'timed_out'
+          : /not found|no such|missing/i.test(raw) ? 'source_data_missing'
+          : 'internal_error';
+
         await requestRef.update({
-          status:   'failed',
-          failedAt: Timestamp.now(),
+          status:        'failed',
+          failedAt:      Timestamp.now(),
+          failureCode,
+          failureReason: 'We could not complete your data export. Please request it '
+                       + 'again; if it keeps failing, contact support with this request ID.',
         });
       } catch (updateErr) {
         // If even the status update fails, log and give up — do not throw
