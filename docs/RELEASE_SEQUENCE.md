@@ -94,6 +94,70 @@ Do not manufacture production PII-processing activity purely to automate this. T
 verification side is already fully observable with the existing tooling — the open
 question is whether the live workflow executes, not whether it can be inspected.
 
+## RC — payment → commission → wallet, end to end
+
+One successful **marketplace** payment (not a subscription — see below) is the
+acceptance test for the whole integrated path. It produces evidence for eight
+assertions at once, which is why it is worth more than testing each subsystem
+alone.
+
+Baseline at time of writing: `payments` 3 (all PENDING), `commissionLedger` 0,
+`wallets` untouched by any payment. Nothing on this path has ever executed.
+
+### 1 · Observe one successful payment
+Confirm COMPLETE **in IntaSend's own dashboard first** — that is upstream of
+everything we control, and the flow has never got past it.
+
+### 2 · Capture the correlation chain
+Follow one `apiRef` through every record it should touch:
+
+```
+apiRef → payments/{apiRef}            status COMPLETE, walletCreditedAt set
+       → commissionLedger/{apiRef}    sokoniCut, providerNet
+       → wallets/{sellerId}           availableBalance incremented
+       → wallets/{sellerId}/transactions/{auto}   direction credit, orderId=apiRef
+```
+
+A break in that chain localises the failure immediately; without the chain you
+only know "the wallet is wrong".
+
+### 3 · Reconcile
+```
+gross (payments.amount)
+  = commissionLedger.sokoniCut  +  commissionLedger.providerNet
+providerNet * 100 == payments.walletCreditCents == the wallet transaction amountCents
+```
+All three must agree. Gateway fees are **not** modelled, so `providerNet` is net of
+commission only — if Finance defines a gateway fee later, this identity changes and
+must be re-derived rather than patched.
+
+### 4 · Replay the delivery — the idempotency proof
+Re-send the same webhook payload (or await a genuine IntaSend retry). Assert:
+
+- **no second wallet credit** — `availableBalance` unchanged
+- **no second ledger entry** under `wallets/{sellerId}/transactions`
+- **no second commission** — `commissionLedger/{apiRef}` unchanged
+- the duplicate is visible in logs, not silent
+
+This is the assertion that cannot be proven by construction. `_walletTxRef()`
+generates a random id, so nothing in FinOS prevents a double credit — the guard is
+the `walletCreditedAt` check on `payments/{apiRef}`. Only a real duplicate proves it
+holds.
+
+### 5 · Exercise the recovery path
+If practical, force a wallet-credit failure (e.g. temporarily deny the wallet
+write). Assert the webhook still returns **200**, the payment remains COMPLETE and
+authoritative, `walletCreditedAt` is **absent**, and a `commissionReviewQueue` entry
+records the failure. That demonstrates a wallet fault cannot corrupt payment state
+or trigger an IntaSend retry storm.
+
+### Subscription payments are a different test
+A subscription payment flows merchant → platform and is **deliberately excluded**
+from wallet crediting: `payData.uid` is the merchant paying us, so crediting them
+would refund their own fee. For a subscription, assert the opposite — that
+`walletCreditedAt` is **absent** and the log records `wallet credit skipped
+(subscription)` — then follow the subscription/entitlement chain instead.
+
 ## Loyalty settlement — deployed, NOT runtime-verified
 
 `loyaltyRedemptions` was also empty at the same reading, so the atomic
