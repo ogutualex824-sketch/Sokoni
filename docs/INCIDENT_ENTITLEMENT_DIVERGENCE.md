@@ -132,3 +132,26 @@ a deterministic catalogue reference rather than taking a majority.
 free allowance. A blank limit prompts a support ticket; a confidently wrong "10"
 does not. Preferring visible uncertainty over a plausible default is what turns a
 silent failure into a reported one.
+
+**Every business decision should have exactly one authoritative implementation.**
+Subscription status, upload limits, commissions, pricing, inventory — wherever a
+rule exists in more than one place, each duplicate is another point at which the
+system can diverge. A single authority with read-only consumers is easier to verify
+and to evolve than several implementations expected to stay synchronised. Expecting
+synchronisation is the assumption that failed here.
+
+This is not aspirational in this codebase; it is already demonstrated. Compare:
+
+| Business rule | Authorities | Guard | Status |
+|---|---|---|---|
+| Commission | 1 (`functions/commission-config.js`) | `verify-commission-single-source` | **PASSES** — "exactly one commission table, and every consumer reads it" |
+| Listing limits | 10 (57 declarations) | `verify-listing-limit-single-source` | **FAILS** — this incident |
+
+Same pattern, opposite maturity. Commission proves the model works at SOKONI's
+scale; entitlements are what it looks like when the same rule is left duplicated.
+The guard is what holds the line afterwards — without one, a single-source
+refactor decays back into duplicates the next time somebody needs a limit and does
+not know where the canonical one lives.
+
+Candidates worth auditing next, by the same method: pricing, inventory ceilings,
+and anything else where two subsystems each hold a table of the same business fact.
