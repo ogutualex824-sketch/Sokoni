@@ -617,3 +617,118 @@ withdrawn on discovering the linkage already existed.
 **Before changing a canonical write path, enumerate every writer to the same
 document and classify each as primary, repair, migration or legacy.** One trace
 is a hypothesis; the full set is a finding.
+
+---
+
+## ADR-0014 — Two IntaSend webhooks: ADR-0013 and production disagree
+
+**Status:** OPEN — blocking. Names the conflict; does not resolve it.
+**Date:** 2026-07-24
+**Evidence:** `docs/INTASEND_WEBHOOK_AUDIT.md`, Cloud Logging 14d, `functions:list`
+
+### The conflict
+
+Three sources name a different canonical collection webhook:
+
+| Source | Canonical | Date |
+|---|---|---|
+| ADR-0013 | `intasendWebhook` | 2026-07-22 |
+| Dashboard (operator observation) | `webhookIntasend` | 2026-07-24 |
+| 2026-07-24 changes (entitlement materialisation, FinOS wallet credit) | `webhookIntasend` | 2026-07-24 |
+
+**ADR.md never mentions `webhookIntasend`.** ADR-0013 was written as though one
+IntaSend webhook existed. Two do, both deployed, both public, both validating the
+same `INTASEND_WEBHOOK_CHALLENGE`, both writing `subscriptions/{uid}`, and both
+matching ADR-0013's description — each reads `paymentIntents` and requires
+`purpose === 'subscription'`. The description does not discriminate between them.
+
+ADR-0013 cites `functions/index.js:5688`; `intasendWebhook` is now at `:5754`. Line
+numbers have drifted, so the ADR binds by **name**, not location.
+
+### Why this matters now
+
+The two have **diverged**, and neither is a superset:
+
+| | `webhookIntasend` | `intasendWebhook` |
+|---|---|---|
+| Entitlement materialisation | **yes** | no |
+| FinOS wallet credit | **yes** | no |
+| Event states | COMPLETE · FAILED · PENDING | + **CANCELLED**, processing |
+
+Cloud Logging shows **both receiving traffic** (2026-07-24 10:03:32 and 10:13:22
+fired both), so registrations point at both. Every logged delivery in 14 days was a
+synthetic probe rejected on challenge mismatch — no genuine IntaSend invoice ID was
+observed — so production has never settled the question by behaviour either.
+
+### Consequences if left unresolved
+
+- Dashboard registered to `intasendWebhook` (per ADR-0013) → a real payment
+  activates the subscription but **credits no wallet and materialises no
+  entitlement**. Exactly the incident of 2026-07-24, reproduced.
+- Both registered → duplicate delivery. Per-`apiRef` idempotency prevents double
+  commission and double wallet credit, but the two write different data, so which
+  one wins is timing-dependent.
+- ADR-0013 continues to name a writer that production may not use.
+
+### Decision required
+
+Pick one canonical collection webhook, then either delete the other or reduce it to
+a thin delegate. Do **not** maintain two. Whichever is chosen must carry the
+entitlement and wallet paths, and the wider event coverage
+(`CANCELLED`) should be folded in rather than lost.
+
+**Do not resolve this by changing the dashboard and the code in the same step.**
+Changing the handler and the configuration simultaneously makes a failure
+impossible to attribute — the same reasoning recorded in
+`INTASEND_WEBHOOK_AUDIT.md`.
+
+**Superseded scope:** ADR-0013's "Accepted — `intasendWebhook` is the canonical
+activation writer" is downgraded to OPEN until this is decided. Its other rulings
+(entitlement derives from `paymentIntents`; a writer taking a plan from a request
+body is not an activation path) are unaffected and still hold.
+
+---
+
+## ADR-0015 — Reversal / refund policy — DECISIONS REQUIRED BEFORE CODE
+
+**Status:** OPEN — no implementation exists, and none should be written first
+**Date:** 2026-07-24
+
+A reversal handler is not plumbing; it encodes financial policy. The code cannot be
+written correctly until these are decided, because each changes the ledger
+arithmetic rather than the wiring.
+
+### Current state — verified
+
+- **No reversal handler.** IntaSend Reversal / Send Money / Wallet Transfer events
+  are enabled in the dashboard; neither webhook branches on any purpose except
+  `subscription`.
+- **`adminSubProcessRefund` moves no money.** It marks a refund `status:'processed'`
+  and notifies the merchant with **zero gateway calls** anywhere in `sub-billing.js`.
+- **The primitives exist.** `debitWalletTxn` supports `allowNegative` (default
+  `false`, throws on insufficient balance); clawback precedent at `finos.js:292`.
+
+### Decisions
+
+| # | Decision | Status | What the code supports today |
+|---|---|---|---|
+| 1 | Full vs partial reversal | Pending | `debitWalletTxn` takes an arbitrary `amountCents` — partial is mechanically supported |
+| 2 | Commission clawback on reversal | Pending | `finos.js:292` debits a seller clawback; precedent exists, policy does not |
+| 3 | Gateway fee treatment | Pending | **Not modelled at all** — no gateway/processing fee concept in `finos-utils` |
+| 4 | Wallet debit after the merchant has withdrawn | Pending | Would fail: `debitWalletTxn` throws on insufficient balance unless `allowNegative` |
+| 5 | Negative wallet balances allowed | Pending | `allowNegative: false` today. Flipping it is one flag — and a solvency decision |
+| 6 | Disputes vs voluntary refunds | Pending | `finosDisputeEscrow` / `finosResolveDispute` exist and are separate from refunds |
+| 7 | Merchant notification | Pending | `adminSubProcessRefund` already notifies "refund processed" **for a refund that moved no money** — must be reconciled |
+| 8 | Audit requirements | Pending | `refunds`, `entitlementAuditLog`, `commissionReviewQueue` exist |
+
+Decisions 4 and 5 are the same question asked twice and should be answered
+together: if a merchant has withdrawn funds before a reversal arrives, either the
+wallet goes negative (a receivable) or the debit fails and the loss sits somewhere
+undefined. There is no third option, and today the code silently takes the second.
+
+Decision 3 also governs the existing credit path: `providerNet` is currently net of
+commission only, so introducing a gateway fee changes the reconciliation identity in
+`RELEASE_SEQUENCE.md` and requires re-derivation rather than a patch.
+
+Once these are approved, implementation is wiring `debitWalletTxn` into a reversal
+branch — the same shape as the credit path, using FinOS and adding no new authority.
