@@ -146,6 +146,81 @@ let wishlist = JSON.parse(
 
 let products = [];
 
+/* ── Catalogue load state ──────────────────────────────────────────────────
+   "No products" and "could not load products" are different facts and must
+   never render as the same screen. Showing the cheerful "No products yet —
+   be the first to sell!" empty state during a failed read is a healthy-looking
+   failure: it tells the shopper the marketplace is empty when it actually has
+   129 active listings it simply could not reach.
+
+   __sokoniCatalogueRead is set when the Firestore listener delivers ANY result,
+   including an empty array — an empty snapshot is a successful read, and only
+   then is "no products yet" the truth. If nothing arrives before the watchdog
+   fires, the read failed and we say so, with a retry. */
+window.__sokoniCatalogueRead = false;
+let _catalogueWatchdog = null;
+
+function _catalogueTelemetry(phase, extra) {
+    const detail = Object.assign({ phase: phase, at: Date.now() }, extra || {});
+    try { window.dispatchEvent(new CustomEvent('sokoni:catalogue', { detail: detail })); } catch (e) {}
+    try {
+        if (window.SokoniObservability && typeof window.SokoniObservability.log === 'function') {
+            window.SokoniObservability.log('catalogue', detail);
+        }
+    } catch (e) {}
+    try { console.warn('[catalogue]', phase, JSON.stringify(detail)); } catch (e) {}
+}
+
+function _renderCatalogueLoading(container) {
+    if (!container) return;
+    if (typeof _p8ShowSkeletons === 'function') { _p8ShowSkeletons(container, 8); return; }
+    container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.45);">Loading products…</div>';
+}
+
+function _renderCatalogueEmpty(container) {
+    if (!container) return;
+    container.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
+            <div style="font-size:56px;margin-bottom:16px;">🛍️</div>
+            <h2 style="color:white;font-size:22px;margin-bottom:10px;">No products yet</h2>
+            <p style="color:rgba(255,255,255,0.4);margin-bottom:22px;">Be the first to sell on Sokoni!</p>
+            <a href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Start Selling →</a>
+        </div>`;
+}
+
+function _renderCatalogueError(container) {
+    if (!container) return;
+    container.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:56px 20px;">
+            <div style="font-size:52px;margin-bottom:14px;">⚠️</div>
+            <h2 style="color:white;font-size:21px;margin-bottom:10px;">Unable to load products</h2>
+            <p style="color:rgba(255,255,255,0.45);margin-bottom:22px;max-width:340px;margin-left:auto;margin-right:auto;">
+                We couldn't reach the catalogue just now. This is a connection problem on our side, not an empty shop.
+            </p>
+            <button type="button" id="skCatalogueRetry"
+                style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;">
+                Try again
+            </button>
+        </div>`;
+    const btn = document.getElementById('skCatalogueRetry');
+    if (btn) btn.addEventListener('click', function () {
+        _catalogueTelemetry('retry-clicked');
+        location.reload();
+    });
+}
+
+/* Bounded, not indefinite: a spinner that never resolves is the loading-state
+   equivalent of a silent failure. */
+function _armCatalogueWatchdog(container, ms) {
+    if (_catalogueWatchdog) clearTimeout(_catalogueWatchdog);
+    _catalogueWatchdog = setTimeout(function () {
+        if (window.__sokoniCatalogueRead) return;              /* a read landed; nothing to do */
+        if (Array.isArray(products) && products.length > 0) return;
+        _catalogueTelemetry('load-failed', { timeoutMs: ms || 12000 });
+        _renderCatalogueError(container);
+    }, ms || 12000);
+}
+
 /* Hardcoded fallback — shown whenever localStorage has no products.
    Ensures the homepage always looks alive on first visit or cleared cache. */
 const FALLBACK_PRODUCTS = [
@@ -262,35 +337,41 @@ function loadProducts(){
        outright emptied the production homepage: real products exist in
        Firestore and are publicly readable, but the listener returned nothing
        within 14 seconds and SokoniDB swallows its onSnapshot error into a
-       console warning. Until that read is proven, an empty storefront is a
-       worse regression than demo data — so the fallback stays as a placeholder
-       and the Firestore listener replaces it the moment real products arrive.
+       console warning.
 
-       The flag is retained and inverted: set sokoniSuppressDemoData to opt OUT
-       once the Firestore path is verified. That makes the eventual removal a
-       one-line change rather than another deploy-and-hope. */
-    const _suppressDemo = (function () {
-        try { return localStorage.getItem('sokoniSuppressDemoData') === 'true'; }
-        catch (e) { return false; }
+       THE CAUSE OF THAT EMPTY PAGE IS NOW KNOWN AND FIXED. index.html was
+       missing the </script> that closed the script.js tag, so the module
+       holding the Firestore catalogue listener was parsed as that tag's text
+       content and never executed at all. The listener did not "return nothing"
+       — it never attached. That is why suppressing the fallback emptied the
+       page, and why re-enabling demo data appeared to be the only option.
+
+       With the listener actually running, demo data is no longer load-bearing,
+       so it is now OFF in production and available only behind an explicit
+       development flag. Fabricated inventory in production is its own defect:
+       it makes a total catalogue outage look like a healthy storefront, and it
+       let shoppers add products nobody sells to a real cart. */
+    const _demoAllowed = (function () {
+        try {
+            if (localStorage.getItem('sokoniDemoData') === 'true') return true;   /* explicit dev opt-in */
+        } catch (e) {}
+        return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     })();
 
     products = savedProducts.length > 0
         ? savedProducts
-        : (_suppressDemo ? [] : FALLBACK_PRODUCTS);
+        : (_demoAllowed ? FALLBACK_PRODUCTS : []);
 
-    /* EMPTY */
-
+    /* Nothing to show yet. Two very different situations look identical here, and
+       conflating them is what hid this bug for so long:
+         - the catalogue genuinely has no listings, or
+         - the catalogue could not be read.
+       On first paint we cannot yet tell, so show a loading state and let the
+       watchdog below decide. Only once the Firestore listener has had its chance
+       do we commit to "empty" or "failed". */
     if(products.length === 0){
-
-        container.innerHTML = `
-        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
-            <div style="font-size:56px;margin-bottom:16px;">🛍️</div>
-            <h2 style="color:white;font-size:22px;margin-bottom:10px;">No products yet</h2>
-            <p style="color:rgba(255,255,255,0.4);margin-bottom:22px;">Be the first to sell on Sokoni!</p>
-            <a href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Start Selling →</a>
-        </div>
-        `;
-
+        _renderCatalogueLoading(container);
+        _armCatalogueWatchdog(container);
         return;
     }
 
@@ -4079,7 +4160,26 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
    Local-only products are preserved: a listing uploaded but not yet synced to
    Firestore must not vanish from its own seller's view. */
 window._homeMergeFirestore = function (fsProducts) {
-    if (!fsProducts || !fsProducts.length) return;
+    /* Record the read BEFORE the empty check. An empty snapshot is a SUCCESSFUL
+       read of an empty catalogue, and returning early without noting that left
+       the watchdog unable to tell "Firestore says there is nothing" from
+       "Firestore never answered" — the two states this whole path exists to
+       separate. */
+    if (Array.isArray(fsProducts)) {
+        window.__sokoniCatalogueRead = true;
+        if (_catalogueWatchdog) { clearTimeout(_catalogueWatchdog); _catalogueWatchdog = null; }
+        _catalogueTelemetry('read-ok', { count: fsProducts.length });
+    }
+
+    if (!fsProducts || !fsProducts.length) {
+        /* Genuinely empty catalogue — say so honestly, but only if we have
+           nothing else on screen (a cached list is still better than a wipe). */
+        if (!Array.isArray(products) || products.length === 0) {
+            const c = document.getElementById("productsContainer");
+            if (c) _renderCatalogueEmpty(c);
+        }
+        return;
+    }
 
     const fsIds = new Set(fsProducts.map(p => String(p.id)));
     const localOnly = (Array.isArray(products) ? products : []).filter(p =>
