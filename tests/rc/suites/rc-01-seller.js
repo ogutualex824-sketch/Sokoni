@@ -86,15 +86,44 @@ module.exports = {
         }
         throw new Error(`archived product still in active results after 15s (active=${JSON.stringify(lastSeen)})`);
     }},
-    { name: 'Seller dashboard renders (UI)', capability: 'Seller dashboard rendering', async run(ctx) {
-        if (!ctx.backendUp) throw new BlockedError('needs authenticated backend to render seller.html as the seller');
+    { name: 'Seller signs in through the real login path (browser)', capability: 'Browser authentication', async run(ctx) {
+        if (!ctx.backendUp) throw new BlockedError('needs an authenticated backend to have seeded the identity');
+        const id = ctx.dataset.IDENTITIES.seller;
+        const res = await ctx.signInAs(id);
+        if (!res.ok) {
+          /* App Check enforcement or a bot-detection failure is an ENVIRONMENT
+             limit, not a product defect — report BLOCKED with the real code so
+             it is actionable. A wrong password IS a defect, so fail on that. */
+          if (/wrong-password|user-not-found|invalid-credential/.test(res.code)) {
+            throw new Error(`sign-in rejected the seeded credential: ${res.code}`);
+          }
+          throw new BlockedError(`browser sign-in unavailable: ${res.code || 'unknown'} — ${res.msg}`);
+        }
+        ctx.record('assertion', { signedInUid: res.uid, claims: res.claims });
+        /* The claim must survive into the CLIENT token, not just exist in Auth —
+           that is what client-side authorization actually reads. */
+        if (!res.claims || res.claims.seller !== true) {
+          throw new Error(`seller claim absent from client ID token: ${JSON.stringify(res.claims)}`);
+        }
+        return { detail: `uid=${res.uid}, seller claim present in ID token` };
+    }},
+    { name: 'Seller dashboard renders for the signed-in seller', capability: 'Seller dashboard rendering', async run(ctx) {
         const page = await ctx.ui();
         await page.goto(ctx.baseUrl() + '/seller.html', { waitUntil: 'domcontentloaded' });
-        await page.waitForTimeout(1500);
+        await page.waitForTimeout(3000);
+        await ctx.dismissOverlays();
         await ctx.shot('seller-dashboard');
-        // Without a signed-in session the page shows the auth gate — that is the
-        // BLOCKED signal, captured but not asserted as pass.
-        throw new BlockedError('seller session injection into the browser is the next backend capability');
+        const state = await page.evaluate(() => ({
+          gated: !!document.getElementById('sokoni-auth-gate'),
+          landed: location.pathname,
+          bodyLen: (document.body.textContent || '').trim().length,
+          errors: (window.__rcErrs || []).length,
+        }));
+        ctx.record('assertion', state);
+        if (state.gated) throw new Error('auth gate shown despite a signed-in session');
+        if (/login|signup/.test(state.landed)) throw new Error(`redirected away to ${state.landed}`);
+        if (state.bodyLen < 200) throw new Error('dashboard rendered empty');
+        return { detail: `rendered at ${state.landed}` };
     }},
   ],
 };

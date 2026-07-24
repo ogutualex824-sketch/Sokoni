@@ -1,0 +1,200 @@
+{
+  "label": "production-rc01-final",
+  "backend": "production(admin)",
+  "startedAt": "2026-07-24T06:36:09.586Z",
+  "privileged": false,
+  "suites": [
+    {
+      "id": "RC-01",
+      "title": "Seller Journey",
+      "verdict": "PASS",
+      "steps": [
+        {
+          "name": "Seed seller identity (+ seller claim actually applied)",
+          "capability": "Seller authentication",
+          "status": "PASS",
+          "detail": "uid=oXrgbq2oBwadJSfsk0NypDCAXVT2, claims={\"seller\":true}",
+          "evidence": [
+            {
+              "type": "identity",
+              "role": "seller",
+              "uid": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+              "claims": {
+                "seller": true
+              }
+            }
+          ],
+          "at": "2026-07-24T06:36:09.594Z"
+        },
+        {
+          "name": "Create shop document",
+          "capability": "Shop creation",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "firestore",
+              "path": "shops/rc-beta-shop",
+              "doc": {
+                "_rcSeed": true,
+                "tier": "premium",
+                "name": "RC Beta Shop",
+                "_rcRun": "rc1",
+                "handle": "rc-beta-shop"
+              }
+            }
+          ],
+          "at": "2026-07-24T06:36:10.863Z"
+        },
+        {
+          "name": "Upload product",
+          "capability": "Product creation",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "firestore",
+              "path": "products/rc-prod-basic",
+              "doc": {
+                "searchableTerms": [
+                  "rc",
+                  "test",
+                  "basic",
+                  "electronics"
+                ],
+                "_rcSeed": true,
+                "ownerRole": "seller",
+                "price": 100000,
+                "name": "RC Test Product — Basic",
+                "_rcRun": "rc1",
+                "id": "rc-prod-basic",
+                "isVisible": true,
+                "category": "electronics",
+                "stock": 25,
+                "status": "active"
+              }
+            }
+          ],
+          "at": "2026-07-24T06:36:16.334Z"
+        },
+        {
+          "name": "Edit product (price persists AND search contract survives)",
+          "capability": "Product mutation",
+          "status": "PASS",
+          "detail": "price=111100, 4 terms intact",
+          "evidence": [
+            {
+              "type": "assertion",
+              "afterEdit": {
+                "price": 111100,
+                "terms": 4,
+                "status": "active",
+                "isVisible": true
+              }
+            }
+          ],
+          "at": "2026-07-24T06:36:17.797Z"
+        },
+        {
+          "name": "Search reflects the product (searchableTerms present)",
+          "capability": "Search indexing",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [],
+          "at": "2026-07-24T06:36:19.130Z"
+        },
+        {
+          "name": "Delete product = archive (soft-delete contract)",
+          "capability": "Product soft-delete",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "assertion",
+              "afterArchive": {
+                "status": "archived",
+                "isVisible": false
+              }
+            }
+          ],
+          "at": "2026-07-24T06:36:20.119Z"
+        },
+        {
+          "name": "Search reflects the archive (datastore ↔ search consistency)",
+          "capability": "Search invalidation",
+          "status": "PASS",
+          "detail": "archived product excluded from active results",
+          "evidence": [
+            {
+              "type": "assertion",
+              "archivedExcludedFromActiveQuery": true,
+              "activeIds": []
+            }
+          ],
+          "at": "2026-07-24T06:36:21.450Z"
+        },
+        {
+          "name": "Seller signs in through the real login path (browser)",
+          "capability": "Browser authentication",
+          "status": "PASS",
+          "detail": "uid=oXrgbq2oBwadJSfsk0NypDCAXVT2, seller claim present in ID token",
+          "evidence": [
+            {
+              "type": "assertion",
+              "signedInUid": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+              "claims": {
+                "name": "RC Seller",
+                "seller": true,
+                "iss": "https://securetoken.google.com/sokoni-aeb26",
+                "aud": "sokoni-aeb26",
+                "auth_time": 1784875008,
+                "user_id": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+                "sub": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+                "iat": 1784875009,
+                "exp": 1784878609,
+                "email": "seller.beta@sokoni.test",
+                "email_verified": true,
+                "firebase": {
+                  "identities": {
+                    "email": [
+                      "seller.beta@sokoni.test"
+                    ]
+                  },
+                  "sign_in_provider": "password"
+                }
+              }
+            }
+          ],
+          "at": "2026-07-24T06:36:21.900Z"
+        },
+        {
+          "name": "Seller dashboard renders for the signed-in seller",
+          "capability": "Seller dashboard rendering",
+          "status": "PASS",
+          "detail": "rendered at /seller",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\production-rc01-final\\rc-01-seller\\seller-dashboard.png"
+            },
+            {
+              "type": "assertion",
+              "gated": false,
+              "landed": "/seller",
+              "bodyLen": 241700,
+              "errors": 0
+            }
+          ],
+          "at": "2026-07-24T06:36:50.413Z"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-07-24T06:37:08.741Z",
+  "summary": {
+    "suites": 1,
+    "pass": 9,
+    "fail": 0,
+    "blocked": 0
+  }
+}

@@ -132,6 +132,46 @@ function makeCtx({ backend, backendUp, browser, dataset, suiteDir, allowPrivileg
       return page;
     },
     baseUrl: () => backend.baseUrl(),
+
+    /* Sign the BROWSER in as a canonical identity, using the app's real
+       email/password path rather than a test-only backdoor — so this exercises
+       the same flow a merchant actually uses. Returns {ok, uid} or {ok:false,
+       code, msg} so a step can decide FAIL vs BLOCKED for itself. */
+    async signInAs(identity) {
+      const p = await this.ui();
+      await p.goto(backend.baseUrl() + '/index.html', { waitUntil: 'domcontentloaded' });
+      // firebase.js is a deferred module; wait for the compat shim it installs.
+      await p.waitForFunction(() => !!window.firebase, { timeout: 25000 })
+        .catch(() => { throw new BlockedError('window.firebase never appeared — app did not boot'); });
+      const res = await p.evaluate(async ([email, password]) => {
+        try {
+          const cred = await window.firebase.auth().signInWithEmailAndPassword(email, password);
+          const tok = await cred.user.getIdTokenResult(true);
+          return { ok: true, uid: cred.user.uid, claims: tok.claims || {} };
+        } catch (e) {
+          return { ok: false, code: e.code || '', msg: String(e.message || e).slice(0, 140) };
+        }
+      }, [identity.email, identity.password]);
+      if (res.ok) {
+        // Mirror what the app itself stores, so auth-guard.js does not gate.
+        await p.evaluate((u) => {
+          localStorage.setItem('loggedIn', 'true');
+          localStorage.setItem('sokoniUser', JSON.stringify(u));
+        }, { uid: res.uid, email: identity.email, name: identity.displayName });
+      }
+      return res;
+    },
+    /* The privacy/cookie gate blurs and covers the page. It is dismissed before
+       capture so the evidence artifact shows the thing under test rather than a
+       consent dialog — the assertions are unaffected either way. */
+    async dismissOverlays() {
+      if (!page) return;
+      for (const sel of ['button:has-text("Accept")', '#cookieAccept', '.cookie-accept']) {
+        const el = await page.$(sel).catch(() => null);
+        if (el && await el.isVisible().catch(() => false)) { await el.click().catch(() => {}); break; }
+      }
+      await page.waitForTimeout(600);
+    },
     async shot(name) {
       if (!page) return null;
       const f = path.join(suiteDir, `${name}.png`);
