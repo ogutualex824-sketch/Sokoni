@@ -25,6 +25,79 @@ located automatically. **No auth column is published rather than an unreliable o
 Confirm in-function authorization yourself before granting public invoker — that
 check, not IAM, is the real security boundary for a callable.
 
+## Prioritisation — affected functions by client surface
+
+The 206 in Group 1 span **47 client surfaces**. Grouping by the surface that
+calls them turns "which functions do we grant?" into "which features do we want
+working in the beta?" — a product decision rather than an IAM one.
+
+### Administrative / internal tooling — 61 functions, higher review bar
+
+These are operator tools, not customer journeys. Two consequences: they are unlikely
+to block a customer beta, and a mistake here has the widest blast radius, so each
+needs its in-function admin check confirmed before any grant.
+
+| Client surface | Functions |
+|---|---|
+| `security-center.html` | 20 |
+| `developer-portal.html` | 12 |
+| `enterprise-ops.html` | 10 |
+| `sasos-admin.html` | 10 |
+| `release-readiness.html` | 6 |
+| `super-admin.html` | 2 |
+| `trust-safety.html` | 1 |
+
+### Product / merchant surfaces — 145 functions
+
+Customer- and merchant-facing journeys plus the shared engines behind them
+(`sokoni-*.js`). Beta-critical selection should start here.
+
+| Client surface | Functions |
+|---|---|
+| `sokoni-hub-etims.js` | 13 |
+| `crm.html` | 12 |
+| `sokoni-etims.js` | 11 |
+| `pos-bi.html` | 9 |
+| `legal-hub.html` | 8 |
+| `event-manager.html` | 8 |
+| `sokoni-education.js` | 6 |
+| `sokoni-aos.js` | 5 |
+| `pos-marketplace.html` | 5 |
+| `event-hub.html` | 5 |
+| `sokoni-inventory-v2.js` | 5 |
+| `inventory.html` | 4 |
+| `procurement.html` | 4 |
+| `sokoni-entitlement.js` | 4 |
+| `sokoni-endpoints.js` | 4 |
+| `sokoni-inventory.js` | 4 |
+| `sokoni-platform.js` | 4 |
+| `business-health.html` | 3 |
+| `inv-ai.html` | 3 |
+| `sokoni-subscription-brain.js` | 2 |
+| `executive-dashboard.html` | 2 |
+| `sokoni-zero-trust.js` | 2 |
+| `inv-products.html` | 2 |
+| `sokoni-async-jobs.js` | 2 |
+| `platform.html` | 2 |
+| `email-center.html` | 2 |
+| `legal-admin.html` | 1 |
+| `automation-center.html` | 1 |
+| `pos-ai.html` | 1 |
+| `qr-center.html` | 1 |
+| `sokoni-wallet.js` | 1 |
+| `commerce-os.html` | 1 |
+| `enterprise-certification.html` | 1 |
+| `sokoni-typesense-engine.js` | 1 |
+| `account-centre.html` | 1 |
+| `sokoni-sasos.js` | 1 |
+| `pos-customers.js` | 1 |
+| `partner-portal.html` | 1 |
+| `sokoni-config.js` | 1 |
+| `pos-manager-auth.js` | 1 |
+
+The split is by filename convention, so treat it as a starting sort rather than a
+final classification — confirm the surface before acting on a row.
+
 ## Group 1 — client reference found (206)
 
 The browser appears to be the expected caller. If the function authenticates and
