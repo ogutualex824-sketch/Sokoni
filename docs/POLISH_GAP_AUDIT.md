@@ -44,6 +44,59 @@ equivalent to a successful production run.
    assumption wearing a tick.
 4. **Corrections stay visible.** When a finding is revised, the original is
    retained with a *Revised* note — the reasoning trail is the point.
+5. **A symptom and its explanation are separate claims** with separate evidence.
+   A verified symptom does not confer any confidence on a proposed cause.
+6. **Record the revision under test.** Before attributing runtime behaviour:
+   confirm branch, confirm working-tree state, record the commit hash, and
+   confirm the *deployed* revision matches it. This repository has concurrent
+   writers (see *Evidence integrity*), so "which code produced this?" is a real
+   question, not a formality.
+
+---
+
+## Evidence integrity
+
+Runtime evidence is only as good as the instrument. Three times this session an
+observation was an artefact of the probe rather than a fact about the system —
+and each looked like a clean result at the time. For any significant probe,
+record these four things **before** running it:
+
+| Item | Ask |
+|---|---|
+| **Observation target** | What exactly is being read — queue entry, Algolia record, Firestore document, log line? |
+| **Probe side effects** | What does the probe create, modify or delete? |
+| **Risk to validity** | Could any side effect change the thing being measured, or exclude the subject from the path under test? |
+| **Mitigation** | Usually: observe before mutating; separate observation from teardown |
+
+### Worked examples from 2026-07-24
+
+| Probe | Side effect | How it invalidated the result |
+|---|---|---|
+| Variant e2e #1 | Created the test product with `status:'draft'` for safety | `_shouldSkip` excludes drafts from indexing — the probe removed its own subject from the path it was testing, then reported the path broken |
+| Variant e2e #3 | Purged the product on exit | `enqueue` uses a deterministic queue id, so the purge **overwrote** the create's queue entry. The probe could not have observed an upsert even if one existed |
+| Batch-fix inference | *(no probe at all)* | Assumed a drained backlog implied new work indexes. Draining says nothing about intake |
+
+### Required probe structure
+
+Observation and teardown must be **separate phases**, in this order:
+
+```
+create test subject
+      ↓
+observe queue DURING the processing window
+      ↓
+observe the destination index
+      ↓
+record all evidence
+      ↓
+── phase boundary: nothing above may be undone by anything below ──
+      ↓
+cleanup
+```
+
+The property that matters: **no destructive action occurs before every
+observation has been recorded.** Cleanup still has to run on every exit path,
+including failures — but always after the verdict, never before it.
 
 ---
 
@@ -55,8 +108,20 @@ equivalent to a successful production run.
 
 > ⚠️ **The stated cause was withdrawn.** See *Revised findings*: "zero `upsert`
 > entries in the queue" was an artefact of the probe, not a fact about the
-> system. The **symptom** above still stands and is unexplained; the **cause**
-> is once again unknown.
+> system.
+
+**Symptom and candidate causes, tracked separately.** One confirmed symptom;
+every explanation still owes evidence.
+
+| Claim | Status | Evidence |
+|---|---|---|
+| Product missing from `sokoni_products` after create | 🔴 **Verified symptom** | Runtime — two independent probe runs, 608s each, purge after the window |
+| `algoliaSync_products_create` deployed | ✅ | Runtime — function list shows **ACTIVE** |
+| `algoliaSync_products_create` invoked | ✅ | Runtime — logs show an invocation at 13:27:11Z matching the probe |
+| Queue write missing | ❔ **Unknown** | Prior claim withdrawn — probe cleanup destroyed the evidence |
+| Trigger guard skipped the work | ❔ **Unknown** | Not examined |
+| Drain processed it incorrectly | ❔ **Unknown** | Not examined |
+| Batch poisoning | ✅ **Fixed** | Runtime — backlog drained `{done:147, dlq:152}` → `{done:306, dlq:0}` |
 
 **Scope note.** The probe's deletes fanned out to **both** `gs__products` and
 `products`, so the delete path works for both targets while the create path
