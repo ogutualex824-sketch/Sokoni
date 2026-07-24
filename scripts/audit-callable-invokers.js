@@ -68,7 +68,16 @@ const AS_JSON  = argv.includes('--json');
 const DO_ALL   = argv.includes('--all');
 const DO_PROBE = argv.includes('--probe');
 const REFRESH  = argv.includes('--refresh');
-const NAMES    = argv.filter((a) => !a.startsWith('--'));
+
+/* --snapshot <file> / --compare <file> — the pre-flight/post-flight pair.
+   The callable surface can change from OUTSIDE a release process: during this
+   work two bindings were granted between one sweep and the next, and only a
+   re-run caught it. A point-in-time verdict cannot show that; a diff can. */
+const valOf = (flag) => { const i = argv.indexOf(flag); return i === -1 ? null : argv[i + 1]; };
+const SNAPSHOT = valOf('--snapshot');
+const COMPARE  = valOf('--compare');
+const NAMES    = argv.filter((a, i) =>
+  !a.startsWith('--') && argv[i - 1] !== '--snapshot' && argv[i - 1] !== '--compare');
 
 /* Release-critical callables. Not exhaustive — it is the set whose failure would
    stop money, sign-in, selling or a legal obligation. Use --all for everything. */
@@ -193,6 +202,34 @@ const kindOf = (f) =>
       if (!AS_JSON && targets.length > 50 && i % 100 === 0 && i) process.stderr.write(`  …${i}/${targets.length}\n`);
     }
   }));
+
+  if (SNAPSHOT) {
+    fs.writeFileSync(SNAPSHOT, JSON.stringify({ at: new Date().toISOString(), project: PROJECT, region: REGION, rows }, null, 2) + '\n');
+    console.log(`\n  snapshot written: ${SNAPSHOT} (${rows.length} rows)\n`);
+  }
+
+  if (COMPARE) {
+    /* A regression is a function that WAS reachable and no longer is. A fix is the
+       reverse. Both matter at release time; only the first should fail the gate. */
+    const prev = JSON.parse(fs.readFileSync(COMPARE, 'utf8'));
+    const was  = new Map((prev.rows || prev).map((r) => [r.id, r.verdict]));
+    const regressed = rows.filter((r) => r.verdict === 'FAIL' && was.get(r.id) === 'PASS');
+    const fixed     = rows.filter((r) => r.verdict === 'PASS' && was.get(r.id) === 'FAIL');
+    const appeared  = rows.filter((r) => !was.has(r.id));
+
+    console.log(`\n  Compared against ${COMPARE}${prev.at ? ' (' + prev.at + ')' : ''}`);
+    console.log(`    regressed (PASS -> FAIL) : ${regressed.length}`);
+    regressed.forEach((r) => console.log(`      - ${r.id}`));
+    console.log(`    fixed     (FAIL -> PASS) : ${fixed.length}`);
+    fixed.forEach((r) => console.log(`      + ${r.id}`));
+    if (appeared.length) console.log(`    new functions            : ${appeared.length}`);
+    console.log('');
+    if (regressed.length) {
+      console.log('  A function that was reachable no longer is. Investigate before shipping.\n');
+      process.exit(1);
+    }
+    process.exit(0);
+  }
 
   if (AS_JSON) { console.log(JSON.stringify(rows, null, 2)); }
   else {

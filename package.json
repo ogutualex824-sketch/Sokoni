@@ -25,7 +25,12 @@
     "test:promotions": "node scripts/test-promotions.js",
     "test:sms": "node scripts/test-sms.js",
     "test:notify": "node scripts/test-notify.js",
-    "verify:commission": "node scripts/verify-commission-single-source.js"
+    "verify:commission": "node scripts/verify-commission-single-source.js",
+    "test:search": "node scripts/test-firestore-search.js",
+    "scan:guards": "node scripts/scan-firestore-guards.js",
+    "audit:invokers": "node scripts/audit-callable-invokers.js --all --probe",
+    "release:preflight": "node scripts/audit-callable-invokers.js --all --snapshot .release-preflight.json",
+    "release:postflight": "node scripts/audit-callable-invokers.js --all --compare .release-preflight.json"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",
