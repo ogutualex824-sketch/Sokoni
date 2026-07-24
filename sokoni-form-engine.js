@@ -244,24 +244,78 @@
 
   /* ── 4. SAFE-AREA CSS VARS ──────────────────────────────── */
 
-  /* Write safe-area values to CSS vars so inline styles can use them */
+  /* Write safe-area values to CSS vars so inline styles can use them.
+   *
+   * This function was the single most expensive piece of owned JavaScript on the
+   * platform — 606ms of self-time on Home and 130ms on SmartPOS in the 2026-07-18
+   * CPU profile, against a page whose dominant cost was style recalculation (3527ms
+   * over 314 recalcs) rather than script execution. It was generating much of that
+   * recalculation itself, four ways at once:
+   *
+   *   1. appendChild(probe) then getComputedStyle(probe) forces a synchronous
+   *      layout — the classic read-after-write reflow.
+   *   2. setProperty() on documentElement writes CUSTOM PROPERTIES ON :root, which
+   *      invalidates style for every element in the document. On a 3128-element DOM
+   *      that is the most expensive possible write, and it happened four times.
+   *   3. removeChild(probe) dirties layout again.
+   *   4. All of it was bound to `resize`, UNTHROTTLED. On mobile the URL bar
+   *      showing and hiding fires resize continuously through a scroll, so this ran
+   *      as a burst during the exact interaction that most needs a free main thread.
+   *
+   * Three changes, no behaviour change:
+   *   - The probe is created once and reused, instead of per call.
+   *   - Values are compared and only written when they actually CHANGE. Safe-area
+   *     insets are constant for a given orientation, so after the first call the
+   *     steady-state cost is four string compares and zero style invalidation.
+   *   - resize is coalesced into a single rAF callback, so a burst of resize events
+   *     does at most one measurement per frame.
+   */
+  var _safeProbe = null;
+  var _safeLast  = { top: null, left: null, bottom: null, right: null };
+  var _safeQueued = false;
+
   function _writeSafeAreaVars() {
+    if (!document.body) return;
+    if (!_safeProbe) {
+      _safeProbe = document.createElement('div');
+      _safeProbe.setAttribute('aria-hidden', 'true');
+      _safeProbe.style.cssText =
+        'position:fixed;top:env(safe-area-inset-top,0px);' +
+        'left:env(safe-area-inset-left,0px);' +
+        'bottom:env(safe-area-inset-bottom,0px);' +
+        'right:env(safe-area-inset-right,0px);' +
+        'pointer-events:none;visibility:hidden;width:1px;height:1px;';
+    }
+    /* Keep it attached: detaching and reattaching is what made every call dirty
+       layout twice. It is 1x1, hidden and pointer-events:none, so it costs nothing
+       to leave in place. */
+    if (!_safeProbe.isConnected) document.body.appendChild(_safeProbe);
+
+    var cs = window.getComputedStyle(_safeProbe);
+    var next = {
+      top:    cs.top    || '0px',
+      left:   cs.left   || '0px',
+      bottom: cs.bottom || '0px',
+      right:  cs.right  || '0px'
+    };
+
+    /* Only touch :root when a value really changed. An unconditional write
+       invalidated the style of every element in the document on every resize
+       tick, to store values that had not moved. */
     var s = document.documentElement.style;
-    /* Create a temporary element to read computed env() values */
-    var probe = document.createElement('div');
-    probe.style.cssText =
-      'position:fixed;top:env(safe-area-inset-top,0px);' +
-      'left:env(safe-area-inset-left,0px);' +
-      'bottom:env(safe-area-inset-bottom,0px);' +
-      'right:env(safe-area-inset-right,0px);' +
-      'pointer-events:none;visibility:hidden;width:1px;height:1px;';
-    document.body.appendChild(probe);
-    var cs = window.getComputedStyle(probe);
-    s.setProperty('--safe-top',    cs.top    || '0px');
-    s.setProperty('--safe-left',   cs.left   || '0px');
-    s.setProperty('--safe-bottom', cs.bottom || '0px');
-    s.setProperty('--safe-right',  cs.right  || '0px');
-    document.body.removeChild(probe);
+    for (var k in next) {
+      if (next[k] !== _safeLast[k]) {
+        s.setProperty('--safe-' + k, next[k]);
+        _safeLast[k] = next[k];
+      }
+    }
+  }
+
+  function _queueSafeAreaVars() {
+    if (_safeQueued) return;
+    _safeQueued = true;
+    var raf = window.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+    raf(function () { _safeQueued = false; _writeSafeAreaVars(); });
   }
 
   /* Run after load to pick up safe area values */
@@ -271,8 +325,14 @@
     _writeSafeAreaVars();
   }
 
-  window.addEventListener('resize', _writeSafeAreaVars, { passive: true });
-  window.addEventListener('orientationchange', _writeSafeAreaVars, { passive: true });
+  window.addEventListener('resize', _queueSafeAreaVars, { passive: true });
+  /* Orientation is the only thing that genuinely changes these insets, and the new
+     values are not applied until after the rotation settles — hence the deferred
+     re-read rather than a single immediate one. */
+  window.addEventListener('orientationchange', function () {
+    _queueSafeAreaVars();
+    setTimeout(_writeSafeAreaVars, 250);
+  }, { passive: true });
 
   /* ── 5. AUTO-DETECT AND FIX OVERFLOW ISSUES ─────────────── */
 
