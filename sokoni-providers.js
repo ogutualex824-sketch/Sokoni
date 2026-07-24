@@ -65,6 +65,39 @@
 
   var _sdk = null, _cache = null, _cacheAt = 0, _inflight = null;
 
+  /* ── Last-good persistent cache ─────────────────────────────────────────────
+     App Check is enforced on Firestore and, on this project, fails
+     intermittently (an identical session can succeed then 403). Before the
+     directory was Firestore-backed the pages rendered hardcoded data and never
+     cared. Now a single failed read would leave a returning visitor staring at
+     "Could not load providers" on a page that worked a minute ago.
+
+     So the last SUCCESSFUL read is persisted — REAL provider records, never
+     fabricated — and served when a later read fails. A visitor who has ever
+     loaded the directory keeps seeing it through an App Check hiccup, flagged
+     `stale` so the UI can note it is not fresh. This is not a demo fallback:
+     nothing here is invented, and a visitor who has never had a successful
+     read still gets the honest error state, because there is nothing real to
+     show them yet. */
+  var LS_KEY = 'sokoniProvidersLastGood';
+  var LS_TTL_MS = 24 * 60 * 60 * 1000;   /* a day: stale-but-real beats broken */
+
+  function saveLastGood(list) {
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify({ at: Date.now(), providers: list }));
+    } catch (e) { /* quota / private mode — the in-memory cache still stands */ }
+  }
+  function loadLastGood() {
+    try {
+      var raw = localStorage.getItem(LS_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.providers) || !parsed.providers.length) return null;
+      if (Date.now() - parsed.at > LS_TTL_MS) return null;   /* too old to trust */
+      return parsed;
+    } catch (e) { return null; }
+  }
+
   /* ── Category aliases ──────────────────────────────────────────────────────
      Hub pages ask for a bucket, not a slug: the Cleaning hub must show both
      cleaners and mamafua. Aliases are expanded before matching so a provider
@@ -176,13 +209,26 @@
     }
     if (_inflight) return _inflight;
 
+    /* A read failed (App Check hiccup, offline, uninitialised SDK). Serve the
+       last SUCCESSFUL real result if we have a recent one, so the page stays
+       usable through an intermittent failure; only surface the error when
+       there is nothing real to fall back to. */
+    function degrade(err) {
+      var lg = loadLastGood();
+      if (lg) {
+        _cache = lg.providers;   /* seed the in-memory cache so retries are instant */
+        _cacheAt = Date.now();
+        console.warn('[SokoniProviders] read failed — serving last-good cache from ' +
+          new Date(lg.at).toISOString());
+        return { providers: lg.providers, error: null, stale: true, staleSince: lg.at };
+      }
+      return { providers: [], error: err };
+    }
+
     _inflight = (function () {
       var d = db();
       if (!d) {
-        return Promise.resolve({
-          providers: [],
-          error: new Error('Firestore is not initialised on this page'),
-        });
+        return Promise.resolve(degrade(new Error('Firestore is not initialised on this page')));
       }
       return loadSdk().then(function (m) {
         var q = m.query(
@@ -191,7 +237,15 @@
           m.orderBy('updatedAt', 'desc'),
           m.limit(SCAN_LIMIT)
         );
-        return withTimeout(m.getDocs(q), 'providers list');
+        /* App Check on this project 403s intermittently, and its token
+           auto-refreshes — so a read that fails now frequently succeeds a
+           second later with a fresh token. One transparent retry converts most
+           of those transient failures into a normal load, before any cache or
+           error path is considered. */
+        return withTimeout(m.getDocs(q), 'providers list').catch(function (e1) {
+          return new Promise(function (res) { setTimeout(res, 1500); })
+            .then(function () { return withTimeout(m.getDocs(q), 'providers list (retry)'); });
+        });
       }).then(function (snap) {
         /* An unreachable backend does NOT reject. getDocs falls back to the
            local persistence cache and resolves normally — on a cold page that
@@ -209,7 +263,7 @@
           var err = new Error('Firestore unreachable — served an empty cache, not an empty registry');
           err.code = 'unavailable';
           console.warn('[SokoniProviders] ' + err.message);
-          return { providers: [], error: err };
+          return degrade(err);
         }
         var out = [];
         snap.forEach(function (doc) {
@@ -220,12 +274,11 @@
         });
         _cache = out;
         _cacheAt = Date.now();
+        saveLastGood(out);   /* remember this success for the next hiccup */
         return { providers: out, error: null };
       }).catch(function (e) {
         console.warn('[SokoniProviders] read failed:', e && e.message);
-        /* Deliberately NOT falling back to cached or demo data — the caller
-           is told the read failed so it can say so. */
-        return { providers: [], error: e };
+        return degrade(e);
       });
     })().then(function (r) { _inflight = null; return r; },
              function (e) { _inflight = null; throw e; });
@@ -279,25 +332,51 @@
         return (b.rating || 0) - (a.rating || 0);
       });
       if (opts.limit) out = out.slice(0, opts.limit);
-      return { providers: out, error: r.error };
+      /* Propagate staleness so a page can note it is showing cached data. */
+      return { providers: out, error: r.error, stale: r.stale || false, staleSince: r.staleSince };
     });
   }
 
   /** get(uid) → Promise<{ provider: Provider|null, error: Error|null }> */
   function get(uid) {
     if (!uid) return Promise.resolve({ provider: null, error: null });
+
+    /* If the last-good list holds this provider, keep it ready as a fallback so
+       an App Check hiccup on the profile page shows the real provider instead
+       of "not available". */
+    function fromLastGood() {
+      var lg = loadLastGood();
+      if (!lg) return null;
+      for (var i = 0; i < lg.providers.length; i++) {
+        if (String(lg.providers[i].uid) === String(uid)) return lg.providers[i];
+      }
+      return null;
+    }
+    function degradeOne(err) {
+      var hit = fromLastGood();
+      if (hit) {
+        console.warn('[SokoniProviders] get failed — serving last-good record for ' + uid);
+        return { provider: hit, error: null, stale: true };
+      }
+      return { provider: null, error: err };
+    }
+
     var d = db();
-    if (!d) return Promise.resolve({ provider: null, error: new Error('Firestore is not initialised') });
+    if (!d) return Promise.resolve(degradeOne(new Error('Firestore is not initialised')));
     return loadSdk().then(function (m) {
-      return withTimeout(m.getDoc(m.doc(d, 'providers', String(uid))), 'provider read');
+      var ref = m.doc(d, 'providers', String(uid));
+      /* One transparent retry, same reasoning as list(): intermittent App
+         Check failures usually clear on the next token. */
+      return withTimeout(m.getDoc(ref), 'provider read').catch(function () {
+        return new Promise(function (res) { setTimeout(res, 1500); })
+          .then(function () { return withTimeout(m.getDoc(ref), 'provider read (retry)'); });
+      });
     }).then(function (snap) {
       /* Same trap as list(): offline, getDoc resolves from an empty cache and
          reports the document as non-existent. "This provider does not exist"
          is a much worse thing to tell a visitor than "we could not load it". */
       if (!snap.exists() && snap.metadata && snap.metadata.fromCache) {
-        var err = new Error('Firestore unreachable — cannot confirm this provider exists');
-        err.code = 'unavailable';
-        return { provider: null, error: err };
+        return degradeOne(new Error('Firestore unreachable — cannot confirm this provider exists'));
       }
       if (!snap.exists()) return { provider: null, error: null };
       var raw = snap.data();
@@ -307,7 +386,7 @@
       return { provider: normalize(snap.id, raw), error: null };
     }).catch(function (e) {
       console.warn('[SokoniProviders] get failed:', e && e.message);
-      return { provider: null, error: e };
+      return degradeOne(e);
     });
   }
 
