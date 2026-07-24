@@ -212,11 +212,39 @@ is defined and ready · but `window.SokoniDB` stays undefined and the
 `sokoni:catalogue` `appcheck-ready` event **never fires**, because the block
 awaits `__sokoniAppCheckReady`, which resolves **"rejected"**.
 
-**Where to look:** the App Check 403 itself — ReCaptcha site-key/domain
-registration for `mysokoni.co.ke`, or App Check enforcement configured without a
-working provider for this origin. The 24-hour throttle makes each failure
-long-lived for that client, so a user who hits it once sees a demo catalogue for
-a day.
+**CONFIGURATION READ FROM THE LIVE PROJECT (App Check REST API):**
+
+| Service | Enforcement |
+|---|---|
+| **firestore.googleapis.com** | **ENFORCED** |
+| firebasestorage.googleapis.com | ENFORCED |
+| identitytoolkit · dataconnect · ml · maps-backend | UNENFORCED |
+
+reCAPTCHA v3 config for the web app:
+`siteSecretSet: true` · `tokenTtl: 86400s` · **`minValidScore: 0.5`**
+
+**This explains the mechanism and the intermittency.** reCAPTCHA v3 does not
+pass/fail — it scores each visitor 0.0–1.0 for how human they look. With
+`minValidScore: 0.5`, **any visitor scoring below 0.5 is refused an App Check
+token**, and because Firestore is *enforced*, that visitor loses the entire
+catalogue and sees demo data. The 86400s TTL matches the observed 24-hour
+throttle, so one bad score locks a user out for a day.
+
+Scores are depressed by exactly the conditions much of this audience uses:
+carrier-grade NAT and shared mobile IPs, privacy browsers, ad-blockers, VPNs,
+older devices, and first-time visitors with no reCAPTCHA history. This is
+therefore **not a rare edge case** — it is a threshold that will systematically
+exclude a fraction of legitimate users, and the site-key/domain registration is
+NOT implicated (`siteSecretSet: true`, and tokens do succeed in some sessions).
+
+**Still unmeasured:** what fraction of real visitors score below 0.5. That
+number decides severity and needs the App Check metrics dashboard (request
+counts by verdict), which the REST API used here does not expose.
+
+**Mitigations are a security decision, not taken here.** The usual levers are
+lowering `minValidScore`, or setting Firestore to UNENFORCED/monitor while the
+score distribution is measured — both weaken an anti-abuse control and belong
+with whoever owns that trade-off.
 
 It is the *fallback* that makes this severe regardless of cause — the page looks
 fully populated, so a catalogue failure produces no visible symptom.
