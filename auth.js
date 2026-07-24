@@ -977,7 +977,56 @@ async function signInWithGoogle() {
         popupSupported: _isPopupSupported(),
         standalone: !!(window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone),
         ua: navigator.userAgent.slice(0, 80),
+        appCheckState: window.__sokoniAppCheckState || 'absent',
     });
+
+    /* ── App Check guard ───────────────────────────────────────────────────
+       Mirrors the phone-OTP guard (see requestOtp) — the Google path had none.
+       Firebase attaches an App Check token to auth calls; when the exchange has
+       been REJECTED the call does not fail cleanly, it surfaces Firebase's
+       catch-all `auth/internal-error`. That is indistinguishable from an ITP
+       problem, so the code below falls back to redirect, the user completes the
+       whole Google round-trip, and it fails again — the reported symptom.
+
+       Observed in production: exchangeRecaptchaV3Token → 403
+       {"message":"App attestation failed."} with __sokoniAppCheckState
+       'rejected' before any click.
+
+       This does NOT weaken App Check and does NOT bypass it — it fails fast
+       with an accurate message instead of sending the user through a doomed
+       OAuth round-trip, and it never masks the underlying error (the code and
+       correlation id are logged, and the message carries the id).
+
+       'pending'  → wait, bounded, exactly as the OTP path does.
+       'rejected' → stop here.
+       'timeout'/'exchanged'/'disabled'/absent → proceed; Firebase queues the
+       call internally and may still succeed once a token arrives. */
+    let _acState = window.__sokoniAppCheckState || 'absent';
+    if (_acState === 'pending' && window.__sokoniAppCheckReady) {
+        showAuthMsg('Preparing security check…', '');
+        _acState = await Promise.race([
+            window.__sokoniAppCheckReady,
+            new Promise(r => setTimeout(() => r('timeout'), 10000)),
+        ]);
+        showAuthMsg('', '');
+    }
+    if (_acState === 'rejected') {
+        console.error('[AUTH ERROR] Google sign-in aborted before OAuth — App Check rejected', {
+            corrId: _gCorrId, appCheckState: _acState,
+        });
+        console.error('[AUTH ERROR] serialized:', JSON.stringify({
+            stage: 'appcheck-precheck', code: 'sokoni/appcheck-rejected',
+            appCheckState: _acState, corrId: _gCorrId,
+            hint: 'exchangeRecaptchaV3Token was refused (App attestation failed). '
+                + 'Not an OAuth fault — the Google round-trip was never started.',
+        }));
+        _resetGoogleBtn();
+        showAuthMsg(
+            'Security check failed, so sign-in could not start. Please refresh the page '
+            + 'and try again. If it keeps happening, use your email and password. '
+            + '[' + _gCorrId + ']', 'error');
+        return;   /* fail fast — no retry loop, no doomed OAuth round-trip */
+    }
 
     try {
         const {
