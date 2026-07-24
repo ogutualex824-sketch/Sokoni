@@ -16,6 +16,39 @@ counted as a pass, so a partial run states exactly what was and was not certifie
 | RC-05 Search | cold/warm cache · typo · bilingual · deleted disappears · edited updates |
 | RC-06 PWA | manifest · service worker · offline · versioned cache |
 
+## How to write a suite — assert in four layers
+
+An end-state check alone is the weakest useful assertion. A page can return 200,
+render, and serve fabricated data; an export can complete its request lifecycle
+and still fail at the final authorization step. Both happened here. So assert in
+layers, outermost first:
+
+1. **Sequence** — the expected order of significant events.
+   RC-07 asserts `pending → processing → ready` rather than "did it reach
+   ready?". A final-state check reports a *timeout* when a job stalls at
+   `pending`; the sequence view reports **where** it stopped.
+2. **Cause** — why a transition happened, where practical.
+   RC-07 asserts a failure carries a `failureCode`, so "it broke" becomes
+   "it broke *here, for this reason*". RC-09's negative control does the same for
+   authorization: it proves a `deny` came from the rules and not from a client
+   that was blocked before the rules ran.
+3. **Outcome** — the final observable state, with its artefacts.
+   Status `ready` **and** a `downloadUrl` **and** an `expiresAt` — not just the
+   status field.
+4. **Failure shape** — would a failure here be transparent or convincing?
+   If the subsystem can fail while still *looking* healthy, that is a defect to
+   file, not a gap to note. This is the mandatory gate in
+   [RELEASE_ACCEPTANCE](../../docs/RELEASE_ACCEPTANCE.md).
+
+These reinforce each other: if layer 1 or 2 regresses while layer 3 still looks
+acceptable, the suite still catches it. That is the case end-state checks miss
+and users find first.
+
+**Corollary — never let the harness manufacture a pass.** If a step cannot
+exercise the real path, it must report `BLOCKED` with the reason. RC-04 refuses
+to fake the inventory decrement with an admin write, because a PASS obtained by
+bypassing the production path certifies nothing.
+
 ## Backends (pluggable — a suite is written once, runs on any)
 
 - **`static`** — no auth. Serves the repo over HTTP and runs the UNAUTHENTICATED
