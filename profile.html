@@ -1,5 +1,16 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
+<!-- sk-no-header: profile ships its own fixed nav.upn (logo, notifications, messages,
+     theme, settings gear). style.css hides every body > nav unless this class is present,
+     and shared-header.js lists profile.html in EXCLUDED so no #sk-top-nav replaces it —
+     so without the class the page had NO top navigation at all: nav.upn computed to
+     display:none, which collapsed the settings gear to a 0x0 box that could not be
+     clicked. The class also drops style.css's 64px body padding-top, which was reserving
+     space for a header that never rendered on top of .up-page's own 68px.
+     data-own-header: tells sokoni-ui-extras.js this page owns its header, so it skips
+     the floating search/inbox buttons and .menu-toggle. Those are position:fixed at
+     top:20px / z-index 9950 and would otherwise land on top of nav.upn — the same
+     overlap already documented for seller.html. -->
+<html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header>
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -50,16 +61,46 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
   border-bottom:1px solid rgba(113,255,0,0.12);
   display:flex;align-items:center;justify-content:space-between;padding:0 18px;z-index:1000;
 }
-.upn-left{display:flex;align-items:center;gap:10px;flex:1;}
+/* min-width:0 — without it a flex item refuses to shrink below its content width
+   (min-width defaults to auto). The title is white-space:nowrap, so .upn-left held a
+   184px floor, .upn-right needed 200px for its four 44px tap targets, and 184+200+36
+   padding = 420px could not fit a 390px — let alone a 360px — screen. Nothing shrank;
+   the row simply overflowed to the right and the settings gear was pushed off the edge
+   (right edge x=402 at every width). At 360px its centre sat outside the viewport, so
+   it could not be tapped at all. Let the title truncate instead of the controls. */
+.upn-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0;}
 .upn-back{
   width:36px;height:36px;display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);
   border-radius:10px;color:rgba(255,255,255,0.7);text-decoration:none;font-size:14px;transition:all .15s;
 }
 .upn-back:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
-.upn-logo{height:26px;}
-.upn-title{font-size:15px;font-weight:900;color:#fff;letter-spacing:-.01em;white-space:nowrap;}
-.upn-right{display:flex;align-items:center;gap:8px;flex:1;justify-content:flex-end;}
+/* The asset is 480x320. Global stylesheets set img{height:auto}, which .upn-logo
+   overrode with a fixed 26px height while leaving width:auto to fall back to the
+   intrinsic 480px — so the logo drew 480x26, an unreadable horizontal smear. It was
+   never noticed because this whole nav computed to display:none until now.
+   Making the link a flex container lets width:auto resolve against the aspect ratio
+   (26 x 480/320 = 39px) instead of the intrinsic width; object-fit:contain guarantees
+   no distortion even if the asset's dimensions change later. */
+.upn-brand{display:flex;align-items:center;flex:0 0 auto;}
+.upn-logo{height:26px;width:auto;object-fit:contain;}
+/* The four controls need a fixed 200px and the back button 36px, so on a phone the
+   remaining ~120px cannot hold both the wordmark (~86px) and the title. With both
+   present the title truncated to 8-18px — an ellipsis with no word in front of it.
+   The wordmark is the redundant one here: the page already says "My Profile", and Home
+   is one tap away in the bottom nav. Drop it below 480px so the title stays legible. */
+@media(max-width:480px){
+  /* Hide the LINK, not just the image inside it: the global 44px tap-target minimum
+     applies to the <a>, so an anchor whose only child is display:none still reserved a
+     full 44px and kept squeezing the title. */
+  .upn-brand{display:none;}
+}
+.upn-title{font-size:15px;font-weight:900;color:#fff;letter-spacing:-.01em;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-width:0;}
+/* flex:0 0 auto, not flex:1 — these are fixed 44px tap targets, so the group must be
+   sized by its content and never stretched or compressed. It keeps its 200px and the
+   title absorbs the difference. */
+.upn-right{display:flex;align-items:center;gap:8px;flex:0 0 auto;justify-content:flex-end;}
 .upn-btn{
   width:36px;height:36px;display:flex;align-items:center;justify-content:center;
   background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);
@@ -68,6 +109,20 @@ body{font-family:'Inter','Segoe UI',Arial,sans-serif;background:var(--bg);color:
 }
 .upn-btn:hover{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:#71ff00;}
 .upn-gear{font-size:16px;}
+/* Must sit AFTER the .upn-right rule above: a media query adds no specificity, so with
+   equal specificity source order decides the winner. Placed before it, this gap was
+   silently overridden back to 8px.
+   4x44 + 3x6 = 194px. At 360px the left side gets 360 - 36 padding - 194 = 130px, and
+   back(44) + gap(8) + "My Profile"(76.09) = 128.09 fits inside it with room to spare.
+   Gaps are spacing only; every control keeps its full 44px tap target. */
+@media(max-width:480px){
+  .upn-right{gap:6px;}
+  /* "My Profile" measures 76.09px at this weight; the box resolved to exactly 76px, so
+     it still ellipsised to "My Prof...". scrollWidth reports integers and rounded the
+     0.09px away, which is why the numbers looked like a clean fit. Two more pixels from
+     the gap give the text real headroom rather than a hairline tie. */
+  .upn-left{gap:8px;}
+}
 
 /* ── Page wrapper ── */
 .up-page{padding-top:68px;max-width:900px;margin:0 auto;padding-left:14px;padding-right:14px;}
@@ -1549,7 +1604,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <nav class="upn">
   <div class="upn-left">
     <a href="/" class="upn-back" title="Back">&#8592;</a>
-    <a href="/"><img loading="lazy" src="assets/sokoni-logo-dark.png" alt="SOKONI" class="upn-logo"></a>
+    <a href="/" class="upn-brand"><img loading="lazy" src="assets/sokoni-logo-dark.png" alt="SOKONI" class="upn-logo"></a>
     <span class="upn-title">My Profile</span>
   </div>
   <div class="upn-right">
@@ -3456,9 +3511,13 @@ function loadBookings(){
   if(window.firebaseDB && _user && _user.uid){
     import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
       var db = window.firebaseDB;
-      var q = m.query(m.collection(db,'bookings'), m.orderBy('createdAt','desc'), m.limit(100));
+      /* Filter server-side: /bookings is owner-scoped, so requesting the newest
+         100 bookings platform-wide and narrowing here was both denied by the
+         rules and wrong — a user with older bookings saw none of them. */
+      var q = m.query(m.collection(db,'bookings'), m.where('userId','==',_user.uid), m.limit(100));
       _profBookingsUnsub = m.onSnapshot(q, function(snap){
-        var fsb = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); }).filter(function(b){ return b.userId===_user.uid; });
+        var fsb = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); })
+          .sort(function(a,b){ return (b.createdAt&&b.createdAt.seconds||0)-(a.createdAt&&a.createdAt.seconds||0); });
         if(fsb.length){ _render(fsb); }
       }, function(){});
     }).catch(function(){});
