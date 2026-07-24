@@ -19,7 +19,10 @@ cancelEvent, createCourse, checkInTicket, compareVehicles). The working callable
 
 No structural difference explains the split: runtime, `ingressSettings` (`ALLOW_ALL`),
 codebase and service account are identical across passing and failing functions.
-This is IAM-state drift from deploy history.
+The cause is not yet established. Deliberate private deployment, differing deployment
+mechanisms, changed platform defaults and IAM drift all remain possible. See
+CALLABLE_INVOKER_REVIEW.md — the intended caller per function is what distinguishes
+them, and that must be confirmed before any binding is changed.
 
 ## Scope of this finding — read before acting
 
