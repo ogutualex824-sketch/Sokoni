@@ -85,13 +85,30 @@ srv.listen(0, async () => {
     ck('NOT offered for not-found',         /check your connection/i.test(out.notFound) === false);
     ck('NOT offered for internal',          /check your connection/i.test(out.internal) === false);
 
-    console.log('\n── The machine-readable part always survives ──');
-    ck('raw code included',        /code: permission-denied/.test(out.denied));
-    ck('server message preserved', /do not belong to this merchant/.test(out.denied));
-    ck('business id included',     /BIZ_123/.test(out.denied));
-    ck('branch id included',       /BR_1/.test(out.denied));
-    ck('unknown code still usable', /code: some-new-code/.test(out.unknown) && /novel failure/.test(out.unknown));
-    ck('functions/ prefix stripped', /code: permission-denied/.test(out.prefixed));
+    /* The machine-readable part is DELIBERATELY NOT on screen.
+       These assertions used to require code:/business:/branch: and the raw server
+       message inside the text shown to the merchant. pos-setup.html removed that
+       ON PURPOSE and records why: Firestore document ids and Firebase error codes
+       mean nothing to a merchant, they invite an id to be read as a name (a real
+       report described a branch called 'internal', which was actually
+       'code: internal'), and printing database keys into the UI is needless
+       disclosure.
+
+       The detail was not dropped. _provDiagnose still sends all of it to
+       console.error and SokoniAsync.report, which is where support reads it.
+       Restoring the old assertions would put those identifiers back on screen and
+       reintroduce the reported defect, so the CONTRACT is inverted here rather
+       than the code being bent to satisfy a stale test. */
+    console.log('');
+    console.log('-- Identifiers stay OUT of the merchant-facing message --');
+    ck('no raw firebase code on screen', /code:\s*permission-denied/.test(out.denied) === false);
+    ck('no business id on screen',       /BIZ_123/.test(out.denied) === false);
+    ck('no branch id on screen',         /BR_1/.test(out.denied) === false);
+    ck('no device id on screen',         /DEV_9/.test(out.denied) === false);
+    ck('unknown code still gets a usable message',
+       typeof out.unknown === 'string' && out.unknown.trim().length > 30);
+    ck('functions/ prefix handled without leaking the code',
+       typeof out.prefixed === 'string' && /code:\s*permission-denied/.test(out.prefixed) === false);
 
     console.log('\n── Never blank ──');
     Object.entries(out).forEach(([k, v]) =>
