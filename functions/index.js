@@ -10688,7 +10688,18 @@ exports.orderAdvance         = _notify.orderAdvance;   /* 11-stage order timelin
 const _acctMgr = require("./account-manager");
 exports.scheduleAccountDeletion   = _acctMgr.scheduleAccountDeletion;
 exports.cancelAccountDeletion     = _acctMgr.cancelAccountDeletion;
-exports.requestDataExport         = _acctMgr.requestDataExport;
+/* requestDataExport is intentionally NOT re-exported from account-manager.
+   It is already exported ~600 lines above from ./data-export, and that is the
+   complete pipeline: data-export.js writes both dataExportRequests (status) AND
+   dataExportQueue/{id}, and its processDataExport worker triggers on
+   dataExportQueue/{requestId} to actually build the export. This later binding
+   silently shadowed that one (last write wins), and account-manager's version
+   writes ONLY dataExportRequests and never dataExportQueue — so the worker never
+   fired. A user's GDPR Art.20 / Kenya DPA §26 request was queued and then
+   processed by nothing. The data-export version also enforces App Check, which
+   this one did not, so restoring it also closes that gap.
+   (account-manager.js still defines the function; it is simply no longer the
+   deployed entry point. Left in place — removing it is unrelated cleanup.) */
 exports.revokeAllSessions         = _acctMgr.revokeAllSessions;
 exports.finaliseExpiredDeletions  = _acctMgr.finaliseExpiredDeletions;
 

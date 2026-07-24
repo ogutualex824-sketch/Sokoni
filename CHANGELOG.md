@@ -1,4 +1,59 @@
-﻿## [2026-07-24] — fix(indexes): source had drifted BELOW production — a deploy would have deleted 3 live indexes
+﻿## [2026-07-24] — fix(privacy): the live GDPR/DPA data-export endpoint queued requests nothing processed
+
+Hardening pass 2, cont. `verify-architecture` flagged a duplicate export,
+`requestDataExport`, in `functions/index.js`. It was not cosmetic.
+
+**Two implementations, last-write-wins.** `index.js:10078` bound
+`requestDataExport` to `./data-export`, then `:10691` re-bound it to
+`./account-manager` ~600 lines later, so account-manager's version was the one
+actually deployed.
+
+**The deployed version was the broken one.** `data-export.js` is the complete
+pipeline: `requestDataExport` writes BOTH `dataExportRequests` (user-facing
+status) AND `dataExportQueue/{id}`, and `processDataExport` (an
+`onDocumentCreated` worker on `dataExportQueue/{requestId}`) builds the actual
+export. account-manager's `requestDataExport` writes ONLY `dataExportRequests` —
+it never writes `dataExportQueue` (grepped: 0 occurrences) — so the worker's
+trigger doc was never created and the worker never ran. A user exercising GDPR
+Art.20 / Kenya DPA §26 was told "you'll receive an email when it's ready" and the
+export was then processed by nothing. The shadow also lacked `enforceAppCheck`,
+which the data-export version enforces.
+
+**Fix.** Removed the shadowing binding at `:10691` so the data-export version —
+already paired with the `getDataExportStatus` reader and `processDataExport`
+worker that index.js wires at `:10079`–`:10080` — is the deployed entry point.
+Security improves (App Check now enforced). The client contract is unchanged:
+`account-centre.html:2178` calls the callable by name. account-manager.js still
+defines its copy; it is simply no longer the deployed entry point (removing it is
+unrelated cleanup, left for a focused change).
+
+Evidence / regression: `node -c` clean, syntax gate 1032 files, duplicate-export
+violations 0, payment-authority 22/0.
+
+**Deployment status — NOT yet production-proven.** This corrects the SOURCE so the
+pipeline is internally consistent. Two things must be confirmed before the fix is
+live and end-to-end functional, and I could not verify either from the repo:
+(1) `requestDataExport` must be re-deployed to swap the running version;
+(2) `processDataExport` must actually be deployed and listening on
+`dataExportQueue` — if that worker was never deployed (this repo has a documented
+history of exported-but-undeployed subsystems), the export still will not
+complete. **Smallest safe next step:** confirm `processDataExport`'s deployment
+state, then deploy `requestDataExport` + `processDataExport` together and run one
+real export end to end.
+
+### Documented, deliberately NOT changed
+
+`verify-architecture` also fails on **CF export count 1581 > 1480 hard budget**.
+This is a scale/cost/cold-start concern, not a correctness defect, and it is
+pre-existing (my one-line change does not move it materially). Consolidating ~100
+callables behind the existing 13 domain dispatchers is a real architectural effort
+with live-endpoint deploy risk; guessing at it at the tail of a session would be
+reckless. Smallest safe next step: pick ONE cohesive domain already fronted by a
+dispatcher, migrate its callables behind it, re-run `verify-architecture`, repeat.
+
+Files affected: `functions/index.js` (removed 1 shadowing export binding).
+
+## [2026-07-24] — fix(indexes): source had drifted BELOW production — a deploy would have deleted 3 live indexes
 
 Hardening pass 2. Highest-value finding of the session so far, and one that
 inverted my own first assumption mid-investigation.
