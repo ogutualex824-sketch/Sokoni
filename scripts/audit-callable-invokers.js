@@ -162,7 +162,16 @@ const kindOf = (f) =>
       return { id, kind, verdict: 'SKIP', note: 'not HTTP-invoked' };
     }
 
-    const svc  = id.toLowerCase();                      // TRAP 1
+    /* TRAP 1 — the Cloud Run service name.
+       This used to be `id.toLowerCase()`, which is an ASSUMPTION about how Cloud
+       Functions v2 derives the backing service name. It happens to be right for
+       every function checked so far, but an assumption in the one field used to
+       address the resource is exactly where TRAP 2 bites: a wrong name returns an
+       empty policy rather than an error, so a bad guess reads as "no bindings".
+
+       `functions:list` reports the real name in runServiceId. Prefer it, and fall
+       back to lowercasing only when the inventory does not carry it. */
+    const svc  = meta.runServiceId || id.toLowerCase();
     const base = `/v2/projects/${PROJECT}/locations/${REGION}/services/${svc}`;
 
     /* Policy FIRST. If it names an invoker the service must exist, so the extra

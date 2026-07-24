@@ -771,3 +771,79 @@ commission only, so introducing a gateway fee changes the reconciliation identit
 
 Once these are approved, implementation is wiring `debitWalletTxn` into a reversal
 branch — the same shape as the credit path, using FinOS and adding no new authority.
+
+---
+
+## ADR-0016 — Wallet STK Push: the first user-visible instance of the invoker gap
+
+**Status:** OPEN — one IAM binding, not applied here (gcloud unavailable in this environment)
+**Date:** 2026-07-24
+
+### Symptom
+
+"Request STK Push" in the wallet does nothing. No STK prompt reaches the phone.
+
+### Where the chain breaks
+
+| Stage | Status | Evidence |
+|---|---|---|
+| Client sends request | ✅ | `_initiateTopUp()` in `sfos-wallet.html` calls `httpsCallable(fns,'initiateWalletTopUp')` |
+| Cloud Run invocation | ❌ | **403 before the handler runs** |
+| Function handler | ❌ | never reached |
+| IntaSend / STK / callback / wallet credit | ❌ | never reached |
+
+### Root cause — infrastructure, not code
+
+```
+service                invoker     probe   ingress
+initiatewallettopup    (NONE)      403     INGRESS_TRAFFIC_ALL
+confirmwallettopup     allUsers    401     INGRESS_TRAFFIC_ALL
+```
+
+The two are consecutive functions in the same flow and the same file
+(`functions/wallet.js`), deployed together, with identical ingress. The only
+difference is the `roles/run.invoker` binding. 403 is rejection at the invocation
+layer; 401 is the healthy "reached the function, its own auth rejected it".
+
+**No application code is at fault.** The client is correct and the handler is
+correct; the request never arrives.
+
+This is the first time a documented entry in `CALLABLE_INVOKER_GAPS.md` has been
+observed as a user-visible symptom rather than a table row —
+`initiateWalletTopUp` was already among the 346.
+
+### Service name was verified, not assumed
+
+The audit previously derived the Cloud Run service name as `id.toLowerCase()`. That
+is an assumption about how Cloud Functions v2 names its backing service, and it sits
+in the one field used to address the resource — where a wrong value returns an EMPTY
+POLICY rather than an error, and reads as "no bindings". `functions:list` reports
+the real name in `runServiceId`; the tool now prefers it. Confirmed for this case:
+`runServiceId = initiatewallettopup`, `GET` on that service returns 200.
+
+### Remediation
+
+```bash
+gcloud run services add-iam-policy-binding initiatewallettopup \
+  --region=us-central1 --member=allUsers --role=roles/run.invoker --project=sokoni-aeb26
+```
+
+Grants the binding `confirmWalletTopUp` already holds. Security is unchanged: the
+function still enforces `request.auth` internally, which is the real boundary for a
+callable.
+
+### Audit trail to record on resolution
+
+```
+Before:  initiateWalletTopUp → 403   (rejected at invocation layer)
+After:   initiateWalletTopUp → 401   (handler reached, unauthenticated rejected)
+Then:    authenticated request → STK initiation → callback → wallet credit
+```
+
+Verify the transition with
+`node scripts/audit-callable-invokers.js initiateWalletTopUp --probe` BEFORE testing
+any downstream stage. Phases 3–6 of the wallet investigation (gateway, callback,
+wallet credit, transfers, replay) were deliberately not started: they sit downstream
+of a request that never arrives, so results would be uninterpretable.
+
+Note the callback destination remains the open question in **ADR-0014**.
