@@ -1772,7 +1772,18 @@ function registerProvider(){
        below — omitting the field entirely just made the record invisible for
        an unexplained reason. */
     status: "pending",
-    jobsCompleted: 0, available: true, verified: false,
+    /* `verified` is NOT written here, and must never be added back.
+       firestore.rules noAdminFields() rejects a create carrying any of
+       isAdmin / suspended / banned / adminApproved / featured / verified /
+       flagged / adminNote / role / approved / approvedAt / approvedBy /
+       commissionRate — the KEY's presence is what fails, not its value. So
+       `verified: false`, which reads as a harmless honest default, made the
+       whole write 403 and self-registration had never once succeeded. That is
+       why the providers collection was empty despite this form existing.
+       Verified against production: identical payload with the key → 403,
+       without it → 200. Absence already means unverified; normalize() in
+       sokoni-providers.js tests `d.verified === true`. */
+    jobsCompleted: 0, available: true,
     email: user?.email||"",
     serviceSpec: specData,
     socials: {
