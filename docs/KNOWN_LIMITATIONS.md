@@ -158,6 +158,42 @@ export TTL (age-based, e.g. matching `EXPORT_TTL_MS`), so retention is enforced
 by infrastructure rather than depending on application cleanup paths that only
 run on the happy path.
 
+### 0e. Logged-out visitors are shown a MOCK catalogue, not real listings — 🚫 P0
+
+**Anonymous visitors do not see any real merchant product.** The public home
+feed renders hardcoded demo data while the 129 real products stay invisible.
+
+Evidence:
+
+| Check | Result |
+|---|---|
+| Real products in Firestore | **129** |
+| Products shown to an anonymous visitor | 91 priced items — site looks healthy |
+| `Infinix Hot 40i` (shown publicly) | **NOT IN FIRESTORE** |
+| `Vitenge Flare Dress` (shown publicly) | **NOT IN FIRESTORE** |
+| `Shea Butter Moisturiser 500ml` (shown publicly) | **NOT IN FIRESTORE** |
+| Source of those names | hardcoded in `sokoni-mock-data.js`, `script.js`, `category.js` |
+| Real product names (e.g. `PEACH MANGO ICE`) | never rendered anonymously |
+
+**Same root cause as 0d:** the anonymous client read of `products` is denied, so
+the demo fallback engages. It is the *fallback* that makes this severe — the
+page looks fully populated, so a total public-catalogue failure produces no
+visible symptom. This is the "demo-fallback masks failures" pattern, in
+production, on the storefront.
+
+**Impact:**
+- Every merchant's listing is invisible to logged-out visitors — no acquisition
+  path reaches a real product.
+- Visitors browse and can tap **fabricated products with prices**. Showing
+  invented listings to consumers is a trust and consumer-protection concern
+  independent of the technical fault.
+- It explains why 0d went unnoticed: the storefront never *looked* broken.
+
+**Not fixed here.** The correct remedy is the same policy reconciliation as 0d
+(anonymous `products` read), which is a security-review decision. A second,
+separate question for that review: whether a demo fallback should ever engage in
+production at all, given it converts an outage into silently fake content.
+
 ### 0d. Uncached product pages fail for logged-out visitors — 🚫 conversion impact
 
 **Symptom:** opening a product by URL shows "Product Not Found" for a product
