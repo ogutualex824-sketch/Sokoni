@@ -316,28 +316,43 @@ body.light-mode .yml-price { color: #1a8a00; }
 }
 .prd-gallery-main {
   position: relative;
-  /* Was aspect-ratio: 1/1 — a full-width square, so on a phone the image ate
-     almost the whole viewport and pushed price, variants and Add to Cart below
-     the fold. 4/3 plus a viewport cap shortens it while keeping the product
-     fully visible: the img below uses object-fit:contain, so nothing is
-     cropped, it is only letterboxed into a shorter frame. */
-  aspect-ratio: 4 / 3;
-  max-height: 56vh;
+  /* Product photography is overwhelmingly SQUARE, and this frame was 4/3 with
+     object-fit:contain — so a square photo was letterboxed with dead bars down
+     both sides and rendered smaller than the space allowed. That was the
+     "too small, surrounded by empty padding" problem.
+
+     A 1/1 frame lets a square image fill the full available width. The earlier
+     concern that a full-width square pushes price and Add to Cart below the
+     fold is handled by the viewport cap rather than by shrinking the frame:
+     max-height keeps the gallery to ~half the screen, and because the image
+     still uses object-fit:contain a non-square photo is letterboxed rather
+     than cropped — aspect ratio is always preserved. */
+  aspect-ratio: 1 / 1;
+  max-height: 52vh;
+  margin-inline: auto;
   overflow: hidden;
   cursor: zoom-in;
 }
 .prd-gallery-main img {
   width: 100%; height: 100%;
   object-fit: contain;
+  /* Keep upscaled/high-DPI product shots crisp rather than smeared. */
+  image-rendering: -webkit-optimize-contrast;
   transition: transform .35s cubic-bezier(.22,.68,0,1.1);
   display: block;
+  margin: 0 auto;
 }
 .prd-gallery-main:hover img { transform: scale(1.04); }
+/* Tap-to-zoom hint. Kept (the behaviour is unchanged) but pinned to the corner
+   and made unobtrusive so it never sits over the product itself: a contained
+   image is centred, so the corner is the one region it cannot occupy. */
 .prd-gallery-zoom-hint {
-  position: absolute; bottom: 10px; right: 10px;
-  background: rgba(0,0,0,0.55); color: rgba(255,255,255,0.7);
-  border-radius: 8px; padding: 4px 10px; font-size: 11px; font-weight: 700;
+  position: absolute; bottom: 8px; right: 8px;
+  background: rgba(0,0,0,0.42); color: rgba(255,255,255,0.62);
+  border-radius: 999px; padding: 3px 9px; font-size: 10px; font-weight: 700;
+  letter-spacing: .02em;
   pointer-events: none; backdrop-filter: blur(6px);
+  z-index: 2;
 }
 .prd-gallery-nav {
   position: absolute; top: 50%; transform: translateY(-50%);
@@ -360,17 +375,28 @@ body.light-mode .yml-price { color: #1a8a00; }
   background: rgba(255,255,255,0.2); cursor: pointer; transition: all .2s;
 }
 .prd-gallery-dot.active { background: #71ff00; width: 18px; border-radius: 3px; }
+/* Thumbnails sit directly below the main image. Centred when there are few
+   enough to fit, still scrollable when there are many — justify-content:center
+   on a scroll container would clip the first items once they overflow, so
+   `margin-inline:auto` on the row is used instead via the flex default. */
 .prd-thumb-strip {
-  display: flex; gap: 6px; padding: 10px 12px 12px;
+  display: flex; gap: 8px; padding: 10px 12px 12px;
+  justify-content: safe center;
   overflow-x: auto; scrollbar-width: none;
 }
 .prd-thumb-strip::-webkit-scrollbar { display: none; }
+/* Evenly sized and aligned: fixed box, no shrink, so every thumbnail is
+   identical regardless of the source image's aspect ratio. */
 .prd-thumb {
-  width: 56px; height: 56px; border-radius: 10px; overflow: hidden;
+  width: 58px; height: 58px; border-radius: 10px; overflow: hidden;
   border: 2px solid rgba(255,255,255,0.08); cursor: pointer;
-  flex-shrink: 0; transition: border-color .15s;
+  flex: 0 0 58px; transition: border-color .15s, opacity .15s;
+  opacity: .65;
 }
-.prd-thumb.active { border-color: #71ff00; }
+/* Active thumbnail is unmistakable — accent border plus full opacity, rather
+   than a border change alone which is easy to miss on a dark surface. */
+.prd-thumb.active { border-color: #71ff00; opacity: 1; }
+.prd-thumb:hover { opacity: 1; }
 .prd-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .prd-video-thumb {
   position: relative; display: flex; align-items: center; justify-content: center;

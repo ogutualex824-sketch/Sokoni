@@ -1,5 +1,10 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<!-- data-no-header: this page has its OWN dedicated header (back · title ·
+     wishlist). Without it, shared-header.js injects the full site nav on top,
+     giving two stacked bars — measured at 110px + 56px = 166px of chrome on an
+     844px viewport before any product content. Bottom nav still provides
+     site-wide navigation, so nothing becomes unreachable. -->
+<html lang="en" data-splash="1" data-no-header="true">
 
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
@@ -48,49 +53,21 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 
 <!-- PREMIUM PRODUCT NAVBAR -->
+<!-- Dedicated Product Details header: back · title · wishlist, nothing else.
+     The logo, cart, cart badge, login button and profile avatar were removed —
+     they duplicated the global nav (which this page no longer injects) and the
+     absolutely-centred title rendered ON TOP of the logo. All of those controls
+     remain reachable from the bottom nav. -->
 <nav class="product-nav-premium sk-sub-nav">
-  <div class="pnp-left">
-    <a href="/" class="pnp-back" title="Back to marketplace">
-      ←
-    </a>
-    <a href="/" class="pnp-logo-link">
-      <img loading="lazy" src="assets/sokoni-logo-dark.png" alt="SOKONI" class="pnp-logo">
-    </a>
-  </div>
-  <div class="pnp-center">
-    <span class="pnp-title">Product Details</span>
-  </div>
-  <div class="pnp-right">
-    <a href="wishlist.html" class="pnp-icon-btn" title="Wishlist">
-      ❤️
-    </a>
-    <a href="cart.html" class="pnp-icon-btn pnp-cart" title="Cart">
-      🛒
-      <span class="pnp-cart-badge" id="cartCount">0</span>
-    </a>
-    <div id="authButtons">
-      <a href="login.html" class="pnp-login-btn">Login</a>
-    </div>
-    <a href="profile.html" class="pnp-avatar" id="pnpProfileAvatar" title="My Profile" style="display:none;">
-      <span id="pnpProfileInitial">👤</span>
-    </a>
-  </div>
+  <a href="/" class="pnp-back" title="Back to marketplace" aria-label="Back">←</a>
+  <span class="pnp-title">Product Details</span>
+  <a href="wishlist.html" class="pnp-icon-btn" title="Wishlist" aria-label="Wishlist">❤️</a>
 </nav>
-<script>
-(function(){
-  var user=null;
-  try{user=JSON.parse(localStorage.getItem('sokoniUser'));}catch(e){}
-  if(user&&(user.name||user.email||user.phone)){
-    var ab=document.getElementById('authButtons');
-    var av=document.getElementById('pnpProfileAvatar');
-    var init=document.getElementById('pnpProfileInitial');
-    var label=user.name||user.email||user.phone||'';
-    if(ab) ab.style.setProperty('display','none','important');
-    if(av) av.style.display='flex';
-    if(init) init.textContent=label?label[0].toUpperCase():'👤';
-  }
-})();
-</script>
+<!-- The header auth script was removed with the elements it drove (#authButtons,
+     #pnpProfileAvatar, #pnpProfileInitial). It was already null-guarded, so it
+     would have become a silent no-op; deleting it avoids leaving dead code that
+     implies those controls still exist. Sign-in state is unaffected — nothing
+     else on this page read it, and auth remains handled globally. -->
 
 <style>
 .product-nav-premium {
@@ -107,7 +84,19 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   padding: 0 18px;
   z-index: 1000;
 }
-.pnp-left { display: flex; align-items: center; gap: 12px; }
+/* Three-column header: fixed-width control, flexible centred title, fixed-width
+   control. The title was `position:absolute; left:50%`, which floated it over
+   the logo and collided on narrow screens. Giving the title flex:1 and centring
+   its text keeps it optically centred between two equal-width controls without
+   overlapping anything, at any width. */
+.pnp-title {
+  flex: 1;
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pnp-back {
   width: 36px; height: 36px;
   display: flex; align-items: center; justify-content: center;
@@ -120,11 +109,9 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   transition: all .15s;
 }
 .pnp-back:hover { background: rgba(113,255,0,0.1); border-color: rgba(113,255,0,0.3); color: #71ff00; }
-.pnp-logo { height: 28px; display: block; }
-.pnp-logo-link { display: flex; align-items: center; }
-.pnp-center { position: absolute; left: 50%; transform: translateX(-50%); }
-.pnp-title { font-size: 13px; font-weight: 800; color: rgba(255,255,255,0.55); letter-spacing: .04em; text-transform: uppercase; }
-.pnp-right { display: flex; align-items: center; gap: 8px; }
+/* .pnp-logo / .pnp-logo-link / .pnp-center removed with their markup.
+   .pnp-title keeps its typography here; its LAYOUT is set above. */
+.pnp-title { font-size: 13px; font-weight: 800; color: rgba(255,255,255,0.72); letter-spacing: .04em; text-transform: uppercase; }
 .pnp-icon-btn {
   position: relative;
   width: 36px; height: 36px;
@@ -177,18 +164,18 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 }
 .pnp-avatar:active { background: rgba(113,255,0,0.22); }
 /* Push content below fixed nav */
-.product-page { padding-top: 72px; }
+/* Matches the 60px header. Was 72px, which assumed the global site header sat
+   above this one; that header is no longer injected here (data-no-header). */
+.product-page { padding-top: 60px; }
 /* Mobile tweaks */
 @media (max-width: 600px) {
-  .product-nav-premium { height: 56px; padding: 0 12px; }
-  .pnp-logo { height: 34px; filter: drop-shadow(0 0 10px rgba(113,255,0,0.3)) brightness(1.08); }
-  .pnp-title { font-size: 11px; }
-  .pnp-back { width: 44px; height: 44px; min-width: 44px; font-size: 13px; }
-  .pnp-icon-btn { width: 44px; height: 44px; min-width: 44px; font-size: 14px; }
-  .pnp-login-btn { padding: 6px 12px; font-size: 11px; }
-  .pnp-right { gap: 5px; }
-  .pnp-left { gap: 8px; }
-  .product-page { padding-top: 64px; }
+  .product-nav-premium { height: 56px; padding: 0 10px; }
+  .pnp-title { font-size: 12px; }
+  /* 44px keeps both controls at the iOS/Android minimum tap target. */
+  .pnp-back { width: 44px; height: 44px; min-width: 44px; font-size: 15px; }
+  .pnp-icon-btn { width: 44px; height: 44px; min-width: 44px; font-size: 16px; }
+  /* Matches the 56px header exactly — no gap, no content hidden beneath it. */
+  .product-page { padding-top: 56px; }
 }
 </style>
 
@@ -268,15 +255,33 @@ document.addEventListener('DOMContentLoaded', () => {
   const _injectQR = () => {
     const id = new URLSearchParams(location.search).get('id') || window._currentProductId;
     if (!id || document.getElementById('_prd_qr_btn')) return;
-    const wishBtn = document.querySelector('a[href="wishlist.html"]');
-    if (!wishBtn) return;
+    /* Anchor to the PAGE, not the header. This used to insert itself beside the
+       wishlist link, whose parent was the header's right-hand group — so the QR
+       button became a fourth header control. The header is now strictly
+       back · title · wishlist, so it lands in the content instead. The QR
+       feature itself is unchanged; only where the trigger lives moved. */
+    const host = document.getElementById('productPageContainer')
+              || document.querySelector('.product-page');
+    if (!host) return;
     const btn = document.createElement('button');
     btn.id = '_prd_qr_btn';
     btn.title = 'Show QR Code';
+    btn.setAttribute('aria-label', 'Show QR code for this product');
     btn.textContent = '📱';
-    btn.style.cssText = 'background:none;border:none;cursor:pointer;font-size:20px;padding:4px 6px;';
+    /* Deliberately NOT absolutely positioned. An earlier attempt pinned this to
+       the container's top-right and it landed squarely on the product photo —
+       obscuring the very content the page exists to show. In normal flow it
+       cannot overlap anything, at any viewport size. */
+    btn.style.cssText = 'display:inline-flex;align-items:center;justify-content:center;'
+      + 'gap:6px;margin:10px 0 0;padding:8px 14px;min-height:40px;border-radius:12px;'
+      + 'background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);'
+      + 'color:rgba(255,255,255,0.75);cursor:pointer;font-size:13px;font-family:inherit;';
     btn.onclick = () => window.SokoniQR?.showModal('product', id, document.title.split('—')[0].trim());
-    wishBtn.parentNode.insertBefore(btn, wishBtn);
+    /* Sits directly beneath the gallery when there is one, so it reads as a
+       product action rather than floating chrome. */
+    const gal = host.querySelector('.prd-gallery-wrap');
+    if (gal && gal.parentNode) gal.parentNode.insertBefore(btn, gal.nextSibling);
+    else host.appendChild(btn);
   };
   setTimeout(_injectQR, 600);
   window.addEventListener('productLoaded', _injectQR);
