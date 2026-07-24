@@ -22,7 +22,11 @@
    v88 — consent-layer removal (glass-overlay P0). security.js is precached. The
    old copy removes the blurred backdrop with a single setTimeout, which WebKit
    drops in a backgrounded tab, leaving a blur that renders at opacity 0. */
-const CACHE_VERSION = "sokoni-20260721-app-shell-v99";
+/* v101 — bumped so already-installed workers replace themselves. Without a bump
+   the SKIP_CACHE_PATTERNS fix below never reaches users whose browser already
+   holds v100, and Google sign-in would stay broken for exactly the people
+   already affected. */
+const CACHE_VERSION = "sokoni-20260724-app-shell-v101";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -309,8 +313,9 @@ const PRECACHE_STATIC = [
   "/sokoni-subscriptions.js", "/sokoni-vouchers.js", "/sokoni-intasend.js",
   /* Vertical — Health, Construction */
   "/sokoni-health.js", "/sokoni-construct.js",
-  /* Search Engine — federated, Typesense, recommendations */
-  "/sokoni-search-engine.js", "/sokoni-typesense-engine.js", "/sokoni-search-recommendations.js",
+  /* Search Engine — federated, Typesense, Firestore fallback, recommendations */
+  "/sokoni-search-engine.js", "/sokoni-typesense-engine.js",
+  "/sokoni-firestore-search.js", "/sokoni-search-recommendations.js",
   /* Infrastructure */
   "/sokoni-env.js", "/sokoni-logger.js",
   /* Auth & Access */
@@ -356,7 +361,14 @@ const CDN_ORIGINS = [
 
 const SKIP_CACHE_PATTERNS = [
   "firebase", "firestore",
+  /* Both spellings on purpose. "googleapis.com/identitytoolkit" is the LEGACY
+     endpoint (https://www.googleapis.com/identitytoolkit/v3/...). Firebase Auth
+     v9+ calls https://identitytoolkit.googleapis.com/v1/... — the host form,
+     which the legacy pattern does NOT match, so auth API calls were silently
+     still passing through the worker. They happened to survive it, which is why
+     email/password kept working, but nothing guaranteed that. */
   "googleapis.com/identitytoolkit",
+  "identitytoolkit.googleapis.com",
   "securetoken.googleapis.com",
   "maps.googleapis.com",
   "maps.gstatic.com",
@@ -367,6 +379,22 @@ const SKIP_CACHE_PATTERNS = [
      connectivity signal if it always hits the real network. */
   "generate_204",
   "/__/",           /* Firebase reserved namespace — auth handler + iframe; must always hit network */
+  /* Firebase Auth's OAuth helper (gapi). THIS BROKE GOOGLE SIGN-IN ON EVERY
+     DEVICE. signInWithPopup/Redirect load https://apis.google.com/js/api.js to
+     create the auth relay. It matched no skip pattern and is not a CDN origin,
+     so it fell through to the caching path; the cross-origin response comes back
+     opaque and the script fails to execute. Firebase's loader reports that as
+     `n.onerror` → the catch-all `auth/internal-error`, so the user completed the
+     whole Google round-trip and was then bounced back to login.
+
+     Proven by controlled experiment against production:
+       service worker registered -> apis.google.com/js/api.js ONERROR
+       service worker blocked    -> LOADED (gapi = object)
+     Same page, same network, only the SW differing. It also explains why
+     clearing browsing data appeared to help — that unregisters the worker — and
+     why email/password sign-in kept working: identitytoolkit was already
+     skipped just above, so only the OAuth providers were affected. */
+  "apis.google.com",
 ];
 
 
