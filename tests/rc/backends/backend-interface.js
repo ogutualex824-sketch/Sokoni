@@ -31,6 +31,9 @@ class BackendInterface {
      MUST refuse to set a claim marked privileged unless opts.allowPrivileged. */
   async ensureUser(/* identity */) { throw new Error(`${this.name}: ensureUser() not implemented`); }
 
+  /* Read claims back — proves the identity was AUTHORIZED, not merely created. */
+  async verifyClaims(/* uid, expected */) { throw new Error(`${this.name}: verifyClaims() not implemented`); }
+
   /* Return something a browser can use to BE this user (a custom token to
      exchange, or {email,password} for the real sign-in form). */
   async authContext(/* uid */) { throw new Error(`${this.name}: authContext() not implemented`); }

@@ -80,6 +80,16 @@ class AdminBackend extends BackendInterface {
     return user.uid;
   }
 
+  /* Read custom claims back from Auth. Creating a user and AUTHORIZING it are
+     different things; a suite asserts the claim landed rather than assuming
+     setCustomUserClaims silently succeeded. */
+  async verifyClaims(uid, expected = {}) {
+    const rec = await this.auth.getUser(uid);
+    const actual = rec.customClaims || {};
+    const ok = Object.entries(expected).every(([k, v]) => actual[k] === v);
+    return { ok, actual };
+  }
+
   async authContext(uid) {
     // A custom token the browser exchanges via signInWithCustomToken — lets the
     // real app run as this user without typing the password into a form.

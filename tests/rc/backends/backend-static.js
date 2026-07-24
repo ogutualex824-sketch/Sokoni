@@ -54,6 +54,7 @@ class StaticBackend extends BackendInterface {
   baseUrl()  { return `http://127.0.0.1:${this.port}`; }
 
   async ensureUser()   { throw new BlockedError('static backend has no auth — run against emulator or production'); }
+  async verifyClaims() { throw new BlockedError('static backend has no auth to read claims from'); }
   async authContext()  { throw new BlockedError('static backend cannot sign a user in'); }
   async setDoc()       { throw new BlockedError('static backend cannot write Firestore'); }
   async getDoc()       { throw new BlockedError('static backend cannot read Firestore'); }
