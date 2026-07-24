@@ -99,10 +99,25 @@ module.exports = {
         const doc = ctx._gdprDoc || await ctx.backend.getDoc(REQ_DOC);
         if (!doc) throw new Error('status document vanished');
         if (doc.status === 'failed') {
-          const reason = doc.failureReason || doc.failureCode || doc.error || doc.reason || doc.message || null;
-          ctx.record('assertion', { failed: true, reason });
-          if (!reason) throw new Error('status is `failed` with NO reason — undiagnosable for the user');
-          return { status: 'BLOCKED', detail: `worker failed with a reason: ${String(reason).slice(0, 80)}` };
+          /* A failing export is a DEFECT, so this always FAILS — it must never
+             soften to BLOCKED once the diagnostic fields land, or fixing the
+             reporting would create the impression the export itself was fixed.
+             These are two separate defects and the report must keep them apart:
+               • diagnostic  — is the failure actionable? (reason present)
+               • execution   — does the export actually work? (status ready)
+             The message distinguishes them; the severity does not. */
+          const code = doc.failureCode || null;
+          const reason = doc.failureReason || doc.error || doc.reason || doc.message || null;
+          ctx.record('assertion', { failed: true, failureCode: code, failureReason: reason });
+          if (!reason && !code) {
+            throw new Error(
+              'EXECUTION DEFECT + DIAGNOSTIC DEFECT: export failed, and the document ' +
+              'carries no reason or code — undiagnosable without Cloud Logging access.');
+          }
+          throw new Error(
+            `EXECUTION DEFECT: export still fails (code=${code || 'n/a'}). ` +
+            `Diagnostics are present, so this is now actionable — but the export ` +
+            `itself is NOT fixed.`);
         }
         if (doc.status !== 'ready') throw new Error(`unexpected terminal status: ${doc.status}`);
         return { detail: 'reached ready' };
