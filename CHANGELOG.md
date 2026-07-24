@@ -1,4 +1,47 @@
-﻿## [2026-07-24] — chore(gates): production hardening pass 1 — repair two release gates that were lying
+﻿## [2026-07-24] — fix(indexes): source had drifted BELOW production — a deploy would have deleted 3 live indexes
+
+Hardening pass 2. Highest-value finding of the session so far, and one that
+inverted my own first assumption mid-investigation.
+
+**Index governance (registry).** `verify-index-governance` failed with 49 ORPHAN
+indexes (deployed, declared in `firestore.indexes.json`, absent from
+`docs/index-registry.json`) plus 1 "stale" registry entry. Registered all 49 —
+dropping nothing, per the standing index rule — as grandfathered `legacy:true`
+entries, each enriched with a FACTUAL `query` (read straight off the index fields)
+and an evidence-based `feature` (inferred from the collection name: `pos*` →
+SmartPOS, `sfos*` → SFOS, `wallet*`/`savings`/`moneyRequests` → Wallet & Payments,
+etc.). Legacy is honest here — these predate the governance baseline — and it
+exempts the `owner`/`dateAdded` fields I cannot attribute without guessing, rather
+than fabricating them.
+
+**Index reconciliation (production drift) — the real defect.** I had removed the
+lone "stale" registry entry, `education|active,featured,createdAt`, believing the
+index was gone. `reconcile-indexes --verify` then proved the opposite: that index
+is LIVE IN PRODUCTION and merely missing from `firestore.indexes.json`. The source
+file had drifted BELOW production by 3 indexes (`education`, `promotions`,
+`smsQueue`), and because `firebase deploy --only firestore:indexes` PRUNES anything
+not in source, the next index deploy would have **deleted three live indexes** and
+broken the queries behind them (featured education listings, promotion placement,
+the SMS retry queue).
+
+Fixed with the sanctioned add-only path: `reconcile-indexes --sync`, which reads
+actual production via the Firestore Admin API and writes the missing indexes into
+source (policy: synchronise source to production, never the reverse). Proven
+add-only against a pre-change backup: **0 removed, exactly 3 added.** Production was
+not modified — it already has these; this makes SOURCE a faithful mirror so a
+future deploy prunes nothing. The 3 re-adopted registry entries are flagged
+`needsAttribution`.
+
+Result: `verify-index-governance` PASSED (379/379, 0 stale); `reconcile --verify`
+"a firestore:indexes deploy would delete NOTHING." No production deploy performed
+or needed — production already holds all three, and both files are in the hosting
+ignore list, so this is a source-fidelity fix. Regression: payment-authority 22/0,
+search 15/0, firebase-config 0 failures.
+
+Files affected: `firestore.indexes.json` (+3, add-only), `docs/index-registry.json`
+(+52 registry entries, −0 indexes).
+
+## [2026-07-24] — chore(gates): production hardening pass 1 — repair two release gates that were lying
 
 First increment of the enterprise hardening pass. All 76 audit suites in
 `scripts/` were executed: **61 exit 0, 15 non-zero**. Triage of the 15 found that
@@ -436,6 +479,84 @@ checkout.html qty defect fixed earlier does **not** exist here.
 Files affected: `sokoni-food.js`, `food-menu.html`, `cart.js`, `cart.html`.
 Security: order id is URL-encoded into the vendor CTA href; vendor name escaped
 via `_esc`. No database, API, or breaking changes.
+
+## [2026-07-24] — perf+feat(search): local-first search — warm catalogue, typo tolerance, bilingual queries
+
+Search is running entirely on the Firestore path (Algolia's credentials are
+still rejected), so this makes that path genuinely fast and genuinely good
+rather than merely correct.
+
+**Speed.**
+
+- **Warm catalogue cache** (`sokoni-firestore-search.js`). Collection scans are
+  now persisted to `localStorage` — only the fields the matcher and result card
+  use, descriptions truncated, one image — with stale-while-revalidate: a
+  returning visitor matches against data already in memory while a fresh copy
+  loads behind them. `warm()` preloads on page load and on first focus of the
+  header search box, so by the time a query is typed there is usually nothing to
+  fetch.
+- **Scan-first, index-second.** The indexed lookup (`searchableTerms`
+  array-contains + `nameLower` range) cost up to three network round trips **per
+  keystroke**. It now runs only when the cached scan came back full — i.e. when
+  matching documents could exist beyond the scan window. Below that cap the
+  cached scan *is* the whole collection and the indexed lookup could not add a
+  row. Profiled in-page: warm `firestoreSearch()` was 746–765ms, of which this
+  was the bulk; local matching alone measures ~1ms (`suggest()`).
+- **Budgeted Algolia probe.** On a first visit the engine cold-starts a Cloud
+  Function to fetch its secured key before it can even attempt a query — seconds
+  during which the Firestore pass had already finished and the page refused to
+  render it. Path A now races a 1.5s budget; past that, Firestore answers.
+- **Breaker persisted across page loads** (`localStorage`, 6h TTL). A credential
+  fault does not heal between navigations, so re-probing a dead engine on every
+  page load is pure latency. A budget *timeout* does not trip it — only a real
+  engine fault does. Clears itself in 6h, so fixing the Algolia key restores
+  Algolia with no deploy; to clear immediately:
+  `localStorage.removeItem("sokoni_search_engine_down_v1")`.
+
+**Quality.**
+
+- **Typo tolerance** — single-edit matching, bounded to tokens of 4+ characters.
+  At three characters an edit distance of one turns "pod" into "pot", "pop" and
+  "cod", which is noise rather than tolerance. Exact matches outrank fuzzy ones
+  in ranking, never the reverse.
+- **Bilingual queries** — a Kenyan buyer types "simu", "viatu", "mtumba",
+  "gari", "nyumba", "kazi", "fundi", "dawa" as readily as the English word, and
+  the catalogue is written in a mix of both. Query tokens expand to their known
+  equivalents in both directions, so a Swahili query finds an English listing
+  and vice versa. Expanding the query is cheaper and more predictable than
+  translating the catalogue.
+- **Instant autocomplete** — the header dropdown now serves from the warm cache
+  synchronously (~1ms measured). A suggestion that arrives after the next
+  keystroke is answering a stale prefix, so anything needing the network is a
+  fallback, not the primary path.
+- Ranking nudges listings that look alive (has an image, is featured) above
+  dormant ones at equal text relevance.
+
+**A regression I shipped and caught in the same session:** failed reads were
+being cached as "this collection is empty". `warm()` starts as the module loads,
+which can be before App Check has minted a token — so the first reads are denied
+and that denial was cached, making the whole catalogue vanish for the rest of
+the session. Failed reads are now never cached, and a denied scan retries inline
+so the search that triggered it self-heals instead of resolving to nothing.
+Both behaviours are now covered by tests.
+
+Tests: `npm run test:search` — **23 assertions, 23 pass**, including typo
+tolerance, the short-token exclusion, bilingual expansion, cached-suggestion
+behaviour, the scan-window boundary (indexed lookup must still reach past it),
+and the cache-poisoning regression above.
+
+**Measurement status — partial, and my own fault.** Verified before the last two
+changes: typed queries **1.08–1.66s** (measured against the results header, so a
+stale render cannot be miscounted), first visit ~10s, warm return ~3.3s. The
+scan-first change removes the ~750ms of per-keystroke round trips from that
+figure, but I could not re-measure it: repeated automated browser runs tripped
+**App Check throttling on this machine** (403, 24h backoff), after which every
+Firestore read is denied and every measurement reads zero. Real devices are
+unaffected. The numbers to trust are the ones above, plus the in-page profile;
+the post-change figure is reasoned, not measured, and is flagged as such.
+
+Files: `sokoni-firestore-search.js`, `search.html`, `shared-header.js`,
+`scripts/test-firestore-search.js`. Hosting deploy only.
 
 ## [2026-07-24] — fix(platform): every remaining unreachable collection + the queries that could never be permitted
 

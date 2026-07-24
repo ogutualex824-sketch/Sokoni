@@ -239,9 +239,6 @@
   "jobApplications|jobId:ASCENDING,appliedAt:DESCENDING": {
     "legacy": true
   },
-  "education|active:ASCENDING,featured:DESCENDING,createdAt:DESCENDING": {
-    "legacy": true
-  },
   "inventory_products|active:ASCENDING,name:ASCENDING": {
     "legacy": true
   },
@@ -1325,6 +1322,315 @@
     "needsAttribution": true
   },
   "kassUnanswered|resolved:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "trackedVehicles|ownerUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Logistics / Tracking",
+    "query": "trackedVehicles: ownerUid ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "subscriptions|uid:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Subscriptions & Billing",
+    "query": "subscriptions: uid ASCENDING, updatedAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "subscriptions|uid:ASCENDING,hubType:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Subscriptions & Billing",
+    "query": "subscriptions: uid ASCENDING, hubType ASCENDING, updatedAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|sellerId:ASCENDING,status:ASCENDING,saleDate:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: sellerId ASCENDING, status ASCENDING, saleDate DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|sellerId:ASCENDING,saleDate:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: sellerId ASCENDING, saleDate DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|sellerId:ASCENDING,branchId:ASCENDING,status:ASCENDING,saleDate:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: sellerId ASCENDING, branchId ASCENDING, status ASCENDING, saleDate DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|cashierUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: cashierUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posRetailSales|sellerId:ASCENDING,cashierUid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posRetailSales: sellerId ASCENDING, cashierUid ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posRetailSales|merchantId:ASCENDING,customerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posRetailSales: merchantId ASCENDING, customerId ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posProducts|merchantId:ASCENDING,qty:ASCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posProducts: merchantId ASCENDING, qty ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posProducts|merchantId:ASCENDING,expiresAt:ASCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posProducts: merchantId ASCENDING, expiresAt ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posProducts|merchantId:ASCENDING,category:ASCENDING,status:ASCENDING,price:ASCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posProducts: merchantId ASCENDING, category ASCENDING, status ASCENDING, price ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posProducts|merchantId:ASCENDING,variantGroupId:ASCENDING,status:ASCENDING,price:ASCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posProducts: merchantId ASCENDING, variantGroupId ASCENDING, status ASCENDING, price ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posWalletTransactions|sellerId:ASCENDING,phone:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posWalletTransactions: sellerId ASCENDING, phone ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|sellerId:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: sellerId ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|sellerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: sellerId ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posSales|sellerId:ASCENDING,customerPhone:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posSales: sellerId ASCENDING, customerPhone ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posRetailSales|sellerId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posRetailSales: sellerId ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posRetailSales|merchantId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posRetailSales: merchantId ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posProducts|merchantId:ASCENDING,status:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posProducts: merchantId ASCENDING, status ASCENDING, updatedAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posStaff|branchId:ASCENDING,status:ASCENDING,updatedAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posStaff: branchId ASCENDING, status ASCENDING, updatedAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "branches|merchantId:ASCENDING,status:ASCENDING,name:ASCENDING": {
+    "legacy": true,
+    "feature": "Multi-branch Business",
+    "query": "branches: merchantId ASCENDING, status ASCENDING, name ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "legalProviders|status:ASCENDING,rating:DESCENDING": {
+    "legacy": true,
+    "feature": "Legal Hub",
+    "query": "legalProviders: status ASCENDING, rating DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "legalProviders|status:ASCENDING,specializations:CONTAINS,rating:DESCENDING": {
+    "legacy": true,
+    "feature": "Legal Hub",
+    "query": "legalProviders: status ASCENDING, specializations CONTAINS, rating DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "legalConsultations|clientUid:ASCENDING,dateTime:DESCENDING": {
+    "legacy": true,
+    "feature": "Legal Hub",
+    "query": "legalConsultations: clientUid ASCENDING, dateTime DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "legalConsultations|providerId:ASCENDING,dateTime:ASCENDING": {
+    "legacy": true,
+    "feature": "Legal Hub",
+    "query": "legalConsultations: providerId ASCENDING, dateTime ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "featuredShops|featuredOnHome:ASCENDING,featuredPriority:DESCENDING": {
+    "legacy": true,
+    "feature": "Marketplace Discovery",
+    "query": "featuredShops: featuredOnHome ASCENDING, featuredPriority DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posDevices|merchantId:ASCENDING,status:ASCENDING,lastSeenAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posDevices: merchantId ASCENDING, status ASCENDING, lastSeenAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "posTerminals|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SmartPOS",
+    "query": "posTerminals: uid ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "walletTransactions|uid:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Wallet & Payments",
+    "query": "walletTransactions: uid ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "walletTransactions|uid:ASCENDING,type:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Wallet & Payments",
+    "query": "walletTransactions: uid ASCENDING, type ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "savings|locked:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Wallet & Payments",
+    "query": "savings: locked ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "moneyRequests|toUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Wallet & Payments",
+    "query": "moneyRequests: toUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "moneyRequests|fromUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Wallet & Payments",
+    "query": "moneyRequests: fromUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "escrowV2|buyerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Payments / Escrow",
+    "query": "escrowV2: buyerUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "escrowV2|sellerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "Payments / Escrow",
+    "query": "escrowV2: sellerUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosTransactions|fromId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosTransactions: fromId ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosTransactions|toId:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosTransactions: toId ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosTransactions|fromId:ASCENDING,type:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosTransactions: fromId ASCENDING, type ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosTransactions|toId:ASCENDING,type:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosTransactions: toId ASCENDING, type ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosTransactions|initiatorUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosTransactions: initiatorUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosLedger|accountId:ASCENDING,ledgerType:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosLedger: accountId ASCENDING, ledgerType ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosLedger|txId:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosLedger: txId ASCENDING, createdAt ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosEscrow|buyerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosEscrow: buyerUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosEscrow|sellerUid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosEscrow: sellerUid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosAuditLog|uid:ASCENDING,severity:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosAuditLog: uid ASCENDING, severity ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosIdempotency|uid:ASCENDING,status:ASCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosIdempotency: uid ASCENDING, status ASCENDING, createdAt DESCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "sfosIdempotency|status:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "feature": "SFOS — Financial Operating System",
+    "query": "sfosIdempotency: status ASCENDING, createdAt ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "paymentIntents|purpose:ASCENDING,createdAt:ASCENDING": {
+    "legacy": true,
+    "feature": "Payments / Escrow",
+    "query": "paymentIntents: purpose ASCENDING, createdAt ASCENDING",
+    "note": "Grandfathered on 2026-07-24 governance baseline; owner/dateAdded not attributed. Upgrade to full metadata when the owning team is confirmed."
+  },
+  "education|active:ASCENDING,featured:DESCENDING,createdAt:DESCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "promotions|status:ASCENDING,placement:ASCENDING": {
+    "legacy": true,
+    "adoptedFromProduction": "2026-07-12",
+    "needsAttribution": true
+  },
+  "smsQueue|status:ASCENDING,nextAttemptAt:ASCENDING": {
     "legacy": true,
     "adoptedFromProduction": "2026-07-12",
     "needsAttribution": true
