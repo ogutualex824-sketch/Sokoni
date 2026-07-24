@@ -230,16 +230,25 @@ token**, and because Firestore is *enforced*, that visitor loses the entire
 catalogue and sees demo data. The 86400s TTL matches the observed 24-hour
 throttle, so one bad score locks a user out for a day.
 
-Scores are depressed by exactly the conditions much of this audience uses:
-carrier-grade NAT and shared mobile IPs, privacy browsers, ad-blockers, VPNs,
-older devices, and first-time visitors with no reCAPTCHA history. This is
-therefore **not a rare edge case** — it is a threshold that will systematically
-exclude a fraction of legitimate users, and the site-key/domain registration is
-NOT implicated (`siteSecretSet: true`, and tokens do succeed in some sessions).
+What the configuration establishes: **it CAN systematically reject some
+legitimate sessions.** Scores are depressed by conditions this audience plausibly
+uses — carrier-grade NAT and shared mobile IPs, privacy browsers, ad-blockers,
+VPNs, older devices, first-time visitors with no reCAPTCHA history — so
+rejections are expected to be *non-random*, concentrated on particular client
+profiles rather than scattered.
 
-**Still unmeasured:** what fraction of real visitors score below 0.5. That
-number decides severity and needs the App Check metrics dashboard (request
-counts by verdict), which the REST API used here does not expose.
+It does **NOT** establish how many users are affected. "Some legitimate sessions
+are rejected" follows from the configuration; "a large fraction of users are
+affected" would need production measurement and is **not claimed here**.
+
+Also ruled out: site-key/domain registration is fine (`siteSecretSet: true`, and
+tokens DO succeed in some sessions), so this is a threshold/enforcement
+trade-off, not a broken provider setup.
+
+**Still unmeasured — this is what decides severity:** token issuance rate,
+rejected-request count, and the rejection distribution by browser/device/origin.
+That needs the App Check metrics dashboard; the REST API used here does not
+expose it. Severity should not be assigned until those numbers are read.
 
 **Mitigations are a security decision, not taken here.** The usual levers are
 lowering `minValidScore`, or setting Firestore to UNENFORCED/monitor while the
