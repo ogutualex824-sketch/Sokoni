@@ -763,15 +763,24 @@ const SokoniSecurity = (() => {
              Keep only the FAB tidy-up. */
           if (_isAuthPage) { _liftFabs(0); return; }
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
-          /* iOS-compatible scroll-lock. */
-          if (!_scrollLocked) {
-            _scrollLockY = window.scrollY || window.pageYOffset || 0;
-            document.body.style.setProperty('position', 'fixed');
-            document.body.style.setProperty('top', '-' + _scrollLockY + 'px');
-            document.body.style.setProperty('width', '100%');
-            document.body.style.setProperty('overflow-y', 'scroll');
-            _scrollLocked = true;
-          }
+          /* NO SCROLL LOCK. This used to set body{position:fixed; top:-scrollY} and it was
+             the single worst functional bug on the home page.
+             The banner mounts 1.5s after DOMContentLoaded, which on Home is ~4.2s after
+             navigation — long after the page is scrollable. A visitor who had started
+             reading was frozen exactly where they stood: position:fixed takes <body> out
+             of flow, so documentElement.scrollHeight collapsed from 11565px to the 900px
+             viewport, scrollY pinned to 0, and the wheel, Page Up and Page Down all went
+             dead. Measured on desktop: scrollable at t=2837ms, frozen from t=4742ms with
+             top:-2500px. Because that offset preserves the VISUAL position, it did not
+             look like a modal had taken over — it looked like the page had hung.
+             The lock was also enforcing nothing. The backdrop is a full-viewport element
+             with pointer-events:auto, so elementFromPoint() anywhere on the page already
+             returns the banner — consent is gated by the backdrop, not by the lock. All
+             the lock contributed was the freeze. Scrolling behind the dialog is also what
+             this banner's own copy promises ("By continuing you accept ..."), which a hard
+             freeze contradicts.
+             _scrollLocked stays false, which keeps accept()'s scrollTo() a no-op so a
+             scrolled reader is not yanked back to the top on Accept. */
           /* Hide the FABs: they sit below the backdrop anyway, but hiding them also takes
              them out of the tab order while the dialog owns focus. */
           _liftFabs(0);
@@ -865,13 +874,17 @@ const SokoniSecurity = (() => {
           window.removeEventListener('resize', _pad);
           if (b.__skRO) { b.__skRO.disconnect(); b.__skRO = null; }
           _dropFabs();                             /* buttons come back — and stay back */
-          /* Release the iOS position:fixed scroll lock and restore the captured scroll
-             position. Also clear legacy overflow/padding-bottom from older builds. */
+          /* This build never locks, but the property cleanup stays: a returning visitor can
+             still be carrying a position:fixed lock written by the PREVIOUS build (bfcache,
+             or a cached security.js). Clearing it here unfreezes them on Accept. */
           document.body.style.removeProperty('position');
           document.body.style.removeProperty('top');
           document.body.style.removeProperty('width');
           document.body.style.removeProperty('overflow-y');
-          window.scrollTo(0, _scrollLockY);
+          /* Only restore a captured position if we actually captured one. Unconditionally
+             calling this would scroll a reader who was 2500px down back to the very top the
+             moment they clicked Accept, because _scrollLockY is now always 0. */
+          if (_scrollLocked) { window.scrollTo(0, _scrollLockY); _scrollLocked = false; }
           document.body.style.removeProperty('overflow');
           document.body.style.removeProperty('padding-bottom');
           document.documentElement.style.setProperty('--sk-consent-h', '0px');
@@ -934,6 +947,27 @@ const SokoniSecurity = (() => {
        it only clears a layer that is purely visual residue. */
     var _sweepStaleConsent = function(){
       if (!localStorage.getItem("sokoniPrivacyAccepted")) return;  /* never remove a live prompt */
+
+      /* Clear the scroll lock BEFORE the early return below, and independently of whether
+         the banner element is still present.
+         The sweeper used to remove the element and stop there, which left the worst
+         possible state reachable: a body still carrying position:fixed / top:-Ypx from a
+         previous build, with the dialog that explained it now deleted. The page is then
+         permanently unscrollable with nothing on screen to account for it — a freeze with
+         no visible cause. bfcache reaches this state routinely, because Safari restores
+         the DOM with inline styles intact but every timer and JS latch gone, and a device
+         holding a cached copy of the older security.js reaches it on an ordinary load.
+         Consent is already stored here, so releasing the lock cannot bypass anything. */
+      var bs = document.body && document.body.style;
+      if (bs && bs.position === 'fixed') {
+        var y = Math.abs(parseInt(bs.top, 10) || 0);
+        bs.removeProperty('position');
+        bs.removeProperty('top');
+        bs.removeProperty('width');
+        bs.removeProperty('overflow-y');
+        if (y) window.scrollTo(0, y);   /* put the reader back where they were frozen */
+      }
+
       var el = document.getElementById("_sokoniPrivacyBanner");
       if (!el) return;
       el.style.setProperty('backdrop-filter', 'none', 'important');
