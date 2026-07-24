@@ -74,8 +74,17 @@ module.exports = {
       capability: 'GDPR: enqueue', async run(ctx) {
         const uid = await ctx.backend.ensureUser(ctx.dataset.IDENTITIES.buyer);
         ctx._gdprUid = uid;
+        /* Must mirror the callable's payload EXACTLY, or this suite tests a
+           document the product never creates. The callable sets expiresAt at
+           REQUEST time (data-export.js ~line 188) into BOTH docs; the worker's
+           ready-update writes only {status, downloadUrl, completedAt} — the
+           expiresAt near it is inside a log.audit() call, not the update.
+           Omitting it here previously produced a false FAIL on a missing field
+           that production would have had all along. */
+        const ttlMs = 7 * 24 * 60 * 60 * 1000;   // EXPORT_TTL_MS equivalent
         const payload = { ...ctx.dataset.RC_TAG, uid, requestId: REQ_ID, status: 'pending',
-                          requestedAt: new Date().toISOString() };
+                          requestedAt: new Date().toISOString(),
+                          expiresAt: new Date(Date.now() + ttlMs).toISOString() };
         await ctx.backend.setDoc(REQ_DOC, payload);
         const before = await ctx.backend.getDoc(REQ_DOC);
         if (!before || before.status !== 'pending') throw new Error('status doc not seeded at pending');

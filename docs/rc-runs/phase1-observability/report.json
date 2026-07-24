@@ -1,0 +1,101 @@
+{
+  "label": "phase1-observability",
+  "backend": "production(admin)",
+  "startedAt": "2026-07-24T07:53:03.975Z",
+  "privileged": false,
+  "suites": [
+    {
+      "id": "RC-07",
+      "title": "GDPR Data Export (state-transition verified)",
+      "verdict": "FAIL",
+      "steps": [
+        {
+          "name": "Callable entry requestDataExport (real client path)",
+          "capability": "GDPR: callable entry",
+          "status": "BLOCKED",
+          "detail": "callable entry not exercisable here (functions/unauthenticated) — requestDataExport is enforceAppCheck:true and headless Chromium has no App Check token. The WO",
+          "evidence": [
+            {
+              "type": "assertion",
+              "callable": {
+                "ok": false,
+                "code": "functions/unauthenticated",
+                "msg": "Unauthenticated"
+              }
+            }
+          ],
+          "at": "2026-07-24T07:53:03.982Z"
+        },
+        {
+          "name": "Enqueue exactly what the callable writes (status + queue doc)",
+          "capability": "GDPR: enqueue",
+          "status": "PASS",
+          "detail": "enqueued for uid=uKV3G82KOUWxXDsgnEUb3CfEJet1",
+          "evidence": [
+            {
+              "type": "firestore",
+              "req": "dataExportRequests/rc-gdpr-probe",
+              "queue": "dataExportQueue/rc-gdpr-probe",
+              "uid": "uKV3G82KOUWxXDsgnEUb3CfEJet1",
+              "seededStatus": "pending"
+            }
+          ],
+          "at": "2026-07-24T07:53:24.014Z"
+        },
+        {
+          "name": "Worker fires and status advances beyond pending",
+          "capability": "GDPR: worker trigger",
+          "status": "PASS",
+          "detail": "observed: pending → failed",
+          "evidence": [
+            {
+              "type": "assertion",
+              "observedTransitions": [
+                {
+                  "status": "pending",
+                  "at": "2026-07-24T07:53:32.709Z"
+                },
+                {
+                  "status": "failed",
+                  "at": "2026-07-24T07:53:36.072Z"
+                }
+              ],
+              "final": "failed"
+            }
+          ],
+          "at": "2026-07-24T07:53:31.671Z"
+        },
+        {
+          "name": "Lifecycle reaches ready (or fails with a reason, never silently)",
+          "capability": "GDPR: status lifecycle",
+          "status": "FAIL",
+          "detail": "EXECUTION DEFECT: export still fails (code=permission_denied). Diagnostics are present, so this is now actionable — but the export itself is NOT fixed.",
+          "evidence": [
+            {
+              "type": "assertion",
+              "failed": true,
+              "failureCode": "permission_denied",
+              "failureReason": "We could not complete your data export. Please request it again; if it keeps failing, contact support with this request ID."
+            }
+          ],
+          "at": "2026-07-24T07:53:37.342Z"
+        },
+        {
+          "name": "Artifact exists and is reachable (download link honoured)",
+          "capability": "GDPR: artifact delivery",
+          "status": "BLOCKED",
+          "detail": "gated on the lifecycle reaching ready",
+          "evidence": [],
+          "at": "2026-07-24T07:53:37.362Z"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-07-24T07:53:43.460Z",
+  "summary": {
+    "suites": 1,
+    "pass": 2,
+    "fail": 1,
+    "blocked": 2
+  }
+}

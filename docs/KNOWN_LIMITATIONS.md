@@ -46,11 +46,32 @@ captured output. All tooling must use it rather than calling the CLI directly.
 
 ## External dependencies (cannot be closed by code alone)
 
-### 0. GDPR data export is BROKEN in production — 🚫 blocks a compliance obligation
+### 0. ✅ CLOSED — GDPR data export (both defects verified fixed, 2026-07-24)
 
-**These are TWO separate defects. Fixing one does not fix the other.**
+**Both defects were verified SEPARATELY by RC-07, in that order, so neither fix
+could mask the other.**
 
-**0a. Execution defect — UNRESOLVED, export does not work.**
+| Phase | Change | RC-07 evidence | Verdict |
+|---|---|---|---|
+| 1 — observability | deploy `failureReason`/`failureCode` (rev `processdataexport-00006-rel`), IAM untouched | `pending → failed`, `failureCode=permission_denied`, generic reason present | still **FAIL** — availability unchanged, as required |
+| 2 — availability | grant `roles/iam.serviceAccountTokenCreator` on the runtime SA to itself | `pending → ready`, `downloadUrl` + `expiresAt` present | **0 FAIL** |
+
+Phase 1 deliberately proved the export *still failed* while diagnostics worked —
+had it succeeded there, the diagnosis would have been wrong and the sequence was
+built to catch that.
+
+`failureCode=permission_denied` independently corroborated the `signBlob`
+diagnosis taken from Cloud Logging, from a second source.
+
+Residual scope: the **callable entry** `requestDataExport` remains uncertified —
+it is `enforceAppCheck:true` and cannot be invoked from headless Chromium, so
+RC-07 reports it BLOCKED. The worker path, artifact, and status lifecycle are
+certified. Closing this entry does not claim the client-facing entry point was
+exercised.
+
+*Original record, retained for the post-mortem:*
+
+**0a. Execution defect — was: export does not work.**
 Every data export fails. Root cause diagnosed from Cloud Logging
 (`processdataexport`, 2026-07-24):
 
@@ -84,11 +105,7 @@ IAM misconfiguration, not application logic — the same class as the
 production user has exercised this path yet. The defect is real but has not yet
 denied a live data-subject request.
 
-**Retention note:** because the artifact is written *before* signing, every
-failed export still leaves a JSON file containing that user's personal data in
-Storage. Once real users hit this path, failures will accumulate personal data
-with no delivery mechanism. Worth a lifecycle/TTL rule on `data-exports/`
-independent of the fix above.
+**Retention note — now tracked separately as item 0c below.**
 
 Remediation (privileged; must be run by a project admin — an automated attempt
 was correctly refused by tooling):
@@ -113,7 +130,65 @@ user-facing) and `failureCode` (stable, for correlation). **Requires a Cloud
 Functions deploy to take effect** — until then production still fails silently.
 
 Closing 0b does **not** close 0a: diagnostics becoming actionable is not the
-export working. Both must be verified separately by RC-07.
+export working. Both were verified separately by RC-07 (table above).
+
+---
+
+### 0c. `data-exports/` has no retention policy — ⏳ OPEN, compliance follow-up
+
+**Not implemented — logged as a follow-up task, deliberately separate from
+restoring export functionality (item 0 above, now closed).**
+
+Exports write `data-exports/<uid>/<requestId>.json`, containing that user's
+personal data, and the upload happens **before** the signed URL is generated.
+So both *successful* and *failed* exports leave personal data in Storage
+indefinitely. Nothing currently deletes it:
+
+- `expiresAt` on the request document governs the **download link**, not the
+  **object** — the file outlives the link.
+- The RC harness's `backend.cleanup()` covers **Firestore only**; Storage
+  objects must be removed separately (done manually after each RC-07 run).
+
+Today this is zero-risk — the bucket is empty and no production user has
+exercised the path. It becomes a genuine data-minimisation problem the moment
+real users request exports.
+
+**Proposed:** a bucket lifecycle rule deleting `data-exports/` objects after the
+export TTL (age-based, e.g. matching `EXPORT_TTL_MS`), so retention is enforced
+by infrastructure rather than depending on application cleanup paths that only
+run on the happy path.
+
+### 1b. Typesense cluster does not exist — ⚠️ redundancy gap, NOT a launch blocker
+The configured cluster hostname **does not resolve**:
+`4kn6y5bfcxv8o702p-1.a2.typesense.net` → `ENOTFOUND`.
+
+Evidence (layered, stopped at the failing layer):
+- Secret Manager holds `TYPESENSE_ADMIN_KEY` (v5) and `TYPESENSE_SEARCH_KEY` (v6).
+  There is no `TYPESENSE_HOST` secret — the host lives in `functions/.env` as
+  `TYPESENSE_NODES`, which is correct (a hostname is not sensitive).
+- DNS control test: `typesense.org`, `cloud.typesense.org`, the Algolia host and
+  `google.com` all resolve; **only** the configured cluster fails.
+- Confirmed **from inside the deployed function** (Google's network, not a dev
+  machine): `searchHealth` reports `DNS_FAILURE`,
+  `getaddrinfo ENOTFOUND 4kn6y5bfcxv8o702p-1.a2.typesense.net`.
+- Only other hostname in the repo is `xyz.a1.typesense.net`, a docs placeholder.
+
+Layers 5–8 (auth, collections, expected-vs-actual, sync pipeline) were **not**
+tested: all are downstream of a host that does not exist, so results would be
+meaningless. The API keys may be perfectly valid — they simply have no cluster.
+
+**Root cause:** the Typesense Cloud cluster was deleted, expired, or never
+provisioned. **This is provisioning, not code** — the integration reads its host
+from configuration correctly.
+
+**Minimal corrective action:** check the Typesense Cloud dashboard. If a live
+cluster exists, its hostname differs — update `TYPESENSE_NODES` and redeploy,
+then re-verify auth/collections (the keys may also belong to the dead cluster).
+If none exists, provision one or decide to drop Typesense.
+
+**Not a launch blocker:** Algolia serves search and the Firestore local-first
+path covers outages. Typesense is a secondary backend; nothing customer-facing
+depends on it today.
 
 ### 1. IntaSend webhook verification / replay — 🚫 blocks payments
 The payment → activation flow cannot be signed off until the webhook
