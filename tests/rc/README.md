@@ -31,6 +31,11 @@ counted as a pass, so a partial run states exactly what was and was not certifie
 
 ## Run
 
+> **Windows:** if `gcloud` fails with *"Python was not found"*, it is not broken — export
+> `CLOUDSDK_PYTHON` first. See [Local Development → Windows environment gotchas](../../docs/LOCAL_DEVELOPMENT.md#windows-environment-gotchas).
+> Note also that `gcloud auth login` and `gcloud auth application-default login` are
+> **separate** credential stores; this harness needs the latter.
+
 ```bash
 # Partial run available immediately (no credentials):
 node tests/rc/rc-runner.js --backend=static

@@ -17,6 +17,85 @@ The app is served directly from the repository root. There is no build step — 
 
 ---
 
+## Windows environment gotchas
+
+Two issues that look like broken tooling but are both the same root cause: **Windows ships a
+`python` alias that is a Microsoft Store installer stub, not an interpreter.** It sits on
+`PATH` ahead of everything and fails with *"Python was not found; run without arguments to
+install from the Microsoft Store"*.
+
+### `gcloud` fails with "Python was not found"
+
+The Cloud SDK is **not** broken and does **not** need a system Python — its launcher just
+can't find a usable interpreter. The SDK ships its own. Point the launcher at it:
+
+```bash
+export CLOUDSDK_PYTHON="$LOCALAPPDATA/Google/Cloud SDK/google-cloud-sdk/platform/bundledpython/python.exe"
+gcloud version   # now works
+```
+
+Set it in your shell profile — it is per-shell, so a new terminal loses it and gcloud
+appears "broken" again. Every `gcloud` command in this guide assumes it is exported.
+
+### `python -m http.server` serves nothing
+
+Same stub. Use the npm dev server (`npm run dev`) or any Node static server instead.
+
+---
+
+## Google Cloud credentials: two separate stores
+
+`gcloud auth login` and `gcloud auth application-default login` populate **different**
+credential stores. Having one does **not** imply the other exists or is valid, and the
+failure modes look nothing alike:
+
+| Command | Store | Used by |
+|---|---|---|
+| `gcloud auth login` | user credentials | the `gcloud` CLI itself |
+| `gcloud auth application-default login` | **ADC** | `firebase-admin`, client libraries, the RC harness |
+
+If `firebase-admin` fails with `invalid_client` or *"Could not load the default
+credentials"* while `gcloud` commands work fine, it is ADC that is missing or stale — run
+the application-default login.
+
+Do **not** try to bridge a `gcloud auth print-access-token` value into `firebase-admin` as a
+custom credential. It does not work and has been verified twice: Identity Toolkit rejects
+user credentials without a quota project, and Firestore refuses custom credential objects
+outright (*"Must initialize the SDK with a certificate credential or application default
+credentials"*). Use ADC, or a service-account key if a long-lived credential is genuinely
+warranted.
+
+---
+
+## Cloud Run invoker bindings (a 403 that is not a code bug)
+
+Firebase **onCall** functions are Cloud Run services underneath. They require
+`roles/run.invoker` granted to `allUsers` so the request can *reach* the function — the
+function then enforces auth itself and returns `401 UNAUTHENTICATED` to anonymous callers.
+This is the normal configuration, not an open endpoint.
+
+A **missing** binding presents as `403` on every call and is easily mistaken for an
+application defect. Diagnose by comparing against a known-working callable:
+
+```bash
+gcloud run services get-iam-policy createcheckoutsession \
+  --region=us-central1 --project=sokoni-aeb26 --format="value(bindings.members)"
+# expect: ['allUsers']
+
+gcloud run services add-iam-policy-binding <service> \
+  --region=us-central1 --member=allUsers \
+  --role=roles/run.invoker --project=sokoni-aeb26
+```
+
+Cloud Run **service names are lowercase** (`requestdataexport`) even though the exported
+function is camelCase (`requestDataExport`).
+
+A correctly-fixed endpoint moves **403 → 401**. Before granting `allUsers` on anything
+privacy-sensitive, confirm the function enforces auth internally (`request.auth?.uid` /
+`_assertAuth`) and ideally `enforceAppCheck: true`.
+
+---
+
 ## Secure Context and Web Bluetooth on localhost
 
 ### The Rule
