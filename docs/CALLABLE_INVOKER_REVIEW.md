@@ -98,7 +98,7 @@ Customer- and merchant-facing journeys plus the shared engines behind them
 The split is by filename convention, so treat it as a starting sort rather than a
 final classification — confirm the surface before acting on a row.
 
-## Group 1 — client reference found (206)
+## Group 1 — client reference found (205)
 
 The browser appears to be the expected caller. If the function authenticates and
 authorizes internally, granting `run.invoker` restores the intended architecture.
@@ -257,7 +257,6 @@ so confirm their in-function admin check explicitly before granting.
 | `recordTypesenseSearchEvent` | sokoni-typesense-engine.js | public invoker (confirm internal auth) |
 | `registerLegalProvider` | legal-hub.html | public invoker (confirm internal auth) |
 | `registerWebhook` | developer-portal.html partner-portal.html | public invoker (confirm internal auth) |
-| `requestDataExport` | account-centre.html | public invoker (confirm internal auth) |
 | `requestSellerPayout` | developer-portal.html seller-earnings.html | public invoker (confirm internal auth) |
 | `resendEmail` | email-center.html sokoni-endpoints.js | public invoker (confirm internal auth) |
 | `resumeQueue` | sokoni-async-jobs.js | public invoker (confirm internal auth) |
@@ -315,7 +314,7 @@ so confirm their in-function admin check explicitly before granting.
 | `verifyFirestoreBackup` | enterprise-ops.html | public invoker (confirm internal auth) |
 | `verifyStepUpAuth` | sokoni-zero-trust.js | public invoker (confirm internal auth) |
 
-## Group 2 — no client reference found (142)
+## Group 2 — no client reference found (141)
 
 No page or client script mentions these. Candidates for **deliberately private**:
 server-to-server, invoked by another function with an IAM identity, or reachable only
@@ -354,7 +353,6 @@ weaker evidence than presence of one — a dynamically-built name would not be f
 | `getComplianceReport` | unchanged until caller identified |
 | `getCreatorDashboard` | unchanged until caller identified |
 | `getCustomerSegmentRevenue` | unchanged until caller identified |
-| `getDataExportStatus` | unchanged until caller identified |
 | `getDeviceList` | unchanged until caller identified |
 | `getDigitalProduct` | unchanged until caller identified |
 | `getDigitalSellerDashboard` | unchanged until caller identified |
