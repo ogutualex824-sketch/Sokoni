@@ -1,3 +1,55 @@
+## [2026-07-24] — feat(wallet): IntaSend webhook now finalizes wallet top-ups (seconds, not up to 30 min)
+
+Wallet top-ups had **three** ways to reach `completed`, and the fastest one wasn't
+wired in:
+
+| Path | Trigger | Latency |
+|------|---------|---------|
+| `confirmWalletTopUp` (poll) | client stays on the page and calls it | fast, but only if the app is open |
+| `sweepStaleWalletTopUps` | scheduled | **up to 30 min** |
+| IntaSend webhook | payment settles server-side | *was not handling top-ups at all* |
+
+Both webhook handlers (`webhookIntasend` — the canonical production receiver — and
+the secondary `intasendWebhook`) key off `payments/{api_ref}`. A wallet top-up sets
+`api_ref` to its `walletTransactions` doc id (`wtop_…`) and creates **no** `payments`
+doc, so every top-up webhook fell through the `if (!snap.exists) return 200` guard and
+was acknowledged with no effect. A buyer who paid and closed the tab waited for the
+30-minute sweep to see their balance.
+
+### Change
+
+Added one shared helper, `_finalizeWalletTopUp(apiRef, state, amount, tag)`, called
+from **both** webhook handlers immediately after the `api_ref` check. When `api_ref`
+starts with `wtop_` it routes the ref to the **same idempotent transactional claim**
+`confirmWalletTopUp` and `sweepStaleWalletTopUps` already use:
+
+- reads `wallets/{uid}` **and** `walletTransactions/{ref}` inside the transaction;
+- no-ops if `status === 'completed'` (a concurrent path or an IntaSend retry already won);
+- on `COMPLETE`, credits **`tx.amount`** (the figure recorded server-side at
+  initiation — never the webhook-supplied amount) and clears `pendingTopUp` only if it
+  still points at this ref;
+- on `FAILED`/`CANCELLED`/`EXPIRED`, marks the tx failed and clears the flag;
+- on `PENDING`/unknown, acks and leaves it to the poll or sweep.
+
+All three paths now **converge on one claim**, so IntaSend's webhook retries cannot
+double-credit — the transaction, not the HTTP layer, is the guard. A transaction error
+propagates (→ 5xx → IntaSend retry), which is the intended recovery. The helper lives
+in one place so the two near-identical endpoints can never drift.
+
+**Architecture:** unchanged. No `onCall`/App Check/auth changes, no new collection, no
+new balance field, no second ledger. The poll (`confirmWalletTopUp`) and the sweep
+(`sweepStaleWalletTopUps`) are retained as complementary UX and recovery paths.
+
+- **Files:** `functions/index.js`
+- **DB:** none (`walletTransactions.resolvedBy` now records `"webhookIntasend"` /
+  `"intasendWebhook"` alongside the existing `"sweepStaleWalletTopUps"`)
+- **API:** none (webhook URL and contract unchanged)
+- **Security:** none — reuses the existing `challenge`-based webhook verification
+- **Breaking:** none
+- **Deploy:** redeploy `webhookIntasend` and `intasendWebhook`. No secret or config change.
+
+---
+
 ## [2026-07-24] — fix(wallet): STK push sent `Bearer [object Object]` to IntaSend and got HTTP 500
 
 `intasend-node` takes **three positional arguments**:

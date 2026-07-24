@@ -5750,6 +5750,85 @@ exports.initiateSTKPush = onCall(
   }
 );
 
+/* ── Shared wallet top-up finalizer for the IntaSend webhooks ────────────────
+   Wallet top-ups (initiateWalletTopUp) set api_ref to the walletTransactions
+   doc id ("wtop_…") and never create a payments/{ref} doc, so the payment path
+   in both webhook handlers below skips straight past them and acks with no
+   effect — leaving completion to the client poll (confirmWalletTopUp) or the
+   30-min sweep (sweepStaleWalletTopUps).
+
+   This routes the ref to the SAME idempotent claim those two paths use so all
+   three converge: whichever observes COMPLETE first credits the wallet inside a
+   transaction, and the others read status === 'completed' and no-op. IntaSend
+   retries webhooks on timeout/5xx, so the TRANSACTION — not the HTTP layer — is
+   the guard against double credit. We always credit tx.amount (recorded
+   server-side at initiation), never the webhook-supplied amount.
+
+   Lives as one helper (called from both webhookIntasend and the secondary
+   intasendWebhook) rather than a pasted block, so the two endpoints can never
+   drift. Returns true when the ref was a wallet top-up and the caller should ack
+   and return; false to fall through to the normal payments path. A transaction
+   error propagates (→ 5xx → IntaSend retry), which is the desired recovery. */
+async function _finalizeWalletTopUp(apiRef, state, amount, tag) {
+  if (!apiRef || !apiRef.startsWith("wtop_")) return false;
+
+  const txRef  = db.collection("walletTransactions").doc(apiRef);
+  const txSnap = await txRef.get();
+  if (!txSnap.exists) return true;   /* unknown ref — handled: nothing to credit */
+  const tx = txSnap.data();
+
+  const paid   = state === "COMPLETE";
+  const failed = ["FAILED", "CANCELLED", "EXPIRED"].includes(state);
+
+  /* Reconciliation aid only — the credited figure is always tx.amount. */
+  if (paid && amount && Math.round(amount) !== Math.round(tx.amount)) {
+    logger.warn(`[${tag}] wallet top-up amount mismatch`, { ref: apiRef, requested: tx.amount, webhook: amount });
+  }
+
+  if (paid) {
+    await db.runTransaction(async (t) => {
+      const walletRef = db.collection("wallets").doc(tx.uid);
+      const [walletSnap, txCheck] = await Promise.all([t.get(walletRef), t.get(txRef)]);
+      /* Already credited by confirmWalletTopUp / sweep / an earlier retry */
+      if (txCheck.exists && txCheck.data().status === "completed") return;
+
+      const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
+      if (!walletSnap.exists) {
+        t.set(walletRef, {
+          uid:          tx.uid,
+          balance:      current + tx.amount,
+          currency:     "KES",
+          lastTopUp:    admin.firestore.Timestamp.now(),
+          pendingTopUp: null,
+          createdAt:    admin.firestore.Timestamp.now(),
+        });
+      } else {
+        const update = { balance: current + tx.amount, lastTopUp: admin.firestore.Timestamp.now() };
+        /* Clear the flag only if it still points at THIS top-up — a newer
+           pending top-up the user just started must not be wiped. */
+        if (walletSnap.data().pendingTopUp === apiRef) update.pendingTopUp = null;
+        t.update(walletRef, update);
+      }
+      t.update(txRef, { status: "completed", updatedAt: admin.firestore.Timestamp.now(), resolvedBy: tag });
+    });
+    console.log(`[${tag}] Wallet top-up credited: ${apiRef}`);
+  } else if (failed) {
+    await db.runTransaction(async (t) => {
+      const walletRef = db.collection("wallets").doc(tx.uid);
+      const [walletSnap, txCheck] = await Promise.all([t.get(walletRef), t.get(txRef)]);
+      /* Do not overwrite a top-up a concurrent path already completed */
+      if (txCheck.exists && txCheck.data().status !== "pending") return;
+      t.update(txRef, { status: "failed", updatedAt: admin.firestore.Timestamp.now(), resolvedBy: tag });
+      if (walletSnap.exists && walletSnap.data().pendingTopUp === apiRef) {
+        t.update(walletRef, { pendingTopUp: null });
+      }
+    });
+    console.log(`[${tag}] Wallet top-up marked failed (${state}): ${apiRef}`);
+  }
+  /* PENDING / unknown state — handled: caller acks, poll or sweep finalizes later */
+  return true;
+}
+
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
   { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
@@ -5796,6 +5875,13 @@ exports.intasendWebhook = onRequest(
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
+
+    /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
+       the shared idempotent claim before the payments path below. */
+    if (await _finalizeWalletTopUp(apiRef, state, amount, "intasendWebhook")) {
+      res.status(200).send("OK");
+      return;
+    }
 
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
@@ -6668,6 +6754,13 @@ exports.webhookIntasend = onRequest(
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
+
+    /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
+       the shared idempotent claim before the payments path below. */
+    if (await _finalizeWalletTopUp(apiRef, state, amount, "webhookIntasend")) {
+      res.status(200).send("OK");
+      return;
+    }
 
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
