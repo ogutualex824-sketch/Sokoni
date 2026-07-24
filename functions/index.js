@@ -6762,6 +6762,32 @@ exports.webhookIntasend = onRequest(
               });
               console.log("[webhookIntasend] Subscription auto-activated",
                 { uid: intent.uid, plan: intent.planId, ref: apiRef });
+
+              /* Activation used to end here, and that was the incident: this
+                 writes subscriptions/{uid}, but the seller UI reads
+                 users/{uid}.subscription.seller — a document only sub-billing.js
+                 maintains and which this path never invoked. With nothing at the
+                 read location the client fell back to its hard-coded free
+                 allowance and showed a 10-product limit to a merchant who had
+                 paid for 100, while canPublishProduct (reading the authoritative
+                 path) correctly allowed the 13th upload.
+
+                 Materialise the entitlement now so both readers agree. This is
+                 deliberately awaited rather than fire-and-forget: a merchant who
+                 has just paid reloads within seconds, and a background write that
+                 loses the race reproduces the original symptom. It cannot fail
+                 the webhook — materialiseEntitlements swallows its own errors and
+                 the subscription is already authoritative in subscriptions/{uid}.
+                 onSubscriptionChangedSyncEntitlements also fires on that write,
+                 so this is belt-and-braces against trigger latency, not the only
+                 path. */
+              /* Required locally rather than via the module-scope binding
+                 declared ~1300 lines below: that const is in its temporal dead
+                 zone until module evaluation reaches it, and depending on
+                 handler timing to stay safe is a latent ReferenceError. Node
+                 caches modules, so this costs nothing after the first call. */
+              await require('./subscription-authority')._internal
+                .materialiseEntitlements(intent.uid, "payment-complete");
               db.collection("subscriptionAuditLog").add({
                 uid:       intent.uid,
                 plan:      intent.planId,
@@ -8115,6 +8141,15 @@ delete exports.syncDocument;
    not a callable — stripped so it is never deployed as a function. */
 const productLimitModule = require('./product-limit');
 Object.assign(exports, productLimitModule);
+
+/* SubscriptionAuthority — the single source of merchant entitlements.
+   getMerchantEntitlements is what every screen must consume instead of
+   computing an upload limit from its own plan table; ten such tables existed
+   and disagreed (see scripts/verify-listing-limit-single-source.js). */
+const subscriptionAuthority = require('./subscription-authority');
+exports.getMerchantEntitlements = subscriptionAuthority.getMerchantEntitlements;
+exports.onSubscriptionChangedSyncEntitlements =
+  subscriptionAuthority.onSubscriptionChangedSyncEntitlements;
 
 /* ── Admin-gated catalogue repair ─────────────────────────────────────────
    Ownership and type repairs on explicitly named product documents. Admin
@@ -10808,3 +10843,27 @@ exports.reconcileInvitations  = _adminInvites.reconcileInvitations;
 const _c2b = require("./mpesa-c2b");
 exports.mpesaC2BValidation   = _c2b.mpesaC2BValidation;
 exports.mpesaC2BConfirmation = _c2b.mpesaC2BConfirmation;
+
+/* ── Healthcare hub (functions/healthcare-hub.js) ──
+   These 15 callables existed in the repo but were never required or
+   re-exported here, so none were deployed. That left appointments with no valid
+   execution path: firestore.rules makes /healthAppointments write:false (booking
+   must be server-side for slot-locking + idempotency), while the CF that does
+   the server-side write was absent. Wiring them in closes that gap.
+   enforceAppCheck + region are set inside the module (CF_OPTS). */
+const _health = require('./healthcare-hub');
+exports.registerHealthProvider   = _health.registerHealthProvider;
+exports.approveHealthProvider    = _health.approveHealthProvider;
+exports.getHealthProviders       = _health.getHealthProviders;
+exports.getHealthProvider        = _health.getHealthProvider;
+exports.bookAppointment          = _health.bookAppointment;
+exports.getMyAppointments        = _health.getMyAppointments;
+exports.getProviderAppointments  = _health.getProviderAppointments;
+exports.updateAppointmentStatus  = _health.updateAppointmentStatus;
+exports.createHealthRecord       = _health.createHealthRecord;
+exports.getHealthRecords         = _health.getHealthRecords;
+exports.createPrescription       = _health.createPrescription;
+exports.getPrescriptions         = _health.getPrescriptions;
+exports.searchHealthProviders    = _health.searchHealthProviders;
+exports.rateHealthProvider       = _health.rateHealthProvider;
+exports.getHealthDashboard       = _health.getHealthDashboard;

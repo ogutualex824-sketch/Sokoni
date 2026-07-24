@@ -813,9 +813,28 @@ async function addProduct(){
                 }
             }
         } catch (_) {
-            /* Unresolved — allow the save. The server rule is the real gate and
-               will reject it if the merchant is genuinely over the limit. */
+            /* Unresolved — allow the save.
+
+               NOTE (2026-07-24): the original comment here claimed "the server
+               rule is the real gate". That is not true for a product COUNT:
+               Firestore rules cannot count documents, so no rule rejects an
+               over-limit create. This path therefore fails OPEN, and that is a
+               deliberate trade — a transient callable failure must not block a
+               paying merchant from listing — but it is the only enforcement
+               point, not a second line of defence. Enforcement lives in
+               canPublishProduct above, which resolves through
+               functions/subscription-authority.js -> subscription-catalog. */
         }
+
+        /* The counter the merchant sees must be recomputed from the authority
+           rather than from any local plan table. Fire-and-forget: a display
+           refresh must never delay or block the upload itself. */
+        try {
+            if (window.SokoniAuthority) {
+                window.SokoniAuthority.invalidate();
+                window.SokoniAuthority.getMerchantEntitlements({ force: true });
+            }
+        } catch (_) { /* display-only */ }
 
         sellerProducts.push(newProduct);
 

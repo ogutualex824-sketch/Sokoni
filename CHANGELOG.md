@@ -1,4 +1,97 @@
-﻿## [2026-07-24] — feat(gate): repeatable callable-reachability audit; three "suspect" functions cleared
+﻿## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
+
+Production incident. A merchant on an active paid STARTER plan saw a 10-product
+limit while the upload engine accepted 13. Both numbers were correct for the
+system that produced them; the systems never met.
+
+### Root cause — an authoritative source violation, not a stale cache
+
+    webhookIntasend  --writes-->  subscriptions/{uid}
+                                    -> subscription-core.resolveSubscription
+                                    -> subscription-catalog  STARTER listingLimit = 100
+                                    -> canPublishProduct     13 < 100  ALLOWED (correct)
+
+    sub-billing.js   --writes-->  users/{uid}.subscription.{hubType}
+                                    -> sokoni-subscription.js (client)
+                                    -> document never written by the payment path
+                                    -> FREE_DEFAULTS.listings_limit = 10  DISPLAYED
+
+`webhookIntasend` (`functions/index.js:6744`) activates the subscription in
+`subscriptions/{uid}` and nothing else. The seller UI reads
+`users/{uid}.subscription.seller` (`sokoni-subscription.js:79`), a mirror only
+`sub-billing.js:335` maintains — a subsystem the IntaSend webhook never invokes.
+Finding nothing at its read location, the client fell back to its hard-coded free
+allowance.
+
+Of the five candidate explanations, the answer is **frontend uses a different
+authority**. It was NOT a stale cache (the document was never written at all),
+NOT skipped backend validation (`canPublishProduct` ran and was right), and the
+13 uploads were legitimate: STARTER allows 100.
+
+Because the canonical FREE limit is also 10, the wrong answer looked plausible —
+which is why this presented as a display bug rather than an entitlement failure.
+
+### Duplicated entitlement logic found
+
+`scripts/verify-listing-limit-single-source.js` reports **57 declarations across
+10 files**. Four are client-side and every one hard-codes 10 for free:
+`sokoni-subscription.js:25`, `sokoni-revenue.js:28`,
+`subscription-billing.html:441`, `sokoni-subscriptions.js:45`. Server-side:
+`functions/index.js:3893` (`maxListings`), `sasos-core.js:61`,
+`sub-billing.js:52` (`listings_limit`), `subscription-os.js:60`. None consulted
+the catalogue. They agreed on the wrong answer because none could see a
+subscription, which made the bug look consistent instead of flaky.
+
+### Implemented — SubscriptionAuthority
+
+`functions/subscription-authority.js` — the single decision, resolving through
+`subscription-core` + `subscription-catalog` (the declared canonical catalogue;
+this adds no eleventh table):
+
+- `getMerchantEntitlements` (callable, App Check enforced, self-or-admin) returns
+  the contract `{ active, plan, uploadLimit, uploadsUsed, uploadsRemaining,
+  premium, expiresAt }`.
+- `materialiseEntitlements(uid, reason)` persists to `entitlements/{uid}`, mirrors
+  `users/{uid}.subscription.seller` so **existing screens correct themselves
+  without being rewritten**, and writes `entitlementAuditLog`.
+- `onSubscriptionChangedSyncEntitlements` recomputes on any write to
+  `subscriptions/{uid}`, so no activation path can leave the mirror behind.
+
+`webhookIntasend` now awaits `materialiseEntitlements(uid, 'payment-complete')`
+immediately after activation. Awaited deliberately: a merchant who has just paid
+reloads within seconds and a background write that loses that race reproduces the
+original symptom. It cannot fail the webhook — the function swallows its own
+errors and the subscription is already authoritative.
+
+`sokoni-authority.js` — client SDK: cached (5-min TTL), single-flight, live
+`entitlements/{uid}` listener, `invalidate()` clearing every cache it owns, and a
+`sokoni:entitlements-changed` event. It returns **null when unknown** and never
+fabricates a free allowance — inventing one on the client is the failure being
+fixed. Loaded before `seller.js` on `seller.html`.
+
+### Corrected a false comment in the upload guard
+
+`seller.js` previously justified failing open with "the server rule is the real
+gate". Firestore rules **cannot count documents**, so no rule rejects an
+over-limit create. Failing open is still the right trade — a transient callable
+failure must not block a paying merchant — but it is the only enforcement point,
+not a second line of defence. Comment corrected rather than behaviour changed.
+
+### NOT done — deliberately
+
+The 57 duplicate declarations remain; the guard still fails. Deleting ten live
+plan tables is a migration touching billing and entitlement code, and the incident
+is resolved by making the authority correct and having the runtime consume it.
+Migration plan: one file per change, `verify-listing-limit-single-source` re-run
+after each, starting with the four client tables (display-only, lowest risk) and
+ending with `sub-billing.js` (owns real billing state, highest risk).
+
+Verified: syntax gate 1040 files, commission gate PASS, payment-authority 22/0,
+architecture duplicate-exports 0. **Not yet runtime-verified** — requires a real
+subscription payment; `entitlements/` and `entitlementAuditLog` are empty until one
+completes.
+
+## [2026-07-24] — feat(gate): repeatable callable-reachability audit; three "suspect" functions cleared
 
 Turns the ad-hoc 401/403 probing into a release gate, and in doing so NARROWS the
 problem rather than expanding it.
@@ -106,6 +199,147 @@ internally, which is the actual security boundary for a Firebase callable.
 
 Verification order: re-probe both (expect 403 → 401), then one authenticated export
 → `dataExportQueue` doc → `processDataExport` → Storage object → status `ready`.
+
+## [2026-07-24] — feat(search-health): failure taxonomy — the probe now names the layer that failed
+
+Root-cause investigation of Typesense found the health check was **conflating
+distinct failure modes into one message**. It reported `missing_config` while
+the actual fault was a cluster hostname that no longer resolves — two different
+problems with two different owners, indistinguishable in the output. Diagnosing
+it cost a full manual investigation the probe could have answered itself.
+
+`searchHealth` now classifies by layer:
+`CONFIG_MISSING` · `DNS_FAILURE` · `CONNECT_FAILURE` · `TLS_FAILURE` ·
+`TIMEOUT` · `AUTH_FAILURE` · `COLLECTION_ERROR` · `HTTP_ERROR` · `HEALTHY`
+
+- `_rawGet` now preserves the socket **error code**, not just the message —
+  the code is what separates `ENOTFOUND` (dead hostname) from `ECONNREFUSED`
+  (refused) from a TLS rejection. The message alone loses that distinction.
+- Transport errors map to a layer; HTTP statuses map separately (401/403 →
+  `AUTH_FAILURE`, since reaching the endpoint proves DNS/TCP/TLS all succeeded;
+  404 → `COLLECTION_ERROR`).
+- The Typesense probe now falls back to `TYPESENSE_NODES` / `TYPESENSE_HOST`
+  from the environment when `searchConfig/engines` lacks a host. Previously it
+  reported `CONFIG_MISSING` while a well-specified but dead host sat in the
+  env — hiding the real fault behind a config complaint.
+- The report names the `host` it probed and carries a `detail` string, so an
+  operator sees *what* was tried, not just that something failed.
+
+Classifier unit-tested offline against real Node error shapes before deploy
+(`ENOTFOUND`/`EAI_AGAIN`→DNS, `ECONNREFUSED`→CONNECT, cert errors→TLS,
+`ETIMEDOUT`→TIMEOUT; 200→HEALTHY, 401/403→AUTH, 404→COLLECTION).
+
+Live after deploy:
+```
+algolia   : status ok,   failure HEALTHY,     200, 652ms
+typesense : status down, failure DNS_FAILURE, getaddrinfo ENOTFOUND
+            host 4kn6y5bfcxv8o702p-1.a2.typesense.net
+```
+That output is itself the confirmation of the Typesense root cause **from inside
+Google's network**, which rules out a dev-machine DNS artifact. See
+[[KNOWN_LIMITATIONS]] §1b.
+
+Files: `functions/search-health.js`. One function deployed. No rules, indexes or
+schema changes.
+
+## [2026-07-24] — ops(algolia): admin key rotated, 18 functions rebound, search health green
+
+Follow-up to the exposure recorded below. **Closed.**
+
+**Rotation verified independently** (not taken on assertion): the stored secret
+no longer matches the leaked value — SHA-256 prefix `86904e7324…` →
+`c400e8c74aa5` — and the new key authenticates against Algolia (HTTP 200,
+8 indexes). A first check *before* the operator's rotation landed correctly
+reported "NOT rotated"; the check was re-run rather than assumed.
+
+**All 18 admin-key-bound functions redeployed**, individually confirmed:
+`searchSetup`, `searchSystemReport`, `searchBackfillAll`, `searchRepairAll`,
+`searchScheduledReconcile`, `searchResolveAlert`, `searchGetHealthHistory`,
+`searchGetUnifiedDashboard`, `searchRepairOrphanedDocs`, `searchVerifyDocument`,
+`searchQueueCoordinator`, `searchDLQSweep`, `searchGetStats`, `searchSimilar`,
+`searchQueueRecovery`, `searchFullReindex`, `searchHealth`, `searchSystemHealth`
+— 18 `Successful update`, **0 failures**.
+
+**Binding verified against live Cloud Run config**, not the deploy log: every one
+of the 18 resolves `ALGOLIA_ADMIN_KEY` via `secretKeyRef` at **version 12**,
+cross-checked against Secret Manager as the newest enabled version. Deploy
+success alone would not have proved the *rotated* value was bound.
+
+**Health check surfaced a real gap.** `searchHealth` returned
+`algolia: down — missing_config` even with valid secrets: it deliberately probes
+with the low-privilege search-only key read from Firestore
+`searchConfig/engines`, a **separate config path from Secret Manager**, and that
+document had never been created. Populated it with the App ID + search-only key
+(`/searchConfig` has no client read rule, so it is server-only; an Algolia
+search-only key is client-visible by design in any case).
+Result: `algolia: ok, 200, 335ms`. Overall status is `degraded` only because
+**Typesense** remains unconfigured — accurate, and out of scope here.
+
+Smoke test — reachability of every read-only admin endpoint (no 404s):
+`searchGetStats` 403, `searchSystemHealth` 403, `searchSystemReport` 403,
+`searchGetUnifiedDashboard` 403, `searchSimilar` 401, `searchHealth` 200/206.
+403/401 is correct: live and App-Check/auth gated.
+
+**Deliberately NOT invoked:** `searchFullReindex`, `searchRepairAll`,
+`searchRepairOrphanedDocs`, `searchBackfillAll`, `searchDLQSweep`. These mutate
+or rebuild production indexes; running them as an unrequested "smoke test" could
+have destroyed the 129 records just verified. Their key binding is confirmed by
+Cloud Run config plus the fact that the same rotated key authenticates. Flagged
+as inferred rather than exercised.
+
+Tooling: `scripts/_secret.js` (leak-safe secret fetch) is now the only sanctioned
+way to read a secret in this repo.
+
+## [2026-07-24] — fix(algolia): wrong Application ID — search is now live on Algolia (129 records indexed)
+
+### 🔴 Security action required: rotate `ALGOLIA_ADMIN_KEY`
+The admin key value was printed into an assistant session transcript.
+`execSync('firebase functions:secrets:access ALGOLIA_ADMIN_KEY')` — the CLI
+printed the secret to stdout, then hit a libuv assertion on Windows and exited
+non-zero; Node's thrown Error carries the captured stdout in its `output` array
+and the runtime printed it in full. **Regenerate the key in the Algolia
+dashboard, re-set the secret, redeploy the admin-bound functions.** Scope is
+limited to Algolia index read/write for app `F2XND3V1FW` — no Firebase, GCP or
+customer data. The search-only key was not exposed.
+Prevented from recurring: `scripts/_secret.js` fetches secrets via `spawnSync`
+with piped stdio and throws a **scrubbed** error carrying no captured output.
+
+### Root cause of the long-running "Invalid Application-ID or API key"
+Not the keys — the **App ID**. The platform was configured for `FF2WSTR4YC`
+while the keys belong to **`F2XND3V1FW`**. `FF2WSTR4YC` is itself a real,
+reachable Algolia app (`/1/isalive` → 200, and that endpoint does discriminate —
+bogus IDs fail DNS), which is why the error looked like bad credentials rather
+than a mismatch. Diagnosis was a raw-key probe of both stored secrets against
+each app: 403 against the old, `404 Index does not exist` against the new — i.e.
+authentication *succeeded* and only the index was missing.
+
+Changes:
+- `ALGOLIA_APP_ID` updated in **8 places**: `functions/.env`, `sokoni-config.js`
+  (×2), `conversion-analytics.js`, `system-health.js`, `scripts/algolia-backfill.js`,
+  `scripts/algolia-setup.js`, `scripts/migrations/algolia-migrate.js`.
+- **8 indexes created** with settings, synonyms and query rules (`algolia-setup.js`).
+- **Backfill fixed and run — 129 records, 0 skipped.** The first run indexed only
+  29: products store their image as a **base64 data URI up to 200 KB**
+  (`seller-wiring.js`), and the transform passed `data.image` straight into
+  `imageUrl`, producing 195 KB records against Algolia's 10 KB limit. Algolia
+  rejects the **entire batch** when one record is oversized, so a single product
+  cost all 100 records on that page. Added `safeImageUrl()` (accepts only
+  `http(s)` URLs — a data URI is pixels, not an address) and `enforceSize()`, a
+  final guard that trims then drops oversized fields so no single document can
+  ever sink a batch again.
+- Redeployed the search-key functions so `getAlgoliaSearchKey` returns the new
+  App ID to clients (it reads `process.env.ALGOLIA_APP_ID`, which binds at deploy).
+
+Verified with the search-only key against `F2XND3V1FW`:
+`sokoni_products` empty query **129 hits**; `"cool mint"` **3**; `"vape"` **20**;
+`global_search "kass"` **8**.
+
+Audit (as requested, before any redeploy): every consumer of both keys resolves
+them via `defineSecret(...).value()` — Secret Manager only, **70 admin-key
+binding sites**, no hard-coded key material anywhere in functions or client, no
+`process.env` fallback for key material (`ALGOLIA_APP_ID` is public and is not a
+secret). Client config holds `algoliaSearchKey: ""` and fetches at runtime.
+Nothing mocked, bypassed or weakened.
 
 ## [2026-07-24] — fix(search-cache): a just-listed product was unsearchable until the cache expired
 

@@ -4218,6 +4218,11 @@ class="notification-container"
        falls to its "free" fallback before querying Firestore. -->
   <script defer src="sokoni-subscriptions.js"></script>
   <script src="sokoni-product-schema.js" defer></script>
+  <!-- SubscriptionAuthority must load before seller.js so the upload guard can
+       refresh the merchant's counter from the server rather than from any local
+       plan table. Loading it here (not lazily) is what keeps a paid upgrade from
+       being displayed as the free allowance. -->
+  <script src="sokoni-authority.js" defer></script>
   <script src="seller.js" defer></script>
   <!-- Fills the localStorage cache seller.js renders from with the CANONICAL
        products collection. Must load after seller.js so displaySellerProducts
