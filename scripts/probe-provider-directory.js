@@ -29,6 +29,15 @@ const http = require('http'), fs = require('fs'), path = require('path');
 const { Gate } = require('./lib/gate-result');
 
 const PORT = Number(process.env.PROBE_PORT || 8134);
+
+/* Against localhost App Check refuses every Firestore read, so the live pass
+   can only ever report BLOCKED. Point BASE at the deployed origin — which IS
+   App Check-registered — and the same assertions become observable, turning
+   the live gate into real production evidence.
+     PROBE_BASE=https://mysokoni.co.ke node scripts/probe-provider-directory.js */
+const BASE = (process.env.PROBE_BASE || '').replace(/\/+$/, '');
+const ORIGIN = BASE || ('http://localhost:' + PORT);
+const AGAINST_PROD = !!BASE;
 const TYPES = { '.html': 'text/html', '.js': 'application/javascript', '.css': 'text/css',
                 '.ico': 'image/x-icon', '.json': 'application/json', '.png': 'image/png',
                 '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
@@ -105,6 +114,62 @@ const INJECT = [
   },
 ];
 
+/* ── App Check debug token ───────────────────────────────────────────────────
+   Headless Chromium cannot pass reCAPTCHA v3, so the App Check exchange 403s
+   and the SDK throttles for 24 hours — meaning the live read is unobservable
+   from an automated browser on ANY origin, production included. The page
+   handles it correctly ("Could not load providers … not an empty category"),
+   but correct error handling is not evidence that the success path works.
+
+   Firebase's supported escape hatch is a debug token: set
+   self.FIREBASE_APPCHECK_DEBUG_TOKEN before the SDK initialises and reCAPTCHA
+   is skipped entirely. Minting one via the admin API and injecting it turns
+   the live gate into genuine end-to-end evidence — real origin, real page,
+   real Firestore read.
+
+   The token is deleted afterwards on every exit path. A debug token left
+   registered is a standing App Check bypass for anyone who learns it. */
+const AC_DEBUG = process.env.PROBE_APPCHECK_DEBUG === '1';
+const DEBUG_TOKEN = '77777777-6666-4555-8444-333333333333';
+const PROJECT = process.env.GCLOUD_PROJECT || 'sokoni-aeb26';
+const APP_ID = process.env.FIREBASE_APP_ID || '1:24799054989:web:e1cf6ca8c281bf1abf26c4';
+
+function adminHeaders() {
+  const { execSync } = require('child_process');
+  const env = Object.assign({}, process.env);
+  if (!env.CLOUDSDK_PYTHON && process.env.LOCALAPPDATA) {
+    env.CLOUDSDK_PYTHON = process.env.LOCALAPPDATA +
+      '\\Google\\Cloud SDK\\google-cloud-sdk\\platform\\bundledpython\\python.exe';
+  }
+  const tok = execSync('gcloud auth print-access-token',
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env }).trim();
+  return { Authorization: 'Bearer ' + tok, 'x-goog-user-project': PROJECT };
+}
+
+function acReq(method, apiPath, body, headers) {
+  const https = require('https');
+  return new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const h = Object.assign({}, headers || {});
+    if (data) { h['Content-Type'] = 'application/json'; h['Content-Length'] = Buffer.byteLength(data); }
+    const r = https.request({ host: 'firebaseappcheck.googleapis.com', path: apiPath, method, headers: h },
+      res => { let o = ''; res.on('data', c => o += c); res.on('end', () => resolve({ status: res.statusCode, body: o })); });
+    r.on('error', reject);
+    if (data) r.write(data);
+    r.end();
+  });
+}
+
+async function mintDebugToken() {
+  const h = adminHeaders();
+  const r = await acReq('POST',
+    '/v1/projects/' + PROJECT + '/apps/' + encodeURIComponent(APP_ID) + '/debugTokens',
+    { displayName: 'tmp-directory-probe', token: DEBUG_TOKEN }, h);
+  if (r.status >= 400) return { error: 'debugTokens.create HTTP ' + r.status + ' ' + r.body.slice(0, 160) };
+  const name = JSON.parse(r.body).name;
+  return { name, cleanup: () => acReq('DELETE', '/v1/' + name, null, adminHeaders()) };
+}
+
 async function injectStub(page) {
   await page.addInitScript(function (records) {
     /* Intercept the assignment rather than polling for it.
@@ -151,6 +216,16 @@ async function injectStub(page) {
 
 (async () => {
   await new Promise(res => srv.listen(PORT, res));
+
+  /* Mint the App Check debug token before any page loads, so the very first
+     navigation already carries a valid attestation. */
+  let acDebug = null;
+  if (AC_DEBUG) {
+    acDebug = await mintDebugToken();
+    if (acDebug.error) { console.log("  App Check debug token unavailable: " + acDebug.error); acDebug = null; }
+    else console.log("  App Check debug token registered (deleted on exit)");
+  }
+
   const browser = await chromium.launch();
 
   /* Two gates, because the two passes are different classes of evidence and
@@ -159,7 +234,8 @@ async function injectStub(page) {
      NOT production evidence, so it never claims to be. */
   const live = new Gate({
     name: 'provider-directory-live',
-    evidence: 'browser-run', environment: 'local',
+    evidence: AGAINST_PROD ? 'production-probe' : 'browser-run',
+    environment: AGAINST_PROD ? 'production' : 'local',
   });
   const render = new Gate({
     name: 'provider-directory-render',
@@ -175,8 +251,9 @@ async function injectStub(page) {
     const errors = [];
     page.on('pageerror', e => errors.push(String(e.message).slice(0, 160)));
     page.on('console', m => { if (m.type() === 'error') errors.push('console: ' + m.text().slice(0, 160)); });
+    if (acDebug) await page.addInitScript(t => { self.FIREBASE_APPCHECK_DEBUG_TOKEN = t; }, DEBUG_TOKEN);
 
-    await page.goto('http://localhost:' + PORT + spec.url, { waitUntil: 'domcontentloaded' });
+    await page.goto(ORIGIN + spec.url, { waitUntil: 'domcontentloaded' });
 
     /* Wait for the grid to stop saying "loading", up to 15s. Asserting
        immediately would test the skeleton, not the data. */
@@ -215,7 +292,7 @@ async function injectStub(page) {
          made the earlier run print FAIL for something never tested. */
       live.pass(spec.url + ': failed read is reported honestly');
       live.blocked(spec.url + ': real providers rendered',
-        'Firestore read blocked (App Check refuses localhost) — not observed');
+        (AGAINST_PROD ? 'Firestore read did not resolve' : 'Firestore read blocked (App Check refuses localhost)') + ' — not observed');
     } else if (spec.expectReal) {
       live.fail(spec.url + ': real providers rendered',
         'neither providers nor an error state were shown');
@@ -230,7 +307,8 @@ async function injectStub(page) {
   const page = await ctx.newPage();
   const perr = [];
   page.on('pageerror', e => perr.push(String(e.message).slice(0, 160)));
-  await page.goto('http://localhost:' + PORT + '/provider-profile.html?uid=H7p6ktBHogM5GcBy6mz8negKVbG2',
+  if (acDebug) await page.addInitScript(t => { self.FIREBASE_APPCHECK_DEBUG_TOKEN = t; }, DEBUG_TOKEN);
+  await page.goto(ORIGIN + '/provider-profile.html?uid=H7p6ktBHogM5GcBy6mz8negKVbG2',
     { waitUntil: 'domcontentloaded' });
   let body = '';
   /* Must exceed sokoni-providers.js READ_TIMEOUT_MS (8s) plus module boot,
@@ -280,7 +358,7 @@ async function injectStub(page) {
     const errs = [];
     p2.on('pageerror', e => errs.push(String(e.message).slice(0, 140)));
     await injectStub(p2);
-    await p2.goto('http://localhost:' + PORT + spec.url, { waitUntil: 'domcontentloaded' });
+    await p2.goto(ORIGIN + spec.url, { waitUntil: 'domcontentloaded' });
 
     let text = '', html = '';
     for (let i = 0; i < 60; i++) {
@@ -320,7 +398,7 @@ async function injectStub(page) {
   const e3 = [];
   p3.on('pageerror', e => e3.push(String(e.message).slice(0, 140)));
   await injectStub(p3);
-  await p3.goto('http://localhost:' + PORT + '/provider-profile.html?uid=H7p6ktBHogM5GcBy6mz8negKVbG2',
+  await p3.goto(ORIGIN + '/provider-profile.html?uid=H7p6ktBHogM5GcBy6mz8negKVbG2',
     { waitUntil: 'domcontentloaded' });
   let b3 = '';
   for (let i = 0; i < 60; i++) {
@@ -344,6 +422,12 @@ async function injectStub(page) {
 
   await browser.close();
   srv.close();
+
+  if (acDebug && acDebug.cleanup) {
+    const d = await acDebug.cleanup();
+    console.log('\n  App Check debug token ' +
+      (d.status < 400 ? 'deleted' : '** NOT DELETED (HTTP ' + d.status + ') — REVOKE MANUALLY **'));
+  }
 
   const liveCode   = live.finish();
   const renderCode = render.finish();
