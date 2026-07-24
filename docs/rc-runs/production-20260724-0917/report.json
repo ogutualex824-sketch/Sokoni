@@ -1,0 +1,212 @@
+{
+  "label": "production-20260724-0917",
+  "backend": "production(admin)",
+  "startedAt": "2026-07-24T06:18:11.786Z",
+  "privileged": false,
+  "suites": [
+    {
+      "id": "RC-01",
+      "title": "Seller Journey",
+      "verdict": "PARTIAL",
+      "steps": [
+        {
+          "name": "Seed seller identity (+ seller claim actually applied)",
+          "capability": "Seller authentication",
+          "status": "PASS",
+          "detail": "uid=oXrgbq2oBwadJSfsk0NypDCAXVT2, claims={\"seller\":true}",
+          "evidence": [
+            {
+              "type": "identity",
+              "role": "seller",
+              "uid": "oXrgbq2oBwadJSfsk0NypDCAXVT2",
+              "claims": {
+                "seller": true
+              }
+            }
+          ],
+          "at": "2026-07-24T06:18:11.808Z"
+        },
+        {
+          "name": "Create shop document",
+          "capability": "Shop creation",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "firestore",
+              "path": "shops/rc-beta-shop",
+              "doc": {
+                "_rcSeed": true,
+                "tier": "premium",
+                "name": "RC Beta Shop",
+                "_rcRun": "rc1",
+                "handle": "rc-beta-shop"
+              }
+            }
+          ],
+          "at": "2026-07-24T06:18:13.937Z"
+        },
+        {
+          "name": "Upload product",
+          "capability": "Product creation",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "firestore",
+              "path": "products/rc-prod-basic",
+              "doc": {
+                "searchableTerms": [
+                  "rc",
+                  "test",
+                  "basic",
+                  "electronics"
+                ],
+                "_rcSeed": true,
+                "ownerRole": "seller",
+                "price": 100000,
+                "name": "RC Test Product — Basic",
+                "_rcRun": "rc1",
+                "id": "rc-prod-basic",
+                "isVisible": true,
+                "category": "electronics",
+                "stock": 25,
+                "status": "active"
+              }
+            }
+          ],
+          "at": "2026-07-24T06:18:18.239Z"
+        },
+        {
+          "name": "Edit product (price persists AND search contract survives)",
+          "capability": "Product mutation",
+          "status": "PASS",
+          "detail": "price=111100, 4 terms intact",
+          "evidence": [
+            {
+              "type": "assertion",
+              "afterEdit": {
+                "price": 111100,
+                "terms": 4,
+                "status": "active",
+                "isVisible": true
+              }
+            }
+          ],
+          "at": "2026-07-24T06:18:19.759Z"
+        },
+        {
+          "name": "Search reflects the product (searchableTerms present)",
+          "capability": "Search indexing",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [],
+          "at": "2026-07-24T06:18:21.299Z"
+        },
+        {
+          "name": "Delete product = archive (soft-delete contract)",
+          "capability": "Product soft-delete",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "assertion",
+              "afterArchive": {
+                "status": "archived",
+                "isVisible": false
+              }
+            }
+          ],
+          "at": "2026-07-24T06:18:22.058Z"
+        },
+        {
+          "name": "Search reflects the archive (datastore ↔ search consistency)",
+          "capability": "Search invalidation",
+          "status": "PASS",
+          "detail": "archived product excluded from active results",
+          "evidence": [
+            {
+              "type": "assertion",
+              "archivedExcludedFromActiveQuery": true,
+              "activeIds": []
+            }
+          ],
+          "at": "2026-07-24T06:18:23.673Z"
+        },
+        {
+          "name": "Seller dashboard renders (UI)",
+          "capability": "Seller dashboard rendering",
+          "status": "BLOCKED",
+          "detail": "seller session injection into the browser is the next backend capability",
+          "evidence": [
+            {
+              "type": "screenshot",
+              "file": "docs\\rc-runs\\production-20260724-0917\\rc-01-seller\\seller-dashboard.png"
+            }
+          ],
+          "at": "2026-07-24T06:18:24.767Z"
+        }
+      ]
+    },
+    {
+      "id": "RC-04",
+      "title": "Inventory Journey",
+      "verdict": "PARTIAL",
+      "steps": [
+        {
+          "name": "Seed probe product at stock 10",
+          "capability": "Inventory seed",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "firestore",
+              "path": "products/rc-stock-10",
+              "stock": 10
+            }
+          ],
+          "at": "2026-07-24T06:18:43.788Z"
+        },
+        {
+          "name": "Place order for qty 2 (decrement path)",
+          "capability": "Inventory mutation",
+          "status": "BLOCKED",
+          "detail": "authoritative stock decrement runs in a Cloud Function — needs functions backend to certify 10→8",
+          "evidence": [],
+          "at": "2026-07-24T06:18:45.394Z"
+        },
+        {
+          "name": "Stock is now 8",
+          "capability": "Inventory decrement",
+          "status": "BLOCKED",
+          "detail": "stock still 10 — decrement function not exercised here",
+          "evidence": [],
+          "at": "2026-07-24T06:18:46.927Z"
+        },
+        {
+          "name": "Search + seller view agree on 8",
+          "capability": "Inventory consistency",
+          "status": "BLOCKED",
+          "detail": "stock=10; gated on decrement step",
+          "evidence": [],
+          "at": "2026-07-24T06:18:47.421Z"
+        },
+        {
+          "name": "Realtime + offline cache reflect change",
+          "capability": "Realtime/offline sync",
+          "status": "BLOCKED",
+          "detail": "realtime listener + IndexedDB offline assertion is a later capability",
+          "evidence": [],
+          "at": "2026-07-24T06:18:48.540Z"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-07-24T06:18:52.312Z",
+  "summary": {
+    "suites": 2,
+    "pass": 8,
+    "fail": 0,
+    "blocked": 5
+  }
+}

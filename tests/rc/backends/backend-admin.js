@@ -119,8 +119,13 @@ class AdminBackend extends BackendInterface {
   }
 
   async cleanup() {
-    // Remove only RC-tagged docs. Never a blanket delete.
-    for (const col of ['products', 'orders']) {
+    /* Remove only RC-tagged docs. Never a blanket delete.
+       `shops` was missing from this list, so the first production run left
+       shops/rc-beta-shop behind. It was not publicly discoverable (shop
+       listings filter status=='active' and the seeded doc has no status), but
+       leaving test data in a live database is not acceptable regardless.
+       Any collection an RC suite writes MUST be listed here. */
+    for (const col of ['products', 'orders', 'shops', 'dataExportRequests', 'dataExportQueue']) {
       let docs = [];
       try { docs = await this.queryCol(col, [['_rcSeed', '==', true]]); } catch { /* rules/permission */ }
       for (const d of docs) { try { await this.deleteDoc(`${col}/${d.id}`); } catch {} }

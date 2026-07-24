@@ -31,8 +31,10 @@ counted as a pass, so a partial run states exactly what was and was not certifie
 
 ## Run
 
-> **Windows:** if `gcloud` fails with *"Python was not found"*, it is not broken — export
-> `CLOUDSDK_PYTHON` first. See [Local Development → Windows environment gotchas](../../docs/LOCAL_DEVELOPMENT.md#windows-environment-gotchas).
+> **Windows:** in PowerShell these commands work as-is. In **Git Bash**, `gcloud` first
+> fails with *"Python was not found"* — it is not broken, set `CLOUDSDK_PYTHON`. See
+> [Local Development → Windows environment gotchas](../../docs/LOCAL_DEVELOPMENT.md#windows-environment-gotchas).
+> (`export` is bash-only; PowerShell uses `$env:VAR = "..."`.)
 > Note also that `gcloud auth login` and `gcloud auth application-default login` are
 > **separate** credential stores; this harness needs the latter.
 

@@ -29,13 +29,23 @@ install from the Microsoft Store"*.
 The Cloud SDK is **not** broken and does **not** need a system Python — its launcher just
 can't find a usable interpreter. The SDK ships its own. Point the launcher at it:
 
-```bash
-export CLOUDSDK_PYTHON="$LOCALAPPDATA/Google/Cloud SDK/google-cloud-sdk/platform/bundledpython/python.exe"
-gcloud version   # now works
+**This affects Git Bash / MSYS shells.** In PowerShell `gcloud` generally resolves its
+interpreter correctly and needs no override — confirmed working there on 2026-07-24.
+
+```powershell
+# PowerShell — note `export` does NOT exist here and will error
+$env:CLOUDSDK_PYTHON = "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk\platform\bundledpython\python.exe"
+gcloud version
 ```
 
-Set it in your shell profile — it is per-shell, so a new terminal loses it and gcloud
-appears "broken" again. Every `gcloud` command in this guide assumes it is exported.
+```bash
+# Git Bash / MSYS — this is where the override is actually required
+export CLOUDSDK_PYTHON="$LOCALAPPDATA/Google/Cloud SDK/google-cloud-sdk/platform/bundledpython/python.exe"
+gcloud version
+```
+
+It is per-shell, so a new terminal loses it and gcloud appears "broken" again — set it in
+your profile if you work in Git Bash.
 
 ### `python -m http.server` serves nothing
 
