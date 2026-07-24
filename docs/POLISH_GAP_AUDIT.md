@@ -115,6 +115,34 @@ The property that matters: **no destructive action occurs before every
 observation has been recorded.** Cleanup still has to run on every exit path,
 including failures — but always after the verdict, never before it.
 
+### Log transitions, not snapshots — and attribute them
+
+A snapshot cannot show a mutation. Two snapshots that disagree only *suggest*
+one; a recorded transition **is** one. Sample fast enough to resolve the event
+you are testing for: a race decided in ~5s is invisible to 8s sampling, which is
+how probe v3 saw only a stable end state and mistook it for the original.
+
+A transition answers *what happened*. It does not answer *who did it* — and with
+concurrent triggers that is the question that turns a strong hypothesis into a
+root cause. Capture identity alongside every sample:
+
+| Field | Source |
+|---|---|
+| `createTime` / `updateTime` | Firestore REST returns both on every document GET — already fetched, usually discarded |
+| generation / revision counter | distinguishes rewrite from no-op |
+| execution id / correlation id | ties a write to the specific function invocation that made it |
+| worker id, attempt count | separates producer behaviour from consumer behaviour |
+
+The difference in practice:
+
+```
+pending → partial → processed                       (what)
+
+t+1.0  algoliaSync_products_create  wrote upsert/pending
+t+3.2  algoliaSync_products_update  wrote partial/pending   ← overwrite, attributed
+t+5.8  processAlgoliaQueue          processed partial       (who)
+```
+
 ---
 
 ## 🔴 Built but broken
