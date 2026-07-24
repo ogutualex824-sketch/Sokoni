@@ -171,20 +171,123 @@ const updateCartCount = () => {
 };
 updateCartCount();
 
+/* ── VARIANT FILTERS ────────────────────────────────────────────────────────
+   Facets are derived from the products actually in view, not from a per-category
+   table. That is what keeps "only show filters that make sense" true without
+   maintaining a second category map: a Material filter appears in Fashion only
+   when some fashion product actually declares a material, and an attribute
+   nobody has filled in never renders an empty control.
+
+   Selections are OR within an attribute (Black or White) and AND across them
+   (Black AND size XL) — the behaviour shoppers expect from a facet list. */
+const _variantSel = {};                     /* key → Set of chosen values */
+
+function _variantFacets(list){
+    const S = window.SokoniProductSchema;
+    if (!S || typeof S.variantGroups !== 'function') return [];
+    const byKey = new Map();
+    list.forEach(p => {
+        S.variantGroups(p).forEach(g => {
+            if (!byKey.has(g.key)) byKey.set(g.key, { key: g.key, label: g.label, values: new Set() });
+            const f = byKey.get(g.key);
+            g.values.forEach(v => f.values.add(v));
+        });
+    });
+    /* A single option filters nothing — every product in view already has it. */
+    return [...byKey.values()]
+        .map(f => ({ key: f.key, label: f.label, values: [...f.values].sort() }))
+        .filter(f => f.values.length > 1);
+}
+
+function applyVariantFilters(list){
+    const S = window.SokoniProductSchema;
+    const keys = Object.keys(_variantSel).filter(k => _variantSel[k] && _variantSel[k].size);
+    if (!keys.length || !S) return list;
+    return list.filter(p => keys.every(k => {
+        const have = S.variantValues(p[k]);
+        return have.some(v => _variantSel[k].has(v));
+    }));
+}
+
+/* The list renderProducts was last called with, before variant filtering. Using
+   this rather than `filtered` means toggling a colour keeps an active sort order
+   or in-category search instead of silently resetting to the whole category. */
+let _variantBase = [];
+
+function toggleVariantFilter(key, val, btn){
+    if (!_variantSel[key]) _variantSel[key] = new Set();
+    const set = _variantSel[key];
+    if (set.has(val)) set.delete(val); else set.add(val);
+    if (btn) btn.setAttribute('aria-pressed', set.has(val) ? 'true' : 'false');
+    renderProducts(_variantBase);
+}
+window.toggleVariantFilter = toggleVariantFilter;
+
+function clearVariantFilters(){
+    Object.keys(_variantSel).forEach(k => delete _variantSel[k]);
+    renderProducts(_variantBase);
+}
+window.clearVariantFilters = clearVariantFilters;
+
+/* Built from the category set, never from the already-filtered subset, so
+   choosing "Black" does not make every other colour disappear. */
+function renderVariantFilters(baseList){
+    const host = document.getElementById('catVariantFilters');
+    if (!host) return;
+    const facets = _variantFacets(baseList);
+    if (!facets.length) { host.innerHTML = ''; host.style.display = 'none'; return; }
+    host.style.display = '';
+
+    const active = Object.keys(_variantSel).some(k => _variantSel[k] && _variantSel[k].size);
+    host.innerHTML = facets.map(f =>
+        '<div class="cat-vfilter-group">' +
+          '<span class="cat-vfilter-label">' + _esc(f.label) + '</span>' +
+          f.values.map(v => {
+              const on = !!(_variantSel[f.key] && _variantSel[f.key].has(v));
+              return '<button type="button" class="cat-vfilter-chip" aria-pressed="' + (on ? 'true' : 'false') + '" ' +
+                     'onclick="toggleVariantFilter(this.dataset.k,this.dataset.v,this)" ' +
+                     'data-k="' + _esc(f.key) + '" data-v="' + _esc(v) + '">' + _esc(v) + '</button>';
+          }).join('') +
+        '</div>'
+    ).join('') + (active
+        ? '<button type="button" class="cat-vfilter-clear" onclick="clearVariantFilters()">Clear</button>'
+        : '');
+}
+
 /* RENDER */
 function renderProducts(list){
     const grid = document.getElementById("catProductsGrid");
     if(!grid) return;
 
+    /* Facets reflect the unfiltered set; the grid reflects the filtered one. */
+    _variantBase = list;
+    renderVariantFilters(list);
+    const hadAll = list.length;
+    list = applyVariantFilters(list);
+
+    const countEl = document.getElementById("catCount");
+    if (countEl) countEl.textContent = `${list.length} product${list.length !== 1 ? "s" : ""} found`;
+
     if(list.length === 0){
-        grid.innerHTML = `
+        /* "Nothing here yet" would be a lie when the category does have stock
+           and a filter excluded it — offer the way back instead. */
+        grid.innerHTML = hadAll > 0
+          ? `
+            <div style="grid-column:1/-1;text-align:center;padding:80px 20px;">
+                <div style="font-size:64px;margin-bottom:20px;">🔎</div>
+                <h2 style="color:white;font-size:22px;margin-bottom:10px;">No matches for these filters</h2>
+                <p style="color:rgba(255,255,255,0.4);margin-bottom:28px;">${hadAll} product${hadAll !== 1 ? "s" : ""} in ${_esc(meta.title)} — try fewer options</p>
+                <button type="button" onclick="clearVariantFilters()" style="padding:14px 32px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;border-radius:14px;font-weight:800;font-size:15px;font-family:inherit;cursor:pointer;">Clear filters</button>
+            </div>
+          `
+          : `
             <div style="grid-column:1/-1;text-align:center;padding:80px 20px;">
                 <div style="font-size:64px;margin-bottom:20px;">${meta.icon}</div>
                 <h2 style="color:white;font-size:24px;margin-bottom:10px;">No products in ${meta.title} yet</h2>
                 <p style="color:rgba(255,255,255,0.4);margin-bottom:28px;">Be the first to list something here</p>
                 <a href="seller.html" style="padding:14px 32px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;font-size:15px;">Start Selling</a>
             </div>
-        `;
+          `;
         return;
     }
 
@@ -209,6 +312,15 @@ function renderProducts(list){
             </div>
             <div class="product-body">
                 <h3 class="product-name">${_esc(p.name)}</h3>
+                ${(function(){
+                    /* Same shared summary the home grid uses — "Black • XL".
+                       Empty string when the product declares no variants, so
+                       pre-variant products keep their current layout exactly. */
+                    const S = window.SokoniProductSchema;
+                    if (!S || typeof S.variantSummary !== 'function') return '';
+                    const s = S.variantSummary(p);
+                    return s ? '<div class="pcard-variants">' + _esc(s) + '</div>' : '';
+                })()}
                 <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;margin-top:1px;">
                     ${(function(){
                         var o = _activeOffers.get(p.id);

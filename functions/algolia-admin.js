@@ -145,6 +145,15 @@ const INDEX_SETTINGS = {
       'seller.name',
       'unordered(sku)',
       'unordered(barcode)',
+      /* Variant values, so "black", "XL", "256GB" or "cotton" find products.
+         Listed last and unordered: a variant hit is a weaker signal than a name
+         hit, and position within the array carries no meaning. */
+      'unordered(colors)',
+      'unordered(sizes)',
+      'unordered(storage)',
+      'unordered(weights)',
+      'unordered(volumes)',
+      'unordered(materials)',
     ],
     attributesForFaceting: [
       'filterOnly(status)',
@@ -171,6 +180,15 @@ const INDEX_SETTINGS = {
       'isOnSale',
       'isBestseller',
       'isNew',
+      /* Variant facets. Refinable (not filterOnly) because these are the
+         attributes a shopper narrows by — colour and size above all — and the
+         UI needs facet counts to know which ones to offer for a category. */
+      'colors',
+      'sizes',
+      'storage',
+      'weights',
+      'volumes',
+      'materials',
     ],
     customRanking: [
       'desc(isFeatured)',

@@ -7665,16 +7665,30 @@ exports.indexProductCreate = onDocumentCreated("products/{productId}", async (ev
 
 exports.indexProductUpdate = onDocumentUpdated("products/{productId}", async (event) => {
   if (!event.data || !event.data.after) return;
-  const before = event.data.before.data() || {};
-  const after  = event.data.after.data()  || {};
-  /* Guard: only reindex when text content fields actually change.
-     Writing indexedAt back every update caused an infinite update loop. */
-  const TEXT_FIELDS = ["name", "title", "category", "description", "tags", "brand", "location", "county"];
-  const changed = TEXT_FIELDS.some(f => before[f] !== after[f]);
-  if (!changed) return;
+  const after = event.data.after.data() || {};
+
+  /* Guard: write only when the generated index actually differs from what is
+     stored. This replaced a fixed TEXT_FIELDS list compared with !==, which was
+     wrong in both directions: array fields (tags, and now the variant
+     attributes) compare by reference, so two snapshots of an unchanged array
+     always looked "changed" and re-armed the very update loop the list was
+     meant to prevent; and any field outside the list — a seller adding colours
+     or sizes — looked unchanged and left the product's terms stale.
+     Comparing the output instead is self-limiting: the trigger's own write
+     produces identical terms on the next pass, so the loop terminates after one
+     hop no matter which field moved, and no field list needs maintaining when
+     search-terms.js learns a new one. */
+  const nextTerms = _buildSearchTerms(after);
+  const nextName  = (after.name || "").toLowerCase();
+  const prevTerms = Array.isArray(after.searchableTerms) ? after.searchableTerms : null;
+  const sameTerms = prevTerms
+    && prevTerms.length === nextTerms.length
+    && prevTerms.every((t, i) => t === nextTerms[i]);
+  if (sameTerms && after.nameLower === nextName) return;
+
   await event.data.after.ref.update({
-    searchableTerms: _buildSearchTerms(after),
-    nameLower: (after.name || "").toLowerCase(),
+    searchableTerms: nextTerms,
+    nameLower: nextName,
   }).catch(() => {});
 });
 

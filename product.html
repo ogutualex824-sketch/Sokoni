@@ -219,6 +219,10 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <!-- PRODUCT JS -->
 
+<!-- Variant labels and per-category ordering come from the same schema the
+     seller forms use, so the page cannot describe an attribute differently
+     from the form that captured it. Must load before product.js. -->
+<script src="sokoni-product-schema.js"></script>
 <script src="product.js"></script>
 
 <script src="sokoni-audit.js" defer></script>

@@ -10148,6 +10148,22 @@ select optgroup {
     flex:1;
 }
 
+/* Card variant summary — "Black • XL". Deliberately quiet: it sits between the
+   name and the price, so it must read as supporting detail and never compete
+   with either. Single line, ellipsised, and absent entirely when a product
+   declares no variants. */
+.pcard-variants{
+    color:rgba(255,255,255,0.5);
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.2px;
+    margin-top:3px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+body.light-mode .pcard-variants{ color:rgba(0,0,0,0.5); }
+
 .product-location-tag{
     background:rgba(0,153,255,0.1);
     border:1px solid rgba(0,153,255,0.2);

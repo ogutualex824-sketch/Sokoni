@@ -590,6 +590,17 @@ function kebsBadge(product){
     return "";
 }
 
+/* Card variant line — "Black • XL", "Black • 256GB", "500ml".
+   Renders nothing at all when the product declares no variants, so the ~all
+   existing products created before variants existed keep their exact current
+   layout. Summary logic lives in the shared schema, never duplicated here. */
+function _variantSummaryHtml(product){
+    const S = window.SokoniProductSchema;
+    if (!S || typeof S.variantSummary !== 'function') return "";
+    const s = S.variantSummary(product);
+    return s ? `<div class="pcard-variants">${_escHtml(s)}</div>` : "";
+}
+
 function buildProductCard(product, size = "normal"){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
@@ -737,6 +748,7 @@ function buildProductCard(product, size = "normal"){
             <div class="product-body">
                 ${badge || kebs ? `<div class="pcard-badge-row">${badge}${kebs}</div>` : ""}
                 <h3 class="product-name">${_escHtml(product.name)}</h3>
+                ${_variantSummaryHtml(product)}
                 ${getSellerBadgesHtml(product.sellerName,'sm')}
                 <div class="price-row">
                     <p class="price">KES ${price}</p>
