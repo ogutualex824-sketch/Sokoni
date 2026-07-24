@@ -13,6 +13,32 @@
    Public API  : window.SokoniPrinter.{discover,connect,print,printQR,
                  printBarcode,printImage,registerDocType,waitForJob,…}
    ════════════════════════════════════════════════════════════════════ */
+
+/* ── Canonical legal entity, wrapped to the paper width ────────────────────
+   The registered name is 34 characters. center() truncates at the paper width,
+   so on 58mm (32 chars) a single line printed
+   "Bravilex International Co. Limit" — a truncated legal name on a customer
+   receipt. Splitting it across two string literals would fix the print but
+   remove the canonical name from this file, which is exactly what
+   verify-company-identity looks for.
+
+   So it is declared ONCE, canonically, and wrapped at print time:
+     58mm (32) -> 'Bravilex International Co.' / 'Limited'
+     80mm (48) -> a single line
+   Source of truth: sokoni-company.js (legalName). */
+const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+function _legalNameLines(width) {
+  const W = Number(width) || 32;
+  const lines = []; let line = '';
+  for (const w of SOKONI_LEGAL_NAME.split(' ')) {
+    const next = line ? line + ' ' + w : w;
+    if (next.length <= W) { line = next; }
+    else { if (line) lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 'use strict';
 (function (root) {
 
@@ -1679,8 +1705,10 @@ class SPEngine {
         enc.al().text(sep).lf().ac()
            .bold(true).sz('tall').text(center('SOKONI POS')).lf().sz('normal').bold(false).lf()
            .text(center('Powered by')).lf()
-           .text(center('Bravilex International')).lf()
-           .text(center('Co. Ltd.')).lf().lf()
+           /* Canonical legal name wrapped to the paper width. Was two hardcoded
+              literals ('Bravilex International' / 'Co. Ltd.') which is not the
+              registered name; _legalNameLines wraps the real one. */
+           .text(_legalNameLines(W).map(center).join(String.fromCharCode(10))).lf().lf()
            .bold(true).sz('tall').text(center('PRINTER')).lf()
            .text(center('CERTIFICATION')).lf().sz('normal').bold(false)
            .al().text(sep).lf().lf();

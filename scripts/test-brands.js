@@ -13,11 +13,20 @@ const AV = require('../functions/age-verification');
 let pass = 0, fail = 0;
 const check = (l, ok, d) => { console.log('  ' + (ok?'PASS  ':'FAIL  ') + l + (d?'   ['+d+']':'')); ok?pass++:fail++; };
 
+/* Pinned, not read from COMPANY. `d.legalName === EXPECTED_LEGAL_NAME` compared two
+   values from the SAME source: if COMPANY.legalName were wrong, both sides would be
+   wrong and this suite would still pass. It verified consistency, not correctness.
+   Pinning the registered name makes it a real assertion - and is why this file
+   legitimately contains the canonical string verify-company-identity looks for. */
+const EXPECTED_LEGAL_NAME = 'Bravilex International Co. Limited';
+
 console.log('\n── One legal entity, many brands ──');
+check('COMPANY.legalName is the registered name',
+      COMPANY.legalName === EXPECTED_LEGAL_NAME, COMPANY.legalName);
 check('two brands registered', B.brandIds().length === 2, B.brandIds().join(','));
 for (const id of B.brandIds()) {
   const d = B.documentBranding(id);
-  check(id + ': legalName is Bravilex', d.legalName === COMPANY.legalName, d.legalName);
+  check(id + ': legalName is Bravilex', d.legalName === EXPECTED_LEGAL_NAME, d.legalName);
   check(id + ': registration number is the company one', d.registrationNumber === COMPANY.registrationNumber);
 }
 check('brand display names differ',

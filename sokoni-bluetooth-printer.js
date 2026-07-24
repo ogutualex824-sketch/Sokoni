@@ -8,6 +8,32 @@
  * Exposes:   window.P58EPrinter  (P58EService singleton)
  */
 
+/* ── Canonical legal entity, wrapped to the paper width ────────────────────
+   The registered name is 34 characters. center() truncates at the paper width,
+   so on 58mm (32 chars) a single line printed
+   "Bravilex International Co. Limit" — a truncated legal name on a customer
+   receipt. Splitting it across two string literals would fix the print but
+   remove the canonical name from this file, which is exactly what
+   verify-company-identity looks for.
+
+   So it is declared ONCE, canonically, and wrapped at print time:
+     58mm (32) -> 'Bravilex International Co.' / 'Limited'
+     80mm (48) -> a single line
+   Source of truth: sokoni-company.js (legalName). */
+const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+function _legalNameLines(width) {
+  const W = Number(width) || 32;
+  const lines = []; let line = '';
+  for (const w of SOKONI_LEGAL_NAME.split(' ')) {
+    const next = line ? line + ' ' + w : w;
+    if (next.length <= W) { line = next; }
+    else { if (line) lines.push(line); line = w; }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+
 'use strict';
 (function () {
 
