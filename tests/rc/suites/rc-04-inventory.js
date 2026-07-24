@@ -15,6 +15,22 @@ module.exports = {
         if (!got || got.stock !== 10) throw new Error(`seed failed (stock=${got && got.stock})`);
         ctx.record('firestore', { path: `products/${p.id}`, stock: got.stock });
     }},
+    /* ARCHITECTURAL NOTE (traced 2026-07-24, not assumed).
+       Marketplace stock is decremented ONLY inside the payment webhooks
+       `verifyIntasendPayment` (index.js:2727) and `darajaSTKCallback`
+       (index.js:3599) — both onRequest, inside a TOCTOU-safe transaction with an
+       insufficient-stock guard. There is NO callable that decrements marketplace
+       stock, so placing an order does not move stock; CONFIRMING PAYMENT does.
+
+       Consequence: RC-04's marketplace decrement is NOT independently testable.
+       It is gated on the same INTASEND secrets as RC-03, because certifying it
+       requires a validly-signed webhook. RC-04 and RC-03 are one certification.
+
+       Two callables DO decrement stock and are reachable with the browser
+       session: `recordPOSSale` (pos-retail-engine.js) and `createClickAndCollect`
+       (pos-marketplace-sync.js). Those are the POS/click-and-collect paths — a
+       DIFFERENT capability from marketplace checkout, and certifying them writes
+       real sale + receipt records, so they belong in their own suite. */
     { name: 'Place order for qty 2 (decrement path)', capability: 'Inventory mutation', async run(ctx) {
         // Prefer the real transaction/function. Until callable invocation is
         // wired, drive the documented decrement path via a transaction-style
@@ -26,7 +42,11 @@ module.exports = {
         // here we verify the order landed so the chain is inspectable.
         const got = await ctx.backend.getDoc(`orders/${ord.id}`);
         if (!got) throw new Error('order not written');
-        throw new BlockedError('authoritative stock decrement runs in a Cloud Function — needs functions backend to certify 10→8');
+        throw new BlockedError(
+          'marketplace stock moves on PAYMENT CONFIRMATION, not order placement — ' +
+          'the decrement lives in verifyIntasendPayment/darajaSTKCallback (onRequest). ' +
+          'Certifying 10→8 requires a validly-signed IntaSend webhook, i.e. the same ' +
+          'secrets as RC-03. Gated on RC-03, not on a generic "functions backend".');
     }},
     { name: 'Stock is now 8', capability: 'Inventory decrement', async run(ctx) {
         const got = await ctx.backend.getDoc('products/rc-stock-10');

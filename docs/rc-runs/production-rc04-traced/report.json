@@ -1,0 +1,68 @@
+{
+  "label": "production-rc04-traced",
+  "backend": "production(admin)",
+  "startedAt": "2026-07-24T06:42:39.415Z",
+  "privileged": false,
+  "suites": [
+    {
+      "id": "RC-04",
+      "title": "Inventory Journey",
+      "verdict": "PARTIAL",
+      "steps": [
+        {
+          "name": "Seed probe product at stock 10",
+          "capability": "Inventory seed",
+          "status": "PASS",
+          "detail": "",
+          "evidence": [
+            {
+              "type": "firestore",
+              "path": "products/rc-stock-10",
+              "stock": 10
+            }
+          ],
+          "at": "2026-07-24T06:42:39.481Z"
+        },
+        {
+          "name": "Place order for qty 2 (decrement path)",
+          "capability": "Inventory mutation",
+          "status": "BLOCKED",
+          "detail": "marketplace stock moves on PAYMENT CONFIRMATION, not order placement — the decrement lives in verifyIntasendPayment/darajaSTKCallback (onRequest). Certifying 10",
+          "evidence": [],
+          "at": "2026-07-24T06:42:47.757Z"
+        },
+        {
+          "name": "Stock is now 8",
+          "capability": "Inventory decrement",
+          "status": "BLOCKED",
+          "detail": "stock still 10 — decrement function not exercised here",
+          "evidence": [],
+          "at": "2026-07-24T06:42:49.234Z"
+        },
+        {
+          "name": "Search + seller view agree on 8",
+          "capability": "Inventory consistency",
+          "status": "BLOCKED",
+          "detail": "stock=10; gated on decrement step",
+          "evidence": [],
+          "at": "2026-07-24T06:42:50.151Z"
+        },
+        {
+          "name": "Realtime + offline cache reflect change",
+          "capability": "Realtime/offline sync",
+          "status": "BLOCKED",
+          "detail": "realtime listener + IndexedDB offline assertion is a later capability",
+          "evidence": [],
+          "at": "2026-07-24T06:42:50.651Z"
+        }
+      ]
+    }
+  ],
+  "finishedAt": "2026-07-24T06:42:55.888Z",
+  "summary": {
+    "suites": 1,
+    "pass": 1,
+    "fail": 0,
+    "blocked": 4
+  }
+}
