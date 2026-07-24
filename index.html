@@ -2756,7 +2756,23 @@
 
   <script src="adult-gate.js"></script>
   <!-- demo-seed.js intentionally removed from production -->
-  <script src="script.js" defer>
+  <!-- Shared product schema: supplies the card variant summary ("Black • XL").
+       Deferred like script.js, so it is evaluated first and is present before
+       any card renders. -->
+  <script src="sokoni-product-schema.js" defer></script>
+  <script src="script.js" defer></script>
+<!-- The tag above was missing its </script>. A <script> element with a src still
+     requires a closing tag, so the HTML parser treated everything up to the NEXT
+     </script> as this element's text content — and text content is ignored when src
+     is present. The module below was therefore parsed as an inert 1196-character
+     string and never executed. Measured on production: 0 "sokoni:catalogue" events,
+     _homeMergeFirestore defined but never called, and script.js's own element
+     carrying 1196 chars of inline text starting with "<script type=\"module\">".
+     Consequence: the Firestore listener never attached, so window.products kept the
+     FALLBACK_PRODUCTS demo array that script.js seeds when localStorage is empty.
+     The homepage showed 28 Unsplash stock listings nobody sells; every card linked to
+     /product?id=F1..F30, which renders "Product Not Found"; and the "images don't
+     load" reports were those demo URLs. Nothing on the homepage could be bought. -->
 <script type="module">
 /* Real seller products from Firestore, merged into the home grid.
    Same source category.html uses — one catalogue, two views.
