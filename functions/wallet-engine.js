@@ -117,6 +117,47 @@ async function _findUserByPhone(db, normalizedPhone) {
 }
 
 /**
+ * Authorize a money-out action with the wallet PIN — SERVER-SIDE, so a client can't
+ * skip it by calling the CF directly. No-op if the user has no PIN set (backward
+ * compatible). If a PIN is set it MUST match; wrong PINs are counted and the wallet
+ * locks+freezes after PIN_MAX_ATTEMPTS (shared with walletV2VerifyPin's tracking).
+ * Throws:
+ *   failed-precondition 'PIN_REQUIRED'  — PIN is set but none supplied (client should prompt)
+ *   permission-denied   'Incorrect PIN' — wrong PIN (or lock message once locked)
+ */
+async function _assertPinOk(db, uid, pin) {
+  const wref  = db.collection('wallets').doc(uid);
+  const wsnap = await wref.get();
+  const w = wsnap.exists ? wsnap.data() : {};
+  if (!w.pinHash) return;                       // no PIN configured → nothing to authorize against
+  if (w.pinLocked) throw new HttpsError('failed-precondition', 'Wallet is PIN-locked. Reset it in Security.');
+  if (!pin || !/^\d{4}$/.test(String(pin))) {
+    throw new HttpsError('failed-precondition', 'PIN_REQUIRED');
+  }
+  if (_sha256(`${pin}${uid}`) === w.pinHash) {
+    await db.collection('walletPinAttempts').doc(uid).set({ verifyAttempts: 0 }, { merge: true }).catch(() => {});
+    return;
+  }
+  // Wrong PIN — track attempts within the window; lock+freeze at the cap.
+  const rateRef = db.collection('walletPinAttempts').doc(uid);
+  let locked = false;
+  await db.runTransaction(async (t) => {
+    const rs  = await t.get(rateRef);
+    const now = Date.now();
+    let attempts = 0, windowStart = now;
+    if (rs.exists) {
+      const rd = rs.data();
+      const ws = rd.windowStart?.toMillis ? rd.windowStart.toMillis() : 0;
+      if (now - ws < PIN_WINDOW_MS) { attempts = rd.verifyAttempts ?? 0; windowStart = ws; }
+    }
+    attempts += 1;
+    t.set(rateRef, { verifyAttempts: attempts, windowStart: Timestamp.fromMillis(windowStart) }, { merge: true });
+    if (attempts >= PIN_MAX_ATTEMPTS) { t.update(wref, { pinLocked: true, frozen: true }); locked = true; }
+  });
+  throw new HttpsError('permission-denied', locked ? 'Too many wrong PINs — wallet locked. Reset it in Security.' : 'Incorrect PIN');
+}
+
+/**
  * Generate a prefixed random ID suitable for Firestore doc IDs.
  * Format: {prefix}_{base36-timestamp}_{6-char-random}
  */
@@ -329,7 +370,7 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
   const senderUid = _requireAuth(request);
   const db        = _db();
 
-  const { phone, toUid, amount, note } = request.data || {};
+  const { phone, toUid, amount, note, pin } = request.data || {};
 
   // ── Validation ──────────────────────────────────────────────────────────────
   /* Recipient may be identified by phone (normal send) or by uid (QR scan-to-pay,
@@ -347,6 +388,7 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
 
   try {
     await _assertNotFrozen(db, senderUid);
+    await _assertPinOk(db, senderUid, pin);   // authorize the send (no-op if no PIN set)
 
     // ── Recipient lookup: by uid (QR) or by phone (tolerant of stored formats) ──
     let recipientDoc;

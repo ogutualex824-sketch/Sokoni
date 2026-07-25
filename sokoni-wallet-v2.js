@@ -713,12 +713,17 @@ window.SokoniWalletV2 = (function () {
   async function executeSend() {
     if (!_sendRecipient || _sendAmount < 10) return;
     if (_frozen) return toast('Wallet is frozen. Unfreeze in Security settings.', 'error');
+    let pin = null;
+    if (_dashboard?.hasPin) {
+      pin = await _promptPin('Enter your PIN to send KSh ' + _fmt(_sendAmount));
+      if (!pin) return;   // cancelled — don't send
+    }
     const btn = document.getElementById('sndConfirmBtn');
     if (btn) btn.disabled = true;
 
     try {
       const note = document.getElementById('sndNote')?.value?.trim() || '';
-      const res = await _callTimed('walletV2Send', { phone: _sendRecipient.phone, amount: _sendAmount, note });
+      const res = await _callTimed('walletV2Send', { phone: _sendRecipient.phone, amount: _sendAmount, note, pin });
       const d = res.data;
       if (d.success) {
         /* Update dashboard cache */
@@ -1180,6 +1185,32 @@ window.SokoniWalletV2 = (function () {
     }
   }
 
+  /* ─── PIN AUTHORIZATION (verify before a send) ───
+     Server enforces the PIN too (walletV2Send → _assertPinOk); this just collects
+     it so the user isn't rejected. Resolves the entered PIN, or null if cancelled. */
+  let _pinResolve = null;
+  function _promptPin(sub) {
+    return new Promise((resolve) => {
+      _pinResolve = resolve;
+      const i = document.getElementById('pinVerifyInput'); if (i) i.value = '';
+      _setText('pinVerifySub', sub || 'Authorize this payment');
+      openOverlay('ovlPinVerify');
+      setTimeout(() => document.getElementById('pinVerifyInput')?.focus(), 120);
+    });
+  }
+  function pinVerifySubmit() {
+    const pin = document.getElementById('pinVerifyInput')?.value?.trim();
+    if (!/^\d{4}$/.test(pin || '')) return toast('Enter your 4-digit PIN', 'error');
+    const r = _pinResolve; _pinResolve = null;
+    closeOverlay('ovlPinVerify');
+    if (r) r(pin);
+  }
+  function pinVerifyCancel() {
+    const r = _pinResolve; _pinResolve = null;
+    closeOverlay('ovlPinVerify');
+    if (r) r(null);
+  }
+
   /* ─── QR CODE ─── */
   function qrTabSwitch(mode) {
     _qrMode = mode;
@@ -1460,10 +1491,16 @@ window.SokoniWalletV2 = (function () {
     if (_frozen) return toast('Wallet is frozen. Unfreeze in Security settings.', 'error');
     if (_dashboard && amount > (_dashboard.balance || 0)) return toast('Insufficient balance', 'error');
 
+    let pin = null;
+    if (_dashboard?.hasPin) {
+      pin = await _promptPin('Enter your PIN to send KSh ' + _fmt(amount));
+      if (!pin) return;   // cancelled — don't send
+    }
+
     const btn = document.getElementById('scanPayBtn');
     if (btn) btn.disabled = true;
     try {
-      const res = await _callTimed('walletV2Send', { toUid: _scanPayload.uid, amount, note: 'QR payment' });
+      const res = await _callTimed('walletV2Send', { toUid: _scanPayload.uid, amount, note: 'Wallet payment', pin });
       const d = res.data;
       if (d.success) {
         if (_dashboard) _dashboard.balance = d.newBalance;
@@ -1653,6 +1690,7 @@ window.SokoniWalletV2 = (function () {
     openSecurity, toggleFreeze, saveLimits, openLimits,
     /* PIN */
     openPinSetup, pinKey, pinKeyDel,
+    pinVerifySubmit, pinVerifyCancel,
     /* QR */
     qrTabSwitch, qrUpdateAmount, qrGenerate, qrShare, qrDownload, qrScan,
     qrCopyCode, qrScanClose, qrScanPay,

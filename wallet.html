@@ -1521,6 +1521,28 @@ body{
   </div>
 </div>
 
+<!-- ── PIN AUTHORIZATION (verify to send) ── -->
+<div class="overlay" id="ovlPinVerify">
+  <div class="ovl-backdrop" onclick="W2.pinVerifyCancel()"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Enter your wallet PIN</h3>
+      <button class="ovl-close" onclick="W2.pinVerifyCancel()"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <p id="pinVerifySub" style="font-size:13px;color:var(--sub);margin-bottom:14px">Authorize this payment</p>
+      <div class="form-group">
+        <input type="password" class="form-input" id="pinVerifyInput" inputmode="numeric" maxlength="4"
+               autocomplete="off" placeholder="••••"
+               style="text-align:center;letter-spacing:10px;font-size:24px"
+               onkeydown="if(event.key==='Enter')W2.pinVerifySubmit()">
+      </div>
+      <button class="btn btn-primary" id="pinVerifyBtn" onclick="W2.pinVerifySubmit()">Authorize</button>
+    </div>
+  </div>
+</div>
+
 <!-- REQUEST MONEY -->
 <div class="overlay" id="ovlRequest">
   <div class="ovl-backdrop" onclick="W2.closeOverlay('ovlRequest')"></div>
