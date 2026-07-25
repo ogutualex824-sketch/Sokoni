@@ -85,11 +85,16 @@ group('Profile page — structure');
   ok('og:title names the member', h.includes('content="Amina Wanjiru — SOKONI"'));
   ok('og:image is the member photo', h.includes('og:image" content="https://firebasestorage.googleapis.com'));
   ok('og:url is the canonical profile URL', h.includes('og:url" content="https://mysokoni.co.ke/profile/aBcDeF1234567890aBcDeF12"'));
-  ok('description carries real detail', /og:description" content="[^"]*Fresh produce supplier/.test(h));
+  /* GATED (owner decision 2026-07-25): the body is a sign-in gate, not the profile.
+     The OG description is generic and must NOT leak the member's real detail. */
+  ok('description is gated, leaks no detail',
+    /og:description" content="[^"]*Create a free SOKONI account/.test(h) &&
+    !/og:description" content="[^"]*Fresh produce supplier/.test(h));
   ok('indexable', h.includes('content="index, follow"'));
-  ok('renders headline, location, badges, skills, shop',
-    h.includes('Fresh produce supplier') && h.includes('Nairobi') &&
-    h.includes('Gold') && h.includes('Logistics') && h.includes('amina-fresh'));
+  ok('gates the body — profile detail NOT rendered',
+    h.includes('Create account') && h.includes('Continue as guest') &&
+    !h.includes('Fresh produce supplier') && !h.includes('Nairobi') &&
+    !h.includes('Gold') && !h.includes('Logistics') && !h.includes('amina-fresh'));
   ok('renders without any client JS', !/<script/i.test(h));
 }
 

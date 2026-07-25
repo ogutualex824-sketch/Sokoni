@@ -47,8 +47,8 @@ body{margin:0;background:var(--pp-bg);color:var(--pp-text);font-family:-apple-sy
 .pp-badge{font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;background:rgba(113,255,0,.10);border:1px solid rgba(113,255,0,.32);color:var(--pp-accent);text-transform:capitalize}
 .pp-badge--level{background:rgba(255,255,255,.06);border-color:var(--pp-line);color:var(--pp-text)}
 .pp-skill{font-size:11.5px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--pp-line);color:var(--pp-muted)}
-.pp-shop,.pp-secondary{display:block;text-decoration:none;font-weight:800;padding:14px;border-radius:12px;margin-bottom:10px}
-.pp-shop{background:var(--pp-accent);color:#041000;font-size:15px}
+.pp-shop,.pp-cta,.pp-secondary{display:block;text-decoration:none;font-weight:800;padding:14px;border-radius:12px;margin-bottom:10px}
+.pp-shop,.pp-cta{background:var(--pp-accent);color:#041000;font-size:15px}
 .pp-secondary{border:1px solid var(--pp-line);color:var(--pp-text);font-weight:700;font-size:14px;padding:13px;margin-bottom:0}
 .pp-sid{margin-top:18px;padding-top:16px;border-top:1px solid var(--pp-line);font-size:11.5px;color:rgba(255,255,255,.38);letter-spacing:.6px}
 .pp-state{text-align:center;padding:60px 18px;color:var(--pp-muted)}
@@ -118,58 +118,25 @@ function _profilePage(d) {
     ? `<img class="pp-avatar" src="${attr(photo, 500)}" alt="" loading="lazy">`
     : `<div class="pp-initials">${esc(_initials(name))}</div>`;
 
-  const badges = [
-    d.trustLevel ? `<span class="pp-badge pp-badge--level">${esc(d.trustLevel)}</span>` : '',
-    ...(d.verifiedTypes || []).map(t => `<span class="pp-badge">✓ ${esc(t)}</span>`),
-  ].filter(Boolean).join('');
-
-  const skills = (d.skills || []).map(s => `<span class="pp-skill">${esc(s)}</span>`).join('');
-  const shopUrl = d.shop && httpsUrl(d.shop.url);
-
-  /* Where sign-in / sign-up should return to: back to this same link, so once the
-     visitor has an account the reveal below shows the profile they came for. */
+  /* Where sign-in / sign-up should return the visitor: back to this same link, so
+     once they have an account they land on the profile they came for. */
   const back = attr('redirect=' + encodeURIComponent(d.profileUrl || '/'), 500);
 
-  /* GATE — the only thing a logged-out visitor sees. Name + avatar only (both are
-     already public via the OG card), then the account/guest choices. */
-  const gate = `<section class="pp-card" id="ppGate">
+  /* GATE — the ENTIRE body. No profile detail (headline, location, skills, shop,
+     Sokoni ID) is rendered at all, so it is not even in page source. Only the name
+     and avatar appear, and both are already public via the OG card above. No client
+     JS: this stays a pure server-rendered page that works with JS disabled, which is
+     the design tenet of this endpoint — gating just changes WHAT is rendered, not
+     HOW. A public shared URL has no auth context at render time, so it always shows
+     the gate; members who want to view a profile do so inside the app. */
+  return _shell(meta, `<section class="pp-card">
     ${avatar}
     <h1 class="pp-name">${esc(name)}</h1>
     <p class="pp-headline">Create a free account to view this profile on SOKONI.</p>
-    <a class="pp-shop" href="/signup?${back}">Create account</a>
+    <a class="pp-cta" href="/signup?${back}">Create account</a>
     <a class="pp-secondary" href="/login?${back}" style="margin-bottom:10px">Sign in</a>
     <a class="pp-secondary" href="/">Continue as guest — browse SOKONI</a>
-  </section>`;
-
-  /* PROFILE — hidden until the script confirms a signed-in visitor. */
-  const profile = `<section class="pp-card" id="ppProfile" style="display:none">
-    ${avatar}
-    <h1 class="pp-name">${esc(name)}</h1>
-    ${d.headline ? `<p class="pp-headline">${esc(d.headline)}</p>` : ''}
-    ${d.location ? `<div class="pp-meta"><span>📍 ${esc(d.location)}</span></div>` : ''}
-    ${badges ? `<div class="pp-badges">${badges}</div>` : ''}
-    ${skills ? `<div class="pp-skills">${skills}</div>` : ''}
-    ${shopUrl ? `<a class="pp-shop" href="${attr(shopUrl, 500)}">Visit shop @${esc(d.shop.handle)}</a>` : ''}
-    <a class="pp-secondary" href="/">Explore SOKONI marketplace</a>
-  </section>`;
-
-  const reveal = `<script>
-  /* Reveal the profile only to a signed-in visitor; everyone else keeps the gate.
-     localStorage is the app's own login cache (set by firebase.js onAuthStateChanged);
-     a genuine session is re-verified inside the app itself on any real action, so
-     this reveal exposes nothing an account holder could not already see. */
-  (function(){
-    try {
-      if (localStorage.getItem('loggedIn') === 'true' && localStorage.getItem('sokoniUser')) {
-        var g = document.getElementById('ppGate'), p = document.getElementById('ppProfile');
-        if (g) g.style.display = 'none';
-        if (p) p.style.display = '';
-      }
-    } catch (e) {}
-  })();
-  </script>`;
-
-  return _shell(meta, gate + profile + reveal);
+  </section>`);
 }
 
 /**
