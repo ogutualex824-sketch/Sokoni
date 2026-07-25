@@ -3293,12 +3293,25 @@ function saveInlineEdit(){
                  tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt};
   if(_ieAvatarData) payload.avatarUrl = _ieAvatarData;
   if(_ieCoverData)  payload.coverUrl  = _ieCoverData;
-  saveToFirestore(payload);
-
+  /* Optimistic local update already happened (setUser above), so the UI reflects
+     the edit immediately and the editor can close. But the toast now waits for the
+     ACTUAL server result — a false "Saved!" over a write that App Check denied is
+     what made the edit silently vanish on refresh. On failure we say so and keep
+     the editor's values in localStorage so nothing is lost before a retry. */
   _ieAvatarData = null; _ieCoverData = null;
   renderHeaderCard();
   toggleInlineEdit();
-  upToast('Profile saved!', true);
+  upToast('Saving…', true);
+  saveToFirestore(payload).then(function(){
+    upToast('Profile saved', true);
+  }).catch(function(err){
+    var code = (err && (err.code || err.message)) || 'unknown';
+    console.warn('[profile] save failed:', code);
+    var msg = code === 'not-signed-in' ? 'Please sign in again to save.'
+            : code === 'db-unavailable' ? 'You appear to be offline — changes will not save.'
+            : 'Could not save to the server. Check your connection and try again.';
+    upToast(msg, false);
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3900,17 +3913,40 @@ function addRole(roleKey){
 /* ══════════════════════════════════════════════════════════════
    FIRESTORE SYNC
 ══════════════════════════════════════════════════════════════ */
+/* Returns a Promise that RESOLVES only when the write actually lands and REJECTS
+   on a real failure, so callers can stop telling the user "Saved!" when nothing
+   reached the server.
+
+   Why the retry: App Check is enforced on Firestore and 403s INTERMITTENTLY on
+   this project (an identical session can succeed then be denied), and a denied
+   write surfaces as permission-denied. The old code ran the write once,
+   fire-and-forget, and swallowed any rejection into a console.warn — so a single
+   App Check hiccup silently dropped the edit, the "Profile saved!" toast fired
+   anyway, and on refresh listenFirestoreProfile's snapshot overwrote the local
+   change with the stale server doc. That is exactly the reported "edit profile
+   doesn't save / goes back to what it was". Same one-retry pattern as the
+   catalogue listener in sokoni-db.js; the token normally refreshes within ~1.2s. */
 function saveToFirestore(fields){
-  if(!_user || !_user.uid) return;
+  if(!_user || !_user.uid) return Promise.reject(new Error('not-signed-in'));
   fields.updatedAt = fields.updatedAt || new Date().toISOString();
-  if(window.firebaseDB){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      var ref = m.doc(window.firebaseDB,'users',_user.uid);
-      m.setDoc(ref, fields, {merge:true}).catch(function(err){ console.warn('Profile Firestore write:', err); });
-    }).catch(function(){});
-  }
-  /* also call legacy helper if available */
+  /* legacy mirror helper, best-effort */
   if(window.sokoniUpdateProfile){ try{ window.sokoniUpdateProfile(fields); }catch(e){} }
+  if(!window.firebaseDB) return Promise.reject(new Error('db-unavailable'));
+
+  return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+    var ref = m.doc(window.firebaseDB,'users',_user.uid);
+    function attempt(n){
+      return m.setDoc(ref, fields, {merge:true}).catch(function(err){
+        var code = (err && err.code) || '';
+        var transient = /unavailable|deadline|internal|permission-denied|unauthenticated/.test(code);
+        if(n < 2 && transient){
+          return new Promise(function(r){ setTimeout(r, 1200); }).then(function(){ return attempt(n+1); });
+        }
+        throw err;
+      });
+    }
+    return attempt(1);
+  });
 }
 
 function listenFirestoreProfile(uid){
