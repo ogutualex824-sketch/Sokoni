@@ -13,7 +13,7 @@ const _B2B_COLL = {
   'b2b_messages':'b2bMessages', 'b2b_suppliers':'b2bSuppliers',
   'b2b_products':'b2bProducts', 'b2b_ratings':'b2bRatings', 'b2b_invoices':'b2bInvoices',
 };
-const _B2B_CFG = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+const _B2B_CFG = {apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
 
 function fsWrite(col, data) {
   const fsColl = _B2B_COLL[col] || col;

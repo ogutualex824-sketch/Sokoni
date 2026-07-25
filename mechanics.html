@@ -508,7 +508,7 @@ async function _getDb(){
     const {initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
     const {getFirestore}=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
     const apps=getApps();
-    const app=apps.length?apps[0]:initializeApp({apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"});
+    const app=apps.length?apps[0]:initializeApp({apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4",measurementId:"G-QT32H65TJS"});
     _fsDb=getFirestore(app); return _fsDb;
   }catch(e){return null;}
 }

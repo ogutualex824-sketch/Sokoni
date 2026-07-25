@@ -15,7 +15,7 @@ importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-com
 /* ── Same config as firebase.js ── */
 firebase.initializeApp({
   apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  authDomain: "auth.mysokoni.co.ke",
+  authDomain: "mysokoni.co.ke",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.firebasestorage.app",
   messagingSenderId: "24799054989",

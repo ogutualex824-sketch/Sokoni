@@ -1,3 +1,22 @@
+## [2026-07-25] — chore(auth): sweep hardcoded authDomain to the app origin across all pages
+
+Follow-up to the sign-in fix. 56 files hardcoded `authDomain: "auth.mysokoni.co.ke"`
+in their own Firebase init. None perform OAuth sign-in — they read session state, which
+is keyed by apiKey under the page origin, not the authDomain — so they were not the bug.
+But leaving the cross-origin value scattered means any page that ever *does* start a
+redirect sign-in would silently reintroduce it. Swept all of them to `mysokoni.co.ke`
+so same-origin is the single consistent default.
+
+Surgical replacement: only the quoted bare hostname (`"auth.mysokoni.co.ke"` /
+`'auth.mysokoni.co.ke'`), which is exactly the authDomain value — never the
+`https://auth.mysokoni.co.ke` URL form used in CSP/links, which is left intact. All
+swept JS re-parsed clean.
+
+54 files committed here (change is only the authDomain value). Two — `wishlist.html`,
+`digital.html` — also carried unrelated in-flight edits from the parallel process and
+were left for that process's own commit to avoid bundling; the authDomain edit is
+already in their working tree.
+
 ## [2026-07-25] — fix(auth): Google sign-in returned to the login page and stalled — cross-origin authDomain
 
 Google (and Facebook) sign-in ran the full OAuth round-trip, came back to the login

@@ -778,7 +778,7 @@ function postRFQ() {
   (async function(){try{
     const{initializeApp,getApps}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js");
     const{getFirestore,collection,addDoc,serverTimestamp}=await import("https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js");
-    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "auth.mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
+    const _cfg={apiKey:"AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",authDomain: "mysokoni.co.ke",projectId:"sokoni-aeb26",storageBucket:"sokoni-aeb26.firebasestorage.app",messagingSenderId:"24799054989",appId:"1:24799054989:web:e1cf6ca8c281bf1abf26c4"};
     const _a=getApps().find(a=>a.name==="b2b-fee")||initializeApp(_cfg,"b2b-fee");
     await addDoc(collection(getFirestore(_a),"b2bFees"),{feeType:"rfq_creation",rfqId:rfq.id,rfqTitle:title,rfqCategory:category,contactName:name,contactPhone:contact,budgetKES:Number(budget)||0,feeKES:100,status:"pending",createdAt:serverTimestamp()});
   }catch(e){}})();
