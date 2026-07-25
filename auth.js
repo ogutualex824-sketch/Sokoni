@@ -71,8 +71,61 @@ window.onunhandledrejection = function(e) {
         window.location.replace(safe);
     }
 
+    /* ── REDIRECT-LOOP BREAKER ──────────────────────────────────────────────
+       A page that gates on the LIVE Firebase session (wallet.html loads
+       sokoni-wallet-v2.js, whose onAuthStateChanged redirects to
+       login.html?redirect=wallet.html the instant Firebase reports no user)
+       disagrees with this guard, which trusts localStorage.loggedIn. When the
+       Firebase session has not restored — expired token, or App Check
+       intermittently blocking the token exchange on this project — but
+       localStorage.loggedIn is still 'true', the two ping-pong forever:
+
+         wallet → login?redirect=wallet.html → wallet → login → …
+
+       Measured in production: 7 full bounces in 14s, the page never settling.
+       That is the "some pages don't even open" report — they are looping, not
+       loading.
+
+       localStorage.loggedIn is a cache of a past session; the live Firebase
+       state is authoritative. So when this guard is about to bounce a "logged
+       in" visitor straight back to the SAME destination that just sent them
+       here, and it has already done so once, the cache is lying: stop, clear
+       the stale flags, and let the login form render so the user can genuinely
+       re-authenticate. A real, restorable session never trips this — its
+       destination does not bounce back. */
+    function _wouldLoop() {
+        try {
+            var params = new URLSearchParams(location.search);
+            var cameFrom = params.get('redirect') || params.get('next');
+            if (!cameFrom) return false;               /* not a gated-page bounce */
+            var pending = sessionStorage.getItem('sokoniLoginRedirect') || cameFrom;
+            var key = 'sokoniAuthBounce';
+            var rec = {};
+            try { rec = JSON.parse(sessionStorage.getItem(key) || '{}'); } catch (_) {}
+            var now = Date.now();
+            /* Same destination, seen within the last 12s → this is the loop. */
+            var looping = rec.dest === pending && (now - (rec.ts || 0) < 12000) && (rec.count || 0) >= 1;
+            sessionStorage.setItem(key, JSON.stringify({
+                dest: pending,
+                count: (rec.dest === pending && now - (rec.ts || 0) < 12000) ? (rec.count || 0) + 1 : 1,
+                ts: now,
+            }));
+            return looping;
+        } catch (_) { return false; }
+    }
+
     /* Fast path — localStorage already reflects active session */
     if (localStorage.getItem('loggedIn') === 'true') {
+        if (_wouldLoop()) {
+            /* The cached session is stale and the destination keeps rejecting it.
+               Clear the lie and fall through to the login form instead of bouncing. */
+            try {
+                localStorage.removeItem('loggedIn');
+                localStorage.removeItem('sokoniUser');
+                sessionStorage.removeItem('sokoniLoginRedirect');
+            } catch (_) {}
+            return;
+        }
         document.addEventListener('DOMContentLoaded', _redir);
         return;
     }
