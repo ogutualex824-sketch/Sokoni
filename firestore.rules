@@ -153,11 +153,23 @@ service cloud.firestore {
                          .hasAny(['admin','superAdmin','moderator','isAdmin'])));
     }
 
+    /* Same PRESENCE-vs-CHANGE fix as noAdminFields/noSelfGrant (see the note there).
+       On a setDoc(merge:true) UPDATE, request.resource.data is the ENTIRE merged
+       document, so testing the presence of `provider` tripped on the value ALREADY
+       stored. Any user whose stored provider does not match their current token's
+       sign_in_provider — after account-linking, a legacy provider value, or signing
+       in with a different linked method — had EVERY profile edit silently denied
+       (the "edit profile is not saving" report). Now: on UPDATE, only re-validate
+       provider when it is actually being CHANGED; a change is still fully checked,
+       so this opens no forgery hole — it only stops a pre-existing provider from
+       blocking an unrelated edit like a name or bio. */
     function noProviderForgery() {
       let data = request.resource.data;
       let tokenProvider = request.auth.token.firebase.sign_in_provider;
 
-      return !data.keys().hasAny(['provider'])
+      return (resource != null
+              && !data.diff(resource.data).affectedKeys().hasAny(['provider']))
+             || !data.keys().hasAny(['provider'])
              || data.provider == tokenProvider
              || (data.provider == 'google'    && tokenProvider == 'google.com')
              || (data.provider == 'apple'     && tokenProvider == 'apple.com')
