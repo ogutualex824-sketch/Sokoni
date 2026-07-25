@@ -2064,6 +2064,26 @@ window.acRevokeAll = async function() {
                     legacyRes.reason && legacyRes.reason.message, legacyRes.reason);
     }
 
+    /* deviceLogoutAll now revokes ALL refresh tokens server-side (the only way to
+       truly sign out devices that are not actively watching their doc). That also
+       revoked THIS device, so re-sign-in immediately with the fresh custom token
+       the function minted — issued after the revocation instant, so it is valid —
+       to honour "you will remain signed in on this device." Without this the
+       current device would drop on its next token refresh (≤1h). */
+    const _revokeData = devRes.status === 'fulfilled' && devRes.value && devRes.value.data;
+    if (_revokeData && _revokeData.refreshToken && window.firebaseAuth) {
+      try {
+        const { signInWithCustomToken } =
+          await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+        await signInWithCustomToken(window.firebaseAuth, _revokeData.refreshToken);
+      } catch (reauthErr) {
+        console.error('[AccountCentre] re-auth after revoke failed:',
+                      reauthErr && reauthErr.message);
+        alert('Other devices were signed out, but this device needs you to sign in ' +
+              'again shortly.');
+      }
+    }
+
     _sessions = [];
     _devices  = [];
     await _loadSessions();
