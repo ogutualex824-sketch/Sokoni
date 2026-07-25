@@ -239,6 +239,7 @@ body{
   transition:transform .15s;
 }
 .qa-btn:active .qa-icon{transform:scale(.9)}
+.qa-icon.emoji{font-size:21px;line-height:1}
 .qa-icon.blue{background:rgba(59,130,246,.1);color:var(--blue)}
 .qa-icon.amber{background:rgba(245,158,11,.1);color:var(--amber)}
 .qa-icon.purple{background:rgba(168,85,247,.1);color:var(--purple)}
@@ -893,7 +894,9 @@ body{
   <a href="/" style="color:var(--sub);font-size:18px;text-decoration:none;padding:4px;flex-shrink:0">
     <i class="fas fa-arrow-left"></i>
   </a>
-  <span id="wal-top-title">Wallet</span>
+  <a href="/" style="flex:1;display:flex;align-items:center;text-decoration:none;min-width:0">
+    <img src="/assets/logosokoni.png" alt="SOKONI" style="height:26px;width:auto;max-width:130px;object-fit:contain;object-position:left">
+  </a>
   <a href="notifications.html" id="wal-top-notif">
     <i class="fas fa-bell"></i>
     <span class="notif-dot" id="notifDot" style="display:none"></span>
@@ -935,35 +938,35 @@ body{
     <!-- Quick Actions -->
     <div class="qa-grid">
       <button class="qa-btn" onclick="W2.openAddMoney()">
-        <div class="qa-icon"><i class="fas fa-plus"></i></div>
+        <div class="qa-icon emoji">💰</div>
         <span class="qa-lbl">Add</span>
       </button>
       <button class="qa-btn" onclick="W2.showPanel('panSend')">
-        <div class="qa-icon blue"><i class="fas fa-paper-plane"></i></div>
+        <div class="qa-icon emoji blue">📤</div>
         <span class="qa-lbl">Send</span>
       </button>
       <button class="qa-btn" onclick="W2.openWithdraw()">
-        <div class="qa-icon amber"><i class="fas fa-arrow-down-to-line"></i></div>
+        <div class="qa-icon emoji amber">🏧</div>
         <span class="qa-lbl">Withdraw</span>
       </button>
       <button class="qa-btn" onclick="W2.openRequest()">
-        <div class="qa-icon purple"><i class="fas fa-hand-holding-dollar"></i></div>
+        <div class="qa-icon emoji purple">🙏</div>
         <span class="qa-lbl">Request</span>
       </button>
       <button class="qa-btn" onclick="W2.openSplit()">
-        <div class="qa-icon teal"><i class="fas fa-scissors"></i></div>
+        <div class="qa-icon emoji teal">✂️</div>
         <span class="qa-lbl">Split</span>
       </button>
       <button class="qa-btn" onclick="W2.showPanel('panQR')">
-        <div class="qa-icon"><i class="fas fa-qrcode"></i></div>
+        <div class="qa-icon emoji">📲</div>
         <span class="qa-lbl">QR Pay</span>
       </button>
       <button class="qa-btn" onclick="W2.openVaultsList()">
-        <div class="qa-icon blue"><i class="fas fa-piggy-bank"></i></div>
+        <div class="qa-icon emoji blue">🐷</div>
         <span class="qa-lbl">Savings</span>
       </button>
       <button class="qa-btn" onclick="W2.showPanel('panMore')">
-        <div class="qa-icon" style="background:var(--sur3)"><i class="fas fa-ellipsis" style="color:var(--sub)"></i></div>
+        <div class="qa-icon emoji" style="background:var(--sur3)">⚙️</div>
         <span class="qa-lbl">More</span>
       </button>
     </div>
@@ -1318,9 +1321,9 @@ body{
 
 <!-- ═══ BOTTOM NAV ═══ -->
 <nav id="wal-nav">
-  <button class="wn-btn" id="navProfile" onclick="location.href='profile.html'">
-    <i class="fas fa-user"></i>
-    <span class="wn-lbl">Profile</span>
+  <button class="wn-btn active" id="navHome" onclick="W2.showPanel('panHome')">
+    <i class="fas fa-house"></i>
+    <span class="wn-lbl">Home</span>
   </button>
   <button class="wn-btn" id="navSend" onclick="W2.showPanel('panSend')">
     <i class="fas fa-paper-plane"></i>
