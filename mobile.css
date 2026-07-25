@@ -4315,7 +4315,7 @@ img { max-width: 100%; height: auto; }
    realistic class-based rule regardless of which stylesheet loads last. #_gpu does
    not exist, so it still matches every element. */
 @media (max-width: 768px) {
-  *:not(#_gpu), *:not(#_gpu)::before, *:not(#_gpu)::after {
+  html *:not(#_gpu), html *:not(#_gpu)::before, html *:not(#_gpu)::after {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
