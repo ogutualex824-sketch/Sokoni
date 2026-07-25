@@ -1718,6 +1718,15 @@ async function _getDb(){
 /* ── Cloud Functions caller (lazy init) ─────────────────────────── */
 let _lhFnsObj = null;
 async function _lhCallCF(name, data) {
+  /* getLegalProviders is App Check enforced. Wait for firebase.js to finish
+     exchanging the App Check token before calling, or the request goes out
+     token-less and 401s. Prefer firebase.js's shared, App-Check-aware callable
+     when it is available. */
+  if (window.__sokoniAppCheckReady) { try { await window.__sokoniAppCheckReady; } catch (_) {} }
+  if (typeof window.sokoniCallable === 'function') {
+    const res = await window.sokoniCallable(name)(data);
+    return res.data;
+  }
   const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
   const { getFunctions, httpsCallable } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
   if (!_lhFnsObj) {

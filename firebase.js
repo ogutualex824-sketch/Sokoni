@@ -63,7 +63,15 @@ const firebaseConfig = {
 };
 
 /* ── Initialize ── */
-const app = initializeApp(firebaseConfig);
+/* Reuse an existing [DEFAULT] app instead of throwing. Some pages (e.g.
+   legal-hub.html) run inline code that calls initializeApp before this module
+   executes. An unconditional initializeApp here then throws "app already exists
+   with different options" at module top level, halting firebase.js BEFORE App
+   Check is initialized or any window.* export is set — which silently disables
+   App Check for the entire page and 401s every App-Check-enforced call (the
+   legal directory's getLegalProviders was dead for exactly this reason). On
+   every normal page getApps() is empty and this behaves identically to before. */
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 /* ── App Check — must be initialised before any other Firebase service ──
    Production (mysokoni.co.ke, sokoni-aeb26.web.app) uses reCAPTCHA v3 attestation
