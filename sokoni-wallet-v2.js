@@ -733,6 +733,12 @@ window.SokoniWalletV2 = (function () {
   /* ─── WITHDRAW / PAYOUT ─── */
   function openWithdraw() {
     openOverlay('ovlWithdraw');
+    /* Prefill the M-Pesa number with the user's own number. Most payouts go to the
+       user's own M-Pesa, and a blank field silently blocked the whole flow — the
+       frontend rejected "Enter a valid M-Pesa number" and never called the CF (which
+       is why payout looked dead with zero server invocations). They can still edit it. */
+    const wp = document.getElementById('wdrPhone');
+    if (wp && !wp.value && _userPhone) wp.value = String(_userPhone).replace(/^\+?254/, '0');
     if (_dashboard) {
       _setText('wdrAvail', 'KSh ' + _fmt(_dashboard.balance || 0));
     } else {
@@ -767,7 +773,10 @@ window.SokoniWalletV2 = (function () {
     let payload = { amount: amt, method };
     if (method === 'mpesa') {
       const phone = document.getElementById('wdrPhone')?.value?.trim();
-      if (!PHONE_RE.test(phone)) return toast('Enter a valid M-Pesa number', 'error');
+      if (!PHONE_RE.test(phone || '')) {
+        document.getElementById('wdrPhone')?.focus();
+        return toast('Enter the M-Pesa number to receive the payout', 'error');
+      }
       payload.accountNumber = _normalizePhone(phone);
     } else {
       payload.accountNumber = document.getElementById('wdrAccNum')?.value?.trim();
