@@ -80,6 +80,19 @@ window.SokoniWalletV2 = (function () {
     return httpsCallable(fns, name);
   }
 
+  /* Invoke a callable with a hard timeout. A callable can hang indefinitely when
+     the App Check token fetch stalls (App Check 403s intermittently) — leaving a
+     disabled submit button that looks permanently dead. This guarantees the caller
+     always resolves/rejects so the button re-enables and the user sees a message. */
+  async function _callTimed(name, payload, ms = 20000) {
+    const fn = await _cf(name);
+    return Promise.race([
+      fn(payload),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('Request timed out — check your connection and try again.')), ms)),
+    ]);
+  }
+
   async function _db() {
     if (window.firebaseDB) return window.firebaseDB;
     const { getFirestore } = await import(
@@ -691,8 +704,7 @@ window.SokoniWalletV2 = (function () {
 
     try {
       const note = document.getElementById('sndNote')?.value?.trim() || '';
-      const fn = await _cf('walletV2Send');
-      const res = await fn({ phone: _sendRecipient.phone, amount: _sendAmount, note });
+      const res = await _callTimed('walletV2Send', { phone: _sendRecipient.phone, amount: _sendAmount, note });
       const d = res.data;
       if (d.success) {
         /* Update dashboard cache */
@@ -761,8 +773,7 @@ window.SokoniWalletV2 = (function () {
 
     if (_sb) _sb.disabled = true;
     try {
-      const fn = await _cf('requestSellerPayout');
-      const res = await fn(payload);
+      const res = await _callTimed('requestSellerPayout', payload);
       if (res.data?.success) {
         toast('Payout requested! Processing within 24h.', 'success');
         closeOverlay('ovlWithdraw');
