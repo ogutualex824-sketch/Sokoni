@@ -3274,18 +3274,26 @@ var PROFILE_EDIT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 function _profileEditGate(u){
   var now = Date.now();
-  var start = (u && u.profileEditWindowStart) ? Date.parse(u.profileEditWindowStart) : 0;
-  var count = (u && Number(u.profileEditCount)) || 0;
+  /* Key off the epoch-ms window start ONLY — the same field the security rule
+     reads — so client and rule never disagree. A doc written before this field
+     existed (ISO-only, from the first client-side version) is treated as a fresh
+     window: the count resets to 1 once, the rule accepts it (no ms → fresh
+     branch), and every edit after that is fully enforced. */
+  var startMs = (u && Number(u.profileEditWindowStartMs)) || 0;
+  var count = startMs ? ((u && Number(u.profileEditCount)) || 0) : 0;
   /* No window yet, or the 14 days have elapsed → a fresh allowance of 3. */
-  if(!start || isNaN(start) || (now - start) >= PROFILE_EDIT_WINDOW_MS){
+  if(!startMs || isNaN(startMs) || (now - startMs) >= PROFILE_EDIT_WINDOW_MS){
     return { allowed:true, nextCount:1, nextStart:new Date(now).toISOString(),
-             remainingAfter: PROFILE_EDIT_MAX - 1 };
+             nextStartMs:now, remainingAfter: PROFILE_EDIT_MAX - 1 };
   }
   if(count >= PROFILE_EDIT_MAX){
-    return { allowed:false, unlockAt:new Date(start + PROFILE_EDIT_WINDOW_MS) };
+    return { allowed:false, unlockAt:new Date(startMs + PROFILE_EDIT_WINDOW_MS) };
   }
-  return { allowed:true, nextCount:count + 1, nextStart:u.profileEditWindowStart,
-           remainingAfter: PROFILE_EDIT_MAX - (count + 1) };
+  /* Continuing the same window — keep the exact ms start so it matches what the
+     rule has stored (the rule requires window start unchanged on a continuing edit). */
+  return { allowed:true, nextCount:count + 1,
+           nextStart:(u.profileEditWindowStart || new Date(startMs).toISOString()),
+           nextStartMs:startMs, remainingAfter: PROFILE_EDIT_MAX - (count + 1) };
 }
 
 function saveInlineEdit(){
@@ -3332,7 +3340,8 @@ function saveInlineEdit(){
                     failed write costs nothing (the count only advances if the
                     whole setDoc lands) */
                  profileEditCount: gate.nextCount,
-                 profileEditWindowStart: gate.nextStart};
+                 profileEditWindowStart: gate.nextStart,
+                 profileEditWindowStartMs: gate.nextStartMs};
   if(_ieAvatarData) payload.avatarUrl = _ieAvatarData;
   if(_ieCoverData)  payload.coverUrl  = _ieCoverData;
   /* Optimistic local update already happened (setUser above), so the UI reflects
@@ -3350,6 +3359,7 @@ function saveInlineEdit(){
     _user = getUser();
     _user.profileEditCount = gate.nextCount;
     _user.profileEditWindowStart = gate.nextStart;
+    _user.profileEditWindowStartMs = gate.nextStartMs;
     setUser(_user);
     var left = gate.remainingAfter;
     upToast(left > 0
@@ -4026,6 +4036,7 @@ function listenFirestoreProfile(uid){
          14-day window follows the account and survives a cleared browser. */
       if(data.profileEditCount !== undefined) _user.profileEditCount = data.profileEditCount;
       if(data.profileEditWindowStart) _user.profileEditWindowStart = data.profileEditWindowStart;
+      if(data.profileEditWindowStartMs !== undefined) _user.profileEditWindowStartMs = data.profileEditWindowStartMs;
       setUser(_user);
       renderHeaderCard();
       renderRoleSwitcher();

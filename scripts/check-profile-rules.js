@@ -56,5 +56,19 @@ if (pe) check('noPrivilegeEscalation diff-guards registeredAs on update',
 ['ageVerified', 'role', 'permissions'].forEach(f =>
   check('noSelfGrant still guards ' + f, (body('noSelfGrant') || '').includes("'" + f + "'")));
 
+/* Server-side rate-limit enforcement (added after the client-side limit). */
+const rl = body('profileEditWithinLimit');
+check('profileEditWithinLimit() exists', !!rl);
+if (rl) {
+  check('rate-limit rule keys off epoch-ms window (rules cannot date-math ISO)',
+    /profileEditWindowStartMs/.test(rl) && /request\.time\.toMillis\(\)/.test(rl));
+  check('rate-limit rule has the counter-unchanged escape hatch (other writes unaffected)',
+    /nc == pc/.test(rl));
+  check('rate-limit rule caps at 3 per window',
+    /nc <= 3/.test(rl) && /1209600000/.test(rl));
+  check('users update rule applies profileEditWithinLimit()',
+    /allow update:[\s\S]*?profileEditWithinLimit\(\)/.test(rules));
+}
+
 console.log(failed ? `\n${failed} FAILED\n` : '\nAll checks passed\n');
 process.exit(failed ? 1 : 0);

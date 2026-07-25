@@ -169,6 +169,28 @@ service cloud.firestore {
              || (data.provider == 'oauth'     && tokenProvider != 'password');
     }
 
+    /* Server-side enforcement of the profile-edit rate limit: 3 edits per rolling
+       14-day window. Runs ONLY when profileEditCount actually changes, so every
+       other write to a user document (lastSeen, fcmToken, roles, a normal profile
+       field edit that does not advance the counter) is unaffected — nc == pc is
+       the escape hatch. Uses epoch-millis (profileEditWindowStartMs) because rules
+       cannot do date math on ISO strings; .get(...,default) keeps it safe on docs
+       that predate these fields. The client writes matching values; a client that
+       tampers (count > 3 in-window, or resetting the window while it is still
+       active) is denied here. */
+    function profileEditWithinLimit() {
+      let prev = resource.data;
+      let next = request.resource.data;
+      let pc = prev.get('profileEditCount', 0);
+      let nc = next.get('profileEditCount', pc);
+      let pw = prev.get('profileEditWindowStartMs', 0);
+      let windowActive = request.time.toMillis() < pw + 1209600000; // 14 days
+      return nc == pc                                   // counter unchanged → not a rate-limited edit
+             || (windowActive && nc == pc + 1 && nc <= 3
+                 && next.get('profileEditWindowStartMs', 0) == pw)  // continuing an active window
+             || (!windowActive && nc == 1);             // window expired/absent → fresh single edit
+    }
+
     function validPrice(field) {
       return request.resource.data[field] is number
              && request.resource.data[field] > 0;
@@ -222,7 +244,8 @@ service cloud.firestore {
                         && uidUnchanged()
                         && noAdminFields()
                         && noPrivilegeEscalation()
-                        && noProviderForgery());
+                        && noProviderForgery()
+                        && profileEditWithinLimit());
       allow delete: if isAdmin();
     }
 
