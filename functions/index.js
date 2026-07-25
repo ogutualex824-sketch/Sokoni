@@ -9919,6 +9919,7 @@ exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 const walletEngine = require('./wallet-engine');
 exports.walletV2Dashboard       = walletEngine.walletV2Dashboard;
 exports.walletV2Send            = walletEngine.walletV2Send;
+exports.walletV2SavePhone       = walletEngine.walletV2SavePhone;
 exports.walletV2Request         = walletEngine.walletV2Request;
 exports.walletV2GetRequests     = walletEngine.walletV2GetRequests;
 exports.walletV2SavingsList     = walletEngine.walletV2SavingsList;
