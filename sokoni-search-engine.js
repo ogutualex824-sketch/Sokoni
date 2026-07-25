@@ -59,11 +59,18 @@ const SEARCH_CONFIG = {
     snippetEllipsisText:       '…',
     /*
      * responseFields narrows the Algolia response to only the fields we need.
-     * Adding 'userData' is required for redirect rules and banner rules to work:
-     * rules with consequence.userData deliver a JSON blob here (e.g. { redirect: '/page.html' }).
-     * Adding 'renderingContent' enables future InstantSearch.js widget migration.
+     * It is a STRICT whitelist of Algolia-recognised response fields — an
+     * unrecognised entry makes Algolia reject the ENTIRE query with HTTP 400
+     * ("Unknown response field ..."), returning no hits at all.
+     * 'queryID', 'abTestID' and 'abTestVariantID' are NOT valid responseFields
+     * values (queryID is delivered at the top level by clickAnalytics, and the
+     * abTest ids likewise are not selectable here). Listing them here silently
+     * broke every Algolia query — search fell through to a fallback that was
+     * itself unavailable, so the page rendered zero results over a live index.
+     * 'userData' is required for redirect/banner rules; 'renderingContent'
+     * enables future InstantSearch widget migration.
      */
-    responseFields:            ['hits', 'nbHits', 'nbPages', 'page', 'facets', 'facets_stats', 'queryID', 'userData', 'renderingContent', 'abTestID', 'abTestVariantID'],
+    responseFields:            ['hits', 'nbHits', 'nbPages', 'page', 'facets', 'facets_stats', 'userData', 'renderingContent'],
   },
 
   /* Fields returned per search hit — covers both specialized indexes and the unified global index */
@@ -308,6 +315,30 @@ class AlgoliaBrowserClient {
 
   updateKey(newKey) { this.searchKey = newKey; }
 
+  /**
+   * Algolia's /1/indexes/*\/queries endpoint requires `requests[].params` to be
+   * a URL-ENCODED QUERY STRING, not a JSON object. Posting the object produced
+   * a 400 with `Expecting a string (near 1:40)` on every single request, so no
+   * search on this client had ever reached the index — the engine fell into its
+   * Firestore fallback each time, which looked like "the catalogue is empty".
+   *
+   * Arrays and objects (facets, attributesToRetrieve, optionalFilters, …) are
+   * JSON-encoded then URL-encoded, which is what the Algolia REST API expects.
+   * undefined values are dropped so optional params stay optional.
+   */
+  _encodeParams(params) {
+    if (typeof params === 'string') return params;
+    if (!params) return '';
+    const parts = [];
+    Object.keys(params).forEach((k) => {
+      const v = params[k];
+      if (v === undefined || v === null) return;
+      const enc = (typeof v === 'object') ? JSON.stringify(v) : String(v);
+      parts.push(encodeURIComponent(k) + '=' + encodeURIComponent(enc));
+    });
+    return parts.join('&');
+  }
+
   _headers() {
     return {
       'X-Algolia-Application-Id': this.appId,
@@ -323,7 +354,12 @@ class AlgoliaBrowserClient {
    */
   async multiSearch(queries, signal) {
     const hosts = [this._dsn, this._fallback1, this._fallback2];
-    const body  = JSON.stringify({ requests: queries });
+    const body  = JSON.stringify({
+      requests: (queries || []).map(q => ({
+        indexName: q.indexName,
+        params:    this._encodeParams(q.params),
+      })),
+    });
 
     for (const host of hosts) {
       try {
@@ -690,6 +726,17 @@ class SokoniSearchEngine {
 
     const cacheKey = `s:${JSON.stringify({ q, indexes, filters, page, hitsPerPage, aroundLatLng, sortIndex })}`;
 
+    /* Hand _fetch the NORMALISED options. Passing the caller's raw `opts` — as
+       this method used to — meant the defaults resolved above never reached
+       the request builder, and an omitted `facets` threw before any request
+       was sent. Caller extras (optionalFilters, neuralSearch, ruleContexts, …)
+       are preserved by spreading opts first. */
+    const fetchOpts = {
+      ...opts,
+      indexes, filters, facets, page, hitsPerPage,
+      aroundLatLng, aroundRadius, sortIndex, userToken,
+    };
+
     /* L1 cache */
     if (!bypassCache) {
       const l1 = this._l1.get(cacheKey);
@@ -714,12 +761,12 @@ class SokoniSearchEngine {
           return { ...l3.val, cached: 'L3' };
         }
         /* Stale — return immediately and revalidate in background */
-        this._fetchAndCache(q, opts, cacheKey).catch(() => {});
+        this._fetchAndCache(q, fetchOpts, cacheKey).catch(() => {});
         return { ...l3.val, cached: 'L3-stale' };
       }
     }
 
-    return this._fetchAndCache(q, opts, cacheKey);
+    return this._fetchAndCache(q, fetchOpts, cacheKey);
   }
 
   async _fetchAndCache(query, opts, cacheKey) {
@@ -731,9 +778,23 @@ class SokoniSearchEngine {
   }
 
   async _fetch(query, opts) {
+    /* These defaults are not decoration. search() destructured its own defaults
+       into locals but handed _fetch the caller's RAW opts, so any caller that
+       omitted `facets` — which is every caller on search.html — reached
+       `facets.length` below and threw
+       "Cannot read properties of undefined (reading 'length')".
+       The throw happened before a single request left the browser, so Algolia
+       failed on EVERY query on the search page regardless of index health.
+       search() now passes normalised options; these defaults keep any other
+       caller safe. */
     const {
-      indexes, filters, facets, page, hitsPerPage,
-      aroundLatLng, aroundRadius, sortIndex, userToken,
+      indexes     = Object.keys(SEARCH_CONFIG.indexes),
+      filters     = {},
+      facets      = [],
+      page        = 0,
+      hitsPerPage = SEARCH_CONFIG.defaultParams.hitsPerPage,
+      aroundRadius = SEARCH_CONFIG.geoRadius,
+      aroundLatLng, sortIndex, userToken,
       optionalFilters,       // personalization boosts
       neuralSearch,          // enable Algolia NeuralSearch (AI query understanding)
       hybridSearch,          // enable hybrid: keyword + neural blended
@@ -741,7 +802,7 @@ class SokoniSearchEngine {
       personalizationImpact, // 0-100, default 75
       optionalWords,         // words that are optional in the query
       ruleContexts: callerRuleContexts, // caller may override context
-    } = opts;
+    } = opts || {};
 
     const resolvedUserToken  = userToken || this.getUserToken();
     const filterStr          = this._buildFilterString(filters);
@@ -846,7 +907,14 @@ class SokoniSearchEngine {
       console.warn('[SearchEngine] Algolia failed, using Firestore fallback:', err.message);
     }
 
-    /* Firestore fallback */
+    /* Firestore fallback.
+       A caller that runs its own Firestore pass (search.html does) would
+       otherwise pay for the same reads twice — once here, whose results it
+       discards on seeing fallback:true, and once in its own Path C. It signals
+       that with skipFirestoreFallback and gets the degraded shell instead. */
+    if (opts && opts.skipFirestoreFallback) {
+      return { results: {}, totalHits: 0, fallback: true };
+    }
     return this._firestoreFallback(query, opts);
   }
 
@@ -1489,41 +1557,67 @@ class SokoniSearchEngine {
 
   /* ── Firestore Fallback ────────────────────────────────────────────── */
 
+  /**
+   * Firestore fallback — delegates to sokoni-firestore-search.js.
+   *
+   * The previous implementation could not return a hit under any circumstance:
+   * it filtered on status == 'active' when most live products carry no status
+   * field at all,
+   * and matched names with startAt(q).endAt(q) — an exact-equality range
+   * against an original-case field, so a lower-cased query could never equal
+   * "Cool Mint". Every path ended in the per-index catch and the caller saw
+   * zero hits, which reads as "nothing exists" rather than "search is down".
+   *
+   * `fallback: true` is preserved on the response: callers use it to tell a
+   * degraded engine apart from a genuine miss.
+   */
   async _firestoreFallback(query, opts) {
-    if (typeof firebase === 'undefined') return { results: {}, totalHits: 0, fallback: true };
+    const db = (typeof window !== 'undefined') ? window.firebaseDB : null;
+    if (!db) return { results: {}, totalHits: 0, fallback: true };
 
-    const db     = firebase.firestore();
-    const q      = (query || '').toLowerCase().trim();
-    const results = {};
-    let totalHits  = 0;
-
-    const collections = {
-      'sokoni_products':   { col: 'products',   status: 'active' },
-      'sokoni_services':   { col: 'services',   status: 'active' },
-      'sokoni_events':     { col: 'events',     status: 'live'   },
-      'sokoni_properties': { col: 'properties', status: 'active' },
-      'sokoni_vehicles':   { col: 'vehicles',   status: 'active' },
-      'sokoni_jobs':       { col: 'jobs',       status: 'active' },
+    /* Index name → the tab the shared module groups that content under. */
+    const INDEX_TAB = {
+      sokoni_products:   'products',
+      sokoni_shops:      'businesses',
+      sokoni_services:   'services',
+      sokoni_jobs:       'jobs',
+      sokoni_properties: 'properties',
+      sokoni_vehicles:   'vehicles',
+      sokoni_events:     'events',
+      sokoni_users:      'professionals',
     };
 
-    const targetIndexes = opts.indexes || Object.keys(collections);
+    const targetIndexes = (opts && opts.indexes) || Object.keys(INDEX_TAB);
+    const results   = {};
+    let   totalHits = 0;
 
-    await Promise.allSettled(
-      targetIndexes.map(async (indexName) => {
-        const spec = collections[indexName];
-        if (!spec) return;
-        try {
-          let ref = db.collection(spec.col)
-            .where('status', '==', spec.status)
-            .limit(opts.hitsPerPage || 12);
-          if (q) ref = ref.orderBy('name').startAt(q).endAt(q + '');
-          const snap = await ref.get();
-          const hits = snap.docs.map(d => ({ objectID: d.id, ...d.data() }));
-          results[indexName] = { hits, nbHits: hits.length, nbPages: 1, page: 0 };
-          totalHits += hits.length;
-        } catch (_) {}
-      })
-    );
+    try {
+      const mod  = await import('./sokoni-firestore-search.js');
+      const rows = await mod.firestoreSearch(db, query, {
+        limit: Math.max((opts && opts.hitsPerPage) || 24, 24),
+      });
+
+      targetIndexes.forEach((indexName) => {
+        const tab  = INDEX_TAB[indexName];
+        /* A unified/global index carries every type; specialised ones filter. */
+        const hits = (tab ? rows.filter(r => r.tab === tab) : rows).map(r => ({
+          objectID:  r.id,
+          name:      r.title,
+          title:     r.title,
+          category:  r.subtitle,
+          price:     r.price,
+          thumbnail: r.thumbnail,
+          link:      r.link,
+          url:       r.link,
+          verified:  r.verified,
+          tab:       r.tab,
+        }));
+        results[indexName] = { hits, nbHits: hits.length, nbPages: 1, page: 0 };
+        totalHits += hits.length;
+      });
+    } catch (err) {
+      console.warn('[SearchEngine] Firestore fallback failed:', err && err.message);
+    }
 
     return { results, totalHits, fallback: true };
   }
