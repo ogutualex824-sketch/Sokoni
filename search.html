@@ -1522,19 +1522,32 @@ async function doSearch(rawQuery) {
 /* ──────────────────────────────────────────
    INPUT HANDLING (debounced)
 ────────────────────────────────────────── */
+/* The side effects a search needs — URL sync, recent-search persistence,
+   analytics, and the search itself. This used to run PER KEYSTROKE inside
+   triggerSearch, which is what made typing lag: each character triggered a
+   localStorage read+parse+write (_saveRecentSearch), a `new URL()` parse plus
+   history.replaceState (updateUrlParam), and an analytics call. Typing "shoes"
+   paid all of that five times over. None of it is needed until a search actually
+   runs, so it now runs once per committed search (debounced, or on Enter). */
+function _commitSearch(q) {
+  updateUrlParam(q);
+  if (q) {
+    _saveRecentSearch(q);
+    if (window.SokoniRecs) SokoniRecs.trackSearch(q);
+  }
+  doSearch(q);
+}
+
 function triggerSearch(val) {
   lastQuery = val.trim();
   currentSearchPage = 0;
   hasMoreResults    = false;
   if (_scrollObserver) { _scrollObserver.disconnect(); _scrollObserver = null; }
-  updateClearBtn();
-  updateUrlParam(lastQuery);
-  if (lastQuery) {
-    _saveRecentSearch(lastQuery);
-    if (window.SokoniRecs) SokoniRecs.trackSearch(lastQuery);
-  }
+  updateClearBtn();                 /* cheap: one button visibility toggle */
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => doSearch(lastQuery), 200); /* 200ms search-as-you-type */
+  /* Per keystroke this is now just a few assignments + rescheduling the timer,
+     so the input field renders characters without jank. */
+  debounceTimer = setTimeout(() => _commitSearch(lastQuery), 200); /* search-as-you-type */
 }
 
 searchInput.addEventListener("input", () => triggerSearch(searchInput.value));
@@ -1544,8 +1557,7 @@ searchInput.addEventListener("keydown", e => {
     clearTimeout(debounceTimer);
     lastQuery = searchInput.value.trim();
     updateClearBtn();
-    updateUrlParam(lastQuery);
-    doSearch(lastQuery);
+    _commitSearch(lastQuery);       /* Enter also now persists the recent search */
   }
 });
 
