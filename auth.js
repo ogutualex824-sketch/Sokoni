@@ -844,8 +844,19 @@ function _isPopupSupported() {
     /* Chrome and Firefox on iOS. Both are WKWebView-based and have historically
        been unreliable with the popup result round-trip, so they stay on redirect. */
     if (/CriOS|FxiOS/.test(navigator.userAgent)) return false;
-    /* Regular iOS Safari, Android Chrome, and all desktop browsers support
-       popups. Firebase signInWithPopup works correctly on all of these. */
+    /* ALL mobile browsers use redirect, not popup. This was the "Google sign-in
+       goes round the whole process then comes back to login and never signs in"
+       report on phones. signInWithPopup is a desktop pattern: on a phone the popup
+       opens as a background tab whose postMessage result frequently never reaches
+       the opener — Android Chrome drops it and iOS Safari's ITP blocks the
+       cross-context handoff — so the user authenticates at Google and lands back on
+       login with no session. Redirect is the reliable mobile flow (auth.mysokoni.co.ke
+       is same-site as the app, so getRedirectResult is not storage-partitioned).
+       Desktop keeps popup, which works there and is smoother. */
+    const _isMobile = /Android|iPhone|iPad|iPod|Mobile|Silk|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent)
+                   || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 820);
+    if (_isMobile) return false;
+    /* Desktop browsers only from here — signInWithPopup works well on desktop. */
     return true;
 }
 
