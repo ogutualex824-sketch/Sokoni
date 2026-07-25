@@ -952,10 +952,31 @@ async function _stLoadFirestore(uid) {
       var lw = document.getElementById("stLogoWrap");
       if (lw) lw.innerHTML = '<img src="' + (sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
     }
+    /* ── Branch selection ──────────────────────────────────────────────
+       store.html?id=<uid>&branch=<branchId> opens one branch as its own
+       storefront. Branches live on the seller doc (sellers/{uid}.branches[]),
+       owned and queryable, so each has a shareable URL. The shop name stays
+       the business identity; the branch name qualifies it, never replaces it.
+       An unknown/absent branch id falls back to the main shop, so a stale link
+       never dead-ends. */
+    var _branchId = new URLSearchParams(location.search).get("branch") || "";
+    var _branch = null;
+    if (_branchId && Array.isArray(sd.branches)) {
+      _branch = sd.branches.filter(function (b) { return b && String(b.id) === String(_branchId); })[0] || null;
+    }
     if (sd.name || sd.storeName) {
       var dn = sd.name || sd.storeName;
+      if (_branch && _branch.name) dn = dn + " — " + _branch.name;
       document.title = dn + " — SOKONI";
       var sn = document.getElementById("stStoreName"); if (sn) sn.textContent = dn;
+    }
+    /* Branch address/phone override the shop's when a branch is open, so the
+       storefront shows that location's real contact details. */
+    if (_branch) {
+      if (_branch.address) { sd.address = _branch.address; sd.location = _branch.address; }
+      if (_branch.phone)   { sd.phone = _branch.phone; }
+      var _bt = document.getElementById("stTagline");
+      if (_bt) { _bt.textContent = "📍 " + (_branch.address || _branch.name); _bt.style.display = ""; }
     }
     if (sd.tagline || sd.bio) {
       var tl = document.getElementById("stTagline");

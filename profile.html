@@ -1667,6 +1667,15 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
                   background:rgba(113,255,0,0.14);border-color:rgba(113,255,0,0.4);color:#71ff00;">
           &#127978; My Store
         </a>
+        <!-- My Shops & Branches — the seller's shop (business identity, distinct
+             from the person's name above) and each of its branches, every one a
+             separate shareable storefront (store.html?id=<uid>&branch=<id>).
+             Populated only for sellers by _renderMyBranches() from the seller's
+             own Firestore doc (sellers/{uid}.branches). Hidden otherwise. -->
+        <div id="upBranchesWrap" style="display:none;width:100%;margin-top:12px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#127978; My Shops &amp; Branches</div>
+          <div id="upBranchesList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
       </div>
 
       <!-- Meta info -->
@@ -2928,13 +2937,57 @@ function _syncMyStoreBtn(u){
   btn.style.display = isSeller ? 'inline-flex' : 'none';
 }
 
+/* List the seller's shop + branches, each linking to its own storefront URL.
+   The shop name (business identity) is deliberately shown separately from the
+   person's name in the header above — they are independent fields. */
+function _isSellerUser(u){
+  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
+  return roles.indexOf('seller') > -1 || roles.indexOf('vendor') > -1 ||
+         !!(u && u.isSeller) || !!(u && u.registeredAs && u.registeredAs.seller);
+}
+async function _renderMyBranches(u){
+  var wrap = document.getElementById('upBranchesWrap');
+  var list = document.getElementById('upBranchesList');
+  if(!wrap || !list) return;
+  var uid = u && (u.uid || u.id);
+  if(!uid || !_isSellerUser(u)){ wrap.style.display = 'none'; return; }
+  /* firebase.js (module) may not have published window.firebaseDB yet. */
+  for(var i=0;i<40 && !window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
+  var db = window.firebaseDB;
+  if(!db){ wrap.style.display = 'none'; return; }
+  try {
+    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap = await m.getDoc(m.doc(db, 'sellers', String(uid)));
+    var sd = (snap.exists && snap.exists()) ? (snap.data() || {}) : {};
+    var shopName = sd.shopName || sd.name || sd.storeName || sd.businessName || 'My Shop';
+    var branches = Array.isArray(sd.branches) && sd.branches.length ? sd.branches
+                 : [{ id:'main', name:'', isMain:true }];   /* single-shop seller */
+    list.innerHTML = branches.map(function(b){
+      var isMain = b.isMain || String(b.id) === 'main';
+      var label  = shopName + (b.name && !isMain ? ' &mdash; ' + escHtml(b.name) : '');
+      var url    = 'store.html?id=' + encodeURIComponent(uid) +
+                   (b.id && !isMain ? '&branch=' + encodeURIComponent(b.id) : '');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">'
+        + '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>'
+        + (b.address ? '<div style="font-size:11px;color:rgba(255,255,255,0.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">&#128205; ' + escHtml(b.address) + '</div>' : '')
+        + '</div><div style="display:flex;gap:6px;flex-shrink:0;">'
+        + '<a href="' + url + '" style="padding:7px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View</a>'
+        + '<a href="seller.html" style="padding:7px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:800;text-decoration:none;">Manage</a>'
+        + '</div></div>';
+    }).join('');
+    wrap.style.display = 'block';
+  } catch(e){ wrap.style.display = 'none'; }
+}
+
 function renderHeaderCard(){
   _user = getUser();
   if(!_user) return;
 
   _syncMyStoreBtn(_user);
+  _renderMyBranches(_user);   /* seller's shop + branches, each its own storefront */
 
-  /* Name */
+  /* Name — the PERSON's name (personal identity), independent of the shop name
+     which lives on the seller doc and is shown in "My Shops & Branches" below. */
   var nameEl = document.getElementById('upName');
   if(nameEl) nameEl.textContent = _user.name || 'Sokoni User';
 

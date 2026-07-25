@@ -17,6 +17,40 @@
   }
   function _saveBranches(arr) {
     localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+    _syncBranchesToFirestore(arr);
+  }
+
+  /* Mirror branches onto the seller's OWN Firestore doc (sellers/{uid}.branches).
+     localStorage alone is per-device and invisible to buyers; an owned copy in
+     Firestore is what gives each branch a public, shareable storefront URL
+     (store.html?id=<uid>&branch=<id>) and lets the owner's profile list them.
+     Best-effort and fire-and-forget: a branch write must never block the POS.
+     firestore.rules permits an owner (auth.uid == uid) to update non-admin
+     fields, so this only persists when the shop OWNER manages branches — the
+     correct constraint. */
+  function _syncBranchesToFirestore(arr) {
+    try {
+      var u   = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      var uid = u && (u.uid || u.id);
+      var db  = global.firebaseDB;
+      if (!uid || !db) return;
+      var clean = (arr || []).map(function (b) {
+        return {
+          id:      String(b.id || ''),
+          name:    String(b.name || ''),
+          address: String(b.address || ''),
+          phone:   String(b.phone || ''),
+          isMain:  !!b.isMain,
+        };
+      });
+      import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+        .then(function (m) {
+          m.setDoc(m.doc(db, 'sellers', String(uid)),
+            { branches: clean, updatedAt: m.serverTimestamp() }, { merge: true })
+            .catch(function () {});
+        })
+        .catch(function () {});
+    } catch (e) { /* never let branch persistence break the POS */ }
   }
   function _getCurrent() {
     try { return JSON.parse(localStorage.getItem(CURRENT_KEY) || 'null'); } catch (e) { return null; }
