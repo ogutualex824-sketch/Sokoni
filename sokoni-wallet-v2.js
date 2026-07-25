@@ -599,48 +599,28 @@ window.SokoniWalletV2 = (function () {
     document.getElementById('sndContactCard').style.display = 'none';
     document.getElementById('sndNotFound').style.display = 'none';
 
-    try {
-      /* Look up user via CF (walletV2Send will also validate — this is just UX preview) */
-      const normPhone = _normalizePhone(phone);
-      const { getFirestore, collection, query, where, limit, getDocs } = await import(
-        'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
-      );
-      const db = getFirestore(window.firebaseApp);
-      const q = query(collection(db, 'users'), where('phone', '==', normPhone), limit(1));
-      const snap = await getDocs(q);
-
-      document.getElementById('sndStep1Searching').style.display = 'none';
-
-      if (snap.empty) {
-        document.getElementById('sndNotFound').style.display = 'block';
-        document.getElementById('sndStep1Next').disabled = true;
-        _sendRecipient = null;
-      } else {
-        const user = snap.docs[0].data();
-        if (snap.docs[0].id === _uid) {
-          toast('You cannot send money to yourself', 'error');
-          document.getElementById('sndNotFound').style.display = 'block';
-          document.getElementById('sndStep1Next').disabled = true;
-          _sendRecipient = null;
-          return;
-        }
-        _sendRecipient = {
-          uid: snap.docs[0].id,
-          name: user.displayName || user.name || 'SOKONI User',
-          phone: normPhone
-        };
-        const av = document.getElementById('sndAvatar');
-        if (av) av.textContent = (_sendRecipient.name[0] || '?').toUpperCase();
-        _setText('sndName', _sendRecipient.name);
-        _setText('sndPhoneDisp', '+' + normPhone);
-        document.getElementById('sndContactCard').style.display = 'flex';
-        document.getElementById('sndStep1Next').disabled = false;
-      }
-    } catch (e) {
-      document.getElementById('sndStep1Searching').style.display = 'none';
-      console.error('[wallet] recipient search failed', e);
-      toast(_skWhy(e, 'Could not search right now.'), 'error');
+    /* The recipient is resolved and validated SERVER-SIDE by walletV2Send. The
+       client MUST NOT query the users collection here: firestore.rules restricts
+       user reads to your own doc (auth.uid == userId), so the old
+       where('phone','==',…) query returned permission-denied — surfaced as
+       "You do not have access to do that" — and blocked EVERY transfer. Accept a
+       valid Kenyan phone; walletV2Send returns the recipient's real name on
+       success, rejects USER_NOT_FOUND, and blocks self-sends. */
+    const normPhone = _normalizePhone(phone);
+    document.getElementById('sndStep1Searching').style.display = 'none';
+    if (!normPhone) {
+      document.getElementById('sndNotFound').style.display = 'block';
+      document.getElementById('sndStep1Next').disabled = true;
+      _sendRecipient = null;
+      return;
     }
+    _sendRecipient = { uid: null, name: '+' + normPhone, phone: normPhone };
+    const av = document.getElementById('sndAvatar');
+    if (av) av.textContent = '👤';
+    _setText('sndName', '+' + normPhone);
+    _setText('sndPhoneDisp', 'Recipient name confirmed on send');
+    document.getElementById('sndContactCard').style.display = 'flex';
+    document.getElementById('sndStep1Next').disabled = false;
   }
 
   function sendStep1Next() {
@@ -714,10 +694,11 @@ window.SokoniWalletV2 = (function () {
         if (_dashboard) _dashboard.balance = d.newBalance;
         _setText('balVal', _fmt(d.newBalance));
         _setText('wdrAvail', 'KSh ' + _fmt(d.newBalance));
+        const rcptName = d.recipientName || _sendRecipient.name;
         const msgEl = document.getElementById('sndSuccessMsg');
-        if (msgEl) msgEl.textContent = 'KSh ' + _fmt(_sendAmount) + ' sent to ' + _sendRecipient.name;
+        if (msgEl) msgEl.textContent = 'KSh ' + _fmt(_sendAmount) + ' sent to ' + rcptName;
         sendGoStep(4);
-        toast('Sent KSh ' + _fmt(_sendAmount) + ' to ' + _sendRecipient.name, 'success');
+        toast('Sent KSh ' + _fmt(_sendAmount) + ' to ' + rcptName, 'success');
       } else {
         toast(d.error === 'USER_NOT_FOUND' ? 'Recipient not found on SOKONI' : 'Transfer failed', 'error');
         if (btn) btn.disabled = false;
