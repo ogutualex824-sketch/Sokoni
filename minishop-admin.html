@@ -20,8 +20,8 @@
       --ms-surface:#0d0d0d;
       --ms-surface2:#141414;
       --ms-border:rgba(255,255,255,.08);
-      --ms-accent:#00bcd4;
-      --ms-accent2:#7c4dff;
+      --ms-accent:#71ff00;
+      --ms-accent2:#00d4ff;
       --ms-success:#4caf50;
       --ms-warn:#ff9800;
       --ms-danger:#f44336;
@@ -37,17 +37,26 @@
     .msa-spinner{width:36px;height:36px;border:3px solid var(--ms-border);border-top-color:var(--ms-accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
+    /* ── Header unit: title bar + tab belt ──────────────────────────────────
+       These two MUST stick together. Previously only .msa-topbar was sticky,
+       so on scroll the bar floated over a tab belt that had already scrolled
+       away — the two read as stacked on top of each other. Sticking the
+       wrapper instead keeps them as one solid unit with a single shadow. */
+    .msa-header{position:sticky;top:0;z-index:100;background:rgba(13,13,13,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--ms-border);box-shadow:0 8px 24px -12px rgba(0,0,0,.9)}
+
     /* ── Top Bar ── */
-    .msa-topbar{display:flex;align-items:center;gap:16px;padding:12px 24px;background:var(--ms-surface);border-bottom:1px solid var(--ms-border);position:sticky;top:0;z-index:100}
+    .msa-topbar{display:flex;align-items:center;gap:16px;padding:12px 24px;min-width:0}
     .msa-back{color:var(--ms-muted);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;transition:color .15s;flex-shrink:0}
     .msa-back:hover{color:var(--ms-accent)}
-    .msa-topbar h1{flex:1;font-size:16px;font-weight:700;letter-spacing:.3px}
+    /* min-width:0 lets the title actually shrink inside a flex row; without it
+       a long shop name forces the bar wider than the viewport. */
+    .msa-topbar h1{flex:1;min-width:0;font-size:16px;font-weight:700;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .msa-topbar-shop-url{font-size:12px;color:var(--ms-muted);font-family:monospace;display:none}
     .msa-topbar-shop-url.visible{display:block}
     .msa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--ms-radius);border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-text);cursor:pointer;font-size:13px;font-weight:500;transition:background .15s,border-color .15s;text-decoration:none;white-space:nowrap}
-    .msa-btn:hover{border-color:var(--ms-accent);background:rgba(0,188,212,.1)}
+    .msa-btn:hover{border-color:var(--ms-accent);background:rgba(113,255,0,.1)}
     .msa-btn.primary{background:var(--ms-accent);border-color:var(--ms-accent);color:#000;font-weight:700}
-    .msa-btn.primary:hover{background:#00acc1;border-color:#00acc1}
+    .msa-btn.primary:hover{background:#5cd400;border-color:#5cd400}
     .msa-btn.success{background:rgba(76,175,80,.15);border-color:rgba(76,175,80,.4);color:#a5d6a7}
     .msa-btn.danger{background:rgba(244,67,54,.1);border-color:rgba(244,67,54,.4);color:#ef9a9a}
     .msa-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -55,8 +64,12 @@
     .msa-btn-sm:hover{background:rgba(255,255,255,.1)}
 
     /* ── Tab Navigation ── */
-    .msa-tabs{display:flex;gap:0;border-bottom:1px solid var(--ms-border);background:var(--ms-surface);padding:0 24px;overflow-x:auto;scrollbar-width:none}
+    .msa-tabs{display:flex;gap:0;padding:0 24px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
     .msa-tabs::-webkit-scrollbar{display:none}
+    /* Fades the belt at the right edge so it reads as scrollable rather than
+       cut off — six tabs never fit a phone. */
+    .msa-tabs-wrap{position:relative}
+    .msa-tabs-wrap::after{content:'';position:absolute;top:0;right:0;bottom:0;width:32px;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(13,13,13,.92))}
     .msa-tab{padding:12px 18px;border:none;background:none;color:var(--ms-muted);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;margin-bottom:-1px}
     .msa-tab:hover{color:var(--ms-text)}
     .msa-tab.active{color:var(--ms-accent);border-bottom-color:var(--ms-accent)}
@@ -75,12 +88,18 @@
     .msa-handle-claim{text-align:center;padding:32px 20px}
     .msa-handle-claim h2{font-size:22px;font-weight:800;margin-bottom:8px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .msa-handle-claim p{color:var(--ms-muted);font-size:14px;margin-bottom:24px}
-    .msa-handle-input-row{display:flex;align-items:stretch;max-width:480px;margin:0 auto;gap:0}
-    .msa-handle-prefix{background:var(--ms-surface2);border:1px solid var(--ms-border);border-right:none;border-radius:var(--ms-radius) 0 0 var(--ms-radius);padding:10px 14px;font-size:14px;color:var(--ms-muted);white-space:nowrap;display:flex;align-items:center}
-    #msaHandleInput{flex:1;background:var(--ms-surface2);border:1px solid var(--ms-border);border-left:none;border-right:none;padding:10px 12px;color:var(--ms-text);font-size:16px;outline:none}
+    /* This row was the page's horizontal overflow: prefix + input + button in a
+       nowrap flex, and the input carried an implicit min-width of its default
+       size. At 390px the three summed to 519px, so the WHOLE document scrolled
+       sideways — which is what made the sticky header slide out of line with
+       the belt beneath it. min-width:0 lets the input shrink; the mobile rule
+       further down stacks the prefix onto its own line. */
+    .msa-handle-input-row{display:flex;align-items:stretch;max-width:480px;margin:0 auto;gap:0;min-width:0}
+    .msa-handle-prefix{background:var(--ms-surface2);border:1px solid var(--ms-border);border-right:none;border-radius:var(--ms-radius) 0 0 var(--ms-radius);padding:10px 14px;font-size:14px;color:var(--ms-muted);white-space:nowrap;display:flex;align-items:center;flex-shrink:0}
+    #msaHandleInput{flex:1;min-width:0;background:var(--ms-surface2);border:1px solid var(--ms-border);border-left:none;border-right:none;padding:10px 12px;color:var(--ms-text);font-size:16px;outline:none}
     #msaHandleInput:focus{border-color:var(--ms-accent)}
     #msaClaimBtn{border-radius:0 var(--ms-radius) var(--ms-radius) 0;padding:10px 20px;border:1px solid var(--ms-accent);background:var(--ms-accent);color:#000;font-weight:700;cursor:pointer;font-size:14px;transition:background .15s;white-space:nowrap}
-    #msaClaimBtn:hover{background:#00acc1}
+    #msaClaimBtn:hover{background:#5cd400}
     #msaHandleDisplay{display:none}
     #msaHandleDisplay.visible{display:block}
     .msa-handle-url-row{display:flex;align-items:center;gap:10px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px 16px}
@@ -153,7 +172,7 @@
     .msa-check-item{display:flex;align-items:center;gap:8px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:10px 12px;cursor:pointer;transition:border-color .15s;font-size:13px}
     .msa-check-item:hover{border-color:var(--ms-accent)}
     .msa-check-item input{accent-color:var(--ms-accent);width:14px;height:14px;cursor:pointer;flex-shrink:0}
-    .msa-check-item.checked{border-color:rgba(0,188,212,.4);background:rgba(0,188,212,.05)}
+    .msa-check-item.checked{border-color:rgba(113,255,0,.4);background:rgba(113,255,0,.05)}
 
     /* ── Section Divider ── */
     .msa-section{margin-bottom:28px}
@@ -166,7 +185,7 @@
     .msa-kpi-label{font-size:11px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
     .msa-kpi-value{font-size:28px;font-weight:800;line-height:1;margin-bottom:2px}
     .msa-kpi-sub{font-size:11px;color:var(--ms-muted)}
-    .msa-kpi.accent{border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)}
+    .msa-kpi.accent{border-color:rgba(113,255,0,.3);background:rgba(113,255,0,.05)}
     .msa-kpi.success{border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05)}
 
     /* ── Date Range ── */
@@ -220,7 +239,7 @@
     .msa-ai-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px}
     .msa-ai-type-btn{padding:10px 12px;border-radius:var(--ms-radius);border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-muted);cursor:pointer;font-size:12px;font-weight:500;text-align:center;transition:all .15s}
     .msa-ai-type-btn:hover{color:var(--ms-text)}
-    .msa-ai-type-btn.active{border-color:var(--ms-accent);background:rgba(0,188,212,.1);color:var(--ms-accent);font-weight:700}
+    .msa-ai-type-btn.active{border-color:var(--ms-accent);background:rgba(113,255,0,.1);color:var(--ms-accent);font-weight:700}
     #msaAiOutput{min-height:140px;font-size:14px;line-height:1.6}
     .msa-ai-history-item{background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px;margin-bottom:8px;font-size:12px;cursor:pointer;transition:border-color .15s}
     .msa-ai-history-item:hover{border-color:var(--ms-accent)}
@@ -239,7 +258,7 @@
     .msa-toast{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:toast-in .25s ease;min-width:220px;max-width:340px}
     .msa-toast.success{border-color:rgba(76,175,80,.4)}
     .msa-toast.error{border-color:rgba(244,67,54,.4)}
-    .msa-toast.info{border-color:rgba(0,188,212,.3)}
+    .msa-toast.info{border-color:rgba(113,255,0,.3)}
     @keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
     /* ── Modal ── */
@@ -261,16 +280,35 @@
     }
     #msa-print-area{display:none}
 
-    /* ── Responsive ── */
+    /* ── Responsive ──────────────────────────────────────────────────────────
+       Nothing in this page may exceed the viewport width. A single overflowing
+       row scrolls the whole document sideways, and once that happens the
+       sticky header no longer lines up with anything below it. */
     @media(max-width:600px){
-      .msa-topbar{padding:10px 14px}
+      .msa-topbar{padding:10px 14px;gap:10px}
       .msa-topbar h1{font-size:14px}
+      .msa-tabs{padding:0 14px}
       .msa-content{padding:14px}
       #msaViewStats{grid-template-columns:repeat(2,1fr)}
       .msa-stats-grid{grid-template-columns:repeat(2,1fr)}
+
+      /* "← Seller Dashboard" costs 112px of a 390px bar. The arrow alone reads
+         the same and gives the shop name room to breathe. */
+      .msa-back{font-size:0;gap:0}
+      .msa-back::before{content:'\2190';font-size:18px;line-height:1}
+
+      /* Stack the URL prefix above the input instead of letting the three
+         pieces fight over one line. */
+      .msa-handle-input-row{flex-wrap:wrap;max-width:100%}
+      .msa-handle-prefix{width:100%;border-right:1px solid var(--ms-border);border-bottom:none;border-radius:var(--ms-radius) var(--ms-radius) 0 0;justify-content:center;font-size:13px}
+      #msaHandleInput{border-left:1px solid var(--ms-border);border-radius:0 0 0 var(--ms-radius);flex:1 1 60%}
+      #msaClaimBtn{border-radius:0 0 var(--ms-radius) 0;flex:0 0 auto}
+      .msa-handle-claim{padding:24px 14px}
+      .msa-handle-claim h2{font-size:19px}
     }
     @media(max-width:420px){
       #msaViewStats{grid-template-columns:1fr 1fr}
+      .msa-stat-value{font-size:22px}
     }
 
     /* ── Flash Sales / Promotions ── */
@@ -306,23 +344,30 @@
   <p style="margin-top:24px;font-size:13px;color:#888">Scan to visit our shop on SOKONI</p>
 </div>
 
-<!-- Top Bar -->
-<div class="msa-topbar">
-  <a href="seller.html" class="msa-back">&#8592; Seller Dashboard</a>
-  <h1>My MiniShop</h1>
-  <span class="msa-topbar-shop-url" id="msaTopbarUrl"></span>
-  <a href="#" id="msaViewShop" target="_blank" class="msa-btn" style="font-size:12px">Open MiniShop &#8599;</a>
-</div>
+<!-- Header unit — title bar and tab belt stick together as one block.
+     Splitting them is what made the bar float over the belt on scroll. -->
+<header class="msa-header">
+  <div class="msa-topbar">
+    <a href="seller.html" class="msa-back" aria-label="Back to Seller Dashboard">&#8592; Seller Dashboard</a>
+    <h1>My MiniShop</h1>
+    <span class="msa-topbar-shop-url" id="msaTopbarUrl"></span>
+    <a href="#" id="msaViewShop" target="_blank" class="msa-btn" style="font-size:12px">Open MiniShop &#8599;</a>
+  </div>
 
-<!-- Tabs -->
-<div class="msa-tabs" role="tablist">
-  <button class="msa-tab active" data-tab="overview" role="tab" aria-selected="true">My MiniShop</button>
-  <button class="msa-tab" data-tab="customize" role="tab" aria-selected="false">Customize</button>
-  <button class="msa-tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
-  <button class="msa-tab" data-tab="share" role="tab" aria-selected="false">Share &amp; Promote</button>
-  <button class="msa-tab" data-tab="ai" role="tab" aria-selected="false">AI Marketing</button>
-  <button class="msa-tab" data-tab="6" role="tab" aria-selected="false" onclick="msAdminTab(6)">&#x26A1; Flash Sales</button>
-</div>
+  <!-- Tabs. The first tab used to repeat "My MiniShop", duplicating the <h1>
+       directly above it — two identical labels stacked one under the other.
+       It is the overview panel, so it is now named for what it shows. -->
+  <div class="msa-tabs-wrap">
+    <div class="msa-tabs" role="tablist">
+      <button class="msa-tab active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="msa-tab" data-tab="customize" role="tab" aria-selected="false">Customize</button>
+      <button class="msa-tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
+      <button class="msa-tab" data-tab="share" role="tab" aria-selected="false">Share &amp; Promote</button>
+      <button class="msa-tab" data-tab="ai" role="tab" aria-selected="false">AI Marketing</button>
+      <button class="msa-tab" data-tab="6" role="tab" aria-selected="false" onclick="msAdminTab(6)">&#x26A1; Flash Sales</button>
+    </div>
+  </div>
+</header>
 
 <!-- ══════════ PANEL: OVERVIEW ══════════ -->
 <div class="msa-content">
@@ -455,16 +500,16 @@
       <div class="msa-section">
         <div class="msa-section-title">Accent Color</div>
         <div id="msaColorSwatches">
-          <div class="msa-swatch selected" data-color="#00bcd4" style="background:#00bcd4" title="Cyan"></div>
-          <div class="msa-swatch" data-color="#7c4dff" style="background:#7c4dff" title="Purple"></div>
+          <div class="msa-swatch selected" data-color="#71ff00" style="background:#71ff00" title="Cyan"></div>
+          <div class="msa-swatch" data-color="#00d4ff" style="background:#00d4ff" title="Purple"></div>
           <div class="msa-swatch" data-color="#4caf50" style="background:#4caf50" title="Green"></div>
           <div class="msa-swatch" data-color="#ff5722" style="background:#ff5722" title="Coral"></div>
           <div class="msa-swatch" data-color="#ff9800" style="background:#ff9800" title="Orange"></div>
           <div class="msa-swatch" data-color="#2196f3" style="background:#2196f3" title="Blue"></div>
         </div>
         <div class="msa-color-custom">
-          <input type="color" id="msaColorPicker" value="#00bcd4" title="Custom color">
-          <input type="text" class="msa-color-hex" id="msaColorHex" value="#00bcd4" maxlength="7" placeholder="#00bcd4">
+          <input type="color" id="msaColorPicker" value="#71ff00" title="Custom color">
+          <input type="text" class="msa-color-hex" id="msaColorHex" value="#71ff00" maxlength="7" placeholder="#71ff00">
           <span style="font-size:12px;color:var(--ms-muted)">Custom hex</span>
         </div>
       </div>
@@ -955,7 +1000,7 @@
     shopUrl: null,
     shopName: null,
     config: {},
-    accentColor: '#00bcd4',
+    accentColor: '#71ff00',
     aiType: 'product_description',
     analyticsRange: 'today'
   };
@@ -1581,7 +1626,7 @@
     }).join('');
     // Copy link row
     container.innerHTML += '<div class="msa-share-card" style="grid-column:1/-1">' +
-      '<div class="msa-share-icon" style="background:rgba(0,188,212,.15);color:var(--ms-accent)">&#128279;</div>' +
+      '<div class="msa-share-icon" style="background:rgba(113,255,0,.15);color:var(--ms-accent)">&#128279;</div>' +
       '<div class="msa-share-info"><div class="msa-share-platform">Direct Link</div><div class="msa-share-text-preview">' + esc(url) + '</div></div>' +
       '<button class="msa-btn-sm" id="msaCopyShopUrl">Copy Link</button>' +
       '</div>';

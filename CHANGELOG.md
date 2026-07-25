@@ -1,3 +1,56 @@
+## [2026-07-26] — fix(minishop-admin): header and tab belt collided; page scrolled sideways on mobile
+
+Reported as the MiniShop header and the belt beneath it sitting "on top of each other".
+
+### Root cause — measured, not guessed
+
+Rendered at 390×844 with the page's own CSS: `document.scrollWidth` was **519px against
+a 390px viewport — 129px of horizontal overflow.**
+
+The source was the handle-claim row, not the header. `.msa-handle-input-row` is a
+`nowrap` flex of prefix + input + Claim button, and `#msaHandleInput` carried its
+default implicit minimum width, so the three summed to 519px and pushed the whole
+document sideways. Once the document scrolls horizontally, `.msa-topbar` — which was
+`position:sticky` **on its own**, with the tab belt left static — no longer lines up
+with anything beneath it. That misalignment is what reads as two bars on top of each
+other.
+
+Two contributing faults:
+
+- Only the top bar was sticky. On scroll it floated over a belt that had already
+  scrolled away.
+- `.msa-topbar h1` had `flex:1` with no `min-width:0`, so the title could not shrink;
+  `← Seller Dashboard` alone consumed 112px of a 390px bar.
+
+### Changes
+
+- New `.msa-header` wrapper holds the title bar and tab belt as **one** sticky unit,
+  with a blurred translucent backdrop and a single shadow.
+- Overflow eliminated: `min-width:0` on the input and row; under 600px the URL prefix
+  stacks onto its own line. Measured after: **scrollWidth 390 = clientWidth 390.**
+- Mobile back link collapses to the arrow glyph (112px → 15.5px), giving the shop name
+  195px instead of 86px. Title truncates with an ellipsis instead of forcing width.
+- Tab belt keeps `overflow-x:auto` (six tabs never fit a phone) and gains a right-edge
+  fade so it reads as scrollable rather than clipped. The only elements now crossing the
+  viewport edge are tab buttons inside that scroller, which is intended.
+- **Removed the duplicated "My MiniShop" tab.** It repeated the `<h1>` directly above
+  it — two identical labels stacked one under the other, which is literally what was
+  reported. It is the overview panel, so it is now labelled "Overview". All tab
+  selectors are flat `.msa-tab[data-tab=…]` lookups, so the new wrapper does not affect
+  switching.
+- Palette aligned to the platform premium rule: `--ms-accent` cyan `#00bcd4` →
+  `#71ff00`, `--ms-accent2` purple `#7c4dff` → `#00d4ff`, with all 21 hardcoded
+  cyan/purple literals swept (0 remaining).
+
+### Verification
+
+Playwright at 390×844 and 1280×900 against the real stylesheet. The first two probe
+runs were **invalid and discarded** — one hit a stale server already on the port, the
+other landed on `index.html` after the auth gate redirected — so the harness now
+asserts the landed URL and the presence of `.msa-topbar` before any number is read.
+
+No functional change: no JS touched, no CF, no data path.
+
 ## [2026-07-25] — feat(share): per-entity link previews for profiles and shops; caching policy corrected
 
 Closes the two follow-ups left open by the profile-share fix earlier today.
