@@ -735,6 +735,8 @@ window.SokoniWalletV2 = (function () {
   }
 
   async function requestPayout() {
+    const _sb = document.getElementById('wdrSubmitBtn');
+    if (_sb && _sb.disabled) return;   /* re-entrancy guard: block double-tap duplicate payouts */
     const amt    = Number(document.getElementById('wdrAmount')?.value);
     const method = document.getElementById('wdrMethod')?.value || 'mpesa';
     if (!amt || amt < 100) return toast('Minimum withdrawal is KSh 100', 'error');
@@ -757,6 +759,7 @@ window.SokoniWalletV2 = (function () {
       if (!payload.accountNumber || !payload.bankName) return toast('Enter account and bank details', 'error');
     }
 
+    if (_sb) _sb.disabled = true;
     try {
       const fn = await _cf('requestSellerPayout');
       const res = await fn(payload);
@@ -769,6 +772,8 @@ window.SokoniWalletV2 = (function () {
       }
     } catch (e) {
       toast(e.message || 'Payout request failed. Try again.', 'error');
+    } finally {
+      if (_sb) _sb.disabled = false;
     }
   }
 
