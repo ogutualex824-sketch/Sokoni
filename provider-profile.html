@@ -151,6 +151,12 @@
 
 <script src="firebase.js" type="module"></script>
 <script src="sokoni-providers.js" defer></script>
+<!-- Booking modal (SokoniPay.bookNow) and in-app chat (SokoniInbox.openChat).
+     Without these the Book button fell through to a non-existent bookings.html
+     (404) and Message lost its in-app handler — the same pair services.html
+     loads for the identical buttons. -->
+<script src="sokoni-pay.js" defer></script>
+<script src="sokoni-inbox.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="sw-register.js" defer></script>
 <script>
@@ -306,14 +312,32 @@
       return;
     }
     if (typeof window.SokoniPay !== 'undefined' && SokoniPay.bookNow) {
+      /* bookNow runs its own gateway modal and confirmation, then fires this
+         callback with a reference. It does NOT navigate — the previous
+         location.href='bookings.html' was both unnecessary and a 404. */
       SokoniPay.bookNow({
         providerName: _p.name,
         category: _p.category || 'default',
         serviceDesc: (_p.skills || []).slice(0, 2).join(', ') || 'Professional Service',
         providerPhone: _p.phone || '',
-      }, function () { location.href = 'bookings.html'; });
+      }, function (ref) {
+        var msg = '✅ Booking request sent to ' + _p.name +
+                  (ref ? '\nRef: ' + ref : '') + '\n' + _p.name.split(' ')[0] +
+                  ' will confirm shortly.';
+        (window._skToast || window.alert)(msg);
+      });
     } else {
-      location.href = 'bookings.html?provider=' + encodeURIComponent(_p.uid);
+      /* SokoniPay unavailable (script blocked / slow). Fall back to a real
+         contact path, never a dead page: message in-app, or WhatsApp/phone. */
+      if (window.SokoniInbox && SokoniInbox.openChat) { chat(); return; }
+      var wa = String(_p.phone || '').replace(/\D/g, '').replace(/^0/, '254');
+      if (wa) {
+        window.open('https://wa.me/' + wa + '?text=' +
+          encodeURIComponent('Hi ' + _p.name + ', I found you on SOKONI and would like to book your service.'),
+          '_blank', 'noopener');
+      } else {
+        (window._skToast || window.alert)('Booking is loading — please try again in a moment.');
+      }
     }
   }
 
