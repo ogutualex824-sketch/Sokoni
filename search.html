@@ -697,6 +697,28 @@ import { firestoreSearch, warm as warmCatalogue } from "./sokoni-firestore-searc
    failure here costs nothing, the search path fetches on demand as before. */
 warmCatalogue(db).catch(() => {});
 
+/* Pre-warm the Algolia engine's secured key the moment the engine object exists,
+   NOT on the first query. The key comes from a Cloud Function that cold-starts in
+   several seconds; deferring it to the first search meant the very first query on
+   a fresh session raced that cold start and, when it lost, was issued without a
+   key — no results, ~1 in 6 cold loads. Kicking init off here runs the cold start
+   during page load and the time the user spends typing, so the key is almost
+   always ready by search time. Fire-and-forget and idempotent: doSearch still
+   awaits init, so a slow warm-up simply falls back to the same path as before —
+   this only removes dead time, it never adds any. */
+(function prewarmSearchEngine() {
+  let waited = 0;
+  const poll = setInterval(function () {
+    waited += 100;
+    if (window.sokoniSearch && typeof window.sokoniSearch.init === "function") {
+      clearInterval(poll);
+      window.sokoniSearch.init().catch(() => {});
+    } else if (waited >= 5000) {
+      clearInterval(poll); /* engine script never loaded — nothing to warm */
+    }
+  }, 100);
+})();
+
 /* ── Tab definitions ── */
 const TABS = [
   { id: "all",           label: "All",           icon: "✨" },

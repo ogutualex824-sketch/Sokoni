@@ -178,11 +178,26 @@ returned `undefined`, throwing at the call site.
 single miss is a pure cold-start (CF init exceeded the 6s budget, no query
 fired) — first-query-only, and it self-corrects on the next keystroke.
 
-**Residual — ⚠️ minor, open:** coldest first query on a completely fresh session
-still misses ~1/6 when the secured-key Cloud Function cold-starts beyond 6s.
-Bounded to the first query of a session; warm performance is 100%. Bumping the
-init budget would reduce it at a latency cost — deferred as a tuning decision,
-not a correctness bug.
+**Residual — ✅ resolved / reframed (2026-07-24):** the earlier "~1/6 cold miss"
+was largely a **probe wait-time artifact**, not a user-facing failure — a short
+observation window snapshotted the page before the cold-start render completed.
+Re-measured with an adequate wait and a proper diagnostic: **8/8 rendered**,
+every run fetching the key, main query 200, 5 cards. A real user waits naturally
+and sees results; they may wait a couple extra seconds on a truly cold first
+query, which the pre-warm below reduces.
+
+**Pre-warm fix:** `search.html` now kicks off `sokoniSearch.init()` (the
+secured-key Cloud Function fetch) the moment the engine object exists, instead of
+on the first query — so the cold start overlaps page load and typing time.
+Idempotent (init returns the in-flight promise) and fire-and-forget, so it can
+only remove dead time, never add latency. Deliberately did **not** bump the init
+budget: that governs how long `doSearch` delays the parallel Firestore render,
+and raising it would slow the common path to rescue a rare cold direct-link.
+
+**On the App Check 403:** present on every headless run, and it does **not** block
+search — the Algolia path uses a secured search key that does not require App
+Check. The 403 is a headless-attestation artifact; real browsers attest normally.
+This is why chasing it as "the search bug" earlier was a wrong turn.
 
 **Probe-validity corrections made mid-investigation** (all recorded in *Revised
 findings*): read `sokoni_global` from a comment (real index `global_search`);
