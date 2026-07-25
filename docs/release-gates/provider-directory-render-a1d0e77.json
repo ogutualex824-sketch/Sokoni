@@ -1,0 +1,91 @@
+{
+  "gate": "provider-directory-render",
+  "status": "PASS",
+  "counts": {
+    "pass": 14,
+    "fail": 0,
+    "blocked": 0
+  },
+  "evidence": "browser-run",
+  "environment": "local",
+  "commit": "a1d0e77",
+  "workingTreeDirty": true,
+  "confidence": "medium",
+  "startedAt": "2026-07-24T19:25:32.165Z",
+  "finishedAt": "2026-07-24T19:26:15.914Z",
+  "assertions": [
+    {
+      "status": "PASS",
+      "label": "/providers.html: real records render",
+      "detail": "Ann, King Bruce"
+    },
+    {
+      "status": "PASS",
+      "label": "/providers.html: no demo data",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/providers.html: no stars on an unrated provider",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/cleaning.html: real records render",
+      "detail": "Ann"
+    },
+    {
+      "status": "PASS",
+      "label": "/cleaning.html: no demo data",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/cleaning.html: no stars on an unrated provider",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/services.html: real records render",
+      "detail": "Ann, King Bruce"
+    },
+    {
+      "status": "PASS",
+      "label": "/services.html: no demo data",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/services.html: no stars on an unrated provider",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/index.html: real records render",
+      "detail": "Ann"
+    },
+    {
+      "status": "PASS",
+      "label": "/index.html: no demo data",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "/index.html: no stars on an unrated provider",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "provider-profile: renders the provider",
+      "detail": null
+    },
+    {
+      "status": "PASS",
+      "label": "provider-profile: no stars on an unrated provider",
+      "detail": null
+    }
+  ],
+  "notes": [
+    "Fixtures are the real production records, injected client-side. This proves the render path, not the Firestore read."
+  ]
+}

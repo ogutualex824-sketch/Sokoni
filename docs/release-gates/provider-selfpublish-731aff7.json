@@ -1,0 +1,44 @@
+{
+  "gate": "provider-selfpublish",
+  "status": "PASS",
+  "counts": {
+    "pass": 5,
+    "fail": 0,
+    "blocked": 0
+  },
+  "evidence": "production-probe",
+  "environment": "production",
+  "commit": "731aff7",
+  "workingTreeDirty": true,
+  "confidence": "high",
+  "startedAt": "2026-07-24T16:44:21.900Z",
+  "finishedAt": "2026-07-24T16:44:38.903Z",
+  "assertions": [
+    {
+      "status": "PASS",
+      "label": "control: bare {uid} create is allowed",
+      "detail": "HTTP 200"
+    },
+    {
+      "status": "PASS",
+      "label": "create status:\"active\" is DENIED",
+      "detail": "HTTP 403"
+    },
+    {
+      "status": "PASS",
+      "label": "create status:\"pending\" is ALLOWED",
+      "detail": "HTTP 200"
+    },
+    {
+      "status": "PASS",
+      "label": "update own record to \"active\" is DENIED",
+      "detail": "HTTP 403"
+    },
+    {
+      "status": "PASS",
+      "label": "pending record absent from the active listing",
+      "detail": "HTTP 200"
+    }
+  ],
+  "notes": []
+}
