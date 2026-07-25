@@ -309,6 +309,8 @@ body{
 }
 .tx-icon.emoji{font-size:20px;line-height:1}
 .empty-emoji{font-size:38px;line-height:1;margin-bottom:10px;opacity:.85}
+.more-card-icon.emoji{font-size:22px;line-height:1}
+.menu-item-icon.emoji{font-size:19px;line-height:1}
 .tx-icon.in{background:rgba(113,255,0,.08);color:var(--g)}
 .tx-icon.out{background:rgba(239,68,68,.08);color:var(--red)}
 .tx-icon.save{background:rgba(59,130,246,.08);color:var(--blue)}
@@ -1233,38 +1235,39 @@ body{
   <!-- ── MORE PANEL ── -->
   <section id="panMore" class="w-panel">
     <div style="padding:20px 16px 0">
+      <button type="button" onclick="W2.showPanel('panHome')" style="display:inline-flex;align-items:center;gap:6px;background:var(--sur2);border:1px solid var(--bor);color:var(--txt);font-size:13px;font-weight:700;border-radius:20px;padding:7px 14px;cursor:pointer;margin-bottom:12px">← Back to Wallet</button>
       <h2 style="font-size:22px;font-weight:900;margin-bottom:4px">More</h2>
       <p style="font-size:13px;color:var(--sub)">Wallet tools &amp; settings</p>
     </div>
 
     <div class="more-grid">
       <div class="more-card" onclick="W2.openVaultsList()">
-        <div class="more-card-icon blue"><i class="fas fa-piggy-bank"></i></div>
+        <div class="more-card-icon emoji blue">🐷</div>
         <h4>Savings</h4>
         <p>Goal-based vaults</p>
       </div>
       <div class="more-card" onclick="W2.openAnalytics()">
-        <div class="more-card-icon purple"><i class="fas fa-chart-pie"></i></div>
+        <div class="more-card-icon emoji purple">📊</div>
         <h4>Analytics</h4>
         <p>Spending breakdown</p>
       </div>
       <div class="more-card" onclick="W2.openSecurity()">
-        <div class="more-card-icon amber"><i class="fas fa-shield-halved"></i></div>
+        <div class="more-card-icon emoji amber">🛡️</div>
         <h4>Security</h4>
         <p>PIN, freeze, limits</p>
       </div>
       <div class="more-card" id="merchantCard" onclick="W2.openMerchantWallet()" style="display:none">
-        <div class="more-card-icon teal"><i class="fas fa-store"></i></div>
+        <div class="more-card-icon emoji teal">🏪</div>
         <h4>Merchant</h4>
         <p>Payouts &amp; float</p>
       </div>
       <div class="more-card" onclick="W2.openRequest()">
-        <div class="more-card-icon"><i class="fas fa-hand-holding-dollar"></i></div>
+        <div class="more-card-icon emoji">🙏</div>
         <h4>Request</h4>
         <p>Ask for money</p>
       </div>
       <div class="more-card">
-        <div class="more-card-icon" style="background:var(--sur3)"><i class="fas fa-credit-card" style="color:var(--dim)"></i></div>
+        <div class="more-card-icon emoji" style="background:var(--sur3)">💳</div>
         <h4 style="color:var(--sub)">Cards</h4>
         <p>Virtual cards</p>
         <span class="badge-soon">Soon</span>
@@ -1276,39 +1279,39 @@ body{
     </div>
     <div class="menu-list">
       <div class="menu-item" onclick="W2.openSecurity()">
-        <div class="menu-item-icon"><i class="fas fa-key"></i></div>
+        <div class="menu-item-icon emoji">🔑</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Wallet PIN</div>
           <div class="menu-item-desc">Secure transfers with a PIN</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <div class="menu-item" onclick="W2.openWithdraw()">
-        <div class="menu-item-icon"><i class="fas fa-arrow-down-to-line"></i></div>
+        <div class="menu-item-icon emoji">🏧</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Withdraw to M-Pesa</div>
           <div class="menu-item-desc">Send wallet balance to M-Pesa</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <div class="menu-item" onclick="W2.openLimits()">
-        <div class="menu-item-icon"><i class="fas fa-sliders"></i></div>
+        <div class="menu-item-icon emoji">🎚️</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Transaction Limits</div>
           <div class="menu-item-desc" id="limitsDesc">Daily & monthly limits</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <div class="menu-item" onclick="W2.openAnalytics()">
-        <div class="menu-item-icon"><i class="fas fa-chart-bar"></i></div>
+        <div class="menu-item-icon emoji">📈</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Spending Analytics</div>
           <div class="menu-item-desc">Where your money goes</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <a href="sfos-wallet.html" class="menu-item" style="text-decoration:none">
-        <div class="menu-item-icon" style="background:var(--ga);"><i class="fas fa-landmark" style="color:var(--g)"></i></div>
+        <div class="menu-item-icon emoji" style="background:var(--ga);">🏦</div>
         <div class="menu-item-info">
           <div class="menu-item-name" style="color:var(--g)">Financial OS</div>
           <div class="menu-item-desc">Enterprise dashboard — merchant, escrow, health score</div>
