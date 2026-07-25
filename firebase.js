@@ -47,27 +47,23 @@ import {
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  /* authDomain MUST equal the app's own origin so the Firebase auth helper iframe
-     (/__/auth/iframe) is SAME-ORIGIN with the page. getRedirectResult() reads the
-     pending sign-in from that iframe's storage on return; a cross-origin iframe has
-     its storage partitioned by modern browsers (Chrome 115+ storage partitioning,
-     Safari ITP), so the read comes back empty and getRedirectResult() resolves to
-     null — the sign-in silently fails, the user lands back on the login page and
-     nothing happens.
+  /* authDomain MUST be a domain registered as a redirect URI on the Google OAuth
+     client, or Google returns "Access blocked: This app's request is invalid" and
+     no sign-in can start.
 
-     This was previously "auth.mysokoni.co.ke". The intent was same-origin, but a
-     SUBDOMAIN is a DIFFERENT ORIGIN from the app at https://mysokoni.co.ke — so the
-     iframe stayed third-party and redirect sign-in broke (Google/Facebook), worst
-     in the installed PWA. Verified before changing: the app origin serves the
-     helper (/__/auth/handler + /__/auth/iframe → 200), mysokoni.co.ke is an
-     authorized domain, and the OAuth client accepts
-     https://mysokoni.co.ke/__/auth/handler as a redirect URI.
-
-     The session lives in IndexedDB keyed by apiKey under the PAGE origin, not the
-     authDomain — so pages that still init with the old value keep sharing the
-     session; only the OAuth helper origin changes. Users must reach the app on the
-     apex mysokoni.co.ke (canonical) for this to be same-origin. */
-  authDomain:        "mysokoni.co.ke",
+     REVERTED 2026-07-25 from "mysokoni.co.ke" back to "auth.mysokoni.co.ke".
+     The apex was tried to make the auth helper iframe same-origin (to dodge
+     cross-origin storage partitioning of getRedirectResult), but
+     https://mysokoni.co.ke/__/auth/handler is NOT a registered redirect URI on the
+     OAuth client, so Google blocked EVERY sign-in on every device. Verified against
+     Google's live OAuth page:
+         mysokoni.co.ke        -> ACCESS BLOCKED (invalid request)
+         auth.mysokoni.co.ke   -> account picker (works)
+         sokoni-aeb26.firebaseapp.com -> account picker (works)
+     The apex can only be used once it is added to the OAuth client's Authorized
+     redirect URIs in Google Cloud Console — until then this MUST stay on the
+     registered subdomain. */
+  authDomain:        "auth.mysokoni.co.ke",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.firebasestorage.app",
   messagingSenderId: "24799054989",
