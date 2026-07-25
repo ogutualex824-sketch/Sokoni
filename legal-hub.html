@@ -1718,10 +1718,15 @@ async function _getDb(){
 /* ── Cloud Functions caller (lazy init) ─────────────────────────── */
 let _lhFnsObj = null;
 async function _lhCallCF(name, data) {
-  /* getLegalProviders is App Check enforced. Wait for firebase.js to finish
-     exchanging the App Check token before calling, or the request goes out
-     token-less and 401s. Prefer firebase.js's shared, App-Check-aware callable
-     when it is available. */
+  /* getLegalProviders is App Check enforced. firebase.js (deferred module)
+     publishes window.sokoniCallable and window.__sokoniAppCheckReady AFTER the
+     first renderLawyers() may already have fired, so a single check falls
+     through to a token-less path and the call 401s — then _fsLawyersCache is
+     set to [] and never retried. POLL for the shared callable (bounded ~8s),
+     then await the token, so the request always carries App Check. */
+  for (let i = 0; i < 80 && typeof window.sokoniCallable !== 'function'; i++) {
+    await new Promise(r => setTimeout(r, 100));
+  }
   if (window.__sokoniAppCheckReady) { try { await window.__sokoniAppCheckReady; } catch (_) {} }
   if (typeof window.sokoniCallable === 'function') {
     const res = await window.sokoniCallable(name)(data);
