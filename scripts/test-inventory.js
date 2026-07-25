@@ -24,7 +24,16 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
+
+/* How many suites run at once. Serial execution (one spawnSync after another)
+   made this unusable as a predeploy hook: 61 suites x a 60s timeout is up to an
+   hour, and the env/network suites each burn their full timeout locally, so the
+   hook never returned and the deploy aborted. The suites are independent child
+   processes, so running a bounded number concurrently collapses wall-clock to
+   roughly the slowest suite without changing any individual result. Kept modest
+   so browser-driving suites do not starve each other into false timeouts. */
+const CONCURRENCY = Math.max(2, Math.min(6, (require('os').cpus() || [{}]).length - 1));
 
 const ROOT = path.resolve(__dirname, '..');
 const AS_JSON = process.argv.includes('--json');
@@ -95,29 +104,58 @@ const files = fs.readdirSync(path.join(ROOT, 'scripts'))
   .sort();
 
 const results = [];
-for (const f of files) {
-  const started = Date.now();
-  const res = spawnSync(process.execPath, [path.join(ROOT, 'scripts', f)], {
-    cwd: ROOT, timeout: TIMEOUT_MS, encoding: 'utf8',
-    env: { ...process.env, NODE_ENV: 'test' },
-  });
-  const out = String(res.stdout || '') + String(res.stderr || '');
-  const verdict = classify(res, out, f.replace(/.js$/, ''));
 
-  /* Pull an assertion count when the suite prints one, so a PASS with 0
-     assertions is visible rather than counted as coverage it does not have. */
-  const m = out.match(/ALL (\d+) PASSED|(\d+)\/(\d+)|(\d+) FAILED/);
-  results.push({
-    suite: f.replace(/\.js$/, ''),
-    verdict,
-    ms: Date.now() - started,
-    exit: res.status,
-    assertions: m ? m[0] : null,
-    reason: verdict === 'ENV' || verdict === 'FAIL'
-      ? (out.split('\n').filter((l) => l.trim()).slice(-2).join(' ').slice(0, 110) || null)
-      : null,
+/* Run one suite as a child process with the same TIMEOUT_MS budget spawnSync
+   used, and classify it identically. The `res` shape handed to classify()
+   mirrors spawnSync's: { status, error } — error.code 'ETIMEDOUT' on timeout so
+   the TIMEOUT verdict still fires. spawnSync was synchronous, which is why the
+   old loop ran the whole set serially; this returns a Promise so a bounded number
+   can run at once. Nothing about a single suite's result changes. */
+function runOne(f) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const child = spawn(process.execPath, [path.join(ROOT, 'scripts', f)], {
+      cwd: ROOT, env: { ...process.env, NODE_ENV: 'test' },
+    });
+    let out = '';
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; child.kill('SIGKILL'); }, TIMEOUT_MS);
+    child.stdout.on('data', (d) => { out += d; });
+    child.stderr.on('data', (d) => { out += d; });
+    child.on('error', (e) => { out += String(e && e.message || e); });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      const res = { status: timedOut ? null : code, error: timedOut ? { code: 'ETIMEDOUT' } : null };
+      const verdict = classify(res, out, f.replace(/.js$/, ''));
+      /* Pull an assertion count when the suite prints one, so a PASS with 0
+         assertions is visible rather than counted as coverage it does not have. */
+      const m = out.match(/ALL (\d+) PASSED|(\d+)\/(\d+)|(\d+) FAILED/);
+      results.push({
+        suite: f.replace(/\.js$/, ''),
+        verdict,
+        ms: Date.now() - started,
+        exit: res.status,
+        assertions: m ? m[0] : null,
+        reason: verdict === 'ENV' || verdict === 'FAIL'
+          ? (out.split('\n').filter((l) => l.trim()).slice(-2).join(' ').slice(0, 110) || null)
+          : null,
+      });
+      resolve();
+    });
   });
 }
+
+async function runAll() {
+  for (let i = 0; i < files.length; i += CONCURRENCY) {
+    await Promise.all(files.slice(i, i + CONCURRENCY).map(runOne));
+  }
+  /* Report in a stable file order regardless of which finished first. */
+  results.sort((a, b) => files.indexOf(a.suite + '.js') - files.indexOf(b.suite + '.js'));
+}
+
+/* Everything below was top-level after the serial loop; it now runs once the
+   parallel run resolves. Verdicts, summary, artifact and exit code are unchanged. */
+runAll().then(() => {
 
 const by = (v) => results.filter((r) => r.verdict === v);
 const summary = {
@@ -222,3 +260,5 @@ if (GATE) {
    are excluded by design: gating on them would make the pipeline depend on
    credentials this machine does not have. */
 if (GATE && summary.fail > 0) process.exit(1);
+
+});
