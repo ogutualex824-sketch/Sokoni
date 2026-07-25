@@ -154,7 +154,12 @@
 <!-- Booking modal (SokoniPay.bookNow) and in-app chat (SokoniInbox.openChat).
      Without these the Book button fell through to a non-existent bookings.html
      (404) and Message lost its in-app handler — the same pair services.html
-     loads for the identical buttons. -->
+     loads for the identical buttons.
+     sokoni-intasend.js defines window.SokoniIntaSend — SokoniPay's gateway "Pay
+     with M-PESA" reads it, and without it the Pay button dead-ended on
+     "Payment system loading… please refresh". services.html already loads it;
+     this page did not, so booking payments could never be initiated here. -->
+<script src="sokoni-intasend.js" defer></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="nav-active.js" defer></script>
