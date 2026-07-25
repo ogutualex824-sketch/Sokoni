@@ -90,6 +90,30 @@ function _normalizePhone(raw) {
 }
 
 /**
+ * Find a SOKONI user by phone, tolerant of how phones are actually stored.
+ * Firebase-Auth users carry `phoneNumber` in "+254…" form; some legacy docs use
+ * `phone` in "254…" form. _normalizePhone yields "254…", so the old
+ * where('phone','==','254…') query matched NEITHER — every recipient lookup
+ * returned USER_NOT_FOUND. This checks both fields in both formats (first hit
+ * wins → one read for a valid recipient). Returns the doc snapshot or null.
+ */
+async function _findUserByPhone(db, normalizedPhone) {
+  if (!normalizedPhone) return null;
+  const plus = `+${normalizedPhone}`;
+  const attempts = [
+    ['phoneNumber', plus],            // Firebase Auth default: "+254…"
+    ['phone',       normalizedPhone], // legacy: "254…"
+    ['phoneNumber', normalizedPhone], // "254…" stored in phoneNumber
+    ['phone',       plus],            // "+254…" stored in phone
+  ];
+  for (const [field, val] of attempts) {
+    const snap = await db.collection('users').where(field, '==', val).limit(1).get();
+    if (!snap.empty) return snap.docs[0];
+  }
+  return null;
+}
+
+/**
  * Generate a prefixed random ID suitable for Firestore doc IDs.
  * Format: {prefix}_{base36-timestamp}_{6-char-random}
  */
@@ -316,17 +340,12 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
   try {
     await _assertNotFrozen(db, senderUid);
 
-    // ── Recipient lookup ──────────────────────────────────────────────────────
-    const recipientQuery = await db.collection('users')
-      .where('phone', '==', normalizedPhone)
-      .limit(1)
-      .get();
-
-    if (recipientQuery.empty) {
+    // ── Recipient lookup (tolerant of phone/phoneNumber + "+254…"/"254…") ──────
+    const recipientDoc = await _findUserByPhone(db, normalizedPhone);
+    if (!recipientDoc) {
       return { success: false, error: 'USER_NOT_FOUND' };
     }
 
-    const recipientDoc  = recipientQuery.docs[0];
     const recipientUid  = recipientDoc.id;
     const recipientData = recipientDoc.data();
 
@@ -481,9 +500,9 @@ exports.walletV2Request = onCall(BASE_OPTS, async (request) => {
     let toPhone = normalizedPhone;
 
     if (normalizedPhone) {
-      const q = await db.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-      if (!q.empty) {
-        toUid = q.docs[0].id;
+      const recipientDoc = await _findUserByPhone(db, normalizedPhone);
+      if (recipientDoc) {
+        toUid = recipientDoc.id;
       }
     }
 
@@ -1505,8 +1524,8 @@ exports.walletV2EscrowCreate = onCall(BASE_OPTS, async (request) => {
     const normalizedPhone = _normalizePhone(counterpartyPhone);
     if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Invalid counterparty phone number');
     sellerPhone = normalizedPhone;
-    const q = await db.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-    if (!q.empty) sellerUid = q.docs[0].id;
+    const sellerDoc = await _findUserByPhone(db, normalizedPhone);
+    if (sellerDoc) sellerUid = sellerDoc.id;
   }
 
   try {

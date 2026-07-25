@@ -476,8 +476,8 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
   const { amount, method, accountNumber, bankCode, bankName } = request.data || {};
 
   const amt = Number(amount);
-  if (!Number.isInteger(amt) || amt < 500) {
-    throw new HttpsError('invalid-argument', 'Minimum payout amount is KSh 500');
+  if (!Number.isInteger(amt) || amt < 100) {
+    throw new HttpsError('invalid-argument', 'Minimum payout amount is KSh 100');
   }
 
   const validMethods = ['mpesa', 'bank'];
