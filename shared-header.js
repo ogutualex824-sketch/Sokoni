@@ -738,9 +738,23 @@
          invisible anyway behind a near-opaque fill. */
       background: #0e0e0e;
       border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px; overflow: hidden;
+      border-radius: 16px;
+      /* Cap the height and scroll INSIDE the panel. Without this the list has
+         no max-height, so on a phone with the keyboard open the lower rows sit
+         behind the keyboard with no way to reach them — "only the top shows,
+         the rest is cut". min(62vh,460px) is the safe default; the visualViewport
+         handler in _wireSearch tightens it to the real space above the keyboard
+         when one is open, so nothing is ever unreachable on any device. */
+      max-height: min(62vh, 460px);
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
       box-shadow: 0 12px 40px rgba(0,0,0,0.6);
       z-index: 100002; display: none;
+    }
+    /* Slim scrollbar so the scroll affordance does not look broken on desktop. */
+    #sk-nav-search-dropdown::-webkit-scrollbar { width: 8px; }
+    #sk-nav-search-dropdown::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.16); border-radius: 8px;
     }
     #sk-nav-search-dropdown.open { display: block; }
     .sk-ac-item {
@@ -1693,6 +1707,35 @@
       dropdown.classList.remove('open');
       _focusIdx = -1;
     }
+
+    /* Size the panel to the space actually visible above the keyboard. On a
+       phone the software keyboard shrinks window.visualViewport but NOT the CSS
+       viewport, so a vh-based cap alone still lets rows hide behind the keyboard.
+       Reading visualViewport.height gives the real visible height, so the list
+       is bounded to it and scrolls for the rest — reachable on every device.
+       Falls back to the CSS max-height (min(62vh,460px)) when unsupported. */
+    function _fitDropdown() {
+      try {
+        if (!dropdown.classList.contains('open')) return;
+        var vv = window.visualViewport;
+        if (!vv) return; /* CSS max-height already applies */
+        var top = dropdown.getBoundingClientRect().top;
+        var avail = vv.height - top - 12;               /* 12px breathing room */
+        if (avail < 140) avail = 140;                   /* never collapse to nothing */
+        dropdown.style.maxHeight = Math.round(avail) + 'px';
+      } catch (e) {}
+    }
+    /* Re-fit whenever the panel opens (any of the render paths toggles .open) or
+       the visible viewport changes (keyboard show/hide, rotate). One observer
+       covers every current and future open-site, so no render path can forget. */
+    try {
+      new MutationObserver(_fitDropdown).observe(dropdown,
+        { attributes: true, attributeFilter: ['class'] });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', _fitDropdown);
+        window.visualViewport.addEventListener('scroll', _fitDropdown);
+      }
+    } catch (e) {}
 
     function _fmt(n) {
       if (!n) return '';

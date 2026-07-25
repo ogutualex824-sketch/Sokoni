@@ -374,7 +374,14 @@
       flex-shrink: 0;
     }
 
-    .result-thumb {
+    /* Selector is intentionally specific — .result-card > img.result-thumb
+       (0,2,1). A global responsive rule ([class*="-card"] > img, specificity
+       0,1,1) in sokoni-responsive.css matches this thumbnail because
+       "result-card" contains "-card", and it forces width:100%/height:auto,
+       stretching the 48px thumb across the whole card and pushing the details
+       off the right edge of the screen. This higher-specificity rule reclaims
+       the fixed 48x48 size. */
+    .result-card > img.result-thumb {
       width: 48px;
       height: 48px;
       border-radius: 12px;
