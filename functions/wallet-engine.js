@@ -99,12 +99,15 @@ function _normalizePhone(raw) {
  */
 async function _findUserByPhone(db, normalizedPhone) {
   if (!normalizedPhone) return null;
-  const plus = `+${normalizedPhone}`;
+  const plus  = `+${normalizedPhone}`;             // "+254742544979"
+  const local = `0${normalizedPhone.slice(3)}`;    // "0742544979" (Kenyan local form)
   const attempts = [
-    ['phoneNumber', plus],            // Firebase Auth default: "+254…"
-    ['phone',       normalizedPhone], // legacy: "254…"
-    ['phoneNumber', normalizedPhone], // "254…" stored in phoneNumber
-    ['phone',       plus],            // "+254…" stored in phone
+    ['phoneNumber', plus],            // Firebase Auth default: "+254…" (most common)
+    ['phone',       local],           // observed in data: "0742…" (local, leading 0)
+    ['phone',       normalizedPhone], // "254…"
+    ['phoneNumber', local],           // "0742…" in phoneNumber
+    ['phone',       plus],            // "+254…" in phone
+    ['phoneNumber', normalizedPhone], // "254…" in phoneNumber
   ];
   for (const [field, val] of attempts) {
     const snap = await db.collection('users').where(field, '==', val).limit(1).get();
