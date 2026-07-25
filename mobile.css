@@ -4306,7 +4306,8 @@ img { max-width: 100%; height: auto; }
    backdrop-filter is the single most expensive compositor op here and the root
    multiplier. Dropping it on phones removes the layer explosion. Elements keep
    their semi-transparent dark backgrounds, so the theme is preserved — only the
-   blur is lost. Deliberate crash-over-polish trade, small screens only. */
+   blur is lost. Deliberate crash-over-polish trade, small screens only.
+
    NOTE ON SPECIFICITY: sokoni-premium-v2.css / style.css set backdrop-filter with
    !important on CLASS selectors, and among !important rules higher specificity wins
    over source order. A plain `*` (0,0,0) would lose to `.card` (0,1,0), so this uses
