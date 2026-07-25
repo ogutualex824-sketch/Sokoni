@@ -4294,3 +4294,28 @@ img { max-width: 100%; height: auto; }
   .prop-type-btn { flex-shrink: 0 !important; white-space: nowrap !important; }
 
 }
+
+/* ── MOBILE GPU CRASH FIX (2026-07-25) ─────────────────────────────────────
+   The home page is ~12,700px tall and the loaded stylesheets declare ~100
+   backdrop-filter layers (many blur(24-28px) + saturate). On a real phone GPU,
+   compositing that many blur layers while scrolling a long page exhausts GPU
+   memory: the renderer crashes (screen goes black), the browser reloads
+   (white -> SOKONI), and the page cannot be scrolled to the bottom. Desktop and
+   headless GPUs never hit the ceiling, so it only reproduces on phones.
+
+   backdrop-filter is the single most expensive compositor op here and the root
+   multiplier. Dropping it on phones removes the layer explosion. Elements keep
+   their semi-transparent dark backgrounds, so the theme is preserved — only the
+   blur is lost. Deliberate crash-over-polish trade, small screens only. */
+   NOTE ON SPECIFICITY: sokoni-premium-v2.css / style.css set backdrop-filter with
+   !important on CLASS selectors, and among !important rules higher specificity wins
+   over source order. A plain `*` (0,0,0) would lose to `.card` (0,1,0), so this uses
+   `*:not(#_gpu)` — the :not() inherits the ID specificity (1,0,0), which beats any
+   realistic class-based rule regardless of which stylesheet loads last. #_gpu does
+   not exist, so it still matches every element. */
+@media (max-width: 768px) {
+  *:not(#_gpu), *:not(#_gpu)::before, *:not(#_gpu)::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
