@@ -4154,7 +4154,14 @@ input:focus, select:focus, textarea:focus {
 button:active, .btn:active, [role="button"]:active { opacity: 0.82 !important; transform: scale(0.985) !important; }
 img { max-width: 100%; height: auto; }
 [class*="-card"], .profile-card, .adm-card, .product-card {
-  will-change: transform;
+  /* will-change removed: this wildcard matches EVERY element with "-card" in its
+     class, so on a 40-card grid it promoted 40+ elements to permanent GPU
+     compositor layers. On mobile that exhausts layer memory and the compositor
+     paints black tiles — the "black screen while scrolling" report. The
+     transition below animates hover perfectly well without it; the browser
+     promotes on demand for the ~200ms the transition runs. Three other
+     stylesheets had the same wildcard (premium.css, style.css, compact-grid.css)
+     and index.html a per-card copy — all removed together. */
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 

@@ -2085,7 +2085,10 @@
       cursor: pointer !important;
       transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
       contain: layout style !important;
-      will-change: transform !important;
+      /* will-change removed — see mobile.css. Every trending card was permanently
+         GPU-promoted; combined with the three stylesheet wildcards a homepage held
+         far more compositor layers than a mobile GPU can back, and scrolling
+         painted black. `contain` stays — it bounds work without forcing a layer. */
       position: relative !important;
     }
 

@@ -1069,7 +1069,9 @@ body.light-mode select option { background: #fff !important; color: #111 !import
 .bank-card, .sacco-card, .ins-card, .inv-card,
 .rest-card, .sv-card, .pv-card, .mpesa-step,
 .lawyer-card, .doc-card, .product-card {
-  will-change: transform;
+  /* will-change removed — see mobile.css. Permanent layer promotion on every
+     card is the mobile black-screen-on-scroll cause. `contain` stays: it bounds
+     layout/paint work and does NOT force a compositor layer. */
   contain: layout style;
 }
 

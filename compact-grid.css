@@ -56,7 +56,9 @@
   display: flex !important;
   flex-direction: column !important;
   position: relative !important;
-  will-change: transform !important;
+  /* will-change removed — see mobile.css. The compact grid is the densest card
+     layout on the platform, so its per-card layer promotion was the worst
+     offender for mobile black-screen-on-scroll. */
   -webkit-tap-highlight-color: transparent !important;
   min-height: 0 !important;
 }

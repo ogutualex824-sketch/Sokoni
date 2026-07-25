@@ -172,7 +172,10 @@ p { line-height:1.52; }
 .seller-card,
 [class*="-card"]:not([class*="modal"]):not([class*="n-panel"]):not([class*="nd-item"]):not([class*="mmenu"]):not([class*="toast"]) {
   transition:transform 0.18s var(--pk-ease), box-shadow 0.18s ease, border-color 0.18s ease !important;
-  will-change:transform;
+  /* will-change removed — sokoni-polish.css duplicates style.css's card rules, so
+     the layer-promotion bug survived removing it there until this copy was fixed
+     too. See mobile.css for the full explanation (mobile black-screen-on-scroll
+     from promoting every card to a permanent GPU layer). */
 }
 .product-card:hover, .seller-card:hover {
   transform:translateY(-4px) !important;
@@ -297,7 +300,8 @@ textarea:focus, select:focus {
 .product-card img,
 [class*="-card"] img:not([class*="avatar"]):not([class*="logo"]):not([class*="icon"]) {
   transition:transform 0.25s var(--pk-ease) !important;
-  will-change:transform;
+  /* will-change removed — duplicate of style.css's card-image rule; promoting
+     every card image doubled the layer count. See mobile.css. */
 }
 .product-card:hover img,
 [class*="-card"]:hover img:not([class*="avatar"]):not([class*="logo"]):not([class*="icon"]) {

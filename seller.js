@@ -443,7 +443,18 @@ async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
             /* Compress before upload — see _compressToBlob. The raw file was being
                stored and then served full-size into thumbnail-sized cards. */
             const blob = await _compressToBlob(imageItems[i].file);
-            const snap = await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
+            /* cacheControl is the other half of "images don't cache well".
+               Firebase Storage defaults uploads to `private, max-age=0`, so the
+               browser revalidated (usually re-downloaded) every product image on
+               every view — measured on production: a live product image returned
+               `Cache-Control: private, max-age=0`. A product photo is immutable
+               once uploaded (a new photo is a new object path), so it is safe to
+               cache for a year. public+immutable lets the browser, the SW image
+               cache, and any CDN keep it instead of re-fetching. */
+            const snap = await uploadBytes(storageRef, blob, {
+                contentType: 'image/jpeg',
+                cacheControl: 'public, max-age=31536000, immutable',
+            });
             urls.push(await getDownloadURL(snap.ref));
         }
         return urls;
