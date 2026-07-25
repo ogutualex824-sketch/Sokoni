@@ -86,15 +86,18 @@
       },
       {
         "source": "/profile/**",
-        "destination": "/public-profile.html"
+        "function": "profileGetPublicProfile",
+        "region": "us-central1"
       },
       {
         "source": "/shop/**",
-        "destination": "/minishop.html"
+        "function": "minishopPage",
+        "region": "us-central1"
       },
       {
         "source": "/@**",
-        "destination": "/minishop.html"
+        "function": "minishopPage",
+        "region": "us-central1"
       },
       {
         "source": "/card/**",
@@ -113,7 +116,7 @@
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
+            "value": "no-cache, must-revalidate"
           }
         ]
       },
@@ -436,6 +439,37 @@
           {
             "key": "X-Robots-Tag",
             "value": "noindex, nofollow"
+          }
+        ]
+      },
+      {
+        "source": "/profile/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300, s-maxage=600, stale-while-revalidate=86400"
+          },
+          {
+            "key": "X-Robots-Tag",
+            "value": "index, follow"
+          }
+        ]
+      },
+      {
+        "source": "/shop/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300, s-maxage=600, stale-while-revalidate=86400"
+          }
+        ]
+      },
+      {
+        "source": "/@**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300, s-maxage=600, stale-while-revalidate=86400"
           }
         ]
       },

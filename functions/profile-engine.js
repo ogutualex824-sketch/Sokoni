@@ -23,6 +23,8 @@
 const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
+/* Markup lives in profile-page.js — the engine owns data, not presentation. */
+const { renderProfilePage: _profilePage, renderProfileError: _profileErrorPage } = require('./profile-page');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -450,21 +452,39 @@ exports.profileGenerateCard = onCall({ region: 'us-central1' }, async (req) => {
    (the coarse level is a public signal; the exact number is not).
    ═══════════════════════════════════════════════════════════════ */
 exports.profileGetPublicProfile = onRequest(
-  { region: 'us-central1', cors: false },
+  /* minInstances: 1 — this function IS the page at /profile/{uid}, so a cold
+     start is not a slow API call, it is a blank screen on a link somebody just
+     tapped in WhatsApp. One warm instance is the cost of that path being a
+     function at all. */
+  { region: 'us-central1', cors: false, minInstances: 1, memory: '256MiB' },
   async (req, res) => {
     res.set('Access-Control-Allow-Origin', '*');
     res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.set('Access-Control-Allow-Headers', 'Content-Type');
+    /* The response varies on nothing but the path, but it IS shared cache
+       content — say so explicitly so no intermediary keys it on a cookie. */
+    res.set('Vary', 'Accept-Encoding');
 
     if (req.method === 'OPTIONS') { res.status(204).send(''); return; }
-    if (req.method !== 'GET')     { res.status(405).json({ error: 'Method not allowed.' }); return; }
+    if (req.method !== 'GET')     { res.status(405).send('Method not allowed.'); return; }
+
+    /* Served through a hosting rewrite at /profile/**, so the uid arrives as a
+       path segment. ?uid= is kept working for direct calls and for the JSON
+       mode used by non-browser clients. */
+    const fromPath = (req.path || '').match(/^\/profile\/([^/?#]+)/);
+    const uid = decodeURIComponent(fromPath ? fromPath[1] : String(req.query.uid || '')).trim();
+    const wantsJson = String(req.query.format || '').toLowerCase() === 'json';
 
     /* Firebase UIDs are 28 alphanumerics. Validating the shape before
        touching Firestore turns a scripted scan of this open endpoint into
        a rejected string compare rather than a billed document read. */
-    const uid = String(req.query.uid || '').trim();
     if (!/^[A-Za-z0-9]{20,64}$/.test(uid)) {
-      res.status(400).json({ error: 'A valid uid is required.' });
+      res.set('Cache-Control', 'public, max-age=300');
+      if (wantsJson) { res.status(400).json({ error: 'A valid uid is required.' }); return; }
+      res.status(404).send(_profileErrorPage(
+        'Profile not found',
+        'This link does not point to a SOKONI profile.'
+      ));
       return;
     }
 
@@ -483,7 +503,11 @@ exports.profileGetPublicProfile = onRequest(
       const user = userSnap.exists ? userSnap.data() : null;
       if (!user || user.profileVisibility === 'private') {
         res.set('Cache-Control', 'public, max-age=60');
-        res.status(404).json({ found: false });
+        if (wantsJson) { res.status(404).json({ found: false }); return; }
+        res.status(404).send(_profileErrorPage(
+          'Profile unavailable',
+          'This profile is private or no longer exists.'
+        ));
         return;
       }
 
@@ -506,11 +530,7 @@ exports.profileGetPublicProfile = onRequest(
         if (created && !isNaN(created)) memberSince = created.toISOString().slice(0, 7);
       } catch (_) { /* unparseable timestamp is simply omitted */ }
 
-      /* Public profiles are identical for every viewer, so they are safe to
-         cache at the edge. This is also what keeps the endpoint cheap under
-         a link that may be forwarded to a large WhatsApp group at once. */
-      res.set('Cache-Control', 'public, max-age=300, s-maxage=600');
-      res.status(200).json({
+      const payload = {
         found:         true,
         uid,
         sokoniId:      _sokoniId(uid),
@@ -528,10 +548,24 @@ exports.profileGetPublicProfile = onRequest(
           url:    `https://mysokoni.co.ke/shop/${shopDoc.id}`,
         } : null,
         profileUrl:    `https://mysokoni.co.ke/profile/${uid}`,
-      });
+      };
+
+      /* Public profiles are identical for every viewer, so they are safe to
+         cache at the edge. This is also what keeps the endpoint cheap under
+         a link that may be forwarded to a large WhatsApp group at once. */
+      res.set('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400');
+      if (wantsJson) { res.status(200).json(payload); return; }
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.status(200).send(_profilePage(payload));
     } catch (err) {
       logger.error('[profile] public profile read failed', { uid, err: err.message });
-      res.status(500).json({ error: 'Could not load this profile.' });
+      /* An error must never be cached as if it were the profile. */
+      res.set('Cache-Control', 'no-store');
+      if (wantsJson) { res.status(500).json({ error: 'Could not load this profile.' }); return; }
+      res.status(500).send(_profileErrorPage(
+        'Could not load this profile',
+        'Something went wrong on our side. Please try again shortly.'
+      ));
     }
   }
 );

@@ -74,6 +74,27 @@ The document default is now `"source": "**"`, with the asset rules **below** it
 overriding for `js`/`css`/images. That is the only pattern that reaches extensionless
 page URLs.
 
+The default value is **`no-cache, must-revalidate`**, not `no-store`. The distinction
+is deliberate and worth understanding before changing it:
+
+| directive | stored? | served without asking origin? |
+|---|---|---|
+| `no-store` | no | never — full transfer every navigation |
+| `no-cache` | yes | no — always revalidated, so a match returns `304` with no body |
+
+Both are always fresh. `no-cache` is fresh **and** cheap, because an unchanged page
+costs a conditional request instead of a full transfer — which matters on Kenyan
+mobile networks where these pages are mostly read.
+
+`no-cache` is safe here only because of a structural property: **every page on SOKONI
+is a user-agnostic shell.** All member data is fetched client-side through
+authenticated Cloud Functions, so the HTML a shared cache stores is identical for
+every viewer and contains nothing private. Pages that reach authentication or payment
+state are still explicitly `no-store, private` in the private-pages block.
+
+> If a page is ever added that renders user data into its HTML at the origin, the
+> default is **not** sufficient. Add it to the private-pages block in the same commit.
+
 When adding a rule for a page, add **both** forms — `@(name)` *and* `@(name).html` —
 as the existing `login` / `checkout` / `profile` rules do. The `.html` form is not
 dead weight: it still covers direct-file access and any future config where
@@ -87,27 +108,24 @@ Do not reorder without re-reading Rule 1.
 
 | # | source | purpose |
 |---|---|---|
-| 0 | `**` | document default — `no-cache, no-store, must-revalidate` |
-| 1 | `**/*.@(js|css)` | 1 h browser cache, no CDN cache |
-| 2 | `**/*.@(jpg\|jpeg\|gif\|png\|svg\|ico\|webp\|woff2\|woff\|ttf)` | 30 d immutable-ish |
+| 0 | `**` | document default — `no-cache, must-revalidate` |
+| 1 | `**/*.@(js\|css)` | 1 h browser cache, no CDN cache |
+| 2 | `**/*.@(jpg\|jpeg\|gif\|png\|svg\|ico\|webp\|woff2\|woff\|ttf)` | 30 d |
 | 3–4 | `/service-worker.js`, `/firebase-messaging-sw.js` | **must stay below #1** — the exact pair that regressed |
 | 5–12 | individual JS files, `version.json`, `manifest.json`, assetlinks | per-file overrides |
 | 13–18 | `login` / `signup` / `admin` / `superadmin` / `checkout` / `payments` / `wallet` / `financial-os` / `finos` / `profile` / `seller` | private pages — `no-store, private`, several `noindex` |
-| 19 | `**` | security headers (CSP, HSTS, Permissions-Policy, …) |
+| 19–21 | `/profile/**`, `/shop/**`, `/@**` | prerendered public pages — `public, max-age=300, s-maxage=600, stale-while-revalidate=86400` |
+| 22 | `**` | security headers (CSP, HSTS, Permissions-Policy, …) |
 
----
+Rules 19–21 are served by Cloud Functions, not static files — see
+[[PUBLIC_PAGE_PRERENDER]]. Their `Cache-Control` is set **identically** in the function
+and here, deliberately: it removes any dependence on whether Hosting config or a
+function-set header wins, which is not something to leave to chance in the request path
+of the storefront.
 
-## Performance note
-
-Making the document default `no-store` trades edge caching for deploy freshness on
-**public** pages too (`/`, `/shop/**`, category and product pages), which were
-previously served from the edge with `max-age=3600`.
-
-That matches the project's declared intent — the dead `**/*.html` rule had always said
-`no-store`. If origin load becomes a problem, the correct follow-up is `no-cache` for
-public pages only: the response is still stored, but revalidated via `ETag`, so
-browsers get a 304 instead of a full transfer and freshness is preserved. That is a
-policy change and should be made deliberately, not as a side effect of a fix.
+`/profile` (the private dashboard) and `/profile/**` (public prerendered profiles) are
+different pages with opposite policies. Rule 18 matches the single segment `profile`
+only; rule 19 matches deeper paths. Do not merge them.
 
 ---
 
@@ -116,19 +134,26 @@ policy change and should be made deliberately, not as a side effect of a fix.
 Header rules only take effect on deploy. After deploying:
 
 ```bash
-for p in profile seller wallet service-worker.js sokoni-ui.js; do
-  printf "%-22s %s\n" "$p" \
-    "$(curl -sI https://mysokoni.co.ke/$p | grep -i '^cache-control' | tr -d '\r')"
+for p in "" profile seller wallet service-worker.js sokoni-ui.js \
+         "profile/SOME_REAL_UID" "shop/SOME_REAL_HANDLE"; do
+  printf "%-28s %s\n" "/$p" \
+    "$(curl -sI "https://mysokoni.co.ke/$p" | grep -i '^cache-control' | tr -d '\r')"
 done
 ```
 
-Expected: `profile` and `seller` → `no-store, private`; `wallet` → `no-store, private`;
-`service-worker.js` → `no-cache, no-store, must-revalidate`; `sokoni-ui.js` →
-`public, max-age=3600, must-revalidate`.
+Expected:
+
+| path | expected |
+|---|---|
+| `/` | `no-cache, must-revalidate` |
+| `/profile`, `/seller`, `/wallet` | `no-store, private` |
+| `/service-worker.js` | `no-cache, no-store, must-revalidate` ← the regression check |
+| `/sokoni-ui.js` | `public, max-age=3600, must-revalidate` |
+| `/profile/{uid}`, `/shop/{handle}` | `public, max-age=300, …` |
 
 Note that hosting deploys the **working tree**, not `HEAD` — see
 [[DEPLOYMENT]] and the clean-worktree rule before deploying.
 
 ---
 
-Related: [[DEPLOYMENT]] · [[ARCHITECTURE]] · [[SECURITY]] · [[CHANGELOG]]
+Related: [[PUBLIC_PAGE_PRERENDER]] · [[DEPLOYMENT]] · [[ARCHITECTURE]] · [[SECURITY]] · [[CHANGELOG]]

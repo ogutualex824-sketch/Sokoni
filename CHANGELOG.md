@@ -1,3 +1,87 @@
+## [2026-07-25] — feat(share): per-entity link previews for profiles and shops; caching policy corrected
+
+Closes the two follow-ups left open by the profile-share fix earlier today.
+
+### 1. Link previews are now per-member and per-shop
+
+Preview crawlers do not run JavaScript, so a client-rendered page can only ever show
+one generic card for every entity. Every shop shared on WhatsApp previewed as "Shop on
+SOKONI" with the SOKONI logo — for sellers who distribute their storefront almost
+entirely through WhatsApp, that card *is* the shopfront.
+
+- `/profile/{uid}` is now rendered **server-side** by `profileGetPublicProfile`. Title,
+  description and `og:image` come from the member. No client JS at all, works with JS
+  disabled, and one round trip instead of two. Replaces `public-profile.html`, deleted
+  here — the client page could not have solved the preview problem.
+- `/shop/{handle}` and `/@{handle}` are served by a new `minishopPage`, which fetches
+  the same `minishop.html` Hosting serves, swaps the `<head>` metadata, and returns it.
+  The storefront still renders client-side from `sokoni-minishop.js` — the markup is
+  **not** duplicated into the functions bundle, because a second copy would drift from
+  the file the UI is built from. Template is held in module memory for 5 minutes; the
+  TTL is what stops a warm instance serving the previous deploy's markup forever.
+- New `functions/html-render.js` — shared escaping, URL guards, meta building and
+  template cache. New `functions/profile-page.js` splits markup from data so it can be
+  tested without Firestore.
+
+Fail-open for the shop page, in three stages: shop read fails → generic metadata;
+template fetch fails with a stale copy in memory → stale copy; no template at all →
+302 to `/minishop?handle=…`, which `sokoni-minishop.js` already supports. No page is
+the only unacceptable outcome.
+
+### 2. Caching policy — `no-cache` rather than `no-store`
+
+The earlier fix set the document default to `no-store`, which was correct for
+freshness but removed edge caching from public pages that had been served with
+`max-age=3600`. Default is now `no-cache, must-revalidate`: still always fresh, but
+the response is **stored**, so an unchanged page costs a `304` instead of a full
+transfer — which matters on the mobile networks these pages are actually read on.
+
+Safe only because of a structural property, now written down: every SOKONI page is a
+user-agnostic shell, with member data fetched client-side through authenticated CFs.
+Pages touching auth or payment state remain explicitly `no-store, private`. A page that
+ever renders user data at the origin must be added to that block in the same commit.
+
+`/profile/**`, `/shop/**` and `/@**` get `public, max-age=300, s-maxage=600,
+stale-while-revalidate=86400`, set **identically** in the function and in
+`firebase.json` so nothing depends on which layer wins. This is what keeps a link
+forwarded to a large WhatsApp group from becoming a burst of Firestore reads.
+
+### Security
+
+These functions write other people's display names, bios and shop names into markup —
+the exact shape of a stored XSS. Every interpolation goes through `esc` / `attr` /
+`httpsUrl`. `scripts/test-public-pages.js` (57 assertions, all passing) covers it; the
+strongest enumerates every tag the renderer emitted and requires the set to be exactly
+the tags the page owns, so any element a payload opens is caught. Verified against the
+real `minishop.html`: metadata replaced cleanly, all 6 scripts and the stylesheet
+preserved, exactly one `<title>`.
+
+### Performance
+
+Both functions run `minInstances: 1` — they *are* the pages, and a cold start is a
+blank screen on a tapped link, not a slow API call. **Deployment risk:** reserved
+instances consume Cloud Run CPU quota, which this project has hit before. If deploy
+fails on quota, drop to `minInstances: 0` to ship and expect cold starts until quota
+is available.
+
+Invocations are roughly neutral for the shop page (previously static file + client XHR;
+now one function response + the same XHR) and strictly cheaper for profiles.
+
+### Deployment
+
+Rewrites reference functions by name, so **functions must deploy before hosting**:
+
+```
+firebase deploy --only functions:profileGetPublicProfile,functions:minishopPage
+firebase deploy --only hosting
+```
+
+Both need `allUsers` run.invoker or they 403 at Cloud Run — for these two that is the
+page failing to load, not a degraded feature. Verification commands:
+[[PUBLIC_PAGE_PRERENDER]]
+
+Related: [[PUBLIC_PAGE_PRERENDER]] · [[HOSTING_HEADERS]] · [[MiniShop]]
+
 ## [2026-07-25] — fix(profile): shared profile links 404'd and fell back to the private dashboard
 
 Reported as a suspected session leak: a profile link shared to WhatsApp produced a

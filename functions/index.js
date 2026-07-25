@@ -9764,6 +9764,10 @@ exports.getIncidentTimeline    = secIncident.getIncidentTimeline;
 /* ── MiniShop & Social Commerce Engine v1.0 ─────────────────────────────── */
 const minishop = require('./minishop');
 exports.getMinishopPublic          = minishop.getMinishopPublic;
+/* Prerenders /shop/{handle} and /@{handle} so each shop gets its own link
+   preview. See functions/minishop-page.js — the storefront itself is still
+   rendered client-side from the same static template. */
+exports.minishopPage               = require('./minishop-page').minishopPage;
 exports.claimMinishopHandle        = minishop.claimMinishopHandle;
 exports.saveMinishopConfig         = minishop.saveMinishopConfig;
 exports.trackMinishopView          = minishop.trackMinishopView;
