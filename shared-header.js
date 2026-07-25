@@ -701,12 +701,19 @@
     /* ── Autocomplete dropdown ── */
     #sk-nav-search-dropdown {
       position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-      background: rgba(14,14,14,0.98);
+      /* Opaque fill and NO backdrop-filter — deliberately. The header is a
+         promoted compositing layer (will-change: transform), and the hero card
+         has its own backdrop-filter. On iOS Safari a backdrop-filter element
+         inside a promoted layer can be composited BEHIND another page element
+         that also uses backdrop-filter — which is exactly the "search dropdown
+         hides behind the hero" report. A solid panel samples nothing across that
+         layer boundary, so it reads above the hero on every engine; the blur was
+         invisible anyway behind a near-opaque fill. */
+      background: #0e0e0e;
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 16px; overflow: hidden;
       box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-      z-index: 700; display: none;
-      backdrop-filter: blur(20px);
+      z-index: 100002; display: none;
     }
     #sk-nav-search-dropdown.open { display: block; }
     .sk-ac-item {
