@@ -1,3 +1,29 @@
+## [2026-07-25] — fix(kass): the concierge closed itself on every send
+
+Typing a message and tapping **send** dismissed the whole KASS widget; you had to
+reopen it to see the reply. Reported as "it sends and closes the chat bot."
+
+Root cause was a DOM-detachment race in the outside-click handler, not the send
+logic. Sending calls `_setSending(true)`, which swaps the send button's icon via
+`_sendBtn.innerHTML = _SPIN_SVG`. The icon element the user tapped is the click's
+`e.target`; the innerHTML swap **detaches it** before the same click finishes
+bubbling to the document-level backdrop handler. That handler closed the widget
+whenever `!_modal.contains(e.target)` — and a detached node is contained by
+nothing, so a tap inside the composer was mis-classified as a click on the
+backdrop.
+
+Only the pointer/click path tripped it; pressing Enter (keydown, no bubbling
+click) was fine — which is why it looked intermittent and hit mobile hardest.
+
+Fix: decide inside-vs-outside on **pointerdown**, when the icon is still in the
+tree, and require the gesture to both start and end outside before closing. The
+send button starts the gesture inside the modal, so it can no longer self-close.
+No change to send, auth, or close semantics otherwise.
+
+**Files:** `kass-widget.js` (one handler). Shared script, so the fix reaches every
+page that embeds the widget. **Not** the full-page `chat.html`, which is a
+different surface. **Database/API/Breaking:** none.
+
 ## [2026-07-25] — fix(wallet): top-up called IntaSend's checkout endpoint, so no STK was ever pushed
 
 Subscriptions sent the M-Pesa PIN prompt; wallet top-ups did not. End-to-end
