@@ -12,7 +12,7 @@
 
 const https = require('https');
 
-const APP_ID   = process.env.ALGOLIA_APP_ID   || 'FF2WSTR4YC';
+const APP_ID   = process.env.ALGOLIA_APP_ID   || 'F2XND3V1FW';
 const ADMIN    = process.env.ALGOLIA_ADMIN_KEY;
 if (!ADMIN) {
   console.error('ERROR: ALGOLIA_ADMIN_KEY environment variable is required — no fallback allowed.');

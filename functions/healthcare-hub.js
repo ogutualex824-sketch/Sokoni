@@ -206,13 +206,20 @@ exports.bookAppointment = onCall(CF_OPTS, exports._h.bookAppointment = async (re
 exports.getMyAppointments = onCall(CF_OPTS, exports._h.getMyAppointments = async (req) => {
   const uid = requireAuth(req);
   const { status, limit = 20 } = req.data;
-  let q = db().collection('healthAppointments')
+  /* status is filtered in memory, not in the query. Chaining .where('status')
+     after .orderBy('dateTime') would require a 3-field composite index
+     (patientUid + status + dateTime); the base query already needs a 2-field
+     one (patientUid + dateTime), which is what we provision. Filtering the
+     handful of rows the limit returns is cheaper than a second index, and
+     matches getProviderAppointments, which already filters in memory. */
+  const q = db().collection('healthAppointments')
     .where('patientUid', '==', uid)
     .orderBy('dateTime', 'desc')
     .limit(Math.min(50, parseInt(limit) || 20));
-  if (status) q = q.where('status', '==', status);
   const snap = await q.get();
-  return { appointments: snap.docs.map(d => d.data()) };
+  let appts = snap.docs.map(d => d.data());
+  if (status) appts = appts.filter(a => a.status === status);
+  return { appointments: appts };
 });
 
 /* â”€â”€ 7. getProviderAppointments â”€â”€ */
