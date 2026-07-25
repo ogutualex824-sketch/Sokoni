@@ -169,15 +169,24 @@ exports.initiateWalletTopUp = onCall(
         process.env.FUNCTIONS_EMULATOR === 'true'  /* test mode only under the emulator */
       );
 
-      const response = await client.collection().charge({
-        first_name: 'SOKONI',
-        last_name: 'Wallet',
-        email: 'wallet@mysokoni.co.ke',
-        host: 'https://mysokoni.co.ke',
-        amount: amt,
-        currency: 'KES',
-        api_ref: txId,
+      /* Use mpesaStkPush (→ /api/v1/payment/mpesa-stk-push/), the endpoint that
+         actually pushes the M-Pesa PIN prompt to the phone — the same one the
+         working subscription flow hits via initiateSTKPush.
+
+         The previous call, collection().charge(), posts to /api/v1/checkout/
+         (see node_modules/intasend-node/dist/collection.js): it mints a hosted-
+         checkout invoice AND blanks the secret key, so it returns 200 with an
+         invoice but never sends an STK. That is the exact divergence — the call
+         "succeeded" server-side while no prompt reached the phone. method and
+         currency are injected by the SDK; the checkout-only name/email/host
+         fields are not part of the STK push. Response still carries
+         invoice.invoice_id, so the invoiceId capture and the confirm/webhook/
+         sweep paths below are unchanged. */
+      const response = await client.collection().mpesaStkPush({
+        amount:       amt,
         phone_number: normalizedPhone,
+        api_ref:      txId,
+        narrative:    'SOKONI wallet top-up',
       });
 
       invoiceId = response?.invoice?.invoice_id ?? response?.id ?? null;

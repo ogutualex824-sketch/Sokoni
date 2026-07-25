@@ -1,3 +1,48 @@
+## [2026-07-25] — fix(wallet): top-up called IntaSend's checkout endpoint, so no STK was ever pushed
+
+Subscriptions sent the M-Pesa PIN prompt; wallet top-ups did not. End-to-end
+comparison against the known-good subscription flow (`initiateSTKPush`) found the
+divergence in the IntaSend transport, not in auth, App Check, or the constructor
+(all already correct/identical).
+
+**Root cause (backend).** `initiateWalletTopUp` called `client.collection().charge()`.
+Per the vendored SDK (`node_modules/intasend-node/dist/collection.js`):
+
+```js
+charge(payload)       -> this.secret_key = ''; send(payload, '/api/v1/checkout/')
+mpesaStkPush(payload) -> method='M-PESA'; currency='KES'; send(payload, '/api/v1/payment/mpesa-stk-push/')
+```
+
+`charge()` posts to `/api/v1/checkout/` — it mints a hosted-checkout invoice and
+**blanks the secret key** — so the call returned HTTP 200 with an invoice while
+**never pushing an STK to the phone**. The subscription flow hits
+`/api/v1/payment/mpesa-stk-push/`, which is what actually prompts. Switched the
+wallet to `collection().mpesaStkPush()` with the STK payload (`amount`,
+`phone_number`, `api_ref`, `narrative`; `method`/`currency` injected by the SDK).
+Response still carries `invoice.invoice_id`, so `invoiceId` capture and the
+confirm-poll / webhook / sweep paths are unchanged.
+
+**Secondary (frontend).** `sokoni-wallet-v2.js` (the `W2` object behind
+`wallet.html`) polled `confirmWalletTopUp` for `status === 'confirmed'`, but the
+function returns `'completed'` (matching the webhook, sweep, and ledger). The
+string never matched, so even a paid top-up polled until timeout instead of
+showing success. Changed the client check to `'completed'`.
+
+**Preserved, not touched:** the transactional ledger, the idempotent webhook
+finalizer (`_finalizeWalletTopUp`), `confirmWalletTopUp`, `sweepStaleWalletTopUps`,
+and App Check enforcement on the callable (`initiateWalletTopUp` keeps
+`enforceAppCheck: true` — it is stricter than `initiateSTKPush` and is not
+implicated here: the handler executed and returned an invoice, which it could not
+have done had App Check blocked it).
+
+- **Files:** `functions/wallet.js` (STK method), `sokoni-wallet-v2.js` (status string)
+- **DB / API / webhook / idempotency:** unchanged
+- **Security:** unchanged (App Check retained)
+- **Breaking:** none
+- **Deploy:** redeploy `initiateWalletTopUp`; ship `sokoni-wallet-v2.js` to hosting.
+
+---
+
 ## [2026-07-24] — feat(wallet): IntaSend webhook now finalizes wallet top-ups (seconds, not up to 30 min)
 
 Wallet top-ups had **three** ways to reach `completed`, and the fastest one wasn't

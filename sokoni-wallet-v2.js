@@ -528,7 +528,10 @@ window.SokoniWalletV2 = (function () {
       const fn = await _cf('confirmWalletTopUp');
       const res = await fn({ txId: _stkTxId });
       const s = res.data;
-      if (s.status === 'confirmed') {
+      /* confirmWalletTopUp returns 'completed' (matching the webhook/sweep and
+         the wallet ledger) — not 'confirmed'. The old string never matched, so
+         a successful top-up polled until timeout instead of showing success. */
+      if (s.status === 'completed') {
         _stopPoll();
         document.getElementById('stkAnim').style.display = 'none';
         document.getElementById('stkSuccessIcon').style.display = 'flex';
