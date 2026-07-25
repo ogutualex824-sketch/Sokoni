@@ -145,6 +145,42 @@ t+5.8  processAlgoliaQueue          processed partial       (who)
 
 ---
 
+## Production incident — search returned zero results (2026-07-24)
+
+**Reported:** "search has stopped working again." **Reproduced, diagnosed,
+fixed, verified — 4/5 runs now render correct results.**
+
+Three layered bugs, each masking the next. Peeled one at a time with runtime
+evidence; every fix exposed the layer beneath it.
+
+| # | Bug | Evidence | Fix |
+|---|---|---|---|
+| 1 | Cold-start budget skip | Browser got a valid key (200) but **never issued an Algolia query**; init lost the 1.5s query-budget race, threw, and `eng.search()` was never reached | `search.html` — init on its own 6s budget; a slow init no longer aborts the query |
+| 2 | Invalid `responseFields` | Once queries fired they returned **HTTP 400 "Unknown response field `queryID`"** — `queryID`/`abTestID`/`abTestVariantID` are not valid `responseFields`; Algolia rejects the whole query | `sokoni-search-engine.js:66` — removed the three invalid fields |
+| 3 | Firestore fallback blocked | `firestore.googleapis.com` 403 (App Check) — so when Algolia failed, nothing caught the ball | Not fixed here; owned by concurrent App Check work. Made moot by fixing the Algolia path |
+
+**Verification (production, post-fix):** 5 fresh-context runs of `?q=vape` →
+4 rendered 4 cards (the exact count the index holds); 1 cold first-hit rendered
+0 despite receiving the 4 hits, with a `404` on a wildcard `*` index.
+
+**Residual — ⚠️ open:** the coldest first query still misses ~1/5, with a
+`404` on index `*` (a malformed/wildcard index query that only fires before the
+config fully resolves on a cold load). Smaller and separate from the outage;
+needs its own fix. **Do not call search 100% until this is characterised.**
+
+**Probe-validity corrections made mid-investigation** (all recorded in *Revised
+findings*): read `sokoni_global` from a comment (real index `global_search`);
+filtered `algolia.net` and missed `algolianet.com`; assumed localhost would
+reproduce production's key fetch (it does not — localhost fails the key call, so
+it could not validate the fix). Four target-of-observation errors in one
+investigation; each caught by re-checking against the actual wire.
+
+**Ownership note:** both fixes are in files the concurrent process is actively
+rewriting (uncommitted). They are **live** (deployed from the working tree) but
+**not committed by me** — committing would take ownership of the other agent's
+in-flight work. Durability risk: if that agent checks out these files, the fix
+is lost and search breaks again. Flagged to the user.
+
 ## 🔴 Built but broken
 
 | Item | Evidence | Method | Last verified |
