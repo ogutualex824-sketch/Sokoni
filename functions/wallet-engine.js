@@ -320,18 +320,23 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
 /**
  * Transfer funds from caller to another SOKONI user identified by phone number.
  *
- * @param {{ phone: string, amount: number, note?: string }} data
+ * @param {{ phone?: string, toUid?: string, amount: number, note?: string }} data
+ *        Identify the recipient by `phone` (normal send) OR `toUid` (QR scan-to-pay,
+ *        which lets phone-less users receive). `toUid` takes precedence.
  * @returns {{ success: boolean, recipientName?: string, newBalance?: number, txId?: string, error?: string }}
  */
 exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
   const senderUid = _requireAuth(request);
   const db        = _db();
 
-  const { phone, amount, note } = request.data || {};
+  const { phone, toUid, amount, note } = request.data || {};
 
   // ── Validation ──────────────────────────────────────────────────────────────
-  const normalizedPhone = _normalizePhone(phone);
-  if (!normalizedPhone) {
+  /* Recipient may be identified by phone (normal send) or by uid (QR scan-to-pay,
+     which lets phone-less users receive). toUid takes precedence when supplied. */
+  const wantsUid        = typeof toUid === 'string' && toUid.trim().length > 0;
+  const normalizedPhone = wantsUid ? null : _normalizePhone(phone);
+  if (!wantsUid && !normalizedPhone) {
     throw new HttpsError('invalid-argument', 'Invalid Kenyan phone number');
   }
   const safeAmount = Number(amount);
@@ -343,8 +348,14 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
   try {
     await _assertNotFrozen(db, senderUid);
 
-    // ── Recipient lookup (tolerant of phone/phoneNumber + "+254…"/"254…") ──────
-    const recipientDoc = await _findUserByPhone(db, normalizedPhone);
+    // ── Recipient lookup: by uid (QR) or by phone (tolerant of stored formats) ──
+    let recipientDoc;
+    if (wantsUid) {
+      const snap = await db.collection('users').doc(toUid.trim()).get();
+      recipientDoc = snap.exists ? snap : null;
+    } else {
+      recipientDoc = await _findUserByPhone(db, normalizedPhone);
+    }
     if (!recipientDoc) {
       return { success: false, error: 'USER_NOT_FOUND' };
     }

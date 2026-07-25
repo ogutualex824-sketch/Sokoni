@@ -39,6 +39,7 @@ window.SokoniWalletV2 = (function () {
   /* ─── CONSTANTS ─── */
   const CF_REGION        = 'us-central1';
   const POLL_INTERVAL_MS = 3000;
+  const MIN_SEND         = 10;        // KES — matches backend MIN_SEND (P2P minimum)
   const MAX_POLL_SECS    = 90;
   const PHONE_RE         = /^(?:254|\+254|0)[17]\d{8}$/;
   const TX_PAGE_SIZE     = 25;
@@ -1300,9 +1301,147 @@ window.SokoniWalletV2 = (function () {
     a.click();
   }
 
-  function qrScan() {
-    toast('Point camera at a SOKONI QR code to pay', 'default', 4000);
-    /* Camera scanning requires getUserMedia + QR decode library — see WALLET_V2_ARCHITECTURE.md */
+  /* ─── SCAN TO PAY ───
+     Lets a payer send to a recipient by scanning their "Pay Me" QR — the key path
+     for phone-less users, who have no phone to be found by but always have a uid.
+     Camera decode uses the native BarcodeDetector (Android Chrome); every other
+     device (incl. iPhone Safari, which lacks BarcodeDetector) uses the paste box.
+     Payment goes through walletV2Send({ toUid }), reusing all its guards. */
+  let _scanStream  = null;
+  let _scanTimer   = null;
+  let _scanPayload = null;   // { uid, amount|null }
+
+  function qrCopyCode() {
+    const code = _qrData?.qrPayload;
+    if (!code) return toast('Generate your QR first', 'error');
+    try {
+      navigator.clipboard.writeText(code);
+      toast('Pay code copied — share it so anyone can pay you', 'success');
+    } catch (_) {
+      toast('Could not copy. Long-press to copy your QR image instead.', 'error');
+    }
+  }
+
+  async function qrScan() {
+    _scanPayload = null;
+    const paste = document.getElementById('scanPaste'); if (paste) paste.value = '';
+    const amtG = document.getElementById('scanAmtGroup'); if (amtG) amtG.style.display = 'none';
+    const amtI = document.getElementById('scanAmt'); if (amtI) amtI.value = '';
+    _setText('scanStatus', 'Point your camera at a SOKONI Pay QR');
+    openOverlay('ovlScan');
+    _startScanCamera();
+  }
+
+  async function _startScanCamera() {
+    const wrap  = document.getElementById('scanCamWrap');
+    const video = document.getElementById('scanVideo');
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+      _setText('scanStatus', 'Live scan isn\'t supported on this device — paste the pay code below.');
+      return;
+    }
+    let detector;
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats?.();
+      if (formats && !formats.includes('qr_code')) {
+        _setText('scanStatus', 'QR scan unsupported here — paste the code below.'); return;
+      }
+      detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    } catch (_) {
+      _setText('scanStatus', 'QR scan unavailable — paste the code below.'); return;
+    }
+    try {
+      _scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch (_) {
+      _setText('scanStatus', 'Camera blocked — allow access or paste the pay code below.'); return;
+    }
+    if (wrap) wrap.style.display = 'block';
+    video.srcObject = _scanStream;
+    try { await video.play(); } catch (_) {}
+    const tick = async () => {
+      if (!_scanStream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes && codes.length) { _onScanDecoded(codes[0].rawValue); return; }
+      } catch (_) {}
+      _scanTimer = setTimeout(tick, 350);
+    };
+    _scanTimer = setTimeout(tick, 400);
+  }
+
+  function _stopScanCamera() {
+    if (_scanTimer) { clearTimeout(_scanTimer); _scanTimer = null; }
+    if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+    const wrap  = document.getElementById('scanCamWrap'); if (wrap) wrap.style.display = 'none';
+    const video = document.getElementById('scanVideo'); if (video) video.srcObject = null;
+  }
+
+  function _parsePayCode(raw) {
+    if (!raw) return null;
+    try {
+      const o = JSON.parse(String(raw).trim());
+      if (o && o.uid) {
+        return { uid: String(o.uid), amount: o.amount != null ? Number(o.amount) : null };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function _acceptScan(parsed) {
+    _scanPayload = parsed;
+    const amtG = document.getElementById('scanAmtGroup');
+    if (parsed.amount && parsed.amount >= MIN_SEND) {
+      if (amtG) amtG.style.display = 'none';
+      _setText('scanStatus', 'Ready to pay KSh ' + _fmt(parsed.amount));
+    } else {
+      if (amtG) amtG.style.display = 'block';
+      _setText('scanStatus', 'Pay code recognised — enter an amount to send.');
+    }
+  }
+
+  function _onScanDecoded(raw) {
+    _stopScanCamera();
+    const parsed = _parsePayCode(raw);
+    if (!parsed) { _setText('scanStatus', 'That QR isn\'t a SOKONI pay code.'); return; }
+    _acceptScan(parsed);
+  }
+
+  function qrScanClose() {
+    _stopScanCamera();
+    closeOverlay('ovlScan');
+  }
+
+  async function qrScanPay() {
+    if (!_scanPayload) {
+      const parsed = _parsePayCode(document.getElementById('scanPaste')?.value);
+      if (!parsed) return toast('Scan or paste a valid SOKONI pay code first', 'error');
+      _acceptScan(parsed);
+    }
+    if (!_scanPayload) return;
+    let amount = _scanPayload.amount;
+    if (!amount || amount < MIN_SEND) amount = Number(document.getElementById('scanAmt')?.value);
+    if (!amount || amount < MIN_SEND) return toast('Enter an amount (min KSh ' + MIN_SEND + ')', 'error');
+    if (_frozen) return toast('Wallet is frozen. Unfreeze in Security settings.', 'error');
+    if (_dashboard && amount > (_dashboard.balance || 0)) return toast('Insufficient balance', 'error');
+
+    const btn = document.getElementById('scanPayBtn');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await _callTimed('walletV2Send', { toUid: _scanPayload.uid, amount, note: 'QR payment' });
+      const d = res.data;
+      if (d.success) {
+        if (_dashboard) _dashboard.balance = d.newBalance;
+        _setText('balVal', _fmt(d.newBalance));
+        toast('Sent KSh ' + _fmt(amount) + ' to ' + (d.recipientName || 'recipient'), 'success');
+        qrScanClose();
+        loadDashboard();
+      } else {
+        toast(d.error === 'USER_NOT_FOUND' ? 'Recipient not found on SOKONI' : 'Payment failed', 'error');
+        if (btn) btn.disabled = false;
+      }
+    } catch (e) {
+      toast(e.message || 'Payment failed. Try again.', 'error');
+      if (btn) btn.disabled = false;
+    }
   }
 
   /* ─── MERCHANT WALLET ─── */
@@ -1388,6 +1527,7 @@ window.SokoniWalletV2 = (function () {
     openPinSetup, pinKey, pinKeyDel,
     /* QR */
     qrTabSwitch, qrUpdateAmount, qrGenerate, qrShare, qrDownload, qrScan,
+    qrCopyCode, qrScanClose, qrScanPay,
     /* Merchant */
     openMerchantWallet,
     /* Split */

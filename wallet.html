@@ -1186,6 +1186,9 @@ body{
         <button class="btn btn-secondary btn-sm" onclick="W2.qrDownload()">
           <i class="fas fa-download"></i> Save
         </button>
+        <button class="btn btn-secondary btn-sm" onclick="W2.qrCopyCode()">
+          <i class="fas fa-copy"></i> Copy code
+        </button>
         <button class="btn btn-primary btn-sm" onclick="W2.qrScan()">
           <i class="fas fa-camera"></i> Scan
         </button>
@@ -1445,6 +1448,39 @@ body{
       </div>
       <button class="btn btn-primary" id="wdrSubmitBtn" onclick="W2.requestPayout()">
         🏧 Request Payout
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCAN TO PAY ── -->
+<div class="overlay" id="ovlScan">
+  <div class="ovl-backdrop" onclick="W2.qrScanClose()"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Scan to Pay</h3>
+      <button class="ovl-close" onclick="W2.qrScanClose()"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <div id="scanCamWrap" style="position:relative;border-radius:var(--radius-s);overflow:hidden;background:#000;aspect-ratio:1/1;display:none;margin-bottom:12px">
+        <video id="scanVideo" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+        <div style="position:absolute;inset:14%;border:2px solid var(--g);border-radius:16px;pointer-events:none"></div>
+      </div>
+      <p id="scanStatus" style="font-size:13px;color:var(--sub);text-align:center;margin-bottom:14px">Point your camera at a SOKONI Pay QR</p>
+
+      <div class="form-group">
+        <label class="form-label">Or paste a SOKONI pay code</label>
+        <textarea class="form-input" id="scanPaste" rows="2" placeholder="Paste the pay code here" style="resize:none"></textarea>
+      </div>
+
+      <div class="form-group" id="scanAmtGroup" style="display:none">
+        <label class="form-label">Amount to send (KSh)</label>
+        <input type="number" class="form-input" id="scanAmt" inputmode="numeric" placeholder="Min KSh 10" min="10">
+      </div>
+
+      <button class="btn btn-primary" id="scanPayBtn" onclick="W2.qrScanPay()">
+        💸 Pay
       </button>
     </div>
   </div>
