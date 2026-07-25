@@ -689,17 +689,37 @@
     }
     #sk-nav-search {
       width: 100%; padding: 10px 16px 10px 40px;
+      /* box-sizing: without it, width:100% + 56px horizontal padding makes the
+         input's border-box 56px WIDER than #sk-nav-search-wrap on any page that
+         lacks a global box-sizing reset, so its right edge (and the tail of the
+         placeholder) overruns and is clipped. border-box folds the padding into
+         the 100%, so the field is exactly as wide as its wrapper. */
+      box-sizing: border-box;
+      /* appearance: none removes the iOS Safari native searchfield styling.
+         type=search on iOS renders its own constrained text box (and a cancel
+         decoration) that clips the placeholder and collides with autofill — the
+         reported symptom. Resetting appearance makes it a plain text field that
+         fills the width. Pseudo-element resets below drop the native buttons. */
+      -webkit-appearance: none; appearance: none;
       background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
       border-radius: 28px; color: rgba(255,255,255,0.92); font-size: 14px;
       font-family: 'Segoe UI', system-ui, sans-serif; outline: none;
       transition: border-color .2s, background .2s, box-shadow .2s;
     }
+    #sk-nav-search::-webkit-search-decoration,
+    #sk-nav-search::-webkit-search-cancel-button,
+    #sk-nav-search::-webkit-search-results-button,
+    #sk-nav-search::-webkit-search-results-decoration { -webkit-appearance: none; display: none; }
     #sk-nav-search:focus {
       border-color: rgba(113,255,0,0.45);
       background: rgba(255,255,255,0.1);
       box-shadow: 0 0 0 3px rgba(113,255,0,0.08), 0 4px 20px rgba(0,0,0,0.3);
     }
-    #sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 14px; }
+    #sk-nav-search::placeholder {
+      color: rgba(255,255,255,0.32); font-size: 14px;
+      /* Show the full placeholder instead of Safari's default clip-to-fit. */
+      text-overflow: ellipsis; overflow: hidden;
+    }
     #sk-nav-search-icon {
       position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
       font-size: 15px; pointer-events: none; opacity: .45;
@@ -1188,7 +1208,8 @@
         ? '<div id="sk-nav-search-wrap" role="search">' +
             '<span id="sk-nav-search-icon" aria-hidden="true">🔍</span>' +
             '<input id="sk-nav-search" type="search" placeholder="Search products, services…" ' +
-              'autocomplete="off" aria-label="Search SOKONI" ' +
+              'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" ' +
+              'enterkeyhint="search" aria-label="Search SOKONI" ' +
               'onkeydown="if(event.key===\'Enter\'&&this.value.trim()){' +
                 'document.getElementById(\'sk-nav-search-dropdown\').classList.remove(\'open\');' +
                 'location.href=\'search.html?q=\'+encodeURIComponent(this.value.trim())}">' +

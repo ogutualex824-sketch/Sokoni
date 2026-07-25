@@ -183,7 +183,8 @@
     <div id="sk-nav-search-wrap" role="search">
       <span id="sk-nav-search-icon" aria-hidden="true">🔍</span>
       <input id="sk-nav-search" type="search" placeholder="Search products, services…"
-             autocomplete="off" aria-label="Search SOKONI"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             enterkeyhint="search" aria-label="Search SOKONI"
              onkeydown="if(event.key==='Enter'&&this.value.trim()){document.getElementById('sk-nav-search-dropdown').classList.remove('open');location.href='search.html?q='+encodeURIComponent(this.value.trim())}">
       <div id="sk-nav-search-dropdown" role="listbox" aria-label="Search suggestions"></div>
     </div>
