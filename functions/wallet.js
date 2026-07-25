@@ -52,6 +52,52 @@ function _normalizePhone(raw) {
   return `254${match[1]}`;
 }
 
+/**
+ * Query IntaSend for an invoice's payment state via the authenticated status
+ * endpoint.
+ *
+ * WHY THIS EXISTS: the intasend-node SDK's collection().status() sets
+ * `this.secret_key = ''` (it targets the publishable-key checkout flow), and our
+ * client is built with an empty publishable key — so the request went out with
+ * NO Authorization header and IntaSend answered HTTP 401. That is why both
+ * confirmWalletTopUp (the client poll) and sweepStaleWalletTopUps could never
+ * observe a COMPLETE: a genuinely-paid top-up (money debited, IntaSend state
+ * COMPLETE) stayed 'pending' in the wallet forever. Verified live: POST
+ * /api/v1/payment/status/ with `Authorization: Bearer <secret>` returns the
+ * invoice; the same raw Bearer transport the STK push already uses.
+ *
+ * Returns the UPPER-CASED state ('COMPLETE' | 'FAILED' | 'PENDING' | …) or null.
+ */
+function _intasendInvoiceState(invoiceId) {
+  const https = require('https');
+  const payload = JSON.stringify({ invoice_id: invoiceId });
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'payment.intasend.com',
+      path: '/api/v1/payment/status/',
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${INTASEND_KEY.value()}`,
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (r) => {
+      let body = '';
+      r.on('data', (c) => { body += c; });
+      r.on('end', () => {
+        try {
+          const j = JSON.parse(body);
+          const state = (j && j.invoice && j.invoice.state) || (j && j.state) || null;
+          resolve(state ? String(state).toUpperCase() : null);
+        } catch (_) { resolve(null); }
+      });
+    });
+    req.on('error', reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
 /** Ensure a wallet document exists; returns the doc reference. */
 async function _ensureWallet(db, uid) {
   const ref = db.collection('wallets').doc(uid);
@@ -248,24 +294,12 @@ exports.confirmWalletTopUp = onCall(
     // Poll IntaSend for payment status
     let invoiceStatus = null;
     try {
-      const IntaSend = require('intasend-node');
-      /* intasend-node takes THREE POSITIONAL args:
-             IntaSend(publishable_key, secret_key, test_mode)
-         This was called as IntaSend(key, { testMode }) — so the secret landed in
-         the publishable slot and an OBJECT became secret_key. The client sends
-         `Authorization: Bearer ${secret_key}`, i.e. "Bearer [object Object]",
-         and IntaSend answered HTTP 500 on every STK push. test_mode was also
-         left undefined. Matches the working call in payment-orchestrator.js. */
-      const client = new IntaSend(
-        '',                                        /* publishable key — unused for collection */
-        INTASEND_KEY.value(),                      /* secret key */
-        process.env.FUNCTIONS_EMULATOR === 'true'  /* test mode only under the emulator */
-      );
-
-      const result = await client.collection().status(tx.invoiceId);
-      invoiceStatus = result?.invoice?.state ?? result?.state ?? null;
+      /* Authenticated status check. The SDK's collection().status() blanks the
+         secret key and 401s (see _intasendInvoiceState); this hits the raw
+         Bearer endpoint so the poll can actually observe COMPLETE. */
+      invoiceStatus = await _intasendInvoiceState(tx.invoiceId);
     } catch (err) {
-      console.error('[wallet] IntaSend status check error:', err.message);
+      console.error('[wallet] IntaSend status check error:', err && err.message);
       throw new HttpsError('unavailable', 'Unable to verify payment status. Please try again shortly.');
     }
 
@@ -765,11 +799,7 @@ exports.sweepStaleWalletTopUps = onSchedule(
       /* Poll IntaSend if we have an invoiceId */
       if (tx.invoiceId) {
         try {
-          const IntaSend = require('intasend-node');
-          /* Positional args — see the note at the STK push call site. */
-          const client   = new IntaSend('', INTASEND_KEY.value(), process.env.FUNCTIONS_EMULATOR === 'true');
-          const result   = await client.collection().status(tx.invoiceId);
-          const state    = (result?.invoice?.state || result?.state || '').toUpperCase();
+          const state = (await _intasendInvoiceState(tx.invoiceId)) || '';
           if (state === 'COMPLETE') {
             finalStatus = 'completed';
           } else if (['FAILED', 'CANCELLED', 'EXPIRED'].includes(state)) {
@@ -777,7 +807,13 @@ exports.sweepStaleWalletTopUps = onSchedule(
           } else {
             continue; // still genuinely pending — skip
           }
-        } catch (_) { /* IntaSend unreachable — expire anyway */ }
+        } catch (_) {
+          /* IntaSend unreachable — leave it pending and retry on the next sweep.
+             NEVER expire here: the old code fell through and marked a possibly-
+             PAID top-up 'expired', losing the credit (exactly what stranded the
+             KES 10 / KNG36GW top-up). */
+          continue;
+        }
       }
 
       await db.runTransaction(async t => {
