@@ -172,6 +172,20 @@ There is no `/provider/**` hosting rewrite. `firebase.json` rewrites `/shop`,
 
 ---
 
+## Onboarded accounts
+
+Real providers listed by uid-keyed script (never fabricated; `verified:false`
+until KYC; ratings/counters start at 0). Each is idempotent — re-running updates
+the one record, never duplicates.
+
+| Provider | Owner | Category | Sign-in | Script |
+| --- | --- | --- | --- | --- |
+| Shave 'n' Trims | Pacifique | hair-beauty (Barber Shop) | phone OTP `+254742544979` | `onboard-barber.js` |
+
+Search is verified over REST after each apply — `searchableTerms array-contains`
+each expected term (e.g. shave / trims / barber / owner name) must return the
+record with `status:'active'` and `searchable:true`.
+
 ## Verification
 
 ```bash
