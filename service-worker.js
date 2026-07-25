@@ -26,7 +26,12 @@
    the SKIP_CACHE_PATTERNS fix below never reaches users whose browser already
    holds v100, and Google sign-in would stay broken for exactly the people
    already affected. */
-const CACHE_VERSION = "sokoni-20260725-app-shell-v102";
+/* v103 — bumped to force clients off cached wallet JS. Static assets (incl.
+   sokoni-wallet-v2.js) are Cache-First, so the send-money fix, payout load-race
+   + double-tap guards, emoji/close-button/logo UI, and the More page never
+   reached already-installed clients — hard-refresh can't beat Cache-First. This
+   bump invalidates the old cache so every client re-fetches current assets. */
+const CACHE_VERSION = "sokoni-20260725-app-shell-v103";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.

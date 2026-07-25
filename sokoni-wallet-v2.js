@@ -739,7 +739,7 @@ window.SokoniWalletV2 = (function () {
     if (_sb && _sb.disabled) return;   /* re-entrancy guard: block double-tap duplicate payouts */
     const amt    = Number(document.getElementById('wdrAmount')?.value);
     const method = document.getElementById('wdrMethod')?.value || 'mpesa';
-    if (!amt || amt < 100) return toast('Minimum withdrawal is KSh 100', 'error');
+    if (!amt || amt < 500) return toast('Minimum withdrawal is KSh 500', 'error');
     /* Only pre-check when the balance is actually loaded. The wallet loads the
        balance asynchronously; before it arrives _dashboard is null, and the old
        check treated that as KSh 0 and silently rejected every payout with
