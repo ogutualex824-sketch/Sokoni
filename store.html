@@ -245,12 +245,21 @@
     /* ── INFO SECTIONS (hours + policies 2-col) ── */
     .st-info-sections {
       max-width: 1100px; margin: 20px auto 0; padding: 0 24px;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      /* minmax(0,1fr), NOT 1fr: a grid item defaults to min-width:auto, which
+         refuses to shrink below its content's intrinsic width. A wide child
+         inside a card (e.g. the hours grid, or a long unbreakable string) then
+         forced this "1fr" track to ~424px on a 390px phone, pushing the card
+         past the right edge — the overflow was masked from scrollWidth by
+         overflow-x:clip on <html>, so it read as content cut off on the right
+         rather than a scrollbar. minmax(0,…) lets the track shrink to the
+         container and the content wraps. */
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px;
     }
-    @media(max-width: 768px){ .st-info-sections { grid-template-columns: 1fr; } }
+    @media(max-width: 768px){ .st-info-sections { grid-template-columns: minmax(0, 1fr); } }
     .st-info-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
       border-radius: 16px; padding: 18px 20px;
+      min-width: 0;   /* permit the grid item to shrink below content width */
     }
 
     /* ── BUSINESS HOURS ── */
