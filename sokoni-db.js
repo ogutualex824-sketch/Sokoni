@@ -596,10 +596,13 @@ const SokoniDB = {
          permission-denied / unauthenticated  → App Check rejected the read
          unavailable / deadline-exceeded       → token not ready yet, transient
 
-       A transient failure is retried once after a short delay, by which time
-       the App Check token has normally arrived. A genuine rejection is
-       reported and not retried, because retrying a denied read only hammers a
-       wall. Neither weakens App Check. */
+       ALL of these are retried once after a short delay, by which time the App
+       Check token has normally arrived or refreshed. The earlier version
+       retried only unavailable/deadline and treated permission-denied as final,
+       but App Check 403s intermittently on this project and surfaces as
+       permission-denied, so a single hiccup permanently broke the load — see the
+       error handler below and fix 5d21705. One retry, then the error state.
+       Neither weakens App Check. */
     const t0 = Date.now();
     const emit = (phase, detail) => {
       const payload = { phase, ...detail, appCheck: (typeof window !== 'undefined' && window.__sokoniAppCheckState) || 'unknown', ms: Date.now() - t0 };
@@ -643,10 +646,29 @@ const SokoniDB = {
             }));
           } catch (_) {}
 
-          const transient = /unavailable|deadline-exceeded|internal/.test(code);
+          /* permission-denied / unauthenticated are included here deliberately.
+             The original code excluded them, reasoning that a denied read is
+             genuine and retrying only "hammers a wall". That is true for a real
+             rules rejection, but App Check is ENFORCED on Firestore on this
+             project and 403s INTERMITTENTLY — an identical session can succeed,
+             then be denied, then succeed again — and a denied App Check read
+             surfaces as permission-denied. The App Check token auto-refreshes, so
+             a read that 403s now usually succeeds ~1.5s later. This is the same
+             finding that fix 5d21705 acted on for providers.html/services.html;
+             the home + category catalogue listener never got the same resilience,
+             so an App Check hiccup during a normal browse left the grid stuck —
+             "the loading sometimes breaks". One transparent retry converts most
+             of those intermittent denials into a normal load.
+
+             Bounded to a single retry (attempt < 2): if it still fails on the
+             second attempt, the token has normally arrived, so a persistent
+             failure is a genuine rejection and is left to the error state rather
+             than retried into a loop. App Check is not weakened — the client just
+             stops treating a transient 403 as permanent. */
+          const transient = /unavailable|deadline-exceeded|internal|permission-denied|unauthenticated/.test(code);
           if (transient && attempt < 2) {
-            _log.warn('[SokoniDB] retrying products listener (token likely not ready)', { attempt });
-            setTimeout(() => attach(attempt + 1), 1500 * attempt);
+            _log.warn('[SokoniDB] retrying products listener (App Check token likely not ready)', { code, attempt });
+            setTimeout(() => attach(attempt + 1), 1500);
           }
         }
       );
