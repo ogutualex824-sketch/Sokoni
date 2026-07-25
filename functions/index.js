@@ -10995,6 +10995,7 @@ exports.profileGetCompletion          = _profEng.profileGetCompletion;
 exports.profileGetAchievements        = _profEng.profileGetAchievements;
 exports.profileGetActivityTimeline    = _profEng.profileGetActivityTimeline;
 exports.profileGenerateCard           = _profEng.profileGenerateCard;
+exports.profileGetPublicProfile       = _profEng.profileGetPublicProfile;
 exports.profileGetEmployment          = _profEng.profileGetEmployment;
 exports.profileUpdatePersonalization  = _profEng.profileUpdatePersonalization;
 exports.profileGetDocumentVault       = _profEng.profileGetDocumentVault;

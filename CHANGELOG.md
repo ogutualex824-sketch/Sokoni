@@ -1,3 +1,121 @@
+## [2026-07-25] — fix(profile): shared profile links 404'd and fell back to the private dashboard
+
+Reported as a suspected session leak: a profile link shared to WhatsApp produced a
+preview that looked like the sharer's authenticated seller dashboard.
+
+### It is not a session leak — ruled out with evidence
+
+Hosting is static and auth is client-side, so a crawler that does not run JS cannot
+see member data. Fetching the page anonymously with WhatsApp's user-agent returns
+364 KB containing **zero** user data — the only matches for a sensitive-string sweep
+were 14× `KASS` (the AI concierge) and the literal placeholder `SKN-XXXXXXXX`. All
+profile data arrives via `profileGetOverview`, an authenticated onCall. No auth
+material appears in any URL. What the reporter saw was the link opened in WhatsApp's
+in-app browser on their own signed-in phone.
+
+### Root cause of the real defect
+
+`profileGetOverview` and `profileGenerateCard` both hand out
+`https://mysokoni.co.ke/profile/{uid}` as `profileUrl`, but no hosting rewrite ever
+matched `/profile/**`. Verified in production: that path returned **404**. Every
+profile link ever shared was dead.
+
+Worse, `piShareProfile()` fell back to `window.location.href` whenever the overview
+call had not resolved yet — so the shared URL became `/profile`, the owner's private
+dashboard shell, whose OG card read "SOKONI — My Profile". A dead link plus a
+first-person preview is what read as an account leak.
+
+### Changes
+
+- **New** `profileGetPublicProfile` (onRequest GET, unauthenticated) in
+  `functions/profile-engine.js`. Explicit field allowlist — never a spread of the user
+  document. Returns display name, photo, headline, location, up to 5 skills, badge
+  names, coarse trust level, member month and MiniShop link. Withholds email, phone,
+  wallet, documents, orders and the numeric trust score. Unknown uid and opted-out
+  member (`users/{uid}.profileVisibility === 'private'`) return an identical 404 so the
+  endpoint cannot be used as a uid-existence oracle. uid shape is validated before any
+  Firestore read, so a scripted scan costs a string compare rather than a billed read.
+  Shop lookup is a single-field query on `shopHandles` — no composite index consumed.
+- **New** `public-profile.html`, served at `/profile/{uid}` via a new rewrite. All
+  member-supplied text rendered through `textContent`; the two URLs that become
+  `href`/`src` are scheme-checked, blocking `javascript:`, `data:` and
+  protocol-relative values. Failure states are honest — no fabricated profile.
+- `piShareProfile()` now derives the public URL from the signed-in uid when the
+  overview has not loaded, and shares nothing if it cannot. The `location.href`
+  fallback is gone.
+- `/profile` marked `noindex` with a neutral OG card.
+
+### Security
+
+Adds one unauthenticated endpoint. Its allowlist is the entire boundary — see the
+warning comment above it. Firebase UIDs are unguessable, and the endpoint is
+enumeration-resistant by shape-validating before reading and by answering
+missing/private identically. Responses are edge-cacheable because a public profile is
+identical for every viewer.
+
+### Deployment
+
+Requires `firebase deploy --only functions:profileGetPublicProfile,hosting`. The new
+CF needs `allUsers` run.invoker or it will 403 at Cloud Run — see
+[[CALLABLE_INVOKER_GAPS]]. Verify after deploy: `/profile/{uid}` returns 200 and
+renders, and `/profile` still serves the private dashboard.
+
+Related: [[HOSTING_HEADERS]] · [[MiniShop]] · [[Authentication]]
+
+## [2026-07-25] — fix(hosting): header rules were silently overriding each other; HTML rule matched nothing
+
+Found while investigating the profile share report. Two independent faults in
+`firebase.json`, both proven against production.
+
+### 1. Rule order was inverted — last match wins
+
+Firebase Hosting applies every matching rule, and for a repeated header key the **last**
+match wins. The file was written specific-first, so generic rules were overriding the
+specific ones beneath them.
+
+Proof: `/service-worker.js` had an explicit `no-cache, no-store, must-revalidate` rule,
+but production served `public, max-age=3600, must-revalidate` — the value from the
+generic `**/*.@(js|css)` rule 100 lines below it. **The service worker was being
+browser-cached for an hour despite a rule forbidding exactly that**, the same class of
+fault as the earlier Cloudflare SW cache incident.
+
+### 2. `**/*.html` matched nothing
+
+With `cleanUrls: true`, real requests never end in `.html`, so the site-wide HTML
+no-store rule was dead. Measured before the fix:
+
+| path | status | Cache-Control served |
+|---|---|---|
+| `/profile` | 200 | `max-age=3600` (shared edge, `X-Cache: HIT`) |
+| `/seller` | 200 | `max-age=3600` |
+| `/minishop` | 200 | `max-age=3600` |
+| `/wallet` | 200 | `no-store, private` (had a hand-written extensionless twin) |
+
+Only the nine pages with hand-written extensionless twins were ever protected. Not a
+data leak — the HTML is user-agnostic — but the declared policy was not in force and
+deploys could serve stale HTML for an hour.
+
+### Changes
+
+- Header block reordered **generic → specific** so narrow rules actually win. Order is
+  now load-bearing; adding a specific rule above a generic one that sets the same key
+  is a silent no-op.
+- `**/*.html` replaced with `**` (with the asset rules below it overriding), which is
+  the only pattern that reaches extensionless page URLs.
+- Both service workers moved below `**/*.@(js|css)` — the exact pair that regressed.
+- Removed the now-duplicate generic asset rules that would have re-broken the SW rules.
+- Added `profile` and `seller` to the private-page rules with `noindex, nofollow`.
+
+### Performance
+
+Pages that were being edge-cached for an hour are now `no-store`, matching the
+project's declared intent. This trades edge caching for deploy freshness on public
+pages such as `/` and `/shop/**`. If origin load becomes a concern, the follow-up is
+`no-cache` (revalidate via ETag → 304) rather than `no-store` for public pages only —
+deliberately not bundled here, as it is a policy change rather than a fix.
+
+Full rules and the ordering contract: [[HOSTING_HEADERS]]
+
 ## [2026-07-25] — chore(auth): sweep hardcoded authDomain to the app origin across all pages
 
 Follow-up to the sign-in fix. 56 files hardcoded `authDomain: "auth.mysokoni.co.ke"`

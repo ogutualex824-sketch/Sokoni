@@ -1,0 +1,319 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- Served at /profile/{uid} via a hosting rewrite (firebase.json).
+     This is the PUBLIC face of a SOKONI member. /profile (no uid) is a
+     different file — the owner's private dashboard — and must never be
+     what a shared link resolves to.
+
+     The OG tags below are static and deliberately generic. Hosting is
+     static, so no crawler-time personalisation is possible; a per-member
+     preview would need prerendering, which is tracked as a follow-up.
+     A generic card is correct here — it is the alternative, a card that
+     LOOKS personal while actually being the sharer's own dashboard, that
+     caused this page to be written. -->
+<title>SOKONI Profile</title>
+<meta name="description" content="A verified member profile on SOKONI — Kenya's unified marketplace.">
+<meta name="theme-color" content="#050505">
+<meta property="og:type" content="profile">
+<meta property="og:site_name" content="SOKONI">
+<meta property="og:title" content="SOKONI Profile">
+<meta property="og:description" content="View this member's verified profile on SOKONI.">
+<meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/assets/logosokoni.png">
+
+<script src="/sokoni-root-guard.js"></script>
+<script src="/security.js"></script>
+<script src="/shared-header.js" data-no-header="true"></script>
+
+<style>
+  :root {
+    --pp-bg:     #050505;
+    --pp-card:   #0d0d0d;
+    --pp-line:   rgba(255,255,255,0.08);
+    --pp-text:   #f2f2f2;
+    --pp-muted:  rgba(255,255,255,0.55);
+    --pp-accent: #71ff00;
+  }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--pp-bg);
+    color: var(--pp-text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.5;
+    min-height: 100vh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  .pp-wrap { max-width: 560px; margin: 0 auto; padding: 28px 18px 64px; }
+
+  .pp-brand {
+    display: flex; align-items: center; gap: 9px;
+    margin-bottom: 26px; text-decoration: none; color: var(--pp-text);
+  }
+  .pp-brand img   { width: 30px; height: 30px; border-radius: 8px; }
+  .pp-brand span  { font-weight: 800; letter-spacing: 0.4px; font-size: 15px; }
+
+  .pp-card {
+    background: var(--pp-card);
+    border: 1px solid var(--pp-line);
+    border-radius: 18px;
+    padding: 30px 22px 26px;
+    text-align: center;
+  }
+
+  .pp-avatar {
+    width: 92px; height: 92px; border-radius: 50%;
+    margin: 0 auto 14px; display: block;
+    object-fit: cover;
+    border: 2px solid var(--pp-accent);
+    background: #1a1a1a;
+  }
+  .pp-initials {
+    width: 92px; height: 92px; border-radius: 50%;
+    margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 32px; font-weight: 800; color: var(--pp-accent);
+    background: #141414; border: 2px solid var(--pp-accent);
+  }
+
+  .pp-name     { font-size: 21px; font-weight: 800; margin: 0 0 4px; overflow-wrap: anywhere; }
+  .pp-headline { color: var(--pp-muted); font-size: 14px; margin: 0 0 12px; overflow-wrap: anywhere; }
+
+  .pp-meta {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 8px 14px; color: var(--pp-muted); font-size: 12.5px; margin-bottom: 16px;
+  }
+
+  .pp-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; margin-bottom: 18px; }
+  .pp-badge {
+    font-size: 11.5px; font-weight: 700; letter-spacing: 0.2px;
+    padding: 5px 11px; border-radius: 999px;
+    background: rgba(113,255,0,0.10);
+    border: 1px solid rgba(113,255,0,0.32);
+    color: var(--pp-accent);
+    text-transform: capitalize;
+  }
+  .pp-badge--level {
+    background: rgba(255,255,255,0.06);
+    border-color: var(--pp-line);
+    color: var(--pp-text);
+  }
+
+  .pp-skills { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-bottom: 20px; }
+  .pp-skill {
+    font-size: 11.5px; padding: 4px 10px; border-radius: 999px;
+    background: rgba(255,255,255,0.05); border: 1px solid var(--pp-line);
+    color: var(--pp-muted);
+  }
+
+  .pp-shop {
+    display: block; text-decoration: none;
+    background: var(--pp-accent); color: #041000;
+    font-weight: 800; font-size: 15px;
+    padding: 14px; border-radius: 12px; margin-bottom: 10px;
+  }
+  .pp-secondary {
+    display: block; text-decoration: none;
+    border: 1px solid var(--pp-line); color: var(--pp-text);
+    font-weight: 700; font-size: 14px;
+    padding: 13px; border-radius: 12px;
+  }
+
+  .pp-sid {
+    margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--pp-line);
+    font-size: 11.5px; color: rgba(255,255,255,0.38); letter-spacing: 0.6px;
+  }
+
+  .pp-state { text-align: center; padding: 60px 18px; color: var(--pp-muted); }
+  .pp-state h1 { font-size: 18px; color: var(--pp-text); margin: 0 0 8px; }
+  .pp-state p  { font-size: 14px; margin: 0 0 22px; }
+
+  .pp-skeleton {
+    height: 220px; border-radius: 18px;
+    background: linear-gradient(100deg, #0d0d0d 30%, #161616 50%, #0d0d0d 70%);
+    background-size: 220% 100%;
+    animation: pp-shimmer 1.3s linear infinite;
+  }
+  @keyframes pp-shimmer { to { background-position: -120% 0; } }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pp-skeleton { animation: none; }
+  }
+</style>
+
+<div class="pp-wrap">
+  <a class="pp-brand" href="/">
+    <img src="/assets/logosokoni.png" alt="">
+    <span>SOKONI</span>
+  </a>
+  <main id="ppRoot" aria-live="polite">
+    <div class="pp-skeleton" role="status" aria-label="Loading profile"></div>
+  </main>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var CF   = 'https://us-central1-sokoni-aeb26.cloudfunctions.net';
+  var root = document.getElementById('ppRoot');
+
+  /* Every value rendered below originates from another member's Firestore
+     document, so it is untrusted input. Text goes in via textContent and
+     the two URLs that become href/src are scheme-checked, never
+     concatenated into markup. */
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls)  n.className   = cls;
+    if (text) n.textContent = text;
+    return n;
+  }
+
+  /* Blocks javascript:, data: and protocol-relative URLs from reaching an
+     href or src. Only absolute https on our own domains, or a site-relative
+     path, is allowed through. */
+  function safeUrl(u, allowRelative) {
+    if (typeof u !== 'string' || !u) return null;
+    if (allowRelative && u.charAt(0) === '/' && u.charAt(1) !== '/') return u;
+    try {
+      var p = new URL(u, location.origin);
+      return p.protocol === 'https:' ? p.href : null;
+    } catch (_) { return null; }
+  }
+
+  function uidFromLocation() {
+    /* Served at /profile/{uid}; ?uid= is kept as a fallback so the page
+       still works if the rewrite is ever bypassed. */
+    var m = location.pathname.match(/^\/profile\/([^/?#]+)/);
+    if (m && m[1]) return decodeURIComponent(m[1]);
+    try { return new URLSearchParams(location.search).get('uid') || ''; }
+    catch (_) { return ''; }
+  }
+
+  function showState(heading, body, ctaLabel, ctaHref) {
+    root.innerHTML = '';
+    var box = el('div', 'pp-state');
+    box.appendChild(el('h1', null, heading));
+    box.appendChild(el('p', null, body));
+    var cta = el('a', 'pp-secondary', ctaLabel || 'Explore SOKONI');
+    cta.href = ctaHref || '/';
+    box.appendChild(cta);
+    root.appendChild(box);
+  }
+
+  function initials(name) {
+    return String(name || '?').trim().split(/\s+/)
+      .map(function (w) { return w.charAt(0); })
+      .join('').slice(0, 2).toUpperCase() || '?';
+  }
+
+  function render(d) {
+    root.innerHTML = '';
+    var card = el('section', 'pp-card');
+
+    var photo = safeUrl(d.photoURL);
+    if (photo) {
+      var img = el('img', 'pp-avatar');
+      img.src = photo;
+      img.alt = '';
+      img.loading = 'lazy';
+      /* A dead photo URL must not leave a broken-image icon on a page whose
+         whole job is to look trustworthy — fall back to initials. */
+      img.onerror = function () {
+        img.replaceWith(el('div', 'pp-initials', initials(d.displayName)));
+      };
+      card.appendChild(img);
+    } else {
+      card.appendChild(el('div', 'pp-initials', initials(d.displayName)));
+    }
+
+    card.appendChild(el('h1', 'pp-name', d.displayName || 'SOKONI Member'));
+    if (d.headline) card.appendChild(el('p', 'pp-headline', d.headline));
+
+    var meta = el('div', 'pp-meta');
+    if (d.location)    meta.appendChild(el('span', null, '📍 ' + d.location));
+    if (d.memberSince) meta.appendChild(el('span', null, 'Member since ' + d.memberSince));
+    if (meta.childNodes.length) card.appendChild(meta);
+
+    var badges = el('div', 'pp-badges');
+    if (d.trustLevel) badges.appendChild(el('span', 'pp-badge pp-badge--level', d.trustLevel));
+    (d.verifiedTypes || []).forEach(function (t) {
+      badges.appendChild(el('span', 'pp-badge', '✓ ' + t));
+    });
+    if (badges.childNodes.length) card.appendChild(badges);
+
+    if ((d.skills || []).length) {
+      var skills = el('div', 'pp-skills');
+      d.skills.forEach(function (s) { skills.appendChild(el('span', 'pp-skill', s)); });
+      card.appendChild(skills);
+    }
+
+    var shopHref = d.shop && safeUrl(d.shop.url);
+    if (shopHref) {
+      var shop = el('a', 'pp-shop', 'Visit shop @' + d.shop.handle);
+      shop.href = shopHref;
+      card.appendChild(shop);
+    }
+
+    var explore = el('a', 'pp-secondary', shopHref ? 'Explore SOKONI' : 'Explore SOKONI marketplace');
+    explore.href = '/';
+    card.appendChild(explore);
+
+    if (d.sokoniId) card.appendChild(el('div', 'pp-sid', d.sokoniId));
+
+    root.appendChild(card);
+
+    /* The tab title is the one piece of per-member text we can set, since it
+       happens after JS runs. Crawlers still see the static <title>. */
+    document.title = (d.displayName || 'SOKONI Member') + ' — SOKONI';
+  }
+
+  var uid = uidFromLocation();
+  if (!uid) {
+    showState('Profile not found', 'This link is missing a profile reference.');
+    return;
+  }
+
+  fetch(CF + '/profileGetPublicProfile?uid=' + encodeURIComponent(uid), {
+    method: 'GET',
+    credentials: 'omit',
+    cache: 'default'
+  })
+    .then(function (r) {
+      /* 404 is a normal answer here — an unknown uid and a member who has
+         opted out are answered identically by design — so it is handled as
+         a state, not thrown as an error. */
+      if (r.status === 404) return null;
+      if (!r.ok) throw new Error('http_' + r.status);
+      return r.json();
+    })
+    .then(function (data) {
+      if (!data || !data.found) {
+        showState(
+          'Profile unavailable',
+          'This profile is private or no longer exists.'
+        );
+        return;
+      }
+      render(data);
+    })
+    .catch(function () {
+      /* Never fabricate a profile to fill the space. An honest failure state
+         is required — a page that invents plausible member details is the
+         worse outcome. */
+      showState(
+        'Could not load this profile',
+        'Check your connection and try again.',
+        'Retry',
+        location.pathname
+      );
+    });
+})();
+</script>

@@ -21,8 +21,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOKONI — My Profile</title>
 <meta name="description" content="Your universal SOKONI profile — manage all roles, orders, listings, bookings and more.">
-<meta property="og:title" content="SOKONI — My Profile">
-<meta property="og:description" content="Universal profile across all SOKONI hubs.">
+<meta name="robots" content="noindex, nofollow">
+<!-- This is the OWNER'S private dashboard. If the URL ever reaches a link
+     preview the card must read as a neutral sign-in destination, not as
+     somebody's account — a first-person "My Profile" card is what made a
+     stray share look like a session leak. The shareable page is
+     /profile/{uid} (public-profile.html). -->
+<meta property="og:title" content="SOKONI">
+<meta property="og:description" content="Kenya's unified marketplace — sign in to your SOKONI account.">
 <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -4612,14 +4618,34 @@ window.logoutUser = logoutUser;
     });
   };
 
+  /* Builds the PUBLIC profile URL for a uid. Kept in one place because the
+     value is what leaves the device — profileGetOverview returns the same
+     shape, and the two must not drift. */
+  function _publicProfileUrl(uid) {
+    return uid ? 'https://mysokoni.co.ke/profile/' + encodeURIComponent(uid) : '';
+  }
+
   window.piShareProfile = function() {
-    var url = _piOverview && _piOverview.profileUrl
-      ? _piOverview.profileUrl
-      : window.location.href;
+    /* NEVER fall back to window.location.href. This page is the owner's
+       private dashboard; when profileGetOverview had not resolved yet, the
+       old fallback shared "/profile" itself, so the recipient got a link to
+       their OWN dashboard shell and the sharer got a WhatsApp preview that
+       looked like their account was leaking. Derive the public URL from the
+       signed-in uid instead, and share nothing if we cannot. */
+    var url = (_piOverview && _piOverview.profileUrl) || '';
+    if (!url) {
+      var u = null;
+      try { u = window.firebase && firebase.auth && firebase.auth().currentUser; } catch (_) {}
+      url = _publicProfileUrl(u && u.uid);
+    }
+    if (!url) { _toast('Still loading your profile — try again in a moment.'); return; }
+
     if (navigator.share) {
       navigator.share({ title: 'SOKONI Profile', url: url }).catch(function(){});
     } else {
-      navigator.clipboard.writeText(url).then(function(){ _toast('Profile link copied!'); });
+      navigator.clipboard.writeText(url)
+        .then(function(){ _toast('Profile link copied!'); })
+        .catch(function(){ _toast(url); });
     }
   };
 
