@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" style="background:#050505">
 <head>
   <!-- Canonical template identifier — see index.html. The SW and sokoni-root-guard.js
        verify this before trusting a cached document. A merchant template must NEVER be
@@ -912,10 +912,21 @@ async function _stLoadFirestore(uid) {
     var app = getApps().length ? getApps()[0] : initializeApp(cfg);
     var db  = getFirestore(app);
 
-    /* Shop metadata */
-    var shopSnap = await getDoc(doc(db, "shops", uid));
-    if (!shopSnap.exists()) shopSnap = await getDoc(doc(db, "sellers", uid));
-    var sd = shopSnap.exists() ? shopSnap.data() : {};
+    /* Shop metadata.
+       Both sources are frequently absent: /shops had no security rule at all
+       until this release (every read denied), and /sellers is empty in
+       production because the shop wizard's write is fire-and-forget. A store
+       page that depends on them alone renders as an unnamed, logo-less shell
+       even when the seller has a full catalogue live.
+       Each read is therefore individually guarded, and whatever is missing is
+       recovered further down from the seller's own products, which carry
+       businessName / sellerName / location. */
+    var sd = {};
+    try {
+      var shopSnap = await getDoc(doc(db, "shops", uid));
+      if (!shopSnap.exists()) shopSnap = await getDoc(doc(db, "sellers", uid));
+      if (shopSnap.exists()) sd = shopSnap.data() || {};
+    } catch (e) { /* denied or offline — the product-derived fallback covers it */ }
 
     if (sd.banner || sd.bannerUrl) {
       var bi = document.getElementById("stBannerImg");
@@ -959,6 +970,32 @@ async function _stLoadFirestore(uid) {
     if (!pSnap.empty) {
       var fsProds = [];
       pSnap.forEach(function(d) { fsProds.push(Object.assign({ id: d.id }, d.data())); });
+
+      /* Recover the shop's identity from its own goods when no shop document
+         was readable. Every product carries the seller's businessName /
+         sellerName and location, so a live catalogue is enough to name the
+         store — far better than showing a buyer an anonymous page. */
+      var pd = fsProds[0] || {};
+      if (!(sd.name || sd.storeName) && (pd.businessName || pd.sellerName)) {
+        var derived = pd.businessName || pd.sellerName;
+        document.title = derived + " — SOKONI";
+        var dsn = document.getElementById("stStoreName");
+        if (dsn) dsn.textContent = derived;
+      }
+      if (!(sd.tagline || sd.bio) && pd.location) {
+        var dtl = document.getElementById("stTagline");
+        if (dtl && !dtl.textContent.trim()) {
+          dtl.textContent = "📍 " + pd.location;
+          dtl.style.display = "";
+        }
+      }
+      if (!(sd.logo || sd.logoUrl)) {
+        var dlw = document.getElementById("stLogoWrap");
+        var dimg = pd.image || (Array.isArray(pd.images) ? pd.images[0] : null);
+        if (dlw && dimg && !dlw.querySelector("img")) {
+          dlw.innerHTML = '<img src="' + dimg + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+        }
+      }
 
       /* Re-render products grid */
       var grid  = document.getElementById("stProductsGrid");

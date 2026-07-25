@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true" style="background:#050505">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -617,12 +617,34 @@ body{
   z-index:var(--sk-z-sheet, 100010);
   display:flex;flex-direction:column;
   pointer-events:none;opacity:0;
-  transition:opacity .2s;
+  /* visibility, not just opacity. WebKit composites backdrop-filter EVEN AT
+     OPACITY 0 (see the same finding recorded in security.js, where it produced
+     an intermittent full-screen "glass" layer on iPhone Safari with no modal on
+     it). With ten closed overlays on this page, each holding a blurring
+     backdrop, that renders as a dim blurred sheet over the whole wallet — the
+     content is there, just behind frosted glass, and nothing can be tapped.
+     visibility:hidden takes the element out of rendering entirely, so no
+     backdrop-filter can be composited while it is closed. */
+  visibility:hidden;
+  transition:opacity .2s, visibility 0s linear .2s;
 }
-.overlay.open{pointer-events:all;opacity:1}
+.overlay.open{
+  pointer-events:all;opacity:1;
+  visibility:visible;
+  /* visibility flips immediately on open; on close it is delayed by the fade
+     above so the sheet still animates out instead of vanishing. */
+  transition:opacity .2s, visibility 0s;
+}
 .ovl-backdrop{
   flex:1;background:rgba(0,0,0,.7);
+}
+/* The blur is applied ONLY while open — belt and braces against the WebKit
+   opacity-0 compositing behaviour above. A filter that is never applied cannot
+   be composited. -webkit- prefix included: it was missing, so older iOS got no
+   blur when open while still paying for it when closed. */
+.overlay.open .ovl-backdrop{
   backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
 }
 .ovl-sheet{
   background:var(--sur);
