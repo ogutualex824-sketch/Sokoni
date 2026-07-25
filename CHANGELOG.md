@@ -1,3 +1,51 @@
+## [2026-07-25] — fix(auth): Google sign-in returned to the login page and stalled — cross-origin authDomain
+
+Google (and Facebook) sign-in ran the full OAuth round-trip, came back to the login
+page, and stopped there with no error — worst in the installed PWA. Phone and email
+sign-in were unaffected.
+
+### Evidence
+
+Server-side truth, from Firebase Auth `lastLoginAt`: the last successful `google.com`
+sign-in was **2026-07-24 20:35 UTC**. Across all of 2026-07-25, **zero** Google
+sessions were created, while phone and password sessions were created normally. A
+completed sign-in updates `lastLoginAt`, so the redirect was **not** producing a
+session — the failure is in the OAuth return, not in anything after it. "No error, no
+navigation, just stays" is the signature of `getRedirectResult()` resolving to
+**null**.
+
+### Root cause
+
+`getRedirectResult()` reads the pending sign-in from the Firebase auth helper iframe
+(`/__/auth/iframe`) on return. `authDomain` was `auth.mysokoni.co.ke` — a **subdomain**,
+which is a **different origin** from the app at `https://mysokoni.co.ke`. Modern
+browsers partition a cross-origin iframe's storage (Chrome 115+ storage partitioning,
+Safari ITP), so the iframe can't read the record it wrote before the redirect, and
+`getRedirectResult()` comes back empty. The in-code comment even stated the goal was a
+same-origin helper — but a subdomain never achieved it.
+
+### Fix
+
+`firebase.js`: `authDomain` → `mysokoni.co.ke`, the app's own origin, so the helper
+iframe is same-origin and its storage is not partitioned.
+
+Verified before changing: the app origin serves the helper
+(`/__/auth/handler` + `/__/auth/iframe` → 200), `mysokoni.co.ke` is an authorized
+domain, the OAuth client accepts `https://mysokoni.co.ke/__/auth/handler` as a redirect
+URI, and App Check for `identitytoolkit` is UNENFORCED (so it was never the blocker).
+The session is stored in IndexedDB keyed by apiKey under the page origin, not the
+authDomain, so pages still initialising with the old value keep sharing the session —
+only the OAuth helper origin moves. Users must reach the app on the apex
+`mysokoni.co.ke` (canonical) for the iframe to be same-origin.
+
+**Files:** `firebase.js` (config). ~60 other files hardcode the old authDomain for
+their own init; they do not perform OAuth and share the session regardless, so they are
+left for a separate consistency sweep. **Database/API/Breaking:** none.
+
+**Causation is inferred, not directly observed** — OAuth cannot be completed headlessly.
+The evidence (server truth + null-result signature + cross-origin iframe + verified
+same-origin helper) is strong, but one real sign-in on a phone is the confirming test.
+
 ## [2026-07-25] — fix(kass): the concierge closed itself on every send
 
 Typing a message and tapping **send** dismissed the whole KASS widget; you had to

@@ -47,14 +47,27 @@ import {
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  /* auth.mysokoni.co.ke is a custom authDomain that runs the Firebase auth
-     handler (/__/auth/) from the same origin as the app.  This prevents Apple
-     ITP from treating the Firebase iframe as third-party, which was the root
-     cause of getRedirectResult() throwing on every iOS Safari page load.
-     DEPLOY ONLY AFTER: (1) auth.mysokoni.co.ke added as a custom domain in
-     Firebase Hosting Console, (2) SSL provisioned (auto, ~minutes), (3) domain
-     added to Firebase Auth → Settings → Authorized domains. */
-  authDomain:        "auth.mysokoni.co.ke",
+  /* authDomain MUST equal the app's own origin so the Firebase auth helper iframe
+     (/__/auth/iframe) is SAME-ORIGIN with the page. getRedirectResult() reads the
+     pending sign-in from that iframe's storage on return; a cross-origin iframe has
+     its storage partitioned by modern browsers (Chrome 115+ storage partitioning,
+     Safari ITP), so the read comes back empty and getRedirectResult() resolves to
+     null — the sign-in silently fails, the user lands back on the login page and
+     nothing happens.
+
+     This was previously "auth.mysokoni.co.ke". The intent was same-origin, but a
+     SUBDOMAIN is a DIFFERENT ORIGIN from the app at https://mysokoni.co.ke — so the
+     iframe stayed third-party and redirect sign-in broke (Google/Facebook), worst
+     in the installed PWA. Verified before changing: the app origin serves the
+     helper (/__/auth/handler + /__/auth/iframe → 200), mysokoni.co.ke is an
+     authorized domain, and the OAuth client accepts
+     https://mysokoni.co.ke/__/auth/handler as a redirect URI.
+
+     The session lives in IndexedDB keyed by apiKey under the PAGE origin, not the
+     authDomain — so pages that still init with the old value keep sharing the
+     session; only the OAuth helper origin changes. Users must reach the app on the
+     apex mysokoni.co.ke (canonical) for this to be same-origin. */
+  authDomain:        "mysokoni.co.ke",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.firebasestorage.app",
   messagingSenderId: "24799054989",
