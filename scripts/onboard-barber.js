@@ -110,6 +110,9 @@ async function patch(col,id,fields){const mask=Object.keys(fields).map(k=>'updat
   await patch('notificationPrefs',uid,{uid:S(uid),sms:B(true),email:B(true),push:B(true),inApp:B(true),updatedAt:T(NOW)});
   await patch('users',uid,{name:S(PERSON),displayName:S(PERSON),phone:S('0742544979'),phoneNumber:S(PHONE),
     category:S('hair-beauty'),accountType:S('provider'),registeredAs:M({provider:B(true)}),isProvider:B(true),
+    /* roles drives sokoni-nav-engine._role(): without 'provider' here the owner
+       logs in but is routed as a buyer and cannot reach their provider workspace. */
+    roles:A(['provider','buyer']),role:S('provider'),
     providerProfileId:S(providerId),providerBusinessName:S(SHOP),searchIndexed:B(true),status:S('active'),createdAt:T(NOW),updatedAt:T(NOW)});
   L('  wrote providers + settings/notifications/analytics/wallet/prefs + users link');
 
