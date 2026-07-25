@@ -77,10 +77,27 @@ window.SokoniMiniShop = (() => {
 
   // ─── CF Caller ───────────────────────────────────────────────────────────────
   async function _callCF(name, data) {
-    if (typeof firebase === 'undefined' || !firebase.functions) throw new Error('Firebase not loaded');
-    const fn = firebase.functions().httpsCallable(name);
-    const result = await fn(data || {});
-    return result.data;
+    /* minishop-admin.html loads the MODULAR firebase.js, so the compat
+       `firebase` global does not exist. This used to call firebase.functions()
+       and threw "Firebase not loaded" for EVERY minishop CF (claim handle, save
+       config, …) — which is why the whole minishop setup was dead and no shop
+       could ever be published. Prefer firebase.js's shared, App-Check-aware
+       modular callable (window.sokoniCallable), waiting briefly for the module
+       to publish it; fall back to compat only where a page actually provides it. */
+    for (let i = 0; i < 60 && typeof window.sokoniCallable !== 'function'
+                          && (typeof firebase === 'undefined' || !firebase.functions); i++) {
+      await new Promise(function (r) { setTimeout(r, 100); });
+    }
+    if (window.__sokoniAppCheckReady) { try { await window.__sokoniAppCheckReady; } catch (_) {} }
+    if (typeof window.sokoniCallable === 'function') {
+      const result = await window.sokoniCallable(name)(data || {});
+      return result.data;
+    }
+    if (typeof firebase !== 'undefined' && firebase.functions) {
+      const result = await firebase.functions().httpsCallable(name)(data || {});
+      return result.data;
+    }
+    throw new Error('Firebase not loaded');
   }
 
   // ─── Source Detection ────────────────────────────────────────────────────────
