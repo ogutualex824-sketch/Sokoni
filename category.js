@@ -423,11 +423,25 @@ function sortProducts(type, btn){
 })();
 
 /* SEARCH */
+/* Debounced: oninput fires on every keystroke, and _runCatSearch re-renders
+   the whole product grid — doing that per keystroke is what made typing lag on
+   a large catalogue. Coalesce to one render ~160ms after the user pauses, the
+   same pattern the header search (220ms) and seller product search (250ms) use.
+   The input stays fully responsive; only the expensive filter+render is
+   throttled. */
+let _catSearchT = null;
 function searchCatProducts(){
-    const val = document.getElementById("catSearch").value.toLowerCase();
+    clearTimeout(_catSearchT);
+    _catSearchT = setTimeout(_runCatSearch, 160);
+}
+function _runCatSearch(){
+    const el = document.getElementById("catSearch");
+    if(!el) return;
+    const val = el.value.toLowerCase();
     const results = filtered.filter(p => p.name.toLowerCase().includes(val));
     renderProducts(results);
-    document.getElementById("catCount").textContent = `${results.length} product${results.length !== 1 ? "s" : ""} found`;
+    const cnt = document.getElementById("catCount");
+    if(cnt) cnt.textContent = `${results.length} product${results.length !== 1 ? "s" : ""} found`;
 }
 
 /* NOTIFICATION */

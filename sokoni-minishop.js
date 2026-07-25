@@ -713,7 +713,19 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const statusMode = params.get('mode') === 'status';
 
     try {
-      const res = await fetch(CF + '/getMinishopPublic?handle=' + encodeURIComponent(handle));
+      /* Bound the fetch. With no timeout, a slow cold start or a stalled
+         connection left the page on its loading skeleton forever — the
+         "just loads and never opens" symptom. Abort after 15s so the catch
+         below can surface the not-found/error state instead of hanging. */
+      const _ctrl = new AbortController();
+      const _to = setTimeout(function () { _ctrl.abort(); }, 15000);
+      let res;
+      try {
+        res = await fetch(CF + '/getMinishopPublic?handle=' + encodeURIComponent(handle),
+          { signal: _ctrl.signal });
+      } finally {
+        clearTimeout(_to);
+      }
       if (res.status === 404) { _showNotFound(); return; }
       if (!res.ok) throw new Error('Server error ' + res.status);
       const data = await res.json();
