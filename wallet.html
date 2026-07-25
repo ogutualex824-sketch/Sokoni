@@ -307,6 +307,8 @@ body{
   display:flex;align-items:center;justify-content:center;
   font-size:18px;flex-shrink:0;
 }
+.tx-icon.emoji{font-size:20px;line-height:1}
+.empty-emoji{font-size:38px;line-height:1;margin-bottom:10px;opacity:.85}
 .tx-icon.in{background:rgba(113,255,0,.08);color:var(--g)}
 .tx-icon.out{background:rgba(239,68,68,.08);color:var(--red)}
 .tx-icon.save{background:rgba(59,130,246,.08);color:var(--blue)}
@@ -973,12 +975,12 @@ body{
 
     <!-- AI Insight -->
     <div class="ai-insight" id="aiInsight">
-      <div class="ai-insight-icon"><i class="fas fa-brain"></i></div>
+      <div class="ai-insight-icon">🧠</div>
       <div class="ai-insight-body">
         <p id="aiInsightText"><span class="skel" style="height:14px;width:100%;display:block;margin-bottom:6px"></span><span class="skel" style="height:14px;width:70%;display:block"></span></p>
       </div>
       <button class="ai-dismiss" onclick="document.getElementById('aiInsight').classList.add('hidden')">
-        <i class="fas fa-times"></i>
+        <span style="font-size:18px;line-height:1">✕</span>
       </button>
     </div>
 
@@ -1352,7 +1354,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Add Money via M-Pesa</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlAddMoney')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlAddMoney')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body" id="addMoneyBody">
       <div class="form-group">
@@ -1398,7 +1400,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Withdraw to M-Pesa</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlWithdraw')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlWithdraw')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div class="info-row">
@@ -1452,7 +1454,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Request Money</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlRequest')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlRequest')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body" id="reqBody">
       <div class="form-group">
@@ -1495,7 +1497,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Savings Vaults</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaults')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaults')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div style="padding:12px 20px">
       <button class="btn btn-primary btn-sm" style="width:auto;padding:0 20px" onclick="W2.openNewVault()">
@@ -1513,7 +1515,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Create Savings Vault</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlNewVault')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlNewVault')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div style="margin-bottom:16px">
@@ -1567,7 +1569,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3 id="vdTitle">Vault</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaultDetail')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaultDetail')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div style="text-align:center;margin-bottom:20px">
@@ -1613,7 +1615,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Spending Analytics</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlAnalytics')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlAnalytics')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div style="padding:16px 20px 0;display:flex;gap:8px">
       <button class="ftab active" id="anTabWeek" onclick="W2.loadAnalytics('week',this)">This week</button>
@@ -1652,7 +1654,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Wallet Security</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlSecurity')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlSecurity')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
 
@@ -1702,7 +1704,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3 id="pinSetupTitle">Set Wallet PIN</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlPinSetup')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlPinSetup')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body" style="text-align:center">
       <p style="color:var(--sub);font-size:13px;margin-bottom:8px" id="pinSetupSubtitle">Choose a 4-digit PIN for your wallet</p>
@@ -1737,7 +1739,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Transaction</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlTxDetail')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlTxDetail')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div style="text-align:center;margin-bottom:24px">

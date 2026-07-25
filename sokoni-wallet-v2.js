@@ -305,14 +305,15 @@ window.SokoniWalletV2 = (function () {
   function _txIcon(tx) {
     const type = tx.type || '';
     const dir  = tx.direction || (tx.amount > 0 ? 'in' : 'out');
-    if (type.includes('topup') || type === 'credit') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: null };
-    if (type === 'send') return { cls: 'out', icon: 'fa-paper-plane', emoji: null };
-    if (type === 'receive') return { cls: 'in', icon: 'fa-arrow-down', emoji: null };
-    if (type.includes('savings')) return { cls: 'save', icon: 'fa-piggy-bank', emoji: null };
-    if (type.includes('escrow')) return { cls: 'escrow', icon: 'fa-lock', emoji: null };
-    if (type === 'payout') return { cls: 'out', icon: 'fa-arrow-up-right', emoji: null };
-    if (dir === 'in') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: null };
-    return { cls: 'out', icon: 'fa-arrow-up-right', emoji: null };
+    if (type.includes('topup') || type === 'credit') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: '💵' };
+    if (type === 'send') return { cls: 'out', icon: 'fa-paper-plane', emoji: '📤' };
+    if (type === 'receive') return { cls: 'in', icon: 'fa-arrow-down', emoji: '📥' };
+    if (type.includes('savings')) return { cls: 'save', icon: 'fa-piggy-bank', emoji: '🐷' };
+    if (type.includes('escrow')) return { cls: 'escrow', icon: 'fa-lock', emoji: '🔒' };
+    if (type === 'payout') return { cls: 'out', icon: 'fa-arrow-up-right', emoji: '🏧' };
+    if (type === 'refund') return { cls: 'in', icon: 'fa-rotate-left', emoji: '↩️' };
+    if (dir === 'in') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: '📥' };
+    return { cls: 'out', icon: 'fa-arrow-up-right', emoji: '📤' };
   }
 
   function _txTitle(tx) {
@@ -333,7 +334,7 @@ window.SokoniWalletV2 = (function () {
     if (!el) return;
 
     if (!txs || txs.length === 0) {
-      el.innerHTML = '<div class="empty-state"><i class="fas fa-receipt"></i><h4>No transactions</h4><p>Your transaction history will appear here</p></div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-emoji">🧾</div><h4>No transactions</h4><p>Your transaction history will appear here</p></div>';
       return;
     }
 
@@ -341,7 +342,7 @@ window.SokoniWalletV2 = (function () {
     const items = txs.slice(0, limit);
 
     el.innerHTML = items.map(tx => {
-      const { cls, icon } = _txIcon(tx);
+      const { cls, emoji } = _txIcon(tx);
       const isIn = cls === 'in' || cls === 'save';
       const amt = Math.abs(tx.amount || 0);
       const sign = isIn ? '+' : '−';
@@ -350,7 +351,7 @@ window.SokoniWalletV2 = (function () {
       const title = _txTitle(tx);
       const note = tx.note || tx.description || tx.category || '';
       return `<div class="tx-item" onclick="W2.openTxDetail(${_esc(JSON.stringify(tx))})">
-        <div class="tx-icon ${_esc(cls)}"><i class="fas ${_esc(icon)}"></i></div>
+        <div class="tx-icon ${_esc(cls)} emoji">${emoji}</div>
         <div class="tx-info">
           <div class="tx-name">${title}</div>
           ${note ? `<div class="tx-desc">${_esc(note)}</div>` : ''}
