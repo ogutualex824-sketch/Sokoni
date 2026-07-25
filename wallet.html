@@ -914,6 +914,13 @@ body{
   <!-- ── HOME PANEL ── -->
   <section id="panHome" class="w-panel active">
 
+    <!-- Add-phone prompt (shown only to phone-less accounts so they can receive money) -->
+    <div id="addPhoneBanner" style="display:none;margin:0 0 12px;padding:12px 14px;background:var(--ga2);border:1px solid rgba(113,255,0,.25);border-radius:14px;align-items:center;gap:10px">
+      <span style="font-size:22px">📱</span>
+      <span style="flex:1;font-size:13px;color:var(--txt);line-height:1.35">Add your phone so people can <strong>send you money</strong>.</span>
+      <button class="btn btn-sm btn-primary" style="width:auto;padding:0 14px" onclick="W2.addPhoneOpen()">Add</button>
+    </div>
+
     <!-- Balance hero -->
     <div class="bal-hero">
       <div class="bal-frozen-badge" id="frozenBadge"><i class="fas fa-snowflake"></i> Frozen</div>
@@ -1482,6 +1489,34 @@ body{
       <button class="btn btn-primary" id="scanPayBtn" onclick="W2.qrScanPay()">
         💸 Pay
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD PHONE (verify to receive money) ── -->
+<div class="overlay" id="ovlAddPhone">
+  <div class="ovl-backdrop" onclick="W2.closeOverlay('ovlAddPhone')"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Add your phone</h3>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlAddPhone')"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Verify a phone number so people can send you money. We'll text you a 6-digit code.</p>
+      <div class="form-group" id="apPhoneGroup">
+        <label class="form-label">Phone number</label>
+        <input type="tel" class="form-input" id="apPhone" inputmode="tel" placeholder="07XX XXX XXX">
+      </div>
+      <div class="form-group" id="apCodeGroup" style="display:none">
+        <label class="form-label">Enter the 6-digit code</label>
+        <input type="text" class="form-input" id="apCode" inputmode="numeric" maxlength="6" placeholder="Code from SMS">
+      </div>
+      <button class="btn btn-primary" id="apSubmitBtn" onclick="W2.addPhoneSubmit()">
+        📲 Send code
+      </button>
+      <!-- invisible reCAPTCHA anchor for Firebase phone verification -->
+      <div id="recaptcha-container"></div>
     </div>
   </div>
 </div>

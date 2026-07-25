@@ -200,6 +200,9 @@ window.SokoniWalletV2 = (function () {
         _userPhone = user.phoneNumber || '';
         _userName  = user.displayName || user.email?.split('@')[0] || 'User';
 
+        /* Prompt phone-less accounts to verify a phone so they can RECEIVE money. */
+        _showAddPhoneBanner(!_userPhone);
+
         /* Update avatar */
         const av = document.getElementById('wal-top-avatar');
         if (av) av.textContent = (_userName[0] || '?').toUpperCase();
@@ -1444,6 +1447,97 @@ window.SokoniWalletV2 = (function () {
     }
   }
 
+  /* ─── ADD PHONE (verify to receive money) ───
+     Phone-less accounts (Google/email sign-ups) can't be found by senders. This
+     links a Firebase-verified phone to the account via linkWithPhoneNumber, then
+     walletV2SavePhone persists only the token-verified number. Firebase enforces
+     one phone per account, so nobody can claim a number they don't control. */
+  let _apStage    = 'send';
+  let _apConfirm  = null;
+  let _apVerifier = null;
+
+  function _showAddPhoneBanner(show) {
+    const b = document.getElementById('addPhoneBanner');
+    if (b) b.style.display = show ? 'flex' : 'none';
+  }
+
+  function addPhoneOpen() {
+    _apStage = 'send';
+    _apConfirm = null;
+    const pg = document.getElementById('apPhoneGroup'); if (pg) pg.style.display = '';
+    const cg = document.getElementById('apCodeGroup');  if (cg) cg.style.display = 'none';
+    const btn = document.getElementById('apSubmitBtn'); if (btn) { btn.textContent = '📲 Send code'; btn.disabled = false; }
+    openOverlay('ovlAddPhone');
+  }
+
+  async function addPhoneSubmit() {
+    const btn = document.getElementById('apSubmitBtn');
+
+    if (_apStage === 'send') {
+      const raw = document.getElementById('apPhone')?.value?.trim();
+      const norm = _normalizePhone(raw);
+      if (!norm) return toast('Enter a valid Kenyan phone number', 'error');
+      const fullPhone = '+' + norm;
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      try {
+        const { getAuth, RecaptchaVerifier, linkWithPhoneNumber } = await import(
+          'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+        );
+        const auth = getAuth(window.firebaseApp);
+        if (!auth.currentUser) throw new Error('Please sign in again.');
+        if (!_apVerifier) {
+          _apVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+        }
+        _apConfirm = await linkWithPhoneNumber(auth.currentUser, fullPhone, _apVerifier);
+        _apStage = 'verify';
+        const pg = document.getElementById('apPhoneGroup'); if (pg) pg.style.display = 'none';
+        const cg = document.getElementById('apCodeGroup');  if (cg) cg.style.display = '';
+        document.getElementById('apCode')?.focus();
+        if (btn) { btn.textContent = '✓ Verify & save'; btn.disabled = false; }
+        toast('Code sent to ' + fullPhone, 'success');
+      } catch (e) {
+        let msg = e.message || 'Could not send code. Try again.';
+        if (e.code === 'auth/credential-already-in-use' ||
+            e.code === 'auth/account-exists-with-different-credential' ||
+            e.code === 'auth/provider-already-linked') {
+          msg = 'That number is already linked to a SOKONI account.';
+        }
+        toast(msg, 'error');
+        try { _apVerifier?.clear(); } catch (_) {}
+        _apVerifier = null;
+        if (btn) { btn.disabled = false; btn.textContent = '📲 Send code'; }
+      }
+      return;
+    }
+
+    /* verify stage */
+    const code = document.getElementById('apCode')?.value?.trim();
+    if (!code || code.length < 6 || !_apConfirm) return toast('Enter the 6-digit code', 'error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+    try {
+      await _apConfirm.confirm(code);   /* links & verifies the phone on the account */
+      const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+      const auth = getAuth(window.firebaseApp);
+      await auth.currentUser.getIdToken(true);   /* refresh so the token carries phone_number */
+      const res = await _callTimed('walletV2SavePhone', {});
+      if (res.data?.success) {
+        _userPhone = String(res.data.phone || '').replace(/^\+/, '');
+        _showAddPhoneBanner(false);
+        closeOverlay('ovlAddPhone');
+        toast('Phone verified — people can now send you money', 'success');
+      } else {
+        toast('Could not save your phone. Try again.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Verify & save'; }
+      }
+    } catch (e) {
+      let msg = e.message || 'Wrong or expired code. Try again.';
+      if (e.code === 'auth/invalid-verification-code') msg = 'Wrong code. Check your SMS and try again.';
+      if (e.code === 'auth/code-expired')             msg = 'Code expired. Tap Send code again.';
+      toast(msg, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Verify & save'; }
+    }
+  }
+
   /* ─── MERCHANT WALLET ─── */
   function openMerchantWallet() {
     openWithdraw();
@@ -1528,6 +1622,8 @@ window.SokoniWalletV2 = (function () {
     /* QR */
     qrTabSwitch, qrUpdateAmount, qrGenerate, qrShare, qrDownload, qrScan,
     qrCopyCode, qrScanClose, qrScanPay,
+    /* Add phone */
+    addPhoneOpen, addPhoneSubmit,
     /* Merchant */
     openMerchantWallet,
     /* Split */

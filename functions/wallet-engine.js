@@ -482,6 +482,42 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 2b. walletV2SavePhone — persist a Firebase-VERIFIED phone so phone-less
+//     (Google/email) users can receive money by phone.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Save the caller's phone to their users doc — but ONLY the number Firebase already
+ * verified via linkWithPhoneNumber, read from the ID-token `phone_number` claim.
+ * A client-supplied number is never trusted, so nobody can claim a number they do
+ * not control; Firebase Auth guarantees one phone links to one account, which closes
+ * the money-interception risk that an unverified "add phone" toggle would open.
+ *
+ * @returns {{ success: boolean, phone: string }}
+ */
+exports.walletV2SavePhone = onCall(BASE_OPTS, async (request) => {
+  const uid = _requireAuth(request);
+  const db  = _db();
+
+  const verified = request.auth?.token?.phone_number;   // "+254…" once the phone is linked
+  if (!verified) {
+    throw new HttpsError('failed-precondition', 'Phone not verified yet. Enter the SMS code first.');
+  }
+  const normalized = _normalizePhone(verified);
+  if (!normalized) {
+    throw new HttpsError('invalid-argument', 'Only Kenyan (+254) numbers can receive wallet money.');
+  }
+  const e164 = `+${normalized}`;
+
+  await db.collection('users').doc(uid).set({
+    phoneNumber:     e164,
+    phoneVerifiedAt: Timestamp.now(),
+  }, { merge: true });
+
+  return { success: true, phone: e164 };
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 3. walletV2Request  — create a money request
 // ═══════════════════════════════════════════════════════════════════════════════
 
