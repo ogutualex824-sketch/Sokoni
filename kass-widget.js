@@ -986,9 +986,23 @@
   /* Close button */
   document.getElementById('kassClose').addEventListener('click', _close);
 
-  /* Backdrop click (outside modal) */
+  /* Backdrop click (outside modal).
+     The inside/outside test is anchored to POINTERDOWN, not to the bubbled click.
+     Sending a message calls _setSending(true), which replaces the send button's
+     inner icon via innerHTML. The icon node the user clicked is therefore detached
+     from the DOM before this click finishes bubbling, so _modal.contains(e.target)
+     returns false and a tap on "send" was mis-read as an outside click — closing
+     the widget on every send. Recording where the gesture STARTED survives that
+     re-render, because at pointerdown time the icon is still in the tree.
+     Require the gesture to both start and end outside so a text selection that
+     begins in the page and releases over the modal does not close it either. */
+  var _downedOutside = false;
+  document.addEventListener('pointerdown', function (e) {
+    _downedOutside = !_modal.contains(e.target) && !_btn.contains(e.target);
+  }, true);
   document.addEventListener('click', function (e) {
-    if (_isOpen() && !_modal.contains(e.target) && !_btn.contains(e.target)) {
+    if (_isOpen() && _downedOutside &&
+        !_modal.contains(e.target) && !_btn.contains(e.target)) {
       _close();
     }
   });
