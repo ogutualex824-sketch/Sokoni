@@ -3261,6 +3261,33 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
+/* Profile-edit rate limit — 3 edits per rolling 14-day window.
+   The window opens on the first edit; after 3 edits the account is locked until
+   14 days from that first edit, then it resets to a fresh 3. Count + window start
+   live on the user document (Firestore is authoritative, mirrored into
+   localStorage by listenFirestoreProfile), so the limit follows the account
+   across devices and cannot be dodged by clearing one browser.
+   NOTE: this is client-side enforcement — it stops ordinary over-editing but a
+   determined user could bypass it. Rules-level enforcement is a follow-up. */
+var PROFILE_EDIT_MAX = 3;
+var PROFILE_EDIT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+function _profileEditGate(u){
+  var now = Date.now();
+  var start = (u && u.profileEditWindowStart) ? Date.parse(u.profileEditWindowStart) : 0;
+  var count = (u && Number(u.profileEditCount)) || 0;
+  /* No window yet, or the 14 days have elapsed → a fresh allowance of 3. */
+  if(!start || isNaN(start) || (now - start) >= PROFILE_EDIT_WINDOW_MS){
+    return { allowed:true, nextCount:1, nextStart:new Date(now).toISOString(),
+             remainingAfter: PROFILE_EDIT_MAX - 1 };
+  }
+  if(count >= PROFILE_EDIT_MAX){
+    return { allowed:false, unlockAt:new Date(start + PROFILE_EDIT_WINDOW_MS) };
+  }
+  return { allowed:true, nextCount:count + 1, nextStart:u.profileEditWindowStart,
+           remainingAfter: PROFILE_EDIT_MAX - (count + 1) };
+}
+
 function saveInlineEdit(){
   var name     = (document.getElementById('ieNameInput').value||'').trim();
   var username = (document.getElementById('ieHandleInput').value||'').trim().replace(/^@/,'');
@@ -3274,6 +3301,16 @@ function saveInlineEdit(){
   var bio   = bioEl ? (bioEl.value||'').trim().slice(0,300) : (_user && _user.bio) || '';
 
   _user = getUser();
+
+  /* Rate-limit gate — checked BEFORE any write. Blocked → tell the user when they
+     can edit again and stop; nothing is written and no edit is consumed. */
+  var gate = _profileEditGate(_user);
+  if(!gate.allowed){
+    var when = gate.unlockAt.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+    upToast('You have used all ' + PROFILE_EDIT_MAX + ' profile edits. You can edit again on ' + when + '.', false);
+    return;
+  }
+
   _user.name = name;
   _user.username = username || slugify(name);
   /* phone deliberately NOT written — the field is read-only, and persisting it here only
@@ -3290,7 +3327,12 @@ function saveInlineEdit(){
      so saving a bio never blanks an existing photo. listenFirestoreProfile() already reads
      bio/avatarUrl/coverUrl back, so every surface refreshes without a reload. */
   var payload = {name:name, username:_user.username, location:location,
-                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt};
+                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt,
+                 /* consume one edit — persisted atomically with the edit, so a
+                    failed write costs nothing (the count only advances if the
+                    whole setDoc lands) */
+                 profileEditCount: gate.nextCount,
+                 profileEditWindowStart: gate.nextStart};
   if(_ieAvatarData) payload.avatarUrl = _ieAvatarData;
   if(_ieCoverData)  payload.coverUrl  = _ieCoverData;
   /* Optimistic local update already happened (setUser above), so the UI reflects
@@ -3303,7 +3345,16 @@ function saveInlineEdit(){
   toggleInlineEdit();
   upToast('Saving…', true);
   saveToFirestore(payload).then(function(){
-    upToast('Profile saved', true);
+    /* Only now that the write landed do we advance the local counter — so a
+       failed save never burns one of the three edits. */
+    _user = getUser();
+    _user.profileEditCount = gate.nextCount;
+    _user.profileEditWindowStart = gate.nextStart;
+    setUser(_user);
+    var left = gate.remainingAfter;
+    upToast(left > 0
+      ? ('Profile saved — ' + left + ' edit' + (left === 1 ? '' : 's') + ' left in this 14-day window')
+      : 'Profile saved — that was your last edit; you can change it again in 14 days', true);
   }).catch(function(err){
     var code = (err && (err.code || err.message)) || 'unknown';
     console.warn('[profile] save failed:', code);
@@ -3971,6 +4022,10 @@ function listenFirestoreProfile(uid){
       if(data.followingCount) _user.followingCount = data.followingCount;
       if(data.averageRating) _user.averageRating = data.averageRating;
       if(data.createdAt) _user.createdAt = data.createdAt;
+      /* Rate-limit counter is server-authoritative — mirror it so the 3-edit /
+         14-day window follows the account and survives a cleared browser. */
+      if(data.profileEditCount !== undefined) _user.profileEditCount = data.profileEditCount;
+      if(data.profileEditWindowStart) _user.profileEditWindowStart = data.profileEditWindowStart;
       setUser(_user);
       renderHeaderCard();
       renderRoleSwitcher();
