@@ -102,6 +102,17 @@
 
     /* ── Hero ────────────────────────────────────────────────── */
     .hero {
+      /* display/margin/border-radius are set explicitly to override the GLOBAL
+         .hero in style.css (.hero{display:flex;justify-content:space-between;
+         margin:20px;border-radius:25px} — built for the homepage banner). This
+         page reused the class name but only set text-align, so the global
+         display:flex leaked in and laid the eyebrow, title, sub and search box
+         out as a horizontal row: on a phone that pushed the search inputs off the
+         right edge and cut them off. Forcing block layout stacks them centred as
+         intended, on every screen size. */
+      display: block;
+      margin: 0;
+      border-radius: 0;
       background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(0,0,0,0) 60%);
       border-bottom: 1px solid var(--border);
       color: #fff;
