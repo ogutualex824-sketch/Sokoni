@@ -1079,11 +1079,21 @@
 
 <!-- ═══════════════════════════════════════════════
      FIREBASE + LOYALTY JS
-     NOTE: Do NOT add defer to the Firebase init script.
-     The compat SDK sets window.firebase synchronously;
-     sokoni-loyalty.js depends on it being available
-     immediately when it executes.
+     sokoni-loyalty.js is written against the COMPAT SDK — it calls
+     firebase.auth(), firebase.firestore() and firebase.functions() on the
+     global `firebase`. Those compat scripts were missing entirely, so the
+     global was undefined and init crashed with "firebase is not defined",
+     breaking the whole page. Load the compat stack (same set as analytics.html
+     + firestore) and sokoni-appcheck.js, which creates the compat default app
+     and activates App Check, BEFORE sokoni-loyalty.js runs. None deferred:
+     sokoni-loyalty.js needs `firebase` synchronously available.
 ═══════════════════════════════════════════════ -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-functions-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-check-compat.js"></script>
+<script src="sokoni-appcheck.js"></script>
 <script src="sokoni-loyalty.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
