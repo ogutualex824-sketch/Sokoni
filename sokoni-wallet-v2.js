@@ -209,6 +209,16 @@ window.SokoniWalletV2 = (function () {
 
         await loadDashboard();
         await checkSellerStatus();
+
+        /* Deep-link from chat's "Send money": open the pay sheet for that contact. */
+        try {
+          const _pp = new URLSearchParams(location.search);
+          const _payUid = _pp.get('pay');
+          if (_payUid && _payUid !== _uid) {
+            openPayToUid(_payUid, _pp.get('name') || 'this contact');
+            history.replaceState(null, '', location.pathname);   // don't reopen on refresh
+          }
+        } catch (_) {}
       });
     } catch (e) {
       console.error('[WalletV2] init error', e);
@@ -1337,11 +1347,26 @@ window.SokoniWalletV2 = (function () {
   async function qrScan() {
     _scanPayload = null;
     const paste = document.getElementById('scanPaste'); if (paste) paste.value = '';
+    /* Restore the scanner UI (a prior "pay contact" open may have hidden these) */
+    const pg = document.getElementById('scanPasteGroup'); if (pg) pg.style.display = '';
     const amtG = document.getElementById('scanAmtGroup'); if (amtG) amtG.style.display = 'none';
     const amtI = document.getElementById('scanAmt'); if (amtI) amtI.value = '';
     _setText('scanStatus', 'Point your camera at a SOKONI Pay QR');
     openOverlay('ovlScan');
     _startScanCamera();
+  }
+
+  /* Open the pay sheet targeting a known uid (e.g. "Send money" from a chat).
+     Reuses the scan-to-pay flow: no camera/paste, just the amount + Pay button. */
+  function openPayToUid(uid, name) {
+    _stopScanCamera();
+    _scanPayload = { uid: String(uid), amount: null };
+    const cam = document.getElementById('scanCamWrap');   if (cam) cam.style.display = 'none';
+    const pg  = document.getElementById('scanPasteGroup'); if (pg)  pg.style.display = 'none';
+    const amtG = document.getElementById('scanAmtGroup');  if (amtG) amtG.style.display = '';
+    const amtI = document.getElementById('scanAmt');       if (amtI) amtI.value = '';
+    _setText('scanStatus', 'Send money to ' + (name || 'this contact'));
+    openOverlay('ovlScan');
   }
 
   async function _startScanCamera() {
