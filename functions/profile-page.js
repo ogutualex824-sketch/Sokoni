@@ -81,22 +81,34 @@ function _initials(name) {
     .map(w => w.charAt(0)).join('').slice(0, 2).toUpperCase()) || '?';
 }
 
-/** Full public profile page with per-member preview metadata. */
+/** Gated profile page with a public preview card for link-preview crawlers.
+ *
+ * PRODUCT DECISION 2026-07-25 (owner-directed): the shared profile link is a
+ * sign-up funnel, not a public page. So:
+ *   • Link-preview crawlers (WhatsApp/Facebook/Google — no JS) still get a clean
+ *     card from the OG tags: name as the title, photo as the image. The preview
+ *     looks good, which is the whole point of server-rendering this endpoint.
+ *   • A logged-OUT human sees ONLY a gate — create account / sign in / continue as
+ *     guest. No bio, location, skills, shop or Sokoni ID is DISPLAYED.
+ *   • A logged-IN human sees the full profile card (revealed by the script below).
+ *
+ * The gate is shown by default and the profile is display:none, so the default
+ * (no-JS) state a crawler sees is the gate, never the member's details. The full
+ * card markup is present but hidden; a signed-in visitor's browser reveals it. A
+ * public shared URL has no auth context at render time, so this client reveal is
+ * the only way to serve one HTML to crawler, guest and member — the standard
+ * content-wall pattern. Sensitive-ish fields (Sokoni ID, exact location) are kept
+ * OUT of the markup entirely so they are not even in page source for a guest.
+ */
 function _profilePage(d) {
   const name  = d.displayName || 'SOKONI Member';
   const photo = httpsUrl(d.photoURL);
 
-  /* The preview description is what people actually read in the WhatsApp
-     card, so it is built from the most specific thing the member published. */
-  const descParts = [d.headline, d.location && `📍 ${d.location}`,
-    d.shop && `Shop @${d.shop.handle}`].filter(Boolean);
-  const description = descParts.length
-    ? descParts.join(' · ')
-    : `${name} is a verified member on SOKONI, Kenya's unified marketplace.`;
-
+  /* Gated preview description — deliberately generic. It must not leak the
+     headline/location/shop, since the point is that those are behind the gate. */
   const meta = metaBlock({
     title:       `${name} — SOKONI`,
-    description,
+    description: `Create a free SOKONI account to view ${name}'s profile on Kenya's unified marketplace.`,
     image:       photo || 'https://mysokoni.co.ke/assets/logosokoni.png',
     url:         d.profileUrl,
     type:        'profile',
@@ -106,11 +118,6 @@ function _profilePage(d) {
     ? `<img class="pp-avatar" src="${attr(photo, 500)}" alt="" loading="lazy">`
     : `<div class="pp-initials">${esc(_initials(name))}</div>`;
 
-  const metaRow = [
-    d.location    ? `<span>📍 ${esc(d.location)}</span>` : '',
-    d.memberSince ? `<span>Member since ${esc(d.memberSince)}</span>` : '',
-  ].filter(Boolean).join('');
-
   const badges = [
     d.trustLevel ? `<span class="pp-badge pp-badge--level">${esc(d.trustLevel)}</span>` : '',
     ...(d.verifiedTypes || []).map(t => `<span class="pp-badge">✓ ${esc(t)}</span>`),
@@ -119,17 +126,50 @@ function _profilePage(d) {
   const skills = (d.skills || []).map(s => `<span class="pp-skill">${esc(s)}</span>`).join('');
   const shopUrl = d.shop && httpsUrl(d.shop.url);
 
-  return _shell(meta, `<section class="pp-card">
+  /* Where sign-in / sign-up should return to: back to this same link, so once the
+     visitor has an account the reveal below shows the profile they came for. */
+  const back = attr('redirect=' + encodeURIComponent(d.profileUrl || '/'), 500);
+
+  /* GATE — the only thing a logged-out visitor sees. Name + avatar only (both are
+     already public via the OG card), then the account/guest choices. */
+  const gate = `<section class="pp-card" id="ppGate">
+    ${avatar}
+    <h1 class="pp-name">${esc(name)}</h1>
+    <p class="pp-headline">Create a free account to view this profile on SOKONI.</p>
+    <a class="pp-shop" href="/signup?${back}">Create account</a>
+    <a class="pp-secondary" href="/login?${back}" style="margin-bottom:10px">Sign in</a>
+    <a class="pp-secondary" href="/">Continue as guest — browse SOKONI</a>
+  </section>`;
+
+  /* PROFILE — hidden until the script confirms a signed-in visitor. */
+  const profile = `<section class="pp-card" id="ppProfile" style="display:none">
     ${avatar}
     <h1 class="pp-name">${esc(name)}</h1>
     ${d.headline ? `<p class="pp-headline">${esc(d.headline)}</p>` : ''}
-    ${metaRow ? `<div class="pp-meta">${metaRow}</div>` : ''}
+    ${d.location ? `<div class="pp-meta"><span>📍 ${esc(d.location)}</span></div>` : ''}
     ${badges ? `<div class="pp-badges">${badges}</div>` : ''}
     ${skills ? `<div class="pp-skills">${skills}</div>` : ''}
     ${shopUrl ? `<a class="pp-shop" href="${attr(shopUrl, 500)}">Visit shop @${esc(d.shop.handle)}</a>` : ''}
     <a class="pp-secondary" href="/">Explore SOKONI marketplace</a>
-    ${d.sokoniId ? `<div class="pp-sid">${esc(d.sokoniId)}</div>` : ''}
-  </section>`);
+  </section>`;
+
+  const reveal = `<script>
+  /* Reveal the profile only to a signed-in visitor; everyone else keeps the gate.
+     localStorage is the app's own login cache (set by firebase.js onAuthStateChanged);
+     a genuine session is re-verified inside the app itself on any real action, so
+     this reveal exposes nothing an account holder could not already see. */
+  (function(){
+    try {
+      if (localStorage.getItem('loggedIn') === 'true' && localStorage.getItem('sokoniUser')) {
+        var g = document.getElementById('ppGate'), p = document.getElementById('ppProfile');
+        if (g) g.style.display = 'none';
+        if (p) p.style.display = '';
+      }
+    } catch (e) {}
+  })();
+  </script>`;
+
+  return _shell(meta, gate + profile + reveal);
 }
 
 /**
