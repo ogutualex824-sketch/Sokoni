@@ -26,7 +26,7 @@
    the SKIP_CACHE_PATTERNS fix below never reaches users whose browser already
    holds v100, and Google sign-in would stay broken for exactly the people
    already affected. */
-const CACHE_VERSION = "sokoni-20260724-app-shell-v101";
+const CACHE_VERSION = "sokoni-20260725-app-shell-v102";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -655,6 +655,15 @@ self.addEventListener("fetch", event => {
     "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js",
     "sokoni-payment-engine.js","sokoni-payment-trust.js","sokoni-fraud-engine.js","sokoni-webhook-engine.js",
     "sokoni-offline.js","sokoni-ui.js","shared-header.js","sw-register.js",
+    /* The menu drawer's CSS and JS MUST stay network-first alongside shared-header.js,
+       because the header builds the drawer markup and the two are versioned together.
+       shared-header.js was ALWAYS_FRESH but sokoni-drawers.css / sokoni-drawer.js were
+       only precached + stale-while-revalidate, so a returning user got the NEW header
+       markup with the OLD drawer stylesheet. After sokoni-drawers.css changed by ~600
+       lines that mismatch rendered the menu as a black, empty panel ("menu brings a
+       black blank"). Keeping all three fresh together guarantees the drawer a page
+       opens is styled by the stylesheet that matches its markup. */
+    "sokoni-drawers.css","sokoni-drawer.js",
     /* Auth-critical scripts: a stale version of any of these can silently
        break sign-in, getRedirectResult, or session persistence. Always
        fetch from network when reachable so fixes deploy immediately. */
