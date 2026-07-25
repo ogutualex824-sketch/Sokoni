@@ -361,6 +361,15 @@ class AlgoliaBrowserClient {
       })),
     });
 
+    /* A well-formed empty response, one slot per request, so a caller doing
+       results[i] / results[0] never dereferences undefined. Returned when every
+       host has been tried and none produced results — search then degrades to
+       the Firestore fallback instead of the whole render aborting. */
+    const emptyResults = () => ({
+      results: (queries || []).map(() => ({ hits: [], nbHits: 0, nbPages: 0, page: 0 })),
+    });
+
+    let sawMissing = false;
     for (const host of hosts) {
       try {
         const res = await fetch(`${host}/1/indexes/*/queries`, {
@@ -370,6 +379,16 @@ class AlgoliaBrowserClient {
           signal,
         });
         if (!res.ok) {
+          /* 404 = an index in the batch does not exist (e.g. an autocomplete or
+             suggestions index that was never created), or a transient
+             host-specific miss. It must NOT throw: a 404 on a secondary query
+             was aborting the whole search render even when the primary query had
+             already returned hits. Try the next host; if all 404, degrade to
+             empty results below rather than throwing. */
+          if (res.status === 404) { sawMissing = true; continue; }
+          /* Other 4xx (400 malformed, 403 auth) are genuine faults worth
+             surfacing — they recur identically, trip the breaker, and hand over
+             to Firestore. */
           if (res.status >= 400 && res.status < 500) {
             const err = await res.json().catch(() => ({}));
             throw new Error(err.message || `Algolia ${res.status}`);
@@ -379,10 +398,19 @@ class AlgoliaBrowserClient {
         return res.json();
       } catch (err) {
         if (err.name === 'AbortError') throw err;
-        if (hosts.indexOf(host) === hosts.length - 1) throw err;
+        if (hosts.indexOf(host) === hosts.length - 1) {
+          /* Last host errored. A missing index degrades to empty; anything else
+             is a real fault worth surfacing to the fallback path. */
+          if (sawMissing) return emptyResults();
+          throw err;
+        }
         /* Try next host */
       }
     }
+    /* Every host exhausted without a 2xx (all 404s, or all 5xx). Degrade to a
+       well-formed empty result rather than returning undefined, which would
+       throw at the call site and abort the render. */
+    return emptyResults();
   }
 
   /**

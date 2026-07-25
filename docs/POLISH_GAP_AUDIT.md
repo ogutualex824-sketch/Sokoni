@@ -163,10 +163,26 @@ evidence; every fix exposed the layer beneath it.
 4 rendered 4 cards (the exact count the index holds); 1 cold first-hit rendered
 0 despite receiving the 4 hits, with a `404` on a wildcard `*` index.
 
-**Residual — ⚠️ open:** the coldest first query still misses ~1/5, with a
-`404` on index `*` (a malformed/wildcard index query that only fires before the
-config fully resolves on a cold load). Smaller and separate from the outage;
-needs its own fix. **Do not call search 100% until this is characterised.**
+**Third bug found + fixed (2026-07-24):** the `404 *` was **not** a wildcard
+index — `/1/indexes/*/queries` is Algolia's multi-query batch endpoint (`*` is
+literal in that path). `AlgoliaBrowserClient.multiSearch` **threw** on any 4xx,
+so a 404 on a *secondary* query (an autocomplete/suggestions index that was never
+created, or a transient host miss) aborted the whole render even when the primary
+query had already returned hits. Fix: a 404 retries the next host, then degrades
+to a well-formed empty result — it never throws and never aborts the render.
+Other 4xx (400/403) still surface. Also fixed a latent bug where all-hosts-fail
+returned `undefined`, throwing at the call site.
+
+**Verified (production, other agent stopped, tree stable):** 6 fresh runs of
+`?q=vape` → **5 rendered 5 cards; the `404`-abort is gone from every run.** The
+single miss is a pure cold-start (CF init exceeded the 6s budget, no query
+fired) — first-query-only, and it self-corrects on the next keystroke.
+
+**Residual — ⚠️ minor, open:** coldest first query on a completely fresh session
+still misses ~1/6 when the secured-key Cloud Function cold-starts beyond 6s.
+Bounded to the first query of a session; warm performance is 100%. Bumping the
+init budget would reduce it at a latency cost — deferred as a tuning decision,
+not a correctness bug.
 
 **Probe-validity corrections made mid-investigation** (all recorded in *Revised
 findings*): read `sokoni_global` from a comment (real index `global_search`);
