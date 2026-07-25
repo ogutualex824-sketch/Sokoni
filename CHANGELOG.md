@@ -1,3 +1,47 @@
+## [2026-07-26] — feat(minishop-admin): storefront hero, sourced performance tiles, and a real fix for stats that always read 0
+
+First slice of the MiniShop redesign — the page should read as the seller's
+business home, not a settings form. Scoped to what the platform can actually
+compute; sections needing data we do not capture are deliberately absent.
+
+### The tiles were never wired
+
+`loadQuickStats()` delegated to `window.SokoniMiniShop.getQuickStats` — **a
+function that does not exist anywhere in the codebase.** The `else` branch ran on
+every load and wrote a hardcoded `'0'` into all four tiles, so every seller's
+dashboard reported zero views and zero followers regardless of real traffic. The
+`.catch` did the same thing, so a failed read was also indistinguishable from a
+genuine zero.
+
+Now wired to real sources: `getMinishopAnalytics` (owner-scoped) for
+`views`, `daily.{YYYYMMDD}` and `followerCount`, plus a single-field `products`
+query for the product count. A failed read renders **"Unavailable"** in warn
+colour, never `0`. A Firestore read that resolves `fromCache && empty` — the
+offline failure mode that looks like success — is treated as unknown, not zero.
+
+### Changes
+
+- **Branded hero** replaces the plain "Your MiniShop URL" card: cover, logo,
+  shop name, tagline, status chip, compact address row with Copy, and
+  Visit Shop / QR / Edit Handle actions. The large Claim block still shows only
+  while unclaimed, so it stops dominating the page once a handle exists.
+- **Performance tiles** rebuilt with icons, shimmer-on-load and hover lift.
+  "Shop Orders" was **removed** — nothing attributes orders to a shop yet, so the
+  tile could never be populated. Replaced with Products, which is real.
+- **Tabs**: `min-height:44px` (was a 42px target on a phone) and
+  `scroll-snap-type: x proximity`, so a flicked belt lands on a tab boundary.
+- **Spacing**: content padding 24px → 28px top / 96px bottom.
+
+### Not built, and why
+
+Today's sales, conversion, wishlist adds, cart abandonment, returning customers,
+top city, average session, most-viewed product, SEO score, pixels, themes and
+custom domain are **not** in this commit. `minishopAnalytics/{shopId}` stores only
+`views`, `sources.*` and `daily.*` — there is no event capture behind any of those
+numbers. Rendering them would mean fabricating data, which
+[[feedback_healthy_looking_failure]] forbids. They need an events + rollup layer
+first; tracked as the next phase.
+
 ## [2026-07-26] — fix(minishop-admin): header and tab belt collided; page scrolled sideways on mobile
 
 Reported as the MiniShop header and the belt beneath it sitting "on top of each other".
