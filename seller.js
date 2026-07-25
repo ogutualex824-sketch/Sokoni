@@ -382,6 +382,50 @@ function showNotification(message,type){
    Works on any uploaded photo automatically.
 ========================= */
 
+/* Resize + recompress a File/Blob to a JPEG Blob before upload.
+   Mirrors compressImage()'s dimensions (max 800px, q0.82) but returns a Blob via
+   canvas.toBlob() rather than a base64 dataURL, so no ~33% base64 inflation is
+   paid on the wire.
+
+   WHY THIS EXISTS: _uploadImagesToStorage used to send imageItems[i].file — the
+   RAW original the seller picked — straight to Storage, then the product's `image`
+   field was overwritten with that URL (seller.js ~881), discarding the compressed
+   800px copy that had already been computed. Measured on production: real merchant
+   uploads were 694KB each, served full-size into 158px cards, so on a mobile
+   connection a product grid effectively never finished loading — reported as
+   "product images not working". An 800px JPEG at q0.82 is ~80-140KB, ~5-8x smaller.
+
+   Fails OPEN: any error (decode failure, tainted canvas, no toBlob) resolves to
+   the original file, so a listing never fails to upload because compression could
+   not run — it just uploads large, exactly as before. */
+function _compressToBlob(file, maxW, quality) {
+    maxW = maxW || 800; quality = quality || 0.82;
+    return new Promise(function (resolve) {
+        try {
+            var img = new Image();
+            var url = URL.createObjectURL(file);
+            img.onload = function () {
+                try {
+                    var w = img.width, h = img.height;
+                    if (w > maxW) { h = Math.round((maxW / w) * h); w = maxW; }
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    URL.revokeObjectURL(url);
+                    if (!canvas.toBlob) { resolve(file); return; }
+                    canvas.toBlob(function (blob) {
+                        /* Only keep the recompressed blob if it is actually smaller;
+                           a tiny source can grow when re-encoded. */
+                        resolve(blob && blob.size < file.size ? blob : file);
+                    }, 'image/jpeg', quality);
+                } catch (e) { URL.revokeObjectURL(url); resolve(file); }
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        } catch (e) { resolve(file); }
+    });
+}
+
 /* Upload an array of {file} objects to Firebase Storage.
    Returns array of download URLs on success, null on failure. */
 async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
@@ -396,7 +440,10 @@ async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
                 window.firebaseStorage,
                 `product-images/${sellerUid || 'anon'}/${productId}/${i}.jpg`
             );
-            const snap = await uploadBytes(storageRef, imageItems[i].file, { contentType: 'image/jpeg' });
+            /* Compress before upload — see _compressToBlob. The raw file was being
+               stored and then served full-size into thumbnail-sized cards. */
+            const blob = await _compressToBlob(imageItems[i].file);
+            const snap = await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
             urls.push(await getDownloadURL(snap.ref));
         }
         return urls;
@@ -745,6 +792,13 @@ async function addProduct(){
             uploadedAt: Date.now(),
             wholesalePrice:  wholesalePrice > 0 ? wholesalePrice : null,
             minWholesaleQty: wholesalePrice > 0 ? minWholesaleQty : null,
+            /* Category-dependent variants (colours / sizes / storage / pack size).
+               Spread from the shared schema so upload and edit write the SAME
+               keys — the drift these two forms are prone to is exactly what the
+               schema exists to prevent. */
+            ...(window.SokoniProductSchema && window.SokoniProductSchema.serializeVariants
+                ? window.SokoniProductSchema.serializeVariants('product', productCategory)
+                : {}),
             isDigital,
             digitalUrl:      isDigital ? digitalUrl : null,
             digitalLicense:  isDigital ? digitalLicense : null,
@@ -1368,6 +1422,34 @@ function _syncEditCategoryOptions(currentCat) {
     }
 }
 
+/* Keep the variant chips in step with the chosen category, on both forms.
+   Bound once, lazily, because the edit modal's category <select> is rebuilt by
+   _syncEditCategoryOptions() and a listener attached to the old node would be
+   discarded — binding on the element that survives (the select id) after each
+   open is simpler than re-binding inside the rebuild. */
+function _bindVariantCategorySync() {
+  var schema = window.SokoniProductSchema;
+  if (!schema || !schema.renderVariants) return;
+  [['productCategory', 'product'], ['editCategory', 'edit']].forEach(function (pair) {
+    var sel = document.getElementById(pair[0]);
+    if (!sel || sel._skVarSync) return;
+    sel.addEventListener('change', function () {
+      /* Re-render for the new category. Current selections are re-read first so
+         an attribute shared by both categories (colours, usually) keeps what the
+         seller already picked instead of silently resetting. */
+      var keep = schema.serializeVariants(pair[1], sel.value) || {};
+      schema.renderVariants(pair[1], sel.value, keep);
+    });
+    sel._skVarSync = true;
+  });
+}
+document.addEventListener('DOMContentLoaded', function () {
+  _bindVariantCategorySync();
+  var schema = window.SokoniProductSchema;
+  var sel = document.getElementById('productCategory');
+  if (schema && schema.renderVariants && sel) schema.renderVariants('product', sel.value, {});
+});
+
 function editProduct(index) {
     _editIndex = index;
     _editImages = [];
@@ -1392,6 +1474,14 @@ function editProduct(index) {
         const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
         setVal("editName", p.name); setVal("editPrice", p.price); setVal("editCategory", p.category || "other");
         setVal("editStock", p.stock); setVal("editDescription", p.description);
+    }
+
+    /* Variant chips for this product's category, pre-selected from what it
+       already has. Rendered AFTER populate so the category select holds the
+       product's real category, and re-bound because the select was rebuilt. */
+    if (window.SokoniProductSchema && window.SokoniProductSchema.renderVariants) {
+        window.SokoniProductSchema.renderVariants('edit', p.category, p);
+        _bindVariantCategorySync();
     }
 
     /* Load images into multi-image editor */
@@ -1447,6 +1537,10 @@ function saveEditProduct() {
         name  = patch.name;
         price = patch.price;
         cat   = patch.category || "other";
+        /* Variants are keyed off the CURRENT category, and keys that no longer
+           apply come back null so a re-categorised product actively loses stale
+           values — a shirt changed to "electronics" must not keep its sizes. */
+        if (schema.serializeVariants) Object.assign(patch, schema.serializeVariants('edit', cat));
     } else {
         /* Fallback if the schema failed to load — the original hand read. */
         name  = document.getElementById("editName")?.value.trim();
