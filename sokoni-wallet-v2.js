@@ -200,6 +200,9 @@ window.SokoniWalletV2 = (function () {
 
   /* ─── DASHBOARD ─── */
   async function loadDashboard() {
+    /* Optimistic: paint the last-known balance instantly from cache so the wallet
+       doesn't sit blank while it re-syncs; the CF below refreshes it. */
+    try { const _cb = localStorage.getItem('_walletBal'); const _be = document.getElementById('balVal'); if (_cb != null && _be && !_be.textContent.trim()) _be.textContent = _fmt(Number(_cb) || 0); } catch (_) {}
     try {
       let data;
       try {
@@ -218,6 +221,7 @@ window.SokoniWalletV2 = (function () {
       /* Update balance */
       const balEl = document.getElementById('balVal');
       if (balEl) balEl.textContent = _fmt(data.balance);
+      try { localStorage.setItem('_walletBal', String(data.balance || 0)); } catch (_) {}
 
       /* Sub-balance mini cards */
       _setText('savingsTotal', 'KSh ' + _fmtShort(data.savingsBalance || 0));
@@ -712,8 +716,16 @@ window.SokoniWalletV2 = (function () {
 
   /* ─── WITHDRAW / PAYOUT ─── */
   function openWithdraw() {
-    _setText('wdrAvail', 'KSh ' + _fmt(_dashboard?.balance || 0));
     openOverlay('ovlWithdraw');
+    if (_dashboard) {
+      _setText('wdrAvail', 'KSh ' + _fmt(_dashboard.balance || 0));
+    } else {
+      /* Balance not loaded yet (wallet still syncing) — show a loading state and
+         fetch it, so the user isn't shown a false KSh 0 and requestPayout has a
+         real balance to check. */
+      _setText('wdrAvail', 'Loading…');
+      loadDashboard().then(() => _setText('wdrAvail', 'KSh ' + _fmt(_dashboard?.balance || 0))).catch(() => {});
+    }
   }
 
   function wdrMethodChange() {
@@ -726,7 +738,13 @@ window.SokoniWalletV2 = (function () {
     const amt    = Number(document.getElementById('wdrAmount')?.value);
     const method = document.getElementById('wdrMethod')?.value || 'mpesa';
     if (!amt || amt < 100) return toast('Minimum withdrawal is KSh 100', 'error');
-    if (amt > (_dashboard?.balance || 0)) return toast('Insufficient balance', 'error');
+    /* Only pre-check when the balance is actually loaded. The wallet loads the
+       balance asynchronously; before it arrives _dashboard is null, and the old
+       check treated that as KSh 0 and silently rejected every payout with
+       "Insufficient balance" — the button looked dead. requestSellerPayout
+       validates the balance server-side regardless, so when it's unknown, proceed
+       and let the server be the authority. */
+    if (_dashboard && amt > (_dashboard.balance || 0)) return toast('Insufficient balance', 'error');
 
     let payload = { amount: amt, method };
     if (method === 'mpesa') {
