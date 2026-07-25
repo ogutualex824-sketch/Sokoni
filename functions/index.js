@@ -1263,14 +1263,17 @@ async function _execChatTool(name, input, ctx) {
       const rows = [];
 
       if (!t || t === "products" || t === "all") {
-        let q = db.collection("products").limit(10);
+        /* Fetch a wider candidate set and surface up to 12 matches — the widget
+           now renders a compact, scrollable list, so KASS can recommend a fuller
+           set of products (was capped at 5) instead of a token handful. */
+        let q = db.collection("products").limit(30);
         if (category) q = q.where("category", "==", category);
         if (maxPrice)  q = q.where("price", "<=", maxPrice).orderBy("price");
         const snap = await q.get().catch(() => ({ docs: [] }));
         snap.docs.filter(d => {
           const n = (d.data().name || "").toLowerCase();
           return !query || n.includes(query.toLowerCase()) || (d.data().category || "").toLowerCase().includes(query.toLowerCase());
-        }).slice(0, 5).forEach(d => {
+        }).slice(0, 12).forEach(d => {
           const r = d.data();
           const card = { type:"product", id:d.id, name:r.name, price:r.price, category:r.category, image:r.imageUrl||r.image, rating:r.avgRating||r.rating, url:`product.html?id=${d.id}`, seller:r.sellerName||r.shopName };
           rows.push(card); ctx.addResult(card);

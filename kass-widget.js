@@ -453,20 +453,27 @@
     '@keyframes k-bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}',
 
     /* ── Result cards ── */
-    '.kc-results{display:flex;flex-direction:column;gap:6px;margin-top:8px;}',
-    '.kc-card{display:flex;align-items:center;gap:10px;',
+    /* Compact result cards: a small 38px thumbnail keeps the product details
+       close to the left edge (a larger image pushed them to the right and wasted
+       width), and the tighter padding lets ~10+ recommendations sit in the scroll
+       area cleanly instead of only a handful. */
+    '.kc-results{display:flex;flex-direction:column;gap:5px;margin-top:8px;max-height:340px;overflow-y:auto;}',
+    '.kc-results::-webkit-scrollbar{width:3px;}',
+    '.kc-results::-webkit-scrollbar-thumb{background:rgba(255,255,255,.12);border-radius:3px;}',
+    '.kc-card{display:flex;align-items:center;gap:9px;',
     'background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);',
-    'border-radius:10px;padding:8px 10px;cursor:pointer;transition:background .15s;text-align:left;}',
+    'border-radius:9px;padding:6px 8px;cursor:pointer;transition:background .15s;text-align:left;}',
     '.kc-card:hover,.kc-card:focus{background:rgba(255,255,255,.1);outline:none;}',
-    '.kc-card-img{width:50px;height:50px;object-fit:cover;border-radius:7px;',
+    '.kc-card-img{width:38px;height:38px;object-fit:cover;border-radius:7px;',
     'flex-shrink:0;background:#222;}',
-    '.kc-card-ph{width:50px;height:50px;border-radius:7px;background:#1e1e1e;',
-    'display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}',
+    '.kc-card-ph{width:38px;height:38px;border-radius:7px;background:#1e1e1e;',
+    'display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}',
     '.kc-card-body{flex:1;min-width:0;}',
     '.kc-card-name{font-size:12.5px;font-weight:700;color:#fff;',
     'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
-    '.kc-card-price{font-size:12px;color:#71ff00;font-weight:700;margin-top:2px;}',
-    '.kc-card-meta{font-size:11px;color:rgba(255,255,255,.4);margin-top:2px;}',
+    '.kc-card-price{font-size:12px;color:#71ff00;font-weight:700;margin-top:1px;}',
+    '.kc-card-meta{font-size:11px;color:rgba(255,255,255,.4);margin-top:1px;',
+    'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
     '.kc-badge{font-size:10px;padding:2px 6px;border-radius:10px;',
     'background:rgba(113,255,0,.12);color:#71ff00;font-weight:700;margin-left:4px;',
     'vertical-align:middle;}',
@@ -729,8 +736,10 @@
     }
 
     if (data.results && data.results.length) {
+      /* Show up to 12 (was 5) — the compact card + scrollable results area means
+         KASS can surface a fuller set of recommendations without crowding. */
       html += '<div class="kc-results">';
-      for (var i = 0; i < Math.min(data.results.length, 5); i++) {
+      for (var i = 0; i < Math.min(data.results.length, 12); i++) {
         html += _cardHtml(data.results[i]);
       }
       html += '</div>';
