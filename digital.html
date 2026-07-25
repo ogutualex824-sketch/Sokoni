@@ -751,7 +751,7 @@ async function flLoadAll(){
   _flDataUnsubs.forEach(function(u){if(u)u();}); _flDataUnsubs=[];
   try{
     var mod = await import('https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js');
-    var {collection, query, orderBy, limit, onSnapshot} = mod;
+    var {collection, query, where, orderBy, limit, onSnapshot} = mod;
 
     _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalGigs'), orderBy('createdAt','desc'), limit(100)), snap=>{
       _flGigs = snap.docs.map(d=>({id:d.id,...d.data()}));
@@ -761,25 +761,41 @@ async function flLoadAll(){
       flRenderGigs();
       if(_activeTab==='talent') flRenderTalent();
     }, function(err){console.warn('[digital] gigs listener error:',err);}));
-    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalJobs'), orderBy('createdAt','desc'), limit(100)), snap=>{
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalJobs'), where('status','in',['active','published']), limit(100)), snap=>{
       _flJobs = snap.docs.map(d=>({id:d.id,...d.data()}));
       _lsSet('flJobs',_flJobs);
       flUpdateStats();
       if(_activeTab==='jobs') flRenderJobs();
     }, function(err){console.warn('[digital] jobs listener error:',err);}));
-    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalProposals'), orderBy('createdAt','desc'), limit(200)), snap=>{
+    /* Proposals and contracts are private to their two parties. These listeners
+       used to request the whole collection and narrow it in the browser, which
+       the owner-scoped rules now (correctly) deny — and which, had the rules
+       been written to permit it, would have handed every freelancer's bids and
+       every client's contracts to anyone who opened the page.
+       `where` on an owner field, no orderBy, so no composite index is needed;
+       ordering is applied after the merge. */
+    var _flUid = _uid();
+    var _flSortDesc = function(rows){
+      return rows.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+    };
+    if (_flUid) {
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalProposals'), where('freelancerUid','==',_flUid), limit(200)), snap=>{
       var prev = _flProposals.map(p=>p.id);
-      _flProposals = snap.docs.map(d=>({id:d.id,...d.data()}));
+      _flProposals = _flSortDesc(snap.docs.map(d=>({id:d.id,...d.data()})));
       _lsSet('flProposals',_flProposals);
       /* notify client when new proposal arrives on their job */
-      var myJobIds = _flJobs.filter(j=>j.posterUid===_uid()).map(j=>j.id);
+      var myJobIds = _flJobs.filter(j=>(j.posterUid||j.employerUid)===_uid()).map(j=>j.id);
       _flProposals.filter(p=>!prev.includes(p.id)&&myJobIds.includes(p.jobId)).forEach(p=>{
         flPushNotif('📨 New proposal from '+p.freelancerName+' — KES '+Number(p.bid).toLocaleString(),'proposal');
       });
     }, function(err){console.warn('[digital] proposals listener error:',err);}));
-    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalContracts'), orderBy('createdAt','desc'), limit(50)), snap=>{
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalContracts'), where('clientUid','==',_flUid), limit(50)), snap=>{
       var prev = _flContracts.map(c=>c.id);
-      _flContracts = snap.docs.map(d=>({id:d.id,...d.data()}));
+      var asClient = snap.docs.map(d=>({id:d.id,...d.data()}));
+      var asFreelancer = _flContracts.filter(function(c){ return c.freelancerUid===_flUid; });
+      _flContracts = _flSortDesc(asClient.concat(asFreelancer.filter(function(c){
+        return !asClient.some(function(x){ return x.id===c.id; });
+      })));
       _lsSet('flContracts',_flContracts);
       /* notify freelancer when contract is awarded */
       _flContracts.filter(c=>!prev.includes(c.id)&&c.freelancerUid===_uid()).forEach(c=>{
@@ -795,8 +811,15 @@ async function flLoadAll(){
         flPushNotif('⭐ New '+(r.rating)+'-star review from '+r.reviewerName,'review');
       });
     }, function(err){console.warn('[digital] reviews listener error:',err);}));
-    /* messages listener — load all chats involving current user */
-    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalMessages'), orderBy('ts','asc'), limit(500)), snap=>{
+    /* Messages listener — the user's own chats only.
+       This previously pulled 500 messages from every conversation on the
+       platform and bucketed them by chatId in the browser: every user's private
+       negotiation was delivered to every other user's device. chatId is
+       composed from both parties' uids, so an array-membership field would be
+       the clean long-term shape; until then the sender-scoped query below is
+       what the rules permit, and the counterparty's replies arrive through the
+       per-chat listener opened when a conversation is viewed. */
+    _flDataUnsubs.push(onSnapshot(query(collection(db,'digitalMessages'), where('senderUid','==',_flUid), limit(500)), snap=>{
       var uid=_uid();
       var byChat={};
       snap.docs.forEach(d=>{var m={id:d.id,...d.data()};if(!byChat[m.chatId])byChat[m.chatId]=[];byChat[m.chatId].push(m);});
@@ -814,6 +837,7 @@ async function flLoadAll(){
       if(_activeTab==='messages') flRenderConvos();
       if(document.getElementById('chatModal').classList.contains('open')&&_currentChatId) _renderMsgs(_flMessages[_currentChatId]||[]);
     }, function(err){console.warn('[digital] messages listener error:',err);}));
+    } /* end if (_flUid) — private listeners require a signed-in user */
   }catch(e){}
 }
 

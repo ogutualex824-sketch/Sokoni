@@ -1642,6 +1642,7 @@
 
     let _acTimer = null;
     let _focusIdx = -1;
+    let _warmStarted = false;
 
     function _items() {
       return Array.from(dropdown.querySelectorAll('.sk-ac-item'));
@@ -1719,25 +1720,78 @@
     }
 
     function _query(q) {
-      /* Try SokoniSearchPro first, then SokoniSearch, then nothing */
+      /* Cached suggestions first — they render in the same frame the user
+         typed in. Anything that needs the network can only arrive after the
+         next keystroke, by which point it is answering a stale prefix. */
+      var api = window.SokoniFirestoreSearch;
+      if (api && api.suggest) {
+        var instant = api.suggest(q, 6);
+        if (instant && instant.length) {
+          _render(instant.map(function(r) {
+            var num = r.price ? Number(String(r.price).replace(/[^0-9.]/g, '')) : null;
+            return {
+              id: r.id, name: r.title, href: r.link,
+              category: r.subtitle, hub: r.tab,
+              price: (num && !isNaN(num)) ? num : null,
+            };
+          }), q);
+          return;
+        }
+      }
+
+      /* Try SokoniSearchPro first, then SokoniSearch, then Firestore */
       if (window.SokoniSearchPro && window.SokoniSearchPro.autocomplete) {
         window.SokoniSearchPro.autocomplete(q, { limit: 6 })
-          .then(function(r) { _render(r, q); })
-          .catch(function() { _fallback(q); });
+          .then(function(r) { if (r && r.length) _render(r, q); else _firestoreSuggest(q); })
+          .catch(function() { _firestoreSuggest(q); });
         return;
       }
       if (window.SokoniSearch) {
         const r = window.SokoniSearch.getSuggestions
           ? window.SokoniSearch.getSuggestions(q, 6)
           : [];
-        _render(r.map(function(s) {
-          return typeof s === 'string'
-            ? { name: s, type: 'product' }
-            : s;
-        }), q);
-        return;
+        if (r && r.length) {
+          _render(r.map(function(s) {
+            return typeof s === 'string'
+              ? { name: s, type: 'product' }
+              : s;
+          }), q);
+          return;
+        }
       }
-      _fallback(q);
+      _firestoreSuggest(q);
+    }
+
+    /* Last resort before the bare "search for X" shortcut: read Firestore
+       directly. An empty autocomplete usually means the Algolia index is stale
+       or its key is unavailable, not that the catalogue is empty — and a buyer
+       typing a product name deserves the product, not a dead dropdown. */
+    function _firestoreSuggest(q) {
+      if (!window.firebaseDB) { _fallback(q); return; }
+      /* The module is an ES module; load it on demand so every page carrying
+         the shared header gets the fallback without another blocking script. */
+      const ready = window.SokoniFirestoreSearch
+        ? Promise.resolve(window.SokoniFirestoreSearch)
+        : import('/sokoni-firestore-search.js').then(function() { return window.SokoniFirestoreSearch; });
+
+      ready
+        .then(function(api) {
+          if (!api) throw new Error('firestore search unavailable');
+          return api.search(q, { limit: 6 });
+        })
+        .then(function(rows) {
+          if (!rows || !rows.length) { _fallback(q); return; }
+          _render(rows.map(function(r) {
+            /* _render formats the price itself, so hand it a number. */
+            const num = r.price ? Number(String(r.price).replace(/[^0-9.]/g, '')) : null;
+            return {
+              id: r.id, name: r.title, href: r.link,
+              category: r.subtitle, hub: r.tab,
+              price: (num && !isNaN(num)) ? num : null,
+            };
+          }), q);
+        })
+        .catch(function() { _fallback(q); });
     }
 
     function _fallback(q) {
@@ -1798,6 +1852,17 @@
 
     input.addEventListener('focus', function() {
       if (this.value.trim().length === 0) _renderFocusState();
+      /* Warm the catalogue on first focus — the user has signalled intent to
+         search, so the data is loading while they type the first character. */
+      if (!_warmStarted && window.firebaseDB) {
+        _warmStarted = true;
+        import('/sokoni-firestore-search.js')
+          .then(function() {
+            var api = window.SokoniFirestoreSearch;
+            if (api && api.warm) api.warm();
+          })
+          .catch(function() {});
+      }
     });
 
     input.addEventListener('keydown', function(e) {

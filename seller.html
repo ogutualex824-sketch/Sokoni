@@ -43,6 +43,10 @@
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="stylesheet" href="sokoni-drawers.css">
 <style>
+/* Variant-chip styles are NOT here — sokoni-product-schema.js injects them, so
+   the renderer and its appearance travel together and a second page adopting
+   the schema cannot end up with unstyled chips. */
+
 /* ── SOKONI Premium Dark Standard ─────────────────────────────────────── */
 :root{
   --bg:#050505; --sur:#0d0d0d; --sur2:#141414;
@@ -637,6 +641,12 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
             <option value="remote">💻 Online / Remote</option>
             <option value="worldwide">🌐 Worldwide</option>
         </select></div><!-- end cat+location grid -->
+
+        <!-- Category-dependent variants (colours, sizes, storage, pack size …).
+             Rendered by SokoniProductSchema.renderVariants() from the selected
+             category, so a shoe offers 36-46 and a phone offers storage rather
+             than every product offering the same meaningless "Size" box. -->
+        <div id="productVariants" class="sk-variants" style="display:none;"></div>
 
         <div style="margin-bottom:10px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -5181,6 +5191,10 @@ class="notification-container"
         <input type="number" id="editStock" min="0" placeholder="e.g. 10" style="width:100%;padding:11px 13px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:white;font-size:16px;outline:none;font-family:inherit;transition:border-color .15s;" onfocus="this.style.borderColor='rgba(113,255,0,0.4)'" onblur="this.style.borderColor='rgba(255,255,255,0.1)'">
       </div>
     </div>
+
+    <!-- Same variant block as upload, same renderer, same category map — the
+         whole point of the shared schema is that these two forms cannot drift. -->
+    <div id="editVariants" class="sk-variants" style="display:none;"></div>
 
     <!-- Fields the edit modal was missing. Upload captured cost price, delivery
          cost, location and wholesale, but Edit could not change any of them, so a

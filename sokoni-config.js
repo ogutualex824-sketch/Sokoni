@@ -61,8 +61,8 @@ window.SOKONI_CONFIG = {
      d) Search key: stored in Secret Manager as ALGOLIA_SEARCH_KEY.
         The client fetches a short-lived secured key at runtime via the
         getAlgoliaSearchKey Cloud Function — no static key is kept in this file.
-     e) Set env var: add ALGOLIA_APP_ID=FF2WSTR4YC to functions/.env             */
-  algoliaAppId:    "FF2WSTR4YC",
+     e) Set env var: add ALGOLIA_APP_ID=F2XND3V1FW to functions/.env             */
+  algoliaAppId:    "F2XND3V1FW",
   algoliaSearchKey: "",   // loaded at runtime via getAlgoliaSearchKey CF
 
   /* Primary index */

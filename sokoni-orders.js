@@ -217,7 +217,25 @@ const SokoniOrders = {
   TRANSITIONS,
 
   /* ── createOrder(opts) ──
-     Initial order creation — writes with status = pending_payment.
+     ⚠️ UNREACHABLE BY THE CURRENT CHECKOUT FLOW — DO NOT REUSE WITHOUT REDESIGN.
+     ────────────────────────────────────────────────────────────────────────
+     Checkout (checkout.html) writes the order document itself and then calls
+     transitionOrder(); it never calls createOrder(). This method is retained
+     only for reference.
+
+     It is INCOMPATIBLE WITH FIRESTORE RULES as written: it sets `escrow` (and a
+     pending_payment status) in the create payload, and firestore.rules
+     `clientOrderInit()` explicitly REJECTS a create that carries `escrow`,
+     `paymentVerified`, `inventoryApplied`, etc. A client call to this method
+     is therefore denied outright. `escrow` is money, not intent — only the
+     server-side payment callback may open it.
+
+     If order creation ever needs to move here, it must first be stripped of
+     every server-owned field (escrow, settlement, payout, fulfilment) so the
+     create payload satisfies clientOrderInit — or be moved into a Cloud
+     Function, which bypasses rules. Wiring it into checkout as-is will break
+     ordering platform-wide. See docs/RELEASE_ACCEPTANCE.md §Write-path P3.
+
      opts: { id, buyerUid, buyerName, buyerPhone, sellerUid, sellerName,
              sellerPhone, items[], orderTotal, deliveryFee, category,
              pickupAddress, pickupCoords, deliveryAddress, deliveryCoords,

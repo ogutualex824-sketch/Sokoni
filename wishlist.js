@@ -1,3 +1,19 @@
+/* NOTE: this file is currently DEAD CODE — no page loads it (it survives only in
+   the service-worker precache list and in a couple of comments). It is escaped
+   anyway so that wiring it up later cannot reintroduce the stored XSS that was
+   found and fixed in wishlist.html's own renderer on 2026-07-24. */
+function _wlEsc(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+}
+function _wlSafeImg(url){
+  if(!url) return 'assets/default-product.png';
+  const u = String(url);
+  return (/^https?:\/\//i.test(u) || /^\/[^/]/.test(u) || !/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(u))
+    ? _wlEsc(u) : 'assets/default-product.png';
+}
+
 let wishlist = [];
 try { wishlist = JSON.parse(localStorage.getItem("wishlist")) || []; }
 catch(e) { wishlist = []; }
@@ -38,12 +54,12 @@ function renderWishlist(list){
     wishlistContainer.innerHTML = list.map((p, i) => `
         <div class="wish-card">
             <div class="wish-card-img-wrap">
-                <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}">
+                <img src="${_wlSafeImg(p.image)}" alt="${_wlEsc(p.name)}">
                 <button class="wish-remove-icon" onclick="removeWishlist(${wishlist.indexOf(p)})" title="Remove">✕</button>
             </div>
             <div class="wish-card-body">
-                <h3>${p.name}</h3>
-                <p class="wish-card-cat">${p.category ? p.category.charAt(0).toUpperCase() + p.category.slice(1) : 'Product'}</p>
+                <h3>${_wlEsc(p.name)}</h3>
+                <p class="wish-card-cat">${p.category ? _wlEsc(p.category.charAt(0).toUpperCase() + p.category.slice(1)) : 'Product'}</p>
                 <p class="wish-card-price">KES ${Number(p.price).toLocaleString()}</p>
                 <div class="wish-card-btns">
                     <button class="wish-add-cart-btn" onclick="moveToCart(${wishlist.indexOf(p)})">

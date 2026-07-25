@@ -1082,9 +1082,14 @@ function renderOverviewProducts(list) {
 /* ── Services ── */
 async function loadServices() {
   try {
+    /* The status filter is not optional. firestore.rules gates /services reads
+       on `resource.data.status`, and Firestore denies a list query it cannot
+       prove is safe — so the previous unfiltered query was rejected outright
+       and this page showed "No services yet" for a business that had them. */
     const q = query(
       collection(_db, 'services'),
       where('businessId', '==', BIZ_ID),
+      where('status', 'in', ['active', 'published']),
       limit(40)
     );
     const snap = await getDocs(q);
@@ -1140,20 +1145,24 @@ function renderOverviewServices(list) {
   el.innerHTML = list.map(s => serviceCardHtml(s)).join('');
 }
 
-/* ── Reviews ── */
+/* ── Reviews ──
+   Reads go through the canonical getReviews Cloud Function (functions/reviews.js),
+   the same service every other hub uses. The previous direct Firestore query
+   filtered on `businessId` with no `status` clause; /reviews only exposes rows
+   whose status is "approved", so Firestore rejected the whole query and this
+   page reported "No reviews yet" no matter what had been written. The CF also
+   returns the shape the platform standardises on — targetId/authorUid/body —
+   rather than this page's private businessId/reviewerUid/comment fields. */
 async function loadReviews() {
   let reviews = [];
   try {
-    const q = query(
-      collection(_db, 'reviews'),
-      where('businessId', '==', BIZ_ID),
-      limit(50)
-    );
-    const snap = await getDocs(q);
-    reviews = snap.docs.map(d => ({ id: d.id, ...d.data() }))
-      .sort((a,b) => (b.ts?.toMillis?.()||0) - (a.ts?.toMillis?.()||0));
+    const mod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    const fns  = mod.getFunctions(window.firebaseApp, 'us-central1');
+    const call = mod.httpsCallable(fns, 'getReviews');
+    const res  = await call({ targetId: BIZ_ID, sort: 'recent', limit: 50 });
+    reviews    = (res.data && res.data.reviews) || [];
   } catch (e) {
-    console.warn('[biz] reviews:', e);
+    console.warn('[biz] reviews:', e && e.message);
   }
 
   document.getElementById('bsReviews').textContent = reviews.length;
@@ -1190,11 +1199,19 @@ function renderRatingOverview(reviews) {
     </div>`;
 }
 
+/* Accepts both shapes: the canonical getReviews payload
+   (authorName / body / createdAt ISO string) and the legacy local one
+   (reviewerName / comment / ts Timestamp), so rows written before the
+   migration still render instead of showing a blank card. */
 function reviewCardHtml(r) {
-  const initials = (r.reviewerName || r.buyerName || 'A').charAt(0).toUpperCase();
-  const name     = escHtml(r.reviewerName || r.buyerName || 'Anonymous');
-  const date     = r.ts?.toDate ? r.ts.toDate().toLocaleDateString('en-KE') : escHtml(r.date || '');
+  const who      = r.authorName || r.reviewerName || r.buyerName || 'Anonymous';
+  const initials = who.charAt(0).toUpperCase();
+  const name     = escHtml(who);
+  const when     = r.createdAt ? new Date(r.createdAt)
+                 : (r.ts?.toDate ? r.ts.toDate() : null);
+  const date     = when && !isNaN(when) ? when.toLocaleDateString('en-KE') : escHtml(r.date || '');
   const stars    = renderStars(r.rating || r.stars || 0);
+  const text     = r.body || r.comment || '';
   return `
     <div class="biz-review-card">
       <div class="biz-review-top">
@@ -1207,7 +1224,8 @@ function reviewCardHtml(r) {
         </div>
         <div class="biz-review-stars">${stars}</div>
       </div>
-      ${r.comment ? `<div class="biz-review-comment">&ldquo;${escHtml(r.comment)}&rdquo;</div>` : ''}
+      ${r.title ? `<div class="biz-review-title" style="font-weight:700;margin-bottom:4px;">${escHtml(r.title)}</div>` : ''}
+      ${text ? `<div class="biz-review-comment">&ldquo;${escHtml(text)}&rdquo;</div>` : ''}
     </div>`;
 }
 
@@ -1265,38 +1283,45 @@ window.bizSubmitReview = async function () {
   btn.disabled = true;
   btn.textContent = 'Checking…';
   try {
-    /* Prevent duplicate reviews: one review per user per business */
-    const { getDocs, query: q2, where: w2 } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    const existing = await getDocs(q2(
-      collection(_db, 'reviews'),
-      w2('businessId', '==', BIZ_ID),
-      w2('reviewerUid', '==', user.uid || '')
-    ));
-    if (!existing.empty) {
-      showToast('You have already reviewed this business');
-      btn.disabled = false;
-      btn.textContent = 'Submit Review';
-      return;
-    }
+    /* Submission goes through the canonical submitReview Cloud Function.
+       The direct write this replaced could never succeed: /reviews create
+       requires claimsOwner() — request.resource.data.uid == auth.uid — and the
+       payload had no `uid` at all, only `reviewerUid`. Nor did it set `status`,
+       which the read rule requires to be "approved", so even a written review
+       was invisible to everyone including its author. The duplicate-check query
+       ahead of it was denied for the same missing-status reason, which is why
+       the failure surfaced as "Could not submit review" before any write.
+
+       The CF owns duplicate detection, rate limiting (3/day), eligibility,
+       sanitising, moderation status and the rating summary — none of which a
+       client write can be trusted with. */
     btn.textContent = 'Submitting…';
-    await addDoc(collection(_db, 'reviews'), {
-      businessId: BIZ_ID,
-      reviewerUid: user.uid || '',
-      reviewerName: user.name || user.email || 'Anonymous',
-      rating: _reviewRating,
-      comment: comment,
-      ts: serverTimestamp()
+    const mod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    const fns  = mod.getFunctions(window.firebaseApp, 'us-central1');
+    const call = mod.httpsCallable(fns, 'submitReview');
+    await call({
+      targetId:   BIZ_ID,
+      targetType: 'seller',
+      targetName: (_biz && (_biz.name || _biz.businessName)) || '',
+      rating:     _reviewRating,
+      body:       comment,
     });
-    /* bump review count on business doc */
-    await updateDoc(doc(_db, 'businesses', BIZ_ID), {
-      reviewCount: increment(1)
-    });
+
     showToast('Review submitted — thank you!');
     document.getElementById('revFormWrap').innerHTML =
       '<div class="biz-auth-notice">Thanks for your review!</div>';
     loadReviews();
   } catch (e) {
-    showToast('Could not submit review — try again');
+    /* The CF speaks in specific failures — surface them instead of a generic
+       retry prompt that sends the user round the same loop. */
+    const code = (e && e.code) || '';
+    const msg  = code.includes('already-exists')      ? 'You have already reviewed this business'
+               : code.includes('resource-exhausted')  ? 'Too many reviews today — try again tomorrow'
+               : code.includes('failed-precondition') ? (e.message || 'Complete an order before reviewing')
+               : code.includes('invalid-argument')    ? (e.message || 'Please write at least 10 characters')
+               : code.includes('unauthenticated')     ? 'Please sign in to leave a review'
+               : 'Could not submit review — try again';
+    showToast(msg);
     btn.disabled = false;
     btn.textContent = 'Submit Review';
   }

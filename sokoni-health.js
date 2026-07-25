@@ -21,6 +21,26 @@ import {
   limit, deleteDoc, writeBatch,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
+/* ── Newest-first ordering, done on the client ──
+   Every listener below filters on an owner field (uid / providerId). Pairing
+   that equality with orderBy('createdAt') would demand a composite index per
+   collection; an equality-only query is served by the automatic single-field
+   indexes, so the sort happens here instead and the hub needs no new index.
+
+   This replaced a far worse arrangement: the listeners used to request EVERY
+   row in the collection and filter by owner in the browser. That is denied
+   outright by the owner-scoped rules these collections now carry — and had the
+   rules been written permissively to accommodate it, one patient's lab
+   bookings, prescriptions and telemedicine sessions would have been delivered
+   to every other patient's device. */
+function _sortByCreatedAtDesc(rows) {
+  return rows.sort((a, b) => {
+    const at = a.createdAt?.seconds ?? a.createdAt ?? 0;
+    const bt = b.createdAt?.seconds ?? b.createdAt ?? 0;
+    return bt - at;
+  });
+}
+
 /* ── UID helper ── */
 function _uid() {
   if (auth.currentUser?.uid) return auth.currentUser.uid;
@@ -31,6 +51,17 @@ function _uid() {
 
 /* ── Sanitize phone ── */
 function _phone(p) { return String(p || '').replace(/\D/g, ''); }
+
+/* Combine the UI's separate date + time fields into the ISO instant the
+   bookAppointment CF expects. Accepts a date like "2026-07-30" (or a locale
+   string) and a time like "14:30"; falls back to date-only when time is absent.
+   Returns '' if nothing usable is given, so the caller can reject early. */
+function _combineDateTime(date, time) {
+  if (!date) return '';
+  const t = (time && /^\d{1,2}:\d{2}/.test(time)) ? time : '00:00';
+  const d = new Date(`${date} ${t}`);
+  return isNaN(d.getTime()) ? '' : d.toISOString();
+}
 
 /* ── Generate IDs ── */
 function _id(prefix) {
@@ -91,7 +122,7 @@ const SokoniHealth = {
   },
 
   listenProviders(callback, filters = {}, limitN = 100) {
-    const q = query(collection(db, 'healthProviders'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthProviders'), where('status', '==', 'active'), limit(limitN));
     return onSnapshot(q,
       snap => {
         let providers = snap.docs.map(d => ({ _fsId: d.id, ...d.data() }));
@@ -117,7 +148,7 @@ const SokoniHealth = {
   },
 
   async getAllProviders(limitN = 200) {
-    const q = query(collection(db, 'healthProviders'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthProviders'), where('status', '==', 'active'), limit(limitN));
     const snap = await getDocs(q);
     return snap.docs.map(d => ({ _fsId: d.id, ...d.data() }));
   },
@@ -152,45 +183,84 @@ const SokoniHealth = {
      HEALTH APPOINTMENTS
   ════════════════════════════════════════ */
 
+  /* Booking a real provider goes through the bookAppointment Cloud Function.
+     /healthAppointments is write:false in the rules — deliberately, because a
+     direct client write cannot do the slot-lock + idempotency that stops two
+     patients booking the same 30-minute slot. The old setDoc here was therefore
+     denied for every appointment. The CF is the only valid create path.
+
+     The appointment id is reused as the idempotency key, so a double-tap or a
+     retry books once, not twice. dateTime is assembled from the UI's separate
+     date + time fields into the ISO instant the CF expects. */
   async saveAppointment(appt) {
     const id = appt.id || _id('APPT-');
-    await setDoc(doc(db, 'healthAppointments', id), {
-      ...appt,
-      id,
-      uid:       _uid(),
-      phone:     _phone(appt.phone),
-      status:    appt.status || 'confirmed',
-      createdAt: serverTimestamp(),
-    }, { merge: true });
-    return id;
+    const dateTime = appt.dateTime || _combineDateTime(appt.date, appt.time);
+    if (!appt.providerId || !dateTime) {
+      throw new Error('An appointment needs a provider and a date/time.');
+    }
+    try {
+      const mod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const fns  = mod.getFunctions(window.firebaseApp, 'us-central1');
+      const call = mod.httpsCallable(fns, 'bookAppointment');
+      const res  = await call({
+        providerId:     appt.providerId,
+        dateTime,
+        reason:         appt.notes || appt.service || '',
+        isOnline:       Boolean(appt.isOnline),
+        idempotencyKey: id,
+      });
+      return (res.data && res.data.appointmentId) || id;
+    } catch (e) {
+      /* Surface the CF's specific, actionable errors — a taken slot or an
+         unavailable provider is not a generic failure. */
+      const code = (e && e.code) || '';
+      if (code.includes('resource-exhausted')) throw new Error('That time slot is already booked — please pick another.');
+      if (code.includes('not-found'))          throw new Error('This provider is not available for booking.');
+      if (code.includes('unauthenticated'))    throw new Error('Please sign in to book an appointment.');
+      throw e;
+    }
+  },
+
+  /* Status changes also go through the CF: /healthAppointments is write:false,
+     so a direct updateDoc is denied. updateAppointmentStatus enforces that only
+     the patient, the provider, or an admin may change it, and it releases the
+     slot lock on cancel/complete so the time becomes bookable again — which a
+     client updateDoc could never do. */
+  async _setAppointmentStatus(appointmentId, status, notes) {
+    const mod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    const fns  = mod.getFunctions(window.firebaseApp, 'us-central1');
+    const call = mod.httpsCallable(fns, 'updateAppointmentStatus');
+    await call({ appointmentId, status, notes: notes || '' });
   },
 
   async updateAppointment(id, data) {
-    await updateDoc(doc(db, 'healthAppointments', id), {
-      ...data, updatedAt: serverTimestamp(),
-    });
+    /* Only a status transition is a valid client operation now; arbitrary field
+       edits are not part of the appointment contract. */
+    if (data && data.status) return this._setAppointmentStatus(id, data.status, data.notes);
+    throw new Error('Appointments can only be updated by changing their status.');
   },
 
   async cancelAppointment(id, reason = '') {
-    await updateDoc(doc(db, 'healthAppointments', id), {
-      status: 'cancelled', cancelReason: reason, cancelledAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    });
+    return this._setAppointmentStatus(id, 'cancelled', reason);
   },
 
   listenUserAppointments(callback, limitN = 50) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'healthAppointments'), orderBy('createdAt', 'desc'), limit(limitN));
+    /* The canonical writer is functions/healthcare-hub.js::bookAppointment, which
+       stamps patientUid — not uid. Matching that is what makes this listener both
+       permitted by /healthAppointments and correct. */
+    const q = query(collection(db, 'healthAppointments'), where('patientUid', '==', uid), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] userAppts:', err.message)
     );
   },
 
   listenProviderAppointments(providerId, callback, limitN = 200) {
-    const q = query(collection(db, 'healthAppointments'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthAppointments'), where('providerId', '==', providerId), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] providerAppts:', err.message)
     );
   },
@@ -221,17 +291,17 @@ const SokoniHealth = {
   listenUserLabBookings(callback, limitN = 50) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'healthLabBookings'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthLabBookings'), where('uid', '==', uid), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] labBookings:', err.message)
     );
   },
 
   listenProviderLabBookings(providerId, callback, limitN = 200) {
-    const q = query(collection(db, 'healthLabBookings'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthLabBookings'), where('providerId', '==', providerId), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] provLabBookings:', err.message)
     );
   },
@@ -262,17 +332,17 @@ const SokoniHealth = {
   listenUserMedOrders(callback, limitN = 50) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'healthMedOrders'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthMedOrders'), where('uid', '==', uid), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] medOrders:', err.message)
     );
   },
 
   listenPharmacyOrders(pharmacyId, callback, limitN = 200) {
-    const q = query(collection(db, 'healthMedOrders'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthMedOrders'), where('pharmacyId', '==', pharmacyId), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.pharmacyId === pharmacyId)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] pharmacyOrders:', err.message)
     );
   },
@@ -303,17 +373,17 @@ const SokoniHealth = {
   listenUserTelemedicine(callback, limitN = 30) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'healthTelemedicine'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthTelemedicine'), where('uid', '==', uid), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] telemedicine:', err.message)
     );
   },
 
   listenProviderTelemedicine(providerId, callback, limitN = 100) {
-    const q = query(collection(db, 'healthTelemedicine'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthTelemedicine'), where('providerId', '==', providerId), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] provTele:', err.message)
     );
   },
@@ -345,9 +415,9 @@ const SokoniHealth = {
   listenUserHomeServices(callback, limitN = 30) {
     const uid = _uid();
     if (!uid) { callback([]); return () => {}; }
-    const q = query(collection(db, 'healthHomeServices'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthHomeServices'), where('uid', '==', uid), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.uid === uid)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] homeServices:', err.message)
     );
   },
@@ -394,9 +464,9 @@ const SokoniHealth = {
   },
 
   listenProviderReviews(providerId, callback, limitN = 20) {
-    const q = query(collection(db, 'healthReviews'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthReviews'), where('providerId', '==', providerId), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })).filter(d => d.providerId === providerId)),
+      snap => callback(_sortByCreatedAtDesc(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })))),
       err  => console.warn('[SokoniHealth] reviews:', err.message)
     );
   },
@@ -424,7 +494,7 @@ const SokoniHealth = {
   ════════════════════════════════════════ */
 
   listenAllProviders(callback, limitN = 200) {
-    const q = query(collection(db, 'healthProviders'), orderBy('createdAt', 'desc'), limit(limitN));
+    const q = query(collection(db, 'healthProviders'), where('status', '==', 'active'), limit(limitN));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => console.warn('[SokoniHealth] allProviders:', err.message)
