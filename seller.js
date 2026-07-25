@@ -972,6 +972,59 @@ async function addProduct(){
                 }
 
                 await m.setDoc(m.doc(db,'products',newProduct.id), fsProduct);
+
+                /* ── SYNC TO INVENTORY MANAGER ──────────────────────────────────
+                   The storefront product (top-level `products`) and the back-office
+                   inventory manager are SEPARATE collections with no bridge, so an
+                   uploaded product never appeared in inv-products.html. That page reads
+                   tenants/{uid}/inventory_products via SokoniInventory. Mirror the product
+                   there, keyed by the SAME id so the two stay linked, mapping the
+                   storefront fields to the inventory schema saveProduct() expects
+                   (price->sellingPrice, costPrice->buyingPrice, stock->stockLevel) and
+                   assigning the default branch (warehouseId). Also mirror to posProducts —
+                   the same two writes SokoniInventory.saveProduct does — so the product is
+                   visible at POS checkout too.
+
+                   FULLY SEPARATE and fire-and-forget: the products write above has already
+                   succeeded and is awaited; this runs after it and is wrapped so a sync
+                   failure (rules, offline, quota) can NEVER affect the storefront listing,
+                   which is the merchant's revenue path. Branch stock separation and a
+                   branch picker on the upload form are follow-on; this establishes the
+                   link and the default-branch assignment. */
+                if (sellerUid) {
+                    try {
+                        const _img = (storageUrls && storageUrls[0]) || newProduct.image || '';
+                        const _sku = 'SKU-' + String(newProduct.id).slice(-8).toUpperCase();
+                        const _wh  = (newProduct.warehouseId || newProduct.branchId || 'main');
+                        const _invProduct = {
+                            id:           newProduct.id,
+                            name:         newProduct.name || '',
+                            sellingPrice: Number(newProduct.price)     || 0,
+                            buyingPrice:  Number(newProduct.costPrice)  || 0,
+                            category:     newProduct.category || '',
+                            stockLevel:   Number(newProduct.stock) || 0,
+                            reorderPoint: 10,
+                            unit:         'pcs',
+                            imageUrl:     _img,
+                            description:  newProduct.description || '',
+                            sku:          _sku,
+                            warehouseId:  _wh,
+                            active:       true,
+                            tenantId:     sellerUid,
+                            sourceProductId: newProduct.id,   /* link back to the storefront product */
+                            createdAt:    m.serverTimestamp(),
+                            updatedAt:    m.serverTimestamp(),
+                        };
+                        m.setDoc(m.doc(db, 'tenants', sellerUid, 'inventory_products', newProduct.id), _invProduct, { merge: true })
+                          .catch(function (e) { console.warn('[SOKONI] inventory sync (non-blocking):', e && e.message); });
+                        m.setDoc(m.doc(db, 'posProducts', newProduct.id), {
+                            name: _invProduct.name, price: _invProduct.sellingPrice, cost: _invProduct.buyingPrice,
+                            category: _invProduct.category, sku: _sku, unit: 'pcs', stockLevel: _invProduct.stockLevel,
+                            reorderPoint: 10, imageUrl: _img, description: _invProduct.description,
+                            sellerId: sellerUid, status: 'active', tenantId: sellerUid, updatedAt: m.serverTimestamp(),
+                        }, { merge: true }).catch(function () { /* POS mirror is best-effort */ });
+                    } catch (_) { /* sync must never break the upload */ }
+                }
             } catch(e){
                 console.warn('[SOKONI] Product Firestore/Storage save:', e.message);
             }
