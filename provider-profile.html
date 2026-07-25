@@ -137,6 +137,16 @@
   <a href="providers.html" class="pp-back">All providers</a>
 </nav>
 
+<!-- Always-visible close: this profile is a full page that covers the services
+     list, and the "‹ Back" text link was easy to miss. A fixed ✕ (below the
+     SokoniPay pay-now modal at z-index 99999, above page content) gives an
+     unambiguous way back to where the booking started. -->
+<button type="button" aria-label="Close" title="Close"
+  onclick="history.length>1?history.back():location.href='services.html'"
+  style="position:fixed;top:12px;right:12px;z-index:1500;width:42px;height:42px;border-radius:50%;background:rgba(15,15,15,0.92);border:1px solid rgba(255,255,255,0.18);color:#fff;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px);box-shadow:0 2px 12px rgba(0,0,0,0.4);"
+  onmouseover="this.style.background='rgba(113,255,0,0.15)';this.style.borderColor='#71ff00';this.style.color='#71ff00'"
+  onmouseout="this.style.background='rgba(15,15,15,0.92)';this.style.borderColor='rgba(255,255,255,0.18)';this.style.color='#fff'">✕</button>
+
 <main class="pp-wrap" id="ppWrap">
   <!-- Loading skeleton, replaced once the read resolves -->
   <div class="pp-hero pp-skel" id="ppSkeleton">
