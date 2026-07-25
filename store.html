@@ -85,6 +85,10 @@
     .st-store-name {
       font-size: 26px; font-weight: 900; color: white;
       margin-bottom: 5px; line-height: 1.2;
+      /* Defence in depth against a long name/code overrunning the phone's right
+         edge: keep it inside the container and break an unspaced string rather
+         than pushing the layout wider than the viewport. */
+      max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
     }
     .st-tagline { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
     .st-badges { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -473,8 +477,20 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
            (store && (store.name === storeParm || sn === store.ownerName));
   });
 
-  /* Resolve display store */
-  const displayName = store?.name || storeParm || "Sokoni Store";
+  /* Resolve display store.
+     storeParm is whatever was in ?id= / ?seller= / ?store=, which for a real
+     seller link is the Firebase UID — a 28-char code like
+     D5Ql2EYr95bt79IpcGTmOMTK0P83. Falling back to it printed that raw UID as the
+     shop name ("the long code"), and a 28-char string in the 20px .st-store-name
+     heading also overran the right edge on a phone. A UID must NEVER be shown as
+     a name. Prefer the configured store name, then the sellerName the seller's
+     own products carry, and only use storeParm when it is clearly a name rather
+     than a UID. */
+  const _looksLikeUid = /^[A-Za-z0-9_-]{16,}$/.test(storeParm) && !/\s/.test(storeParm);
+  const _nameFromProducts = (products[0] && products[0].sellerName) ||
+                            (allProducts.find(p => (p.sellerUid||p.sellerId) === storeParm) || {}).sellerName || "";
+  const displayName = store?.name || _nameFromProducts ||
+                      (_looksLikeUid ? "Sokoni Store" : storeParm) || "Sokoni Store";
   document.title = displayName + " — SOKONI";
 
   /* Banner */
