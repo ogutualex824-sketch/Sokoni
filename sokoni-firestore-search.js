@@ -293,11 +293,28 @@ const KEEP = ['name', 'title', 'category', 'subcategory', 'brand', 'tags', 'loca
      handful of bytes each, so the localStorage payload stays small. */
   'colors', 'sizes', 'storage', 'weights', 'volumes', 'materials'];
 
+/* An inline base64 image can be ~190KB. A handful of them fills the whole
+   ~5MB localStorage bucket the catalogue shares, so the persist silently fails
+   (quota) and — worse on a phone — every cache write stringifies megabytes of
+   data URI. They never belong in the persisted copy: the card falls back to a
+   placeholder for these (rare, legacy) uploads, which costs nothing, while URL
+   thumbnails persist normally. */
+const IMG_FIELDS = ['image', 'thumbnail', 'logo', 'logoUrl', 'banner', 'bannerUrl', 'photo', 'poster'];
+function dropDataUri(v) {
+  return (typeof v === 'string' && v.slice(0, 5) === 'data:') ? undefined : v;
+}
+
 function slim(d) {
   const out = { _id: d._id };
   for (const k of KEEP) if (d[k] !== undefined) out[k] = d[k];
   if (typeof d.description === 'string') out.description = d.description.slice(0, LS_MAX_DESC);
-  if (Array.isArray(d.images)) out.images = d.images.slice(0, 1);
+  if (Array.isArray(d.images)) {
+    const first = dropDataUri(d.images[0]);
+    if (first !== undefined) out.images = [first]; else delete out.images;
+  }
+  for (const f of IMG_FIELDS) {
+    if (out[f] !== undefined && dropDataUri(out[f]) === undefined) delete out[f];
+  }
   return out;
 }
 
