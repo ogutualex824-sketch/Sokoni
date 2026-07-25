@@ -332,11 +332,13 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
     return {
       balance:         w.balance         ?? 0,
       pendingBalance:  w.pendingBalance   ?? 0,
+      pendingPayout:   w.pendingPayout    ?? 0,
       savingsBalance:  w.savingsBalance   ?? 0,
       cashbackBalance: w.cashbackBalance  ?? 0,
       rewardPoints:    w.rewardPoints     ?? 0,
       tier:            w.tier             ?? 'bronze',
       frozen:          w.frozen           ?? false,
+      hasPin:          !!w.pinHash,
       pinLocked:       w.pinLocked        ?? false,
       dailyLimit:      w.dailyLimit       ?? 50_000,
       monthlyLimit:    w.monthlyLimit     ?? 500_000,

@@ -473,7 +473,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
 
   const db = getFirestore();
   const uid = request.auth.uid;
-  const { amount, method, accountNumber, bankCode, bankName } = request.data || {};
+  const { amount, method, accountNumber, bankCode, bankName, idempotencyKey } = request.data || {};
 
   const amt = Number(amount);
   if (!Number.isInteger(amt) || amt < 100) {
@@ -501,15 +501,25 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
     throw new HttpsError('invalid-argument', 'bankCode is required for bank payouts');
   }
 
-  /* Atomically check velocity + balance, reserve amount, and create request */
-  const reqId       = _genId('pout');
+  /* Idempotency: a client-supplied key maps to a deterministic doc id, so a
+     double-tap or a retry-after-timeout can't create two withdrawals. Falls back to
+     a random id when no key is sent (older clients). */
+  const safeKey = _san(idempotencyKey, 120).replace(/[^A-Za-z0-9_-]/g, '');
+  const reqId   = safeKey ? `pout_${safeKey}` : _genId('pout');
   const walletRef   = db.collection('wallets').doc(uid);
   const reqRef      = db.collection('payoutRequests').doc(reqId);
   const velocityRef = db.collection('payoutVelocity').doc(uid);
   const today       = new Date().toISOString().slice(0, 10);
 
+  /* Atomically dedupe + check velocity + balance, reserve amount, create request */
+  let deduplicated = false;
   await db.runTransaction(async (t) => {
-    const [walletSnap, velocitySnap] = await Promise.all([t.get(walletRef), t.get(velocityRef)]);
+    const [walletSnap, velocitySnap, existingReq] = await Promise.all([
+      t.get(walletRef), t.get(velocityRef), t.get(reqRef),
+    ]);
+
+    /* Already submitted with this key — return it without reserving again. */
+    if (existingReq.exists) { deduplicated = true; return; }
 
     /* FRD-1: velocity gate — max 3 payout requests per seller per calendar day */
     const vel = velocitySnap.exists ? velocitySnap.data() : null;
@@ -542,6 +552,9 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
   return {
     success: true,
     requestId: reqId,
+    deduplicated,
+    accountNumber: sanitizedAccount,
+    amount: amt,
     message: 'Payout request submitted. Processing within 1–3 business days.',
   };
 });

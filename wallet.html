@@ -930,6 +930,9 @@ body{
         <span id="balVal">—</span>
       </div>
       <div id="balTier" style="margin-bottom:12px"></div>
+      <div id="pendingPayoutRow" style="display:none;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--sub);margin-bottom:10px">
+        <span>⏳</span> Pending withdrawals: <b id="pendingPayoutVal" style="color:var(--txt)">KSh 0</b>
+      </div>
       <div class="bal-sub-row">
         <div class="bal-mini" id="miniSavings" onclick="W2.openVaultsList()">
           <div class="bal-mini-label">Savings</div>
@@ -1416,46 +1419,88 @@ body{
       <button class="ovl-close" onclick="W2.closeOverlay('ovlWithdraw')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
-      <div class="info-row">
-        <span class="k">Available to withdraw</span>
-        <span class="v" style="color:var(--g)" id="wdrAvail">KSh —</span>
-      </div>
-      <div class="form-group" style="margin-top:16px">
-        <label class="form-label">Amount (KSh)</label>
-        <input type="number" class="form-input" id="wdrAmount" placeholder="Min KSh 100" min="100">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Payout Method</label>
-        <select class="form-input" id="wdrMethod" onchange="W2.wdrMethodChange()">
-          <option value="mpesa">M-Pesa</option>
-          <option value="bank">Bank Transfer</option>
-        </select>
-      </div>
-      <div id="wdrMpesaFields">
-        <div class="form-group">
-          <label class="form-label">M-Pesa Number</label>
-          <input type="tel" class="form-input" id="wdrPhone" inputmode="tel" placeholder="07XX XXX XXX">
+      <!-- FORM -->
+      <div id="wdrForm">
+        <div class="info-row">
+          <span class="k">Available to withdraw</span>
+          <span class="v" style="color:var(--g)" id="wdrAvail">KSh —</span>
+        </div>
+
+        <!-- Empty state: balance below minimum -->
+        <div id="wdrEmpty" style="display:none;text-align:center;padding:18px 6px">
+          <div style="font-size:40px;margin-bottom:8px">🐷</div>
+          <p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:4px">You need at least KSh 100 to withdraw</p>
+          <p style="font-size:13px;color:var(--sub)">Sell items or receive payments to grow your balance.</p>
+        </div>
+
+        <div id="wdrFields">
+          <div class="form-group" style="margin-top:16px">
+            <label class="form-label">Amount (KSh)</label>
+            <input type="number" class="form-input" id="wdrAmount" placeholder="Min KSh 100" min="100" inputmode="numeric" oninput="W2.wdrAmountInput()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Payout Method</label>
+            <select class="form-input" id="wdrMethod" onchange="W2.wdrMethodChange()">
+              <option value="mpesa">M-Pesa</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+          </div>
+          <div id="wdrMpesaFields">
+            <div class="form-group">
+              <label class="form-label">M-Pesa Number</label>
+              <input type="tel" class="form-input" id="wdrPhone" inputmode="tel" placeholder="07XX XXX XXX">
+              <div id="wdrSavedNote" style="display:none;font-size:12px;color:var(--g);margin-top:6px">✓ Your saved M-Pesa number</div>
+            </div>
+          </div>
+          <div id="wdrBankFields" style="display:none">
+            <div class="form-group">
+              <label class="form-label">Account Number</label>
+              <input type="text" class="form-input" id="wdrAccNum" placeholder="Account number">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bank</label>
+              <input type="text" class="form-input" id="wdrBank" placeholder="Bank name">
+            </div>
+          </div>
+
+          <!-- Withdrawal summary -->
+          <div id="wdrSummary" style="display:none;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-s);padding:12px 14px;margin-bottom:14px">
+            <div class="info-row"><span class="k">Amount</span><span class="v" id="wsAmount">KSh 0</span></div>
+            <div class="info-row"><span class="k">Fee</span><span class="v" id="wsFee">KSh 0</span></div>
+            <div class="info-row" style="border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px">
+              <span class="k" style="font-weight:700">You'll receive</span>
+              <span class="v" id="wsReceive" style="color:var(--g);font-weight:800">KSh 0</span>
+            </div>
+          </div>
+
+          <!-- Inline error (never fail silently) -->
+          <div id="wdrError" role="alert" style="display:none;background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.35);color:#ff8f8f;border-radius:var(--radius-s);padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.4"></div>
+
+          <div style="background:var(--ga2);border:1px solid rgba(113,255,0,.2);border-radius:var(--radius-s);padding:12px;margin-bottom:16px">
+            <p style="font-size:12px;color:var(--sub)">
+              <i class="fas fa-info-circle" style="color:var(--g)"></i>
+              Payouts are processed within 24 hours. Minimum withdrawal is KSh 100.
+            </p>
+          </div>
+          <button class="btn btn-primary" id="wdrSubmitBtn" onclick="W2.requestPayout()">
+            🏧 Request Payout
+          </button>
         </div>
       </div>
-      <div id="wdrBankFields" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Account Number</label>
-          <input type="text" class="form-input" id="wdrAccNum" placeholder="Account number">
+
+      <!-- SUCCESS + PROCESSING TIMELINE -->
+      <div id="wdrSuccess" style="display:none;text-align:center;padding:8px 0">
+        <div style="font-size:46px;margin-bottom:8px">✅</div>
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Withdrawal request received</h3>
+        <p id="wdrSuccessMsg" style="font-size:14px;color:var(--sub);margin-bottom:18px"></p>
+        <div style="text-align:left;max-width:260px;margin:0 auto 20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--txt)"><span style="color:var(--g)">✓</span> Request received</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--txt)"><span style="color:var(--g)">✓</span> Verification</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--txt)"><span>⏳</span> Processing</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--sub)"><span>•</span> Sent to M-Pesa</div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Bank</label>
-          <input type="text" class="form-input" id="wdrBank" placeholder="Bank name">
-        </div>
+        <button class="btn btn-primary" onclick="W2.closeOverlay('ovlWithdraw')">Done</button>
       </div>
-      <div style="background:var(--ga2);border:1px solid rgba(113,255,0,.2);border-radius:var(--radius-s);padding:12px;margin-bottom:16px">
-        <p style="font-size:12px;color:var(--sub)">
-          <i class="fas fa-info-circle" style="color:var(--g)"></i>
-          Payouts are processed within 24 hours. Minimum withdrawal is KSh 100.
-        </p>
-      </div>
-      <button class="btn btn-primary" id="wdrSubmitBtn" onclick="W2.requestPayout()">
-        🏧 Request Payout
-      </button>
     </div>
   </div>
 </div>

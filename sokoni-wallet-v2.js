@@ -254,6 +254,11 @@ window.SokoniWalletV2 = (function () {
       _setText('savingsTotal', 'KSh ' + _fmtShort(data.savingsBalance || 0));
       _setText('cashbackVal', 'KSh ' + _fmtShort(data.cashbackBalance || 0));
       _setText('rewardPts', (data.rewardPoints || 0) + ' pts');
+      _renderPendingPayout();   /* pending-withdrawals indicator */
+
+      /* Keep the "Set PIN / Change PIN" label in sync with whether a PIN exists */
+      const _pinBtnL = document.getElementById('pinBtnLabel');
+      if (_pinBtnL) _pinBtnL.textContent = data.hasPin ? 'Change PIN' : 'Set PIN';
 
       /* Freeze badge */
       _frozen = !!data.frozen;
@@ -746,23 +751,79 @@ window.SokoniWalletV2 = (function () {
   }
 
   /* ─── WITHDRAW / PAYOUT ─── */
+  let _wdrIdemKey     = '';
+  let _payoutStartedAt = 0;
+
   function openWithdraw() {
     openOverlay('ovlWithdraw');
-    /* Prefill the M-Pesa number with the user's own number. Most payouts go to the
-       user's own M-Pesa, and a blank field silently blocked the whole flow — the
-       frontend rejected "Enter a valid M-Pesa number" and never called the CF (which
-       is why payout looked dead with zero server invocations). They can still edit it. */
+    /* Reset to the form view (a prior success may have left the success panel up). */
+    const form = document.getElementById('wdrForm');    if (form) form.style.display = '';
+    const succ = document.getElementById('wdrSuccess');  if (succ) succ.style.display = 'none';
+    _wdrClearError();
+    const amtI = document.getElementById('wdrAmount'); if (amtI) amtI.value = '';
+    const sum  = document.getElementById('wdrSummary'); if (sum) sum.style.display = 'none';
+
+    /* Fresh idempotency key per withdraw session — reused across retries of THIS
+       attempt so a double-tap or timeout-retry can't create two withdrawals. */
+    _wdrIdemKey = (_uid || 'anon') + '_' + Date.now();
+
+    /* Prefill the user's own M-Pesa number (most payouts go there). */
     const wp = document.getElementById('wdrPhone');
-    if (wp && !wp.value && _userPhone) wp.value = String(_userPhone).replace(/^\+?254/, '0');
-    if (_dashboard) {
-      _setText('wdrAvail', 'KSh ' + _fmt(_dashboard.balance || 0));
-    } else {
-      /* Balance not loaded yet (wallet still syncing) — show a loading state and
-         fetch it, so the user isn't shown a false KSh 0 and requestPayout has a
-         real balance to check. */
-      _setText('wdrAvail', 'Loading…');
-      loadDashboard().then(() => _setText('wdrAvail', 'KSh ' + _fmt(_dashboard?.balance || 0))).catch(() => {});
+    if (wp && _userPhone) {
+      wp.value = String(_userPhone).replace(/^\+?254/, '0');
+      const note = document.getElementById('wdrSavedNote'); if (note) note.style.display = 'block';
     }
+
+    if (_dashboard) {
+      const b = _dashboard.balance || 0;
+      _setText('wdrAvail', 'KSh ' + _fmt(b));
+      _wdrApplyBalanceState(b);
+    } else {
+      _setText('wdrAvail', 'Loading…');
+      loadDashboard().then(() => {
+        const b = _dashboard?.balance || 0;
+        _setText('wdrAvail', 'KSh ' + _fmt(b));
+        _wdrApplyBalanceState(b);
+      }).catch(() => {});
+    }
+  }
+
+  /* Empty-state: below the minimum, hide the fields and show a helpful message. */
+  function _wdrApplyBalanceState(bal) {
+    const low    = (bal || 0) < 100;
+    const empty  = document.getElementById('wdrEmpty');
+    const fields = document.getElementById('wdrFields');
+    if (empty)  empty.style.display  = low ? 'block' : 'none';
+    if (fields) fields.style.display = low ? 'none'  : '';
+  }
+
+  function _wdrClearError() {
+    const e = document.getElementById('wdrError');
+    if (e) { e.style.display = 'none'; e.textContent = ''; }
+  }
+  function _wdrShowError(msg) {
+    const e = document.getElementById('wdrError');
+    if (e) { e.textContent = msg; e.style.display = 'block'; }
+    console.warn('[payout] error surfaced:', msg);
+  }
+
+  /* Live withdrawal summary + button enable/disable as the amount changes. */
+  function wdrAmountInput() {
+    _wdrClearError();
+    const amt = Number(document.getElementById('wdrAmount')?.value) || 0;
+    const bal = _dashboard ? (_dashboard.balance || 0) : null;
+    const sum = document.getElementById('wdrSummary');
+    const btn = document.getElementById('wdrSubmitBtn');
+    if (amt > 0) {
+      _setText('wsAmount', 'KSh ' + _fmt(amt));
+      _setText('wsFee', 'KSh 0');
+      _setText('wsReceive', 'KSh ' + _fmt(amt));
+      if (sum) sum.style.display = 'block';
+    } else if (sum) {
+      sum.style.display = 'none';
+    }
+    const ok = amt >= 100 && (bal == null || amt <= bal);
+    if (btn) btn.disabled = !ok;
   }
 
   function wdrMethodChange() {
@@ -771,49 +832,103 @@ window.SokoniWalletV2 = (function () {
     document.getElementById('wdrBankFields').style.display  = method === 'bank'  ? '' : 'none';
   }
 
+  /* Map any failure to a specific, honest message — never "something went wrong". */
+  function _payoutErr(e) {
+    const msg  = (typeof e === 'string') ? e : (e && e.message) || '';
+    const code = (e && e.code) || '';
+    if (!navigator.onLine)                                                        return 'You appear to be offline. Check your connection and try again.';
+    if (/timed out|timeout/i.test(msg))                                           return 'The request timed out. Check your connection and try again.';
+    if (code === 'unauthenticated' || /unauthenticat|sign ?in|token/i.test(msg))  return 'Your session expired. Please sign in again, then retry.';
+    if (code === 'resource-exhausted' || /maximum|per day|too many/i.test(msg))   return msg || 'Payout limit reached. Try again later.';
+    if (/insufficient/i.test(msg))                                                return 'Insufficient balance for this payout.';
+    if (/minimum/i.test(msg))                                                     return 'Minimum payout is KSh 100.';
+    if (/duplicate|already/i.test(msg))                                           return 'This withdrawal was already submitted.';
+    return msg || 'Payout failed. Please try again.';
+  }
+
   async function requestPayout() {
-    const _sb = document.getElementById('wdrSubmitBtn');
-    if (_sb && _sb.disabled) return;   /* re-entrancy guard: block double-tap duplicate payouts */
+    console.log('[payout] button clicked');
+    const btn = document.getElementById('wdrSubmitBtn');
+    _wdrClearError();
+
+    /* Non-sticking in-flight guard: block rapid double-taps, but auto-recover if the
+       prior attempt is >30s old (iOS can suspend a backgrounded promise + its timeout,
+       which used to leave the button permanently disabled → "does nothing"). */
+    if (btn && btn.dataset.busy === '1' && (Date.now() - _payoutStartedAt) < 30000) {
+      console.log('[payout] ignored — already in flight');
+      return;
+    }
+
     const amt    = Number(document.getElementById('wdrAmount')?.value);
     const method = document.getElementById('wdrMethod')?.value || 'mpesa';
-    if (!amt || amt < 100) return toast('Minimum withdrawal is KSh 100', 'error');
-    /* Only pre-check when the balance is actually loaded. The wallet loads the
-       balance asynchronously; before it arrives _dashboard is null, and the old
-       check treated that as KSh 0 and silently rejected every payout with
-       "Insufficient balance" — the button looked dead. requestSellerPayout
-       validates the balance server-side regardless, so when it's unknown, proceed
-       and let the server be the authority. */
-    if (_dashboard && amt > (_dashboard.balance || 0)) return toast('Insufficient balance', 'error');
+    const bal    = _dashboard ? (_dashboard.balance || 0) : null;
 
-    let payload = { amount: amt, method };
+    if (!amt || amt < 100)         return _wdrShowError('Enter an amount of at least KSh 100.');
+    if (bal != null && amt > bal)  return _wdrShowError('Enter an amount between KSh 100 and your available balance (KSh ' + _fmt(bal) + ').');
+
+    const payload = { amount: amt, method, idempotencyKey: _wdrIdemKey || ((_uid || 'anon') + '_' + Date.now()) };
     if (method === 'mpesa') {
       const phone = document.getElementById('wdrPhone')?.value?.trim();
-      if (!PHONE_RE.test(phone || '')) {
-        document.getElementById('wdrPhone')?.focus();
-        return toast('Enter the M-Pesa number to receive the payout', 'error');
-      }
+      if (!PHONE_RE.test(phone || '')) { document.getElementById('wdrPhone')?.focus(); return _wdrShowError('Enter the M-Pesa number to receive the payout.'); }
       payload.accountNumber = _normalizePhone(phone);
     } else {
       payload.accountNumber = document.getElementById('wdrAccNum')?.value?.trim();
       payload.bankName      = document.getElementById('wdrBank')?.value?.trim();
-      if (!payload.accountNumber || !payload.bankName) return toast('Enter account and bank details', 'error');
+      if (!payload.accountNumber || !payload.bankName) return _wdrShowError('Enter your account number and bank name.');
     }
+    console.log('[payout] validation passed', { amount: amt, method });
 
-    if (_sb) _sb.disabled = true;
+    if (!navigator.onLine) return _wdrShowError('You appear to be offline. Check your connection and try again.');
+
+    /* Loading state — Processing… + spinner, taps blocked. */
+    const origLabel = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.dataset.busy = '1';
+      btn.disabled = true;
+      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px"></span>Processing…';
+    }
+    _payoutStartedAt = Date.now();
+    const _reset = () => { if (btn) { btn.dataset.busy = '0'; btn.disabled = false; btn.innerHTML = origLabel || '🏧 Request Payout'; } };
+
     try {
-      const res = await _callTimed('requestSellerPayout', payload);
-      if (res.data?.success) {
-        toast('Payout requested! Processing within 24h.', 'success');
-        closeOverlay('ovlWithdraw');
-        loadDashboard();
+      console.log('[payout] request sent', { amount: amt, method, key: payload.idempotencyKey });
+      const res = await _callTimed('requestSellerPayout', payload, 25000);
+      console.log('[payout] response received', res && res.data);
+      const d = (res && res.data) || {};
+      if (d.success) {
+        const raw  = d.accountNumber || payload.accountNumber || '';
+        const acct = raw ? ('0' + String(raw).slice(3)) : 'your account';
+        /* Optimistic refresh — no page reload. */
+        if (_dashboard) {
+          _dashboard.balance       = Math.max(0, (_dashboard.balance || 0) - amt);
+          _dashboard.pendingPayout = (_dashboard.pendingPayout || 0) + amt;
+        }
+        _setText('balVal', _fmt(_dashboard?.balance || 0));
+        _renderPendingPayout();
+        _setText('wdrSuccessMsg', 'KSh ' + _fmt(amt) + ' will be sent to ' + acct + ' within 24 hours.');
+        const form = document.getElementById('wdrForm');   if (form) form.style.display = 'none';
+        const succ = document.getElementById('wdrSuccess'); if (succ) succ.style.display = 'block';
+        _wdrIdemKey = '';   // consumed — next withdrawal gets a fresh key
+        loadDashboard();    // authoritative refresh
+        console.log('[payout] wallet refreshed');
       } else {
-        toast(res.data?.message || 'Payout request failed', 'error');
+        _wdrShowError(_payoutErr(d.message));
       }
     } catch (e) {
-      toast(e.message || 'Payout request failed. Try again.', 'error');
+      console.error('[payout] error', e);
+      _wdrShowError(_payoutErr(e));
     } finally {
-      if (_sb) _sb.disabled = false;
+      _reset();
     }
+  }
+
+  /* Pending-withdrawals indicator on the dashboard (shown only when > 0). */
+  function _renderPendingPayout() {
+    const row = document.getElementById('pendingPayoutRow');
+    if (!row) return;
+    const p = _dashboard?.pendingPayout || 0;
+    if (p > 0) { _setText('pendingPayoutVal', 'KSh ' + _fmt(p)); row.style.display = 'flex'; }
+    else row.style.display = 'none';
   }
 
   /* ─── REQUEST MONEY ─── */
@@ -1678,7 +1793,7 @@ window.SokoniWalletV2 = (function () {
     sendStep1Next, sendStep2Next, executeSend,
     sndKey, sndKeyDel, setSendAmt,
     /* Withdraw */
-    openWithdraw, wdrMethodChange, requestPayout,
+    openWithdraw, wdrMethodChange, requestPayout, wdrAmountInput,
     /* Request */
     openRequest, createRequest, shareReqLink, copyReqLink,
     /* Savings */
