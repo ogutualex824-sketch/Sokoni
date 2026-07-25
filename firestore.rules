@@ -82,12 +82,32 @@ service cloud.firestore {
              || ctr.data.count < ctr.data.maxProducts;
     }
 
+    /* PRESENCE vs CHANGE. These guards previously tested the PRESENCE of a
+       protected field on request.resource.data — which on a setDoc(merge:true)
+       UPDATE is the ENTIRE merged document, not just the changed keys. So any
+       user whose document already carried one of these fields (role, verified,
+       featured, ageVerified, … all written server-side via the Admin SDK) had
+       EVERY self-update denied: the pre-existing field tripped the guard. That is
+       what stopped profile edits (and any owner edit of a doc carrying such a
+       field) from saving.
+       Now create/update-aware: on CREATE (resource == null) presence is correct
+       — you may not create a doc bearing these fields. On UPDATE only a CHANGE to
+       one is rejected, via diff().affectedKeys() — the same idiom uidUnchanged()
+       uses. This cannot open an escalation hole: adding, modifying OR removing any
+       protected field still appears in affectedKeys and is still denied; only
+       leaving a pre-existing field untouched is now permitted. */
     function noAdminFields() {
-      return !request.resource.data.keys()
-               .hasAny(['isAdmin','suspended','banned','adminApproved',
-                        'featured','verified','flagged','adminNote',
-                        'role','approved','approvedAt','approvedBy',
-                        'commissionRate']);
+      return resource == null
+        ? !request.resource.data.keys()
+            .hasAny(['isAdmin','suspended','banned','adminApproved',
+                     'featured','verified','flagged','adminNote',
+                     'role','approved','approvedAt','approvedBy',
+                     'commissionRate'])
+        : !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['isAdmin','suspended','banned','adminApproved',
+                     'featured','verified','flagged','adminNote',
+                     'role','approved','approvedAt','approvedBy',
+                     'commissionRate']);
     }
 
     /* Beta gate + entitlement fields are SERVER-OWNED on users/{uid}.
@@ -100,25 +120,37 @@ service cloud.firestore {
        Zero blast radius today precisely because none of these fields exist yet;
        this closes the hole before it can be opened. Legitimate writers use the
        Admin SDK, which bypasses rules entirely. */
+    /* Same PRESENCE-vs-CHANGE fix as noAdminFields (see the note there).
+       Age-verification fields are a REGULATORY control written only by
+       ageVerifySubmit (age-verification.js) via the Admin SDK after computing the
+       age server-side; a client that could set ageVerified:true on its own
+       document would defeat the gate. The diff form still blocks any CHANGE to
+       these — it only stops a pre-existing ageVerified/role/… from blocking an
+       unrelated edit like a name or bio change. */
     function noSelfGrant() {
-      return !request.resource.data.keys()
-                .hasAny(['betaStatus','accessLevel','featureFlags','permissions','role',
-                         'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus',
-                         /* Age verification is a REGULATORY control, not a profile
-                            preference. ageVerifySubmit (age-verification.js) writes
-                            these via the Admin SDK after computing the age
-                            server-side; a client that could set ageVerified:true
-                            on its own document would defeat the entire gate and
-                            leave us selling nicotine to an unverified buyer while
-                            believing otherwise. */
-                         'ageVerified','ageVerifiedAt','ageVerifiedMethod']);
+      return resource == null
+        ? !request.resource.data.keys()
+            .hasAny(['betaStatus','accessLevel','featureFlags','permissions','role',
+                     'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus',
+                     'ageVerified','ageVerifiedAt','ageVerifiedMethod'])
+        : !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['betaStatus','accessLevel','featureFlags','permissions','role',
+                     'trustScore','kycStatus','riskLevel','merchantStatus','providerStatus',
+                     'ageVerified','ageVerifiedAt','ageVerifiedMethod']);
     }
 
     function noPrivilegeEscalation() {
       return noSelfGrant()
-             && (!request.resource.data.keys().hasAny(['registeredAs'])
-                 || !request.resource.data.registeredAs.keys()
-                      .hasAny(['admin','superAdmin','moderator','isAdmin']));
+             && (resource == null
+                 ? (!request.resource.data.keys().hasAny(['registeredAs'])
+                    || !request.resource.data.registeredAs.keys()
+                         .hasAny(['admin','superAdmin','moderator','isAdmin']))
+                 /* On update, only re-validate registeredAs when it is actually
+                    being changed — a pre-existing registeredAs must not block an
+                    unrelated edit. A change to it is still fully validated. */
+                 : (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['registeredAs'])
+                    || !request.resource.data.registeredAs.keys()
+                         .hasAny(['admin','superAdmin','moderator','isAdmin'])));
     }
 
     function noProviderForgery() {

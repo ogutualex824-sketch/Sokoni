@@ -34,6 +34,7 @@
     "scan:hidden-blur": "node scripts/scan-hidden-backdrop-blur.js",
     "scan:xss": "node scripts/scan-xss-sinks.js",
     "check:variants": "node scripts/check-variant-parity.js",
+    "check:profile-rules": "node scripts/check-profile-rules.js",
     "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js"
   },
   "devDependencies": {
