@@ -543,9 +543,16 @@
       backdrop-filter: none; -webkit-backdrop-filter: none;
       border-bottom: none;
       box-shadow: none;
-      will-change: transform;
-      transform: translateZ(0);
-      -webkit-transform: translateZ(0);
+      /* No will-change/translateZ promotion here — deliberately. This header
+         never animates transform (it only transitions background/backdrop/
+         shadow on scroll), so 'will-change: transform' bought nothing and had a
+         real cost: it promotes the fixed header to a GPU compositing layer, and
+         iOS Safari CLIPS an absolutely-positioned descendant that extends past
+         that layer's box to the layer's backing store. That is why the search
+         autocomplete showed only its first row — rows 2-6 hang below the 58px
+         header and were clipped away. The header still forms its own stacking
+         context (position: fixed + z-index), so it keeps painting above the
+         hero; it simply no longer traps and clips the dropdown. */
       transition: background .3s ease, backdrop-filter .3s ease,
                   box-shadow .3s ease, border-color .3s ease;
     }
