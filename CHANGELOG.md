@@ -24,10 +24,19 @@ Safari ITP), so the iframe can't read the record it wrote before the redirect, a
 `getRedirectResult()` comes back empty. The in-code comment even stated the goal was a
 same-origin helper — but a subdomain never achieved it.
 
-### Fix
+### Fix (two parts — the second is essential)
 
 `firebase.js`: `authDomain` → `mysokoni.co.ke`, the app's own origin, so the helper
 iframe is same-origin and its storage is not partitioned.
+
+`firebase.json`: the CSP `frame-src` listed `https://auth.mysokoni.co.ke` but **not
+`'self'`**. Because `frame-src` is explicitly present it overrides `default-src 'self'`,
+so once the helper iframe became same-origin the browser **blocked it** — trading the
+storage-partition failure for a CSP failure. Added `'self'` to `frame-src`. Without this
+the authDomain change alone does nothing; the iframe never loads. (The old
+`auth.mysokoni.co.ke` entry is kept, harmless, until the config sweep lands.) Confirmed
+`injectCSP()` in `security.js` is a no-op, so no second meta-CSP intersects and
+re-blocks it.
 
 Verified before changing: the app origin serves the helper
 (`/__/auth/handler` + `/__/auth/iframe` → 200), `mysokoni.co.ke` is an authorized
