@@ -122,7 +122,14 @@
    Anything that hides via transform must be excluded here, not just visually
    suppressed elsewhere. */
 @media (max-width: 768px) {
-  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support):not(#sk-offline-bar):not(#sk-offline-banner):not(#sk-spl):not(#sk-splash):not(.sk-drawer):not(#sk-menu-drawer) {
+  /* Modal/dialog OVERLAYS hide with opacity:0 while closed. Because this fade
+     ends at opacity:1 with fill-mode:both, an un-excluded overlay gets PINNED to
+     opacity:1 and paints its full-screen backdrop over the page while closed —
+     the "B2B/minishop/inventory page is black" class of bug. Same failure mode
+     the transform-hidden bars above hit; overlays that hide via opacity need the
+     same exclusion. (They run their own open/close transition, so they lose
+     nothing by sitting out the page-entrance fade.) */
+  body > *:not(#splashScreen):not(script):not(style):not(.bottom-nav):not(#networkToast):not(#pullRefreshIndicator):not(.chat-unread-pip):not(#notificationContainer):not(#sokoni-bell-btn):not(#sokoni-notif-drawer):not(#sokoni-wa-support):not(#sk-offline-bar):not(#sk-offline-banner):not(#sk-spl):not(#sk-splash):not(.sk-drawer):not(#sk-menu-drawer):not([class*="modal-ov"]):not([class*="modal-overlay"]):not([class*="modal-backdrop"]):not([class*="dialog-overlay"]):not([class*="popup-overlay"]) {
     animation: sk-page-fade 0.28s ease both;
   }
 }
