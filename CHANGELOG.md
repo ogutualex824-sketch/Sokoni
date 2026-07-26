@@ -168,6 +168,35 @@ No database, API, or security changes. No breaking changes.
 
 ---
 
+## [2026-07-26] — fix(deploy): SW version format blocked every hosting deploy
+
+Caught by the release gate on the first deploy after `bump-sw-version.js` was
+wired into the predeploy chain. Nothing shipped — the gate did its job.
+
+`CACHE_VERSION` has to satisfy two contracts at once:
+
+1. **unique per deploy**, so each release gets a fresh cache → the timestamp
+2. **ends in `-vNN`, monotonically increasing** → the counter
+
+`bump-sw-version.js` emitted only `sokoni-YYYYMMDDHHMMSS`, satisfying (1) and
+breaking (2). `test-navigation.js` compares that `NN` against the version a
+specific fix landed in — that comparison is how the gate proves users receive a
+*corrected* worker rather than merely a *different* one. A bare timestamp is
+unique but not comparable, so the check could never pass and
+`test-inventory --gate` failed the entire deploy:
+
+```
+FAIL  test-navigation — CACHE_VERSION is missing or does not end in -vNN
+                        cannot verify users get the fixed worker
+```
+
+Now emits `sokoni-<stamp>-v<N>`, satisfying both. The counter continues from any
+existing `-vNN`, or resumes above the highest already shipped (v115) so the
+sequence never moves backwards after the timestamp-only interlude. Verified
+monotonic across consecutive runs: v116 → v117 → v118.
+
+Gate after the fix: **PASS 54, FAIL 0**.
+
 ## [2026-07-26] — fix(cache): updates now arrive on reload instead of requiring users to clear browsing data
 
 Reported as "all updates should be available upon any reload, not deleting all
