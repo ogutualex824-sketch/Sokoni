@@ -1,3 +1,23 @@
+## [2026-07-26] — fix(pwa): updates now appear on a normal reload (no "clear browsing data")
+
+The service worker is cache-first for the app shell and only serves new assets
+when CACHE_VERSION bumps — at which point a fresh SW installs, re-caches, and
+sw-register.js auto-reloads once. All that machinery was correct.
+
+The broken link: the bump never ran on deploy. scripts/deploy/bump-sw-version.js
+existed ("Run from CI before the hosting deploy step") but was wired into neither
+the npm deploy:hosting script nor the hosting predeploy. So every deploy shipped
+new files while the SW kept serving the OLD precache, and only clearing browsing
+data (which wipes the SW) revealed updates.
+
+Fix: added `node scripts/deploy/bump-sw-version.js` as the first hosting predeploy
+step in firebase.json. Now EVERY hosting deploy — any path, any agent — bumps
+CACHE_VERSION, so a new SW ships and clients reload onto fresh assets on the next
+normal visit. No cache-clearing.
+
+### Files
+`firebase.json`.
+
 ## [2026-07-26] — fix(orders): separate the Orders button from Profile — dedicated lean page
 
 Reported: on Pacifique's Android the **Orders** button and the **Profile** button were "tied

@@ -532,6 +532,7 @@
       }
     ],
     "predeploy": [
+      "node scripts/deploy/bump-sw-version.js",
       "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js",
       "node scripts/perf-guard.js",
