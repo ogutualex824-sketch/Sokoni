@@ -764,12 +764,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* Reject base64 data: URIs in product image fields. Products are written
+       client-direct, so this rule is the server-side backstop that stops a base64
+       image from ever landing in a product doc — the 2026-07-24 "PEACH MANGO ICE"
+       incident, where a 195KB data: URI in `image`/`imageUrl` bloated the record
+       past Algolia's 10KB limit and poisoned every batch it shipped in, stalling
+       search indexing for all products. Rules cannot iterate the `images` array,
+       so the client strips array entries; this covers the single-string fields,
+       which is where that incident's payload lived. .matches() is whole-string, so
+       a real https:// Storage URL passes and only a data: URI is rejected. Uses
+       .get(field,'') so an update that does not touch the field is never blocked. */
+    function noBase64Image() {
+      let d = request.resource.data;
+      return !(d.get('image', '') is string        && d.get('image', '').matches('data:.*'))
+          && !(d.get('imageUrl', '') is string     && d.get('imageUrl', '').matches('data:.*'))
+          && !(d.get('thumbnailUrl', '') is string && d.get('thumbnailUrl', '').matches('data:.*'));
+    }
+
     match /products/{productId} {
       allow read:   if true;
       allow create: if isAuthed()
                     && request.resource.data.sellerUid == request.auth.uid
                     && validPrice('price')
                     && noAdminFields()
+                    && noBase64Image()
                     && withinProductLimit();
       allow update: if isAdmin()
                     || (isAuthed()
@@ -777,7 +795,8 @@ service cloud.firestore {
                         && !request.resource.data.diff(resource.data)
                              .affectedKeys()
                              .hasAny(['sellerUid'])
-                        && noAdminFields());
+                        && noAdminFields()
+                        && noBase64Image());
       allow delete: if isAdmin()
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid);
     }

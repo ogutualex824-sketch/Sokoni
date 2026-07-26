@@ -3,6 +3,13 @@
    Shows empty setup screen if user hasn't registered as seller
 ═════════════════════════════════════════════════════════════════ */
 
+/* True for a base64 data: URI. Product image fields must reference Cloud Storage,
+   never a data: URI — a data: URI in a product doc bloats the record and poisons
+   the Algolia batch it ships in (the "PEACH MANGO ICE" incident). Used to strip
+   base64 out of every product write; the Firestore rule enforces the same
+   server-side. */
+const _isDataUri = v => typeof v === 'string' && v.startsWith('data:');
+
 const _esc = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function initSellerDashboard() {
@@ -964,11 +971,21 @@ async function addProduct(){
                             try { if (typeof displaySellerProducts === 'function') displaySellerProducts(); } catch (_) {}
                         }
                     } catch (_) { /* cache is best-effort; the document is written regardless */ }
-                } else {
-                    /* Base64 fallback — strip very large images to avoid 1MB limit */
-                    fsProduct.images = (fsProduct.images || []).map(function(b){
-                        return b && b.length > 200000 ? b.substring(0, 200000) : b;
-                    });
+                }
+
+                /* PRIORITY-1 GUARD (2026-07-25): NEVER persist a base64 data: URI to
+                   a product doc. The old "base64 fallback" here truncated a data: URI
+                   to ~200KB and stored it — which is exactly how "PEACH MANGO ICE" put
+                   a 195KB image into `images`, blew past Algolia's 10KB record cap and
+                   stalled search indexing for every product in its batch. A product
+                   with no image shows the placeholder (the seller can re-add the photo);
+                   a poisoned index is far worse. This strips the string `image` field
+                   and every `images[]` entry regardless of which upload branch ran, so
+                   it is the client half of the defence-in-depth the Firestore rule now
+                   enforces server-side. */
+                fsProduct.image  = _isDataUri(fsProduct.image) ? '' : (fsProduct.image || '');
+                if (Array.isArray(fsProduct.images)) {
+                    fsProduct.images = fsProduct.images.filter(function(v){ return !_isDataUri(v); });
                 }
 
                 await m.setDoc(m.doc(db,'products',newProduct.id), fsProduct);
@@ -1674,6 +1691,15 @@ function saveEditProduct() {
                 fsPatch.image = _editImages[0];
                 fsPatch.images = _editImages.slice();
                 fsPatch.imageStorageUrls = _editImages.slice();
+            }
+            /* Defence-in-depth: never let a base64 data: URI reach the doc via `patch`.
+               DELETE the offending key (rather than blanking it) so a good existing
+               Storage image is left untouched — updateDoc only writes the keys present.
+               Matches the create path and the server-side rule. */
+            if (_isDataUri(fsPatch.image)) delete fsPatch.image;
+            if (Array.isArray(fsPatch.images)) {
+                var _cleanImgs = fsPatch.images.filter(function(v){ return !_isDataUri(v); });
+                if (_cleanImgs.length) fsPatch.images = _cleanImgs; else delete fsPatch.images;
             }
             await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), fsPatch);
         } catch (e) {
