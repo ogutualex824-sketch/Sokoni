@@ -27,6 +27,32 @@ function _authRequired(req) {
   return req.auth.uid;
 }
 
+/* ── Per-(customer, venue) active-booking counter ─────────────────────────────
+   Makes `maxBookingsPerCustomer` burst-safe. The prefetch count alone is
+   optimistic — a concurrent burst of creates for different slots can all read the
+   same stale count and slip past the cap. The authoritative check + increment now
+   happen INSIDE bookingCreate's transaction against this single counter doc, so
+   concurrent creates by one customer serialize on it (Firestore optimistic
+   concurrency retries the loser). Only touched when the venue sets a cap
+   (maxBookingsPerCustomer > 0) — zero overhead for everyone else. Decremented,
+   clamped at ≥ 0, whenever a booking leaves the active {pending,confirmed,active}
+   set (cancel / reject / check-out / auto-complete). */
+function _custCounterRef(venueId, customerId) {
+  return db.collection('venues').doc(venueId).collection('customerCounters').doc(String(customerId));
+}
+async function _decrCustomerCounter(venueId, customerId) {
+  if (!venueId || !customerId) return;
+  const ref = _custCounterRef(venueId, customerId);
+  try {
+    await db.runTransaction(async txn => {
+      const s = await txn.get(ref);
+      if (!s.exists) return; /* nothing counted (venue had no cap when created) */
+      const cur = Number(s.data().active || 0);
+      txn.set(ref, { active: Math.max(0, cur - 1), updatedAt: Date.now() }, { merge: true });
+    });
+  } catch (e) { console.warn('[booking] customer counter decrement:', e.message); }
+}
+
 /* ── Pricing (mirrors client engine) ─────────────────────── */
 function _calculatePrice(venue, startMins, endMins, dateStr, opts={}) {
   const p = venue.pricing || {};
@@ -459,6 +485,10 @@ exports.bookingCreate = onCall(
     const slotKey    = `${date}_${startTs}_${endTs}`;
     const slotLockRef = db.collection('venues').doc(venueId).collection('slotLocks').doc(slotKey);
 
+    /* Authoritative per-customer cap: counter doc read + incremented inside the
+       transaction below (only when the venue sets a cap). */
+    const counterRef = maxPerCustomer > 0 ? _custCounterRef(venueId, uid) : null;
+
     /* Idempotency record keyed by client-supplied key (document lookup — tx-safe) */
     const idemRef = idempotencyKey
       ? db.collection('_bookingIdempotency').doc(String(idempotencyKey))
@@ -468,10 +498,12 @@ exports.bookingCreate = onCall(
     let replayData  = null;
     let isConflict  = false;
     let conflictCode = 'already-exists';
+    let counterExisted = false;   /* whether the per-customer counter doc pre-existed */
+    let counterSeed    = 0;       /* real count to seed the counter with on first write */
 
     await db.runTransaction(async txn => {
       /* Reset per-attempt so transaction retries start clean */
-      isReplay = false; isConflict = false;
+      isReplay = false; isConflict = false; counterExisted = false; counterSeed = 0;
 
       /* ── 1. Idempotency guard (atomic document read) ───────────────────────
          Two concurrent requests with the same key: one commits, the other
@@ -511,11 +543,20 @@ exports.bookingCreate = onCall(
         }
       }
 
-      /* ── 3b. Per-customer active-booking cap (0 = unlimited) ──────────────  */
-      if (maxPerCustomer > 0 && customerActiveCount >= maxPerCustomer) {
-        isConflict   = true;
-        conflictCode = 'failed-precondition';
-        return;
+      /* ── 3b. Per-customer active-booking cap (0 = unlimited). The counter is read
+             INSIDE the txn so concurrent creates by one customer serialize on this
+             single doc (the prefetched `customerActiveCount` alone is optimistic and
+             a burst can slip past it). If no counter exists yet — the venue just
+             enabled the cap — fall back to the prefetched real count and seed. ──  */
+      if (maxPerCustomer > 0) {
+        const cSnap = await txn.get(counterRef);
+        counterExisted = cSnap.exists;
+        counterSeed    = cSnap.exists ? Number(cSnap.data().active || 0) : customerActiveCount;
+        if (counterSeed >= maxPerCustomer) {
+          isConflict   = true;
+          conflictCode = 'failed-precondition';
+          return;
+        }
       }
 
       /* ── 4. Overlap check (against pre-fetched snapshot; includes the provider
@@ -577,6 +618,15 @@ exports.bookingCreate = onCall(
 
       /* Slot lock — prevents same-slot concurrent write from committing */
       txn.set(slotLockRef, { bookingId, uid, venueId, date, startTime, endTime, createdAt: Date.now() });
+
+      /* Per-customer counter — atomic increment (seed from the real count the first
+         time, then increment). Same transaction → burst-safe against the cap. */
+      if (counterRef) {
+        txn.set(counterRef, {
+          active:    counterExisted ? FieldValue.increment(1) : (counterSeed + 1),
+          updatedAt: Date.now(),
+        }, { merge: true });
+      }
 
       /* Venue booking counter */
       txn.update(db.collection('venues').doc(venueId), {
@@ -696,6 +746,8 @@ exports.bookingCancel = onCall(
         date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
       });
     } catch (e) { console.warn('[booking] waitlist offer on cancel:', e.message); }
+    /* Booking left the active set → release its slot in the per-customer cap. */
+    await _decrCustomerCounter(booking.venueId, booking.customerId);
 
     return { cancelled: true, cancellationFee: fee };
   }
@@ -788,6 +840,8 @@ exports.bookingCheckOut = onCall(
       checkOut:  { time: time || Date.now(), by: uid },
       updatedAt: Date.now(),
     });
+    /* Completed → leaves the active set → release its slot in the per-customer cap. */
+    await _decrCustomerCounter(booking.venueId, booking.customerId);
     return { checkedOut: true };
   }
 );
@@ -955,6 +1009,19 @@ exports.bookingReject = onCall(
       body:  _sanitize(reason || 'Your booking was declined by the venue.'),
       data:  { bookingId }, priority: 'high', category: 'bookings', read: false, createdAt: Date.now(),
     });
+    /* A rejected booking frees the slot exactly like a cancellation — release the
+       lock (else it stays permanently unbookable), offer the waitlist, and release
+       the per-customer cap slot. All best-effort. */
+    try {
+      await db.collection('venues').doc(booking.venueId).collection('slotLocks')
+        .doc(`${booking.date}_${booking.startTs}_${booking.endTs}`).delete();
+    } catch (e) { console.warn('[booking] slotLock release on reject:', e.message); }
+    try {
+      await require('./booking-waitlist').offerNextWaitlist(booking.venueId, {
+        date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
+      });
+    } catch (e) { console.warn('[booking] waitlist offer on reject:', e.message); }
+    await _decrCustomerCounter(booking.venueId, booking.customerId);
     return { rejected: true };
   }
 );
@@ -1037,6 +1104,12 @@ exports.bookingAutoComplete = functions.scheduler.onSchedule(
     const batch = db.batch();
     snap.docs.forEach(d => batch.update(d.ref, { status: 'completed', autoCompletedAt: Date.now() }));
     if (!snap.empty) await batch.commit();
+    /* Each auto-completed booking leaves the active set → release its per-customer
+       cap slot. Sequential + clamped ≥ 0; volume here is low (once daily). */
+    for (const d of snap.docs) {
+      const b = d.data();
+      await _decrCustomerCounter(b.venueId, b.customerId);
+    }
     return null;
   }
 );

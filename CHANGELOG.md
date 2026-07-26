@@ -29,15 +29,25 @@ venues are completely unchanged.
 - **`venue-booking.js`** — `waitlistEnabled` added to create + venueUpdate (coerced bool).
 
 Verified: `scripts/test-booking-waitlist.js` — 19 pure-helper assertions (ordering, position,
-double-accept gate). **Firestore-emulator concurrency pass — 20/20** (real handler code):
+double-accept gate). **Firestore-emulator concurrency pass — 24/24** (real handler code):
 same-slot double-book → exactly one wins; cancel→release→offer→accept re-books; two devices
 accept the same offer → exactly one claims (others "Offer no longer available"); reap expires +
-re-offers; concurrent `offerNextWaitlist` → one offer minted. **Known limitation surfaced by the
-pass:** the per-customer cap (Phase 1) is prefetch-optimistic — a *concurrent burst* of creates for
-*different* slots by one customer can exceed the cap (same-slot doubles are still airtight via the
-CAS); it holds on settled state. Hardening it needs a transactional per-(customer,venue) counter —
-deferred pending approval. Files: `functions/booking-waitlist.js` (new), `functions/booking.js`,
+re-offers; concurrent `offerNextWaitlist` → one offer minted; **per-customer cap holds under a
+concurrent burst** (see below). Files: `functions/booking-waitlist.js` (new), `functions/booking.js`,
 `functions/venue-booking.js`, `functions/booking-dispatch.js`.
+
+**Per-customer cap hardening (same commit).** The Phase-1 cap was prefetch-optimistic — the
+emulator pass showed a concurrent burst of creates for *different* slots by one customer could
+exceed it. Fixed with a transactional per-`(customer, venue)` counter (`venues/{id}/
+customerCounters/{customerId}.active`): the authoritative check + increment now happen INSIDE
+`bookingCreate`'s transaction, so concurrent creates serialize on the one counter doc (the loser
+retries). Seeded from the real count the first time a capped venue is used (zero-touch for venues
+with no cap). Decremented, clamped ≥ 0, on every exit from the active set — `bookingCancel`,
+`bookingReject`, `bookingCheckOut`, `bookingAutoComplete`. `bookingReject` additionally now
+releases the slotLock + offers the waitlist (a rejected booking frees the slot exactly like a
+cancellation — same latent-bug class). Note: the venue-wide `capacity.concurrent` check remains
+prefetch-optimistic and counts whole-day active bookings rather than time-overlapping ones — a
+separate, lower-risk pre-existing behavior, not touched here.
 
 ---
 
