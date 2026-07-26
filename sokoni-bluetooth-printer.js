@@ -20,7 +20,20 @@
      58mm (32) -> 'Bravilex International Co.' / 'Limited'
      80mm (48) -> a single line
    Source of truth: sokoni-company.js (legalName). */
-const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+/* `var`, NOT `const`. This file and sokoni-universal-printer.js both declare
+   this name, and both load as classic scripts on every POS printer page. Two
+   top-level `const`s of the same identifier throw
+
+       Identifier 'SOKONI_LEGAL_NAME' has already been declared
+
+   which aborts whichever script parses second — so window.P58EPrinter was never
+   assigned, and with it SokoniUniversalPrinter, the printer manager and the
+   print service. The P58E could not be paired or configured at all.
+
+   `var` redeclaration is legal and idempotent here because both files assign
+   the identical literal. The literal stays in BOTH files deliberately:
+   verify-company-identity scans for the canonical name in each. */
+var SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
 function _legalNameLines(width) {
   const W = Number(width) || 32;
   const lines = []; let line = '';

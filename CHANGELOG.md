@@ -52,6 +52,68 @@ No database, API, or security changes. No breaking changes.
 
 ---
 
+## [2026-07-26] — fix(pos): P58E printer could not be configured — duplicate global killed the adapter
+
+Reported as "configure the P58E, I want to test for a client". The P58E support
+was already written and complete; it was never reachable.
+
+### Root cause
+
+`sokoni-universal-printer.js` and `sokoni-bluetooth-printer.js` **both** declared
+
+```js
+const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+```
+
+at global scope. They load together as classic scripts on every POS printer
+page, and two top-level `const`s of one identifier throw:
+
+```
+Identifier 'SOKONI_LEGAL_NAME' has already been declared
+```
+
+That aborts the script that parses second. `window.P58EPrinter` was therefore
+**never assigned** — so pairing, configuration and test printing were all
+impossible, on production, for every merchant.
+
+Confirmed against live `mysokoni.co.ke/pos-printer-setup` before the fix:
+`typeof window.P58EPrinter === "undefined"`, with that exact page error.
+
+### Why it went unnoticed
+
+The page renders its entire UI — "Discover P58E", "Setup", "Hardware Tests",
+"Test Print" all present and clickable. Only the hardware layer was missing, so
+it presented as a printer or Bluetooth problem rather than a script one.
+
+Each file is also individually valid: `node --check` passes on both, and any
+test loading them in isolation passes. It only breaks when they share a global
+scope — which is exactly what a browser does.
+
+### Fix
+
+`const` → `var` in both files. `var` redeclaration is legal and idempotent here
+because both assign the identical literal.
+
+The literal stays in **both** files deliberately — `verify-company-identity`
+scans each for the canonical name, so "fixing" this by deleting one declaration
+would have traded a printer outage for a compliance-gate failure.
+
+Verified in a real browser after the fix: `P58EPrinter`, `SokoniPrinter`,
+`PrinterManager` and `PosPrintService` all resolve to objects, and the P58E
+adapter exposes its full method surface.
+
+### Regression guard
+
+New `scripts/test-printer-globals.js` loads the bundle's declarations and fails
+on any shared global lexical name.
+
+It tracks real **brace depth** rather than column-0 position. The first version
+used `/^const /m` and reported `ESC`, `CMD` and `PrintQueue` as collisions —
+all three false positives, since every script wraps its body in an IIFE written
+unindented. What made `SOKONI_LEGAL_NAME` genuine is that it sits *before* the
+IIFE opens, at depth zero. Verified both ways: 7/7 green now, and exit 1 with
+the offending identifier named when the `const` is reintroduced.
+
 ## [2026-07-26] — fix(brands,minishop): brand name printed on documents; two colliding health scores
 
 Two open items closed, and the root cause of a third found.
