@@ -205,7 +205,7 @@
     { i:'🏠',  l:'Home',     h:'/' },
     { i:'🛍️', l:'Shop',     h:'category.html?cat=all' },
     { i:'🛠️', l:'Services', h:'services.html' },
-    { i:'📦',  l:'Orders',   h:'profile.html#orders' },
+    { i:'📦',  l:'Orders',   h:'my-orders.html' },
     { i:'👤',  l:'Profile',  h:'profile.html' }
   ];
 

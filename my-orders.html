@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-require-auth="true">
+<head>
+  <!-- Crash sentinel FIRST — this page exists precisely because the bottom-nav
+       "Orders" button used to load the 7k-line profile.html (profile.html#orders),
+       which OOM-crashed low-RAM Android. Keep the guard here too. -->
+  <script src="sokoni-crash-sentinel.js"></script>
+  <script src="auth-guard.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>My Orders — SOKONI</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <style>
+    /* Self-contained premium-dark. No framework, no external CSS — this is the
+       lightweight page the heavy profile.html is NOT, so it must stay lean. */
+    :root{--bg:#050505;--card:#0e0e0e;--line:#1c1c1c;--txt:#f2f2f2;--dim:#8a8a8a;--acc:#71ff00;}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 -apple-system,Segoe UI,Roboto,system-ui,sans-serif;padding-bottom:90px;}
+    .mo-top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(5,5,5,0.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+    .mo-top a.back{color:var(--txt);text-decoration:none;font-size:22px;line-height:1;width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px;border:1px solid var(--line);}
+    .mo-top h1{font-size:18px;margin:0;font-weight:800;}
+    .mo-wrap{padding:16px;max-width:640px;margin:0 auto;}
+    .mo-card{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:12px;cursor:pointer;transition:border-color .15s;text-decoration:none;color:inherit;}
+    .mo-card:active{border-color:var(--acc);}
+    .mo-id{font-weight:800;font-size:15px;word-break:break-word;}
+    .mo-sub{color:var(--dim);font-size:12.5px;margin-top:3px;}
+    .mo-right{text-align:right;flex-shrink:0;}
+    .mo-amt{font-weight:900;font-size:15px;}
+    .mo-badge{display:inline-block;margin-top:6px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;}
+    .mo-empty{text-align:center;padding:64px 20px;color:var(--dim);}
+    .mo-empty .ic{font-size:52px;margin-bottom:14px;}
+    .mo-empty a{color:var(--acc);text-decoration:none;font-weight:800;}
+    .mo-skel{height:74px;border-radius:14px;background:linear-gradient(90deg,#0e0e0e,#141414,#0e0e0e);background-size:200% 100%;animation:mo-sh 1.2s infinite;margin-bottom:12px;}
+    @keyframes mo-sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    @media (prefers-color-scheme: light){/* app is dark-only per brand; no light override */}
+  </style>
+</head>
+<body>
+  <div class="mo-top">
+    <a href="profile.html" class="back" aria-label="Back to profile">&#8592;</a>
+    <h1>My Orders</h1>
+  </div>
+
+  <div class="mo-wrap" id="moWrap">
+    <div class="mo-skel"></div><div class="mo-skel"></div><div class="mo-skel"></div>
+  </div>
+
+  <script>
+  (function () {
+    'use strict';
+    var wrap = document.getElementById('moWrap');
+
+    /* One status vocabulary covering BOTH the legacy profile labels
+       (placed/processing/…) and the canonical sokoni-orders lifecycle
+       (pending_payment/paid/…) so every order renders a correct badge. */
+    var STATUS = {
+      placed:               { l:'Placed',                c:'#9aa0a6' },
+      processing:           { l:'Processing',            c:'#fbbf24' },
+      shipped:              { l:'Shipped',               c:'#00aaff' },
+      out_for_delivery:     { l:'Out for Delivery',      c:'#00aaff' },
+      pending_payment:      { l:'Pending Payment',       c:'#fbbf24' },
+      paid:                 { l:'Paid',                  c:'#71ff00' },
+      awaiting_confirmation:{ l:'Awaiting Confirmation', c:'#fbbf24' },
+      confirmed:            { l:'Confirmed',             c:'#71ff00' },
+      rider_assigned:       { l:'Rider Assigned',        c:'#00aaff' },
+      rider_en_route:       { l:'Rider En Route',        c:'#00aaff' },
+      picked_up:            { l:'Picked Up',             c:'#00aaff' },
+      in_transit:           { l:'In Transit',            c:'#00aaff' },
+      delivered:            { l:'Delivered',             c:'#71ff00' },
+      completed:            { l:'Completed',             c:'#71ff00' },
+      cancelled:            { l:'Cancelled',             c:'#ff6b6b' },
+      refunded:             { l:'Refunded',              c:'#f97316' }
+    };
+
+    function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(m){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]; }); }
+
+    function orderHref(o){
+      if (o.deliveryRef) return 'delivery-tracking.html?ref=' + encodeURIComponent(o.deliveryRef);
+      return 'track.html?id=' + encodeURIComponent(o.id || o._fsId || '');
+    }
+    function orderDate(o){
+      if (o.date) return esc(o.date);
+      var s = o.createdAt && (o.createdAt.seconds || o.createdAt._seconds);
+      if (s) { try { return new Date(s * 1000).toLocaleDateString(); } catch(e){} }
+      return '';
+    }
+
+    function render(list){
+      if (!list || !list.length) {
+        wrap.innerHTML = '<div class="mo-empty"><div class="ic">&#128230;</div>No orders yet.<br><a href="/">Start shopping</a></div>';
+        return;
+      }
+      wrap.innerHTML = list.slice(0, 40).map(function(o){
+        var st = STATUS[o.status] || { l: esc(o.status || 'Order'), c:'#9aa0a6' };
+        var dateStr = orderDate(o);
+        var items = (o.items && o.items.length) ? ' &middot; ' + o.items.length + ' item(s)' : '';
+        var total = Number(o.total != null ? o.total : (o.orderTotal || 0)).toLocaleString();
+        return '<a class="mo-card" href="' + esc(orderHref(o)) + '">' +
+            '<div><div class="mo-id">' + esc(o.id || o._fsId || 'Order') + '</div>' +
+            '<div class="mo-sub">' + dateStr + items + '</div></div>' +
+            '<div class="mo-right"><div class="mo-amt">KES ' + total + '</div>' +
+            '<span class="mo-badge" style="background:' + st.c + '22;color:' + st.c + ';border:1px solid ' + st.c + '55;">' + esc(st.l) + '</span></div>' +
+          '</a>';
+      }).join('');
+    }
+
+    /* 1) Instant render from the same cache profile.html writes — so the page is
+          useful even before (or without) Firebase, and never blanks on a slow net. */
+    var cached = [];
+    try { cached = JSON.parse(localStorage.getItem('sokoniOrders') || '[]'); } catch(e) {}
+    if (cached.length) render(cached);
+
+    /* 2) Live Firestore via the canonical SokoniDB.listenUserOrders — merge with
+          cache, sort newest-first, re-render, and refresh the cache. */
+    function goLive(uid){
+      if (!uid || !window.SokoniDB || typeof window.SokoniDB.listenUserOrders !== 'function') {
+        if (!cached.length) render([]);   /* no cache, no live source → honest empty */
+        return;
+      }
+      try {
+        window.SokoniDB.listenUserOrders(uid, function(fsOrders){
+          var merged = Array.isArray(fsOrders) ? fsOrders.slice() : [];
+          cached.forEach(function(lo){ if(!merged.find(function(fo){ return (fo.id||fo._fsId) === (lo.id||lo._fsId); })) merged.push(lo); });
+          merged.sort(function(a,b){
+            var as = (a.createdAt && (a.createdAt.seconds||a.createdAt._seconds)) || 0;
+            var bs = (b.createdAt && (b.createdAt.seconds||b.createdAt._seconds)) || 0;
+            return bs - as;
+          });
+          try { localStorage.setItem('sokoniOrders', JSON.stringify(merged)); } catch(e){}
+          render(merged);
+        });
+      } catch(e){ if(!cached.length) render([]); }
+    }
+
+    /* Get the uid once auth is ready. waitForFirebaseReady is firebase.js's single
+       readiness contract; onAuthStateChanged then hands us the signed-in user. */
+    function boot(){
+      if (typeof window.waitForFirebaseReady !== 'function') { setTimeout(boot, 200); return; }
+      window.waitForFirebaseReady(function(){
+        var uid = window.__sokoniCurrentUid || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid);
+        if (uid) { goLive(uid); return; }
+        if (window.firebaseSDK && window.firebaseSDK.onAuthStateChanged) {
+          window.firebaseSDK.onAuthStateChanged(function(u){ if (u && u.uid) goLive(u.uid); });
+        }
+      });
+    }
+    boot();
+  })();
+  </script>
+
+  <!-- Firebase (modular) + the canonical order DB. Both are ES modules and imply
+       defer, so the instant cache render above paints before these evaluate. -->
+  <script src="firebase.js" type="module"></script>
+  <script src="sokoni-db.js" type="module"></script>
+</body>
+</html>

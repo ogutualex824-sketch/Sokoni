@@ -1,3 +1,30 @@
+## [2026-07-26] — fix(orders): separate the Orders button from Profile — dedicated lean page
+
+Reported: on Pacifique's Android the **Orders** button and the **Profile** button were "tied
+together" and crashed the page while loading. Root cause: the bottom-nav Orders link pointed at
+`profile.html#orders` — the same 7k-line profile.html that OOM-crashes low-RAM Android (see the
+crash-sentinel entries). Orders and Profile loaded the identical heavy page.
+
+Fix — give Orders its own lightweight URL:
+- New `my-orders.html` — a self-contained, dependency-free buyer orders page. Renders instantly
+  from the `sokoniOrders` localStorage cache, then goes live via the canonical
+  `SokoniDB.listenUserOrders(uid)` (same data source profile.html uses — extend, don't rebuild),
+  merges + sorts newest-first, and refreshes the cache. No event-bus / observability / gateway /
+  kass-widget / 7-layer dashboard cascade — so it does not reproduce the profile-page crash.
+  Ships the crash sentinel too.
+- Repointed the Orders button everywhere: `sokoni-nav-engine.js` canonical tab **and 86 static
+  bottom-nav bars** (`href="profile.html#orders"` → `href="my-orders.html"`). One-line change per
+  file; line endings preserved.
+
+Propagation: the 86 static pages are network-first (fresh on any reload); the nav-engine.js change
+rides the already-committed service-worker `v115` bump, which purges old caches on activate — so
+updates land on a normal reload without clearing browsing data.
+
+Files: `my-orders.html` (new), `sokoni-nav-engine.js`, + 86 page HTMLs (Orders href only).
+No DB/API/security changes. No breaking changes. profile.html's own Orders tab is unchanged.
+
+---
+
 ## [2026-07-26] — feat(pricing): single-source "Pricing, Earnings & Fees" hub (earnings.html)
 
 One authoritative page for everything it costs to earn on SOKONI, so pricing lives
