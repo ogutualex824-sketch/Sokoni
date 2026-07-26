@@ -30,6 +30,11 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { defineSecret }       = require("firebase-functions/params");
 const admin                  = require("firebase-admin");
+/* MiniShop config is still split across two stores during the convergence
+   period. Reading minishopConfig/{id} directly means a merchant whose branding
+   only ever landed in the legacy store scores zero for fields they actually
+   filled in — and this file attaches a GRADE to that score. */
+const { resolve: resolveConfig } = require("./minishop-config-schema");
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -173,7 +178,11 @@ function _calcHealthScore(shop, config, products, orders) {
   if (_san(shop.description || config.description || "", 500).length > 10) ps += 3;
   if (shop.logoUrl  || shop.logo     || config.logoUrl)  ps += 2;
   if (shop.coverUrl || shop.cover    || config.coverUrl) ps += 2;
-  if (shop.phone    || shop.contactPhone || config.phone) ps += 2;
+  /* `config.contactPhone` is the canonical name; `config.phone` is the legacy
+     one. Only the legacy name was checked here, so a merchant whose number
+     lives solely in their MiniShop config — the normal case once saved through
+     the CF — lost these 2 points and was graded down for a complete profile. */
+  if (shop.phone || shop.contactPhone || config.contactPhone || config.phone) ps += 2;
   if (shop.category || config.category)                  ps += 1;
   const soc = shop.socialLinks || config.socialLinks || {};
   if (soc.whatsapp || soc.wa)                            ps += 1;
@@ -406,7 +415,13 @@ const getMerchantDashboard = onCall(CF_OPTS, _h.getMerchantDashboard = async (re
     db.collection("shopReviews").where("shopId", "==", shopId).limit(10).get(),
   ]);
 
-  const config   = configSnap.exists ? configSnap.data() : {};
+  /* `shop` comes from _assertSellerAccess above, so the legacy blob is already
+     in hand — resolve() merges canonical over it and normalises both. */
+  const config   = resolveConfig(
+    configSnap.exists ? configSnap.data() : {},
+    shop.minishopConfig,
+    shop
+  );
   const products = productsSnap.docs.map(d => d.data());
   const orders   = ordersSnap.docs.map(d => d.data());
   const reviews  = reviewsSnap.docs.map(d => d.data());
@@ -469,7 +484,13 @@ const getMerchantHealthScore = onCall(CF_OPTS, _h.getMerchantHealthScore = async
     db.collection("orders").where("shopId", "==", shopId).limit(50).get(),
   ]);
 
-  const config   = configSnap.exists ? configSnap.data() : {};
+  /* `shop` comes from _assertSellerAccess above, so the legacy blob is already
+     in hand — resolve() merges canonical over it and normalises both. */
+  const config   = resolveConfig(
+    configSnap.exists ? configSnap.data() : {},
+    shop.minishopConfig,
+    shop
+  );
   const products = productsSnap.docs.map(d => d.data());
   const orders   = ordersSnap.docs.map(d => d.data());
 

@@ -1,3 +1,57 @@
+## [2026-07-26] — fix(minishop): last readers onto the resolver; merchant health score graded on the wrong field
+
+Completes the schema convergence. Every consumer of MiniShop **display** config
+now reads through `resolve()`; nothing outside the schema module knows about the
+two stores.
+
+### Scope was narrower than it looked — and blanket conversion would have broken things
+
+Five readers bypassed the resolver, but only **three** read display config. The
+other two read `handle`, which `resolve()` deliberately drops (it is a protected
+routing field, not display config). Converting those would have returned
+`undefined` and broken handle lookups in campaigns and QR generation.
+
+Converted: `merchant-success.js` ×2, `minishop-v3.js` ×1.
+Correctly left alone: `minishop-campaigns.js`, `qr.js`, `minishop-v3.js:986`,
+and the `followerCount` / `handle` reads in `minishop.js` — all non-display
+fields that live canonically in `minishopConfig` already.
+
+### The deterministic bug
+
+`_calcHealthScore` checked `config.phone` — the **legacy** name — and never
+`config.contactPhone`, the canonical one. It falls back to `shop.phone` /
+`shop.contactPhone`, so it was not always zero (an earlier note overstated
+this); but a merchant whose number lives solely in their MiniShop config — the
+normal case once saved through the CF — silently lost those 2 points and was
+graded down for a complete profile.
+
+Compounding it, `merchant-success.js` read only the canonical store, so a
+merchant whose branding is still legacy-only scored zero for `coverUrl`,
+`logoUrl`, `description`, `category`, `socialLinks` and `responseTime` —
+fields they had actually filled in. This file attaches a **letter grade** to
+that score, which is why it was the priority.
+
+### Verification
+
+Audited every assignment from a `minishopConfig` snapshot across `functions/`
+and classified each as resolved, or raw-but-provably-non-display. Result: 3
+resolved, 6 raw reading only `handle` / `followerCount`, 0 unaccounted. Nine
+apparent hits in `availability.js`, `loyalty-enterprise.js`,
+`release-readiness.js` and `search-queue.js` were false positives — those files
+contain **zero** `minishopConfig` references; the pattern had matched unrelated
+`configSnap` variables.
+
+Affected functions: `getMerchantDashboard`, `getMerchantHealthScore`,
+`miniShopOGMeta`. Tests 73 + 57 green; syntax gate 1,083 files clean.
+
+### Still open
+
+Two health-scoring systems now exist — `_calcHealthScore` (merchant: verification,
+fulfilment, reviews, response, orders) and the MiniShop panel added earlier today
+(storefront completeness). They measure different things, which is defensible,
+but that is a decision worth taking explicitly rather than inheriting. Not
+resolved here.
+
 ## [2026-07-26] — chore(minishop): schema versioning, explicit protected fields, and an E2E share verifier
 
 Three follow-ups on the schema convergence.
