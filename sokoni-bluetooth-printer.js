@@ -950,14 +950,43 @@ class P58EService {
   ───────────────────────────────────────────────────────────── */
   static checkCompatibility () {
     const issues = [];
-    if (!navigator.bluetooth) issues.push('Web Bluetooth API not available — use Chrome on Android or Desktop.');
+    const ua    = navigator.userAgent || '';
+    /* iPadOS reports as MacIntel with touch points, so the platform check is
+       needed alongside the UA test. */
+    const isIOS = /iP(hone|od|ad)/.test(ua) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    /* iOS is called out by name and FIRST, because "use Chrome" is actively
+       misleading there: every iOS browser — Chrome, Edge, Firefox included — is
+       required to run on WebKit, which implements no Web Bluetooth at all.
+       A merchant told only "use Chrome" will install Chrome on their iPhone,
+       hit exactly the same wall, and conclude the printer is broken. */
+    if (isIOS) {
+      issues.push('iPhone and iPad cannot connect Bluetooth printers from a web page. ' +
+                  'Every iOS browser — including Chrome and Edge — runs on WebKit, which ' +
+                  'does not implement Web Bluetooth. Use an Android phone or a ' +
+                  'Windows/Mac computer with Chrome or Edge.');
+    } else if (!navigator.bluetooth) {
+      issues.push('Web Bluetooth is not available in this browser — use Chrome or Edge ' +
+                  'on Android, Windows or Mac.');
+    }
+
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
       issues.push('Page must be served over HTTPS for Bluetooth to work.');
     }
-    if (!navigator.bluetooth?.getDevices) {
-      issues.push('navigator.bluetooth.getDevices not available — auto-reconnect requires Chrome 85+.');
+    /* A DEGRADATION, not a blocker — the printer still pairs and prints, the
+       chooser just opens each time. Keeping it out of `issues` matters: it
+       drives `supported`, and flagging this browser as unsupported would show a
+       red "Browser Not Supported" banner to a merchant whose printer works
+       perfectly, and probably lose the sale.
+       Only meaningful where Bluetooth exists at all; on iOS it is noise stacked
+       under a hard blocker. */
+    const warnings = [];
+    if (!isIOS && navigator.bluetooth && !navigator.bluetooth.getDevices) {
+      warnings.push('Auto-reconnect needs Chrome 85 or newer. Pairing and printing ' +
+                    'still work — the chooser will just open each time.');
     }
-    return { supported: issues.length === 0, issues };
+    return { supported: issues.length === 0, issues, warnings, isIOS };
   }
 
   /* Instance proxy — allows external code to call P58EPrinter.checkCompatibility()

@@ -1677,9 +1677,21 @@ function renderP58EPanel () {
      added to sokoni-bluetooth-printer.js that delegates to the static method safely. */
   const compat = PrinterManager.p58e.checkCompatibility?.() || { supported: true, issues: [] };
   const notice = document.getElementById('p58eBrowserNotice');
-  if (!compat.supported) {
+  /* Warnings are shown even when the browser IS supported — they describe a
+     degraded-but-working setup (e.g. no silent reconnect on Chrome < 85), and
+     a merchant should know the chooser will keep appearing rather than think
+     pairing failed. They must never turn the card red. */
+  const warn = (compat.warnings || []);
+  if (compat.supported && warn.length) {
     notice.style.display = '';
-    document.getElementById('p58eCompatMsg').innerHTML = compat.issues.map(i => '&#9888; ' + _esc(i)).join('<br>');
+    notice.querySelector('.card-top').style.background = 'linear-gradient(90deg,var(--acc),#1a73e8)';
+    notice.querySelector('.card-title').style.color = 'var(--txt)';
+    notice.querySelector('.card-title').innerHTML = '&#8505; Works, with one limitation';
+    document.getElementById('p58eCompatMsg').innerHTML = warn.map(i => _esc(i)).join('<br>');
+  } else if (!compat.supported) {
+    notice.style.display = '';
+    document.getElementById('p58eCompatMsg').innerHTML =
+      compat.issues.concat(warn).map(i => '&#9888; ' + _esc(i)).join('<br>');
   } else {
     notice.style.display = 'none';
   }

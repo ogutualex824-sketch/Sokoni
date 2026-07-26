@@ -1,3 +1,46 @@
+## [2026-07-26] — fix(pos): P58E compatibility told iPhone users to install Chrome, which cannot work
+
+Asked to connect the P58E from a phone — which surfaced the check the panel
+actually shows merchants.
+
+### The message was wrong on the one device where it matters most
+
+`checkCompatibility()`, which the P58E panel renders, said only:
+
+> Web Bluetooth API not available — use Chrome on Android or Desktop.
+
+On an iPhone that advice is actively harmful. **Every** iOS browser — Chrome and
+Edge included — is required to run on WebKit, which implements no Web Bluetooth
+at all. A merchant follows the instruction, installs Chrome, hits the identical
+wall, and concludes the printer is broken.
+
+The adapter already knew this: `diagnose()` detects iOS and explains it. But
+that is a console tool, and the panel used the checker that did not. iOS is now
+detected by name and called out first, including the iPadOS case (which reports
+as MacIntel with touch points).
+
+### It also rejected a browser that works
+
+Missing `getDevices()` (Chrome < 85) was listed as an *issue*, so `supported`
+went false and a red **Browser Not Supported** banner appeared — on a browser
+where pairing and printing work fine and only silent reconnect is missing. That
+would lose a sale to a cosmetic limitation.
+
+Blockers and degradations are now separate: `issues` drive `supported`, while
+`warnings` describe a working-but-degraded setup and render in accent blue as
+"Works, with one limitation" rather than a red rejection.
+
+| device | supported | shows |
+|---|---|---|
+| iPhone / iPad | **false** | one blocker, named honestly |
+| Android Chrome 120 | **true** | nothing |
+| Android Chrome 80 | **true** | one warning — chooser opens each time |
+
+### For the client test
+
+**Android phone with Chrome.** An iPhone cannot drive a Bluetooth printer from a
+web page in any browser — that is the platform, not SOKONI.
+
 ## [2026-07-26] — feat(accounts): centralized idempotent user baseline bootstrap (ensureUserBaseline)
 
 Milestone 1 of the account-consistency program: ONE shared path that gives every AUTHENTICATED
