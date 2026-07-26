@@ -1,3 +1,25 @@
+## [2026-07-26] — feat(accounts): idempotent Admin-SDK migration for existing users (#4) — dry-run first
+
+`scripts/migrate-user-baselines.js` — scans EVERY Firebase Auth account and creates ONLY the
+missing baseline Firestore docs/fields (never overwriting valid data), so historical accounts
+behave like newly-created ones. Reuses the EXACT client-bootstrap planners (single gap-logic
+source) and, being Admin SDK, additionally backfills `createdAt` from the REAL Auth creation
+time (authentic history, not fabricated). Dry-run by DEFAULT; `--live` to write; `--limit N`.
+
+Verified: `scripts/test-migrate-baselines.js` — 16 assertions (idempotent, no-overwrite,
+createdAt-from-Auth, only-fills-missing), gate-run.
+
+DRY-RUN against production (read-only) surfaced the scale of the inconsistency: of 55 total
+accounts, **54 need repair** — 26 have NO users doc, 47 have no wallet, 51 have no
+notificationPrefs; 419 user fields to fill (roles 38, name 36, createdAt 36, onboarding 43…);
+0 errors. This is the root of the "account-specific bugs" — most accounts were never fully
+initialized. The LIVE run is gated on founder confirmation (writes to 54 production accounts).
+
+Files: `scripts/migrate-user-baselines.js` (new), `scripts/test-migrate-baselines.js` (new).
+Script only — no hosting/functions deploy; no data written yet.
+
+---
+
 ## [2026-07-26] — feat(accounts): broaden auth-state + baseline bootstrap to authenticated pages (#3)
 
 Milestone 3: every authenticated entry point now shares the same two canonical modules —
