@@ -147,30 +147,26 @@
   <section id="subscriptions">
     <div class="sec-head"><span class="sec-ic">💳</span><h2>Subscriptions</h2></div>
     <div class="sec-sub">Selling on SOKONI is free to start. Upgrade only when you need more listings and tools.</div>
+    <!-- Prices are NOT restated here on purpose. Subscription pricing is
+         per-business-type and lives in the subscription engine (subGetPlans →
+         sub-billing.js), rendered live on plans.html with a monthly/annual
+         toggle. Hardcoding figures here drifted (an earlier version copied a
+         second, disagreeing catalogue and showed the wrong Enterprise price).
+         The Plans page is the single source; this section summarises and links. -->
     <div class="cards">
-      <div class="card">
-        <div class="card-tag">Free</div>
-        <div class="card-price free">KES 0</div>
-        <ul><li>Up to 10 listings</li><li>Marketplace access</li><li>Standard support</li></ul>
-      </div>
-      <div class="card">
-        <div class="card-tag">Starter</div>
-        <div class="card-price"><span class="cur">KES </span>999<span class="per">/mo</span></div>
-        <ul><li>Up to 100 listings</li><li>Wallet &amp; payouts</li><li>Verified badge</li><li>3 staff seats</li></ul>
-      </div>
-      <div class="card hl">
-        <div class="card-tag">Growth</div>
-        <div class="card-price"><span class="cur">KES </span>2,499<span class="per">/mo</span></div>
-        <ul><li>Unlimited listings</li><li>Premium analytics</li><li>Featured placement</li><li>Multi-branch · 10 seats</li></ul>
-      </div>
-      <div class="card">
-        <div class="card-tag">Enterprise</div>
-        <div class="card-price"><span class="cur">KES </span>4,999<span class="per">/mo</span></div>
-        <ul><li>Unlimited listings</li><li>Priority support</li><li>Unlimited staff seats</li><li>Multi-branch</li></ul>
+      <div class="card" style="grid-column:1/-1">
+        <div class="card-tag">Free to start · plans by business type</div>
+        <p style="color:var(--sub);font-size:13.5px;margin:9px 0 3px">Subscriptions are tailored to what you run — <strong style="color:#fff">Seller, Service Provider, Restaurant, Hotel, Property, Driver</strong> and more — each with a free tier plus monthly and annual paid plans (annual saves roughly two months).</p>
+        <ul>
+          <li>A free tier on every hub — never pay just to start</li>
+          <li>Monthly or annual billing; change or cancel anytime</li>
+          <li>Live, current prices per business type on the Plans page</li>
+          <li>Sales commission is separate — see the next section</li>
+        </ul>
       </div>
     </div>
-    <div class="note">Annual billing is available at a discount — pick a plan to see the yearly price. Plans can be changed at any time; upgrades apply immediately and downgrades take effect at the end of your current period.</div>
-    <a class="cta" href="plans.html">See full plans &amp; features →</a>
+    <div class="note">Prices differ by business type and are served live from SOKONI's subscription engine, so the <strong>Plans</strong> page always shows the correct current figure with a monthly/annual toggle. That page is the single source for subscription pricing — this hub links to it rather than repeat numbers that could fall out of sync.</div>
+    <a class="cta" href="plans.html">See live plans &amp; pricing for your business →</a>
   </section>
 
   <!-- ── COMMISSIONS (data-driven from SokoniCommission) ── -->

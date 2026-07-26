@@ -282,8 +282,13 @@ function renderPlans() {
   const curSub    = currentSubs[currentHub];
 
   const cards = hubPlans.map(plan => {
-    const price = billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly;
-    const isFree = price === 0;
+    const priceRaw   = billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly;
+    const priceNum   = Number(priceRaw);
+    /* Never render "KES NaN": a plan that is missing/misconfigured for this cycle
+       shows "Contact Sales" instead of a broken number. Only a real, finite value
+       is treated as a price; 0 is Free. */
+    const priceValid = Number.isFinite(priceNum);
+    const isFree     = priceValid && priceNum === 0;
     const isPopular = plan.id === popularId;
     const isCurrent = curSub?.planId === plan.id && ['active','trialing','grace'].includes(curSub?.status);
     const trialDays = plan.trial?.days || 0;
@@ -292,8 +297,10 @@ function renderPlans() {
 
     const priceHtml = isFree
       ? `<div class="plan-price free-price">Free</div>`
-      : `<div class="plan-price"><span class="currency">KES</span>${Math.round(price/100).toLocaleString('en-KE')}<span class="period">/${billingCycle==='annual'?'yr':'mo'}</span></div>
-         ${billingCycle==='annual'?`<div class="plan-annual-note">≈ KES ${Math.round(price/100/12).toLocaleString('en-KE')}/mo billed annually</div>`:''}`;
+      : !priceValid
+      ? `<div class="plan-price" style="font-size:22px">Contact Sales</div>`
+      : `<div class="plan-price"><span class="currency">KES</span>${Math.round(priceNum/100).toLocaleString('en-KE')}<span class="period">/${billingCycle==='annual'?'yr':'mo'}</span></div>
+         ${billingCycle==='annual'?`<div class="plan-annual-note">≈ KES ${Math.round(priceNum/100/12).toLocaleString('en-KE')}/mo billed annually</div>`:''}`;
 
     const trialHtml = trialDays > 0 && !isCurrent
       ? `<div class="trial-badge">${esc(trialDays)}-day free trial</div>` : '';
@@ -396,7 +403,15 @@ async function confirmSubscribe() {
     } else {
       /* Redirect to checkout with plan pre-selected */
       closeModal();
-      const priceKES = Math.round(plan.price / 100);
+      /* Use the price for the SELECTED cycle (plan.price did not exist on the
+         plan object — it was undefined, so amount=NaN reached checkout). Guard
+         against a missing/misconfigured price rather than send NaN to payment. */
+      const amountCents = billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly;
+      const priceKES = Math.round(Number(amountCents) / 100);
+      if (!Number.isFinite(priceKES) || priceKES < 0) {
+        toast('This plan isn’t available for online checkout yet — please contact support.', 'error');
+        return;
+      }
       location.href = `checkout.html?type=subscription&planId=${encodeURIComponent(plan.id)}&cycle=${billingCycle}&amount=${priceKES}&name=${encodeURIComponent(plan.name)}`;
     }
   } catch(err) {
