@@ -6,6 +6,25 @@ let getDocs = null;
    Defined here so buildProductCard() and all callers share one implementation. */
 const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 
+/* Self-bootstrap the shared image render helper (sokoni-image.js) when the host page
+   didn't load it. This decouples the trending grid's renderProductImage() upgrade from
+   index.html carrying the <script> tag — which, in this multi-agent repo, is subject to
+   a deploy race on that shared file. Idempotent + fail-open: the grid render is already
+   guarded (falls back to an inline <img> with identical behaviour) if the helper isn't
+   ready yet, and the async data fetch that triggers the grid render gives this tiny
+   same-origin script ample time to load first. */
+(function ensureSokoniImage(){
+  try {
+    if (typeof document === 'undefined' || window.renderProductImage) return;
+    if (document.querySelector('script[data-sk-image-boot],script[src*="sokoni-image.js"]')) return;
+    var s = document.createElement('script');
+    s.src = 'sokoni-image.js';
+    s.async = false;                         // load ASAP, preserve order; non-blocking
+    s.setAttribute('data-sk-image-boot','1');
+    (document.head || document.documentElement).appendChild(s);
+  } catch (_) { /* fail open — inline fallback still renders */ }
+})();
+
 /* Block browser autofill/email injection on all search inputs sitewide */
 (function blockSearchAutofill(){
   function applyToEl(el){

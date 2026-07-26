@@ -6,6 +6,23 @@
 (function (window) {
   'use strict';
 
+  /* Self-bootstrap the shared image render helper (sokoni-image.js) if the host page
+     didn't load it — so this engine's renderProductImage() upgrade activates on any
+     page, independent of a per-page <script> tag (which, on index.html, is subject to a
+     multi-agent deploy race on the shared file). Idempotent + fail-open: the render is
+     already guarded (falls back to an inline <img>) if the helper isn't ready. */
+  (function ensureSokoniImage(){
+    try {
+      if (typeof document === 'undefined' || window.renderProductImage) return;
+      if (document.querySelector('script[data-sk-image-boot],script[src*="sokoni-image.js"]')) return;
+      var s = document.createElement('script');
+      s.src = 'sokoni-image.js';
+      s.async = false;
+      s.setAttribute('data-sk-image-boot','1');
+      (document.head || document.documentElement).appendChild(s);
+    } catch (_) { /* fail open */ }
+  })();
+
   /* ── Firebase config (project sokoni-aeb26) ── */
   const FB_CONFIG = {
     apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
