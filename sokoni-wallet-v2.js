@@ -931,6 +931,66 @@ window.SokoniWalletV2 = (function () {
     else row.style.display = 'none';
   }
 
+  /* ─── PAYOUT HISTORY / DETAILS ─── */
+  async function openPayouts() {
+    openOverlay('ovlPayouts');
+    const list = document.getElementById('payoutsList');
+    if (list) list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:20px 0">Loading…</p>';
+    try {
+      const res = await _callTimed('getPayoutHistory', {}, 20000);
+      _renderPayouts(res?.data?.payouts || []);
+    } catch (e) {
+      if (list) list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:20px 0">Could not load withdrawals. ' + _esc(e.message || '') + '</p>';
+    }
+  }
+
+  function _payoutStatusMeta(s) {
+    const m = {
+      pending:         { t: 'Requested',  c: 'var(--sub)', i: '🕒' },
+      approving:       { t: 'Approving',  c: 'var(--sub)', i: '🕒' },
+      approved:        { t: 'Approved',   c: 'var(--g)',   i: '✓'  },
+      processing:      { t: 'Processing', c: '#f6c945',    i: '⏳' },
+      approval_failed: { t: 'Retrying',   c: '#f6c945',    i: '⚠️' },
+      paid:            { t: 'Paid',       c: 'var(--g)',   i: '✅' },
+      rejected:        { t: 'Rejected',   c: 'var(--red)', i: '✕'  },
+      failed:          { t: 'Failed',     c: 'var(--red)', i: '✕'  },
+    };
+    return m[s] || { t: s || 'Unknown', c: 'var(--sub)', i: '•' };
+  }
+
+  function _payoutDate(ts) {
+    const secs = ts?._seconds ?? ts?.seconds;
+    if (!secs) return '';
+    const d = new Date(secs * 1000);
+    return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) +
+           ' · ' + d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function _renderPayouts(payouts) {
+    const list = document.getElementById('payoutsList');
+    if (!list) return;
+    if (!payouts.length) {
+      list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:24px 0">No withdrawals yet.</p>';
+      return;
+    }
+    list.innerHTML = payouts.map((p) => {
+      const st = _payoutStatusMeta(p.status);
+      return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+          '<span style="font-weight:800;font-size:15px">KSh ' + _fmt(p.amount) + '</span>' +
+          '<span style="font-size:12px;font-weight:700;color:' + st.c + '">' + st.i + ' ' + _esc(st.t) + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--sub);line-height:1.7">' +
+          '<div>To ' + _esc(p.destinationMasked || '—') + ' · ' + _esc(String(p.method || '').toUpperCase()) + '</div>' +
+          (p.fee ? '<div>Fee KSh ' + _fmt(p.fee) + ' · You receive KSh ' + _fmt(p.netAmount) + '</div>' : '') +
+          '<div>' + _esc(_payoutDate(p.createdAt)) + '</div>' +
+          (p.intasendRef ? '<div>Ref: ' + _esc(p.intasendRef) + '</div>' : '') +
+          '<div style="opacity:.7">ID: ' + _esc(p.id) + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
   /* ─── REQUEST MONEY ─── */
   function openRequest() {
     document.getElementById('reqBody').style.display = '';
@@ -1793,7 +1853,7 @@ window.SokoniWalletV2 = (function () {
     sendStep1Next, sendStep2Next, executeSend,
     sndKey, sndKeyDel, setSendAmt,
     /* Withdraw */
-    openWithdraw, wdrMethodChange, requestPayout, wdrAmountInput,
+    openWithdraw, wdrMethodChange, requestPayout, wdrAmountInput, openPayouts,
     /* Request */
     openRequest, createRequest, shareReqLink, copyReqLink,
     /* Savings */

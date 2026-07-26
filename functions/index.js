@@ -6758,6 +6758,23 @@ exports.webhookIntasend = onRequest(
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
+    /* Seller B2C payouts ("pout_…"): advance a withdrawal from its provider status.
+       Matches by api_ref (== our reqId) or by intasendRef (tracking_id). No-op for
+       non-payout events, so top-up/payment handling below is unaffected. */
+    try {
+      if (await wallet.finalizeB2CPayoutFromWebhook(db, apiRef, state)) {
+        res.status(200).send("OK");
+        return;
+      }
+      if (checkoutId && await wallet.finalizeB2CPayoutFromWebhook(db, checkoutId, state)) {
+        res.status(200).send("OK");
+        return;
+      }
+    } catch (e) {
+      console.error("[webhookIntasend] B2C payout finalize error:", e.message);
+      /* fall through — don't block other webhook handling */
+    }
+
     /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
        the shared idempotent claim before the payments path below. */
     if (await _finalizeWalletTopUp(apiRef, state, amount, "webhookIntasend")) {
@@ -9919,6 +9936,8 @@ exports.requestSellerPayout    = wallet.requestSellerPayout;
 exports.getPayoutHistory       = wallet.getPayoutHistory;
 exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
+exports.reconcilePayouts       = wallet.reconcilePayouts;
+exports.getPayoutAnalytics     = wallet.getPayoutAnalytics;
 exports.refundToWallet           = wallet.refundToWallet;
 exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 

@@ -930,8 +930,8 @@ body{
         <span id="balVal">—</span>
       </div>
       <div id="balTier" style="margin-bottom:12px"></div>
-      <div id="pendingPayoutRow" style="display:none;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--sub);margin-bottom:10px">
-        <span>⏳</span> Pending withdrawals: <b id="pendingPayoutVal" style="color:var(--txt)">KSh 0</b>
+      <div id="pendingPayoutRow" onclick="W2.openPayouts()" style="display:none;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--sub);margin-bottom:10px;cursor:pointer">
+        <span>⏳</span> Pending withdrawal: <b id="pendingPayoutVal" style="color:var(--txt)">KSh 0</b> · arrives within 24h ›
       </div>
       <div class="bal-sub-row">
         <div class="bal-mini" id="miniSavings" onclick="W2.openVaultsList()">
@@ -1485,6 +1485,9 @@ body{
           <button class="btn btn-primary" id="wdrSubmitBtn" onclick="W2.requestPayout()">
             🏧 Request Payout
           </button>
+          <p style="text-align:center;margin-top:12px">
+            <a onclick="W2.openPayouts()" style="font-size:13px;color:var(--g);cursor:pointer;text-decoration:underline">View past withdrawals ›</a>
+          </p>
         </div>
       </div>
 
@@ -1500,6 +1503,23 @@ body{
           <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--sub)"><span>•</span> Sent to M-Pesa</div>
         </div>
         <button class="btn btn-primary" onclick="W2.closeOverlay('ovlWithdraw')">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PAYOUT HISTORY / DETAILS ── -->
+<div class="overlay" id="ovlPayouts">
+  <div class="ovl-backdrop" onclick="W2.closeOverlay('ovlPayouts')"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Your withdrawals</h3>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlPayouts')"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <div id="payoutsList" style="display:flex;flex-direction:column;gap:10px">
+        <p id="payoutsLoading" style="text-align:center;color:var(--sub);font-size:13px;padding:20px 0">Loading…</p>
       </div>
     </div>
   </div>
