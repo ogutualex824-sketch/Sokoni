@@ -1,3 +1,28 @@
+## [2026-07-26] — fix(profile): "tabs jump to home" is the OOM crash — add crash sentinel
+
+Reported: on Pacifique's Android, tapping the profile tabs (Overview/Orders/Bookings/
+Wallet/…) "leads to the home page". Investigated the tab wiring end-to-end and it is
+**correct**: the tabs are `<button type="button">` (not links, not in a form), all 14
+`panel-*` targets exist, and all **seven** chained `switchTab` layers only toggle DOM
+classes + lazy-load that tab's dashboard — **none navigate**. Verified in Android-emulated
+Chromium: tapping tabs does not navigate. So it is not a button bug.
+
+What it actually is: profile.html is the heaviest page in the app (7k+ lines, sokoni-orders
+module, event-bus, observability, gateway, kass-widget, and a cascade of dashboard renders
+per tab). On a low-RAM Android, a tab tap triggers enough rendering to hit Chrome's
+"Aw, Snap!" renderer crash (OOM) — the same fault as the "reload snap" report — after which
+a reload lands on home. Same root cause, surfaced on the heaviest page.
+
+Action (telemetry-first, per the standing decision): wired `sokoni-crash-sentinel.js` into
+`profile.html` so the next tab-tap crash is captured on the real device — the breadcrumb
+shows heap climbing then an abnormal exit right after the tap, readable at `/android-doctor`.
+No behavior change to the tabs. Verified: sentinel initialises on the authed provider
+profile, 0 pageerrors.
+
+Files: `profile.html` (+1 include). See the sentinel entry below for the mechanism.
+
+---
+
 ## [2026-07-26] — feat(diagnostics): Android crash sentinel + on-device doctor
 
 Reported: on Android (Chrome), most accounts fail to open — the tab shows Chrome's
