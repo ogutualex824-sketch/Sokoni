@@ -1566,3 +1566,57 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
   }
   return true;
 };
+
+// ─── 14. sweepEarningsToWallet — converge ecosystem earnings into ONE
+//        withdrawable balance (Option A) ─────────────────────────────────────
+/**
+ * Ecosystem convergence. Marketplace / food / rider / service earnings are credited by
+ * FinOS `creditWalletTxn` into availableBalance + withdrawableBalance (CENTS) — a ledger
+ * the wallet withdrawal (requestSellerPayout, which reads `balance` in SHILLINGS) cannot
+ * pay out, so those earnings were stranded. This scheduled job MOVES (not copies)
+ * whole-shilling withdrawable earnings into `balance`, decrementing the FinOS fields in
+ * the SAME transaction, so the money is in exactly ONE place at all times — no
+ * double-withdrawal — and becomes withdrawable to M-Pesa. Idempotent (once moved the
+ * source is 0, so re-runs are no-ops) and doubles as the one-off migration for existing
+ * stranded funds. Sub-shilling remainders stay in FinOS until they accrue to a shilling.
+ *
+ * Note: booking + provider-service earnings are already credited DIRECTLY to `balance`
+ * at the webhook, so they are instant; this covers the FinOS-ledger flows.
+ */
+exports.sweepEarningsToWallet = onSchedule(
+  { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB' },
+  async () => {
+    const db = getFirestore();
+    const snap = await db.collection('wallets')
+      .where('withdrawableBalance', '>', 0).limit(200).get().catch(() => null);
+    if (!snap || snap.empty) return;
+
+    let moved = 0, totalShillings = 0;
+    for (const doc of snap.docs) {
+      await db.runTransaction(async (t) => {
+        const s = await t.get(doc.ref);
+        if (!s.exists) return;
+        const d  = s.data();
+        const wd = Number(d.withdrawableBalance || 0);   // cents
+        const av = Number(d.availableBalance || 0);      // cents
+        const moveCents = Math.min(wd, av);              // lockstep fields; move the safe minimum
+        const moveShillings = Math.floor(moveCents / 100);
+        if (moveShillings < 1) return;
+        const backCents = moveShillings * 100;
+        t.update(doc.ref, {
+          balance:             FieldValue.increment(moveShillings),
+          availableBalance:    FieldValue.increment(-backCents),
+          withdrawableBalance: FieldValue.increment(-backCents),
+          updatedAt:           Timestamp.now(),
+        });
+        t.set(db.collection('walletTransactions').doc(`${doc.id}_earnsettle_${Date.now()}`), {
+          uid: doc.id, type: 'earning_settlement', amount: moveShillings,
+          description: 'Earnings moved to your withdrawable wallet balance',
+          status: 'completed', createdAt: Timestamp.now(),
+        });
+        moved++; totalShillings += moveShillings;
+      }).catch((e) => console.error('[sweepEarningsToWallet] txn error', doc.id, e.message));
+    }
+    if (moved) console.log(`[sweepEarningsToWallet] moved KSh ${totalShillings} into withdrawable balance across ${moved} wallet(s)`);
+  }
+);
