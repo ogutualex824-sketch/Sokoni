@@ -125,18 +125,58 @@ async function _auditProduct(db, ctx, doc) {
   }
 
   const col = db.collection('integrityIssues');
-  await Promise.all(issues.map((x) => col.doc(issueId(productId, x.type, x.field)).set({
-    productId, sellerId,
-    type: x.type, severity: x.severity, code: x.code, field: x.field,
-    path: x.path || null, url: x.url || null, message: x.message,
-    detectedAt: Timestamp.now(), runId: ctx.runId,
-    schemaVersion: validator.SCHEMA_VERSION, resolved: false,
-  }, { merge: true })));
+  const now = Timestamp.now();
+  const currentIds = new Set(issues.map((x) => issueId(productId, x.type, x.field)));
+
+  /* One query serves both lifecycle needs: preserve firstDetectedAt on a persisting
+     issue, and auto-resolve an open issue this run no longer detects. Query by
+     productId only (auto-indexed) and filter status in code, so no composite index
+     is required — a product carries few issue docs. */
+  const existingSnap = await col.where('productId', '==', productId).get();
+  const openDocs = existingSnap.docs.filter((d) => (d.data().status || 'open') === 'open');
+  const openById = {};
+  openDocs.forEach((d) => { openById[d.id] = d.data(); });
+
+  const writes = [];
+
+  /* Upsert each current issue with a lifecycle:
+       status 'open', firstDetectedAt (preserved across runs), lastSeenAt (bumped). */
+  issues.forEach((x) => {
+    const id = issueId(productId, x.type, x.field);
+    const existing = openById[id];
+    writes.push(col.doc(id).set({
+      productId, sellerId,
+      type: x.type, severity: x.severity, code: x.code, field: x.field,
+      path: x.path || null, url: x.url || null, message: x.message,
+      status: 'open',
+      firstDetectedAt: (existing && existing.firstDetectedAt) || now,
+      lastSeenAt: now,
+      resolvedAt: null,
+      resolution: null,
+      lastRunId: ctx.runId,
+      schemaVersion: validator.SCHEMA_VERSION,
+    }, { merge: true }));
+  });
+
+  /* Auto-resolve: an issue that was open but is no longer detected is fixed. Keep
+     the document (history) rather than deleting it, so trend data survives. */
+  let resolved = 0;
+  openDocs.forEach((d) => {
+    if (!currentIds.has(d.id)) {
+      resolved++;
+      writes.push(d.ref.set({
+        status: 'resolved', resolvedAt: now, resolution: 'auto: no longer detected', lastRunId: ctx.runId,
+      }, { merge: true }));
+    }
+  });
+
+  await Promise.all(writes);
 
   return {
     hadIssues: issues.length > 0,
     structural: issues.filter((i) => i.type === 'STRUCTURAL_INVALID').length,
     missing: issues.filter((i) => i.type === 'MISSING_STORAGE_OBJECT').length,
+    resolved,
   };
 }
 
@@ -151,7 +191,7 @@ async function _runAudit() {
   const stateSnap = await stateRef.get();
   const startAfterId = stateSnap.exists ? (stateSnap.data().cursor || null) : null;
 
-  const totals = { scanned: 0, withIssues: 0, structural: 0, missing: 0 };
+  const totals = { scanned: 0, withIssues: 0, structural: 0, missing: 0, resolved: 0 };
   let lastId = startAfterId;
   let done = false;
 
@@ -167,6 +207,7 @@ async function _runAudit() {
       if (r.hadIssues) totals.withIssues++;
       totals.structural += r.structural;
       totals.missing += r.missing;
+      totals.resolved += r.resolved;
     });
     lastId = snap.docs[snap.docs.length - 1].id;
     if (snap.size < PAGE) { done = true; break; }
@@ -189,12 +230,13 @@ async function _runAudit() {
     productsWithIssues: FieldValue.increment(totals.withIssues),
     structuralFailures: FieldValue.increment(totals.structural),
     missingStorageObjects: FieldValue.increment(totals.missing),
+    issuesAutoResolved: FieldValue.increment(totals.resolved),
     lastRunAt: Timestamp.now(),
   }, { merge: true });
 
   console.log('[IntegrityAudit] ' + runId + ' scanned=' + totals.scanned +
     ' withIssues=' + totals.withIssues + ' structural=' + totals.structural +
-    ' missing=' + totals.missing + ' done=' + done);
+    ' missing=' + totals.missing + ' autoResolved=' + totals.resolved + ' done=' + done);
 
   return { runId, ...totals, coveredFullCatalog: done };
 }
