@@ -103,6 +103,11 @@ const KEY_TEST_SEQ   = 'p58e_test_seq';
 ───────────────────────────────────────────────────────────────── */
 const CONNECT_TIMEOUT_MS = 12000; /* 12s — prevents gatt.connect() hanging indefinitely */
 const HEALTH_INTERVAL_MS = 5000;  /* 5s — poll gatt.connected to catch stale connections */
+/* Cadence of the indefinite watch that takes over once the fast reconnect
+   ladder is exhausted. Slow on purpose: a printer that has been away for two
+   minutes is usually off or out of range, so retrying hard achieves nothing and
+   costs battery. 30s recovers a returning printer within one customer. */
+const SLOW_WATCH_MS = 30000;
 
 const DEFAULT_SETTINGS = {
   autoConnect:    true,
@@ -429,6 +434,12 @@ class P58EService {
         connectedAt: new Date().toISOString(),
       };
       this._reconnectAttempts = 0;
+      /* A successful connect clears the manual-disconnect suppression and any
+         slow watch still running, so recovery is armed again for the NEXT drop.
+         Without this, one deliberate disconnect would disable auto-recovery for
+         the rest of the session. */
+      this._manualDisconnect = false;
+      clearInterval(this._watchTimer);
 
       if (savePaired) {
         this._paired = {
@@ -486,10 +497,42 @@ class P58EService {
   /* ─────────────────────────────────────────────────────────────
      AUTO-RECONNECT after GATT disconnect (exponential backoff)
   ───────────────────────────────────────────────────────────── */
+  /**
+   * Slow, indefinite watch for a printer that went away for longer than the
+   * fast backoff window.
+   *
+   * The fast ladder gives up after _MAX_RECONNECT attempts — about 2.3 minutes.
+   * That is far shorter than the normal life of a till: a merchant switches the
+   * printer off between customers, it sleeps, it walks out of range in a bag.
+   * Before this, exhausting the ladder set status 'error' and stopped dead, and
+   * because the health monitor had already been stopped nothing was left
+   * watching. The printer could come back, sit there powered on and in range,
+   * and SOKONI would never notice — "it doesn't reconnect".
+   *
+   * So the ladder no longer terminates recovery; it hands over to a steady
+   * retry. Cheap (one GATT connect attempt every 30s), silent while it fails,
+   * and it stops the moment it succeeds or the merchant disconnects on purpose.
+   */
+  _startSlowWatch (device) {
+    clearInterval(this._watchTimer);
+    this._watchTimer = setInterval(async () => {
+      if (this._manualDisconnect) { clearInterval(this._watchTimer); return; }
+      if (this._status === 'connected') { clearInterval(this._watchTimer); return; }
+      try {
+        await this._connectDevice(device);
+        clearInterval(this._watchTimer);
+        this._markCheck('reconnect');
+      } catch (_) { /* still away — keep watching, stay quiet */ }
+    }, SLOW_WATCH_MS);
+  }
+
   _scheduleReconnect (device) {
     if (this._reconnectAttempts >= this._MAX_RECONNECT) {
       this._setStatus('error');
       this._emit('reconnect_failed', { attempts: this._reconnectAttempts });
+      /* Exhausted the FAST ladder — not the end of recovery. Keep a slow watch
+         so the printer re-attaches by itself whenever it comes back. */
+      if (!this._manualDisconnect) this._startSlowWatch(device);
       return;
     }
     const delay = Math.min(1500 * Math.pow(2, this._reconnectAttempts), 30000); // max 30s
@@ -533,7 +576,13 @@ class P58EService {
   ───────────────────────────────────────────────────────────── */
   async disconnect () {
     clearTimeout(this._reconnectTimer);
+    clearInterval(this._watchTimer);
     this._stopHealthMonitor();
+    /* Deliberate disconnect: suppress BOTH the fast ladder and the slow watch.
+       A merchant who taps Disconnect must not have the printer quietly
+       re-attach 30 seconds later. Cleared again on the next successful
+       connect, so this never becomes a permanent opt-out. */
+    this._manualDisconnect  = true;
     this._reconnectAttempts = this._MAX_RECONNECT; /* stop auto-reconnect loop */
     if (this._btDevice?.gatt?.connected) {
       try { this._btDevice.gatt.disconnect(); } catch(e) {}
