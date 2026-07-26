@@ -35,6 +35,10 @@ const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https')
 const { defineSecret }                  = require('firebase-functions/params');
 const { getFirestore, FieldValue }      = require('firebase-admin/firestore');
 const logger                            = require('firebase-functions/logger');
+/* The single definition of a shop's storefront config — field list, legacy-name
+   aliases, sanitisation, and the read-time merge across the two stores this
+   config was historically split between. See minishop-config-schema.js. */
+const { normalize: normalizeConfig, resolve: resolveConfig } = require('./minishop-config-schema');
 
 /* ── Secrets ──────────────────────────────────────────────────────────────── */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -57,11 +61,9 @@ const VALID_SOURCES = new Set([
 ]);
 
 /** All whitelisted fields for minishopConfig (prevents mass-assignment) */
-const ALLOWED_CONFIG_FIELDS = new Set([
-  'theme', 'announcement', 'hours', 'socialLinks', 'policies',
-  'tags', 'featuredProductIds', 'description', 'coverUrl', 'logoUrl',
-  'contactPhone', 'contactEmail', 'deliveryAreas', 'languages', 'paymentMethods',
-]);
+/* Field list moved to minishop-config-schema.js — it is now shared by the
+   writer, the public reader and the prerenderer, which is the only way the
+   three stay in agreement. */
 
 /* ── Internal helpers ─────────────────────────────────────────────────────── */
 
@@ -168,13 +170,29 @@ exports.getMinishopPublic = onRequest(
         return;
       }
 
-      const shop   = { id: shopId, ...shopSnap.data() };
-      const config = configSnap.exists ? configSnap.data() : {};
+      const shopRaw   = shopSnap.data();
+      const configRaw = configSnap.exists ? configSnap.data() : {};
+      const shop      = { id: shopId, ...shopRaw };
+
+      /* Branding was historically written to shops/{id}.minishopConfig under a
+         different set of key names, so reading only minishopConfig/{id} renders
+         those shops with no logo, cover or tagline at all. resolve() merges the
+         canonical store over the legacy one and normalises both. */
+      const config = {
+        ...resolveConfig(configRaw, shopRaw.minishopConfig, shopRaw),
+        /* Counters share the config document but are not display config, so
+           they are carried across explicitly rather than through the schema. */
+        totalProducts: configRaw.totalProducts,
+        followerCount: configRaw.followerCount,
+      };
 
       // Strip sensitive seller fields before sending to public
       delete shop.sellerUid;
       delete shop.bankDetails;
       delete shop.taxPin;
+      /* Remove the legacy blob so the response has exactly one config source —
+         leaving it invites a consumer to read the un-normalised copy. */
+      delete shop.minishopConfig;
 
       /* 3 — Products (single-field query: shopId == shopId, no composite) */
       const productsSnap = await db
@@ -316,54 +334,21 @@ exports.saveMinishopConfig = onCall(
     /* ── Verify ownership ── */
     await _assertShopOwner(shopId, uid);
 
-    /* ── Strip to allowed fields only (prevent mass-assignment) ── */
-    const safeConfig = {};
-    for (const key of ALLOWED_CONFIG_FIELDS) {
-      if (key in rawConfig) {
-        safeConfig[key] = rawConfig[key];
-      }
-    }
+    /* ── Normalise to the canonical schema ──────────────────────────────
+       minishop-config-schema.js owns the field list, the legacy-name aliases
+       and the sanitisation. It replaces the allowlist that used to live here,
+       which silently dropped brandColor, responseTime, deliveryPolicy, tagline,
+       location, category and fontFamily — seven fields the storefront actually
+       renders — on every single save.
 
-    /* ── Per-field sanitization ── */
-    if (safeConfig.announcement !== undefined) {
-      safeConfig.announcement = _san(safeConfig.announcement, 200);
-    }
-    if (safeConfig.description !== undefined) {
-      safeConfig.description = _san(safeConfig.description, 500);
-    }
-    if (safeConfig.policies !== undefined) {
-      safeConfig.policies = _san(safeConfig.policies, 1000);
-    }
-    if (safeConfig.contactPhone !== undefined) {
-      safeConfig.contactPhone = _san(safeConfig.contactPhone, 20);
-    }
-    if (safeConfig.contactEmail !== undefined) {
-      safeConfig.contactEmail = _san(safeConfig.contactEmail, 100);
-    }
-    if (safeConfig.coverUrl !== undefined) {
-      safeConfig.coverUrl = _san(safeConfig.coverUrl, 500);
-    }
-    if (safeConfig.logoUrl !== undefined) {
-      safeConfig.logoUrl = _san(safeConfig.logoUrl, 500);
-    }
+       normalize() also accepts the legacy names the built-in admin controller
+       sends (coverImage, logoImage, phone, email, flat social keys) and folds
+       them into canonical form, so both controllers now converge here. */
+    const safeConfig = normalizeConfig(rawConfig);
 
-    /* ── Array length guards ── */
-    if (Array.isArray(safeConfig.tags)) {
-      safeConfig.tags = safeConfig.tags.slice(0, 10).map(t => _san(t, 30));
+    if (!Object.keys(safeConfig).length) {
+      throw new HttpsError('invalid-argument', 'config contained no recognised fields.');
     }
-    if (Array.isArray(safeConfig.featuredProductIds)) {
-      safeConfig.featuredProductIds = safeConfig.featuredProductIds.slice(0, 6);
-    }
-    if (Array.isArray(safeConfig.deliveryAreas)) {
-      safeConfig.deliveryAreas = safeConfig.deliveryAreas.slice(0, 20).map(a => _san(a, 100));
-    }
-    if (Array.isArray(safeConfig.languages)) {
-      safeConfig.languages = safeConfig.languages.slice(0, 5).map(l => _san(l, 20));
-    }
-    if (Array.isArray(safeConfig.paymentMethods)) {
-      safeConfig.paymentMethods = safeConfig.paymentMethods.slice(0, 10).map(p => _san(p, 50));
-    }
-
     /* ── Persist ── */
     await _db()
       .collection('minishopConfig')

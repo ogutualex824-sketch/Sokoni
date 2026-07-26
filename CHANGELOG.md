@@ -1,3 +1,63 @@
+## [2026-07-26] — fix(minishop): converge the config schema — one definition, one store, one set of names
+
+Completes the repair flagged in the previous commit as "a bridge, not the fix".
+
+### The full diagnosis
+
+It was a **three-way** split, not two, and the root cause was two controllers
+bound to the same form:
+
+- `minishop-admin.html` ships a built-in controller that wrote
+  `shops/{id}.minishopConfig` **directly from the client** as `coverImage`,
+  `logoImage`, `phone`, `email` and flat social keys.
+- `sokoni-minishop.js` — loaded by the same page, with the built-in one as an
+  `onerror` fallback — wrote `minishopConfig/{id}` through `saveMinishopConfig`
+  as `coverUrl`, `logoUrl`, `contactPhone`, `socialLinks{}`.
+- The storefront reads `minishopConfig/{id}` and renders a third set.
+
+Which schema a save produced depended on whether `sokoni-minishop.js` had
+loaded. And the page's own preview read back the same document it had just
+written, so a save that never reached the storefront still looked successful.
+
+Measured against the storefront's actual read set:
+
+- **7 fields it renders were absent from the CF allowlist** — `brandColor`,
+  `category`, `deliveryPolicy`, `fontFamily`, `location`, `responseTime`,
+  `tagline` — and the allowlist drops unknown keys silently, so even the
+  *correct* controller lost them on **every save**.
+- **12 fields the legacy controller wrote were read by nothing.**
+
+### The fix
+
+New `functions/minishop-config-schema.js` is the single definition: canonical
+field list, per-field sanitisation, legacy-name aliases, and the read-time merge.
+
+- `saveMinishopConfig` now normalises instead of allowlisting. It accepts either
+  schema and always persists canonical, so both controllers converge.
+- `getMinishopPublic` resolves across **both** stores, so shops configured
+  before this commit render their existing branding with no migration step.
+- `minishop-page.js` uses the shared resolver in place of its local bridge.
+- The admin's built-in controller now saves through the CF rather than writing
+  `shops/{id}` directly — server-validated instead of client mass-assignment.
+
+No migration script is needed: reads resolve across both stores, and the first
+save through either controller rewrites that shop in canonical form.
+
+### Also fixed
+
+The inherited sanitiser stripped tags but kept their contents, so
+`<script>alert(1)</script>` was stored as the literal text `alert(1)`. Not an
+injection risk — every consumer escapes on output — but not what the seller
+typed. Script and style blocks are now removed with their contents.
+
+### Tests
+
+`scripts/test-minishop-config-schema.js` — 36 assertions covering legacy→canonical
+mapping, the seven previously-dropped fields, mass-assignment rejection
+(`sellerUid`, `bankDetails`), sanitisation, both store-precedence directions, and
+the live failure case: a shop whose data exists **only** in the legacy store must
+still resolve. `scripts/test-public-pages.js` still 57/57.
+
 ## [2026-07-26] — feat(minishop-admin): shop health, quick actions, empty states — and a config schema split that broke shop branding
 
 Second redesign slice. Also fixes a platform bug found while wiring it, which

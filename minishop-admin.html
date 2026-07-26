@@ -1791,13 +1791,26 @@
       return;
     }
 
-    if (!_state.shopId || typeof firebase === 'undefined') {
+    if (!_state.shopId || typeof firebase === 'undefined' || !firebase.functions) {
       toast('Shop not loaded', 'error');
       if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false;
       return;
     }
-    firebase.firestore().collection('shops').doc(_state.shopId)
-      .update({ minishopConfig: cfg, minishopUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+
+    /* Saves through saveMinishopConfig rather than writing shops/{id}
+       .minishopConfig directly.
+
+       The direct write is why a seller's cover and logo never reached their
+       storefront: this controller wrote coverImage / logoImage / phone into the
+       shop document, while the storefront reads coverUrl / logoUrl /
+       contactPhone out of minishopConfig/{shopId}. Two stores, two schemas,
+       never meeting — and because this page's own preview read back the same
+       document it had just written, it always looked like the save had worked.
+
+       The CF now normalises legacy field names, so collectConfig() can keep
+       emitting its existing shape; it lands in canonical form in the canonical
+       store, server-validated instead of client-written. */
+    firebase.functions().httpsCallable('saveMinishopConfig')({ shopId: _state.shopId, config: cfg })
       .then(function(){ toast('Changes saved!', 'success'); })
       .catch(function(e){ toast(e.message || 'Save failed', 'error'); })
       .finally(function(){ if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false; });

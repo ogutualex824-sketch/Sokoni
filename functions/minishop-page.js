@@ -29,6 +29,7 @@ const logger = require('firebase-functions/logger');
 const { getFirestore } = require('firebase-admin/firestore');
 const admin = require('firebase-admin');
 const { httpsUrl, metaBlock, injectMeta, fetchTemplate } = require('./html-render');
+const { resolve: resolveConfig } = require('./minishop-config-schema');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -125,43 +126,28 @@ exports.minishopPage = onRequest(
 
         const shop = shopSnap.exists ? shopSnap.data() : {};
 
-        /* MiniShop branding currently lives in TWO places under TWO naming
-           schemes, and they never meet:
-
-             minishop-admin.html  writes shops/{id}.minishopConfig
-                                  as coverImage / logoImage / tagline / phone
-             saveMinishopConfig   writes minishopConfig/{id}
-                                  as coverUrl / logoUrl / contactPhone
-
-           The public storefront reads only the second, so a cover a seller
-           uploads in the admin never reaches their shop — and reading only the
-           second here would mean every shared shop link fell back to the SOKONI
-           logo, which is the exact defect this function exists to fix.
-
-           Reading both is a bridge, not the fix. The real fix is converging the
-           two stores onto one schema; until then, never read just one. */
-        const cfgA = configSnap?.exists ? configSnap.data() : {};
-        const cfgB = shop.minishopConfig || {};
-        const pick = (...keys) => {
-          for (const k of keys) {
-            for (const src of [cfgA, cfgB, shop]) {
-              if (src && typeof src[k] === 'string' && src[k].trim()) return src[k];
-            }
-          }
-          return '';
-        };
+        /* Branding is resolved through the shared schema module rather than read
+           straight off one document. MiniShop config was historically split
+           across two stores with two key schemes, so reading only the canonical
+           one would leave most shared links falling back to the SOKONI logo —
+           the exact defect this function exists to fix. */
+        const config = resolveConfig(
+          configSnap?.exists ? configSnap.data() : {},
+          shop.minishopConfig,
+          shop
+        );
 
         const name = shop.name || shop.shopName || shop.businessName || `@${handle}`;
 
         /* Prefer what the seller wrote about their own shop; fall back to
            something specific enough to still be worth tapping. */
-        const description = pick('description', 'tagline') ||
+        const description = config.description || config.tagline ||
           `Shop directly from ${name} on SOKONI — Kenya's marketplace. Order on WhatsApp or pay with M-Pesa.`;
 
         /* The preview image is the single biggest driver of whether a shared
            link gets opened, so the shop's own cover or logo is used when it
-           has one — under either naming scheme. */
-        const image = httpsUrl(pick('coverUrl', 'coverImage', 'logoUrl', 'logoImage')) ||
+           has one. */
+        const image = httpsUrl(config.coverUrl) || httpsUrl(config.logoUrl) ||
                       `${ORIGIN}/assets/logosokoni.png`;
 
         meta = metaBlock({
