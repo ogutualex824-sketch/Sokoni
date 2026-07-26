@@ -43,6 +43,7 @@
 
   <div class="card" id="deviceCard"></div>
   <div id="crashList"></div>
+  <div id="redirectList"></div>
 
   <p class="foot">SOKONI · Android Doctor · no data leaves your phone unless you tap Share.</p>
 
@@ -120,13 +121,36 @@
       }).join('');
     }
 
+    /* ── auth-redirect log (loop diagnosis) ───────────────────────── */
+    var redirects = readJSON('sk_auth_redirects', []);
+    if (!Array.isArray(redirects)) redirects = [];
+    /* Loop = the same reason logged 4+ times inside 15 seconds. */
+    var loopHit = null;
+    for (var ri = 0; ri < redirects.length; ri++) {
+      var same = redirects.filter(function(x){ return x.reason === redirects[ri].reason && Math.abs((x.t||0) - (redirects[ri].t||0)) < 15000; });
+      if (same.length >= 4) { loopHit = { reason: redirects[ri].reason, count: same.length }; break; }
+    }
+    (function(){
+      var el = document.getElementById('redirectList');
+      if (!redirects.length) return;
+      var rows = redirects.slice().reverse().slice(0, 12).map(function(r){
+        var when = ''; try { when = new Date(r.t).toLocaleTimeString(); } catch(e){}
+        return '<div class="row"><span class="k">'+when+'</span><span class="v" style="text-align:right;max-width:70%">'+String(r.reason||'?').replace(/</g,'&lt;')+' (loggedIn='+r.loggedIn+', cache='+r.hasUser+')</span></div>';
+      }).join('');
+      el.innerHTML =
+        (loopHit ? '<div class="verdict bad" style="margin-bottom:10px">🔁 REDIRECT LOOP detected: <b>'+loopHit.reason+'</b> fired '+loopHit.count+'× in 15s. This is the "keeps reloading" bug — send this to support.</div>' : '') +
+        '<div class="card"><div class="k" style="margin-bottom:8px">Recent auth redirects ('+redirects.length+')</div>'+rows+'</div>';
+    })();
+
     /* ── share / copy ─────────────────────────────────────────────── */
     function reportText(){
       return 'SOKONI Android Doctor report\n' +
         '============================\n' +
         Object.keys(dev).map(function(k){return k+': '+dev[k];}).join('\n') +
         '\n\nRecorded crashes: ' + crashes.length + '\n' +
-        JSON.stringify(crashes, null, 2);
+        JSON.stringify(crashes, null, 2) +
+        '\n\nAuth redirects: ' + redirects.length + (loopHit ? ' — LOOP: '+loopHit.reason+' x'+loopHit.count : '') + '\n' +
+        JSON.stringify(redirects, null, 2);
     }
     document.getElementById('shareBtn').addEventListener('click', function(){
       var txt = reportText();

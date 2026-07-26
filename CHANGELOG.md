@@ -1,3 +1,36 @@
+## [2026-07-26] — fix(auth): the LAST profile↔login loop — 3 guards still gated on the profile cache
+
+Founder diagnosis (correct): the Android splash/reload wasn't slowness — it's still a profile↔login
+redirect loop, and "one remaining script is checking auth before/without the canonical state".
+Reproduced in emulation the exact trigger — `loggedIn='true'` but NO/`malformed sokoniUser` (which
+is what happens when App Check blocks the Firestore read that populates that cache): **48
+navigations, infinite loop.**
+
+Root cause: THREE guards still required the `sokoniUser` PROFILE CACHE to decide "logged in",
+while login-side auth.js keys only on the `loggedIn` flag — so a logged-in user with an empty cache
+was judged logged-out and bounced to login, which bounced back. Same anti-pattern as the isLoggedIn
+`u.name` bug (gating a session on profile metadata), in three more places:
+- `auth-guard.js` (head, pre-paint): required `loggedIn && sokoniUser` → now `loggedIn` alone.
+- `profile.js`: `if(loggedIn!=='true' || !user)` → now the session flag alone; `user` defaults to
+  `{}` (all uses are `user.x || default` / null-guarded) so it renders while firebase/bootstrap
+  fill the cache.
+- `sokoni-security.js` `isLoggedIn()` (via sokoni-guards `requireAuth`): required a `sokoniUser`
+  object → now `loggedIn==='true'` alone (getSession() still short-circuits a real token).
+
+The session flag is authoritative for the optimistic path; SokoniAuthState/firebase resolve the real
+user and the bootstrap repairs the cache. Verified: the bug scenarios go from **nav=48 (infinite) →
+nav=3 (bounded, settles on home)**; a valid session renders profile (nav=1, 14 tabs); not-logged-in
+still → login. `sk_auth_redirects` confirms the three guards no longer fire.
+
+Instrumentation (per the founder's request): each guard now logs `[SOKONI AUTH REDIRECT]` + rings
+the reason into `localStorage.sk_auth_redirects`; `/android-doctor` shows the recent redirects and
+flags a LOOP (same reason 4×/15s) in plain language — so a real-device loop is diagnosable without
+chrome://inspect.
+
+Files: `auth-guard.js`, `profile.js`, `sokoni-security.js`, `android-doctor.html`. No DB/API changes.
+
+---
+
 ## [2026-07-26] — feat(pwa): foreground update check — installed PWAs get "Update available" promptly (#7)
 
 Audited the PWA update lifecycle. Most of it was already in place and correct:

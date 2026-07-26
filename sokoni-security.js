@@ -136,10 +136,15 @@
        reloading" for new users. A display name is profile metadata, NOT proof of
        a session. Authentication is having a real identity (uid or email) plus the
        loggedIn flag — name is irrelevant to whether someone is signed in. */
-    try {
-      var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
-      return !!(u && (u.uid || u.email || u.name) && localStorage.getItem('loggedIn') === 'true');
-    } catch (e) { return false; }
+    /* BUGFIX 2026-07-26 (2): the loggedIn flag IS the session; sokoniUser is only a
+       profile CACHE — absent for a new account, a cleared cache, or when App Check
+       blocks the Firestore read that populates it. This first required u.name, then
+       any u.{uid|email|name} — but BOTH still required the cache OBJECT to exist, so
+       a genuinely-logged-in user with an empty cache was judged logged-out and
+       requireAuth() bounced them to login.html → the profile↔login loop. Trust the
+       session flag alone (getSession above handles a real session token); firebase/
+       SokoniAuthState resolve the real user and the bootstrap repairs the cache. */
+    try { return localStorage.getItem('loggedIn') === 'true'; } catch (e) { return false; }
   }
 
   function hasRole(role) {

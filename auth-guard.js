@@ -32,8 +32,17 @@
   var hasUser = false;
   try { hasUser = !!JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (e) {}
 
-  /* Already authenticated — show page as normal */
-  if (loggedIn && hasUser) return;
+  /* Already authenticated — show page as normal.
+     BUGFIX 2026-07-26: this required BOTH loggedIn AND a cached sokoniUser. But
+     sokoniUser is a PROFILE CACHE, not the session — it is legitimately absent for
+     a new account, a cleared cache, or when App Check blocks the Firestore read
+     that populates it. Requiring it bounced a genuinely-logged-in user to
+     login.html, which (auth.js keys only on loggedIn) bounced them right back:
+     the profile↔login loop. The session flag alone is authoritative here;
+     SokoniAuthState/firebase resolve the real user and the bootstrap repairs the
+     missing cache. Gating a session on profile metadata is exactly the class of
+     bug that broke isLoggedIn() (the u.name requirement). */
+  if (loggedIn) return;
 
   /* Never bounce the auth pages themselves — that is a redirect loop.
      Matches with and without .html because cleanUrls:true strips it. */
@@ -45,6 +54,17 @@
      open-redirect be smuggled in via the address bar. */
   var next = location.pathname + location.search;
   var target = 'login.html?next=' + encodeURIComponent(next);
+
+  /* Instrument the redirect so a loop is diagnosable (chrome://inspect, or
+     /android-doctor which reads sk_auth_redirects). If the SAME reason logs many
+     times in seconds, that is the loop. */
+  try {
+    console.warn('[SOKONI AUTH REDIRECT]', { page: path, loggedIn: loggedIn, hasUser: hasUser, reason: 'auth-guard→login' });
+    var _log = JSON.parse(localStorage.getItem('sk_auth_redirects') || '[]');
+    _log.push({ t: Date.now(), page: path, loggedIn: loggedIn, hasUser: hasUser, reason: 'auth-guard→login' });
+    while (_log.length > 25) _log.shift();
+    localStorage.setItem('sk_auth_redirects', JSON.stringify(_log));
+  } catch (e) {}
 
   /* replace(), not assign(): the protected page must not sit in history,
      or Back from login lands on it and bounces straight here again. */
