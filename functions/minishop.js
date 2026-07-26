@@ -38,7 +38,7 @@ const logger                            = require('firebase-functions/logger');
 /* The single definition of a shop's storefront config — field list, legacy-name
    aliases, sanitisation, and the read-time merge across the two stores this
    config was historically split between. See minishop-config-schema.js. */
-const { normalize: normalizeConfig, resolve: resolveConfig } = require('./minishop-config-schema');
+const { forWrite: configForWrite, resolve: resolveConfig } = require('./minishop-config-schema');
 
 /* ── Secrets ──────────────────────────────────────────────────────────────── */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -344,7 +344,7 @@ exports.saveMinishopConfig = onCall(
        normalize() also accepts the legacy names the built-in admin controller
        sends (coverImage, logoImage, phone, email, flat social keys) and folds
        them into canonical form, so both controllers now converge here. */
-    const safeConfig = normalizeConfig(rawConfig);
+    const safeConfig = configForWrite(rawConfig);
 
     if (!Object.keys(safeConfig).length) {
       throw new HttpsError('invalid-argument', 'config contained no recognised fields.');

@@ -12,7 +12,10 @@
  * Run: node scripts/test-minishop-config-schema.js
  */
 
-const { normalize, resolve } = require('../functions/minishop-config-schema');
+const {
+  normalize, resolve, forWrite, readVersion, assertNoProtected,
+  SCHEMA_VERSION, PROTECTED_FIELDS,
+} = require('../functions/minishop-config-schema');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, detail) => {
@@ -154,6 +157,55 @@ group('resolve — degenerate inputs');
   const r2 = resolve({ deliveryAreas: [] }, { deliveryAreas: 'A,B' }, {});
   ok('empty array does not mask a real legacy value',
     Array.isArray(r2.deliveryAreas) && r2.deliveryAreas.length === 2, r2.deliveryAreas);
+}
+
+/* ── 6. Mass assignment — every protected field, named individually ─────────
+   The point of enumerating these rather than spot-checking two is that the
+   test fails the moment someone widens the allowlist or adds a passthrough
+   branch, instead of the day a client-supplied sellerUid reaches Firestore. */
+group('protected fields — none can survive normalisation');
+{
+  const hostile = {};
+  for (const f of PROTECTED_FIELDS) hostile[f] = 'attacker-controlled';
+  hostile.tagline = 'legitimate';                 // one real field must still pass
+
+  const n = normalize(hostile);
+  ok('a legitimate field alongside them still passes', n.tagline === 'legitimate', n);
+
+  let leaked = [];
+  for (const f of PROTECTED_FIELDS) if (f in n) leaked.push(f);
+  ok('zero protected fields in normalize output', leaked.length === 0, leaked);
+
+  /* Name each one so a regression report says which field escaped. */
+  for (const f of PROTECTED_FIELDS) ok('rejects ' + f, !(f in n));
+
+  ok('forWrite output is also clean',
+    !Object.keys(forWrite(hostile)).some(k => PROTECTED_FIELDS.has(k)));
+  ok('assertNoProtected throws if one is smuggled in', (() => {
+    try { assertNoProtected({ sellerUid: 'x' }); return false; } catch (_) { return true; }
+  })());
+  ok('assertNoProtected passes a clean object', (() => {
+    try { assertNoProtected({ tagline: 'ok' }); return true; } catch (_) { return false; }
+  })());
+}
+
+/* ── 7. Schema versioning ───────────────────────────────────────────────── */
+group('schema version');
+{
+  const w = forWrite(LEGACY);
+  ok('forWrite stamps the current version', w.schemaVersion === SCHEMA_VERSION, w.schemaVersion);
+  ok('forWrite still normalises', w.coverUrl === LEGACY.coverImage && !('coverImage' in w), w);
+  ok('normalize alone does NOT stamp — it is also used for reads',
+    !('schemaVersion' in normalize(LEGACY)));
+  ok('a client cannot forge the version', forWrite({ schemaVersion: 99, tagline: 'x' }).schemaVersion === SCHEMA_VERSION);
+
+  ok('unversioned document reads as v1', readVersion({ tagline: 'x' }) === 1);
+  ok('versioned document reads its version', readVersion({ schemaVersion: 2 }) === 2);
+  ok('garbage version falls back to v1', readVersion({ schemaVersion: 'two' }) === 1);
+  ok('null document reads as v1', readVersion(null) === 1);
+
+  ok('schemaVersion never leaks into resolved display config',
+    !('schemaVersion' in resolve(forWrite(CANONICAL), {}, {})));
 }
 
 console.log(`\n${pass} passed, ${fail} failed`);

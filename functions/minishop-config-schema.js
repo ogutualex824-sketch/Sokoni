@@ -38,6 +38,44 @@
  * Do not add a field to a reader or a writer without adding it here first.
  */
 
+/**
+ * Current shape of a persisted config document.
+ *
+ *   v1 — unversioned. Either of the two pre-convergence schemas; distinguished
+ *        only by which keys are present. Handled by the aliases below.
+ *   v2 — canonical. Stamped by `forWrite()` on every save from e4dd740 onward.
+ *
+ * A document with no `schemaVersion` is v1 by definition. Readers do not branch
+ * on this yet — v1 and v2 differ only by key names, which `normalize()` already
+ * reconciles — so it is recorded now to make a genuinely breaking change later
+ * (restructuring a field rather than renaming it) possible without guessing at
+ * a document's age. Do not add version branching until a change actually needs
+ * it; speculative branches rot.
+ */
+const SCHEMA_VERSION = 2;
+
+/**
+ * Fields that must NEVER be accepted from a client payload, whatever else
+ * changes here.
+ *
+ * `normalize()` is an allowlist by construction, so these are already excluded
+ * — this set exists so the guarantee is explicit, greppable, and testable
+ * rather than an emergent property someone could undo by widening the
+ * allowlist. `assertNoProtected()` enforces it, and the tests assert each name
+ * individually. Add to this list whenever a sensitive field is added to
+ * `shops/{id}`, not after it leaks.
+ */
+const PROTECTED_FIELDS = new Set([
+  'sellerUid', 'ownerId', 'uid',                      // ownership
+  'bankDetails', 'taxPin', 'kraPin', 'payoutAccount', // financial identity
+  'balance', 'walletId', 'commissionRate',            // money
+  'verified', 'isVerified', 'trustScore', 'status',   // platform-granted standing
+  'totalProducts', 'followerCount',                   // server-maintained counters
+  'createdAt', 'updatedAt', 'minishopClaimedAt',      // server timestamps
+  'minishopHandle', 'handle', 'shopId',               // identity / routing
+  'minishopConfig',                                   // the legacy blob itself
+]);
+
 /** Canonical fields, and how each is sanitised. */
 const STRING_FIELDS = {
   announcement:   200,
@@ -196,9 +234,49 @@ function resolve(canonicalDoc, legacyDoc, shopDoc) {
   return out;
 }
 
+/**
+ * Belt-and-braces check that no protected field survived normalisation.
+ *
+ * `normalize()` cannot emit one — it only copies canonical keys — so this
+ * should never throw. It exists because the day someone widens the allowlist or
+ * adds a passthrough branch, the failure would otherwise be silent and would
+ * write a client-supplied `sellerUid` into the shop's config. Cheap insurance
+ * on a path that already touches Firestore.
+ */
+function assertNoProtected(config) {
+  for (const key of Object.keys(config || {})) {
+    if (PROTECTED_FIELDS.has(key)) {
+      throw new Error(`minishop-config-schema: protected field "${key}" escaped normalisation`);
+    }
+  }
+  return config;
+}
+
+/**
+ * Produce the object to persist: canonical fields plus the version stamp.
+ *
+ * Every writer must use this rather than `normalize()` directly, so that no
+ * document is ever written without a version.
+ */
+function forWrite(raw) {
+  const config = assertNoProtected(normalize(raw));
+  return { ...config, schemaVersion: SCHEMA_VERSION };
+}
+
+/** Version of a stored document. Absent means v1 — written before convergence. */
+function readVersion(doc) {
+  const v = doc && doc.schemaVersion;
+  return Number.isInteger(v) && v > 0 ? v : 1;
+}
+
 module.exports = {
   normalize,
   resolve,
+  forWrite,
+  readVersion,
+  assertNoProtected,
+  SCHEMA_VERSION,
+  PROTECTED_FIELDS,
   CANONICAL_FIELDS,
   ALIASES,
   SOCIAL_KEYS,

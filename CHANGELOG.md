@@ -1,3 +1,61 @@
+## [2026-07-26] — chore(minishop): schema versioning, explicit protected fields, and an E2E share verifier
+
+Three follow-ups on the schema convergence.
+
+### Schema versioning
+
+Persisted configs now carry `schemaVersion` (currently **2**). Unversioned
+documents are v1 by definition — either pre-convergence shape.
+
+`forWrite()` is the only writer entry point, so no document can be persisted
+without a stamp, and a client cannot forge one (the field is not in the
+allowlist; the stamp is applied after normalisation). `readVersion()` reports a
+stored document's version, defaulting to 1.
+
+Readers deliberately do **not** branch on version yet: v1 and v2 differ only by
+key names, which `normalize()` already reconciles. The stamp exists so a future
+genuinely breaking change — restructuring a field rather than renaming one — can
+tell documents apart without guessing at their age. Speculative version branches
+rot, so none were added.
+
+### Protected fields, explicit and enumerated
+
+`normalize()` was already an allowlist, so mass assignment was structurally
+impossible — but only as an emergent property that a future widening could
+silently undo. `PROTECTED_FIELDS` now names all 20 explicitly (ownership,
+financial identity, money, platform-granted standing, server counters, server
+timestamps, routing identity, and the legacy blob), `assertNoProtected()`
+enforces it inside `forWrite()`, and the tests assert **each field by name** so a
+regression report says which one escaped rather than just "a field leaked".
+
+### `scripts/verify-minishop-share.js`
+
+One command that walks the whole public share chain for a handle and reports
+each step separately, so a failure names its own cause:
+
+```
+node scripts/verify-minishop-share.js <handle>
+```
+
+Checks the data layer (config resolves under canonical names, legacy blob not
+echoed, sensitive fields stripped), the prerenderer (served by the function not
+the static shell, markup intact after meta injection, exactly one `<title>`,
+publicly cacheable), and the card itself (title names *this* shop rather than the
+generic fallback, `og:url` correct, and the `og:image` is the shop's own **and
+actually loads** — an image that 404s renders as a blank card, which is worse
+than the fallback logo).
+
+Exits non-zero on failure so it can gate a release. On an unclaimed handle it
+says so plainly instead of reporting a cascade of failures.
+
+It cannot check how WhatsApp visually renders the card or whether its crawler
+holds a stale copy — those still need a human with a phone. Everything upstream
+is now covered.
+
+### Tests
+
+`scripts/test-minishop-config-schema.js` 36 → **73 assertions**, all passing.
+
 ## [2026-07-26] — fix(minishop): converge the config schema — one definition, one store, one set of names
 
 Completes the repair flagged in the previous commit as "a bridge, not the fix".
