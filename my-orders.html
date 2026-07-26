@@ -153,6 +153,8 @@
   <!-- Firebase (modular) + the canonical order DB. Both are ES modules and imply
        defer, so the instant cache render above paints before these evaluate. -->
   <script src="firebase.js" type="module"></script>
+  <script src="sokoni-auth-state.js"></script>
+  <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-db.js" type="module"></script>
 </body>
 </html>

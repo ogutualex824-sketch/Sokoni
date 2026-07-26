@@ -1,3 +1,30 @@
+## [2026-07-26] — feat(accounts): broaden auth-state + baseline bootstrap to authenticated pages (#3)
+
+Milestone 3: every authenticated entry point now shares the same two canonical modules —
+`sokoni-auth-state.js` (resolution-aware "who is signed in") and `sokoni-user-bootstrap.js`
+(idempotent baseline repair) — so no page implements its own initialization and every signed-in
+page starts from the same complete user state. Both self-hook on the verified session and fail
+open, so inclusion is additive and safe.
+
+Added where missing:
+- `wallet.html`, `my-orders.html`, `provider-dashboard.html` — both modules.
+- `seller.html`, `driver.html`, `landlord.html` — bootstrap (they already had auth-state).
+  (profile.html already had both.)
+
+Verified in Android-emulated Chromium (authed session): my-orders/seller/driver/landlord all
+load the modules (`SokoniAuthState` present, `ensureUserBaseline` present), nav=1 (no loop), 0
+non-vendor pageerrors. wallet.html + provider-dashboard.html redirect in headless because they
+carry their OWN live-auth gate (e.g. sokoni-wallet-v2.js) and there is no real Firebase user in
+emulation — on a signed-in device they don't redirect and the modules run; the inserts did not
+cause it (0 errors). FOLLOW-UP: migrate those pages' own redirect gates to SokoniAuthState so
+their intermittent-redirect class is closed too.
+
+Restaurant/hotel/settings/orders dashboards were not found as separate firebase-auth pages, so
+they are not in scope here. Files: wallet/my-orders/provider-dashboard/seller/driver/landlord
+.html (+1–2 script tags each). No DB/API changes.
+
+---
+
 ## [2026-07-26] — fix(plans): the LAST "KES NaN" path (subscribe modal) + restore paid checkout
 
 The card prices were already guarded (c5b3572), but the **subscribe modal** still rendered
