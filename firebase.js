@@ -24,7 +24,7 @@ import {
   linkWithCredential,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore,
+  getFirestore, terminate, clearIndexedDbPersistence,
   collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, limit, limitToLast,
   startAfter, startAt, endAt, endBefore,
@@ -920,6 +920,31 @@ async function sokoniSignOut() {
 
   /* 4. Invalidate any in-memory caches (the page reload after this clears the rest). */
   try { if (window.SokoniSubscriptions) window.SokoniSubscriptions.invalidateCache(); } catch (_) {}
+
+  /* 5. HARDENING — purge Firestore's offline IndexedDB so no cached document can
+        survive into the next account's session on this device. Firestore's lifecycle
+        REQUIRES the instance be terminated before its persistence can be cleared, so
+        this is the correct (and only safe) place: it runs LAST, and every
+        sokoniSignOut() caller immediately redirects, reloads, or shows a terminal
+        session-revoked overlay — so the now-dead `db` instance is never touched again
+        and the next page re-initialises Firestore fresh.
+
+        Persistence is currently memory-only (getFirestore default), so this clears
+        nothing today — but it completes the security model and future-proofs the
+        moment persistentLocalCache is ever enabled, plus removes any legacy on-disk
+        cache from an older build. Best-effort and TIME-BOXED (1.5s) so a slow or
+        multi-tab-blocked IndexedDB delete can never stall the post-signout redirect;
+        clearIndexedDbPersistence throws failed-precondition when another tab still
+        holds Firestore open — that is expected and swallowed. */
+  try {
+    await Promise.race([
+      (async () => {
+        try { await terminate(db); } catch (_) {}
+        try { await clearIndexedDbPersistence(db); } catch (_) {}
+      })(),
+      new Promise((res) => setTimeout(res, 1500)),
+    ]);
+  } catch (_) {}
 }
 window.sokoniSignOut = sokoniSignOut;
 
