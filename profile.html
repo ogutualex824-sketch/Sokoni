@@ -2773,6 +2773,10 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 </div>
 
 <!-- Scripts -->
+<!-- Canonical auth-state — THE single resolution-aware source of "who is signed
+     in". Loads before permissions/guards so they consume it and never conclude
+     "logged out" while Firebase Auth is still resolving. -->
+<script src="sokoni-auth-state.js"></script>
 <script src="sokoni-permissions.js"></script>
 <script src="profile.js"></script>
 <script src="sokoni-invoice.js"></script>

@@ -1,3 +1,39 @@
+## [2026-07-26] — feat(auth): single canonical auth-state source (SokoniAuthState) — kills the intermittent loop
+
+Milestone 2 of account-consistency: ONE resolution-aware source of "who is signed in", so no page
+decides authentication independently. Removes the last redirect-loop class — the intermittent one.
+
+Root cause of the intermittent loop: `sokoni-permissions.js` `isLoggedIn()` did
+`if (window.firebaseAuth) return false;` — concluding LOGGED-OUT the instant the firebaseAuth
+object exists, which is synchronous and happens long before `currentUser` resolves (and longer
+while App Check delays the token exchange on this project). `guardCurrentPage()` then bounced
+seller/driver/provider/landlord/admin pages to `login.html?next=…`, login bounced back on the
+cached `loggedIn` flag → the timing-dependent "page keeps reloading" that never reproduced on a
+fast desktop.
+
+New `sokoni-auth-state.js` → `window.SokoniAuthState`:
+- **The invariant:** auth is authoritative ONLY after Firebase init completes (first
+  onAuthStateChanged). Before that, `isLoggedIn()` returns an OPTIMISTIC value from cache — it
+  NEVER concludes "logged out" while resolving, so a guard can't redirect mid-resolution.
+- **After resolution it is authoritative:** resolved + no user → `false` EVEN with a stale
+  `loggedIn` flag (a genuine sign-out is not overridden). 12s backstop resolves to the optimistic
+  cached session (never fabricates a logout on a slow/offline cold start).
+- API: `getCurrentSession()` (uid/email/displayName/phoneNumber/roles/resolved), `isLoggedIn()`,
+  `isResolved()`, `whenResolved(cb)`, `ready` (Promise). Reads only firebase.js's readiness
+  contract + live listener; never writes/redirects/throws.
+- `sokoni-permissions.js` `isLoggedIn()` now delegates to it (with a bug-free standalone fallback
+  for pages where the module isn't loaded — the premature-`false` is gone either way).
+
+Verified: `scripts/test-auth-state.js` (12 assertions incl. the invariant), gate-run. Emulation:
+profile (new+named) and seller all nav=1 (no loop); `SokoniAuthState` present; optimistic-true
+during resolution; authoritative after. Wired into profile.html + the guarded pages that consume
+permissions (seller/driver/landlord). Next: broaden ensureUserBaseline, then the server migration.
+
+Files: `sokoni-auth-state.js` (new), `scripts/test-auth-state.js` (new), `sokoni-permissions.js`,
+`profile.html`, `seller.html`, `driver.html`, `landlord.html`. No DB/API changes. No breaking changes.
+
+---
+
 ## [2026-07-26] — fix(pos): P58E compatibility told iPhone users to install Chrome, which cannot work
 
 Asked to connect the P58E from a phone — which surfaced the check the panel

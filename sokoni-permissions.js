@@ -362,11 +362,19 @@
   function getLevel() { return _roleLevel(_currentRoles); }
 
   function isLoggedIn() {
-    /* Firebase Auth is the authoritative source */
+    /* Canonical, resolution-aware source of truth (sokoni-auth-state.js). */
+    if (window.SokoniAuthState) return window.SokoniAuthState.isLoggedIn();
+    /* Standalone fallback (module not loaded on this page).
+       BUGFIX 2026-07-26: this used to do `if (window.firebaseAuth) return false;`
+       — concluding LOGGED-OUT the instant the firebaseAuth object existed, which
+       is synchronous and happens long before currentUser resolves (and longer
+       while App Check delays the token exchange). guardCurrentPage() then bounced
+       seller/driver/provider/landlord/admin pages to login.html?next=…, login
+       bounced back on the cached loggedIn flag, and the two looped — the
+       timing-dependent "page keeps reloading". Never conclude logged-out merely
+       because the auth OBJECT exists; trust the verified currentUser, else the
+       cached flag until a resolver confirms otherwise. A real sign-out clears it. */
     if (window.firebaseAuth && window.firebaseAuth.currentUser) return true;
-    /* Firebase loaded but no currentUser — definitely not logged in */
-    if (window.firebaseAuth) return false;
-    /* Firebase SDK not yet resolved — trust localStorage only for initial paint */
     return localStorage.getItem("loggedIn") === "true";
   }
 
