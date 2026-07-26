@@ -1726,8 +1726,33 @@ function renderP58EPanel () {
 
 async function pairP58E () {
   const btn = document.getElementById('btnPairP58E');
-  btn.disabled = true; btn.textContent = 'Opening picker…';
+  btn.disabled = true;
   try {
+    /* Search → detect → connect, and only fall back to the picker if the
+       printer is not already known to this browser.
+
+       This used to jump straight to requestAndPair(), so a merchant who had
+       paired yesterday still got the chooser dialog every single time. Chrome
+       85+ exposes getDevices(), which lets autoConnect() re-attach to an
+       already-permitted printer with no dialog at all — so try that first and
+       the common case becomes one tap with nothing to select.
+
+       The picker cannot be skipped for a printer this browser has never seen:
+       Web Bluetooth requires a user gesture and a human choice for first
+       permission, by design. That is the one step no code can remove. */
+    btn.textContent = 'Searching for printer…';
+    const restored = await PrinterManager.p58e.autoConnect();
+    if (restored) {
+      const known = PrinterManager.p58e.info;
+      toast('Connected to ' + (known?.name || 'P58E') + ' — no pairing needed');
+      _connectedDevice = { name: known?.name, type: 'bluetooth' };
+      updateStatusBar();
+      renderP58EPanel();
+      renderChecklist();
+      return;
+    }
+
+    btn.textContent = 'Opening picker…';
     const info = await PrinterManager.p58e.requestAndPair();
     if (info) {
       toast('Connected to ' + info.name);
@@ -2356,7 +2381,26 @@ loadConfig();
 updateStatusBar();
 renderP58EPanel();
 renderChecklist();
-PrinterManager.autoReconnect().then(ok => { if (ok) updateStatusBar(); });
+/* Silent reconnect on open — this is the "auto pair" half. A merchant who
+   paired once should find the printer already connected when the page loads,
+   with nothing to tap.
+
+   It only ever appeared broken: autoReconnect() delegates to
+   window.P58EPrinter.autoConnect(), and P58EPrinter was undefined on production
+   because of a duplicate top-level const (fixed 2026-07-26). The call returned
+   false every time, so no session has ever auto-reconnected.
+
+   The panel is re-rendered too, not just the status bar — otherwise a restored
+   connection still showed "Pair P58E Printer", which reads as "it did not
+   work". */
+PrinterManager.autoReconnect().then(ok => {
+  if (!ok) return;
+  const known = PrinterManager.p58e?.info;
+  if (known) _connectedDevice = { name: known.name, type: 'bluetooth' };
+  updateStatusBar();
+  renderP58EPanel();
+  renderChecklist();
+}).catch(() => { /* no paired printer, or the browser lacks getDevices() */ });
 </script>
 </body>
 </html>

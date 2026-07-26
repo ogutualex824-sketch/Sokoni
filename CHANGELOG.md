@@ -229,6 +229,43 @@ No database, API, or security changes. No breaking changes.
 
 ---
 
+## [2026-07-26] — fix(pos): P58E now searches, connects, and auto-reconnects on open
+
+Follow-up to the duplicate-global fix. With `P58EPrinter` finally defined, two
+gaps in the flow above it became reachable — and visible.
+
+### Auto-reconnect had never once run
+
+Page init already called `PrinterManager.autoReconnect()`, which delegates to
+`window.P58EPrinter.autoConnect()`. `P58EPrinter` was `undefined` on production,
+so that call returned `false` on **every session since the feature shipped**. No
+merchant has ever had a printer reconnect by itself; the capability was written,
+wired, and dead.
+
+It also only refreshed the status bar. A restored connection still rendered
+"Pair P58E Printer", which reads as *it didn't work* even when it had. The panel
+and checklist now re-render too.
+
+### Pairing asked for the picker every time
+
+`pairP58E()` went straight to `requestAndPair()`, so a merchant who paired
+yesterday still got the browser chooser today. It now tries `autoConnect()`
+first — Chrome 85+ exposes `getDevices()`, which re-attaches to an
+already-permitted printer with **no dialog at all** — and only opens the picker
+when the printer is genuinely unknown to that browser.
+
+So the flow is now: **search → detect → connect**, one tap, nothing to select
+in the common case; and on the next visit, connected before the merchant
+touches anything.
+
+### The one step that cannot be removed
+
+First-time pairing on a browser that has never seen the printer **must** show
+the chooser and **must** be triggered by a user gesture. That is the Web
+Bluetooth permission model, not a SOKONI limitation — no amount of code removes
+it, and anything claiming to would be lying about where the permission came
+from. Every subsequent connection is silent.
+
 ## [2026-07-26] — fix(deploy): SW version format blocked every hosting deploy
 
 Caught by the release gate on the first deploy after `bump-sw-version.js` was
