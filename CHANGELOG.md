@@ -1,3 +1,46 @@
+## [2026-07-26] — feat(booking): Phase 2 — waitlist (availability-as-inventory) + slotLock-release fix
+
+Architecture-reviewed (APPROVE WITH TWO REVISIONS, both applied). A waitlist turns a *lost* slot
+into recoverable inventory: when a booked slot frees up (cancellation or an expired offer), it is
+offered to the next person in line instead of silently going idle. Built as an ORCHESTRATION layer
+over the existing primitives — an "offer" IS a standard `bookingHolds` HOLD and acceptance goes
+through the existing `bookingCreate`, so payment / approval / capacity / idempotency are all
+inherited, not re-implemented. Config-gated: `venue.waitlistEnabled` defaults **false**, so existing
+venues are completely unchanged.
+
+- **`functions/booking-waitlist.js`** (NEW) — merged into `bookingDispatch`. Handlers:
+  `bookingJoinWaitlist`, `bookingLeaveWaitlist` (also declines an active offer), `bookingAcceptOffer`
+  (atomic offered→claimed CLAIM, then real `bookingCreate`, then completed; reverts to offered if
+  create fails), `bookingGetMyWaitlist` (with on-demand position). Server helpers `offerNextWaitlist`
+  (transactional: re-checks the slot is genuinely free, mints an offer HOLD + `offerId` +
+  `offerExpiresAt`, flips the entry to `offered`, notifies) and `reapExpiredOffers`.
+  - *Revision 1* — no stored mutable position; order is `(priority ASC, createdAt ASC)`, computed
+    on demand (`computePosition`), so the queue can't drift.
+  - *Revision 2* — explicit lifecycle `waiting → offered → claimed → completed | expired | cancelled`;
+    the offer carries `offerId` + `offerHoldId` + `offerExpiresAt` for stale/duplicate-safe accepts
+    (`canAccept` validates status, ownership, offerId match, and hold liveness).
+- **`bookingCleanupHolds`** now owns offer-expiry: expired offer HOLDs mark their entry `expired`
+  (only if still `offered` for that `offerId`) and re-offer the slot to the next person.
+- **`bookingCancel` — slotLock release (BEHAVIOR CHANGE, latent-bug fix)**: cancel now deletes
+  `venues/{id}/slotLocks/{date_startTs_endTs}`. Previously the lock was **never** released, so a
+  cancelled slot stayed permanently unbookable (bookingCreate's slot-lock CAS blocks it) — a
+  pre-existing bug that also blocked the waitlist. Cancel then calls `offerNextWaitlist`. Both
+  best-effort — a notification/offer failure never fails the cancel.
+- **`venue-booking.js`** — `waitlistEnabled` added to create + venueUpdate (coerced bool).
+
+Verified: `scripts/test-booking-waitlist.js` — 19 pure-helper assertions (ordering, position,
+double-accept gate). **Firestore-emulator concurrency pass — 20/20** (real handler code):
+same-slot double-book → exactly one wins; cancel→release→offer→accept re-books; two devices
+accept the same offer → exactly one claims (others "Offer no longer available"); reap expires +
+re-offers; concurrent `offerNextWaitlist` → one offer minted. **Known limitation surfaced by the
+pass:** the per-customer cap (Phase 1) is prefetch-optimistic — a *concurrent burst* of creates for
+*different* slots by one customer can exceed the cap (same-slot doubles are still airtight via the
+CAS); it holds on settled state. Hardening it needs a transactional per-(customer,venue) counter —
+deferred pending approval. Files: `functions/booking-waitlist.js` (new), `functions/booking.js`,
+`functions/venue-booking.js`, `functions/booking-dispatch.js`.
+
+---
+
 ## [2026-07-26] — feat(booking): Phase 1 — provider buffers + per-customer cap (extend, don't rebuild)
 
 Architecture-reviewed (APPROVE). The booking engine already had the hard parts (atomic

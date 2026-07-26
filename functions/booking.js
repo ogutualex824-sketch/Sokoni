@@ -682,6 +682,21 @@ exports.bookingCancel = onCall(
       });
     }
 
+    /* Phase 2 (booking Phase 2): release the slot lock so the freed slot is
+       bookable again. bookingCreate's slot-lock CAS otherwise keeps a cancelled
+       slot permanently unbookable — a latent bug, and a blocker for the waitlist.
+       Then offer the slot to the next waitlisted customer (no-op if the venue has
+       no waitlist / the queue is empty). Both best-effort — must not fail cancel. */
+    try {
+      await db.collection('venues').doc(booking.venueId).collection('slotLocks')
+        .doc(`${booking.date}_${booking.startTs}_${booking.endTs}`).delete();
+    } catch (e) { console.warn('[booking] slotLock release on cancel:', e.message); }
+    try {
+      await require('./booking-waitlist').offerNextWaitlist(booking.venueId, {
+        date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
+      });
+    } catch (e) { console.warn('[booking] waitlist offer on cancel:', e.message); }
+
     return { cancelled: true, cancellationFee: fee };
   }
 );
@@ -995,6 +1010,12 @@ exports.bookingCleanupHolds = functions.scheduler.onSchedule(
   { schedule: 'every 5 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1' },
   async () => {
     const snap = await db.collection('bookingHolds').where('expiresAt', '<', Date.now()).get();
+    const expired = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    /* Phase 2: any expired hold that was a waitlist OFFER must expire its waitlist
+       entry and re-offer the slot to the next person BEFORE we delete the hold
+       (reap ignores the expired hold since it filters expiresAt > now anyway). */
+    try { await require('./booking-waitlist').reapExpiredOffers(expired); }
+    catch (e) { console.warn('[booking] waitlist reap on cleanup:', e.message); }
     const batch = db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
     if (!snap.empty) await batch.commit();

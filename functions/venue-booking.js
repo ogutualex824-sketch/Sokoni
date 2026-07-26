@@ -313,6 +313,9 @@ exports.venueCreate = onCall(CF_OPTS, exports._h.venueCreate = async (request) =
     bufferBeforeMins:       _clamp(d.bufferBeforeMins, 0, 240, 0),
     bufferAfterMins:        _clamp(d.bufferAfterMins,  0, 240, 0),
     maxBookingsPerCustomer: _clamp(d.maxBookingsPerCustomer, 0, 1000, 0),
+    /* Phase-2 booking addition. DEFAULT false → the venue has no waitlist and
+       bookingJoinWaitlist rejects, so existing venues are unchanged. */
+    waitlistEnabled:        !!d.waitlistEnabled,
     requiresApproval: !!d.requiresApproval,
     afterHoursBooking: !!d.afterHoursBooking,
     schedule:         d.schedule || _defaultSchedule(),
@@ -343,12 +346,13 @@ exports.venueUpdate = onCall(CF_OPTS, exports._h.venueUpdate = async (request) =
     'name','description','photos','virtualTour','location',
     'capacity','amenities','accessibility','rules','isShared',
     'bookingModels','slotDurationMins','bufferMins',
-    'bufferBeforeMins','bufferAfterMins','maxBookingsPerCustomer',
+    'bufferBeforeMins','bufferAfterMins','maxBookingsPerCustomer','waitlistEnabled',
     'requiresApproval','afterHoursBooking','schedule','pricing','status',
   ];
 
   const updates = { updatedAt: admin.firestore.Timestamp.now() };
   allowed.forEach(k => { if (d[k] !== undefined) updates[k] = d[k]; });
+  if (updates.waitlistEnabled !== undefined) updates.waitlistEnabled = !!updates.waitlistEnabled;
 
   if (updates.pricing)          updates.pricing          = _sanitizePricing(updates.pricing);
   if (updates.capacity)         updates.capacity         = _sanitizeCapacity(updates.capacity);
