@@ -144,6 +144,65 @@ No database, API, or security changes. No breaking changes.
 
 ---
 
+## [2026-07-26] — fix(cache): updates now arrive on reload instead of requiring users to clear browsing data
+
+Reported as "all updates should be available upon any reload, not deleting all
+browsing data". Confirmed and fixed at the layer actually responsible.
+
+### The leak
+
+Every `.js` and `.css` was served as:
+
+```
+Cache-Control: public, max-age=3600, must-revalidate
+```
+
+`must-revalidate` does **not** force revalidation while a response is fresh — it
+only governs what happens after expiry. So for a full hour the browser served
+JavaScript from disk **without contacting the server at all**.
+
+A user reloading after a deploy therefore got current HTML referencing the same
+filenames, and the browser quietly supplied yesterday's JavaScript. Clearing
+site data was the only reliable escape, which is exactly the reported symptom.
+
+### It also defeated the service worker
+
+`bump-sw-version.js` correctly bumps `CACHE_VERSION` on every deploy, so the SW
+builds a fresh cache each release. But the fetches that **populate** that cache
+go through the browser's HTTP cache — so the new service-worker cache was being
+filled with hour-old files. The version bump was doing its job and being undone
+one layer down.
+
+### Fix
+
+`no-cache, must-revalidate` for JS and CSS: still stored, but revalidated every
+time. Unchanged files return `304` (headers only); changed files arrive
+immediately.
+
+This costs nothing at the edge, because `CDN-Cache-Control: no-store` was
+already set on these files — the hour of `max-age` bought **no** CDN benefit
+whatsoever. It was pure client-side staleness.
+
+### The allowlist this replaces
+
+The service worker carries an `ALWAYS_FRESH` list whose comments record four
+separate incidents where a stale asset outlived the fix for it — the offline
+detector, the drawer stylesheet, `seller.js`, and the POS startup path. Each
+was resolved by appending one more filename.
+
+That pattern only ever protects files that have already caused an outage. The
+P58E printer fix committed minutes earlier would have hit it precisely:
+`sokoni-bluetooth-printer.js` was not on the list, so a returning merchant would
+have kept the broken build. The printer bundle is added for the demo, but the
+header change is what stops the next one needing its own entry.
+
+### Also
+
+`scripts/generate-version.js` added to the hosting predeploy chain.
+`version.json` was reporting commit `55c96cd` from **2026-07-18** — eight days
+and many deploys stale — because nothing regenerated it. Anything reasoning
+about build identity was reading a fossil.
+
 ## [2026-07-26] — fix(pos): P58E printer could not be configured — duplicate global killed the adapter
 
 Reported as "configure the P58E, I want to test for a client". The P58E support

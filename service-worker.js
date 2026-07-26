@@ -31,7 +31,7 @@
    + double-tap guards, emoji/close-button/logo UI, and the More page never
    reached already-installed clients — hard-refresh can't beat Cache-First. This
    bump invalidates the old cache so every client re-fetches current assets. */
-const CACHE_VERSION = "sokoni-20260726-app-shell-v115";
+const CACHE_VERSION = "sokoni-20260726125450";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -690,7 +690,17 @@ self.addEventListener("fetch", event => {
        that dies before the page settles may never reach that second launch, so
        the fix could not arrive by the very failure it repairs.
        Anything on the POS startup path must land on the first load. */
-    "pos-omni.js", "pos-modules.js"];
+    "pos-omni.js", "pos-modules.js",
+    /* Printer stack. Same argument as the POS startup path: these drive
+       physical hardware a merchant is standing in front of, and a stale copy
+       presents as "the printer is broken" rather than "the page is old" — so
+       nobody thinks to reload, let alone clear site data. The P58E adapter in
+       particular was dead on production because of a duplicate global; a
+       merchant holding a stale sokoni-bluetooth-printer.js would still see the
+       broken build after the fix shipped. Hardware paths must land on the first
+       load. */
+    "sokoni-universal-printer.js", "sokoni-bluetooth-printer.js",
+    "sokoni-printer-manager.js", "sokoni-pos-print-service.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;

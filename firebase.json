@@ -125,7 +125,7 @@
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "public, max-age=3600, must-revalidate"
+            "value": "no-cache, must-revalidate"
           },
           {
             "key": "CDN-Cache-Control",
@@ -533,6 +533,7 @@
     ],
     "predeploy": [
       "node scripts/deploy/bump-sw-version.js",
+      "node scripts/generate-version.js",
       "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js",
       "node scripts/perf-guard.js",
