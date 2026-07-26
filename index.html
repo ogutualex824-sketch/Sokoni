@@ -19,6 +19,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI — Kenya's #1 Online Marketplace | Buy & Sell Products</title>
 
+  <!-- Crash Sentinel — FIRST script, before everything, so an "Aw, Snap!" (OOM) crash
+       during load still leaves a localStorage breadcrumb. Reported 2026-07-26: Android
+       accounts crash/reload. Read the captured reason on the phone at /android-doctor.
+       Self-contained, no dependencies, fails open. -->
+  <script src="sokoni-crash-sentinel.js"></script>
   <!-- Canonical root guard — verifies this really is the marketplace shell and self-heals
        if a different template ever renders at "/". Loads FIRST and synchronously so the
        check runs before the user can interact with a wrong page. Fails open. -->

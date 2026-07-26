@@ -1,3 +1,32 @@
+## [2026-07-26] — feat(diagnostics): Android crash sentinel + on-device doctor
+
+Reported: on Android (Chrome), most accounts fail to open — the tab shows Chrome's
+"Aw, Snap!" page (its button reads *Reload*, hence "reload snap"). "Aw, Snap!" is a
+**renderer crash**, on budget Android almost always out-of-memory. A crash cannot be
+reported from the tab that died, so this captures it on the *next* load.
+
+**What shipped (diagnostics only — no behavior change to the app):**
+
+- `sokoni-crash-sentinel.js` — FIRST `<head>` script. Writes a synchronous localStorage
+  breadcrumb every 2s (heap, device memory, cores, network, last script loaded, App Check
+  state, JS errors, reload count), marks it clean only on an orderly exit, and on the next
+  load detects that the previous run ended abnormally and classifies WHY from evidence
+  (`heap-near-limit`, `low-device-memory`, `appcheck-rejected`, `reload-loop`, …). Two sinks:
+  a localStorage ring buffer (100% reliable) and a best-effort beacon to the existing
+  `logClientDiagnostic` CF via its anonymous `auth-*` surface (no functions deploy).
+- `android-doctor.html` — dependency-free page the merchant opens at `/android-doctor` on
+  the phone; shows the recorded crash reason in plain language + a Share button.
+- Wired into `index.html` (home, the reported page) and `login.html` (the auth surface).
+
+**Why it matters:** turns an unreproducible "his phone says reload snap" into measured
+evidence (OOM vs App Check 403 vs reload loop) captured from the actual failing device,
+so the fix targets the real cause instead of a guess.
+
+Files: `sokoni-crash-sentinel.js` (new), `android-doctor.html` (new), `index.html`, `login.html`.
+No database, API, or security changes. No breaking changes.
+
+---
+
 ## [2026-07-26] — chore(onboarding): split Maina's profile name from the shop name
 
 The first onboarding used the business name for both, so the owner's profile
