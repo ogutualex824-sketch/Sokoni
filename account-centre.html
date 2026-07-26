@@ -2027,7 +2027,7 @@ window.acConfirmDelete = async function() {
           </p>
         </div>
         <div class="ac-btn-row" style="justify-content:center;">
-          <button class="ac-btn ac-btn-ghost" onclick="window.sokoniSignOut && window.sokoniSignOut()">Sign Out Now</button>
+          <button class="ac-btn ac-btn-ghost" onclick="(window.sokoniSignOut?window.sokoniSignOut():Promise.resolve()).finally(function(){location.href='login.html'})">Sign Out Now</button>
         </div>
       </div>`;
   } catch (e) {

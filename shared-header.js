@@ -1636,7 +1636,14 @@
 
   window._skSignOutFromAcct = function () {
     window._skCloseAcct();
-    if (window.sokoniSignOut) { window.sokoniSignOut(); } else { location.href = 'login.html'; }
+    /* sokoniSignOut clears the session but does NOT navigate — without this redirect
+       the page stayed put and Sign Out looked broken ("not working"). Always land on
+       login (even if the network sign-out throws, local state is cleared). */
+    if (window.sokoniSignOut) {
+      window.sokoniSignOut().finally(function () { location.href = 'login.html'; });
+    } else {
+      location.href = 'login.html';
+    }
   };
 
   window._skSwitchWorkspace = function (businessId) {
