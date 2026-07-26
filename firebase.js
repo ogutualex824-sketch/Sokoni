@@ -22,6 +22,8 @@ import {
   FacebookAuthProvider,
   getRedirectResult,
   linkWithCredential,
+  linkWithPhoneNumber,
+  reload,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore, terminate, clearIndexedDbPersistence,
@@ -275,6 +277,15 @@ window.firebaseSDK = {
   createUserWithEmailAndPassword:(e, p)       => createUserWithEmailAndPassword(auth, e, p),
   signInWithPopup:               (provider)   => signInWithPopup(auth, provider),
   signInWithPhoneNumber:         (phone, ver) => signInWithPhoneNumber(auth, phone, ver),
+  /* Verify/attach a phone to the CURRENTLY signed-in account (profile phone
+     verification). Sends an SMS and returns a ConfirmationResult; .confirm(code)
+     links the verified number so auth.currentUser.phoneNumber is set. */
+  linkWithPhoneNumber:           (phone, ver) => auth.currentUser
+                                    ? linkWithPhoneNumber(auth.currentUser, phone, ver)
+                                    : Promise.reject(new Error('No user')),
+  /* Refresh the current user so freshly-changed emailVerified/phoneNumber flags
+     are visible without a full page reload. */
+  reloadUser:                    ()           => auth.currentUser ? reload(auth.currentUser) : Promise.reject(new Error('No user')),
   signOut:                       ()           => signOut(auth),
   onAuthStateChanged:            (cb)         => onAuthStateChanged(auth, cb),
   updateProfile,

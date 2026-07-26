@@ -32,6 +32,32 @@
     @media (prefers-reduced-motion: reduce){ #sk-auth-gate .sk-ag-spin{ animation:none; } }
     html.sk-auth-ok #sk-auth-gate{ display:none !important; }
   </style>
+  <!-- ── Profile verification (email link + phone OTP) UI ── -->
+  <style id="pv-css">
+    .pv-btn{ margin-left:auto; flex:0 0 auto; background:#71ff00; color:#052e00;
+      border:0; border-radius:999px; padding:7px 16px; font:700 12px/1 "Segoe UI",system-ui,sans-serif;
+      cursor:pointer; letter-spacing:0.3px; }
+    .pv-btn:disabled{ opacity:0.55; cursor:default; }
+    .pv-modal{ position:fixed; inset:0; z-index:2147483646; background:rgba(0,0,0,0.72);
+      display:flex; align-items:center; justify-content:center; padding:20px; }
+    .pv-box{ position:relative; width:min(400px,100%); background:#0c0c0c;
+      border:1px solid rgba(113,255,0,0.22); border-radius:20px; padding:26px 22px 24px;
+      box-shadow:0 24px 70px rgba(0,0,0,0.7); font-family:"Segoe UI",system-ui,sans-serif; }
+    .pv-x{ position:absolute; top:12px; right:14px; background:transparent; border:0; color:#8a8a8a;
+      font-size:26px; line-height:1; cursor:pointer; }
+    .pv-title{ color:#fff; font-size:19px; font-weight:800; margin-bottom:6px; }
+    .pv-hint{ color:#9a9a9a; font-size:13px; margin-bottom:16px; }
+    .pv-input{ width:100%; box-sizing:border-box; background:#050505; color:#fff;
+      border:1px solid rgba(255,255,255,0.14); border-radius:12px; padding:14px 16px;
+      font-size:16px; margin-bottom:14px; }
+    .pv-input:focus{ outline:none; border-color:#71ff00; }
+    .pv-otp{ text-align:center; letter-spacing:8px; font-size:22px; font-weight:700; }
+    .pv-cta{ width:100%; background:#71ff00; color:#052e00; border:0; border-radius:12px;
+      padding:14px; font-size:15px; font-weight:800; cursor:pointer; }
+    .pv-cta:disabled{ opacity:0.6; cursor:default; }
+    .pv-link{ display:block; width:100%; margin-top:12px; background:transparent; border:0;
+      color:#8a8a8a; font-size:13px; cursor:pointer; }
+  </style>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -4668,6 +4694,198 @@ window.logoutUser = logoutUser;
     if (devEl && window.firebase && firebase.auth && firebase.auth().currentUser) {
       devEl.textContent = 'Manage trusted devices and sessions';
     }
+
+    /* Email + phone verification actions, driven by the LIVE Firebase user. */
+    _pvInit();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     PROFILE VERIFICATION — email link + phone SMS OTP
+     The Security panel's Email/Phone rows are driven from the LIVE Firebase
+     user (authoritative + immediate, unlike the cached CF overview). When a
+     channel is unverified we inject a "Verify" action; phone verification
+     links the SMS-verified number to the signed-in account so
+     currentUser.phoneNumber is set and the users doc is updated app-wide.
+  ═══════════════════════════════════════════════════════════════════ */
+  var _pvConfirm = null;        /* ConfirmationResult from linkWithPhoneNumber */
+  var _pvVerifier = null;       /* RecaptchaVerifier (invisible, reused)       */
+  var _pvPendingPhone = '';     /* E.164 phone awaiting OTP confirmation        */
+
+  function _pvToast(msg, type){ try { (window._skToast ? window._skToast(msg, type) : alert(msg)); } catch(_){ try{ alert(msg); }catch(e){} } }
+  function _pvUser(){ try { return window.firebaseAuth && window.firebaseAuth.currentUser; } catch(_){ return null; } }
+
+  /* Kenya-first E.164 normaliser: 07.. / 01.. / 2547.. / +2547.. / 7XXXXXXXX */
+  function _pvNormalizePhone(raw){
+    var s = String(raw||'').replace(/[^\d+]/g,'');
+    if (!s) return '';
+    if (s.charAt(0) === '+') return s;
+    if (s.indexOf('254') === 0) return '+' + s;
+    if (s.charAt(0) === '0')    return '+254' + s.slice(1);
+    if (s.length === 9)         return '+254' + s;
+    return '+' + s;
+  }
+
+  /* Paint a security row + (un)verified Verify button. */
+  function _pvRow(idBase, verified, yesText, noText, onVerify){
+    var st  = document.getElementById(idBase + 'Status');
+    var sub = document.getElementById(idBase);
+    if (st){ st.style.display=''; st.className = verified ? 'pi-sec-good' : 'pi-sec-warn'; st.textContent = verified ? '✓' : '!'; }
+    if (sub) sub.textContent = verified ? yesText : noText;
+    var row   = sub ? sub.closest('.pi-sec-item') : null;
+    var btnId = idBase + 'VerifyBtn';
+    var btn   = document.getElementById(btnId);
+    if (verified || !onVerify){ if (btn) btn.remove(); return; }
+    if (!row) return;
+    if (!btn){ btn = document.createElement('button'); btn.id = btnId; btn.type = 'button'; btn.className = 'pv-btn'; row.appendChild(btn); }
+    btn.textContent = 'Verify'; btn.disabled = false; btn.onclick = onVerify;
+  }
+
+  function _pvInit(){
+    var u = _pvUser();
+    if (!u){ document.addEventListener('sokoniAuthReady', function _h(){ document.removeEventListener('sokoniAuthReady', _h); _pvInit(); }); return; }
+    /* EMAIL — authoritative from the ID token. */
+    _pvRow('piSecEmail', !!u.emailVerified, 'Email verified',
+      (u.email ? 'Not verified — tap Verify' : 'No email on this account'),
+      (u.email ? _pvSendEmail : null));
+    /* PHONE — verified === linked to the auth account. */
+    _pvRow('piSecPhone', !!u.phoneNumber, 'Phone verified', 'Not verified — tap Verify', _pvStartPhone);
+  }
+
+  function _pvSendEmail(){
+    var u = _pvUser(); if (!u || !u.email) return;
+    var btn = document.getElementById('piSecEmailVerifyBtn');
+    if (btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+    (window.firebaseSDK && window.firebaseSDK.sendEmailVerification ? window.firebaseSDK.sendEmailVerification() : Promise.reject(new Error('unavailable')))
+      .then(function(){
+        _pvToast('Verification email sent to ' + u.email + '. Open it, tap the link, then come back.', 'success');
+        if (btn){ btn.textContent = "I've verified"; btn.disabled = false; btn.onclick = _pvRecheckEmail; }
+      })
+      .catch(function(e){
+        var c = e && e.code;
+        _pvToast(c === 'auth/too-many-requests' ? 'Too many attempts — wait a minute and try again.' : 'Could not send the email. Please try again.', 'error');
+        if (btn){ btn.disabled = false; btn.textContent = 'Verify'; }
+      });
+  }
+  function _pvRecheckEmail(){
+    var btn = document.getElementById('piSecEmailVerifyBtn');
+    if (btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+    (window.firebaseSDK && window.firebaseSDK.reloadUser ? window.firebaseSDK.reloadUser() : Promise.resolve())
+      .then(function(){ var u=_pvUser(); _pvInit(); if (u && u.emailVerified) _pvToast('Email verified ✓', 'success'); else _pvToast('Not verified yet — tap the link in the email first.', 'info'); })
+      .catch(function(){ _pvInit(); });
+  }
+
+  function _pvEnsureRecaptcha(){
+    if (_pvVerifier) return _pvVerifier;
+    if (!(window.firebaseSDK && window.firebaseSDK.RecaptchaVerifier && window.firebaseAuth)) return null;
+    var host = document.getElementById('pv-recaptcha');
+    if (!host){ host = document.createElement('div'); host.id = 'pv-recaptcha'; host.style.display = 'none'; document.body.appendChild(host); }
+    try { _pvVerifier = new window.firebaseSDK.RecaptchaVerifier(window.firebaseAuth, 'pv-recaptcha', { size: 'invisible' }); }
+    catch(e){ _pvVerifier = null; }
+    return _pvVerifier;
+  }
+
+  function _pvStartPhone(){
+    if (!_pvUser()) return;
+    var prefill = (_user && (_user.phoneNumber || _user.phone)) || '';
+    _pvOpenModal(String(prefill).replace(/[^\d+\s()-]/g,''));
+  }
+
+  function _pvOpenModal(prefill){
+    _pvCloseModal();
+    var ov = document.createElement('div');
+    ov.id = 'pv-modal'; ov.className = 'pv-modal';
+    ov.innerHTML =
+      '<div class="pv-box" role="dialog" aria-modal="true" aria-label="Verify phone">' +
+        '<button class="pv-x" type="button" aria-label="Close" onclick="window._pvCloseModal&&window._pvCloseModal()">×</button>' +
+        '<div class="pv-title">Verify your phone</div>' +
+        '<div id="pv-step1">' +
+          '<div class="pv-hint">We’ll text you a 6-digit code.</div>' +
+          '<input id="pv-phone" class="pv-input" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX" value="'+ (prefill||'') +'">' +
+          '<button id="pv-send" type="button" class="pv-cta">Send code</button>' +
+        '</div>' +
+        '<div id="pv-step2" style="display:none;">' +
+          '<div class="pv-hint" id="pv-sent-to"></div>' +
+          '<input id="pv-otp" class="pv-input pv-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">' +
+          '<button id="pv-verify" type="button" class="pv-cta">Verify</button>' +
+          '<button id="pv-back" type="button" class="pv-link">Change number</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    document.body.style.overflow = 'hidden';
+    document.getElementById('pv-send').onclick   = _pvSendCode;
+    document.getElementById('pv-verify').onclick = _pvVerifyCode;
+    document.getElementById('pv-back').onclick   = function(){ _pvShowStep(1); };
+    ov.addEventListener('click', function(e){ if (e.target === ov) _pvCloseModal(); });
+    var inp = document.getElementById('pv-phone'); if (inp) inp.focus();
+  }
+  window._pvCloseModal = function(){ var ov = document.getElementById('pv-modal'); if (ov) ov.remove(); try { document.body.style.overflow = ''; } catch(_){} };
+  function _pvShowStep(n){
+    var s1 = document.getElementById('pv-step1'), s2 = document.getElementById('pv-step2');
+    if (s1) s1.style.display = n === 1 ? '' : 'none';
+    if (s2) s2.style.display = n === 2 ? '' : 'none';
+  }
+
+  function _pvSendCode(){
+    var phone = _pvNormalizePhone((document.getElementById('pv-phone')||{}).value || '');
+    if (!/^\+\d{10,15}$/.test(phone)){ _pvToast('Enter a valid phone number.', 'error'); return; }
+    var btn = document.getElementById('pv-send');
+    if (btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+    var verifier = _pvEnsureRecaptcha();
+    if (!verifier){ _pvToast('Verification is unavailable right now. Please try again.', 'error'); if (btn){ btn.disabled=false; btn.textContent='Send code'; } return; }
+    window.firebaseSDK.linkWithPhoneNumber(phone, verifier)
+      .then(function(confirmation){
+        _pvConfirm = confirmation; _pvPendingPhone = phone;
+        var to = document.getElementById('pv-sent-to'); if (to) to.textContent = 'Code sent to ' + phone;
+        _pvShowStep(2);
+        var otp = document.getElementById('pv-otp'); if (otp) otp.focus();
+      })
+      .catch(function(e){
+        var c = e && e.code, msg;
+        if (c === 'auth/credential-already-in-use' || c === 'auth/account-exists-with-different-credential') msg = 'This phone is already linked to another SOKONI account.';
+        else if (c === 'auth/provider-already-linked' || c === 'auth/phone-number-already-exists') msg = 'A phone is already linked to this account.';
+        else if (c === 'auth/invalid-phone-number') msg = 'That phone number looks invalid.';
+        else if (c === 'auth/too-many-requests') msg = 'Too many attempts — please wait and try again.';
+        else if (c === 'auth/captcha-check-failed') msg = 'Verification check failed — reload the page and try again.';
+        else msg = 'Could not send the code. Please try again.';
+        _pvToast(msg, 'error');
+        try { if (_pvVerifier && _pvVerifier.clear) _pvVerifier.clear(); } catch(_){}
+        _pvVerifier = null;
+        if (btn){ btn.disabled = false; btn.textContent = 'Send code'; }
+      });
+  }
+
+  function _pvVerifyCode(){
+    if (!_pvConfirm){ _pvToast('Please request a code first.', 'error'); return; }
+    var code = (((document.getElementById('pv-otp')||{}).value) || '').replace(/\D/g,'');
+    if (code.length < 6){ _pvToast('Enter the 6-digit code.', 'error'); return; }
+    var btn = document.getElementById('pv-verify');
+    if (btn){ btn.disabled = true; btn.textContent = 'Verifying…'; }
+    _pvConfirm.confirm(code)
+      .then(function(){ return _pvPersistPhone(_pvPendingPhone); })
+      .then(function(){ _pvToast('Phone verified ✓', 'success'); _pvConfirm = null; _pvCloseModal(); _pvInit(); })
+      .catch(function(e){
+        var c = e && e.code, msg;
+        if (c === 'auth/invalid-verification-code') msg = 'Incorrect code. Check it and try again.';
+        else if (c === 'auth/code-expired') msg = 'That code expired — request a new one.';
+        else if (c === 'auth/credential-already-in-use') msg = 'This phone is already linked to another account.';
+        else msg = 'Verification failed. Please try again.';
+        _pvToast(msg, 'error');
+        if (btn){ btn.disabled = false; btn.textContent = 'Verify'; }
+      });
+  }
+
+  /* Persist the verified number to users/{uid} so the whole app sees it.
+     Canonical field is phoneNumber "+254…" (never the legacy 'phone'). */
+  function _pvPersistPhone(phone){
+    var u = _pvUser(); if (!u || !phone || !window.firebaseDB) return Promise.resolve();
+    return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+      .then(function(m){
+        return m.setDoc(m.doc(window.firebaseDB, 'users', u.uid),
+          { phoneNumber: phone, phoneVerified: true, phoneVerifiedAt: m.serverTimestamp() },
+          { merge: true });
+      })
+      .then(function(){ try { _user = getUser() || {}; _user.phoneNumber = phone; localStorage.setItem('sokoniUser', JSON.stringify(_user)); } catch(_){} })
+      .catch(function(e){ console.warn('[PV] persist phone failed', e && e.code); });
   }
 
   /* ─────────────────────────────────────────────
