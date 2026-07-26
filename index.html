@@ -4060,21 +4060,24 @@ document.addEventListener('DOMContentLoaded', function() {
   <script defer src="sokoni-webhook-engine.js"></script>
   <script defer src="sokoni-search-pro.js"></script>
   <script>
-  /* Hidden admin access: tap the home logo 9× quickly → super admin. This only
-     reveals the door — super-admin.html enforces the admin claim, so a non-admin
-     who finds the gesture still gets bounced. Delegated so it survives shared-header
-     re-rendering the logo. A lone tap still navigates home (after a short debounce). */
+  /* Hidden admin access: tap the home logo 9× → super admin. Reveals the door only;
+     super-admin.html enforces the admin claim, so a non-admin who finds the gesture is
+     still bounced. Counts taps within an 800ms rolling window (a slow gap just restarts
+     the count — it never navigates away, so the counter can actually reach 9). On the
+     home page a single logo tap does nothing (you're already home); the gesture works on
+     BOTH tap (touch) and click. Delegated so it survives shared-header wiring the logo. */
   (function(){
-    var taps=0, t=null;
-    document.addEventListener('click', function(e){
-      var logo = e.target.closest && e.target.closest('#sk-nav-logo');
+    var taps=0, last=0;
+    function hit(e){
+      var logo = e.target && e.target.closest && e.target.closest('#sk-nav-logo');
       if(!logo) return;
-      e.preventDefault();
-      taps++;
-      if(taps>=9){ clearTimeout(t); taps=0; location.href='/super-admin.html'; return; }
-      clearTimeout(t);
-      t=setTimeout(function(){ var single=(taps===1); taps=0; if(single) location.href='/'; }, 500);
-    }, true);
+      e.preventDefault(); e.stopPropagation();
+      var now = Date.now();
+      taps = (now - last < 800) ? (taps+1) : 1;
+      last = now;
+      if(taps >= 9){ taps=0; location.href='/super-admin.html'; }
+    }
+    document.addEventListener('click', hit, true);
   })();
   </script>
 </body>
