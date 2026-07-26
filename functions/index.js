@@ -2232,6 +2232,7 @@ exports.createCheckoutSession = onCall(
     const sessionItems = [];
     let serverSubtotal = 0;
     const outOfStockItems = [];
+    const adjustedItems   = [];
     for (const item of cartItems) {
       const pid  = String(item.productId || item.id || "");
       const prod = priceMap[pid];
@@ -2246,7 +2247,17 @@ exports.createCheckoutSession = onCall(
       }
 
       const unitPrice = Number(prod.salePrice || prod.price || 0);
-      const qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
+      let   qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
+
+      /* Quantity revalidation: never authorise a session for more than remains.
+         When a metered product has fewer units than requested, clamp to what is
+         available (>=1 here, since <=0 was rejected as OOS above) and report the
+         adjustment so the buyer can be told "only N available" before paying. */
+      if (stockQty !== null && qty > stockQty) {
+        adjustedItems.push({ name: prod.name || pid, requested: qty, available: stockQty });
+        qty = stockQty;
+      }
+
       const lineTotal = unitPrice * qty;
       serverSubtotal += lineTotal;
       sessionItems.push({
@@ -2407,6 +2418,9 @@ exports.createCheckoutSession = onCall(
       serverTotal,
       itemCount:       sessionItems.length,
       outOfStockItems: outOfStockItems.length > 0 ? outOfStockItems : undefined,
+      /* Lines whose quantity was reduced to remaining stock — the page warns the
+         buyer ("only N available") and updates the cart before payment. */
+      adjustedItems:   adjustedItems.length > 0 ? adjustedItems : undefined,
       /* So the page can show the discount it actually received, and explain a
          code that was rejected, instead of asserting a discount of its own. */
       promoApplied:    promoApplied || undefined,
@@ -2720,14 +2734,19 @@ exports.verifyIntasendPayment = onRequest(
             const snap    = await t.get(prodRef);
             if (!snap.exists) return;
             const cur = snap.data().stock;
+            /* Payment is already confirmed, so a last-item race is flagged, not
+               rejected — but stock must never go negative. Deduct at most what
+               remains; the oversoldAlerts record carries the true shortfall. */
+            let dec = qty;
             if (typeof cur === 'number' && cur < qty) {
+              dec = Math.max(0, cur);
               t.set(db.collection('oversoldAlerts').doc(), {
                 orderId, productId: item.productId,
                 requested: qty, available: cur,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             }
-            t.update(prodRef, { stock: admin.firestore.FieldValue.increment(-qty) });
+            t.update(prodRef, { stock: admin.firestore.FieldValue.increment(-dec) });
           }))
       );
       const stockFailed = stockResults.filter(r => r.status === 'rejected');
@@ -3214,6 +3233,19 @@ exports.darajaSTKPush = onCall(
           throw new HttpsError("failed-precondition", "Product is not available for sale: " + pid);
         }
 
+        /* Overselling guard — reject BEFORE the STK push, while no money has moved.
+           A finite stock field is authoritative; products without stock tracking
+           (stock undefined) are unmetered and pass. A genuine last-item race that
+           slips past this is caught again at deduction (floor + oversoldAlerts). */
+        const stk = Number(p.stock);
+        if (p.outOfStock === true || (Number.isFinite(stk) && stk <= 0)) {
+          throw new HttpsError("failed-precondition", "Out of stock: " + (p.name || pid));
+        }
+        if (Number.isFinite(stk) && stk < qty) {
+          throw new HttpsError("failed-precondition",
+            "Only " + stk + " left of " + (p.name || pid) + " — please reduce the quantity.");
+        }
+
         const unit = Number(p.price);
         if (!Number.isFinite(unit) || unit < 0) {
           throw new HttpsError("failed-precondition", "Product has no valid price: " + pid);
@@ -3572,6 +3604,25 @@ exports.darajaSTKCallback = onRequest(
                  transaction, so concurrent retries serialise on it. */
               if (o.inventoryApplied === true) return;
 
+              /* Stock. Prefer the server-priced line items recorded at STK
+                 time over anything the client later wrote onto the order. */
+              const lines = Array.isArray(payData.items) && payData.items.length
+                ? payData.items
+                : (Array.isArray(o.items) ? o.items : []);
+
+              /* Read every product BEFORE any write — a Firestore transaction
+                 requires all reads to precede all writes — so the deduction can
+                 be floored and never drive stock negative on a last-item race. */
+              const stockReads = [];
+              for (const line of lines) {
+                const pid = line && (line.productId || line.id);
+                const qty = Math.floor(Number(line && line.qty) || 0);
+                if (!pid || qty < 1) continue;
+                const pRef  = db.collection("products").doc(String(pid));
+                const pSnap = await txn.get(pRef);
+                stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap });
+              }
+
               txn.update(orderRef, {
                 status:          "paid",
                 paymentStatus:   "paid",
@@ -3588,18 +3639,23 @@ exports.darajaSTKCallback = onRequest(
                 updatedAt:       ts,
               });
 
-              /* Stock. Prefer the server-priced line items recorded at STK
-                 time over anything the client later wrote onto the order. */
-              const lines = Array.isArray(payData.items) && payData.items.length
-                ? payData.items
-                : (Array.isArray(o.items) ? o.items : []);
-
-              for (const line of lines) {
-                const pid = line && (line.productId || line.id);
-                const qty = Math.floor(Number(line && line.qty) || 0);
-                if (!pid || qty < 1) continue;
-                txn.update(db.collection("products").doc(pid), {
-                  stock: admin.firestore.FieldValue.increment(-qty),
+              /* Payment is already confirmed, so an oversell is flagged, not
+                 rejected — but stock is floored at zero and the shortfall is
+                 recorded for reconciliation (parity with the IntaSend path). */
+              for (const { ref, pid, qty, snap } of stockReads) {
+                const cur = snap.exists ? snap.data().stock : null;
+                let dec = qty;
+                if (typeof cur === "number" && cur < qty) {
+                  dec = Math.max(0, cur);
+                  txn.set(db.collection("oversoldAlerts").doc(), {
+                    orderId:   payData.orderId || checkoutId || null,
+                    productId: pid, requested: qty, available: cur,
+                    path:      "daraja",
+                    createdAt: ts,
+                  });
+                }
+                txn.update(ref, {
+                  stock: admin.firestore.FieldValue.increment(-dec),
                 });
               }
             });
@@ -8241,6 +8297,12 @@ exports.algoliaQueueMonitor   = algoliaQueueModule.algoliaQueueMonitor;
    Each trigger with globalSearch:true also fans out to global_search index. */
 const algoliaSync = require("./algolia-sync");
 Object.assign(exports, algoliaSync);
+
+/* ── Shop-name fan-out: a shop rename propagates to all its products, which then
+   ride the product-update triggers above to correct both search indexes. ── */
+const shopNameSync = require("./shop-name-sync");
+exports.shopNameSync_shops   = shopNameSync.shopNameSync_shops;
+exports.shopNameSync_sellers = shopNameSync.shopNameSync_sellers;
 
 /* ── Admin: setup, backfill, health, orphan cleanup, rules, A/B testing ── */
 const algoliaAdminModule = require("./algolia-admin");

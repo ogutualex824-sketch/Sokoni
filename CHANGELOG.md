@@ -1,3 +1,40 @@
+## [2026-07-27] — fix(commerce): stop overselling + propagate shop renames + Buy Now on category cards
+
+Scoped from a user real-time-sync design proposal. A 3-agent read-only audit mapped the 7-point
+design against live code: inventory deduction (transactional) and search-index sync were already
+**Built**; the real gaps were overselling, cart quantity revalidation, and shop-name staleness.
+Implemented the P0 (correctness) + P1 (propagation) scope the user approved; deferred blanket
+`onSnapshot` listeners (P2) on read-cost grounds.
+
+- **Overselling guard (P0)** — `products.stock` could go **negative**: `increment(-qty)` had no floor
+  and neither payment path blocked it. Now:
+  - STK-push initiation (`functions/index.js`) rejects **before charging** when a metered product has
+    `stock <= 0` or `stock < qty` — no money moves on an oversell.
+  - `createCheckoutSession` clamps each line to remaining stock and returns `adjustedItems` so the
+    session can never authorise more than exists.
+  - Both deduction paths (IntaSend webhook + Daraja STK callback) now floor the decrement at zero and
+    write an `oversoldAlerts` record for the genuine last-item race (the Daraja transaction was
+    restructured to read-before-write so the floor is transaction-safe). Payment already confirmed →
+    flag, never reject.
+- **Cart quantity revalidation (P1)** — `createCheckoutSession` previously only dropped fully
+  out-of-stock lines; it now also detects `qty > available`, clamps, and `checkout.html` warns the
+  buyer ("only N available") before payment. The charged `serverTotal` already reflects the clamp.
+- **Shop-name fan-out (P1)** — `functions/shop-name-sync.js` (NEW): `onDocumentUpdated` triggers on
+  `shops/{uid}` and `sellers/{uid}`; on a real name change (`name || storeName`) it batch-updates
+  `sellerName` across all `products where sellerUid == uid` (paginated, ≤400/batch). Each product
+  write rides the existing product-update triggers, so **both** search indexes (Algolia + Typesense)
+  self-correct — no separate reindex path. Fixes stale shop names on product cards and in search.
+- **Buy Now on category cards** — `category.js` cards rendered only Add-to-cart + Wishlist while a
+  `buyNowCat()` handler already existed unused; added a ⚡ Buy Now button beneath the two. (Home cards
+  already had all three.)
+
+Files: `functions/index.js`, `functions/shop-name-sync.js` (new), `category.js`, `checkout.html`.
+DB: writes `sellerNameSyncedAt` on products during a rename; `oversoldAlerts.path` field added.
+Security/payments: strengthens payment integrity (no charge for non-existent stock); no rules change.
+Deploy: functions (new `shopNameSync_shops`/`shopNameSync_sellers` + checkout changes) + hosting.
+
+---
+
 ## [2026-07-27] — feat(booking): converge venue lifecycle onto one engine (Convergence Step 1) — STAGED, flagged
 
 Audit (3 parallel read-only agents + direct verification) found the booking domain fragmented across

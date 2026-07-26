@@ -359,7 +359,13 @@ function renderProducts(list){
                       + '<button type="button" ' + dis + ' aria-label="Save ' + _esc(p.name) + ' to wishlist" '
                       +   'onclick="event.stopPropagation();addToWishlistCat(\'' + pid + '\')" '
                       +   'style="' + btn + 'background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.22);flex:0 0 42px;">🤍</button>'
-                      + '</div>';
+                      + '</div>'
+                      /* Buy Now — for shoppers who want to purchase immediately
+                         without a cart round-trip. Calls the existing buyNowCat
+                         handler (checkout with just this item). */
+                      + '<button type="button" ' + dis + ' aria-label="Buy ' + _esc(p.name) + ' now" '
+                      +   'onclick="event.stopPropagation();buyNowCat(\'' + pid + '\')" '
+                      +   'style="' + btn + 'width:100%;margin-top:6px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#050505;border:none;">⚡ Buy Now</button>';
                 })()}
             </div>
         </div>

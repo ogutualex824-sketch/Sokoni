@@ -2242,6 +2242,20 @@ async function sendStkPush(){
         /* Give buyer 3 seconds to see the notice before proceeding */
         await new Promise(r => setTimeout(r, 3000));
       }
+
+      /* Notify buyer if a line's quantity was reduced to what's actually in
+         stock. The server already clamped it and serverTotal (adopted into the
+         displayed total above) reflects the reduced amount, so the buyer is
+         never charged for units that don't exist — this just explains why the
+         quantity/total changed. */
+      const adj = sessionRes.data.adjustedItems;
+      if (Array.isArray(adj) && adj.length > 0) {
+        const _msg = adj.slice(0, 3)
+          .map(a => `${a.name}: only ${a.available} available (you asked for ${a.requested})`)
+          .join("; ");
+        showPushToast("⚠️ Quantity adjusted", _msg + ". Your total has been updated.", "orange");
+        await new Promise(r => setTimeout(r, 3000));
+      }
     } catch (sessionErr) {
       console.error("[SOKONI] createCheckoutSession failed:", sessionErr);
       btn.disabled = false;
