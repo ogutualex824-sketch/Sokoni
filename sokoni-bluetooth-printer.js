@@ -203,6 +203,59 @@ class P58EService {
   /* ─────────────────────────────────────────────────────────────
      DISCOVERY — opens the browser Bluetooth picker
   ───────────────────────────────────────────────────────────── */
+  /**
+   * Open the chooser with NO filters — every nearby BLE device is listed.
+   *
+   * Why this exists: `requestDevice({filters})` only shows devices matching a
+   * service UUID or a name PREFIX. Cheap thermal printers are wildly
+   * inconsistent about both. A unit advertising "BlueTooth Printer",
+   * "58Printer" or "MPT-II" matches no prefix in PROFILE.nameFilters — the
+   * prefix must match the START of the name — so the chooser opens completely
+   * empty and the merchant concludes the printer is broken when it is sitting
+   * right there, powered on.
+   *
+   * Unfiltered listing is the reliable escape hatch: the merchant can see the
+   * device and pick it by eye, whatever it calls itself.
+   *
+   * MUST be called from its own user gesture. Chrome spends the gesture on the
+   * first requestDevice(), so this cannot be chained automatically after a
+   * failed filtered attempt — it needs a second, deliberate tap. That is a
+   * platform rule, not a UI choice.
+   */
+  async requestDeviceAny () {
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth is not available in this browser.');
+    this._setStatus('scanning');
+    this._emit('scanning', { unfiltered: true });
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: PROFILE.services,
+      });
+      return device;
+    } catch (e) {
+      this._setStatus('idle');
+      if (e?.name === 'NotFoundError') {
+        throw new Error(
+          'No Bluetooth devices found, or the chooser was dismissed.\n\n' +
+          'On Android: make sure Location is ON — Chrome cannot scan for ' +
+          'Bluetooth devices without it, even though the printer has nothing ' +
+          'to do with your location.\n\n' +
+          'Also check the printer is in BLE pairing mode (blue LED blinking).'
+        );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Pair using the unfiltered chooser, then connect. Same contract as
+   * requestAndPair(), for the "I can't see my printer" path.
+   */
+  async requestAndPairAny () {
+    const device = await this.requestDeviceAny();
+    return this._connectDevice(device, true);
+  }
+
   async requestDevice () {
     /* iOS / WebKit: all browsers on iPhone and iPad use WebKit, which
        does not implement Web Bluetooth. Show a friendly explanation

@@ -448,6 +448,10 @@ input:checked+.slider:before{transform:translateX(18px)}
 
       <div class="actions-row">
         <button class="btn btn-primary" id="btnPairP58E" onclick="pairP58E()">&#128268; Pair P58E Printer</button>
+        <!-- Shown only after a filtered scan finds nothing. Needs its own tap:
+             Chrome spends the user gesture on the first requestDevice(), so the
+             unfiltered chooser cannot be chained automatically. -->
+        <button class="btn btn-outline" id="btnPairAnyP58E" onclick="pairAnyP58E()" style="display:none">&#128269; Show all nearby devices</button>
         <button class="btn btn-danger"  id="btnForgetP58E" onclick="forgetP58E()" style="display:none">&#128465; Forget Printer</button>
         <button class="btn btn-outline" id="btnReconnectP58E" onclick="reconnectP58E()" style="display:none">&#8635; Reconnect</button>
       </div>
@@ -1795,9 +1799,43 @@ async function pairP58E () {
       toast('Pairing cancelled');
     }
   } catch(e) {
-    toast('Pairing failed: ' + e.message, 5000);
+    /* "Nothing found" is the single most common Android failure and it is NOT
+       the same as a real error: the printer is usually sitting there powered on,
+       just advertising a name that matches none of our prefixes. Offer the
+       unfiltered chooser instead of leaving the merchant at a dead end. */
+    const msg = String(e && e.message || e);
+    const notFound = e?.name === 'NotFoundError' || /no .*(device|printer).*found|not found/i.test(msg);
+    if (notFound) {
+      const anyBtn = document.getElementById('btnPairAnyP58E');
+      if (anyBtn) anyBtn.style.display = '';
+      toast('No matching printer found. Tap "Show all nearby devices" to pick it by name.', 8000);
+      _dbg('Filtered scan found nothing — offering unfiltered chooser');
+    } else {
+      toast('Pairing failed: ' + msg, 5000);
+    }
   } finally {
     btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer';
+  }
+}
+
+/* Unfiltered pairing — its own handler because it needs its own user gesture. */
+async function pairAnyP58E () {
+  const btn = document.getElementById('btnPairAnyP58E');
+  btn.disabled = true; btn.textContent = 'Opening full list…';
+  try {
+    const info = await PrinterManager.p58e.requestAndPairAny();
+    if (info) {
+      toast('Connected to ' + info.name);
+      _connectedDevice = { name: info.name, type: 'bluetooth' };
+      btn.style.display = 'none';
+      updateStatusBar(); renderP58EPanel(); renderChecklist();
+    } else {
+      toast('Pairing cancelled');
+    }
+  } catch(e) {
+    toast(String(e && e.message || e), 9000);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '&#128269; Show all nearby devices';
   }
 }
 
