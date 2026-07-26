@@ -126,10 +126,19 @@
 
   function isLoggedIn() {
     if (getSession()) return true;
-    /* Legacy fallback */
+    /* Legacy fallback.
+       BUGFIX 2026-07-26: this used to require `u.name`. A signed-in account that
+       had never set a display name — every brand-NEW account, and any account
+       whose profile doc had not finished writing — was therefore judged NOT
+       logged in. requireAuth() then bounced it to login.html, login.html saw
+       localStorage.loggedIn==='true' and bounced it straight back, and the two
+       ping-ponged forever: the reported "profile won't open / page keeps
+       reloading" for new users. A display name is profile metadata, NOT proof of
+       a session. Authentication is having a real identity (uid or email) plus the
+       loggedIn flag — name is irrelevant to whether someone is signed in. */
     try {
       var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
-      return !!(u && u.name && localStorage.getItem('loggedIn') === 'true');
+      return !!(u && (u.uid || u.email || u.name) && localStorage.getItem('loggedIn') === 'true');
     } catch (e) { return false; }
   }
 

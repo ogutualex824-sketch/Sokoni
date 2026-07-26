@@ -1,3 +1,32 @@
+## [2026-07-26] — fix(auth): CRITICAL — new accounts couldn't open Profile (isLoggedIn required a display name)
+
+Reported: "most users face reload / over-reload — nobody can open or access their profile."
+Reproduced and root-caused in Android-emulated Chromium: it is an infinite **profile.html ↔
+login.html redirect loop** (36+ bounces in ~6s) that fires DETERMINISTICALLY for any account
+missing a display `name` — i.e. every brand-NEW account, and any account whose profile doc
+hadn't finished writing.
+
+Root cause — `sokoni-security.js` `isLoggedIn()` legacy fallback:
+    return !!(u && u.name && localStorage.getItem('loggedIn') === 'true');
+It required `u.name`. A signed-in account with no display name was judged NOT logged in, so
+`requireAuth()` (via sokoni-guards.js on `data-require-auth` pages) redirected to login.html;
+login.html saw `localStorage.loggedIn==='true'` and redirected straight back; the two ping-
+ponged forever — the "profile won't open / page keeps reloading" report.
+
+Fix: authentication is a real identity (uid OR email OR name) + the loggedIn flag — a display
+name is profile metadata, not proof of a session:
+    return !!(u && (u.uid || u.email || u.name) && localStorage.getItem('loggedIn') === 'true');
+
+Verified: brand-new account (uid+email, no name) now stays on /profile.html (1 navigation, was
+36+), renders fully (14 tabs, switchTab defined, content present), 0 pageerrors — across 3 runs.
+Accounts WITH a name are unchanged. Real sessions (getSession()) already short-circuit above this.
+
+Files: `sokoni-security.js` (1 line). No DB/API changes. No breaking changes. Fixes the platform-
+wide "new users can't access their profile" outage. (Follow-up: the intermittent App-Check
+live-auth loop class in sokoni-permissions.js, and the broader account-initialization program.)
+
+---
+
 ## [2026-07-26] — fix(profile): low-memory guard so the Profile page stops crashing on budget Android
 
 Reported: the **Profile** button crashes the page while loading on low-RAM Android for providers
