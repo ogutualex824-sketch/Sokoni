@@ -853,6 +853,11 @@ exports.finosRequestBankPayout = onCall(
   { region: REGION, timeoutSeconds: 30, memory: '128MiB', invoker: 'private' },
   async (request) => {
     _assertAuth(request);
+    /* RETIRED — earnings converge into wallets.balance (sweepEarningsToWallet); this
+       reads availableBalance and would double-pay. Use the wallet withdrawal only. */
+    throw new HttpsError('failed-precondition',
+      'Withdrawals now go through your SOKONI Wallet (Wallet → Withdraw). This method is retired.');
+    /* eslint-disable no-unreachable */
     const uid = _uid(request);
     const { amountCents, bankName, accountNumber, accountName, entityType } = request.data;
 

@@ -344,6 +344,12 @@ exports.requestPayout = onCall(
     enforceAppCheck: true, secrets: [INTASEND_PRIV] },
   async (request) => {
     _assertAuth(request);
+    /* RETIRED — earnings now converge into wallets.balance (see sweepEarningsToWallet);
+       this FinOS payout reads availableBalance and would double-pay against the swept
+       balance. Withdrawals go through the wallet (requestSellerPayout) only. */
+    throw new HttpsError('failed-precondition',
+      'Withdrawals now go through your SOKONI Wallet (Wallet → Withdraw). This method is retired.');
+    /* eslint-disable no-unreachable */
     const uid = _uid(request);
     const { amountCents, phone, entityType } = request.data;
 
