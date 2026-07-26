@@ -1,3 +1,62 @@
+## [2026-07-26] — feat(minishop-admin): shop health, quick actions, empty states — and a config schema split that broke shop branding
+
+Second redesign slice. Also fixes a platform bug found while wiring it, which
+was silently defeating the per-shop link previews shipped earlier today.
+
+### MiniShop branding was written to one place and read from another
+
+Two config stores exist, with two naming schemes, and they never meet:
+
+| | store | keys |
+|---|---|---|
+| `minishop-admin.html` writes | `shops/{id}.minishopConfig` | `coverImage`, `logoImage`, `tagline`, `phone` |
+| `saveMinishopConfig` CF writes | `minishopConfig/{id}` | `coverUrl`, `logoUrl`, `contactPhone` |
+| public storefront **reads** | `minishopConfig/{id}` | `coverUrl`, `logoUrl` |
+
+So a seller uploads a cover and logo in the MiniShop admin, the admin's own
+preview shows it back to them because it reads the same store it wrote — and the
+public storefront never sees it. A textbook healthy-looking failure.
+
+It also defeated `minishopPage`: that function read only the CF store, so almost
+every shared shop link would have fallen back to the SOKONI logo — the exact
+defect per-shop previews exist to fix. `minishop-page.js` now resolves branding
+across **both** stores and **both** key names.
+
+That is a bridge, not the fix. Converging the two stores onto one schema is the
+real repair and needs its own change — it touches the storefront, the admin and
+the CF allowlist together.
+
+### Shop Health
+
+Weighted checklist over data the platform already holds: shop link claimed,
+logo, cover, description, 10+ products, delivery areas. Score ring plus a "Fix"
+link that jumps to the tab (or page) that resolves each gap.
+
+Deliberately excluded: fulfilment rate, response time, review score. Nothing
+measures those yet, and a checklist item that can never turn green is worse than
+an absent one. When the product count cannot be read, that check is dropped from
+the denominator rather than scored as a confirmed gap.
+
+### Quick Actions
+
+Add Product · Share Shop · Create Discount · View Orders · Analytics. Every
+target verified to exist — the two off-page links use `seller.html#products` and
+`#orders`, both present in that page's `_HASH_MOBILE` and `_HASH_DESKTOP` maps.
+
+### Empty states
+
+A genuine `0` now carries a line telling the seller what to do about it ("No
+visitors yet. Share your MiniShop to start receiving traffic."). `Unavailable`
+never gets a hint — there is nothing a seller can do about a failed read. The
+three states are now visually distinct: real value, actionable zero (with hint),
+failed read (14px warn orange).
+
+### Verified
+
+390×844 and 1280×900: `scrollWidth == clientWidth` at both. All six tabs measure
+exactly 44px. Failure-state styling confirmed by computed style, not by eye —
+`14px / rgb(255,152,0) / 600`.
+
 ## [2026-07-26] — feat(minishop-admin): storefront hero, sourced performance tiles, and a real fix for stats that always read 0
 
 First slice of the MiniShop redesign — the page should read as the seller's

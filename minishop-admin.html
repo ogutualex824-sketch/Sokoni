@@ -134,6 +134,39 @@
     .msa-hero-url-text{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--ms-accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .msa-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 
+    /* ── Shop Health ─────────────────────────────────────────────────────────
+       Every check below is computed from data the platform already holds. No
+       check is listed that cannot be evaluated — a checklist that can never go
+       green is worse than no checklist. */
+    .msa-health{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:14px;padding:20px;margin-bottom:20px}
+    .msa-health-top{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+    .msa-health-ring{width:78px;height:78px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative;background:conic-gradient(var(--ms-accent) 0deg,rgba(255,255,255,.07) 0deg)}
+    .msa-health-ring::before{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--ms-surface)}
+    .msa-health-score{position:relative;font-size:20px;font-weight:800;line-height:1}
+    .msa-health-score small{font-size:10px;font-weight:600;color:var(--ms-muted);display:block;margin-top:1px}
+    .msa-health-head{flex:1;min-width:180px}
+    .msa-health-head h2{font-size:15px;font-weight:700;margin-bottom:3px}
+    .msa-health-head p{font-size:12.5px;color:var(--ms-muted)}
+    .msa-health-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px;margin-top:18px}
+    .msa-health-item{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:9px 12px;border-radius:10px;background:var(--ms-bg);border:1px solid var(--ms-border)}
+    .msa-health-item.done{color:var(--ms-muted)}
+    .msa-health-item.done .msa-health-mark{color:var(--ms-accent)}
+    .msa-health-item.todo{color:var(--ms-text)}
+    .msa-health-mark{font-weight:800;flex-shrink:0;width:15px;text-align:center}
+    .msa-health-item.todo .msa-health-mark{color:rgba(255,255,255,.28)}
+    .msa-health-item .msa-health-go{margin-left:auto;font-size:11px;font-weight:700;color:var(--ms-accent);text-decoration:none;white-space:nowrap}
+
+    /* ── Quick Actions ── */
+    .msa-quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:24px}
+    .msa-quick-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:76px;padding:14px 10px;border-radius:14px;background:var(--ms-surface);border:1px solid var(--ms-border);color:var(--ms-text);font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:none;text-align:center;transition:border-color .18s,transform .18s}
+    .msa-quick-btn:hover{border-color:rgba(113,255,0,.4);transform:translateY(-2px)}
+    .msa-quick-btn span{font-size:19px;line-height:1}
+    @media(prefers-reduced-motion:reduce){.msa-quick-btn:hover{transform:none}}
+
+    /* Empty state shown inside a stat card when the metric is genuinely zero —
+       distinct from "Unavailable", which means the read failed. */
+    .msa-empty-hint{font-size:11px;color:var(--ms-muted);margin-top:7px;line-height:1.35}
+
     /* ── Quick Stats ─────────────────────────────────────────────────────────
        Only metrics the platform can actually compute appear here. Cards for
        sales, conversion, wishlist and abandonment are deliberately absent until
@@ -453,6 +486,32 @@
         </div>
       </section>
     </div>
+
+    <!-- Quick Actions. Every target is a page that exists — a dead tile on the
+         primary action row is worse than one fewer action. -->
+    <div class="msa-quick" id="msaQuickActions">
+      <a class="msa-quick-btn" href="seller.html#products"><span>&#10133;</span>Add Product</a>
+      <button class="msa-quick-btn" type="button" id="msaQaShare"><span>&#128228;</span>Share Shop</button>
+      <button class="msa-quick-btn" type="button" id="msaQaDiscount"><span>&#127991;</span>Create Discount</button>
+      <a class="msa-quick-btn" href="seller.html#orders"><span>&#128230;</span>View Orders</a>
+      <button class="msa-quick-btn" type="button" id="msaQaAnalytics"><span>&#128202;</span>Analytics</button>
+    </div>
+
+    <!-- Shop Health. Guidance, not just measurement — every check is derived
+         from data the platform already stores, so each one can actually go
+         green. Nothing aspirational is listed. -->
+    <section class="msa-health" id="msaHealth" hidden>
+      <div class="msa-health-top">
+        <div class="msa-health-ring" id="msaHealthRing">
+          <div class="msa-health-score"><span id="msaHealthScore">0</span><small>/ 100</small></div>
+        </div>
+        <div class="msa-health-head">
+          <h2>Shop Health</h2>
+          <p id="msaHealthHint">Finish these to help customers find and trust your shop.</p>
+        </div>
+      </div>
+      <div class="msa-health-list" id="msaHealthList"></div>
+    </section>
 
     <!-- Shop performance. Every tile here maps to a value the platform actually
          stores (minishopAnalytics views / daily buckets, follower count, product
@@ -1270,6 +1329,7 @@
     var card = document.getElementById(_STAT_CARDS[tileId]);
     if (card) card.classList.remove('msa-stat-skeleton', 'is-error');
     if (el) el.textContent = fmt(value);
+    _statHint(tileId, value);
   }
 
   /* An unreadable metric must never render as "0". A seller with 200 views
@@ -1326,13 +1386,117 @@
           /* Firestore resolves getDocs from an empty local cache when the
              backend is unreachable, so an offline read looks like "no products".
              Treat a cached empty result as unknown, not as zero. */
-          if (snap.metadata && snap.metadata.fromCache && snap.empty) { _statFail('msaProductCount'); return; }
+          if (snap.metadata && snap.metadata.fromCache && snap.empty) {
+            _statFail('msaProductCount'); renderHealth(null); return;
+          }
           _statSet('msaProductCount', snap.size);
+          renderHealth(snap.size);
         })
-        .catch(function(){ _statFail('msaProductCount'); });
+        .catch(function(){ _statFail('msaProductCount'); renderHealth(null); });
     } else {
       _statFail('msaProductCount');
+      renderHealth(null);
     }
+  }
+
+  /* A real zero and a broken read look identical on a number tile, so a genuine
+     zero gets a line telling the seller what to do about it. "Unavailable" is
+     never given a hint — there is nothing the seller can do about a failed read. */
+  var _EMPTY_HINTS = {
+    msaViewsToday: 'No visits today yet. Share your link to bring people in.',
+    msaTotalViews: 'No visitors yet. Share your MiniShop to start receiving traffic.',
+    msaFollowers:  'No followers yet. Shoppers can follow from your shop page.',
+    msaProductCount: 'No products yet. Add one so your shop has something to show.'
+  };
+
+  function _statHint(tileId, value) {
+    var card = document.getElementById(_STAT_CARDS[tileId]);
+    if (!card) return;
+    var old = card.querySelector('.msa-empty-hint');
+    if (old) old.remove();
+    if (Number(value) !== 0 || !_EMPTY_HINTS[tileId]) return;
+    var p = document.createElement('div');
+    p.className = 'msa-empty-hint';
+    p.textContent = _EMPTY_HINTS[tileId];
+    card.appendChild(p);
+  }
+
+  /* ── Shop Health ──────────────────────────────────────────────────────────
+     Weighted checks over data the platform already holds. Deliberately NOT
+     included: fulfilment rate, response time, review score — nothing measures
+     those yet, and a checklist item that can never turn green is worse than an
+     absent one.
+
+     `productCount` is passed in rather than re-queried so the panel cannot
+     disagree with the Products tile beside it. */
+  function renderHealth(productCount) {
+    var cfg = _state.config || {};
+
+    var checks = [
+      { id:'handle',   label:'Claim your shop link', w:20, done: !!_state.handle,             tab:null },
+      { id:'logo',     label:'Add a shop logo',      w:15, done: !!(cfg.logoImage || cfg.logoUrl),   tab:'customize' },
+      { id:'cover',    label:'Add a cover photo',    w:15, done: !!(cfg.coverImage || cfg.coverUrl), tab:'customize' },
+      { id:'desc',     label:'Write a description',  w:15, done: !!((cfg.description || cfg.tagline || '').trim()), tab:'customize' },
+      /* Products are managed in the seller dashboard, not on this page, so this
+         one routes off-page. Both hash targets are handled by seller.html's
+         _HASH_MOBILE / _HASH_DESKTOP maps. */
+      { id:'products', label:'Upload 10+ products',  w:20, done: productCount != null && productCount >= 10, href:'seller.html#products' },
+      { id:'delivery', label:'Set delivery areas',   w:15, done: !!(cfg.deliveryAreas && cfg.deliveryAreas.length), tab:'customize' }
+    ];
+
+    /* A check whose input could not be read is scored as not-done but must not
+       be presented as a confirmed gap, so the product check is dropped from the
+       denominator when the count is unknown. */
+    var scored = checks.filter(function(c){ return !(c.id === 'products' && productCount == null); });
+    var earned = 0, total = 0;
+    scored.forEach(function(c){ total += c.w; if (c.done) earned += c.w; });
+    var score = total ? Math.round((earned / total) * 100) : 0;
+
+    var scoreEl = document.getElementById('msaHealthScore');
+    var ringEl  = document.getElementById('msaHealthRing');
+    var listEl  = document.getElementById('msaHealthList');
+    var hintEl  = document.getElementById('msaHealthHint');
+    var wrapEl  = document.getElementById('msaHealth');
+    if (!listEl || !wrapEl) return;
+
+    if (scoreEl) scoreEl.textContent = score;
+    if (ringEl)  ringEl.style.background =
+      'conic-gradient(var(--ms-accent) ' + (score * 3.6) + 'deg, rgba(255,255,255,.07) 0deg)';
+
+    var remaining = checks.filter(function(c){ return !c.done; }).length;
+    if (hintEl) {
+      hintEl.textContent = remaining === 0
+        ? 'Your shop is fully set up. Nice work.'
+        : remaining + (remaining === 1 ? ' step left' : ' steps left') + ' to a complete shop.';
+    }
+
+    listEl.innerHTML = '';
+    checks.forEach(function(c) {
+      var row = document.createElement('div');
+      row.className = 'msa-health-item ' + (c.done ? 'done' : 'todo');
+      var mark = document.createElement('span');
+      mark.className = 'msa-health-mark';
+      mark.textContent = c.done ? '✓' : '○';
+      row.appendChild(mark);
+      var txt = document.createElement('span');
+      txt.textContent = c.label;
+      row.appendChild(txt);
+      if (!c.done && (c.tab || c.href)) {
+        var go = document.createElement('a');
+        go.className = 'msa-health-go';
+        go.textContent = 'Fix';
+        if (c.href) {
+          go.href = c.href;
+        } else {
+          go.href = '#';
+          go.addEventListener('click', function(e){ e.preventDefault(); switchTab(c.tab); });
+        }
+        row.appendChild(go);
+      }
+      listEl.appendChild(row);
+    });
+
+    wrapEl.hidden = false;
   }
 
   /* Populate the hero from the shop's own branding. */
@@ -1377,6 +1541,19 @@
     if (copyBtn) copyBtn.addEventListener('click', function(){ copyText(_state.shopUrl || ''); });
     var qrBtn = document.getElementById('msaQrBtn');
     if (qrBtn) qrBtn.addEventListener('click', function(){ switchTab('share'); });
+
+    /* Quick actions. Each one routes to a tab that exists on this page or a
+       page that exists on disk — verified, because a dead tile on the primary
+       action row is worse than one fewer action. */
+    var qaShare = document.getElementById('msaQaShare');
+    if (qaShare) qaShare.addEventListener('click', function(){ switchTab('share'); });
+    var qaAnalytics = document.getElementById('msaQaAnalytics');
+    if (qaAnalytics) qaAnalytics.addEventListener('click', function(){ switchTab('analytics'); });
+    var qaDiscount = document.getElementById('msaQaDiscount');
+    if (qaDiscount) qaDiscount.addEventListener('click', function(){
+      /* Flash Sales is a legacy numeric tab driven by msAdminTab(6). */
+      if (typeof msAdminTab === 'function') msAdminTab(6); else switchTab('6');
+    });
     var editBtn = document.getElementById('msaEditHandleBtn');
     if (editBtn) editBtn.addEventListener('click', function(){
       if (_state.handle) {
