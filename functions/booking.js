@@ -234,7 +234,9 @@ exports.bookingGetAvailability = onCall(
     const openM  = _timeToMins(hours.open  || '08:00');
     const closeM = _timeToMins(hours.close || '22:00');
     const buffer = venue.config?.cleaningBuffer || 0;
-    const step   = 30;
+    /* Slot length = the venue's configured duration (fall back to 30) so a
+       displayed slot's length matches the booking the client then creates. */
+    const step   = Math.max(15, Number(venue.slotDurationMins || venue.config?.slotDuration || 30));
 
     const blocked = [...existingBookings, ...holds].map(b => [_timeToMins(b.startTime), _timeToMins(b.endTime)+buffer]);
 
@@ -247,12 +249,13 @@ exports.bookingGetAvailability = onCall(
       if (date === today && s <= nowM+15) continue;
       const overlap = blocked.some(([bs,be])=> s<be && s+step>bs);
       slots.push({
-        id:        `${date}_${_minsToTime(s)}`,
-        startTime: _minsToTime(s),
-        endTime:   _minsToTime(s+step),
-        startMins: s,
-        endMins:   s+step,
-        available: !overlap,
+        id:          `${date}_${_minsToTime(s)}`,
+        startTime:   _minsToTime(s),
+        endTime:     _minsToTime(s+step),
+        startMins:   s,
+        endMins:     s+step,
+        durationMins: step,
+        available:   !overlap,
       });
     }
 
