@@ -989,15 +989,21 @@ function renderRelatedProducts(){
 }
 
 function openRelatedProduct(id){
-    let all = [];
-    try { all = JSON.parse(localStorage.getItem("sellerProducts")) || []; } catch(e) {}
-    if(!all.length){ try { all = JSON.parse(localStorage.getItem("sokoniProducts")) || []; } catch(e) {} }
-    const p = all.find(x => String(x.id) === String(id));
-    if(p){
-        localStorage.setItem("selectedProduct", JSON.stringify(p));
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        window.location.reload();
-    }
+    if(!id) return;
+    /* Cache the product for an instant render if we have it locally; otherwise
+       product.js resolves it from Firestore via the ?id. */
+    try {
+        let all = JSON.parse(localStorage.getItem("sellerProducts")) || [];
+        if(!all.length) all = JSON.parse(localStorage.getItem("sokoniProducts")) || [];
+        const p = all.find(x => String(x.id) === String(id));
+        if(p) localStorage.setItem("selectedProduct", JSON.stringify(p));
+    } catch(e) {}
+    /* Navigate with the NEW ?id. product.js resolves the product from the URL id
+       (authoritative), so the old approach — set selectedProduct then location.
+       reload() WITHOUT changing ?id — just re-rendered the CURRENT product: the
+       old ?id won and overwrote selectedProduct, so the tap appeared dead. And a
+       related product not cached locally never opened at all. */
+    window.location.href = "product.html?id=" + encodeURIComponent(id);
 }
 window.openRelatedProduct = openRelatedProduct;
 
