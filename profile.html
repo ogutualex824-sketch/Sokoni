@@ -2895,7 +2895,9 @@ var _user = getUser();
 if(localStorage.getItem('loggedIn') !== 'true'){
   try { var _rl=JSON.parse(localStorage.getItem('sk_auth_redirects')||'[]'); _rl.push({t:Date.now(),from:location.pathname,to:'login.html',reason:'profile-inline-guard',loggedIn:false,hasCache:!!_user}); while(_rl.length>40)_rl.shift(); localStorage.setItem('sk_auth_redirects',JSON.stringify(_rl)); } catch(e){}
   console.warn('[SOKONI AUTH REDIRECT] profile-inline-guard → login (loggedIn flag not set)');
-  window.location.href = 'login.html';
+  /* Carry the return target so auth.js sends the user BACK to /profile after a
+     successful sign-in (spec: "return to /profile instead of the home page"). */
+  window.location.href = 'login.html?redirect=profile.html';
   throw new Error('Not authenticated');
 }
 if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokoniAuthReady fill it */
@@ -4095,9 +4097,15 @@ function listenFirestoreProfile(uid){
 ══════════════════════════════════════════════════════════════ */
 function logoutUser(_c){
   if(!_c){_skConfirm('Log out of SOKONI?',()=>logoutUser(true));return;}
-  localStorage.removeItem('sokoniUser');
-  localStorage.removeItem('sokoniCart');
-  window.location.href = 'login.html';
+  /* SECURITY: never do a partial (2-key) logout — that left the previous user's
+     wallet/profile/permissions caches on the device (cross-account leak). Route
+     through the canonical sokoniSignOut(), which awaits firebaseAuth.signOut(),
+     tears down Firestore listeners, and wipes ALL user-specific storage. Then a
+     hard redirect drops any remaining in-memory state. */
+  var _done = function(){ window.location.href = 'login.html'; };
+  try {
+    (window.sokoniSignOut ? window.sokoniSignOut() : Promise.resolve()).finally(_done);
+  } catch(_){ _done(); }
 }
 window.logoutUser = logoutUser;
 
