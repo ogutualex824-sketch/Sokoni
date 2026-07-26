@@ -1,3 +1,57 @@
+## [2026-07-26] — chore(onboarding): Maina Groceries — grocery seller, phone-OTP login
+
+Onboarded **Maina Groceries** (phone 0706603915) as a marketplace grocery seller.
+Account `zewfgP9OpcSTc34x07UCecTo0Mh2`; signs in by OTP on +254706603915.
+
+### The category was the part worth getting right
+
+Three plausible values existed and only one works:
+
+| value | verdict |
+|---|---|
+| **`food`** | **Correct** — the marketplace slug, titled "Groceries & Fresh Food" |
+| `grocery` | A Food Hub vendor category in `sokoni-food.js`, which is **localStorage-only** and never touches Firestore. A merchant filed there would exist on one browser and nowhere else. |
+| `groceries` | A display label, not a slug |
+
+Valid categories are exactly the 36 keys of `categoryMeta` in `category.js`, and
+products are matched with `p.category.toLowerCase() === category.toLowerCase()`.
+Either wrong value would have listed the shop in a category no page resolves —
+a silent no-op that reads as a successful onboarding.
+
+### Written
+
+- `sellers/{uid}` — name, category `food` / Groceries, `status: active`,
+  `isVisible: true`, searchableTerms including Swahili (*mboga*, *duka*).
+- `users/{uid}` — `roles: ["seller","buyer"]`. The **array** is what
+  `sokoni-nav-engine._role()` reads; the boolean alone would let the owner sign
+  in successfully and still land as a buyer.
+
+Honest starting state: `verified: false`, `shopPublished: false`, all counters
+zero, and `onboardingPending` listing what the owner still has to add — logo,
+cover, description, address, hours, delivery areas, products, prices. No
+products, ratings or reviews were invented.
+
+### Script
+
+`scripts/onboard-maina-groceries.js` — dry run by default, `--apply` to write.
+Idempotent: a re-run detects the existing account and record and would merge
+rather than duplicate.
+
+One bug found and fixed in it after the first apply: the read-back called
+`.fields` on `req()`'s `{status, body}` result, where `body` is a raw string, so
+it printed `name=undefined … ** CHECK **` on a run whose writes had actually
+succeeded. The real state was verified out-of-band before anything was changed.
+A verification step that cries wolf is worse than none — the next person learns
+to ignore it.
+
+### Verified in production
+
+`sellers/`: name="Maina Groceries", category=food, status=active, isVisible=true,
+verified=false, productCount=0.
+`users/`: roles=[seller,buyer], role=seller, hasSellerProfile=true.
+Auth: phone +254706603915 attached, providers `phone, password`, not disabled.
+Listed under `category.html?cat=food`.
+
 ## [2026-07-26] — fix(minishop-admin): loading overlay could spin forever — three unbounded waits
 
 Reported as the MiniShop page "splashing — it stays there and doesn't move".
