@@ -402,9 +402,26 @@
 <body>
 
 <!-- Auth Gate -->
+<!-- Full-screen loading gate. It MUST reach a terminal state: the spinner is
+     swapped for #msaGateError if auth cannot be established, because an overlay
+     that spins forever is indistinguishable from a frozen app. -->
 <div id="msaAuthGate">
-  <div class="msa-spinner"></div>
-  <span style="color:var(--ms-muted);font-size:13px">Loading your MiniShop&hellip;</span>
+  <div id="msaGateLoading" style="display:flex;flex-direction:column;align-items:center;gap:16px">
+    <div class="msa-spinner"></div>
+    <span style="color:var(--ms-muted);font-size:13px">Loading your MiniShop&hellip;</span>
+  </div>
+  <div id="msaGateError" style="display:none;text-align:center;padding:0 28px;max-width:420px">
+    <div style="font-size:34px;margin-bottom:12px">&#128268;</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">Couldn&rsquo;t load your MiniShop</div>
+    <div id="msaGateErrorMsg" style="color:var(--ms-muted);font-size:13.5px;line-height:1.5;margin-bottom:20px">
+      We couldn&rsquo;t reach SOKONI. Check your connection and try again.
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="msa-btn primary" id="msaGateRetry">Try again</button>
+      <a class="msa-btn" href="login.html?redirect=minishop-admin.html">Sign in</a>
+      <a class="msa-btn" href="seller.html">Seller Dashboard</a>
+    </div>
+  </div>
 </div>
 
 <!-- Print Area -->
@@ -1175,13 +1192,60 @@
     if (g) { g.style.opacity = '0'; g.style.transition = 'opacity .3s'; setTimeout(function(){ g.remove(); }, 300); }
   }
 
+  /* ── Auth gate ceiling ──────────────────────────────────────────────────
+     Both waits below used to be unbounded, and either one hanging left the
+     full-screen gate spinning forever with no way out — which is what
+     "the page just sits there" is.
+
+       1. `typeof firebase === 'undefined'` polled every 300ms with no limit.
+          firebase.js is a module script; if it fails to evaluate (App Check
+          403, blocked CDN, offline) the global never appears and this loops
+          for as long as the tab is open.
+       2. onAuthStateChanged may never invoke its callback if Auth cannot
+          initialise — App Check failures do exactly this, and are known to be
+          intermittent on this platform.
+
+     A loading state that cannot terminate is a defect in its own right, so
+     both now have a ceiling and a visible, actionable failure. */
+  var _GATE_TIMEOUT_MS = 12000;
+  var _gateStart   = Date.now();
+  var _gateSettled = false;
+
+  function _gateFail(reason) {
+    if (_gateSettled) return;
+    _gateSettled = true;
+    var loading = document.getElementById('msaGateLoading');
+    var errBox  = document.getElementById('msaGateError');
+    var msgEl   = document.getElementById('msaGateErrorMsg');
+    if (msgEl && reason) msgEl.textContent = reason;
+    if (loading) loading.style.display = 'none';
+    if (errBox)  errBox.style.display  = 'block';
+    console.warn('[MSA] auth gate timed out:', reason);
+  }
+
   function checkAuth() {
-    // Wait for Firebase Auth
+    if (_gateSettled) return;
+
+    // Wait for Firebase Auth — bounded.
     if (typeof firebase === 'undefined' || !firebase.auth) {
+      if (Date.now() - _gateStart > _GATE_TIMEOUT_MS) {
+        _gateFail('SOKONI didn’t finish loading. This is usually a network or ad-blocker issue.');
+        return;
+      }
       setTimeout(checkAuth, 300);
       return;
     }
-    firebase.auth().onAuthStateChanged(function(user) {
+
+    /* Auth exists, but the state callback can still never fire. */
+    var authTimer = setTimeout(function () {
+      _gateFail('We couldn’t confirm your sign-in. Check your connection and try again.');
+    }, Math.max(2000, _GATE_TIMEOUT_MS - (Date.now() - _gateStart)));
+
+    firebase.auth().onAuthStateChanged(function (user) {
+      clearTimeout(authTimer);
+      if (_gateSettled) return;   // already failed and reported; don't fight the UI
+      _gateSettled = true;
+
       if (!user) {
         window.location.href = 'login.html?redirect=minishop-admin.html';
         return;
@@ -1191,6 +1255,20 @@
     });
   }
 
+  /* Retry re-arms the whole gate rather than reloading, so a transient App
+     Check failure costs one tap instead of a full page load. */
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('#msaGateRetry');
+    if (!btn) return;
+    _gateSettled = false;
+    _gateStart   = Date.now();
+    var loading = document.getElementById('msaGateLoading');
+    var errBox  = document.getElementById('msaGateError');
+    if (errBox)  errBox.style.display  = 'none';
+    if (loading) loading.style.display = 'flex';
+    checkAuth();
+  });
+
   // ── Load Shop Data ─────────────────────────────────
   function loadShopData(uid) {
     if (typeof firebase === 'undefined' || !firebase.firestore) {
@@ -1199,8 +1277,24 @@
       return;
     }
     var db = firebase.firestore();
+
+    /* Ceiling on the read. A Firestore get() against an unreachable backend can
+       settle from an empty local cache — or never settle at all — and a promise
+       that never settles runs neither .then nor .catch, so the gate above would
+       stay up forever. Whichever finishes first wins; the gate always comes
+       down. */
+    var _readTimedOut = false;
+    var readTimer = setTimeout(function () {
+      _readTimedOut = true;
+      console.warn('[MSA] shop read timed out — showing the page without shop data');
+      hideAuthGate();
+      initUI();
+    }, 10000);
+
     db.collection('shops').where('ownerId','==',uid).limit(1).get()
       .then(function(snap) {
+        clearTimeout(readTimer);
+        if (_readTimedOut) return;   // UI already initialised by the timeout path
         if (!snap.empty) {
           var doc = snap.docs[0];
           var data = doc.data();
@@ -1217,6 +1311,8 @@
         initUI();
       })
       .catch(function(err) {
+        clearTimeout(readTimer);
+        if (_readTimedOut) return;
         console.error('[MSA] loadShopData:', err);
         hideAuthGate();
         initUI();

@@ -1,3 +1,56 @@
+## [2026-07-26] — fix(minishop-admin): loading overlay could spin forever — three unbounded waits
+
+Reported as the MiniShop page "splashing — it stays there and doesn't move".
+
+### It is not the splash
+
+Measured the splash lifecycle on both local and production: `#sk-spl` / `#sk-splash`
+gets its dismiss class at ~2.5s and is removed from the DOM by ~4.5s, with zero
+page errors. The splash works.
+
+The stuck overlay is `#msaAuthGate` — a *second* full-screen element on the same
+page, dark background, centred spinner, "Loading your MiniShop…". It reads
+exactly like a splash, and unlike the splash it had **no terminal state**.
+
+### Three waits with no ceiling
+
+1. `checkAuth()` polled `typeof firebase === 'undefined'` every 300 ms **with no
+   limit**. `firebase.js` is a module script; if it fails to evaluate — App Check
+   403, blocked CDN, offline — the global never appears and this loops for as
+   long as the tab stays open.
+2. `onAuthStateChanged` may never invoke its callback when Auth cannot
+   initialise. App Check failures do exactly that, and are known to be
+   intermittent on this platform.
+3. `loadShopData()`'s Firestore `get()` had `.then` and `.catch` but no timeout.
+   A promise that never settles runs **neither**, so the gate stayed up.
+
+Any one of the three left a full-screen spinner with no way out and no
+explanation — [[feedback_healthy_looking_failure]] in its purest form: the app
+looks busy rather than broken, so nobody reports it as an error.
+
+### Changes
+
+- 12 s ceiling across the auth gate, covering both the module-load poll and the
+  auth-state callback, each with its own message so the two are distinguishable
+  in support.
+- The gate now has a real failure state — heading, cause, and three ways out
+  (Try again / Sign in / Seller Dashboard) — instead of an endless spinner.
+- **Try again re-arms the gate in place** rather than reloading, so a transient
+  App Check blip costs one tap.
+- 10 s ceiling on the shop read; on timeout the page initialises without shop
+  data rather than hanging, and the late promise is ignored so it cannot
+  double-initialise.
+
+### Verified
+
+Each failure mode reproduced and observed to terminate:
+
+| simulated failure | result |
+|---|---|
+| `firebase.js` never loads | error state at 12 s — "SOKONI didn't finish loading…" |
+| `onAuthStateChanged` never fires | error state at 12 s — "We couldn't confirm your sign-in…" |
+| happy path (auth ok, empty shop) | gate removed, page rendered, health panel intact |
+
 ## [2026-07-26] — fix(minishop): last readers onto the resolver; merchant health score graded on the wrong field
 
 Completes the schema convergence. Every consumer of MiniShop **display** config
