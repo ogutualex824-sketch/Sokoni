@@ -1,3 +1,31 @@
+## [2026-07-26] — fix(auth): the ACTUAL profile↔login loop culprit — a 4th, HIDDEN inline guard in profile.html
+
+Reported still looping after the 3-guard fix. Stopped guessing: used Chrome DevTools Protocol to
+capture the INITIATOR STACK of the /login.html navigation. It named the exact source —
+**profile.html:2889**, an inline `<script>` "Auth guard" that no grep of the .js files had surfaced:
+    var _user = getUser();
+    if(!_user || !_user.uid){ window.location.href = 'login.html'; throw new Error('Not authenticated'); }
+The 4th copy of the same bug — gating on the sokoniUser CACHE (`_user.uid`). Every logged-in user
+whose cache was empty/App-Check-blocked (i.e. almost everyone on Android, but NOT the founder whose
+cache was populated from prior reads) hit it → login → home → loop. This is why "works for me, not
+others".
+
+Fix: gate on the SESSION FLAG alone (`localStorage.loggedIn === 'true'`); if the cache is absent set
+`_user = {}` and proceed — firebase.js/bootstrap populate it and profile.html's existing
+`sokoniAuthReady` listener (line 2962) re-reads it. Verified: loggedIn + NO/ malformed sokoniUser now
+RENDERS the profile (nav=1, 14 tabs) instead of bouncing; not-logged-in still → login.
+
+Also shipped, so this class of bug is never invisible again:
+- **Global redirect instrument + circuit breaker** in `sokoni-crash-sentinel.js` (first script):
+  wraps location.assign/replace and the href= setter to log every redirect to login/home with a
+  STACK TRACE + auth state into `sk_auth_redirects`, and BREAKS a detected loop (same target 4×/12s).
+- **/android-doctor** now shows the recent redirects, the stack SOURCE, and flags a loop in plain
+  language — so any future redirect loop names its own culprit without CDP.
+
+Files: `profile.html`, `sokoni-crash-sentinel.js`, `android-doctor.html`. No DB/API changes.
+
+---
+
 ## [2026-07-26] — fix(auth): the LAST profile↔login loop — 3 guards still gated on the profile cache
 
 Founder diagnosis (correct): the Android splash/reload wasn't slowness — it's still a profile↔login

@@ -2884,12 +2884,21 @@ function getRoleDef(key){
   return ROLES.find(function(r){ return r.key===key; }) || ROLES[0];
 }
 
-/* ── Auth guard ── */
+/* ── Auth guard ──
+   BUGFIX 2026-07-26: this required the sokoniUser CACHE (_user.uid). An empty or
+   App-Check-blocked cache on a genuinely-logged-in account bounced to login →
+   the profile↔login loop. CDP named profile.html here as the redirect initiator —
+   the 4th, hidden copy of the same bug (after auth-guard.js / profile.js /
+   sokoni-security.js). Gate on the SESSION FLAG alone; firebase.js/bootstrap
+   populate the cache and the sokoniAuthReady listener re-reads it below. */
 var _user = getUser();
-if(!_user || !_user.uid){
+if(localStorage.getItem('loggedIn') !== 'true'){
+  try { var _rl=JSON.parse(localStorage.getItem('sk_auth_redirects')||'[]'); _rl.push({t:Date.now(),from:location.pathname,to:'login.html',reason:'profile-inline-guard',loggedIn:false,hasCache:!!_user}); while(_rl.length>40)_rl.shift(); localStorage.setItem('sk_auth_redirects',JSON.stringify(_rl)); } catch(e){}
+  console.warn('[SOKONI AUTH REDIRECT] profile-inline-guard → login (loggedIn flag not set)');
   window.location.href = 'login.html';
   throw new Error('Not authenticated');
 }
+if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokoniAuthReady fill it */
 
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
 var _profSellerProductsUnsub = null;

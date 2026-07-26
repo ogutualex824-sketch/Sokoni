@@ -124,21 +124,27 @@
     /* ── auth-redirect log (loop diagnosis) ───────────────────────── */
     var redirects = readJSON('sk_auth_redirects', []);
     if (!Array.isArray(redirects)) redirects = [];
-    /* Loop = the same reason logged 4+ times inside 15 seconds. */
+    /* A redirect's identity: the guard reason (older entries) or from→to (sentinel
+       entries). Loop = the same identity 4+ times inside 15 seconds. */
+    var rkey = function(r){ return r.reason || ((r.from||'')+'→'+(r.to||'')); };
     var loopHit = null;
     for (var ri = 0; ri < redirects.length; ri++) {
-      var same = redirects.filter(function(x){ return x.reason === redirects[ri].reason && Math.abs((x.t||0) - (redirects[ri].t||0)) < 15000; });
-      if (same.length >= 4) { loopHit = { reason: redirects[ri].reason, count: same.length }; break; }
+      var k = rkey(redirects[ri]);
+      var same = redirects.filter(function(x){ return rkey(x) === k && Math.abs((x.t||0) - (redirects[ri].t||0)) < 15000; });
+      if (same.length >= 4) { loopHit = { key: k, count: same.length, src: (redirects[ri].stack||'').split('  <<  ')[0] }; break; }
     }
     (function(){
       var el = document.getElementById('redirectList');
       if (!redirects.length) return;
-      var rows = redirects.slice().reverse().slice(0, 12).map(function(r){
+      var esc2 = function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+      var rows = redirects.slice().reverse().slice(0, 14).map(function(r){
         var when = ''; try { when = new Date(r.t).toLocaleTimeString(); } catch(e){}
-        return '<div class="row"><span class="k">'+when+'</span><span class="v" style="text-align:right;max-width:70%">'+String(r.reason||'?').replace(/</g,'&lt;')+' (loggedIn='+r.loggedIn+', cache='+r.hasUser+')</span></div>';
+        var label = r.reason || ((r.from||'?')+' → '+(r.to||'?')+(r.how?' ('+r.how+')':''));
+        var src = r.stack ? '<div style="color:var(--dim);font-size:11px;margin-top:2px;word-break:break-all">'+esc2((r.stack||'').split('  <<  ').slice(0,2).join('  <<  '))+'</div>' : '';
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row" style="border:0;padding:0"><span class="k">'+when+'</span><span class="v" style="text-align:right;max-width:66%">'+esc2(label)+'</span></div><div class="k" style="font-size:11px">loggedIn='+r.loggedIn+' · cache='+(r.hasCache!=null?r.hasCache:r.hasUser)+' · uid='+(r.uid?'yes':'no')+'</div>'+src+'</div>';
       }).join('');
       el.innerHTML =
-        (loopHit ? '<div class="verdict bad" style="margin-bottom:10px">🔁 REDIRECT LOOP detected: <b>'+loopHit.reason+'</b> fired '+loopHit.count+'× in 15s. This is the "keeps reloading" bug — send this to support.</div>' : '') +
+        (loopHit ? '<div class="verdict bad" style="margin-bottom:10px">🔁 REDIRECT LOOP: <b>'+esc2(loopHit.key)+'</b> fired '+loopHit.count+'× in 15s. This is the "keeps reloading" bug.'+(loopHit.src?'<div style="font-size:11px;margin-top:6px;word-break:break-all">source: '+esc2(loopHit.src)+'</div>':'')+'</div>' : '') +
         '<div class="card"><div class="k" style="margin-bottom:8px">Recent auth redirects ('+redirects.length+')</div>'+rows+'</div>';
     })();
 
