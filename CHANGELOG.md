@@ -1,3 +1,27 @@
+## [2026-07-26] — feat(pwa): foreground update check — installed PWAs get "Update available" promptly (#7)
+
+Audited the PWA update lifecycle. Most of it was already in place and correct:
+- `_showUpdateToast()` auto-shows a "🔄 New version of SOKONI available [Update] [✕]" prompt on
+  `updatefound`→installed and for a waiting worker at load; one-tap Update → `_sokoniApplyUpdate()`
+  (SKIP_WAITING + controllerchange reload). Manual `sokoniCheckForUpdates()` also exists.
+- Cache strategy is sound: navigations are network-first (`networkFirstPage`), static js/css are
+  cache-first but version-invalidated + hosting `no-cache`/CDN `no-store`, dynamic data
+  (profile/orders/wallet) loads via the Firestore SDK (always live). `updateViaCache:'none'`.
+- Stale root-scope FCM SW is proactively unregistered (no competing workers); `controllerchange`
+  reload is guarded (first-install, OAuth-in-flight, POS veto).
+
+The one real gap: no FOREGROUND re-check. The browser only re-fetches service-worker.js on a
+navigation or its ~24h timer, so an installed PWA (or long-lived tab) backgrounded while a new
+version ships wouldn't notice until the next full navigation. Added a throttled
+visibilitychange/focus handler that calls `reg.update()` when the app returns to the foreground —
+so a returning user promptly gets the one-tap update prompt. Throttled to once/minute so rapid
+focus/blur (and the mobile keyboard) never hammer the network.
+
+Verified: sw-register.js parses, loads with 0 pageerrors, foreground events fire safely, apply/
+check functions intact. Files: `sw-register.js`. No breaking changes.
+
+---
+
 ## [2026-07-26] — test(accounts): RC-10 account-baseline & navigation regression suite (#5)
 
 Locks in the 2026-07-26 account-consistency fixes so they cannot silently regress. New RC suite

@@ -144,6 +144,29 @@
           if (reg.waiting && navigator.serviceWorker.controller) {
             setTimeout(_showUpdateToast, 2000);
           }
+
+          /* ── FOREGROUND UPDATE CHECK ───────────────────────────────────────
+             The browser only re-fetches service-worker.js on a navigation or its
+             own ~24h timer. An installed PWA (or a long-lived tab) that is
+             backgrounded while a new version ships would otherwise not notice
+             until the next full navigation. So when the app returns to the
+             foreground — tab focus, PWA resume — ask for a fresh SW check. If a
+             newer version exists, updatefound → statechange → _showUpdateToast()
+             surfaces the one-tap "Update available" prompt promptly.
+
+             updateViaCache:'none' means this always hits the network for the SW
+             file. Throttled to at most once a minute so rapid focus/blur flips
+             (and the keyboard opening on mobile) never hammer the network. */
+          let _lastUpdateCheck = Date.now();   /* registration itself just checked */
+          const _foregroundUpdateCheck = () => {
+            if (document.visibilityState !== "visible") return;
+            const now = Date.now();
+            if (now - _lastUpdateCheck < 60000) return;
+            _lastUpdateCheck = now;
+            if (_swReg) { try { _swReg.update(); } catch (_) {} }
+          };
+          document.addEventListener("visibilitychange", _foregroundUpdateCheck);
+          window.addEventListener("focus", _foregroundUpdateCheck);
         })
         .catch(err => console.warn("[SOKONI SW] Registration failed:", err));
 
