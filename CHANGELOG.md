@@ -35,6 +35,29 @@ Deploy: functions (new `shopNameSync_shops`/`shopNameSync_sellers` + checkout ch
 
 ---
 
+## [2026-07-27] — fix(sw): eliminate the "old version flashes, then reloads to new" update flash — DEPLOYED
+
+Diagnosis (verified, not the usual advice): the caching strategy was NOT the cause — the SW is
+already network-first for HTML, CSS **and** JS, versions its caches, and deletes old caches on
+activate. The flash came from the update *orchestration*: `service-worker.js` calls `skipWaiting()`
+on install, so every freshly-deployed worker auto-activates and fires `controllerchange` in each open
+tab — and `sw-register.js` reloaded on ANY `controllerchange`. That involuntary reload IS the
+"old loads, then reloads to the updated version" double-load. The file already had a complete
+user-initiated update path (a one-tap "Update available" toast + `_userRequestedUpdate` flag) that
+auto-skipWaiting was silently bypassing.
+
+Fix (`sw-register.js`): only reload on `controllerchange` when the update was **user-requested**
+(they tapped Update). A worker that activates on its own no longer force-reloads open tabs. Freshness
+is unaffected — network-first already gives a returning visitor the latest on load, and their next
+navigation is fully current under the new worker; the toast lets anyone force the swap immediately.
+`skipWaiting` is retained (the new worker's logic still activates promptly); the first-install,
+OAuth-in-flight, and POS work-in-progress reload exceptions are unchanged. Deployed from a clean
+worktree (main tree had other agents' WIP); live and verified. Trade-off: a critical fix now reaches
+an already-open tab on its next navigation or on tap, rather than via a forced reload — the correct
+price for removing the involuntary flash.
+
+---
+
 ## [2026-07-27] — feat(booking): converge venue lifecycle onto one engine (Convergence Step 1) — STAGED, flagged
 
 Audit (3 parallel read-only agents + direct verification) found the booking domain fragmented across
