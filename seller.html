@@ -4233,6 +4233,10 @@ class="notification-container"
        plan table. Loading it here (not lazily) is what keeps a paid upgrade from
        being displayed as the free allowance. -->
   <script src="sokoni-authority.js" defer></script>
+  <!-- Product Validation Contract — the single source of truth for product-data
+       validation. Loaded before seller.js (defer preserves order) so the write path
+       uses the same policies as the Algolia pipeline and repair scripts. -->
+  <script src="sokoni-product-validator.js" defer></script>
   <script src="seller.js" defer></script>
   <!-- Fills the localStorage cache seller.js renders from with the CANONICAL
        products collection. Must load after seller.js so displaySellerProducts

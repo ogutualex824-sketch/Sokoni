@@ -7,8 +7,15 @@
    never a data: URI — a data: URI in a product doc bloats the record and poisons
    the Algolia batch it ships in (the "PEACH MANGO ICE" incident). Used to strip
    base64 out of every product write; the Firestore rule enforces the same
-   server-side. */
-const _isDataUri = v => typeof v === 'string' && v.startsWith('data:');
+   server-side. Delegates to the shared Product Validation Contract
+   (sokoni-product-validator.js) when it has loaded, so the write path and the
+   Algolia pipeline apply the identical rule; the inline check is the fallback if
+   the module has not parsed yet. */
+const _isDataUri = v => (
+  (typeof window !== 'undefined' && window.SokoniProductValidator)
+    ? window.SokoniProductValidator.isDataUri(v)
+    : (typeof v === 'string' && v.startsWith('data:'))
+);
 
 const _esc = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
