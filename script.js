@@ -2835,6 +2835,15 @@ function showPromoToast(msg){
 }
 
 function showWelcomePopup(){
+    /* Never show the "Create Free Account" welcome to a signed-in user. It is
+       irrelevant to them AND, as a full-screen position:fixed overlay, it blocks
+       page scrolling until dismissed — the "home gets stuck at the Sokoni Hub and
+       won't scroll past" report (it fires on first scroll past the hero, so it
+       lands right as the user reaches the hubs section). Guests still get it. */
+    try {
+      var _wu = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if ((_wu && (_wu.uid || _wu.id)) || localStorage.getItem('loggedIn') === 'true') return;
+    } catch(e) {}
     /* LAYER PRIORITY: consent (legally required) -> welcome -> notifications.
        Measured on real Desktop Chrome: this modal fired at ~11s while the
        privacy/cookie consent banner was still on screen and rendered over it.
