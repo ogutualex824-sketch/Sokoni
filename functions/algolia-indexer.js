@@ -548,6 +548,10 @@ const TRANSFORMERS = {
       condition:       _str(data.condition, 'new'),
       inStock:         data.inStock !== false,
       quantity:        _num(data.quantity),
+      /* Monotonic per-product change marker (bumped on every stock deduction).
+         Carried through so search records can later be ignored if older than the
+         latest version, and to correlate index state with order/payment logs. */
+      inventoryVersion: _num(data.inventoryVersion),
       minOrder:        _num(data.minOrder, 1),
       images,
       thumbnail:       images[0]?.url || _str(data.thumbnail || data.imageUrl || data.image || data.photo || data.coverImage),

@@ -2733,7 +2733,9 @@ exports.verifyIntasendPayment = onRequest(
             const prodRef = db.collection('products').doc(String(item.productId));
             const snap    = await t.get(prodRef);
             if (!snap.exists) return;
-            const cur = snap.data().stock;
+            const pdata = snap.data();
+            const cur = pdata.stock;
+            const priorVer = Number(pdata.inventoryVersion) || 0;
             /* Payment is already confirmed, so a last-item race is flagged, not
                rejected — but stock must never go negative. Deduct at most what
                remains; the oversoldAlerts record carries the true shortfall. */
@@ -2746,7 +2748,14 @@ exports.verifyIntasendPayment = onRequest(
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             }
-            t.update(prodRef, { stock: admin.firestore.FieldValue.increment(-dec) });
+            /* stock, updatedAt and inventoryVersion move together in ONE atomic
+               write so every listener gets a single, monotonic change signal. */
+            t.update(prodRef, {
+              stock:            admin.firestore.FieldValue.increment(-dec),
+              updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+              inventoryVersion: admin.firestore.FieldValue.increment(1),
+            });
+            console.log(`[webhook] stock deduct product=${item.productId} -${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
           }))
       );
       const stockFailed = stockResults.filter(r => r.status === 'rejected');
@@ -3643,7 +3652,9 @@ exports.darajaSTKCallback = onRequest(
                  rejected — but stock is floored at zero and the shortfall is
                  recorded for reconciliation (parity with the IntaSend path). */
               for (const { ref, pid, qty, snap } of stockReads) {
-                const cur = snap.exists ? snap.data().stock : null;
+                const pdata = snap.exists ? snap.data() : {};
+                const cur = snap.exists ? pdata.stock : null;
+                const priorVer = Number(pdata.inventoryVersion) || 0;
                 let dec = qty;
                 if (typeof cur === "number" && cur < qty) {
                   dec = Math.max(0, cur);
@@ -3654,9 +3665,14 @@ exports.darajaSTKCallback = onRequest(
                     createdAt: ts,
                   });
                 }
+                /* One atomic write: stock + updatedAt + inventoryVersion, so
+                   listeners see a single monotonic change signal. */
                 txn.update(ref, {
-                  stock: admin.firestore.FieldValue.increment(-dec),
+                  stock:            admin.firestore.FieldValue.increment(-dec),
+                  updatedAt:        ts,
+                  inventoryVersion: admin.firestore.FieldValue.increment(1),
                 });
+                console.log(`[daraja] stock deduct product=${pid} -${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
               }
             });
           } catch (e) {
