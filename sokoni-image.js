@@ -43,7 +43,12 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '1.0.0';   // bump on any behaviour change; surfaced for prod diagnostics
+  var VERSION = '1.1.0';   // bump on any behaviour change; surfaced for prod diagnostics
+  /* v1.1.0 — added the optional `fallbackMode` (placeholder | css-hide | remove).
+     Backward compatible: default is 'placeholder' (v1.0 behaviour). This lets an
+     existing page keep its OWN intended fallback (a branded CSS placeholder via a
+     failed-class, or removing the img and revealing a CSS layer) so migrating to the
+     helper is a true no-regression standardisation rather than a downgrade. */
   var CLASS = 'sk-img';
 
   var CONFIG = {
@@ -116,6 +121,12 @@
 
     a.push('data-sk-fallback="' + esc(fallback) + '"');
 
+    /* Fallback strategy on load error — default 'placeholder' preserves v1.0. Other
+       modes let a migrated page keep its own fallback behaviour. */
+    var fmode = opts.fallbackMode || 'placeholder';
+    if (fmode !== 'placeholder') a.push('data-sk-fallmode="' + esc(fmode) + '"');
+    if (fmode === 'css-hide' && opts.failClass) a.push('data-sk-failclass="' + esc(opts.failClass) + '"');
+
     var img = '<img ' + a.join(' ') + '>';
 
     /* CLS: when no explicit size, reserve space with an aspect-ratio box so the
@@ -140,6 +151,10 @@
     if (!imgEl.getAttribute('loading'))  imgEl.setAttribute('loading', opts.priority ? 'eager' : 'lazy');
     if (opts.priority) imgEl.setAttribute('fetchpriority', 'high');
     imgEl.setAttribute('data-sk-fallback', opts.placeholder || CONFIG.placeholder);
+    if (opts.fallbackMode && opts.fallbackMode !== 'placeholder') {
+      imgEl.setAttribute('data-sk-fallmode', opts.fallbackMode);
+      if (opts.fallbackMode === 'css-hide' && opts.failClass) imgEl.setAttribute('data-sk-failclass', opts.failClass);
+    }
     var srcset = buildSrcset(opts.variants);
     if (srcset) {
       imgEl.setAttribute('srcset', srcset);
@@ -158,12 +173,27 @@
     if (!t || t.tagName !== 'IMG' || !t.classList || !t.classList.contains(CLASS)) return;
     if (t.dataset.skFailed) return;
     t.dataset.skFailed = '1';
+    if (t.hasAttribute('srcset')) t.removeAttribute('srcset');   // don't re-resolve to the broken variant
+
+    var mode = t.getAttribute('data-sk-fallmode') || 'placeholder';
+    var info = { src: t.currentSrc || t.src, el: t, mode: mode };
+
+    if (mode === 'remove') {
+      if (typeof CONFIG.reportErrors === 'function') { try { CONFIG.reportErrors(info); } catch (_) {} }
+      try { t.remove(); } catch (_) {}
+      return;
+    }
+    if (mode === 'css-hide') {
+      t.style.display = 'none';
+      var fc = t.getAttribute('data-sk-failclass');
+      if (fc && t.parentNode && t.parentNode.classList) t.parentNode.classList.add(fc);
+      if (typeof CONFIG.reportErrors === 'function') { try { CONFIG.reportErrors(info); } catch (_) {} }
+      return;
+    }
+    /* default: 'placeholder' — swap to the fallback image (v1.0 behaviour). */
     var fb = t.getAttribute('data-sk-fallback') || CONFIG.placeholder;
     if (t.getAttribute('src') !== fb) t.setAttribute('src', fb);
-    if (t.hasAttribute('srcset')) t.removeAttribute('srcset');   // don't re-resolve to the broken variant
-    if (typeof CONFIG.reportErrors === 'function') {
-      try { CONFIG.reportErrors({ src: t.currentSrc || t.src, el: t }); } catch (_) {}
-    }
+    if (typeof CONFIG.reportErrors === 'function') { try { CONFIG.reportErrors(info); } catch (_) {} }
   }
 
   var _inited = false;

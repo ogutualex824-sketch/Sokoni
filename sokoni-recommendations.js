@@ -612,7 +612,9 @@
          via absolute positioning (CSS). If the image fails to load, onerror removes
          the img element and the emoji underneath is revealed automatically. */
       const imgTag = item.image
-        ? '<img src="' + _esc(item.image) + '" loading="lazy" alt="' + name + '" onerror="this.remove()">'
+        ? (window.renderProductImage
+            ? window.renderProductImage({ src: item.image, alt: name, wrap: false, fallbackMode: 'remove' })
+            : '<img src="' + _esc(item.image) + '" loading="lazy" decoding="async" alt="' + name + '" onerror="this.remove()">')
         : '';
 
       return `<a href="${url}" class="sk-rec-card" onclick="${trackClick}">

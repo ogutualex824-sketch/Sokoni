@@ -1,6 +1,6 @@
 # SOKONI Image — `renderProductImage()` v1 API
 
-**Status:** v1.0.0 · public API frozen · file: [`sokoni-image.js`](../sokoni-image.js) · tests: [`scripts/test-sokoni-image.js`](../scripts/test-sokoni-image.js)
+**Status:** v1.1.0 · public API frozen (additive-only) · file: [`sokoni-image.js`](../sokoni-image.js) · tests: [`scripts/test-sokoni-image.js`](../scripts/test-sokoni-image.js)
 
 `sokoni-image.js` is the **single rendering abstraction** for product (and general)
 images. Every image on a product surface should be rendered through it so that
@@ -24,7 +24,7 @@ Related: [[Product Validation Contract]] (keeps `data:` URIs out of image fields
 // Browser globals (set when the script loads):
 window.SokoniImage            // the module
 window.renderProductImage     // alias of SokoniImage.render
-window.SOKONI_IMAGE_VERSION   // "1.0.0"
+window.SOKONI_IMAGE_VERSION   // "1.1.0"
 ```
 
 ### `renderProductImage(opts) → string`
@@ -48,7 +48,9 @@ el.innerHTML = renderProductImage({ src: p.image, alt: p.name, aspectRatio: '1/1
 | `className` | string | — | Extra classes (added alongside `sk-img`). |
 | `variants` | `{200,600,1200}` | `null` | Width→URL map → `srcset` + `sizes`. Ignored today; **future**. |
 | `sizes` | string | `(max-width:768px) 100vw, 400px` | Used only when `variants` are supplied. |
-| `placeholder` | string | `assets/default-product.png` | Fallback image. |
+| `placeholder` | string | `assets/default-product.png` | Fallback image (mode `placeholder`). |
+| `fallbackMode` | `placeholder`|`css-hide`|`remove` | `placeholder` | On load error: swap to placeholder / hide img + add `failClass` to parent / remove img. **v1.1 — added so a migrated page keeps its own fallback.** |
+| `failClass` | string | — | Class added to the parent when `fallbackMode:"css-hide"`. |
 | `wrap` | boolean | `true` | `false` = drop-in `<img>` (no CLS wrapper); use when the card CSS already sizes the image. |
 
 ### Always applied
@@ -96,9 +98,9 @@ automatically when the script loads.
 
 | Surface | Status |
 |---|---|
-| `store.html` product grid | ✅ Migrated (structure-preserving, `wrap:false`) — **pending real-browser release gate** |
-| `index.html` trending/popular | ⏳ Next |
-| `sokoni-recommendations.js` | ⏳ |
+| `store.html` product grid | ✅ Migrated (`wrap:false`, placeholder fallback) |
+| `index.html` trending (`script.js`) | ✅ Migrated (`fallbackMode:css-hide`, preserves `.img-failed` branded placeholder) |
+| `sokoni-recommendations.js` | ✅ Migrated (`fallbackMode:remove`, preserves emoji-underneath; gained `decoding=async`) |
 | Minishop | ⏳ |
 | Seller dashboard previews | ⏳ |
 | Remaining consumers | ⏳ |
@@ -106,7 +108,7 @@ automatically when the script loads.
 **Release gate (must pass in a real browser before further rollout):** images render;
 placeholder only for genuinely-missing images; no layout shift while scrolling; lazy
 loading works; console clean; no unexpected image 404s/retries; Safari + Chrome match;
-`window.SOKONI_IMAGE_VERSION === "1.0.0"`; `document.querySelectorAll('.st-product-card img.sk-img').length > 0`.
+`window.SOKONI_IMAGE_VERSION === "1.1.0"`; `document.querySelectorAll('.st-product-card img.sk-img').length > 0`.
 
 ## Migration pattern for a new page
 

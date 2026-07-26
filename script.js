@@ -820,8 +820,9 @@ function buildProductCard(product, size = "normal"){
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap" data-emoji="${catEmoji[product.category]||'🛍️'}">
-                <img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async"
-                  onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">
+                ${window.renderProductImage
+                  ? renderProductImage({ src: img, alt: product.name, wrap: false, fallbackMode: 'css-hide', failClass: 'img-failed' })
+                  : `<img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async" onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">`}
                 ${locTag}
                 ${nameOverlay}
                 ${shopRing}

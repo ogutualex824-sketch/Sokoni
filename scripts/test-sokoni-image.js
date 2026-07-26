@@ -68,8 +68,20 @@ ok('isBadSrc: data: true', SI.isBadSrc('data:x') === true);
 ok('isBadSrc: https false', SI.isBadSrc('https://s/x') === false);
 ok('isBadSrc: empty true', SI.isBadSrc('') === true);
 
+/* Fallback modes (v1.1) */
+ok('default mode → no fallmode attr (placeholder, v1.0 behaviour)',
+  !/data-sk-fallmode/.test(SI.render({ src: 'https://s/x' })));
+ok('css-hide mode → emits fallmode + failClass',
+  (() => { const h = SI.render({ src: 'https://s/x', fallbackMode: 'css-hide', failClass: 'img-failed' });
+    return h.includes('data-sk-fallmode="css-hide"') && h.includes('data-sk-failclass="img-failed"'); })());
+ok('remove mode → emits fallmode',
+  SI.render({ src: 'https://s/x', fallbackMode: 'remove' }).includes('data-sk-fallmode="remove"'));
+ok('always keeps sk-img + data-sk-fallback regardless of mode',
+  (() => { const h = SI.render({ src: 'https://s/x', fallbackMode: 'remove' });
+    return h.includes('sk-img') && h.includes('data-sk-fallback'); })());
+
 /* Version + diagnostics */
-ok('exposes a version constant', SI.version === '1.0.0');
+ok('exposes a version constant', SI.version === '1.1.0');
 ok('checkAdoption is callable (no-op without a DOM)',
   (() => { const r = SI.checkAdoption(); return r && typeof r.unmanaged === 'number'; })());
 

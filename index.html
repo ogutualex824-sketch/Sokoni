@@ -24,6 +24,9 @@
        check runs before the user can interact with a wrong page. Fails open. -->
   <script src="sokoni-root-guard.js"></script>
   <script src="security.js"></script>
+  <!-- Image rendering abstraction — loaded early so window.renderProductImage exists
+       before the deferred trending grid (script.js) and recommendations render. -->
+  <script src="sokoni-image.js"></script>
   <script src="splash.js"></script>
   <script>/* Capture ?ref=CODE from referral links — runs before any other JS */
   (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
