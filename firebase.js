@@ -883,21 +883,43 @@ const _SOKONI_LS_KEYS = [
   "sokoniPermCache",
 ];
 
+/* Non-user infrastructure keys that MUST survive sign-out — everything else in
+   local/session storage is treated as user data and wiped. Matched case-insensitively
+   as a substring of the key name. */
+const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware/i;
+
 async function sokoniSignOut() {
+  /* 1. Stop any registered Firestore listeners so no post-signout snapshot can fire
+        into a stale UI. (Belt-and-suspenders — the caller-side redirect/reload also
+        tears every listener down.) */
   try {
-    await signOut(auth);
-  } catch (e) {
-    /* Always clear local state even if the network call fails */
-  }
-  /* Clear ALL SOKONI-managed localStorage keys to prevent stale session reuse */
-  _SOKONI_LS_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
-  /* Clear sessionStorage caches */
-  try {
-    sessionStorage.removeItem("sokoniPermCache");
-    sessionStorage.removeItem("_sk_pay_idem");
+    if (Array.isArray(window._sokoniListeners)) {
+      window._sokoniListeners.forEach(u => { try { if (typeof u === "function") u(); } catch (_) {} });
+      window._sokoniListeners = [];
+    }
   } catch (_) {}
-  /* Invalidate subscription cache */
-  if (window.SokoniSubscriptions) window.SokoniSubscriptions.invalidateCache();
+
+  /* 2. Firebase sign-out (clears the auth session in IndexedDB). Clear local state
+        even if the network call fails. */
+  try { await signOut(auth); } catch (e) { /* proceed to wipe regardless */ }
+
+  /* 3. SECURITY — wipe ALL user-specific local/session storage so the NEXT user can
+        never see the previous user's wallet, profile, cart, orders or seller data.
+        A fixed allow-list always missed keys (cart, _walletBal, sellerProfile, bnb_*,
+        b2b_*, chpro_*, permissions, authCache…); this clears everything EXCEPT the
+        non-user infra keys above. */
+  const _wipe = (store) => {
+    try {
+      Object.keys(store).forEach(k => {
+        if (!_SOKONI_LS_KEEP.test(k)) { try { store.removeItem(k); } catch (_) {} }
+      });
+    } catch (_) {}
+  };
+  _wipe(localStorage);
+  _wipe(sessionStorage);
+
+  /* 4. Invalidate any in-memory caches (the page reload after this clears the rest). */
+  try { if (window.SokoniSubscriptions) window.SokoniSubscriptions.invalidateCache(); } catch (_) {}
 }
 window.sokoniSignOut = sokoniSignOut;
 

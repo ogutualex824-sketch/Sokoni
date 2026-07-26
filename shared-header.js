@@ -1572,7 +1572,7 @@
       rolePills +
       '<div class="sk-acct-links">' +
         '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()"><i class="fas fa-user"></i> My Profile</a>' +
-        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Account Centre</a>' +
+        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Settings</a>' +
         '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()"><i class="fas fa-briefcase"></i> My Workspaces</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()"><i class="fas fa-wallet"></i> Wallet</a>' +
         '<div class="sk-acct-separator"></div>' +
