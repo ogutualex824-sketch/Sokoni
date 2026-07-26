@@ -325,8 +325,17 @@ function renderPlans() {
       ctaHtml = `<button class="btn-plan btn-plan-current">Current Plan</button>`;
     } else if (isFree) {
       ctaHtml = `<button class="btn-plan btn-plan-outline" onclick="startFree('${esc(plan.id)}','${esc(plan.hubType)}','${esc(plan.name)}')">Get Started Free</button>`;
+    } else if (!priceValid) {
+      /* No valid price for this cycle — never open a "KES NaN" modal or a broken
+         checkout. Offer Contact Sales instead of a Subscribe button that can't work. */
+      ctaHtml = `<a class="btn-plan btn-plan-outline" href="mailto:hello@mysokoni.co.ke?subject=${encodeURIComponent('Subscription enquiry: ' + (plan.name || ''))}">Contact Sales</a>`;
     } else {
-      ctaHtml = `<button class="btn-plan btn-plan-primary" onclick="openModal(${JSON.stringify({id:plan.id,name:plan.name,hubType:plan.hubType,price,trialDays,tier:plan.tier}).replace(/"/g,'&quot;')})">
+      /* Pass BOTH cycle prices so the modal DISPLAYS and checkout CHARGES the correct
+         amount for whichever toggle the buyer picks. The old code passed a phantom
+         `price` variable (declared nowhere in this scope) → undefined → "KES NaN" in
+         the modal, and checkout read plan.priceMonthly/Annual that were never on the
+         modal object, blocking every paid subscription. */
+      ctaHtml = `<button class="btn-plan btn-plan-primary" onclick="openModal(${JSON.stringify({id:plan.id,name:plan.name,hubType:plan.hubType,priceMonthly:plan.priceMonthly,priceAnnual:plan.priceAnnual,trialDays,tier:plan.tier}).replace(/"/g,'&quot;')})">
         ${trialDays>0?`Start Free Trial`:`Subscribe Now`}
       </button>`;
     }
@@ -360,11 +369,14 @@ let _pendingPlan = null;
 function openModal(plan) {
   if (!currentUser) { location.href = 'login.html?redirect=plans'; return; }
   _pendingPlan = plan;
-  const price = billingCycle === 'annual' ? plan.price : plan.price;
+  /* Cycle-correct numeric price; the card passes priceMonthly/priceAnnual. */
+  const price = Number(billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly);
   document.getElementById('modal-title').textContent = plan.name;
   document.getElementById('modal-desc').textContent =
     `${billingCycle === 'annual' ? 'Annual' : 'Monthly'} subscription for ${plan.hubType.replace(/_/g,' ')} hub`;
-  document.getElementById('modal-price').textContent = `KES ${Math.round(price/100).toLocaleString('en-KE')}/${billingCycle==='annual'?'year':'month'}`;
+  document.getElementById('modal-price').textContent = Number.isFinite(price)
+    ? `KES ${Math.round(price/100).toLocaleString('en-KE')}/${billingCycle==='annual'?'year':'month'}`
+    : 'Contact Sales';
   const trialNote = document.getElementById('modal-trial-note');
   if (plan.trialDays > 0) {
     trialNote.textContent = `Starts with a ${plan.trialDays}-day free trial`;

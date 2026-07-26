@@ -1,3 +1,29 @@
+## [2026-07-26] — fix(plans): the LAST "KES NaN" path (subscribe modal) + restore paid checkout
+
+The card prices were already guarded (c5b3572), but the **subscribe modal** still rendered
+"KES NaN/month": the card called `openModal(...price...)` with a phantom `price` variable
+declared NOWHERE in that scope → `undefined`, and `openModal` then did
+`Math.round(undefined/100)` with no `Number.isFinite` guard. Worse, the checkout path reads
+`plan.priceMonthly`/`plan.priceAnnual`, which the modal object never carried — so every paid
+subscription silently hit "not available for online checkout".
+
+Fixes (client-only, plans.html):
+- The card now passes BOTH `priceMonthly` and `priceAnnual` to the modal, so display and
+  checkout are cycle-correct for whichever toggle the buyer picks.
+- The modal price is `Number.isFinite`-guarded → shows "Contact Sales" instead of "KES NaN".
+- Plans with no valid price for a cycle get a "Contact Sales" CTA instead of a Subscribe
+  button that opens a broken modal / dead checkout.
+
+Note on the prices themselves: the source of truth (`functions/sub-billing.js` PLANS → the
+`subGetPlans` CF) already defines complete, finite prices for EVERY plan — so the NaN was
+purely this client bug, not missing data. Adjusting the price VALUES to a different table is a
+business decision (and a functions deploy), left for the founder to confirm.
+
+Verified: plans.html loads 0 pageerrors; guard yields "Contact Sales" for a missing price and
+"KES 999/month" for a valid one. Files: `plans.html`. No DB/API/schema changes.
+
+---
+
 ## [2026-07-26] — feat(auth): single canonical auth-state source (SokoniAuthState) — kills the intermittent loop
 
 Milestone 2 of account-consistency: ONE resolution-aware source of "who is signed in", so no page
