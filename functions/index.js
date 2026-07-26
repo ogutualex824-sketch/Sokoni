@@ -11026,6 +11026,11 @@ exports.deviceTrust                   = _devEng.deviceTrust;
 exports.deviceUntrust                 = _devEng.deviceUntrust;
 exports.devicePing                    = _devEng.devicePing;
 
+/* ── Storage Integrity Auditor ─────────────────────────────── */
+const _integrity = require('./integrity-audit');
+exports.storageIntegrityAuditScheduled = _integrity.storageIntegrityAuditScheduled;
+exports.storageIntegrityAuditRun        = _integrity.storageIntegrityAuditRun;
+
 /* ── Profile & Identity Engine ─────────────────────────────── */
 const _profEng = require('./profile-engine');
 exports.profileGetOverview            = _profEng.profileGetOverview;
