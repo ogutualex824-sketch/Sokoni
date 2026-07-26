@@ -31,7 +31,7 @@
    + double-tap guards, emoji/close-button/logo UI, and the More page never
    reached already-installed clients — hard-refresh can't beat Cache-First. This
    bump invalidates the old cache so every client re-fetches current assets. */
-const CACHE_VERSION = "sokoni-20260726-app-shell-v114";
+const CACHE_VERSION = "sokoni-20260726-app-shell-v115";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -702,10 +702,13 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  /* CSS / JS — Stale While Revalidate (cached version served instantly;
-     background fetch keeps cache fresh for the next load) */
+  /* CSS / JS — Network First so EVERY reload gets the latest deploy when online,
+     with the cached copy as an offline fallback. Was Stale-While-Revalidate, which
+     served the OLD file on reload and only fetched the new one for the NEXT load —
+     that is why updates appeared to require clearing browsing data. Network-First
+     removes the stale-first-reload entirely; offline still works from cache. */
   if (["css","js"].includes(ext)) {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(networkFirst(request, STATIC_CACHE));
     return;
   }
 
