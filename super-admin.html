@@ -1649,26 +1649,45 @@ const SA={
 // ═══════════════════════════════════════════════════════════
 // Auth Gate — superAdmin custom claim check
 // ═══════════════════════════════════════════════════════════
-firebase.auth().onAuthStateChanged(async user=>{
-  if(!user){
-    location.href='login.html?redirect=super-admin.html';
-    return;
+(function(){
+  function runGate(){
+    firebase.auth().onAuthStateChanged(async user=>{
+      if(!user){
+        location.href='login.html?redirect=super-admin.html';
+        return;
+      }
+      try{
+        const idTokenResult=await user.getIdTokenResult(true);
+        if(idTokenResult.claims.superAdmin!==true){
+          // Not a super admin — redirect
+          location.href='admin-os.html?error=insufficient_privileges';
+          return;
+        }
+        // Authorized — hide gate, init app
+        document.getElementById('authGate').style.display='none';
+        SA.init(user);
+      }catch(err){
+        console.error('[SuperAdmin] Auth check failed:',err);
+        location.href='login.html?error=auth_check_failed';
+      }
+    });
   }
-  try{
-    const idTokenResult=await user.getIdTokenResult(true);
-    if(idTokenResult.claims.superAdmin!==true){
-      // Not a super admin — redirect
-      location.href='admin-os.html?error=insufficient_privileges';
+  /* firebase.js is a DEFERRED ES module that installs the window.firebase compat
+     shim used below; this classic script can run before it, and the shim is set up
+     just AFTER the sokoniFirebaseReady event — so poll for the shim itself, or the
+     "Verifying super admin access…" splash hangs forever (the bug this fixes). */
+  var tries=0;
+  (function wait(){
+    if(window.firebase && typeof window.firebase.auth==='function' && window.firebaseAuth){ runGate(); return; }
+    if(++tries>250){   /* ~7.5s */
+      var p=document.querySelector('#authGate p');
+      if(p)p.innerHTML='Could not reach authentication. Please refresh the page.';
+      console.error('[SuperAdmin] Firebase not ready — gate aborted');
       return;
     }
-    // Authorized — hide gate, init app
-    document.getElementById('authGate').style.display='none';
-    SA.init(user);
-  }catch(err){
-    console.error('[SuperAdmin] Auth check failed:',err);
-    location.href='login.html?error=auth_check_failed';
-  }
-});
+    setTimeout(wait,30);
+  })();
+})();
 </script>
 </body>
 </html>
