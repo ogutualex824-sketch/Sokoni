@@ -45,10 +45,11 @@ const BASE = '/v1/projects/' + PROJECT + '/databases/(default)/documents';
 const PHONE_LOCAL = '0706603915';
 const PHONE       = '+254706603915';
 const SHOP        = 'Maina Groceries';
-/* The owner's personal name was not supplied; the business name is used for
-   display and no person name is invented. The owner can set their own in
-   Profile. */
-const PERSON      = 'Maina Groceries';
+/* Person and business are deliberately separate: PERSON is who signs in and is
+   what shows on the profile; SHOP is the business and is what customers see on
+   the storefront and in search. Collapsing the two makes the owner's profile
+   read like a company and the shop read like a person. */
+const PERSON      = 'Maina';
 const EMAIL       = 'mainagroceries254706603915@sokoni-seller.invalid'; /* placeholder; login is by phone */
 
 const CATEGORY       = 'food';        /* categoryMeta key — see header */
@@ -188,6 +189,7 @@ async function patch(col, id, fields) {
   L('       verified=false  featured=false  shopPublished=false  rating/reviews/products=0');
   L('       searchableTerms: ' + searchTerms.join(', '));
   L('     users/{uid}');
+  L('       name="' + PERSON + '"  displayName="' + PERSON + '"   <- the PERSON, not the business');
   L('       roles=["seller","buyer"]  role="seller"  hasSellerProfile=true');
   L('       ^ roles drives sokoni-nav-engine._role(). Without "seller" in the ARRAY the');
   L('         owner signs in successfully and still lands as a buyer.');
@@ -209,7 +211,13 @@ async function patch(col, id, fields) {
     if (upd.status >= 400) { L('  ! attaching phone failed (' + upd.status + '): ' + upd.body.slice(0, 300)); process.exit(1); }
     L('\n  4. created auth account ' + uid + ' with phone ' + PHONE);
   } else {
-    L('\n  4. reusing existing auth account ' + uid);
+    /* Keep the auth profile in step with PERSON on a re-run. Without this the
+       displayName stays at whatever the first run set, so correcting the name
+       here would fix Firestore and leave Firebase Auth disagreeing with it. */
+    const upd = await req('POST', IT, '/v1/projects/' + PROJECT + '/accounts:update',
+                          { localId: uid, phoneNumber: PHONE, displayName: PERSON });
+    if (upd.status >= 400) { L('  ! updating auth profile failed (' + upd.status + '): ' + upd.body.slice(0, 300)); process.exit(1); }
+    L('\n  4. reusing existing auth account ' + uid + ' (displayName synced to "' + PERSON + '")');
   }
 
   sellerFields.uid = S(uid);

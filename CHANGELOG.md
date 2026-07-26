@@ -1,3 +1,29 @@
+## [2026-07-26] — chore(onboarding): split Maina's profile name from the shop name
+
+The first onboarding used the business name for both, so the owner's profile
+read as "Maina Groceries" — a company where a person should be.
+
+Now separated, which is the distinction the platform already assumes:
+
+| store | value | meaning |
+|---|---|---|
+| Firebase Auth `displayName` | `Maina` | who signs in |
+| `users/{uid}.name` / `.displayName` | `Maina` | the person, shown on their profile |
+| `sellers/{uid}.name` / `shopName` / `businessName` | `Maina Groceries` | the business, shown to customers and in search |
+
+The re-run also surfaced a gap in the script: `accounts:update` only ran when
+creating a *new* account, so correcting the name would have fixed Firestore and
+left Firebase Auth still saying "Maina Groceries". The reuse branch now syncs
+`displayName` too — otherwise the script is only idempotent for the data it
+happens to write second.
+
+Verified across all three stores: auth `displayName=Maina`, `users/` name and
+displayName `Maina`, `sellers/` name/shopName/businessName `Maina Groceries`,
+category still `food`, `status: active`, `isVisible: true`.
+
+The read-back that misreported on the first apply now works and printed
+`OK — discoverable`.
+
 ## [2026-07-26] — chore(onboarding): Maina Groceries — grocery seller, phone-OTP login
 
 Onboarded **Maina Groceries** (phone 0706603915) as a marketplace grocery seller.
