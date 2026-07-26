@@ -42,66 +42,14 @@
   var LOOP_THRESHOLD = 4;                /* >=4 loads of same path within the window  */
   var SENTINEL_VERSION = 'sentinel-1.0';
 
-  /* ── GLOBAL REDIRECT INSTRUMENT + CIRCUIT BREAKER ──────────────────────────
-     The profile↔login loop kept eluding a fix because we could not see WHICH
-     script fires the redirect on the real (App-Check-flaky) device. This is the
-     FIRST script on the page, so wrapping navigation here catches every redirect
-     before any auth guard runs. Every redirect to login/home is logged with a
-     STACK TRACE + auth state into sk_auth_redirects (shown at /android-doctor),
-     and — as a safety net — a detected loop is BROKEN: if the same target is
-     navigated to 4+ times within 12s, further identical redirects are blocked so
-     the page settles on itself instead of thrashing. Covers location.assign and
-     location.replace (auth-guard, sokoni-guards, sokoni-security, auth.js all use
-     replace); the href= setter can't be reliably wrapped, but a loop needs BOTH
-     directions, so blocking the replace side collapses it. */
-  (function () {
-    function _rec(to, how) {
-      var stack = ''; try { throw new Error('_'); } catch (e) { stack = (e.stack || '').split('\n').slice(2, 7).join('  <<  '); }
-      var rec = { t: Date.now(), from: location.pathname, to: String(to).slice(0, 90), how: how,
-        loggedIn: (function(){ try { return localStorage.getItem('loggedIn') === 'true'; } catch (_) { return null; } })(),
-        hasCache: (function(){ try { return !!localStorage.getItem('sokoniUser'); } catch (_) { return null; } })(),
-        uid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
-        stack: stack };
-      try { var l = JSON.parse(localStorage.getItem('sk_auth_redirects') || '[]'); l.push(rec); while (l.length > 40) l.shift(); localStorage.setItem('sk_auth_redirects', JSON.stringify(l)); } catch (_) {}
-      try { console.warn('[SOKONI REDIRECT]', rec.from, '→', rec.to, '(' + how + ') loggedIn=' + rec.loggedIn + ' cache=' + rec.hasCache + ' uid=' + (rec.uid ? 'yes' : 'no') + '\n  ' + stack); } catch (_) {}
-    }
-    function _isLoopTarget(u) { u = String(u); return /login|index|\/$/.test(u) || u === '/'; }
-    function _looping(to) {
-      try { var l = JSON.parse(localStorage.getItem('sk_auth_redirects') || '[]'); var t = String(to).slice(0, 90), now = Date.now();
-        return l.filter(function (x) { return String(x.to) === t && now - (x.t || 0) < 12000; }).length >= 4; } catch (_) { return false; }
-    }
-    function _wrap(name) {
-      try {
-        var orig = location[name] && location[name].bind(location);
-        if (!orig) return;
-        location[name] = function (u) {
-          _rec(u, name);
-          if (_isLoopTarget(u) && _looping(u)) { try { console.error('[SOKONI] redirect loop BROKEN (' + name + ' → ' + u + '). See /android-doctor for the source.'); } catch (_) {} return; }
-          return orig(u);
-        };
-      } catch (_) {}
-    }
-    _wrap('assign'); _wrap('replace');
-    /* Also wrap the href SETTER (location.href = '…' / window.location = '…'), which
-       most page code uses and which assign/replace wrapping misses. Best-effort:
-       only if the descriptor is configurable (it is in Chromium / Android Chrome). */
-    try {
-      var proto = window.Location && window.Location.prototype;
-      var desc = proto && Object.getOwnPropertyDescriptor(proto, 'href');
-      if (desc && desc.configurable && typeof desc.set === 'function') {
-        var origSet = desc.set, origGet = desc.get;
-        Object.defineProperty(proto, 'href', {
-          configurable: true, enumerable: desc.enumerable,
-          get: function () { return origGet.call(this); },
-          set: function (u) {
-            _rec(u, 'href=');
-            if (_isLoopTarget(u) && _looping(u)) { try { console.error('[SOKONI] redirect loop BROKEN (href= → ' + u + '). See /android-doctor.'); } catch (_) {} return; }
-            return origSet.call(this, u);
-          }
-        });
-      }
-    } catch (_) {}
-  })();
+  /* NOTE: a global redirect interceptor that overrode Location.prototype.href was
+     tried here (2026-07-26) to catch every login/home redirect. It BROKE Firebase
+     Auth account creation (auth/network-request-failed) because the SDK, App Check
+     and reCAPTCHA read/validate location, and redefining that prototype property
+     corrupts that path. REMOVED. Redirect reasons are already recorded by the
+     individual guards (auth-guard.js, profile.js, sokoni-security.js, profile.html
+     inline guard) into sk_auth_redirects, shown at /android-doctor. NEVER override
+     Location.prototype.* here. */
 
   var t0 = Date.now();
   var path = location.pathname;

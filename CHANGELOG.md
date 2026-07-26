@@ -1,3 +1,24 @@
+## [2026-07-26] — HOTFIX(auth): remove global redirect interceptor — it broke account creation
+
+REGRESSION from the previous commit: new users hit `auth/network-request-failed` on Create Account.
+Cause: the global redirect interceptor added to `sokoni-crash-sentinel.js` (the first script on
+every page, incl. login.html) overrode `Location.prototype.href`. Firebase Auth, App Check and
+reCAPTCHA read/validate `location` during the token exchange; redefining that prototype property
+corrupts that path, so the signUp request fails before it lands — surfacing as
+`auth/network-request-failed`. The interceptor also wasn't even capturing anything in testing.
+
+Fix: REMOVED the entire interceptor (assign/replace wraps + the href-setter override). Redirect
+reasons are still recorded by the individual guards (auth-guard.js, profile.js, sokoni-security.js,
+and the profile.html inline guard) into `sk_auth_redirects`, which `/android-doctor` shows — so the
+loop diagnosis is intact WITHOUT touching `location`. The real loop fix (profile.html:2889, gating
+on the session flag) stays. Verified: login.html loads clean, `firebaseAuth` initialises,
+`location.href` reads work, 0 pageerrors. Standing rule added in-file: NEVER override
+`Location.prototype.*`.
+
+Files: `sokoni-crash-sentinel.js`.
+
+---
+
 ## [2026-07-26] — fix(auth): the ACTUAL profile↔login loop culprit — a 4th, HIDDEN inline guard in profile.html
 
 Reported still looping after the 3-guard fix. Stopped guessing: used Chrome DevTools Protocol to
