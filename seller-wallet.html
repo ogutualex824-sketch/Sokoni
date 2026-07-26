@@ -225,8 +225,11 @@ input[type=radio]{accent-color:var(--g)}
     <div class="amount" id="wd-balance">—</div>
     <div class="label">Available to Withdraw</div>
   </div>
+  <div style="background:var(--ga);border:1px solid var(--g);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:13px;color:var(--sub);line-height:1.5">
+    💡 Your earnings now settle into your <strong style="color:var(--g)">SOKONI Wallet</strong> and are withdrawn there — one balance, instant M-Pesa payout.
+  </div>
   <div style="margin-bottom:20px">
-    <button class="btn btn-primary" onclick="openWdPanel()">Request Withdrawal</button>
+    <button class="btn btn-primary" onclick="location.href='wallet.html'">Withdraw in Wallet →</button>
   </div>
   <div class="sec-title" style="margin-bottom:14px">Withdrawal History</div>
   <div class="sw-table-wrap">
@@ -465,6 +468,12 @@ function toggleWdFields(){
 }
 
 async function submitWithdrawal(){
+  /* Withdrawals converged into the SOKONI Wallet (single balance, one payout path).
+     The legacy requestWithdrawal is retired — send the seller to the Wallet instead. */
+  toast('Withdrawals now happen in your SOKONI Wallet — taking you there…','success');
+  setTimeout(function(){ location.href='wallet.html'; }, 900);
+  return;
+  /* eslint-disable no-unreachable */
   const amount=parseFloat(document.getElementById('wd-amount').value);
   if(!amount||amount<100){toast('Minimum withdrawal is KES 100','error');return}
   const method=document.querySelector('input[name="wd-method"]:checked').value;
