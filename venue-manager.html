@@ -639,7 +639,38 @@ const iso  = d  => d.toISOString().slice(0,10);
 const DAYS     = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const DAY_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 const REASON_LABELS = { maintenance:'Maintenance', private_event:'Private Event', holiday:'Holiday', cleaning:'Cleaning', other:'Other' };
-const STATUS_LABELS = { pending_payment:'Pending', pending:'Pending', confirmed:'Confirmed', checked_in:'Checked In', completed:'Completed', cancelled:'Cancelled' };
+const STATUS_LABELS = { pending_payment:'Pending', pending:'Pending', confirmed:'Confirmed', checked_in:'Checked In', active:'Checked In', completed:'Completed', cancelled:'Cancelled', no_show:'No Show' };
+
+/* ── Booking-engine adapter (convergence Step 1) ──────────────────────────────
+   USE_BOOKING_CORE routes the owner console's booking-lifecycle ops onto the
+   hardened booking.js core (top-level `bookings`). Flip to false to instantly
+   revert to the legacy venue-booking.js endpoints — client-only, no redeploy.
+   Venue-config ops (venueCreate/venueUpdate) are NOT routed: they manage the
+   shared venue doc and price correctly on read via the unified schema. */
+var USE_BOOKING_CORE = true;
+var BOOK_ORDER_FIELD = USE_BOOKING_CORE ? 'startTs' : 'startTime';
+function bmCalendar(venueId, startD, endD) {
+  return USE_BOOKING_CORE
+    ? cf('bookingGetCalendar')({ venueId: venueId, from: startD.getTime(), until: endD.getTime() })
+    : cf('venueGetCalendar')({ venueId: venueId, startDate: iso(startD), endDate: iso(endD) });
+}
+function bmBlock(venueId, startStr, endStr, reason, note) {
+  return USE_BOOKING_CORE
+    ? cf('bookingBlockSlots')({ venueId: venueId, startTs: new Date(startStr + 'T00:00:00').getTime(), endTs: new Date(endStr + 'T23:59:59').getTime(), reason: reason, note: note })
+    : cf('venueBlockDates')({ venueId: venueId, startDate: startStr, endDate: endStr, reason: reason, note: note });
+}
+function bmStats(venueId) { return cf(USE_BOOKING_CORE ? 'bookingGetStats' : 'venueGetStats')({ venueId: venueId }); }
+function bmCancel(id, r)  { return cf(USE_BOOKING_CORE ? 'bookingCancel' : 'venueCancelBooking')({ bookingId: id, reason: r }); }
+function bmAction(action, id) {
+  var CORE   = { confirm: 'bookingApprove', checkin: 'bookingCheckIn', checkout: 'bookingCheckOut' };
+  var LEGACY = { confirm: 'venueConfirmBooking', checkin: 'venueCheckIn', checkout: 'venueCheckOut' };
+  return cf((USE_BOOKING_CORE ? CORE : LEGACY)[action])({ bookingId: id });
+}
+/* Booking-doc field accessors that work for both shapes (core: startTs epoch +
+   pricingBreakdown.total; legacy: startTime Timestamp + totalAmount/amount). */
+function bmStartMs(b) { return b.startTs != null ? Number(b.startTs) : ms(b.startTime); }
+function bmEndMs(b)   { return b.endTs   != null ? Number(b.endTs)   : ms(b.endTime); }
+function bmPrice(b)   { return (b.pricingBreakdown && b.pricingBreakdown.total != null) ? b.pricingBreakdown.total : (b.totalAmount != null ? b.totalAmount : b.amount); }
 
 let _venues   = [];
 let _activeId = null;
@@ -745,11 +776,7 @@ async function loadCalendar() {
   $('calGrid').innerHTML = '<div class="empty" style="grid-column:1/-1"><span class="spinner"></span></div>';
   const endD = new Date(_weekStart.getTime() + 7 * 86400000);
   try {
-    const res = await cf('venueGetCalendar')({
-      venueId:   _activeId,
-      startDate: iso(_weekStart),
-      endDate:   iso(endD)
-    });
+    const res = await bmCalendar(_activeId, _weekStart, endD);
     _calData = { bookings: res.data.bookings || [], blockouts: res.data.blockouts || [] };
     renderCalendar();
   } catch (err) {
@@ -766,13 +793,13 @@ function renderCalendar() {
     const isTdy  = day.getTime() === today.getTime();
 
     const dayBks = _calData.bookings.filter(b => {
-      const t = ms(b.startTime);
+      const t = bmStartMs(b);
       return t && new Date(t).toISOString().slice(0, 10) === dStr;
     });
     const dayBlk = _calData.blockouts.filter(b => {
-      const from = b.startDate || b.from || '';
-      const to   = b.endDate   || b.to   || '';
-      return dStr >= from && dStr <= to;
+      const from = b.startDate || b.from || (b.startTs != null ? new Date(Number(b.startTs)).toISOString().slice(0, 10) : '');
+      const to   = b.endDate   || b.to   || (b.endTs   != null ? new Date(Number(b.endTs)).toISOString().slice(0, 10) : '');
+      return from && dStr >= from && dStr <= to;
     });
 
     html += `<div class="cal-col${isTdy ? ' today' : ''}">`;
@@ -816,7 +843,7 @@ async function loadBookings() {
   try {
     let q = firebase.firestore().collection('bookings')
       .where('venueId', '==', _activeId)
-      .orderBy('startTime', 'desc')
+      .orderBy(BOOK_ORDER_FIELD, 'desc')
       .limit(20);
     if (_bookFilter) q = q.where('status', '==', _bookFilter);
     const snap = await q.get();
@@ -834,7 +861,7 @@ async function loadMoreBookings() {
   try {
     let q = firebase.firestore().collection('bookings')
       .where('venueId', '==', _activeId)
-      .orderBy('startTime', 'desc')
+      .orderBy(BOOK_ORDER_FIELD, 'desc')
       .startAfter(_lastDoc)
       .limit(20);
     if (_bookFilter) q = q.where('status', '==', _bookFilter);
@@ -855,8 +882,8 @@ function renderBookings() {
     return;
   }
   $('bookList').innerHTML = _bookings.map((b, i) => {
-    const t   = ms(b.startTime);
-    const et  = ms(b.endTime);
+    const t   = bmStartMs(b);
+    const et  = bmEndMs(b);
     const dur = et && t ? Math.round((et - t) / 60000) : null;
     const name = b.customerName || b.userName || 'Guest';
     return `<div class="brow" onclick="openDetail('list',${i})">
@@ -866,7 +893,7 @@ function renderBookings() {
       </div>
       <div class="brow-right">
         ${badge(b.status)}
-        <span class="brow-price">${xe(KES(b.totalAmount ?? b.amount))}</span>
+        <span class="brow-price">${xe(KES(bmPrice(b)))}</span>
       </div>
     </div>`;
   }).join('');
@@ -887,7 +914,7 @@ async function submitBlock() {
   if (!start || !end)  { toast('Start and end dates are required', 'err'); return; }
   if (end < start)     { toast('End date must be on or after start date', 'err'); return; }
   try {
-    await cf('venueBlockDates')({ venueId: _activeId, startDate: start, endDate: end, reason, note });
+    await bmBlock(_activeId, start, end, reason, note);
     toast('Dates blocked');
     $('blkStart').value = '';
     $('blkEnd').value   = '';
@@ -1044,7 +1071,7 @@ async function loadStats() {
   if (!_activeId) return;
   ['stRev','stBk','stCr','stAvg','stPeak'].forEach(id => { $(id).textContent = '…'; });
   try {
-    const res = await cf('venueGetStats')({ venueId: _activeId });
+    const res = await bmStats(_activeId);
     const d   = res.data || {};
     $('stRev').textContent  = Number(d.totalRevenue   || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 });
     $('stBk').textContent   = d.totalBookings  ?? 0;
@@ -1113,8 +1140,8 @@ function openDetail(src, idx) {
   if (!b) return;
   _selBooking = { ...b, _src: src, _idx: idx };
 
-  const t   = ms(b.startTime);
-  const et  = ms(b.endTime);
+  const t   = bmStartMs(b);
+  const et  = bmEndMs(b);
   const dur = et && t ? Math.round((et - t) / 60000) : null;
 
   const rows = [
@@ -1122,8 +1149,8 @@ function openDetail(src, idx) {
     ['Date &amp; Time', fDT(t)],
     et ? ['End Time', fT(et)] : null,
     dur !== null ? ['Duration', dur + ' min'] : null,
-    ['Amount',    KES(b.totalAmount ?? b.amount)],
-    b.depositAmount ? ['Deposit Paid', KES(b.depositAmount)] : null,
+    ['Amount',    KES(bmPrice(b))],
+    (b.pricingBreakdown && b.pricingBreakdown.deposit) ? ['Deposit', KES(b.pricingBreakdown.deposit)] : (b.depositAmount ? ['Deposit Paid', KES(b.depositAmount)] : null),
     b.bookingRef  ? ['Reference',   b.bookingRef] : null,
     b.notes       ? ['Notes',       b.notes]      : null,
   ].filter(Boolean);
@@ -1165,10 +1192,9 @@ function closeSidePanel() {
 
 async function doAction(action) {
   if (!_selBooking) return;
-  const cfName = { confirm: 'venueConfirmBooking', checkin: 'venueCheckIn', checkout: 'venueCheckOut' }[action];
-  const next   = { confirm: 'confirmed', checkin: 'checked_in', checkout: 'completed' }[action];
+  const next   = { confirm: 'confirmed', checkin: (USE_BOOKING_CORE ? 'active' : 'checked_in'), checkout: 'completed' }[action];
   try {
-    await cf(cfName)({ bookingId: _selBooking.id });
+    await bmAction(action, _selBooking.id);
     _selBooking.status = next;
     updateLocalStatus(_selBooking.id, next);
     toast('Updated to ' + xe(STATUS_LABELS[next]));
@@ -1187,7 +1213,7 @@ async function doCancel() {
   // Use a plain prompt — lightweight, no modal-in-modal complexity
   const reason = (window.prompt('Reason for cancellation (leave blank to skip):') || '').trim();
   try {
-    await cf('venueCancelBooking')({ bookingId: _selBooking.id, reason });
+    await bmCancel(_selBooking.id, reason);
     _selBooking.status = 'cancelled';
     updateLocalStatus(_selBooking.id, 'cancelled');
     toast('Booking cancelled');
