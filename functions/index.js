@@ -9946,6 +9946,7 @@ exports.requestSellerPayout    = wallet.requestSellerPayout;
 exports.getPayoutHistory       = wallet.getPayoutHistory;
 exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
+exports.adminPayoutOps         = wallet.adminPayoutOps;
 exports.reconcilePayouts       = wallet.reconcilePayouts;
 exports.processPayoutRetries   = wallet.processPayoutRetries;
 exports.getPayoutAnalytics     = wallet.getPayoutAnalytics;

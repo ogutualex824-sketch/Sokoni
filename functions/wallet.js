@@ -1446,6 +1446,71 @@ exports.getPayoutAnalytics = onCall({ cors: true, enforceAppCheck: true }, async
   };
 });
 
+// ─── 12b. adminPayoutOps — real-time operational view for support ────────────
+/**
+ * Live operational snapshot of the payout pipeline for a support dashboard — no
+ * manual Firestore querying. Returns counts by state, the oldest processing payout,
+ * the most recent webhook received, the max retry count, and the working lists.
+ */
+exports.adminPayoutOps = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+  _requireAuth(request);
+  _requireAdmin(request);
+  const db = getFirestore();
+
+  const states = ['processing', 'retry_scheduled', 'failed', 'approval_failed', 'pending', 'approved', 'scheduled'];
+  const byState = {};
+  await Promise.all(states.map(async (st) => {
+    const snap = await db.collection('payoutRequests').where('status', '==', st).limit(100).get().catch(() => null);
+    byState[st] = snap ? snap.docs.map((d) => ({ id: d.id, ...d.data() })) : [];
+  }));
+  const all = [].concat(...Object.values(byState));
+
+  let reconcileExceptions = 0, maxRetry = 0, oldestProcMs = null, lastWebhookMs = null;
+  for (const p of all) {
+    if (p.reconcileFlag === 'needs_review') reconcileExceptions++;
+    if ((p.retryCount || 0) > maxRetry) maxRetry = p.retryCount;
+    if (Array.isArray(p.webhookEvents) && p.webhookEvents.length) {
+      const ms = p.webhookEvents[p.webhookEvents.length - 1]?.at?.toMillis?.() ?? null;
+      if (ms && (lastWebhookMs === null || ms > lastWebhookMs)) lastWebhookMs = ms;
+    }
+  }
+  for (const p of byState.processing) {
+    const ms = p.b2cInitiatedAt?.toMillis?.() ?? p.updatedAt?.toMillis?.() ?? p.createdAt?.toMillis?.() ?? null;
+    if (ms && (oldestProcMs === null || ms < oldestProcMs)) oldestProcMs = ms;
+  }
+
+  const mask = (a) => { const s = String(a || ''); if (s.length < 6) return s; const l = s.startsWith('254') ? '0' + s.slice(3) : s; return l.slice(0, 4) + '****' + l.slice(-3); };
+  const trim = (list) => list.slice(0, 30).map((p) => ({
+    id: p.id, sellerUid: p.sellerUid, amount: p.amount, status: p.status, mode: p.mode || null,
+    method: p.method, destinationMasked: mask(p.accountNumber), intasendRef: p.intasendRef || null,
+    retryCount: p.retryCount || 0, reconcileFlag: p.reconcileFlag || null,
+    lastWebhookState: p.lastWebhookState || null, createdAt: p.createdAt, updatedAt: p.updatedAt || null,
+  }));
+
+  return {
+    counts: {
+      processing: byState.processing.length,
+      retrying: byState.retry_scheduled.length,
+      failed: byState.failed.length,
+      approvalFailed: byState.approval_failed.length,
+      pending: byState.pending.length,
+      approved: byState.approved.length,
+      scheduled: byState.scheduled.length,
+      reconcileExceptions,
+    },
+    oldestProcessingAt: oldestProcMs ? new Date(oldestProcMs).toISOString() : null,
+    lastWebhookAt: lastWebhookMs ? new Date(lastWebhookMs).toISOString() : null,
+    maxRetryCount: maxRetry,
+    lists: {
+      processing:  trim(byState.processing),
+      retrying:    trim(byState.retry_scheduled),
+      failed:      trim(byState.failed),
+      needsReview: trim(all.filter((p) => p.reconcileFlag === 'needs_review')),
+      pending:     trim(byState.pending),
+    },
+  };
+});
+
 // ─── 13. finalizeB2CPayoutFromWebhook — called by the IntaSend webhook ────────
 /**
  * Advance a B2C payout from an IntaSend webhook. Matches a payoutRequests doc by

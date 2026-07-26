@@ -4050,6 +4050,24 @@ document.addEventListener('DOMContentLoaded', function() {
   <script defer src="sokoni-fraud-engine.js"></script>
   <script defer src="sokoni-webhook-engine.js"></script>
   <script defer src="sokoni-search-pro.js"></script>
+  <script>
+  /* Hidden admin access: tap the home logo 9× quickly → super admin. This only
+     reveals the door — super-admin.html enforces the admin claim, so a non-admin
+     who finds the gesture still gets bounced. Delegated so it survives shared-header
+     re-rendering the logo. A lone tap still navigates home (after a short debounce). */
+  (function(){
+    var taps=0, t=null;
+    document.addEventListener('click', function(e){
+      var logo = e.target.closest && e.target.closest('#sk-nav-logo');
+      if(!logo) return;
+      e.preventDefault();
+      taps++;
+      if(taps>=9){ clearTimeout(t); taps=0; location.href='/super-admin.html'; return; }
+      clearTimeout(t);
+      t=setTimeout(function(){ var single=(taps===1); taps=0; if(single) location.href='/'; }, 500);
+    }, true);
+  })();
+  </script>
 </body>
 
 </html>
