@@ -335,6 +335,7 @@
         category: _p.category || 'default',
         serviceDesc: (_p.skills || []).slice(0, 2).join(', ') || 'Professional Service',
         providerPhone: _p.phone || '',
+        providerId: uid,   /* provider's uid (from the URL) — links the booking + notifies them */
       }, function (ref) {
         var msg = '✅ Booking request sent to ' + _p.name +
                   (ref ? '\nRef: ' + ref : '') + '\n' + _p.name.split(' ')[0] +

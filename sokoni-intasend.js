@@ -226,6 +226,11 @@
           serviceDesc:  options.serviceDesc   || '',
           category:     options.category      || 'default',
           uid:          auth.currentUser.uid,
+          /* Booking linkage — the webhook creates bookings/{ref} + notifies both
+             parties on COMPLETE. Only present for on-platform service bookings. */
+          ...(options.type          ? { type:          options.type }          : {}),
+          ...(options.providerId    ? { providerId:    options.providerId }    : {}),
+          ...(options.providerPhone ? { providerPhone: options.providerPhone } : {}),
         },
       });
 

@@ -6893,7 +6893,11 @@ exports.webhookIntasend = onRequest(
       try {
         const _isSubscription =
           category === "subscription" || payData.meta?.category === "subscription";
-        const _sellerId = payData.uid;
+        /* For a service booking the earner is the PROVIDER (meta.providerId), not the
+           paying customer (payData.uid). Scoped to bookings so marketplace/POS flows,
+           where uid already means the seller, are unaffected. */
+        const _isBooking = payData.meta?.type === "booking";
+        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId : payData.uid;
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         if (_isSubscription) {
@@ -6934,6 +6938,58 @@ exports.webhookIntasend = onRequest(
           reason: "wallet credit failed: " + walletErr.message,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => {});
+      }
+
+      /* ── Service bookings: create the booking + notify both parties ──────────
+         bookNow only collects payment; the booking itself MUST be created here,
+         server-side, because the customer's payment wizard may be closed before
+         this webhook arrives (money taken, but no confirmation — the reported bug).
+         Idempotent: keyed by the payment ref. Additive — no money flow changed. */
+      try {
+        const m = payData.meta || {};
+        if (m.type === "booking") {
+          const bookingRef = db.collection("bookings").doc(apiRef);
+          const created = await db.runTransaction(async (txn) => {
+            const b = await txn.get(bookingRef);
+            if (b.exists) return false;                    // already created — idempotent
+            txn.set(bookingRef, {
+              ref:           apiRef,
+              customerUid:   payData.uid || null,
+              providerId:    m.providerId || null,
+              providerName:  m.providerName || "",
+              providerPhone: m.providerPhone || "",
+              serviceDesc:   m.serviceDesc || "",
+              category:      m.category || "default",
+              amount, currency: "KES",
+              status:        "confirmed",                  // paid; awaiting provider fulfilment
+              paymentRef:    apiRef,
+              createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return true;
+          });
+          if (created) {
+            const { notify } = require("./notify");
+            if (payData.uid) notify({
+              uid: payData.uid, type: "booking_confirmed",
+              title: "Booking confirmed ✅",
+              body: `Your booking with ${m.providerName || "the provider"} is confirmed. Ref ${apiRef}.`,
+              dedupeKey: `booking_confirmed_${apiRef}`,
+              data: { ref: apiRef, providerName: m.providerName || "" },
+            }).catch(() => {});
+            if (m.providerId) notify({
+              uid: m.providerId, type: "booking_new",
+              title: "New booking 📅",
+              body: `You have a new booking${m.serviceDesc ? " — " + m.serviceDesc : ""}. Ref ${apiRef}.`,
+              dedupeKey: `booking_new_${apiRef}`,
+              data: { ref: apiRef, customerUid: payData.uid || "" },
+            }).catch(() => {});
+            console.log(`[webhookIntasend] booking created + notified: ${apiRef}`);
+          }
+        }
+      } catch (bErr) {
+        /* Never fail the webhook on booking-creation error — payment stands. */
+        console.error("[webhookIntasend] booking creation failed (recoverable):", bErr.message);
       }
 
       try {
