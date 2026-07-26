@@ -1,3 +1,48 @@
+## [2026-07-26] — feat(pricing): single-source "Pricing, Earnings & Fees" hub (earnings.html)
+
+One authoritative page for everything it costs to earn on SOKONI, so pricing lives
+in one place and a seller never has to contact support to understand fees.
+
+### Data-driven, not hardcoded
+- **Commission table + calculator read live from `window.SokoniCommission`** (the
+  client mirror generated from the single `functions/commission-config.js`,
+  drift-guarded). Every sale category in the live config is rendered dynamically
+  with a humanised fallback label, so a newly-added hub can never be silently
+  missed. Platform-revenue/internal keys (subscriptions, advertising, saas,
+  default) are excluded from the sales table by design.
+- **Delivery table reads `window.SokoniDeliveryPricing.CONFIG`** — per-vehicle
+  base/per-km/per-min and the rider minimum payout, straight from the pricing
+  engine.
+
+### Accurate where sourced, honest where not
+Sections with canonical figures: subscriptions (Free · Starter 999 · Growth 2,499
+· Enterprise 4,999 /mo — `priceKES` is cents, confirmed via plans.html's /100
+render), commission (marketplace 3%, services 15%, legal 5%, digital 10%, vehicles
+flat 2,000, min KES 10), delivery, advertising (Pro Boost 500, VIP 1,500).
+
+Figures NOT defined anywhere in the code are shown as **"Fee confirming — contact
+support"** rather than invented: M-Pesa/bank/card/international withdrawal fees and
+premium/business verification. A page that promises "no hidden fees" must not
+carry a single guessed number; the minimum withdrawal (KES 100) is real and shown.
+
+### Sections
+Subscriptions · Sales commission · Payments & withdrawals · Delivery & logistics ·
+Advertising · Other platform fees · Earnings calculator · FAQ · transparency
+promise. Premium dark, responsive, sticky section nav.
+
+### Also
+- Linked the hub from the homepage "Earn Today / Become a Seller" area.
+- Replaced inaccurate homepage copy "Paid plans from KES 500/month" (the cheapest
+  paid plan is KES 999; 500 is a boost price) with a link to the single-source
+  page.
+
+**Open (needs the real numbers from ops):** withdrawal/payment and verification
+fees, currently marked "confirming". Client-side only page; no rules/functions
+changed.
+
+### Files
+`earnings.html` (new), `index.html`.
+
 ## [2026-07-26] — fix(profile): "tabs jump to home" is the OOM crash — add crash sentinel
 
 Reported: on Pacifique's Android, tapping the profile tabs (Overview/Orders/Bookings/
