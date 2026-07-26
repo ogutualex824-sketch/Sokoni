@@ -247,6 +247,25 @@
           }
         } catch (_) { /* a broken predicate must not block a legitimate update */ }
 
+        /* ── ONLY reload for a USER-REQUESTED update ──────────────────────────
+           This is the fix for the "old version loads, then reloads to the new one"
+           flash. The SW calls skipWaiting() on install, so a freshly-deployed
+           worker activates on its own and fires controllerchange in every open tab.
+           Reloading on THAT — an update the user never asked for — is exactly the
+           involuntary double-load being reported.
+
+           Content freshness does not depend on this reload: HTML, CSS and JS are
+           all network-first (see service-worker.js), so a returning visitor already
+           gets the latest on load, and their next navigation is fully current under
+           the new worker. The one-tap "Update available" toast lets anyone who wants
+           it immediately force the swap — that path sets _userRequestedUpdate and
+           gets the single expected reload below. Everyone else updates seamlessly on
+           their next navigation, with no flash. */
+        if (!_userRequestedUpdate) {
+          console.info('[SOKONI SW] new worker active — no forced reload (applies on next navigation; tap Update to apply now)');
+          return;
+        }
+
         if (!refreshing) { refreshing = true; window.location.reload(); }
       });
     });
