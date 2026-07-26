@@ -6758,15 +6758,25 @@ exports.webhookIntasend = onRequest(
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
-    /* Seller B2C payouts ("pout_…"): advance a withdrawal from its provider status.
-       Matches by api_ref (== our reqId) or by intasendRef (tracking_id). No-op for
-       non-payout events, so top-up/payment handling below is unaffected. */
+    /* First-rollout observability: log the ENTIRE webhook payload (challenge/secret
+       stripped) before parsing, so if IntaSend's B2C field names/format differ we can
+       see exactly what arrived and adapt. */
     try {
-      if (await wallet.finalizeB2CPayoutFromWebhook(db, apiRef, state)) {
+      const _rb = { ...(req.body || {}) };
+      delete _rb.challenge; delete _rb.signature; delete _rb.secret;
+      console.log("[webhookIntasend] raw payload:", JSON.stringify(_rb).slice(0, 4000));
+    } catch (_) { /* logging must never block the webhook */ }
+
+    /* Seller B2C payouts ("pout_…"): advance a withdrawal from its provider status.
+       Matches by api_ref (== our reqId) or by intasendRef (tracking_id). Stores the raw
+       payload on the payout for audit. No-op for non-payout events, so top-up/payment
+       handling below is unaffected. */
+    try {
+      if (await wallet.finalizeB2CPayoutFromWebhook(db, apiRef, state, req.body)) {
         res.status(200).send("OK");
         return;
       }
-      if (checkoutId && await wallet.finalizeB2CPayoutFromWebhook(db, checkoutId, state)) {
+      if (checkoutId && await wallet.finalizeB2CPayoutFromWebhook(db, checkoutId, state, req.body)) {
         res.status(200).send("OK");
         return;
       }
@@ -9937,6 +9947,7 @@ exports.getPayoutHistory       = wallet.getPayoutHistory;
 exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
 exports.reconcilePayouts       = wallet.reconcilePayouts;
+exports.processPayoutRetries   = wallet.processPayoutRetries;
 exports.getPayoutAnalytics     = wallet.getPayoutAnalytics;
 exports.refundToWallet           = wallet.refundToWallet;
 exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;

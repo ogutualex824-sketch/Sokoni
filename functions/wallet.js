@@ -251,6 +251,9 @@ async function _assessPayoutRisk(db, uid, amount, method, pin, cfg) {
  */
 async function _disburseB2C(db, rid, payout) {
   const reqRef = db.collection('payoutRequests').doc(rid);
+  const ctx    = { ...payout, id: rid };
+  const tries  = (payout.retryCount || 0) + 1;
+  _plog('b2c_initiate', ctx, { attempt: tries });
   try {
     const resp = await intasendB2C(INTASEND_KEY.value(), {
       phone: payout.accountNumber, amountKES: String(payout.amount),
@@ -259,17 +262,32 @@ async function _disburseB2C(db, rid, payout) {
     const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
     await reqRef.update({
       status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      b2cResponse: _redact(resp),
       statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
     });
     await _payoutMetric(db, 'b2cInitiated');
+    _plog('b2c_ok', { ...ctx, intasendRef: ref, status: 'processing' });
     return { ok: true, intasendRef: ref };
   } catch (e) {
-    await reqRef.update({
-      status: 'approval_failed', b2cError: String(e.message || e).slice(0, 300), updatedAt: Timestamp.now(),
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('approval_failed', 'B2C initiate failed: ' + String(e.message || e).slice(0, 150))),
-    });
+    const errMsg = String(e.message || e);
+    const kind   = _classifyB2CError(errMsg);
+    if (kind === 'retryable' && tries <= PAYOUT_RETRY_MAX) {
+      const delay = Math.min(PAYOUT_RETRY_BASE_MS * Math.pow(2, tries - 1), PAYOUT_RETRY_MAX_MS);
+      await reqRef.update({
+        status: 'retry_scheduled', retryCount: tries, retryAt: Timestamp.fromMillis(Date.now() + delay),
+        b2cError: errMsg.slice(0, 300), updatedAt: Timestamp.now(),
+        statusHistory: FieldValue.arrayUnion(_payoutEvent('retry_scheduled', `Transient B2C error (try ${tries}/${PAYOUT_RETRY_MAX}) — retry in ${Math.round(delay / 60000)}m: ` + errMsg.slice(0, 120))),
+      });
+      await _payoutMetric(db, 'b2cRetries');
+      _plog('b2c_retry', { ...ctx, status: 'retry_scheduled' }, { attempt: tries, delayMs: delay, error: errMsg.slice(0, 160) });
+      return { ok: false, retry: true, error: errMsg };
+    }
+    /* Permanent, or retries exhausted → Failed immediately + refund the seller (the
+       initiate was rejected, so money never left) for admin review. */
+    await _refundPayout(db, rid, 'failed', { detail: (kind === 'permanent' ? 'Permanent B2C error: ' : 'Retries exhausted: ') + errMsg.slice(0, 150) });
     await _payoutMetric(db, 'b2cErrors');
-    return { ok: false, error: e.message || 'B2C failed' };
+    _plog('b2c_failed', { ...ctx, status: 'failed' }, { kind, attempt: tries, error: errMsg.slice(0, 160) });
+    return { ok: false, error: errMsg };
   }
 }
 
@@ -299,6 +317,65 @@ function _notifyPayout(kind, payout, rid) {
       data: { requestId: rid, amount: amt, reference: ref, destination: dest, kind },
     }).catch(() => {});
   } catch (_) { /* notifications must never break payouts */ }
+}
+
+/**
+ * Structured payout log — one line per stage carrying the full correlation set so a
+ * single payout can be traced end-to-end (grep by correlationId or requestId).
+ * @param {string} stage  e.g. 'requested','risk','reserved','b2c_initiated','paid'
+ * @param {object} p      the payout record (or a partial with the ids)
+ * @param {object} extra  extra fields to merge
+ */
+function _plog(stage, p = {}, extra = {}) {
+  try {
+    console.log('[payout] ' + JSON.stringify({
+      stage,
+      correlationId: p.correlationId || p.id || null,
+      requestId:     p.id || p.requestId || null,
+      payoutId:      p.id || p.requestId || null,
+      intasendRef:   p.intasendRef || null,
+      sellerId:      p.sellerUid || null,
+      state:         p.status || null,
+      amount:        p.amount ?? null,
+      ts:            new Date().toISOString(),
+      ...extra,
+    }));
+  } catch (_) { /* logging must never break payouts */ }
+}
+
+/** Strip sensitive keys before logging/storing a provider payload for audit. */
+function _redact(obj) {
+  try {
+    if (!obj || typeof obj !== 'object') return obj ?? null;
+    const out = Array.isArray(obj) ? [] : {};
+    for (const k of Object.keys(obj)) {
+      if (/key|secret|token|auth|password|challenge|signature|pin/i.test(k)) { out[k] = '[redacted]'; continue; }
+      const v = obj[k];
+      out[k] = (v && typeof v === 'object') ? _redact(v) : v;
+    }
+    return out;
+  } catch (_) { return null; }
+}
+
+/* Retry policy for transient B2C failures. */
+const PAYOUT_RETRY_MAX     = 4;
+const PAYOUT_RETRY_BASE_MS = 2 * 60 * 1000;   // 2 min
+const PAYOUT_RETRY_MAX_MS  = 30 * 60 * 1000;  // cap at 30 min
+
+/**
+ * Classify a B2C failure. 'retryable' = transient (network/timeout/5xx/429) → back off
+ * and retry. 'permanent' = won't fix itself (invalid number, insufficient PROVIDER
+ * funds, 4xx validation) → move to Failed immediately for review.
+ */
+function _classifyB2CError(msg) {
+  const m = String(msg || '').toLowerCase();
+  if (/timeout|econnreset|etimedout|econnrefused|network|socket|enotfound|eai_again|fetch failed/.test(m)) return 'retryable';
+  const statusMatch = m.match(/\((\d{3})\)/);
+  const status = statusMatch ? Number(statusMatch[1]) : 0;
+  if (status >= 500 || status === 429) return 'retryable';
+  if (/invalid.*(phone|number|msisdn|account)|unregistered|insufficient|not.*enough|balance/.test(m)) return 'permanent';
+  if (status >= 400 && status < 500) return 'permanent';
+  return 'retryable';   // unknown → retryable, but bounded by PAYOUT_RETRY_MAX
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -788,6 +865,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
   /* ── Risk engine: decide instant vs review vs scheduled (before reserving) ── */
   const cfg  = await _getPayoutConfig(db);
   const risk = await _assessPayoutRisk(db, uid, amt, method, pin, cfg);
+  _plog('risk', { sellerUid: uid, amount: amt }, { mode: risk.mode, reasons: risk.reasons });
   /* Initial status by mode: instant reserves as a transient 'approving' then fires
      B2C; review → 'pending'; scheduled → 'scheduled'. */
   const initialStatus = risk.mode === 'instant' ? 'approving'
@@ -830,6 +908,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
     t.update(walletRef, { balance: balance - amt, pendingPayout: FieldValue.increment(amt) });
     t.set(reqRef, {
       sellerUid:     uid,
+      correlationId: reqId,
       amount:        amt,
       fee:           0,
       netAmount:     amt,
@@ -859,11 +938,12 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
   }
 
   await _payoutMetric(db, 'requests');
+  _plog('reserved', { id: reqId, correlationId: reqId, sellerUid: uid, amount: amt, status: initialStatus });
 
   /* ── Instant path: disburse via IntaSend B2C immediately (webhook confirms paid) ── */
   if (risk.mode === 'instant') {
     await _payoutMetric(db, 'instantAttempts');
-    const payoutDoc = { sellerUid: uid, amount: amt, accountNumber: sanitizedAccount, method, intasendRef: null };
+    const payoutDoc = { sellerUid: uid, correlationId: reqId, amount: amt, accountNumber: sanitizedAccount, method, intasendRef: null };
     const res = await _disburseB2C(db, reqId, payoutDoc);
     if (res.ok) {
       return {
@@ -873,12 +953,21 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
         message: 'Sending your money…',
       };
     }
-    /* B2C initiate failed — funds stay reserved, parked for review/retry. */
+    if (res.retry) {
+      /* Transient provider error — funds reserved, auto-retry scheduled. */
+      return {
+        success: true, requestId: reqId, mode: 'instant', status: 'retry_scheduled',
+        amount: amt, accountNumber: sanitizedAccount,
+        estimatedArrival: 'A few minutes',
+        message: 'Sending your money… completing shortly.',
+      };
+    }
+    /* Permanent failure — funds were returned to the wallet. */
     return {
-      success: true, requestId: reqId, mode: 'review', status: 'approval_failed',
+      success: true, requestId: reqId, mode: 'review', status: 'failed',
       amount: amt, accountNumber: sanitizedAccount,
-      estimatedArrival: 'Under review',
-      message: 'Your withdrawal is being processed and will arrive shortly.',
+      estimatedArrival: 'Returned to wallet',
+      message: 'We couldn\'t send to that number and returned the funds to your wallet. Please check the number and try again.',
     };
   }
 
@@ -977,7 +1066,7 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
 
   // ── REJECTED (refund reserved funds) — only pre-disbursement states ─────────
   if (status === 'rejected') {
-    if (!['pending', 'approved', 'approval_failed'].includes(payout.status)) {
+    if (!['pending', 'approved', 'approval_failed', 'retry_scheduled'].includes(payout.status)) {
       throw new HttpsError('failed-precondition', `Cannot reject a payout that is "${payout.status}" — funds may already be disbursed.`);
     }
     await _refundPayout(db, rid, 'rejected', { processedBy: request.auth.uid, note: _san(note, 500) || null, detail: 'Rejected by admin' });
@@ -986,7 +1075,7 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
   }
 
   // ── APPROVED → (optionally) auto-disburse via IntaSend B2C ──────────────────
-  if (!['pending', 'approval_failed'].includes(payout.status)) {
+  if (!['pending', 'approval_failed', 'retry_scheduled'].includes(payout.status)) {
     throw new HttpsError('failed-precondition', `Cannot approve a payout that is "${payout.status}".`);
   }
   /* Atomic gate: flip to a transient 'approving' so a concurrent approve can't
@@ -995,7 +1084,7 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
   await db.runTransaction(async (t) => {
     const s  = await t.get(reqRef);
     const st = s.exists ? s.data().status : null;
-    if (!['pending', 'approval_failed'].includes(st)) return;
+    if (!['pending', 'approval_failed', 'retry_scheduled'].includes(st)) return;
     t.update(reqRef, {
       status: 'approving', approvedAt: Timestamp.now(), processedBy: request.auth.uid,
       note: _san(note, 500) || payout.note || null, updatedAt: Timestamp.now(),
@@ -1018,10 +1107,10 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
   }
 
   // Automated M-Pesa disbursement via the shared B2C helper (webhook confirms 'paid').
-  const res = await _disburseB2C(db, rid, payout);
-  if (res.ok) return { success: true, status: 'processing', intasendRef: res.intasendRef };
-  /* Initiate failed — funds remain reserved (ambiguous), parked for retry/reconcile. */
-  throw new HttpsError('internal', 'Payout provider error: ' + (res.error || 'B2C failed') + '. Funds remain reserved — retry or reject.');
+  const res = await _disburseB2C(db, rid, { ...payout, id: rid });
+  if (res.ok)    return { success: true, status: 'processing', intasendRef: res.intasendRef };
+  if (res.retry) return { success: true, status: 'retry_scheduled', message: 'Transient provider error — automatic retry scheduled.' };
+  throw new HttpsError('internal', 'Payout failed: ' + (res.error || 'B2C error') + ' — funds returned to the seller for review.');
 });
 
 // ─── 9. adminGetPendingPayouts ─────────────────────────────────────────────
@@ -1254,6 +1343,45 @@ exports.reconcilePayouts = onSchedule(
   }
 );
 
+// ─── 11b. processPayoutRetries — retry queue for transient B2C failures ──────
+/**
+ * Scheduled retry of payouts parked in 'retry_scheduled' whose backoff window has
+ * elapsed. Re-runs _disburseB2C (which re-classifies: another transient error backs
+ * off again up to PAYOUT_RETRY_MAX, then fails+refunds; a permanent error fails+
+ * refunds immediately). Claims each atomically so a slow run can't double-fire.
+ */
+exports.processPayoutRetries = onSchedule(
+  { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB', secrets: [INTASEND_KEY] },
+  async () => {
+    const db  = getFirestore();
+    const now = Date.now();
+    const snap = await db.collection('payoutRequests')
+      .where('status', '==', 'retry_scheduled').limit(50).get().catch(() => null);
+    if (!snap || snap.empty) return;
+
+    let ran = 0;
+    for (const doc of snap.docs) {
+      const p = doc.data();
+      if (p.retryAt && p.retryAt.toMillis() > now) continue;   // backoff not elapsed
+      /* Claim atomically: flip 'retry_scheduled' → 'approving' so a concurrent run
+         can't disburse twice. */
+      let claimed = false;
+      await db.runTransaction(async (t) => {
+        const s = await t.get(doc.ref);
+        if (s.exists && s.data().status === 'retry_scheduled') {
+          t.update(doc.ref, { status: 'approving', updatedAt: Timestamp.now() });
+          claimed = true;
+        }
+      }).catch(() => {});
+      if (!claimed) continue;
+      _plog('retry_run', { ...p, id: doc.id }, { attempt: (p.retryCount || 0) + 1 });
+      await _disburseB2C(db, doc.id, { ...p, id: doc.id });
+      ran++;
+    }
+    if (ran) console.log(`[processPayoutRetries] ran ${ran} retr(y/ies)`);
+  }
+);
+
 // ─── 12. getPayoutAnalytics — payout system health (admin) ───────────────────
 /**
  * Aggregate the daily payoutMetrics counters over a window for an ops dashboard:
@@ -1326,7 +1454,7 @@ exports.getPayoutAnalytics = onCall({ cors: true, enforceAppCheck: true }, async
  * terminal status). Returns true if it matched a payout so the webhook can stop.
  * NOT a Cloud Function — a plain helper the webhook in index.js invokes.
  */
-exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state) {
+exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayload) {
   if (!ref) return false;
   const rid = _san(ref, 128);
 
@@ -1338,25 +1466,36 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state) {
     reqRef = q.docs[0].ref; snap = q.docs[0];
   }
 
-  const p        = snap.data();
-  const st       = String(state || '').toUpperCase();
+  const p  = snap.data();
+  const st = String(state || '').toUpperCase();
+
+  /* Audit: attach the raw (redacted) webhook payload to the payout record, so if
+     IntaSend changes field names/formats we can see exactly what arrived. */
+  await reqRef.update({
+    updatedAt: Timestamp.now(),
+    lastWebhookState: st,
+    webhookEvents: FieldValue.arrayUnion({ state: st, at: Timestamp.now(), payload: _redact(rawPayload) }),
+  }).catch(() => {});
+  _plog('webhook_received', { ...p, id: reqRef.id }, { webhookState: st });
+
   const COMPLETE = ['COMPLETE', 'COMPLETED', 'SUCCESS', 'PAID', 'SETTLED'];
   const FAILED   = ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED'];
   const REVERSED = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'];
 
   if (COMPLETE.includes(st)) {
     await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, detail: `IntaSend B2C confirmed (${st})` });
-    /* metric + latency recorded inside _settlePayoutPaid */
+    _plog('paid', { ...p, id: reqRef.id, status: 'paid' });   /* metric+latency inside _settlePayoutPaid */
   } else if (REVERSED.includes(st)) {
     await _reversePayout(db, reqRef.id, `IntaSend reversed (${st})`);
     await _payoutMetric(db, 'reversed');
+    _plog('reversed', { ...p, id: reqRef.id, status: 'reversed' });
   } else if (FAILED.includes(st)) {
     /* _refundPayout is a no-op if already paid/terminal — never double-pays. */
     await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${st})` });
     await _payoutMetric(db, 'b2cErrors');
+    _plog('failed', { ...p, id: reqRef.id, status: 'failed' }, { webhookState: st });
   } else {
     await reqRef.update({
-      updatedAt: Timestamp.now(),
       statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', `IntaSend update: ${st}`)),
     }).catch(() => {});
   }
