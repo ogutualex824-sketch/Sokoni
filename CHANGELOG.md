@@ -1,3 +1,27 @@
+## [2026-07-26] — fix(profile): low-memory guard so the Profile page stops crashing on budget Android
+
+Reported: the **Profile** button crashes the page while loading on low-RAM Android for providers
+(Pacifique the barber, **Ann the mama fua**). Same root cause as the Orders button and "reload snap":
+profile.html is the heaviest page and auto-runs a large dashboard cascade on load — the command-
+summary dashboard, an in-memory search index, adaptive hubs/cards, and module/exec/notification
+summaries. On a budget device that cascade exhausts the renderer → "Aw, Snap!" (OOM).
+
+Fix — a single low-memory guard, `window.__SK_LOWMEM`, set from `navigator.deviceMemory` (≤2 GB, or
+unreported + ≤4 cores on Android). When true, seven OPTIONAL widgets early-return
+(`_loadOverviewDashboard`, `_buildSearchIndex`, `_renderAdaptiveHubs`, `_renderAdaptiveCards`,
+`_renderExecCmds`, `_renderNotifSummary`, `_renderModuleSummaries`). Their containers are already
+`display:none`/static-fallback, so skipping them leaves no stuck skeletons — the CORE profile
+(avatar, name, basic stats, all 14 tabs, Orders, Wallet, static hub links, every button) still loads.
+
+Capable devices are UNAFFECTED — `__SK_LOWMEM` is false and every widget renders exactly as before.
+Verified in Android-emulated Chromium both ways: capable = unchanged; low-mem (deviceMemory=2) =
+widgets skipped, 0 pageerrors, 14 tabs present, `switchTab` toggles panels (orders/wallet/bookings/
+identity), page never navigates to home. `data-lowmem="1"` is exposed on `<html>` for future CSS.
+
+Files: `profile.html` (+1 flag block, 7 one-line guards). No DB/API/security changes. No breaking changes.
+
+---
+
 ## [2026-07-26] — fix(pwa): updates now appear on a normal reload (no "clear browsing data")
 
 The service worker is cache-first for the app shell and only serves new assets

@@ -2797,6 +2797,28 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
    UNIVERSAL PROFILE — main controller
 ═══════════════════════════════════════════════════════════════ */
 
+/* ── Low-memory guard (2026-07-26) ──────────────────────────────
+   Reported: this page crashes ("Aw, Snap!" / renderer OOM) on low-RAM Android
+   for providers (Pacifique the barber, Ann the mama fua) — the Profile/Orders
+   buttons load it and the tab renders it. profile.html auto-runs a large
+   dashboard cascade on load: search index, adaptive hubs/cards, and module /
+   exec / notification summaries. On a budget device that cascade is what
+   exhausts the renderer. When the device reports low memory we skip those
+   OPTIONAL widgets, so the CORE profile — avatar, name, basic stats, tabs,
+   Orders, Wallet, quick actions, every button — still loads and works. Capable
+   devices are unaffected: __SK_LOWMEM is false and every widget renders as before. */
+window.__SK_LOWMEM = (function () {
+  try {
+    var m = navigator.deviceMemory;                     /* GB, Chrome/Android   */
+    if (typeof m === 'number' && m > 0 && m <= 2) return true;
+    /* deviceMemory unreported + few cores on Android ≈ budget device */
+    if (m == null && /Android/i.test(navigator.userAgent || '') &&
+        navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) return true;
+  } catch (e) {}
+  return false;
+})();
+if (window.__SK_LOWMEM) { try { document.documentElement.setAttribute('data-lowmem', '1'); } catch (e) {} }
+
 /* ── Helpers ── */
 function escHtml(s){
   if(s==null) return '';
@@ -4742,6 +4764,7 @@ window.logoutUser = logoutUser;
      Uses already-cached _piOverview (set in Sprint-3 boot).
   ══════════════════════════════════════════════════════════════ */
   function _loadOverviewDashboard() {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional command-summary dashboard */
     function _render(ov) {
       /* Trust Score */
       var ts = ov.trust ? ov.trust.score : null;
@@ -5299,7 +5322,7 @@ window.logoutUser = logoutUser;
 
   function _buildSearchIndex(ov) {
     _searchIndex = [];
-    if (!ov) return;
+    if (window.__SK_LOWMEM || !ov) return;   /* low-mem: keep search index empty but valid */
     _searchIndex.push({ icon: '👤', text: 'My Profile', sub: 'Identity', action: function() { switchTab('identity'); } });
     _searchIndex.push({ icon: '💼', text: 'Career Profile', sub: 'Professional', action: function() { switchTab('career'); } });
     _searchIndex.push({ icon: '📁', text: 'Document Vault', sub: 'Documents', action: function() { switchTab('vault'); } });
@@ -5621,6 +5644,7 @@ window.logoutUser = logoutUser;
 
   /* ── Adaptive Hub Links (replace upQuickLinks when rendered) ── */
   function _renderAdaptiveHubs(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional adaptive dashboard */
     var hub = _el('upQuickLinks');
     if (!hub) return;
     var roles = ov ? (ov.roles || []) : [];
@@ -5831,6 +5855,7 @@ window.logoutUser = logoutUser;
   var DIRECT_KEYS = { businessCount: true, trustScore: true, orderCount: true, walletBalance: true };
 
   function _renderAdaptiveCards(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional adaptive cards */
     var wrap6    = _el6('pi6RoleCardWrap');
     var grid     = _el6('pi6RoleCards');
     if (!grid) return;
@@ -6042,6 +6067,7 @@ window.logoutUser = logoutUser;
   };
 
   function _renderExecCmds(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional exec-command widget */
     var wrap = _el6('pi6ExecCmdsWrap');
     if (!wrap) return;
     var role = _role(ov);
@@ -6384,6 +6410,7 @@ window.logoutUser = logoutUser;
      3. NOTIFICATION SUMMARY
   ───────────────────────────────────────────── */
   function _renderNotifSummary(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional notification summary */
     var wrap = _el7('pi7NotifSummary');
     if (!wrap) return;
 
@@ -6499,6 +6526,7 @@ window.logoutUser = logoutUser;
   };
 
   function _renderModuleSummaries(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional module summaries */
     var wrap = _el7('pi7ModuleCards');
     if (!wrap) return;
     var role = _role7(ov);
