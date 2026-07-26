@@ -390,7 +390,10 @@ window.PosSales = (() => {
     const items = (order.items || []).map(i => ({ productId: i.productId, qty: i.qty || i.quantity || 1 }));
     await PosInventory.deductSaleItems(items, order.branchId || _branchId, order.id, 'marketplace');
     const fsDb = window.firebase?.firestore?.();
-    if (fsDb) await fsDb.collection('orders').doc(order.id).update({ posProcessed: true, posProcessedAt: Date.now() });
+    /* Server clock, not the till's device clock — this is the authoritative time
+       inventory was deducted and the order marked POS-processed. Matches the CF
+       (functions/pos-retail.js) which stamps posProcessedAt with serverTimestamp. */
+    if (fsDb) await fsDb.collection('orders').doc(order.id).update({ posProcessed: true, posProcessedAt: firebase.firestore.FieldValue.serverTimestamp() });
     emit('marketplace:order_synced', { orderId: order.id });
   }
 
