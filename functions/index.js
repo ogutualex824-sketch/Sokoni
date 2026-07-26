@@ -6904,6 +6904,40 @@ exports.webhookIntasend = onRequest(
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
         } else if (!_sellerId || _netCents <= 0) {
           console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        } else if (_isBooking) {
+          /* Booking earnings → the provider's WITHDRAWABLE wallet balance
+             (wallets.balance, in SHILLINGS) — the exact field the wallet UI shows and
+             requestSellerPayout pays out, so the provider can withdraw to M-Pesa. The
+             finos availableBalance/withdrawableBalance ledger (cents) is a SEPARATE
+             representation the withdraw flow does not read, which is why crediting it
+             would leave the earnings un-withdrawable. Idempotent via walletCreditedAt. */
+          const _netShillings = Math.round(Math.max(0, amount - sokoniCut));
+          const _payDoc = db.collection("payments").doc(apiRef);
+          const _walRef = db.collection("wallets").doc(_sellerId);
+          const _credited = await db.runTransaction(async (txn) => {
+            const snap = await txn.get(_payDoc);
+            if (!snap.exists || snap.data().walletCreditedAt) return false;
+            const wSnap = await txn.get(_walRef);
+            if (wSnap.exists) {
+              txn.update(_walRef, { balance: admin.firestore.FieldValue.increment(_netShillings) });
+            } else {
+              txn.set(_walRef, { uid: _sellerId, balance: _netShillings, currency: "KES",
+                createdAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            }
+            txn.set(db.collection("walletTransactions").doc(`${_sellerId}_${apiRef}_booking`), {
+              uid: _sellerId, type: "booking_earning", amount: _netShillings,
+              description: `Booking earning — ${payData.meta?.serviceDesc || "service"} (ref ${apiRef})`,
+              status: "completed", createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            txn.update(_payDoc, {
+              walletCreditedAt:  admin.firestore.FieldValue.serverTimestamp(),
+              walletCreditCents: _netShillings * 100,
+              walletCreditedTo:  _sellerId,
+            });
+            return true;
+          });
+          console.log(`[webhookIntasend] booking earning ${_credited ? "credited" : "already credited"} to provider wallet.balance`,
+            { ref: apiRef, provider: _sellerId, netShillings: _netShillings });
         } else {
           const { creditWalletTxn } = require('./finos-utils');
           const _payDoc = db.collection("payments").doc(apiRef);
