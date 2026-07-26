@@ -649,22 +649,29 @@ const STATUS_LABELS = { pending_payment:'Pending', pending:'Pending', confirmed:
    shared venue doc and price correctly on read via the unified schema. */
 var USE_BOOKING_CORE = true;
 var BOOK_ORDER_FIELD = USE_BOOKING_CORE ? 'startTs' : 'startTime';
+/* booking.js core ops are DISPATCHER-ONLY (served via bookingDispatch, not as
+   standalone callables), so core routes through _bd(); legacy venue* ops are
+   standalone callables reached via cf(name). */
+function _bd(op, data) { return cf('bookingDispatch')(Object.assign({ op: op }, data || {})); }
 function bmCalendar(venueId, startD, endD) {
   return USE_BOOKING_CORE
-    ? cf('bookingGetCalendar')({ venueId: venueId, from: startD.getTime(), until: endD.getTime() })
+    ? _bd('bookingGetCalendar', { venueId: venueId, from: startD.getTime(), until: endD.getTime() })
     : cf('venueGetCalendar')({ venueId: venueId, startDate: iso(startD), endDate: iso(endD) });
 }
 function bmBlock(venueId, startStr, endStr, reason, note) {
   return USE_BOOKING_CORE
-    ? cf('bookingBlockSlots')({ venueId: venueId, startTs: new Date(startStr + 'T00:00:00').getTime(), endTs: new Date(endStr + 'T23:59:59').getTime(), reason: reason, note: note })
+    ? _bd('bookingBlockSlots', { venueId: venueId, startTs: new Date(startStr + 'T00:00:00').getTime(), endTs: new Date(endStr + 'T23:59:59').getTime(), reason: reason, note: note })
     : cf('venueBlockDates')({ venueId: venueId, startDate: startStr, endDate: endStr, reason: reason, note: note });
 }
-function bmStats(venueId) { return cf(USE_BOOKING_CORE ? 'bookingGetStats' : 'venueGetStats')({ venueId: venueId }); }
-function bmCancel(id, r)  { return cf(USE_BOOKING_CORE ? 'bookingCancel' : 'venueCancelBooking')({ bookingId: id, reason: r }); }
+function bmStats(venueId) { return USE_BOOKING_CORE ? _bd('bookingGetStats', { venueId: venueId }) : cf('venueGetStats')({ venueId: venueId }); }
+function bmCancel(id, r)  { return USE_BOOKING_CORE ? _bd('bookingCancel', { bookingId: id, reason: r }) : cf('venueCancelBooking')({ bookingId: id, reason: r }); }
 function bmAction(action, id) {
-  var CORE   = { confirm: 'bookingApprove', checkin: 'bookingCheckIn', checkout: 'bookingCheckOut' };
+  if (USE_BOOKING_CORE) {
+    var CORE = { confirm: 'bookingApprove', checkin: 'bookingCheckIn', checkout: 'bookingCheckOut' };
+    return _bd(CORE[action], { bookingId: id });
+  }
   var LEGACY = { confirm: 'venueConfirmBooking', checkin: 'venueCheckIn', checkout: 'venueCheckOut' };
-  return cf((USE_BOOKING_CORE ? CORE : LEGACY)[action])({ bookingId: id });
+  return cf(LEGACY[action])({ bookingId: id });
 }
 /* Booking-doc field accessors that work for both shapes (core: startTs epoch +
    pricingBreakdown.total; legacy: startTime Timestamp + totalAmount/amount). */
