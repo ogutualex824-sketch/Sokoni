@@ -2778,6 +2778,10 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <script src="sokoni-invoice.js"></script>
 <script type="module" src="session-manager.js"></script>
 <script type="module" src="firebase.js"></script>
+<!-- Centralized, idempotent baseline repair: gives every authenticated user the
+     same baseline (users doc / wallet / notificationPrefs), creating ONLY what is
+     missing, never overwriting. Self-hooks on the verified session; fails open. -->
+<script src="sokoni-user-bootstrap.js" defer></script>
 <!-- Canonical avatar resolver + upload. Not deferred: handleAvatarUpload is
      an inline onchange handler, so SokoniAvatar must exist before a user
      can reach the file picker. -->

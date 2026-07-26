@@ -1,3 +1,35 @@
+## [2026-07-26] — feat(accounts): centralized idempotent user baseline bootstrap (ensureUserBaseline)
+
+Milestone 1 of the account-consistency program: ONE shared path that gives every AUTHENTICATED
+user the same baseline Firestore structure, creating ONLY what is missing and NEVER overwriting
+valid data — so pages can assume a baseline instead of each re-implementing (and diverging on) it.
+
+`sokoni-user-bootstrap.js` → `window.ensureUserBaseline()`:
+- **Idempotent by construction** — reads each doc, computes only ABSENT fields/docs, writes only
+  those with `{merge:true}`. A complete account triggers ZERO writes; safe to run every login.
+- **Auth = identity provider, not profile completeness** — derives uid only from the verified
+  `firebaseAuth.currentUser` after `waitForFirebaseReady`, never from `localStorage.loggedIn` or
+  cached profile. Never redirects, never throws — a bootstrap failure cannot reintroduce the
+  profile↔login loop.
+- **Bounded by firestore.rules (verified against the live rules)** — may create/repair only
+  `users/{uid}` (roles-array; never `role`/admin/privilege/`provider`/`createdAt`/`profileEditCount`,
+  so `profileEditWithinLimit()` stays satisfied via `nc==pc`), `wallets/{uid}` (balance EXACTLY 0),
+  and `notificationPrefs/{uid}`. Server-owned docs (shops, subscriptions, provider status/settings,
+  wallet v2 balances) are deliberately left to the server migration.
+- Existing accounts missing onboarding flags are treated as ONBOARDED (never re-onboarded); a
+  missing display name is backfilled from the auth token (the field whose absence caused the loop).
+
+Verified: `scripts/test-user-bootstrap.js` — 33 assertions on the pure planners (idempotency,
+no-overwrite invariant, and that no client write can contain a rules-forbidden field). Wired into
+`profile.html`; emulation confirms it self-hooks, fails open on unreachable Firestore, and does not
+change rendering or navigation (brand-new account still: 14 tabs, no loop, 0 pageerrors).
+
+Files: `sokoni-user-bootstrap.js` (new), `scripts/test-user-bootstrap.js` (new), `profile.html`
+(+1 include). Next: broaden the include, then the idempotent server migration for existing users
+and the post-migration rules audit.
+
+---
+
 ## [2026-07-26] — fix(auth): CRITICAL — new accounts couldn't open Profile (isLoggedIn required a display name)
 
 Reported: "most users face reload / over-reload — nobody can open or access their profile."
