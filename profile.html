@@ -13,6 +13,25 @@
 <html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header>
 <head>
   <script src="sokoni-crash-sentinel.js"></script>
+  <!-- ── Auth gate ──────────────────────────────────────────────────────────
+       An opaque splash covers the ENTIRE page until SokoniAuthState POSITIVELY
+       confirms a signed-in user (resolver runs alongside the auth guard below).
+       A signed-out visitor is redirected before this ever lifts, so no
+       authenticated layout — profile skeleton, wallet, trust score — is visible
+       to them, not even for a frame. Resolution-aware, so it never fights the
+       loggedIn-flag guard nor reintroduces the profile↔login loop. -->
+  <style id="sk-auth-gate-css">
+    #sk-auth-gate{ position:fixed; inset:0; z-index:2147483647; background:#050505;
+      display:flex; align-items:center; justify-content:center; flex-direction:column; gap:20px; }
+    #sk-auth-gate .sk-ag-spin{ width:44px; height:44px; border-radius:50%;
+      border:3px solid rgba(113,255,0,0.18); border-top-color:#71ff00;
+      animation:sk-ag-spin 0.8s linear infinite; }
+    #sk-auth-gate .sk-ag-txt{ color:#8a8a8a; letter-spacing:0.3px;
+      font:500 14px/1.4 "Segoe UI",system-ui,sans-serif; }
+    @keyframes sk-ag-spin{ to{ transform:rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce){ #sk-auth-gate .sk-ag-spin{ animation:none; } }
+    html.sk-auth-ok #sk-auth-gate{ display:none !important; }
+  </style>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -1603,6 +1622,12 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 </head>
 
 <body>
+<!-- Auth gate splash — first paint, opaque, covers the page until a verified session
+     is confirmed by the resolver near the auth guard below. Lifts via html.sk-auth-ok. -->
+<div id="sk-auth-gate" role="status" aria-live="polite" aria-label="Loading your profile">
+  <div class="sk-ag-spin"></div>
+  <div class="sk-ag-txt">Loading&hellip;</div>
+</div>
 <script src="sokoni-security.js"></script>
 <script src="sokoni-guards.js"></script>
 <script src="splash.js"></script>
@@ -2901,6 +2926,47 @@ if(localStorage.getItem('loggedIn') !== 'true'){
   throw new Error('Not authenticated');
 }
 if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokoniAuthReady fill it */
+
+/* ── Auth-gate resolver ─────────────────────────────────────────────────────
+   The synchronous flag guard above gives the fast redirect for the obvious
+   signed-out case (no loggedIn flag). This closes the subtler one the user saw
+   in screenshots: a STALE loggedIn flag with NO live Firebase session — where
+   the flag guard would let the authenticated layout paint. The page stays under
+   the opaque #sk-auth-gate splash until SokoniAuthState (resolution-aware) has
+   AUTHORITATIVELY reported a real user; only then do we reveal. If Firebase
+   reports no user, we clear the stale cache first — otherwise login.html's
+   already-logged-in guard would bounce us straight back and re-create the
+   profile↔login loop — then redirect. SokoniAuthState NEVER concludes
+   logged-out while auth is still resolving, so this cannot reintroduce the loop. */
+(function _profileAuthGate(){
+  var HTML = document.documentElement;
+  function reveal(){ HTML.classList.add('sk-auth-ok'); }
+  function toLogin(){
+    try { localStorage.removeItem('loggedIn'); localStorage.removeItem('sokoniUser'); } catch(_){}
+    try { location.replace('login.html?redirect=profile.html'); }
+    catch(_){ location.href = 'login.html?redirect=profile.html'; }
+  }
+  var AS = window.SokoniAuthState;
+  if (AS && AS.ready && typeof AS.ready.then === 'function'){
+    AS.ready.then(function(session){
+      if (session && session.uid) reveal(); else toLogin();
+    }).catch(function(){
+      /* Never trap a real user on the splash: fall back to the flag we already know is 'true'. */
+      reveal();
+    });
+  } else {
+    /* SokoniAuthState unavailable — we only reached here because the flag was
+       'true', so reveal rather than strand the user on the splash. */
+    reveal();
+  }
+  /* Absolute failsafe past SokoniAuthState's own 12s optimistic backstop. */
+  setTimeout(function(){
+    if (HTML.classList.contains('sk-auth-ok')) return;
+    if (AS && AS.isResolved && AS.isResolved() &&
+        !(AS.getCurrentSession && AS.getCurrentSession())) toLogin();
+    else reveal();
+  }, 14000);
+})();
 
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
 var _profSellerProductsUnsub = null;
