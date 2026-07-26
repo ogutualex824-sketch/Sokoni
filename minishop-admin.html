@@ -520,10 +520,16 @@
     <section class="msa-health" id="msaHealth" hidden>
       <div class="msa-health-top">
         <div class="msa-health-ring" id="msaHealthRing">
-          <div class="msa-health-score"><span id="msaHealthScore">0</span><small>/ 100</small></div>
+          <div class="msa-health-score"><span id="msaHealthScore">0</span><small>% done</small></div>
         </div>
         <div class="msa-health-head">
-          <h2>Shop Health</h2>
+          <!-- "Storefront Setup", NOT "Shop Health". merchant-success.html already
+               owns "Health Score — your business performance index", graded A+ to F
+               from fulfilment, reviews and orders. This panel measures something
+               different: how completely the storefront is filled in. Two panels
+               both called health, one a performance grade and one a checklist,
+               would read as the same number disagreeing with itself. -->
+          <h2>Storefront Setup</h2>
           <p id="msaHealthHint">Finish these to help customers find and trust your shop.</p>
         </div>
       </div>

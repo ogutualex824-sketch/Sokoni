@@ -27,6 +27,58 @@ No database, API, or security changes. No breaking changes.
 
 ---
 
+## [2026-07-26] — fix(brands,minishop): brand name printed on documents; two colliding health scores
+
+Two open items closed, and the root cause of a third found.
+
+### KASS brand name on documents
+
+`functions/brands.js` still had `displayName: 'KASS Vapes'` after the merchant
+renamed to KASS SHOP everywhere else. That value feeds `brandName` in
+`documentBranding()`, so receipts printed a different name than the storefront
+and the seller record showed. Renamed.
+
+`domains: ['kassvapes.co.ke']` is deliberately **not** renamed — it is live
+infrastructure and host→brand resolution depends on it. `test-brands` 36/36.
+
+### Two health scores no longer collide
+
+`merchant-success.html` already owns **"Health Score — your business
+performance index"**, graded A+ to F from fulfilment, reviews and orders. The
+MiniShop panel added earlier the same day was called **"Shop Health"** and
+measured something entirely different: how completely the storefront is filled
+in.
+
+Two panels both called health — one a performance grade, one a checklist —
+read as the same number disagreeing with itself. The MiniShop one is now
+**"Storefront Setup"**, and its ring reads `% done` rather than `/100`, which
+stops it looking like a grade. Both engines kept; only the collision removed.
+
+### Root cause found for the handle that never existed
+
+**The `shops` collection is empty and has no writer anywhere in the codebase.**
+
+`claimMinishopHandle` → `_assertShopOwner` → reads `shops/{shopId}` →
+`NOT_FOUND`. **No merchant has ever been able to claim a MiniShop handle,
+because it is structurally impossible.** That is why every handle probed this
+session returned 404, and why the per-shop preview work has never run its happy
+path against real data.
+
+A second bug sits in the same path: `minishop-admin` queries
+`where('ownerId', ...)` while `_assertShopOwner` checks `sellerUid` — two field
+names for one relationship, so fixing only the missing writer would produce a
+shop its owner still cannot open.
+
+Written up with three options and a recommendation in
+[[MINISHOP_SHOPS_COLLECTION_GAP]]. Not patched here: it is identity-adjacent,
+and the fast fix (backfill `shops/` from `sellers/`) would create a fourth home
+for the same merchant — exactly the duplication the config convergence removed
+that morning. It belongs in front of the Architecture Review Gate.
+
+Nothing built today is invalidated by it. The prerenderer, schema convergence,
+resolver, admin redesign and auth-gate ceiling all fail closed and honestly
+against an empty `shops/`, and work the moment one exists.
+
 ## [2026-07-26] — chore(onboarding): split Maina's profile name from the shop name
 
 The first onboarding used the business name for both, so the owner's profile
