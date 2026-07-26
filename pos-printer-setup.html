@@ -1753,7 +1753,26 @@ async function pairP58E () {
        Web Bluetooth requires a user gesture and a human choice for first
        permission, by design. That is the one step no code can remove. */
     btn.textContent = 'Searching for printer…';
-    const restored = await PrinterManager.p58e.autoConnect();
+
+    /* BOUNDED. autoConnect() calls navigator.bluetooth.getDevices() and then a
+       GATT connect, and either can hang indefinitely on some Android builds —
+       no error, no rejection, just silence. Awaiting it unbounded parked the
+       button on "Searching for printer…" forever and the picker never opened,
+       which is strictly worse than the old behaviour of going straight to the
+       chooser.
+
+       A convenience shortcut must never be able to block the path that
+       actually works, so it gets 3 seconds and then we move on regardless. A
+       late resolution is ignored: `settled` guards against the picker and a
+       slow auto-connect both driving the UI. */
+    let settled = false;
+    const restored = await Promise.race([
+      PrinterManager.p58e.autoConnect().then(r => { settled = true; return r; })
+                                       .catch(() => { settled = true; return false; }),
+      new Promise(res => setTimeout(() => res(false), 3000)),
+    ]);
+    if (!settled) _dbg('autoConnect timed out after 3s — falling through to picker');
+
     if (restored) {
       const known = PrinterManager.p58e.info;
       toast('Connected to ' + (known?.name || 'P58E') + ' — no pairing needed');
@@ -2405,7 +2424,13 @@ renderChecklist();
    The panel is re-rendered too, not just the status bar — otherwise a restored
    connection still showed "Pair P58E Printer", which reads as "it did not
    work". */
-PrinterManager.autoReconnect().then(ok => {
+/* Also bounded — same hang risk as the pair path. This one does not block a
+   button, but an unresolved promise means the panel never re-renders, so the
+   page would sit showing "Pair" while a connection was silently in progress. */
+Promise.race([
+  PrinterManager.autoReconnect().catch(() => false),
+  new Promise(res => setTimeout(() => res(false), 5000)),
+]).then(ok => {
   if (!ok) return;
   const known = PrinterManager.p58e?.info;
   if (known) _connectedDevice = { name: known.name, type: 'bluetooth' };
