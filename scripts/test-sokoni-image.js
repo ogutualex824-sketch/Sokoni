@@ -68,5 +68,10 @@ ok('isBadSrc: data: true', SI.isBadSrc('data:x') === true);
 ok('isBadSrc: https false', SI.isBadSrc('https://s/x') === false);
 ok('isBadSrc: empty true', SI.isBadSrc('') === true);
 
+/* Version + diagnostics */
+ok('exposes a version constant', SI.version === '1.0.0');
+ok('checkAdoption is callable (no-op without a DOM)',
+  (() => { const r = SI.checkAdoption(); return r && typeof r.unmanaged === 'number'; })());
+
 console.log('\n  ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

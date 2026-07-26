@@ -37,11 +37,13 @@
   if (typeof window !== 'undefined') {
     window.SokoniImage = api;
     window.renderProductImage = api.render;   // named alias per the design
+    window.SOKONI_IMAGE_VERSION = api.version; // production diagnostics: which helper is running
     api._autoInit();
   }
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
+  var VERSION = '1.0.0';   // bump on any behaviour change; surfaced for prod diagnostics
   var CLASS = 'sk-img';
 
   var CONFIG = {
@@ -170,10 +172,41 @@
     _inited = true;
     document.addEventListener('error', _onError, true);
   }
+
+  function _isDev() {
+    try { return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname); }
+    catch (e) { return false; }
+  }
+
+  /* Dev-only adoption check: flags product images rendered OUTSIDE the abstraction
+     (an <img> without .sk-img under a product-image selector), so new code adopts
+     renderProductImage() and lazy/decoding/CLS/fallback stay consistent. Runs
+     automatically ONLY on localhost, so it never warns or costs anything in
+     production. Callable by hand anywhere: SokoniImage.checkAdoption(). */
+  function checkAdoption(selector) {
+    if (typeof document === 'undefined') return { unmanaged: 0, examples: [] };
+    var sel = selector || '.st-product-card img, .product-card img, .ptrend-grid img, [class*="product"] img';
+    var imgs = [].slice.call(document.querySelectorAll(sel));
+    var unmanaged = imgs.filter(function (i) { return !i.classList.contains(CLASS); });
+    if (unmanaged.length && typeof console !== 'undefined') {
+      try {
+        console.warn('[SokoniImage v' + VERSION + '] ' + unmanaged.length +
+          ' product image(s) rendered outside the helper (missing .' + CLASS +
+          '). Adopt renderProductImage() so lazy/decoding/CLS/fallback stay consistent.',
+          unmanaged.slice(0, 5));
+      } catch (_) {}
+    }
+    return { unmanaged: unmanaged.length, examples: unmanaged.slice(0, 5) };
+  }
+
   function _autoInit() {
     if (typeof document === 'undefined') return;
-    if (document.readyState !== 'loading') init();
-    else document.addEventListener('DOMContentLoaded', init);
+    var start = function () {
+      init();
+      if (_isDev()) setTimeout(function () { checkAdoption(); }, 2500);  // after cards render
+    };
+    if (document.readyState !== 'loading') start();
+    else document.addEventListener('DOMContentLoaded', start);
   }
 
   /* Preload a hero/LCP image — call for above-the-fold priority images. */
@@ -192,16 +225,19 @@
   }
 
   return {
+    version: VERSION,
     render: render,
     renderProductImage: render,
     html: render,
     apply: apply,
     preload: preload,
     configure: configure,
+    checkAdoption: checkAdoption,
     buildSrcset: buildSrcset,
     isBadSrc: isBadSrc,
     init: init,
     _autoInit: _autoInit,
+    _isDev: _isDev,
     CLASS: CLASS,
     CONFIG: CONFIG
   };
