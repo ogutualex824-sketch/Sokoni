@@ -433,5 +433,10 @@
   if(document.readyState!=='loading') init(); else document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
+<!-- Registers the service worker, checks for updates, and auto-reloads once a new
+     worker takes control. Without this, the page renders whatever the active (and
+     possibly stale) worker holds and never triggers an update — the cause of
+     "earn page still loading old version". Matches index.html. -->
+<script src="sw-register.js" defer></script>
 </body>
 </html>

@@ -439,5 +439,8 @@ document.getElementById('modal-overlay').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => { if(e.key==='Escape') closeModal(); });
 </script>
+<!-- SW registration + update-check + auto-reload on new worker (same fix as
+     earnings.html): ensures the pricing SoT page never serves a stale version. -->
+<script src="sw-register.js" defer></script>
 </body>
 </html>
