@@ -45,7 +45,7 @@ srv.listen(0, async () => {
     const vis = (id) => { const e = $(id); return !!e && e.style.display !== 'none'; };
 
     const run = async (branches) => {
-      WIZ.selectedBiz = { id: 'BIZ1', name: 'KASS VAPES' };
+      WIZ.selectedBiz = { id: 'BIZ1', name: 'KASS SHOP' };
       WIZ._bizBranches = branches;
       WIZ.selectedBranch = null;
       $('branch-error').classList.remove('visible');
@@ -66,11 +66,11 @@ srv.listen(0, async () => {
 
     const r = {};
     r.zero = await run([]);
-    r.one  = await run([{ id: 'b1', name: 'KASS VAPES - Nairobi CBD', address: 'Kimathi St' }]);
+    r.one  = await run([{ id: 'b1', name: 'KASS SHOP - Nairobi CBD', address: 'Kimathi St' }]);
     r.many = await run([{ id: 'b1', name: 'CBD' }, { id: 'b2', name: 'Westlands' }, { id: 'b3', name: 'Karen' }]);
 
     /* Genuine backend failure — permission denied. */
-    WIZ.selectedBiz = { id: 'BIZ1', name: 'KASS VAPES' };
+    WIZ.selectedBiz = { id: 'BIZ1', name: 'KASS SHOP' };
     WIZ._bizBranches = null;
     const e = new Error('Access denied'); e.code = 'permission-denied';
     _branchFailure(e);
@@ -98,7 +98,7 @@ srv.listen(0, async () => {
 
     console.log('\n── Case 2: ONE branch — auto-selected, read-only, no extra click ──');
     ck('single panel shown',           out.one.single === true);
-    ck('branch auto-selected',         out.one.selected === 'KASS VAPES - Nairobi CBD', out.one.selected);
+    ck('branch auto-selected',         out.one.selected === 'KASS SHOP - Nairobi CBD', out.one.selected);
     ck('Continue ENABLED immediately', out.one.continueEnabled === true);
     ck('title is "Branch", not "Select Branch"', out.one.title === 'Branch', out.one.title);
     ck('selector hidden',              out.one.listCount === 0);

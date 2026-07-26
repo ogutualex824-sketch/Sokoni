@@ -51,10 +51,10 @@ srv.listen(0, async () => {
 
     /* canonical wins on scalar fields */
     let m = M.merge(
-      [{ id: 'p1', title: 'Canonical', price: 100, sellerName: 'KASS VAPES' }],
+      [{ id: 'p1', title: 'Canonical', price: 100, sellerName: 'KASS SHOP' }],
       [{ id: 'p1', title: 'Stale',     price: 50,  sellerName: '+254705726803' }]);
     r.canonWins     = m.merged[0].title === 'Canonical' && m.merged[0].price === 100;
-    r.staleNameGone = m.merged[0].sellerName === 'KASS VAPES';
+    r.staleNameGone = m.merged[0].sellerName === 'KASS SHOP';
     r.noDupe        = m.merged.length === 1;
 
     /* an unsynced local-only product must survive and be flagged */

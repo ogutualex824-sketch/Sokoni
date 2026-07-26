@@ -11,7 +11,7 @@
  *           (shown on legal-hub) and lawyers (global search). No LSK number is
  *           fabricated — it is left blank for the firm to supply, so this is a
  *           real-but-unverified entry, never an invented advocate.
- *   [KASS]  make KASS VAPES searchable → sellers/{uid}.
+ *   [KASS]  make KASS SHOP searchable → sellers/{uid}.
  *
  *   node scripts/onboard-batch2.js            # dry run
  *   node scripts/onboard-batch2.js --apply
@@ -146,16 +146,16 @@ const KASS_UID='xrH21J5GFbW8PluCZ2ny5nIuf602';
   } else L('      would write legalProviders (active) + lawyers, LSK blank (not fabricated)');
 
   /* ── [KASS] make searchable ────────────────────────────────────────────── */
-  L('\n  [KASS] KASS VAPES — sellers registry');
+  L('\n  [KASS] KASS SHOP — sellers registry');
   const kUser=await lookupUid(KASS_UID);
   const kPhone=(kUser&&kUser.phoneNumber)||'+254705726803';
   if(APPLY){
     await patch('sellers',KASS_UID,{
-      uid:S(KASS_UID),name:S('KASS VAPES'),shopName:S('KASS VAPES'),storeName:S('KASS VAPES'),businessName:S('KASS VAPES'),
+      uid:S(KASS_UID),name:S('KASS SHOP'),shopName:S('KASS SHOP'),storeName:S('KASS SHOP'),businessName:S('KASS SHOP'),
       category:S('vape'),categoryLabel:S('Vape & Accessories'),sellerType:S('vape'),accountType:S('seller'),
       status:S('active'),isVisible:B(true),searchable:B(true),searchIndexed:B(true),
-      searchableTerms:A(terms(['KASS VAPES','kass','vape','vapes','e-cigarette','vaping','pods','accessories'])),
-      nameLower:S('kass vapes'),
+      searchableTerms:A(terms(['KASS SHOP','kass','vape','vapes','e-cigarette','vaping','pods','accessories'])),
+      nameLower:S('kass shop'),
       verified:B(false),featured:B(false),shopPublished:B(false),
       rating:I(0),reviewCount:I(0),productCount:I(0),
       phone:S(kPhone),phoneNumber:S(kPhone),
