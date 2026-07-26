@@ -1807,8 +1807,10 @@ function _clearDrvDelivery() {
 window._drvAcceptDelivery = async function(dRef) {
   const drv = window.currentDriver;
   try {
+    /* acceptedAt is server-owned (Firestore resolves the sentinel at commit) — the
+       rider's device clock never sets an authoritative delivery-acceptance time. */
     await SokoniDB.updatePackageRequest(dRef, {
-      status:'driver_accepted', acceptedAt:new Date().toISOString(),
+      status:'driver_accepted', acceptedAt:SokoniDB.serverTimestamp(),
       assignedDriverId: drv?.id || 'unknown',
       driverName: drv?.name || 'SOKONI Rider',
     });

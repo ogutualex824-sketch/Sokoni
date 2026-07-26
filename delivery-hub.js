@@ -78,11 +78,27 @@ function _calcFee(distKm, vehicleType, weight, urgency) {
   return Math.round((base + kmCh + wSur) * urgMult);
 }
 
+/* Timestamp field → Date (or null). Accepts a Firestore Timestamp (new,
+   server-stamped docs), a millis number, or an ISO string (legacy docs) so reads
+   survive the mixed-type window — new Date(Timestamp) is Invalid Date. */
+function _tsDate(v) {
+  if (v == null) return null;
+  if (typeof v.toDate === 'function')   return v.toDate();
+  if (typeof v.toMillis === 'function') return new Date(v.toMillis());
+  if (typeof v === 'number')            return new Date(v);
+  const t = Date.parse(v); return isNaN(t) ? null : new Date(t);
+}
+
 async function _timelineUpdate(fsId, status, by, extra) {
+  /* entry.at stays a client ISO string: it lives inside the timeline arrayUnion,
+     where the serverTimestamp() sentinel is illegal. It is a display mirror.
+     statusUpdatedAt is the authoritative scalar (feeds payoutDue/SLA) and is
+     server-generated. Any timestamp fields in `extra` are already serverTimestamp
+     (see the callers) and land as scalars, not in the array. */
   const entry = { status, at: new Date().toISOString(), by: String(by || 'system') };
   await updateDoc(doc(db, 'deliveries', fsId), {
     status,
-    statusUpdatedAt: entry.at,
+    statusUpdatedAt: serverTimestamp(),
     timeline: arrayUnion(entry),
     updatedAt: serverTimestamp(),
     ...(extra || {}),
@@ -256,7 +272,7 @@ const DeliveryHub = {
       etaMin:          null,
       /* Status */
       status:          'pending',
-      statusUpdatedAt: now,
+      statusUpdatedAt: serverTimestamp(),
       /* Proof */
       proofPIN,
       proofVerified:   false,
@@ -264,12 +280,12 @@ const DeliveryHub = {
       proofGps:        null,
       proofTimestamp:  null,
       proofNote:       null,
-      /* Timeline */
+      /* Timeline — at:now is a client mirror (arrays cannot hold serverTimestamp) */
       timeline: [{ status:'pending', at:now, by:'sender' }],
       /* Payout */
       payoutDue: false,
-      /* Timestamps */
-      createdAt:  now,
+      /* Timestamps — server-generated authoritative event times */
+      createdAt:  serverTimestamp(),
       updatedAt:  serverTimestamp(),
       /* Tracking */
       trackingUrl: 'https://mysokoni.co.ke/delivery-tracking.html?ref=' + deliveryRef,
@@ -328,7 +344,7 @@ const DeliveryHub = {
 
     await updateDoc(doc(db, 'deliveries', fsId), {
       status:          'rider_assigned',
-      statusUpdatedAt: now,
+      statusUpdatedAt: serverTimestamp(),
       assignedRiderId: rider._fsId,
       riderName:       rider.name || 'SOKONI Rider',
       riderPhone:      rider.phone || null,
@@ -337,6 +353,7 @@ const DeliveryHub = {
       riderLat:        rider.lat,
       riderLng:        rider.lng,
       etaMin,
+      /* timeline at stays client — arrayUnion cannot hold the sentinel */
       timeline: arrayUnion({ status:'rider_assigned', at:now, by:'system' }),
       updatedAt: serverTimestamp(),
     });
@@ -361,7 +378,7 @@ const DeliveryHub = {
   ──────────────────────────────────────────────────────── */
   async riderAccept(fsId, riderId) {
     await _timelineUpdate(fsId, 'rider_en_route', riderId, {
-      acceptedAt: new Date().toISOString(),
+      acceptedAt: serverTimestamp(),
     });
 
     /* Read delivery for notification */
@@ -380,11 +397,12 @@ const DeliveryHub = {
   async riderReject(fsId, riderId) {
     await updateDoc(doc(db, 'deliveries', fsId), {
       status:          'pending',
-      statusUpdatedAt: new Date().toISOString(),
+      statusUpdatedAt: serverTimestamp(),
       assignedRiderId: null,
       riderName:       null,
       riderPhone:      null,
       riderPlate:      null,
+      /* timeline at stays client — arrayUnion cannot hold the sentinel */
       timeline: arrayUnion({ status:'pending', at:new Date().toISOString(), by:riderId }),
       updatedAt: serverTimestamp(),
     });
@@ -405,7 +423,7 @@ const DeliveryHub = {
   ──────────────────────────────────────────────────────── */
   async riderAtPickup(fsId, riderId) {
     await _timelineUpdate(fsId, 'picked_up', riderId, {
-      pickedUpAt: new Date().toISOString(),
+      pickedUpAt: serverTimestamp(),
     });
   },
 
@@ -416,7 +434,7 @@ const DeliveryHub = {
     const snap = await getDoc(doc(db, 'deliveries', fsId)).catch(() => null);
     const d    = snap?.data();
     await _timelineUpdate(fsId, 'in_transit', riderId, {
-      inTransitAt: new Date().toISOString(),
+      inTransitAt: serverTimestamp(),
     });
     if (d?.senderUid) {
       this.notify(d.senderUid, '🚗 Package In Transit!',
@@ -456,14 +474,15 @@ const DeliveryHub = {
       photoData:   photoData || null,
       gps:         gps || null,
       notes:       notes || 'Delivered — PIN verified',
-      createdAt:   now,
+      createdAt:   serverTimestamp(),
     });
 
-    /* Update delivery */
+    /* Update delivery — deliveredAt gates the rider payout, so it is the server
+       clock. `now` (client) is returned below only for optimistic UI display. */
     await _timelineUpdate(fsId, 'delivered', riderId, {
-      deliveredAt:   now,
+      deliveredAt:   serverTimestamp(),
       proofVerified: true,
-      proofTimestamp:now,
+      proofTimestamp:serverTimestamp(),
       proofGps:      gps  || null,
       proofNote:     notes || 'Delivered — PIN verified',
       payoutDue:     true,
@@ -505,7 +524,7 @@ const DeliveryHub = {
   ──────────────────────────────────────────────────────── */
   async confirmReceipt(fsId, senderUid) {
     await _timelineUpdate(fsId, 'completed', senderUid, {
-      completedAt:       new Date().toISOString(),
+      completedAt:       serverTimestamp(),
       sellerPayoutReady: true,
     });
   },
@@ -517,7 +536,7 @@ const DeliveryHub = {
     const snap = await getDoc(doc(db, 'deliveries', fsId)).catch(() => null);
     const d    = snap?.data() || {};
     await _timelineUpdate(fsId, 'cancelled', cancelledBy, {
-      cancelledAt:  new Date().toISOString(),
+      cancelledAt:  serverTimestamp(),
       cancelledBy:  cancelledBy || 'user',
       cancelReason: reason || '',
     });
@@ -705,7 +724,7 @@ const DeliveryHub = {
     const today = new Date().toDateString();
     const totalEarnings = all.reduce((s,d) => s+(d.driverNet||0), 0);
     const todayEarnings = all
-      .filter(d => new Date(d.deliveredAt||d.createdAt).toDateString() === today)
+      .filter(d => { const dt = _tsDate(d.deliveredAt || d.createdAt); return dt && dt.toDateString() === today; })
       .reduce((s,d) => s+(d.driverNet||0), 0);
     return { trips:all.length, totalEarnings, todayEarnings };
   },

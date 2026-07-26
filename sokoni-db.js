@@ -68,6 +68,11 @@ function _idemGuard(key) {
 
 const SokoniDB = {
 
+  /* Server-clock sentinel for callers (e.g. driver.html) that need an
+     authoritative event time without importing the Firestore SDK. Resolved by
+     Firestore on the server at commit — the client never supplies the value. */
+  serverTimestamp: () => serverTimestamp(),
+
   /* ════════════════════════════════════════
      APPLICATIONS  (providers, drivers, sellers)
   ════════════════════════════════════════ */
