@@ -254,6 +254,8 @@ window.SokoniWalletV2 = (function () {
       _setText('savingsTotal', 'KSh ' + _fmtShort(data.savingsBalance || 0));
       _setText('cashbackVal', 'KSh ' + _fmtShort(data.cashbackBalance || 0));
       _setText('rewardPts', (data.rewardPoints || 0) + ' pts');
+      _setText('todayPaidVal', 'KSh ' + _fmtShort(data.todayPaid || 0));
+      _setText('monthPaidVal', 'KSh ' + _fmtShort(data.monthPaid || 0));
       _renderPendingPayout();   /* pending-withdrawals indicator */
 
       /* Keep the "Set PIN / Change PIN" label in sync with whether a PIN exists */
@@ -818,6 +820,9 @@ window.SokoniWalletV2 = (function () {
       _setText('wsAmount', 'KSh ' + _fmt(amt));
       _setText('wsFee', 'KSh 0');
       _setText('wsReceive', 'KSh ' + _fmt(amt));
+      /* Client hint only — the server risk engine is authoritative. KSh 20,000 is the
+         default instant ceiling; eligible sellers get it instantly, others 24h. */
+      _setText('wsArrival', amt <= 20000 ? '⚡ Instant · 1–3 min' : '⏳ Under review');
       if (sum) sum.style.display = 'block';
     } else if (sum) {
       sum.style.display = 'none';
@@ -880,12 +885,20 @@ window.SokoniWalletV2 = (function () {
 
     if (!navigator.onLine) return _wdrShowError('You appear to be offline. Check your connection and try again.');
 
-    /* Loading state — Processing… + spinner, taps blocked. */
+    /* Instant payouts require a verified PIN — collect it if the user has one set.
+       The server decides whether to grant instant; a missing PIN just routes to review. */
+    if (_dashboard?.hasPin) {
+      const pin = await _promptPin('Enter your PIN to withdraw KSh ' + _fmt(amt));
+      if (!pin) return;   // cancelled — don't submit
+      payload.pin = pin;
+    }
+
+    /* Loading state — "Sending your money…" + spinner, taps blocked. */
     const origLabel = btn ? btn.innerHTML : '';
     if (btn) {
       btn.dataset.busy = '1';
       btn.disabled = true;
-      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px"></span>Processing…';
+      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px"></span>Sending your money…';
     }
     _payoutStartedAt = Date.now();
     const _reset = () => { if (btn) { btn.dataset.busy = '0'; btn.disabled = false; btn.innerHTML = origLabel || '🏧 Request Payout'; } };
@@ -905,7 +918,7 @@ window.SokoniWalletV2 = (function () {
         }
         _setText('balVal', _fmt(_dashboard?.balance || 0));
         _renderPendingPayout();
-        _setText('wdrSuccessMsg', 'KSh ' + _fmt(amt) + ' will be sent to ' + acct + ' within 24 hours.');
+        _wdrRenderSuccess(d, amt, acct);
         const form = document.getElementById('wdrForm');   if (form) form.style.display = 'none';
         const succ = document.getElementById('wdrSuccess'); if (succ) succ.style.display = 'block';
         _wdrIdemKey = '';   // consumed — next withdrawal gets a fresh key
@@ -920,6 +933,28 @@ window.SokoniWalletV2 = (function () {
     } finally {
       _reset();
     }
+  }
+
+  /* Mode-aware success panel: instant (sent + ref + ETA), scheduled, or under review. */
+  function _wdrRenderSuccess(d, amt, acct) {
+    const mode    = d.mode || 'review';
+    const titleEl = document.querySelector('#wdrSuccess h3');
+    const emojiEl = document.querySelector('#wdrSuccess > div');
+    let title, msg, emoji;
+    if (mode === 'instant' || d.status === 'processing') {
+      emoji = '✅'; title = 'KSh ' + _fmt(amt) + ' sent successfully';
+      msg = 'On its way to ' + acct + '. Expected arrival: ' + (d.estimatedArrival || '1–3 minutes') + '.' +
+            (d.reference ? '\nReference: ' + d.reference : '');
+    } else if (mode === 'scheduled') {
+      emoji = '🗓️'; title = 'Withdrawal scheduled';
+      msg = 'KSh ' + _fmt(amt) + ' to ' + acct + ' — processed within 24 hours.';
+    } else {
+      emoji = '⏳'; title = 'Under review';
+      msg = 'KSh ' + _fmt(amt) + ' to ' + acct + '. Approved withdrawals arrive within 24 hours.';
+    }
+    if (emojiEl) emojiEl.textContent = emoji;
+    if (titleEl) titleEl.textContent = title;
+    _setText('wdrSuccessMsg', msg);
   }
 
   /* Pending-withdrawals indicator on the dashboard (shown only when > 0). */

@@ -297,8 +297,8 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
   try {
     const walletRef = await _ensureWallet(db, uid);
 
-    // Fan-out: wallet doc, savings subcollection, last 5 transactions in parallel
-    const [walletSnap, savingsSnap, txSnap] = await Promise.all([
+    // Fan-out: wallet doc, savings subcollection, last 5 transactions, payouts in parallel
+    const [walletSnap, savingsSnap, txSnap, payoutSnap] = await Promise.all([
       walletRef.get(),
       db.collection('wallets').doc(uid).collection('savings').get(),
       db.collection('walletTransactions')
@@ -306,6 +306,7 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
         .orderBy('createdAt', 'desc')
         .limit(5)
         .get(),
+      db.collection('payoutRequests').where('sellerUid', '==', uid).limit(100).get().catch(() => null),
     ]);
 
     const w = walletSnap.data();
@@ -314,6 +315,21 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
     let totalSaved = 0;
     for (const vDoc of savingsSnap.docs) {
       totalSaved += vDoc.data().currentAmount || 0;
+    }
+
+    // Paid-out totals for the dashboard cards (today / this month)
+    let todayPaid = 0, monthPaid = 0;
+    if (payoutSnap) {
+      const now = new Date();
+      const startDay   = new Date(now); startDay.setHours(0, 0, 0, 0);
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      for (const d of payoutSnap.docs) {
+        const p = d.data();
+        if (p.status !== 'paid') continue;
+        const ms = p.processedAt?.toMillis ? p.processedAt.toMillis() : (p.updatedAt?.toMillis ? p.updatedAt.toMillis() : 0);
+        if (ms >= startMonth.getTime()) monthPaid += (p.amount || 0);
+        if (ms >= startDay.getTime())   todayPaid += (p.amount || 0);
+      }
     }
 
     const last5Transactions = txSnap.docs.map((d) => {
@@ -339,6 +355,8 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
       tier:            w.tier             ?? 'bronze',
       frozen:          w.frozen           ?? false,
       hasPin:          !!w.pinHash,
+      todayPaid,
+      monthPaid,
       pinLocked:       w.pinLocked        ?? false,
       dailyLimit:      w.dailyLimit       ?? 50_000,
       monthlyLimit:    w.monthlyLimit     ?? 500_000,

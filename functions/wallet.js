@@ -56,6 +56,7 @@ async function _payoutMetric(db, field, incBy = 1, timingMs = null) {
  */
 async function _settlePayoutPaid(db, rid, extra = {}) {
   const reqRef = db.collection('payoutRequests').doc(rid);
+  let settled = null;   // set to the payout data only when THIS call performs the settlement
   await db.runTransaction(async (t) => {
     const reqSnap = await t.get(reqRef);
     if (!reqSnap.exists) return;
@@ -79,7 +80,14 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
       ...(extra.intasendRef ? { intasendRef: extra.intasendRef } : {}),
       ...(extra.processedBy ? { processedBy: extra.processedBy } : {}),
     });
+    settled = { ...payout, intasendRef: extra.intasendRef || payout.intasendRef };
   });
+  if (settled) {
+    /* Record end-to-end processing latency (request → paid) for analytics. */
+    const startMs = settled.createdAt?.toMillis ? settled.createdAt.toMillis() : null;
+    if (startMs) await _payoutMetric(db, 'paid', 0, Date.now() - startMs);
+    _notifyPayout('paid', settled, rid);
+  }
 }
 
 /**
@@ -89,6 +97,7 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
  */
 async function _refundPayout(db, rid, newStatus, extra = {}) {
   const reqRef = db.collection('payoutRequests').doc(rid);
+  let refunded = null;
   await db.runTransaction(async (t) => {
     const reqSnap = await t.get(reqRef);
     if (!reqSnap.exists) return;
@@ -105,7 +114,191 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
       ...(extra.note ? { note: extra.note } : {}),
       ...(extra.processedBy ? { processedBy: extra.processedBy } : {}),
     });
+    refunded = payout;
   });
+  /* Notify only when a provider FAILURE returned the funds (not an admin reject). */
+  if (refunded && newStatus === 'failed') _notifyPayout('failed', refunded, rid);
+}
+
+/**
+ * Reverse a payout after an IntaSend REVERSED/chargeback event. If it had settled
+ * ('paid'), the money came back → credit balance. If still in-flight, release the
+ * reserved hold. Idempotent.
+ */
+async function _reversePayout(db, rid, detail) {
+  const reqRef = db.collection('payoutRequests').doc(rid);
+  await db.runTransaction(async (t) => {
+    const snap = await t.get(reqRef);
+    if (!snap.exists) return;
+    const p = snap.data();
+    if (p.status === 'reversed') return;   // idempotent
+    const walletRef = db.collection('wallets').doc(p.sellerUid);
+    if (p.status === 'paid') {
+      /* Completed then returned → credit the amount back to available balance. */
+      t.update(walletRef, { balance: FieldValue.increment(p.amount) });
+    } else {
+      /* Not yet paid → release the reserved hold back to available balance. */
+      t.update(walletRef, { balance: FieldValue.increment(p.amount), pendingPayout: FieldValue.increment(-p.amount) });
+    }
+    t.update(reqRef, {
+      status: 'reversed', updatedAt: Timestamp.now(),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('reversed', detail || 'Payout reversed')),
+    });
+  });
+}
+
+const crypto = require('crypto');
+function _sha256(input) { return crypto.createHash('sha256').update(String(input), 'utf8').digest('hex'); }
+
+/* config/payouts — adjustable WITHOUT code changes. Safe defaults (system off). */
+const PAYOUT_CONFIG_DEFAULTS = {
+  enabled:            false,   // master switch for automated (instant) payouts
+  autoB2C:            false,   // actually call IntaSend B2C
+  instantLimit:       20000,   // KES — max amount eligible for instant
+  requirePin:         true,    // instant requires a verified wallet PIN
+  holdNewSellersDays: 7,       // accounts younger than this can't get instant
+  dailyLimit:         50000,   // KES — max instant total per seller per day
+  scheduledAbove:     0,       // KES — amounts >= this route to 'scheduled' (0 = off)
+};
+
+async function _getPayoutConfig(db) {
+  try {
+    const c = await db.collection('config').doc('payouts').get();
+    return { ...PAYOUT_CONFIG_DEFAULTS, ...(c.exists ? c.data() : {}) };
+  } catch (_) { return { ...PAYOUT_CONFIG_DEFAULTS }; }
+}
+
+/** Sum of today's non-refunded payout amounts for a seller. */
+async function _todayPayoutTotal(db, uid) {
+  try {
+    const start = new Date(); start.setHours(0, 0, 0, 0);
+    const snap = await db.collection('payoutRequests')
+      .where('sellerUid', '==', uid)
+      .where('createdAt', '>=', Timestamp.fromDate(start))
+      .limit(50).get();
+    let total = 0;
+    snap.forEach((d) => { const p = d.data(); if (!['rejected', 'failed'].includes(p.status)) total += (p.amount || 0); });
+    return total;
+  } catch (_) { return 0; }
+}
+
+/** Is there already an in-flight (unsettled) payout for this seller? */
+async function _hasActivePayout(db, uid) {
+  try {
+    const snap = await db.collection('payoutRequests').where('sellerUid', '==', uid).limit(50).get();
+    return snap.docs.some((d) => ['pending', 'approving', 'approved', 'processing', 'approval_failed', 'scheduled'].includes(d.data().status));
+  } catch (_) { return true; }   // fail safe → treat as active → not instant
+}
+
+/** Any OPEN dispute against this seller? */
+async function _hasOpenDispute(db, uid) {
+  try {
+    const snap = await db.collection('disputes').where('sellerId', '==', uid).limit(20).get();
+    return snap.docs.some((d) => String(d.data().status || '').toLowerCase() === 'open');
+  } catch (_) { return false; }
+}
+
+/**
+ * Risk engine — decide the payout MODE. Conservative by construction: any unmet
+ * condition OR unavailable signal routes to 'review', never silently 'instant'.
+ * Instant requires ALL of: system enabled, autoB2C on, M-Pesa, amount ≤ instantLimit,
+ * (PIN verified if required), no fraud/freeze, active account, verified seller,
+ * account older than the new-seller hold, daily limit not exceeded, no in-flight
+ * payout, no open dispute.
+ * @returns {{ mode:'instant'|'review'|'scheduled', reasons:string[], pinVerified:boolean }}
+ */
+async function _assessPayoutRisk(db, uid, amount, method, pin, cfg) {
+  const reasons = [];
+
+  const walletSnap = await db.collection('wallets').doc(uid).get();
+  const w = walletSnap.exists ? walletSnap.data() : {};
+  const pinVerified = !!(w.pinHash && pin && _sha256(`${pin}${uid}`) === w.pinHash);
+
+  if (!cfg.enabled)                    reasons.push('system_disabled');
+  if (!cfg.autoB2C)                    reasons.push('auto_off');
+  if (method !== 'mpesa')              reasons.push('non_mpesa');
+  if (amount > cfg.instantLimit)       reasons.push('above_instant_limit');
+  if (cfg.requirePin && !pinVerified)  reasons.push('pin_required');
+  if (w.frozen === true || w.fraudFlag === true || w.riskFlag === true) reasons.push('fraud_flag');
+
+  const userSnap = await db.collection('users').doc(uid).get();
+  const u = userSnap.exists ? userSnap.data() : {};
+  const acctStatus = String(u.accountStatus || u.status || 'active').toLowerCase();
+  if (['suspended', 'flagged', 'banned', 'frozen', 'restricted'].includes(acctStatus)) reasons.push('account_status');
+  const verified = (u.payoutVerified === true) || (u.sellerVerified === true) || (u.emailVerified === true);
+  if (!verified) reasons.push('unverified');
+  const createdMs = u.createdAt?.toMillis ? u.createdAt.toMillis() : (u.createdAt?._seconds ? u.createdAt._seconds * 1000 : Date.now());
+  if ((Date.now() - createdMs) / 86400000 < (cfg.holdNewSellersDays || 0)) reasons.push('new_seller_hold');
+
+  if ((await _todayPayoutTotal(db, uid)) + amount > cfg.dailyLimit) reasons.push('daily_limit');
+  if (await _hasActivePayout(db, uid)) reasons.push('pending_exists');
+  if (await _hasOpenDispute(db, uid))  reasons.push('open_dispute');
+
+  let mode;
+  if (cfg.scheduledAbove > 0 && amount >= cfg.scheduledAbove) mode = 'scheduled';
+  else if (reasons.length === 0)                             mode = 'instant';
+  else                                                       mode = 'review';
+
+  return { mode, reasons, pinVerified };
+}
+
+/**
+ * Initiate an IntaSend B2C disbursement for a reserved payout and advance its status.
+ * Shared by the instant path (requestSellerPayout) and admin approval. On success →
+ * 'processing' + intasendRef (webhook later confirms 'paid'). On failure → parks at
+ * 'approval_failed' WITHOUT refunding (an initiate error can be ambiguous). Returns
+ * { ok, intasendRef?, error? }.
+ */
+async function _disburseB2C(db, rid, payout) {
+  const reqRef = db.collection('payoutRequests').doc(rid);
+  try {
+    const resp = await intasendB2C(INTASEND_KEY.value(), {
+      phone: payout.accountNumber, amountKES: String(payout.amount),
+      reference: rid, remarks: 'SOKONI Earnings Payout',
+    });
+    const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
+    await reqRef.update({
+      status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
+    });
+    await _payoutMetric(db, 'b2cInitiated');
+    return { ok: true, intasendRef: ref };
+  } catch (e) {
+    await reqRef.update({
+      status: 'approval_failed', b2cError: String(e.message || e).slice(0, 300), updatedAt: Timestamp.now(),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('approval_failed', 'B2C initiate failed: ' + String(e.message || e).slice(0, 150))),
+    });
+    await _payoutMetric(db, 'b2cErrors');
+    return { ok: false, error: e.message || 'B2C failed' };
+  }
+}
+
+/** Mask an M-Pesa/account number for user-facing messages: 0712****678. */
+function _maskAcct(acc) {
+  const s = String(acc || '');
+  if (s.length < 6) return s;
+  const local = s.startsWith('254') ? '0' + s.slice(3) : s;
+  return local.slice(0, 4) + '****' + local.slice(-3);
+}
+
+/** Fire an in-app + SMS + email notification about a payout (best-effort). */
+function _notifyPayout(kind, payout, rid) {
+  try {
+    const notify = require('./notify').notify;
+    const dest   = _maskAcct(payout.accountNumber);
+    const amt    = payout.amount;
+    const ref    = payout.intasendRef || rid;
+    const map = {
+      paid:   { type: 'payout_paid',   title: 'Payout sent ✅',   body: `KSh ${amt} sent to ${dest}. Ref ${ref}.` },
+      failed: { type: 'payout_failed', title: 'Payout failed',    body: `Your KSh ${amt} withdrawal failed and the funds were returned to your wallet.` },
+    }[kind];
+    if (!map) return;
+    notify({
+      uid: payout.sellerUid, type: map.type, title: map.title, body: map.body,
+      dedupeKey: `${map.type}_${rid}`,
+      data: { requestId: rid, amount: amt, reference: ref, destination: dest, kind },
+    }).catch(() => {});
+  } catch (_) { /* notifications must never break payouts */ }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -557,14 +750,14 @@ exports.getWalletTransactions = onCall({ cors: true, enforceAppCheck: true }, as
 
 // ─── 6. requestSellerPayout ────────────────────────────────────────────────
 
-exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
   /* HIGH-06: throttle a money/privilege endpoint. Throws resource-exhausted. */
   await checkRateLimit(request, 'payment');
 
   const db = getFirestore();
   const uid = request.auth.uid;
-  const { amount, method, accountNumber, bankCode, bankName, idempotencyKey } = request.data || {};
+  const { amount, method, accountNumber, bankCode, bankName, idempotencyKey, pin } = request.data || {};
 
   const amt = Number(amount);
   if (!Number.isInteger(amt) || amt < 100) {
@@ -591,6 +784,15 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
   if (method === 'bank' && !bankCode) {
     throw new HttpsError('invalid-argument', 'bankCode is required for bank payouts');
   }
+
+  /* ── Risk engine: decide instant vs review vs scheduled (before reserving) ── */
+  const cfg  = await _getPayoutConfig(db);
+  const risk = await _assessPayoutRisk(db, uid, amt, method, pin, cfg);
+  /* Initial status by mode: instant reserves as a transient 'approving' then fires
+     B2C; review → 'pending'; scheduled → 'scheduled'. */
+  const initialStatus = risk.mode === 'instant' ? 'approving'
+                      : risk.mode === 'scheduled' ? 'scheduled'
+                      : 'pending';
 
   /* Idempotency: a client-supplied key maps to a deterministic doc id, so a
      double-tap or a retry-after-timeout can't create two withdrawals. Falls back to
@@ -635,8 +837,13 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
       accountNumber: sanitizedAccount,
       bankCode:      method === 'bank' ? _san(bankCode, 20) : null,
       bankName:      method === 'bank' ? _san(bankName, 100) : null,
-      status:        'pending',
-      statusHistory: [_payoutEvent('pending', 'Request submitted')],
+      mode:          risk.mode,
+      riskReasons:   risk.reasons,
+      status:        initialStatus,
+      statusHistory: [_payoutEvent('requested', 'Request submitted'),
+                      _payoutEvent(initialStatus, risk.mode === 'instant' ? 'Instant — auto-approved by risk engine'
+                                                  : risk.mode === 'scheduled' ? 'Scheduled for later processing'
+                                                  : 'Queued for admin review')],
       intasendRef:   null,
       note:          null,
       processedAt:   null,
@@ -645,15 +852,44 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true }, asyn
     });
   });
 
-  await _payoutMetric(db, deduplicated ? 'duplicatesPrevented' : 'requests');
+  if (deduplicated) {
+    await _payoutMetric(db, 'duplicatesPrevented');
+    return { success: true, requestId: reqId, deduplicated: true, mode: risk.mode, amount: amt,
+             accountNumber: sanitizedAccount, message: 'Already submitted.' };
+  }
 
+  await _payoutMetric(db, 'requests');
+
+  /* ── Instant path: disburse via IntaSend B2C immediately (webhook confirms paid) ── */
+  if (risk.mode === 'instant') {
+    await _payoutMetric(db, 'instantAttempts');
+    const payoutDoc = { sellerUid: uid, amount: amt, accountNumber: sanitizedAccount, method, intasendRef: null };
+    const res = await _disburseB2C(db, reqId, payoutDoc);
+    if (res.ok) {
+      return {
+        success: true, requestId: reqId, mode: 'instant', status: 'processing',
+        amount: amt, accountNumber: sanitizedAccount, reference: res.intasendRef,
+        estimatedArrival: '1–3 minutes',
+        message: 'Sending your money…',
+      };
+    }
+    /* B2C initiate failed — funds stay reserved, parked for review/retry. */
+    return {
+      success: true, requestId: reqId, mode: 'review', status: 'approval_failed',
+      amount: amt, accountNumber: sanitizedAccount,
+      estimatedArrival: 'Under review',
+      message: 'Your withdrawal is being processed and will arrive shortly.',
+    };
+  }
+
+  const estimated = risk.mode === 'scheduled' ? 'Tomorrow' : 'Under review';
   return {
-    success: true,
-    requestId: reqId,
-    deduplicated,
-    accountNumber: sanitizedAccount,
-    amount: amt,
-    message: 'Payout request submitted. Processing within 1–3 business days.',
+    success: true, requestId: reqId, mode: risk.mode, status: initialStatus,
+    amount: amt, accountNumber: sanitizedAccount,
+    estimatedArrival: estimated,
+    message: risk.mode === 'scheduled'
+      ? 'Scheduled — your payout will be processed within 24 hours.'
+      : 'Submitted — under review. Funds arrive within 24 hours once approved.',
   };
 });
 
@@ -781,31 +1017,11 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets
     return { success: true, status: 'approved', autoB2C: false };
   }
 
-  // Automated M-Pesa disbursement via the existing IntaSend B2C helper.
-  try {
-    const resp = await intasendB2C(INTASEND_KEY.value(), {
-      phone:     payout.accountNumber,
-      amountKES: String(payout.amount),
-      reference: rid,
-      remarks:   'SOKONI Earnings Payout',
-    });
-    const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
-    await reqRef.update({
-      status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
-    });
-    await _payoutMetric(db, 'b2cInitiated');
-    return { success: true, status: 'processing', intasendRef: ref };
-  } catch (e) {
-    /* Do NOT refund here — an initiate error can be ambiguous (request may still have
-       reached the provider). Park it for retry/reconciliation; funds stay reserved. */
-    await reqRef.update({
-      status: 'approval_failed', b2cError: String(e.message || e).slice(0, 300), updatedAt: Timestamp.now(),
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('approval_failed', 'B2C initiate failed: ' + String(e.message || e).slice(0, 150))),
-    });
-    await _payoutMetric(db, 'b2cErrors');
-    throw new HttpsError('internal', 'Payout provider error: ' + (e.message || 'B2C failed') + '. Funds remain reserved — retry or reject.');
-  }
+  // Automated M-Pesa disbursement via the shared B2C helper (webhook confirms 'paid').
+  const res = await _disburseB2C(db, rid, payout);
+  if (res.ok) return { success: true, status: 'processing', intasendRef: res.intasendRef };
+  /* Initiate failed — funds remain reserved (ambiguous), parked for retry/reconcile. */
+  throw new HttpsError('internal', 'Payout provider error: ' + (res.error || 'B2C failed') + '. Funds remain reserved — retry or reject.');
 });
 
 // ─── 9. adminGetPendingPayouts ─────────────────────────────────────────────
@@ -1059,8 +1275,8 @@ exports.getPayoutAnalytics = onCall({ cors: true, enforceAppCheck: true }, async
 
   const snaps = await db.getAll(...ids.map((d) => db.collection('payoutMetrics').doc(d)));
   const totals = {
-    requests: 0, approvals: 0, paid: 0, rejected: 0,
-    b2cInitiated: 0, b2cErrors: 0, duplicatesPrevented: 0, reconcileExceptions: 0,
+    requests: 0, approvals: 0, paid: 0, rejected: 0, reversed: 0,
+    instantAttempts: 0, b2cInitiated: 0, b2cErrors: 0, duplicatesPrevented: 0, reconcileExceptions: 0,
     processingMsTotal: 0, processingSamples: 0,
   };
   const daily = [];
@@ -1078,20 +1294,25 @@ exports.getPayoutAnalytics = onCall({ cors: true, enforceAppCheck: true }, async
 
   const avgProcessingMs = totals.processingSamples > 0
     ? Math.round(totals.processingMsTotal / totals.processingSamples) : null;
-  const successRate = totals.approvals > 0 ? +(totals.paid / totals.approvals * 100).toFixed(1) : null;
+  const successRate = totals.b2cInitiated > 0 ? +(totals.paid / totals.b2cInitiated * 100).toFixed(1) : null;
+  const instantSuccessRate = totals.instantAttempts > 0
+    ? +((totals.instantAttempts - totals.b2cErrors) / totals.instantAttempts * 100).toFixed(1) : null;
 
   return {
     windowDays: days,
     totals: {
       requests: totals.requests,
       approvals: totals.approvals,
+      instantAttempts: totals.instantAttempts,
       successfulPayouts: totals.paid,
       rejected: totals.rejected,
+      reversed: totals.reversed,
       failed: totals.b2cErrors,
       duplicatesPrevented: totals.duplicatesPrevented,
       reconciliationExceptions: totals.reconcileExceptions,
-      avgProcessingMs,
-      successRate,
+      avgPayoutSeconds: avgProcessingMs != null ? Math.round(avgProcessingMs / 1000) : null,
+      webhookSuccessRate: successRate,
+      instantSuccessRate,
     },
     daily,
   };
@@ -1121,10 +1342,14 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state) {
   const st       = String(state || '').toUpperCase();
   const COMPLETE = ['COMPLETE', 'COMPLETED', 'SUCCESS', 'PAID', 'SETTLED'];
   const FAILED   = ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED'];
+  const REVERSED = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'];
 
   if (COMPLETE.includes(st)) {
     await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, detail: `IntaSend B2C confirmed (${st})` });
-    await _payoutMetric(db, 'paid');
+    /* metric + latency recorded inside _settlePayoutPaid */
+  } else if (REVERSED.includes(st)) {
+    await _reversePayout(db, reqRef.id, `IntaSend reversed (${st})`);
+    await _payoutMetric(db, 'reversed');
   } else if (FAILED.includes(st)) {
     /* _refundPayout is a no-op if already paid/terminal — never double-pays. */
     await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${st})` });
