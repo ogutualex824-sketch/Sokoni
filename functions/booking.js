@@ -10,6 +10,10 @@ if (!admin.apps.length) admin.initializeApp();
 const db   = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
+/* Unified pricing — one calculator for the whole engine. normalize() accepts
+   legacy OR canonical, so this prices existing (un-migrated) venues correctly. */
+const { normalize: _normalizePricing, compute: _computePricing } = require('./pricing-schema');
+
 exports._h = {}; // handler registry — consumed by booking-dispatch.js
 
 /* ─── Helpers ───────────────────────────────────────────── */
@@ -54,39 +58,21 @@ async function _decrCustomerCounter(venueId, customerId) {
 }
 
 /* ── Pricing (mirrors client engine) ─────────────────────── */
+/* Delegates to the unified calculator (functions/pricing-schema.js). Kept as a
+   thin adapter so the single call site (bookingCreate) is unchanged. normalize()
+   handles legacy AND canonical venue.pricing, so existing venues price identically
+   (proven byte-for-byte by scripts/test-pricing-schema.js). The returned breakdown
+   is the canonical shape { base, peakSurcharge, holidaySurcharge, addOns, subtotal,
+   memberDiscount, total, deposit, currency, duration } — bookingCreate reads .total
+   for its server-authoritative payment check. */
 function _calculatePrice(venue, startMins, endMins, dateStr, opts={}) {
-  const p = venue.pricing || {};
-  const duration = endMins - startMins;
-  if (duration <= 0) return { base:0, surcharge:0, discount:0, addOns:0, deposit:p.deposit||0, total:p.deposit||0 };
-
-  let base = 0;
-  const HALF=240, FULL=480;
-  if (duration >= FULL && p.fullDay) {
-    base = p.fullDay * Math.ceil(duration/FULL);
-  } else if (duration >= HALF && p.halfDay) {
-    base = p.halfDay;
-  } else {
-    base = (p.hourly||0) * (duration/60);
-  }
-
-  const dow = _dayOfWeek(dateStr);
-  let surcharge = 0;
-  if ((dow==='sat'||dow==='sun') && p.weekend) surcharge += p.weekend;
-
-  for (const [ps,pe] of (p.peak?.hours||[])) {
-    const psM=ps*60, peM=pe*60;
-    const ol = Math.max(0,Math.min(endMins,peM)-Math.max(startMins,psM));
-    if (ol>0 && p.peak?.rate) surcharge += (p.peak.rate-(p.hourly||0))*(ol/60);
-  }
-  if (opts.isHoliday && p.holiday) surcharge += p.holiday;
-
-  let discount=0;
-  if (opts.isMember && p.member?.discount) discount=(base+surcharge)*p.member.discount;
-  if (opts.promoDiscount) discount+=(base+surcharge)*opts.promoDiscount;
-
-  const addOns=(opts.addOns||[]).reduce((t,a)=>t+(a.price||0),0);
-  const subtotal=base+surcharge-discount+addOns;
-  return { base, surcharge, discount, addOns, subtotal, deposit:p.deposit||0, total:subtotal+(p.deposit||0), duration };
+  return _computePricing(_normalizePricing(venue.pricing), {
+    startMins, endMins, dateStr,
+    isMember:  !!opts.isMember,
+    isHoliday: !!opts.isHoliday,
+    addOns:    opts.addOns || [],
+    promoPct:  opts.promoDiscount || 0,
+  });
 }
 
 /* ── Check for booking overlap ───────────────────────────── */
@@ -1025,6 +1011,86 @@ exports.bookingReject = onCall(
     return { rejected: true };
   }
 );
+
+/* ═══════════════════════════════════════════════════════════
+   Convergence Step 1 — parity ops so the whole venue lifecycle
+   runs on this core: price quote, no-show, owner stats.
+   Dispatcher-only (registered on _h; served via bookingDispatch).
+═══════════════════════════════════════════════════════════ */
+
+/* Server price quote — the ONE calculator, shown before create so the quoted
+   price equals the price bookingCreate later verifies payment against. */
+exports._h.bookingQuotePrice = async (req) => {
+  const d = req.data || {};
+  const { venueId, date, startTime } = d;
+  if (!venueId || !date || !startTime) throw new HttpsError('invalid-argument','venueId, date, startTime required');
+  const durationMins = Number(d.durationMins) || (d.endTime ? (_timeToMins(d.endTime) - _timeToMins(startTime)) : 60);
+  if (!(durationMins > 0)) throw new HttpsError('invalid-argument','duration must be positive');
+  const venueSnap = await db.collection('venues').doc(venueId).get();
+  if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
+  const startMins = _timeToMins(startTime);
+  return _calculatePrice(venueSnap.data(), startMins, startMins + durationMins, date, {
+    isMember: !!d.isMember, addOns: d.addOns || [],
+  });
+};
+
+/* Owner marks a booking as no-show → terminal state + no-show fee. Releases the
+   per-customer cap slot. Does NOT re-offer the slot (its time has already passed,
+   unlike a cancellation), and does not touch the slot lock for the same reason. */
+exports._h.bookingMarkNoShow = async (req) => {
+  const uid = _authRequired(req);
+  const { bookingId, reason } = req.data || {};
+  if (!bookingId) throw new HttpsError('invalid-argument','bookingId required');
+  const ref = db.collection('bookings').doc(bookingId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found','Booking not found');
+  const booking = snap.data();
+  const venueSnap = await db.collection('venues').doc(booking.venueId).get();
+  const venue = venueSnap.exists ? venueSnap.data() : {};
+  if (booking.ownerId !== uid && venue.ownerId !== uid && !req.auth?.token?.admin) {
+    throw new HttpsError('permission-denied','Only the venue owner can mark a no-show');
+  }
+  if (['cancelled','completed','no_show'].includes(booking.status)) {
+    throw new HttpsError('failed-precondition', `Booking is already ${booking.status}`);
+  }
+  const pctRaw = venue.pricing?.cancellationPolicy?.noShowFeePercent;
+  const pct = Number.isFinite(Number(pctRaw)) ? Number(pctRaw) : 100;
+  const noShowFee = Math.round((booking.pricingBreakdown?.total || 0) * pct / 100 * 100) / 100;
+  await ref.update({
+    status: 'no_show', noShowAt: Date.now(), noShowBy: uid,
+    noShowFee, noShowReason: _sanitize(reason || ''), updatedAt: Date.now(),
+  });
+  await _decrCustomerCounter(booking.venueId, booking.customerId);
+  return { noShow: true, noShowFee };
+};
+
+/* Owner booking stats over the last 30 days (top-level bookings). Mirrors the
+   venue-booking.js venueGetStats output so existing reporting is unchanged. */
+exports._h.bookingGetStats = async (req) => {
+  const uid = _authRequired(req);
+  const { venueId } = req.data || {};
+  if (!venueId) throw new HttpsError('invalid-argument','venueId required');
+  const venueSnap = await db.collection('venues').doc(venueId).get();
+  if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
+  if (venueSnap.data().ownerId !== uid && !req.auth?.token?.admin) {
+    throw new HttpsError('permission-denied','Not the venue owner');
+  }
+  const from = Date.now() - 30 * 86400000;
+  const snap = await db.collection('bookings')
+    .where('venueId', '==', venueId).where('startTs', '>=', from).limit(2000).get();
+  const all = snap.docs.map(d => d.data());
+  const TERMINAL = new Set(['cancelled', 'completed', 'no_show']);
+  const active    = all.filter(b => !TERMINAL.has(b.status));
+  const cancelled = all.filter(b => b.status === 'cancelled').length;
+  const noShows   = all.filter(b => b.status === 'no_show').length;
+  const totalRevenue  = Math.round(active.reduce((s, b) => s + (b.pricingBreakdown?.total || 0), 0) * 100) / 100;
+  const totalBookings = active.length;
+  const avgValue  = totalBookings > 0 ? Math.round(totalRevenue / totalBookings * 100) / 100 : 0;
+  const cancelRate = all.length > 0 ? Math.round(cancelled / all.length * 100) : 0;
+  const hourMap = {};
+  active.forEach(b => { const h = (b.startTime || '').split(':')[0]; if (h) hourMap[h] = (hourMap[h] || 0) + 1; });
+  return { totalRevenue, totalBookings, avgValue, cancelRate, noShows, cancelled, hourMap };
+};
 
 /* ═══════════════════════════════════════════════════════════
    16. SCHEDULED — Send Booking Reminders (every 30 minutes)
