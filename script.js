@@ -936,16 +936,24 @@ function restoreHomeScroll(){
 ========================= */
 
 function openProduct(id){
+    if(!id) return;
     saveHomeScroll();
-    const p = products.find(x => x.id === id);
-    if(!p) return;
-    localStorage.setItem("selectedProduct", JSON.stringify(p));
-    if(typeof sokoniTrackProductView === "function") sokoniTrackProductView(p);
-    /* Include the canonical id in the URL, not just the localStorage cache. The
-       cache makes the first render instant; the ?id makes the page shareable,
-       refreshable and deep-linkable — on any of those the product.js Firestore
-       fallback resolves it even when selectedProduct is absent. */
-    window.location.href = "product.html?id=" + encodeURIComponent(id);
+    /* The card's data-pid is the SANITISED id (safeId, see the card template), so
+       match on the same transform — matching raw product.id here failed for any id
+       that safeId altered, which silently killed the whole-card tap. Fall back to a
+       raw match too. */
+    const _mkSafe = pid => String(pid||'').replace(/[^a-zA-Z0-9_-]/g,'');
+    const p = products.find(x => _mkSafe(x.id) === String(id))
+           || products.find(x => String(x.id) === String(id));
+    if(p){
+        localStorage.setItem("selectedProduct", JSON.stringify(p));
+        if(typeof sokoniTrackProductView === "function") sokoniTrackProductView(p);
+    }
+    /* ALWAYS navigate. The ?id makes the page shareable/refreshable and lets
+       product.js resolve from Firestore even when the product is not in the local
+       array (cross-grid taps, recommendations) — previously a missed local match
+       returned early and the tap did nothing. Use the real id when known. */
+    window.location.href = "product.html?id=" + encodeURIComponent(p ? p.id : id);
 }
 
 window.openProduct = openProduct;
@@ -1124,7 +1132,14 @@ function searchProducts(){
 async function buyProduct(productId, _trigBtn){
     if (_trigBtn) { _trigBtn.dataset.loading = '1'; _trigBtn.disabled = true; }
 
+    /* productId is the card's data-pid = safeId (sanitised). Match on the same
+       transform (as addToWishlist does) so the action finds the product; a raw
+       id === safeId comparison failed whenever safeId altered the id, so the
+       button did nothing. Raw match kept as a fallback. */
+    const _mkSafeAct = pid => String(pid||'').replace(/[^a-zA-Z0-9_-]/g,'');
     const selectedProduct = products.find(
+        product => _mkSafeAct(product.id) === String(productId)
+    ) || products.find(
         product => String(product.id) === String(productId)
     );
 
@@ -1170,7 +1185,14 @@ async function buyProduct(productId, _trigBtn){
 async function buyNow(productId, _trigBtn){
     if (_trigBtn) { _trigBtn.dataset.loading = '1'; _trigBtn.disabled = true; }
 
+    /* productId is the card's data-pid = safeId (sanitised). Match on the same
+       transform (as addToWishlist does) so the action finds the product; a raw
+       id === safeId comparison failed whenever safeId altered the id, so the
+       button did nothing. Raw match kept as a fallback. */
+    const _mkSafeAct = pid => String(pid||'').replace(/[^a-zA-Z0-9_-]/g,'');
     const selectedProduct = products.find(
+        product => _mkSafeAct(product.id) === String(productId)
+    ) || products.find(
         product => String(product.id) === String(productId)
     );
 
