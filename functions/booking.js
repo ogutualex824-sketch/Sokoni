@@ -266,18 +266,25 @@ exports.bookingHoldSlot = onCall(
     if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
     if (endTs <= startTs) throw new HttpsError('invalid-argument','endTs must be after startTs');
 
+    /* Provider buffer (default 0 = no change) so a hold reserves the same
+       [start-bufferBefore, end+bufferAfter] window that bookingCreate enforces. */
+    const _hv = (await db.collection('venues').doc(venueId).get()).data() || {};
+    const bufBeforeMs = Math.max(0, Number(_hv.bufferBeforeMins || 0)) * 60000;
+    const bufAfterMs  = Math.max(0, Number(_hv.bufferAfterMins  || 0)) * 60000;
+
     /* Atomic: check + write in transaction */
     const held = await db.runTransaction(async txn => {
-      /* Check for overlap */
+      /* Check for overlap (buffer-aware; widen the endTs pre-filter so a booking
+         ending within the buffer window is still caught). */
       const bSnap = await db.collection('bookings')
         .where('venueId','==',venueId)
-        .where('endTs','>',startTs)
+        .where('endTs','>', startTs - bufBeforeMs - bufAfterMs)
         .where('status','in',['pending','confirmed','active'])
         .get();
 
       for (const doc of bSnap.docs) {
         const b = doc.data();
-        if (b.startTs < endTs && b.endTs > startTs) return false;
+        if ((startTs - bufBeforeMs) < (b.endTs + bufAfterMs) && (endTs + bufAfterMs) > (b.startTs - bufBeforeMs)) return false;
       }
 
       /* Check existing holds */
@@ -424,6 +431,25 @@ exports.bookingCreate = onCall(
       .get();
     const existingBookings = existingSnap.docs.map(d => d.data());
 
+    /* ── Phase-1: provider buffer + per-customer cap (both default 0 = no change).
+       Buffer expands the reserved window to [start-before, end+after] so back-to-
+       back bookings leave setup/cleanup time. Per-customer cap counts this
+       customer's active (pending/confirmed/active) bookings at this venue and
+       rejects once the limit is reached. Prefetched like the capacity check
+       (optimistic; the slot-lock CAS below still prevents same-slot double-book). */
+    const bufBeforeMs = Math.max(0, Number(venue.bufferBeforeMins || 0)) * 60000;
+    const bufAfterMs  = Math.max(0, Number(venue.bufferAfterMins  || 0)) * 60000;
+    const maxPerCustomer = Math.max(0, Number(venue.maxBookingsPerCustomer || 0));
+    let customerActiveCount = 0;
+    if (maxPerCustomer > 0) {
+      const custSnap = await db.collection('bookings')
+        .where('venueId', '==', venueId)
+        .where('customerId', '==', uid)
+        .where('status', 'in', ['pending', 'confirmed', 'active'])
+        .get();
+      customerActiveCount = custSnap.size;
+    }
+
     const requiresApproval = venue.config?.approvalRequired || false;
     const bookingId = _uid();
 
@@ -485,8 +511,18 @@ exports.bookingCreate = onCall(
         }
       }
 
-      /* ── 4. Overlap check (against pre-fetched snapshot) ──────────────────  */
-      const hasOverlap = existingBookings.some(b => b.startTs < endTs && b.endTs > startTs);
+      /* ── 3b. Per-customer active-booking cap (0 = unlimited) ──────────────  */
+      if (maxPerCustomer > 0 && customerActiveCount >= maxPerCustomer) {
+        isConflict   = true;
+        conflictCode = 'failed-precondition';
+        return;
+      }
+
+      /* ── 4. Overlap check (against pre-fetched snapshot; includes the provider
+             buffer so a booking reserves [start-bufferBefore, end+bufferAfter]) ─  */
+      const hasOverlap = existingBookings.some(b =>
+        (startTs - bufBeforeMs) < (b.endTs + bufAfterMs) &&
+        (endTs   + bufAfterMs)  > (b.startTs - bufBeforeMs));
       if (hasOverlap) {
         isConflict   = true;
         conflictCode = 'already-exists';
@@ -558,7 +594,9 @@ exports.bookingCreate = onCall(
     if (isReplay)   return { bookingId: replayData.bookingId, idempotent: true };
     if (isConflict) throw new HttpsError(
       conflictCode,
-      conflictCode === 'resource-exhausted' ? 'Venue is fully booked for this time' : 'Slot is no longer available'
+      conflictCode === 'resource-exhausted'  ? 'Venue is fully booked for this time'
+      : conflictCode === 'failed-precondition' ? 'You have reached the maximum number of active bookings with this provider'
+      : 'Slot is no longer available'
     );
 
     /* Send confirmation notification */

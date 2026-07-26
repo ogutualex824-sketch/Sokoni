@@ -306,6 +306,13 @@ exports.venueCreate = onCall(CF_OPTS, exports._h.venueCreate = async (request) =
       : ['hourly'],
     slotDurationMins: _clamp(d.slotDurationMins, 15, 1440, 60),
     bufferMins:       _clamp(d.bufferMins, 0, 240, 15),
+    /* Phase-1 booking additions. Granular buffer (setup before / cleanup after)
+       and a per-customer active-booking cap. All DEFAULT 0 so existing venues
+       behave exactly as before — owners opt in. bufferMins stays for back-compat
+       but the booking engine reads the granular fields. */
+    bufferBeforeMins:       _clamp(d.bufferBeforeMins, 0, 240, 0),
+    bufferAfterMins:        _clamp(d.bufferAfterMins,  0, 240, 0),
+    maxBookingsPerCustomer: _clamp(d.maxBookingsPerCustomer, 0, 1000, 0),
     requiresApproval: !!d.requiresApproval,
     afterHoursBooking: !!d.afterHoursBooking,
     schedule:         d.schedule || _defaultSchedule(),
@@ -336,6 +343,7 @@ exports.venueUpdate = onCall(CF_OPTS, exports._h.venueUpdate = async (request) =
     'name','description','photos','virtualTour','location',
     'capacity','amenities','accessibility','rules','isShared',
     'bookingModels','slotDurationMins','bufferMins',
+    'bufferBeforeMins','bufferAfterMins','maxBookingsPerCustomer',
     'requiresApproval','afterHoursBooking','schedule','pricing','status',
   ];
 
@@ -346,6 +354,9 @@ exports.venueUpdate = onCall(CF_OPTS, exports._h.venueUpdate = async (request) =
   if (updates.capacity)         updates.capacity         = _sanitizeCapacity(updates.capacity);
   if (updates.slotDurationMins) updates.slotDurationMins = _clamp(updates.slotDurationMins, 15, 1440, 60);
   if (updates.bufferMins !== undefined) updates.bufferMins = _clamp(updates.bufferMins, 0, 240, 0);
+  if (updates.bufferBeforeMins !== undefined) updates.bufferBeforeMins = _clamp(updates.bufferBeforeMins, 0, 240, 0);
+  if (updates.bufferAfterMins !== undefined)  updates.bufferAfterMins  = _clamp(updates.bufferAfterMins, 0, 240, 0);
+  if (updates.maxBookingsPerCustomer !== undefined) updates.maxBookingsPerCustomer = _clamp(updates.maxBookingsPerCustomer, 0, 1000, 0);
   if (updates.name) updates.name = String(updates.name).trim().slice(0, 200);
 
   await db.collection('venues').doc(d.venueId).update(updates);

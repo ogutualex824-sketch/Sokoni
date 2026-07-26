@@ -1,3 +1,29 @@
+## [2026-07-26] — feat(booking): Phase 1 — provider buffers + per-customer cap (extend, don't rebuild)
+
+Architecture-reviewed (APPROVE). The booking engine already had the hard parts (atomic
+`runTransaction` holds+create, capacity, idempotency, holds, cancellation/release, schedules).
+Phase 1 adds two low-risk, config-gated capabilities inside the EXISTING transaction — both
+default 0 so existing venues behave exactly as before:
+
+- **Buffer times** — new `bufferBeforeMins` / `bufferAfterMins` on the venue (venue-booking.js:
+  create + venueUpdate + clamps). `bookingCreate` and `bookingHoldSlot` now reserve
+  `[start-bufferBefore, end+bufferAfter]` so back-to-back bookings leave setup/cleanup time (the
+  hold's `endTs` pre-filter is widened so a booking ending within the buffer is still caught).
+  Legacy `bufferMins` kept for back-compat but NOT auto-applied (would surprise existing venues) —
+  owners opt in via the granular fields.
+- **Max bookings per customer** — new `maxBookingsPerCustomer` (0 = unlimited). Counts the
+  customer's active (`pending`/`confirmed`/`active`) bookings at the venue and rejects at the limit
+  with `failed-precondition` ("reached the maximum number of active bookings with this provider").
+  Ignores cancelled/completed/rejected/expired. Prefetched like the capacity check.
+
+Verified: `scripts/test-booking-buffer.js` — 11 assertions incl. the 60-min haircut + 15-min
+buffer example (10:30 & 11:00 blocked, 11:15 bookable) and buffer-0 no-change. Full transactional
+behaviour needs the emulator. Files: `functions/booking.js`, `functions/venue-booking.js`
+(existing CFs modified — no new exports). Deferred (approved): waitlist via HOLD lifecycle,
+underbooking analytics (split from pricing), recurring templates.
+
+---
+
 ## [2026-07-26] — HOTFIX(auth): remove global redirect interceptor — it broke account creation
 
 REGRESSION from the previous commit: new users hit `auth/network-request-failed` on Create Account.
