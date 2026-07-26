@@ -1,3 +1,24 @@
+## [2026-07-26] — test(accounts): RC-10 account-baseline & navigation regression suite (#5)
+
+Locks in the 2026-07-26 account-consistency fixes so they cannot silently regress. New RC suite
+`tests/rc/suites/rc-10-account-baseline.js` (registered in rc-runner ALL_SUITES), 5 steps:
+1. Orders button is decoupled from the crashing Profile page (→ my-orders.html).
+2. Subscription page never renders "KES NaN".
+3. Auth-state is a single canonical resolution-aware source (SokoniAuthState exposed, permissions
+   delegates to it, the premature-`false` bug is gone — checked as a LIVE line, not a comment).
+4. Every account has a complete baseline (users/wallet/notificationPrefs) — via the Admin backend.
+5. A signed-in account does not loop profile.html ↔ login.html (renders tabs, stays on /profile).
+
+Steps 1–3 are static-safe and run everywhere; 4–5 need an authenticated backend and report BLOCKED
+(never a false pass) on static. Ran `--backend=static`: 3 PASS, 0 FAIL, 2 BLOCKED. Steps 4–5 run
+for real on `--backend=production/emulator`; #4's migration already proved 55/55 accounts have the
+baseline, and the loop fix was verified in emulation — this codifies both as repeatable checks.
+
+Files: `tests/rc/suites/rc-10-account-baseline.js` (new), `tests/rc/rc-runner.js` (register). Test-
+only — no app/deploy change.
+
+---
+
 ## [2026-07-26] — feat(accounts): idempotent Admin-SDK migration for existing users (#4) — dry-run first
 
 `scripts/migrate-user-baselines.js` — scans EVERY Firebase Auth account and creates ONLY the

@@ -43,7 +43,8 @@ function makeBackend(name, opts) {
 }
 
 const ALL_SUITES = ['rc-01-seller', 'rc-02-buyer', 'rc-03-payment',
-                    'rc-04-inventory', 'rc-05-search', 'rc-06-pwa', 'rc-07-gdpr', 'rc-09-rules'];
+                    'rc-04-inventory', 'rc-05-search', 'rc-06-pwa', 'rc-07-gdpr', 'rc-09-rules',
+                    'rc-10-account-baseline'];
 
 async function main() {
   const backendName = arg('backend', 'static');
