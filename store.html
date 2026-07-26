@@ -15,6 +15,10 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <meta charset="UTF-8">
   <script src="security.js"></script>
+  <!-- Single image rendering abstraction (consistent lazy/decoding/CLS/fallback,
+       srcset-ready). Loaded early so window.renderProductImage exists before the
+       grid renders. -->
+  <script src="sokoni-image.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Store — SOKONI</title>
   <meta name="description" content="Browse SOKONI store — thousands of products from verified Kenyan sellers.">
@@ -621,7 +625,9 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
         ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${p.minWholesaleQty})</div>`
         : "";
       return `<a class="st-product-card" href="product.html?id=${p.id}">
-        <img src="${p.image||'assets/default-product.png'}" alt="${p.name}" loading="lazy">
+        ${window.renderProductImage
+          ? renderProductImage({ src: p.image, alt: p.name, wrap: false })
+          : `<img src="${p.image||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async">`}
         <div class="st-product-info">
           <div class="st-product-name">${p.name}</div>
           <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
