@@ -1,3 +1,42 @@
+## [2026-07-27] — feat(booking): converge venue lifecycle onto one engine (Convergence Step 1) — STAGED, flagged
+
+Audit (3 parallel read-only agents + direct verification) found the booking domain fragmented across
+FIVE write-paths, and — critically — the hardened `booking.js` engine (buffers, per-customer cap,
+waitlist, slotLock-release) had **no live caller**: the live venue flow ran through the less-capable
+`venue-booking.js` model, so none of that hardening reached users. Step 1 converges the venue
+lifecycle onto the `booking.js` core, behind a client rollback flag. **Committed but NOT deployed** —
+one bundled release (indexes → functions → hosting) after final review.
+
+- **Unified pricing schema** (`functions/pricing-schema.js`, NEW): one canonical model + one
+  `compute()`/`normalize()` calculator (same normalize-write/resolve-read pattern as the minishop
+  config convergence). `normalize()` accepts legacy OR canonical, so reads price un-migrated venues
+  correctly — code deploy is decoupled from data migration. PAYMENT-SAFETY: proven byte-identical to
+  the live `_calcPrice` for existing venues (`scripts/test-pricing-schema.js`, 90/90 incl. 80 live
+  venue×booking parity checks). `bookingCreate` now prices via this calculator.
+- **Parity ops added to the core** (dispatcher-only): `bookingQuotePrice` (same calculator create
+  verifies payment against — quote == stored price), `bookingMarkNoShow` (terminal + fee; releases the
+  cap slot, does NOT re-offer the past slot), `bookingGetStats` (owner 30-day stats mirroring
+  `venueGetStats`). `bookingGetAvailability` slots now honor the venue's slot duration.
+- **Client repoint behind `USE_BOOKING_CORE`** (flip=false → instant client-only rollback; legacy
+  `venue*` endpoints stay live during cutover): `venue-booking.html` (availability/quote/create/
+  my-bookings) and `venue-manager.html` (calendar/block/stats/confirm/checkin/checkout/cancel + the
+  direct bookings-list read now core-aware: orders by `startTs`, reads `pricingBreakdown.total`). This
+  also fixes the pre-existing mismatch where the owner console read a `bookings` collection the live
+  create never wrote. Venue-config ops (`venueCreate`/`venueUpdate`) stay put.
+- **Index**: added `(venueId, status, startTs DESC)` for the status-filtered owner list.
+- **Bug caught by Gate 1 & fixed**: the owner console initially called dispatcher-only core ops by
+  name (`cf('bookingCancel')`) — would have 404'd in prod; now routed through `bookingDispatch`.
+
+Verified — both required release gates GREEN: **Gate 1 browser render** (Playwright, 17/17: both pages
+boot with zero console/network errors, render all core shapes, actions dispatch the right op); **Gate 2
+pricing pipeline** (emulator, quote==stored at component level across legacy/canonical/peak venues, no
+rounding drift). Plus pricing parity 90/90, waitlist 19, buffer 11, emulator concurrency 44/44.
+Payment/receipt legs are explicitly OUT OF SCOPE — this venue flow creates bookings without upfront
+payment. Deploy order when green-lit: firestore:indexes → functions:bookingDispatch → hosting; then a
+production smoke test (create/view/confirm/cancel/waitlist/buffer/cap + CF logs).
+
+---
+
 ## [2026-07-26] — feat(booking): Phase 2 — waitlist (availability-as-inventory) + slotLock-release fix
 
 Architecture-reviewed (APPROVE WITH TWO REVISIONS, both applied). A waitlist turns a *lost* slot
