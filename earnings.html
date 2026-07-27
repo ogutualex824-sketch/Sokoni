@@ -458,10 +458,15 @@
       plans.forEach(function(p){ var h = p.hubType || 'other'; if(!byHub[h]){ byHub[h]=[]; order.push(h); } byHub[h].push(p); });
       host.innerHTML = order.map(function(h){
         var rows = byHub[h].map(function(p){
-          var mo = Number(p.priceMonthly), yr = Number(p.priceAnnual);
+          /* subGetPlans / sub-billing.js store price as NESTED price:{monthly,annual}
+             in KES cents (not flat priceMonthly/priceAnnual). Read the nested field;
+             fall back to a flat field only if a custom plan uses one. */
+          var moC = (p.price && p.price.monthly != null) ? p.price.monthly : p.priceMonthly;
+          var yrC = (p.price && p.price.annual  != null) ? p.price.annual  : p.priceAnnual;
+          var mo = Number(moC), yr = Number(yrC);
           var moPer = (Number.isFinite(mo) && mo>0) ? ' <span class="permo">/mo</span>' : '';
           var yrPer = (Number.isFinite(yr) && yr>0) ? ' <span class="permo">/yr</span>' : '';
-          return '<tr><td>'+_e(p.name || p.id || 'Plan')+'</td><td class="rate">'+_priceCell(p.priceMonthly)+moPer+'</td><td class="rate">'+_priceCell(p.priceAnnual)+yrPer+'</td></tr>';
+          return '<tr><td>'+_e(p.name || p.id || 'Plan')+'</td><td class="rate">'+_priceCell(moC)+moPer+'</td><td class="rate">'+_priceCell(yrC)+yrPer+'</td></tr>';
         }).join('');
         var n = byHub[h].length;
         return '<div class="sub-hub"><div class="sub-hub-h">'+_e(HUB_LABELS[h]||h)+' <span class="pill">'+n+' plan'+(n===1?'':'s')+'</span></div>'+
