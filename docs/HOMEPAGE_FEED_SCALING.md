@@ -1,6 +1,7 @@
 # Homepage Feed Scaling — Mitigation + Tracked Technical Debt
 
-**Status:** Emergency mitigation SHIPPED (2026-07-27). Scalable architecture TRACKED, not yet built.
+**Status:** Emergency mitigation **VERIFIED IN CODE / AWAITING PRODUCTION DEVICE VALIDATION**
+(2026-07-27, live SW v144). NOT closed — see §5. Scalable architecture TRACKED, not yet built.
 **Owner area:** Homepage catalogue feed · [[ARCHITECTURE]] · [[Marketplace]]
 **Related defect (separate):** `inspiq.js` / `feeds.html` unbounded infinite-scroll — see "Priority after" below.
 
@@ -83,7 +84,21 @@ These device checks are not markable from the build environment.
 
 1. **Fix `inspiq.js` / `feeds.html` infinite-scroll OOM** — same memory class,
    different page: unbounded, non-virtualized, infinitely-refilling append with an
-   unthrottled scroll fallback.
+   unthrottled scroll fallback. **Build this as a reusable pagination module, not a
+   one-off patch** (see below).
 2. **Paginated feed architecture** — remove the fixed-cap dependency (§4.3, §4.4).
 3. **Server-ranked feed + boost injection** — boosts appear regardless of creation
    date (§4.1, §4.2).
+
+### 6a. Build one shared feed module, don't fix this twice
+
+The homepage and `feeds.html` have the **same** scalability problem (unbounded live
+feed → renderer OOM). Fix it once: a single reusable module owning **pagination +
+virtualization (visible-window realtime) + ranking/boost injection**, consumed by
+both the homepage feed and `inspiq.js`/`feeds.html`. This keeps feed behavior
+consistent across SOKONI (one place for ranking, boost rules, page size, windowing)
+and avoids solving virtualization separately per surface. Treat the `inspiq.js` fix
+(priority 1) as the **first consumer** that establishes the module, not a throwaway
+patch — the homepage cap (§2) is then retired by migrating it onto the same module
+(§4), not by raising the limit. Aligns with [[project_platform_constitution]]
+"extend don't rebuild / canonical engines".
