@@ -1827,7 +1827,21 @@
     </div>
 
     <!-- -- PRODUCTS GRID — PREMIUM LAYOUT -- -->
-    <div id="productsContainer" class="ptrend-grid"></div>
+    <!-- Inline skeletons: the grid area shows placeholders at FIRST PAINT instead of
+         staying empty until the deferred 213 KB script.js executes (~9.5 s under
+         throttle). script.js's _p8ShowSkeletons/displayProducts sets innerHTML, so
+         these are replaced the moment real data renders — no double-render. Markup
+         mirrors _p8ShowSkeletons; .p8-sk styles live in style.css. -->
+    <div id="productsContainer" class="ptrend-grid">
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+      <div class="p8-sk"><div class="p8-sk-img"></div><div class="p8-sk-line w85"></div><div class="p8-sk-line w45"></div><div class="p8-sk-line w70"></div></div>
+    </div>
 
     <!-- See All footer — shown on home page when filter hides products -->
     <div id="trendingSeeAllFooter" style="display:none;text-align:center;padding:4px 28px 16px;">
