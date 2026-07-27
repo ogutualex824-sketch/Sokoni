@@ -323,11 +323,25 @@ service cloud.firestore {
 
     match /bookings/{bookingId} {
 
+      /* Client create is for a booking REQUEST only. The authoritative price,
+         payment state, commission and confirmed status are set by the server
+         (bookingCreate / bookingCreateService via Admin SDK, which bypass rules).
+         A client may not self-declare them — status must be absent or 'pending',
+         and the financial/settlement fields are forbidden. This closes the
+         manipulation vector (a client writing status:'confirmed' / paymentStatus:
+         'paid' / a fake price) while still letting the request-creation UIs work.
+         Service bookings go through `providerBookings` (write:false → CF-only). */
       allow create: if isActive() && isAuthed()
                     && (request.resource.data.customerId == request.auth.uid
                         || request.resource.data.buyerId  == request.auth.uid
                         || request.resource.data.userId   == request.auth.uid)
-                    && noAdminFields();
+                    && noAdminFields()
+                    && (!('status' in request.resource.data)
+                        || request.resource.data.status == 'pending')
+                    && !request.resource.data.keys().hasAny([
+                         'price','pricingBreakdown','paymentStatus','paymentId',
+                         'verifiedPaymentId','commission','commissionRate','net',
+                         'amountPaid','settlement','settled']);
       allow read:   if isAdmin()
                     || (isAuthed() && resource.data.uid          == request.auth.uid)
                     || (isAuthed() && resource.data.buyerId      == request.auth.uid)

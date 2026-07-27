@@ -22,7 +22,8 @@ function _h() {
   if (!_mod) {
     _mod = Object.assign({},
       require('./provider-onboarding')._h,
-      require('./provider-ops')._h);
+      require('./provider-ops')._h,
+      require('./booking-service')._h);   /* Phase B: authoritative service create */
   }
   return _mod;
 }
@@ -62,6 +63,8 @@ const ROUTES = [
   'providerRemoveService',
   'providerUpdateService',
   'providerToggleService',
+  // booking-service (Phase B) — authoritative service-appointment create
+  'bookingCreateService',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');
