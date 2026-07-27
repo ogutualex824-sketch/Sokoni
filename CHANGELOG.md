@@ -1,3 +1,22 @@
+## [2026-07-27] — feat(booking): Phase D4 — provider calendar (presentation-only, real-time)
+
+A week/month calendar in the provider dashboard that **visualizes** authoritative booking data.
+
+**Files:** `provider-dashboard.html`. **Deploy:** hosting only. No CF, collection, rules, or migration.
+
+- **Presentation-only:** reads canonical availability (`providerAvailability` + `overrides`) and subscribes to
+  the provider's own bookings via Firestore `onSnapshot`. It never writes bookings (providerBookings stays
+  CF-only) and never becomes a second source of scheduling state.
+- **Real-time:** a slot booked by a customer while the provider is viewing updates the calendar live, no
+  refresh — providers can't act on stale availability. Owner-scoped by auth UID (rules already permit the read).
+- **Views:** week (Mon-start, default) + month toggle; prev/next/today nav. Per-day slot view shows
+  available / booked / break / blackout / closed-unavailable; off-grid (rescheduled) bookings still render.
+- **Timezone-safe:** all bucketing done in Africa/Nairobi (UTC+3, no DST), consistent with the booking engine.
+- **Actions:** clicking a booking reuses the D1 lifecycle actions (confirm/start/complete/no-show/cancel/
+  reschedule/contact) — no calendar-originated writes.
+- **Verification:** 18/18 logic tests (tz bucketing incl. no UTC day-leak, Monday week-start, slot generation,
+  day-state classification); inline JS syntax-checked.
+
 ## [2026-07-27] — feat(booking): Phase D3 — provider service model (fee/deposit/images)
 
 Enriches the canonical `providerServices` model + establishes the platform money-representation invariant.
