@@ -96,6 +96,7 @@ The contract is **semantically versioned** so the standard can grow without inva
 - **v2.0 (breaking)** — a clause that changes what "published" means (e.g. a new mandatory projection, or a required moderation gate before public visibility). Entities must be re-run and re-certified; a v1.x certification is no longer sufficient.
 
 Likely future requirements — candidates for v1.1 / v2.0, deliberately NOT in v1.0:
+- **Navigability (v1.1 candidate)** — every entity a search returns must resolve to a valid destination page (`business.html` / `product.html` / provider page), and hidden/archived/unpublished entities must never appear in search. Extends stage 3+4 from "indexed correctly" to "discoverable AND navigable" — catches broken links (e.g. a spec pointing at the wrong page), not just indexing regressions. Partially covered today: `scripts/test-firestore-search.js` asserts each result's `link` target per spec and excludes archived fixtures; the v1.1 assertion generalises this across every entity in `publicationContract()` (link points to that entity's known page template + the page's read query resolves the id). The exact-page-renders-the-entity leg is an integration test.
 - **Search ranking** — relevance/quality signals beyond term matching.
 - **Multilingual indexing** — Swahili + English term generation and query handling.
 - **Geospatial search** — location-aware discovery (near-me, county radius).
