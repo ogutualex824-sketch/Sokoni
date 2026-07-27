@@ -1124,6 +1124,18 @@ function displaySellerProducts(){
 
     ) || [];
 
+    /* CROSS-ACCOUNT SAFETY: the sellerProducts cache is a single global key that can
+       hold a previous account's listings on a shared device. Render ONLY the
+       signed-in user's own products so another seller's inventory can never appear
+       here. No live uid (auth not resolved) → render nothing rather than risk a leak;
+       the hydrate/auth flow re-renders once the uid is known. Unstamped entries are
+       excluded. This is the render-side guard behind the sokoni-seller-products.js
+       cache purge. */
+    const _liveUid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+    sellerProducts = _liveUid
+        ? sellerProducts.filter(p => String(p.sellerUid || p.uid || '') === String(_liveUid))
+        : [];
+
     if(sellerProducts.length === 0){
 
         sellerProductsContainer.innerHTML = `
