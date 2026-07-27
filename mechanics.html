@@ -432,6 +432,7 @@
 /* """""""""""""""""""""""""""""""
    DEMO MECHANICS / GARAGES
 """"""""""""""""""""""""""""""" */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_MECHS = [
   { id:"MCH001", name:"Kamau Auto Garage", type:"garage", spec:"general", emoji:"🔧",
     location:"nairobi", area:"Industrial Area, Nairobi", phone:"0712001001", years:15,
@@ -545,7 +546,7 @@ async function loadMechs(){
 
   const fsIds=new Set((_fsCache||[]).map(m=>m.id));
   let local=[]; try{local=JSON.parse(localStorage.getItem("sokoniMechanics"))||[];}catch(e){}
-  _all=[...(_fsCache||[]),...local.filter(m=>!fsIds.has(m.id)),...DEMO_MECHS.filter(d=>!fsIds.has(d.id)&&!local.some(l=>l.id===d.id))];
+  _all=[...(_fsCache||[]),...local.filter(m=>!fsIds.has(m.id)),...(_demoAllowed?DEMO_MECHS.filter(d=>!fsIds.has(d.id)&&!local.some(l=>l.id===d.id)):[])];
 
   const verified=_all.filter(m=>m.verified).length;
   const garages =_all.filter(m=>m.type==="garage"||m.type==="bodyshop"||m.type==="dealer"||m.type==="tyre"||m.type==="electrician").length;
@@ -857,7 +858,7 @@ const DEMO_PARTS = [
 
 function loadParts() {
   let custom = []; try { custom = JSON.parse(localStorage.getItem('sokoniParts')) || []; } catch(e) {}
-  return [...custom, ...DEMO_PARTS.filter(d => !custom.some(c => c.id === d.id))];
+  return [...custom, ...(_demoAllowed?DEMO_PARTS.filter(d => !custom.some(c => c.id === d.id)):[])];
 }
 
 function filterParts() {

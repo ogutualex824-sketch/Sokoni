@@ -353,6 +353,7 @@ const HS_TYPES = [
   {key:'security',emoji:'🔒',label:'Security'},
 ];
 
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_PROVIDERS = [
   {id:'HS01',type:'plumbing',emoji:'🔧',name:'James Mwangi',area:'Nairobi',specialty:'Plumber',exp:'8 years',rate:'KES 2,500/day',rating:4.9,jobs:312,phone:'0712100001',bio:'Licensed plumber. Burst pipes, drainage, bathroom fitting, borehole pumps.',certified:true},
   {id:'HS02',type:'electrical',emoji:'⚡',name:'Peter Otieno',area:'Nairobi',specialty:'Electrician',exp:'12 years',rate:'KES 3,000/day',rating:5.0,jobs:445,phone:'0723100002',bio:'KEBS certified. Wiring, solar, security systems, phase balancing.',certified:true},
@@ -432,7 +433,7 @@ function filterProviders(){
   let list=[
     ..._fsProviders.map(d=>({...d,id:d._id||d.id})),
     ...local.filter(d=>!_fsProviders.some(f=>(f._id||f.id)===d.id)),
-    ...DEMO_PROVIDERS.filter(d=>!allIds.has(d.id)),
+    ...(_demoAllowed?DEMO_PROVIDERS.filter(d=>!allIds.has(d.id)):[]),
   ];
   if(_hsTypeFilter!=='all'){
     const mapped=window.HS_TYPE_MAP&&window.HS_TYPE_MAP[_hsTypeFilter];

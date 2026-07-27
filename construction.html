@@ -1152,6 +1152,7 @@ function cnShowTab(tab, btn){
 /* ════════════════════════════════════════════════════════════
    CONTRACTOR DATA
 ════════════════════════════════════════════════════════════ */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_CONTRACTORS = [
   {id:'c01',name:'JobFit Electricals',type:'electrician',icon:'⚡',city:'Nairobi',rating:4.9,reviews:87,exp:'8 yrs',tags:['Wiring','DB Boards','Solar','KPLC Certified'],phone:'0722111001',verified:true,price:'From KES 2,500/job'},
   {id:'c02',name:'Mombasa Sparks Ltd',type:'electrician',icon:'⚡',city:'Mombasa',rating:4.8,reviews:54,exp:'12 yrs',tags:['Commercial','Industrial','Standby Generators'],phone:'0711222001',verified:true,price:'From KES 3,000/job'},
@@ -1186,7 +1187,7 @@ function filterContractors(type, btn){
 function renderContractors(){
   const grid = document.getElementById('ctrGrid');
   if(!grid) return;
-  const list = _activeCtrType==='all' ? DEMO_CONTRACTORS : DEMO_CONTRACTORS.filter(c=>c.type===_activeCtrType);
+  const list = !_demoAllowed ? [] : (_activeCtrType==='all' ? DEMO_CONTRACTORS : DEMO_CONTRACTORS.filter(c=>c.type===_activeCtrType));
   if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">No contractors found for this type.</p>'; return; }
   grid.innerHTML = list.map(c=>`
     <div class="ctr-card">
@@ -1254,7 +1255,7 @@ function filterEquipment(cat, btn){
 function renderEquipment(){
   const grid = document.getElementById('eqGrid');
   if(!grid) return;
-  const list = _activeEqCat==='all' ? DEMO_EQUIPMENT : DEMO_EQUIPMENT.filter(e=>e.cat===_activeEqCat);
+  const list = !_demoAllowed ? [] : (_activeEqCat==='all' ? DEMO_EQUIPMENT : DEMO_EQUIPMENT.filter(e=>e.cat===_activeEqCat));
   if(!list.length){ grid.innerHTML='<p style="color:rgba(255,255,255,0.3);padding:36px 0;text-align:center;">No equipment in this category.</p>'; return; }
   grid.innerHTML = list.map(e=>`
     <div class="eq-card">

@@ -2269,6 +2269,7 @@ function showFleetMsg(msg){
 }
 
 /* DEMO FLEET */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_CARS=[
   {id:"c1",make:"Toyota",model:"Land Cruiser V8",year:2021,type:"SUV",seats:7,fuel:"Diesel",trans:"Automatic",color:"White",plate:"KDA 001A",priceDay:8500,priceHour:1500,deposit:25000,mileageLimit:300,extraMile:15,owner:"John Kamau",ownerPhone:"0712345678",city:"nairobi",lat:-1.290,lng:36.825,features:["AC","GPS","Leather Seats","Sunroof","4WD","Bluetooth","Rear Camera"],status:"available",rating:4.9,reviews:38,insuranceIncluded:false,image:"https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=400&q=70",kmToday:0,fuelPct:95,trackerIMEI:"860123456789012",trackerBrand:"Teltonika FMB920",trackerSIM:"0712345678",docsVerified:true,listingStatus:"approved"},
   {id:"c2",make:"Mercedes-Benz",model:"S-Class 500",year:2023,type:"Luxury",seats:4,fuel:"Petrol",trans:"Automatic",color:"Black",plate:"KCB 500B",priceDay:18000,priceHour:3000,deposit:50000,mileageLimit:200,extraMile:25,owner:"Grace Muthoni",ownerPhone:"0722111222",city:"nairobi",lat:-1.278,lng:36.810,features:["AC","GPS","Massaging Seats","Panoramic Roof","Ambient Lighting","Premium Sound","Wi-Fi"],status:"rented",rating:5.0,reviews:15,insuranceIncluded:true,image:"https://images.unsplash.com/photo-1583121274602-3e2820c69888?w=400&q=70",kmToday:142,fuelPct:62,trackerIMEI:"860987654321098",trackerBrand:"Concox GT06N",trackerSIM:"0722111222",docsVerified:true,listingStatus:"approved"},
@@ -2293,7 +2294,7 @@ const DEMO_CARS=[
   {id:"c21",make:"Peugeot",model:"3008 GT",year:2022,type:"SUV",seats:5,fuel:"Petrol",trans:"Automatic",color:"Pearl White",plate:"KDX 030U",priceDay:4500,priceHour:820,deposit:12000,mileageLimit:300,extraMile:11,owner:"Felix Odhiambo",ownerPhone:"0720030300",city:"nairobi",lat:-1.282,lng:36.820,features:["AC","GPS","i-Cockpit","Grip Control","Head-Up Display"],status:"available",rating:4.3,reviews:14,insuranceIncluded:false,image:"https://images.unsplash.com/photo-1502877338535-766e1452684a?w=400&q=70",kmToday:0,fuelPct:88,trackerIMEI:null,trackerBrand:null,docsVerified:true,listingStatus:"approved"},
 ];
 
-function getCars(){let c=[];try{c=JSON.parse(localStorage.getItem("sokoniCarFleet"))||[];}catch(e){}return c.length?c:DEMO_CARS;}
+function getCars(){let c=[];try{c=JSON.parse(localStorage.getItem("sokoniCarFleet"))||[];}catch(e){}return c.length?c:(_demoAllowed?DEMO_CARS:[]);}
 function saveCars(c){localStorage.setItem("sokoniCarFleet",JSON.stringify(c));}
 function getBookings(){let b=[];try{b=JSON.parse(localStorage.getItem("sokoniCarBookings"))||[];}catch(e){}return b;}
 function saveBookings(b){localStorage.setItem("sokoniCarBookings",JSON.stringify(b));}
@@ -4563,7 +4564,7 @@ var CarHubPro = (function(){
     var cat  = _partCatFilter;
 
     /* merge localStorage parts */
-    var allParts = DEMO_PARTS.slice();
+    var allParts = _demoAllowed?DEMO_PARTS.slice():[];
     try {
       var ls = JSON.parse(localStorage.getItem('sokoniParts')||'[]');
       allParts = ls.concat(allParts);

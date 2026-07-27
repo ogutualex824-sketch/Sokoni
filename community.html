@@ -718,6 +718,7 @@ _initFS();
 </section>
 
 <script>
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_GROUPS = [
   { id:'G001', type:'estate', emoji:'🏘️', name:'Karen / Langata Residents', desc:'Buy, sell and hire within Karen, Langata & South C. Vetted neighbours only.', members:342, color:'#71ff00', joined:false },
   { id:'G002', type:'campus', emoji:'🎓', name:'UoN Students Marketplace', desc:'Books, laptops, rooms, food & services for University of Nairobi students.', members:1240, color:'#00d4ff', joined:false },
@@ -759,7 +760,7 @@ function renderCCGroups() {
   let list = [
     ..._fsGroups.map(g=>({...g, id:g._id||g.id})),
     ...local.filter(g => !_fsGroups.some(f=>(f._id||f.id)===g.id)),
-    ...DEMO_GROUPS.filter(d => !allIds.has(d.id)),
+    ...(_demoAllowed?DEMO_GROUPS.filter(d => !allIds.has(d.id)):[]),
   ];
   if (_ccFilter !== 'all') list = list.filter(g => g.type === _ccFilter);
   grid.innerHTML = list.map(g => {
@@ -1024,7 +1025,7 @@ window.filterEvents = function(f, btn) {
 
 function renderEvents() {
   const grid = document.getElementById('ccEventsGrid'); if(!grid) return;
-  let list = [..._evLocal, ...DEMO_EVENTS.filter(d => !_evLocal.some(l=>l.id===d.id))];
+  let list = [..._evLocal, ...(_demoAllowed?DEMO_EVENTS.filter(d => !_evLocal.some(l=>l.id===d.id)):[])];
   const today = new Date().toISOString().slice(0,10);
   const weekEnd = new Date(Date.now()+7*86400000).toISOString().slice(0,10);
   if(_evFilter==='today') list = list.filter(e=>e.eventDate===today);
@@ -1133,7 +1134,7 @@ function _timeAgo(ts) {
 
 function renderAsks() {
   const el = document.getElementById('ccAskList'); if(!el) return;
-  let list = [..._askLocal, ...DEMO_ASKS.filter(d => !_askLocal.some(l=>l.id===d.id))];
+  let list = [..._askLocal, ...(_demoAllowed?DEMO_ASKS.filter(d => !_askLocal.some(l=>l.id===d.id)):[])];
   if(!list.length){ el.innerHTML=`<div class="cm-empty"><div class="cm-empty-icon">🙋</div><p>No questions yet — ask the community!</p></div>`; return; }
   el.innerHTML = list.map(ask => `
     <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:16px;padding:18px;margin-bottom:14px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.15)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
@@ -1211,7 +1212,7 @@ let _bizFollows = {}; try { _bizFollows = JSON.parse(localStorage.getItem('ccBiz
 
 function renderBiz() {
   const grid = document.getElementById('ccBizGrid'); if(!grid) return;
-  grid.innerHTML = DEMO_BIZ.map(b => {
+  grid.innerHTML = (_demoAllowed?DEMO_BIZ:[]).map(b => {
     const isF = _bizFollows[b.id];
     return `<div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:18px;padding:18px;transition:border-color .2s;" onmouseover="this.style.borderColor='rgba(113,255,0,0.15)'" onmouseout="this.style.borderColor='rgba(255,255,255,0.07)'">
       <div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;">

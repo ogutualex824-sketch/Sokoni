@@ -611,6 +611,7 @@ function showThPanel(name, btn) {
 window.showThPanel = showThPanel;
 
 /* ── DATA ── */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
 const DEMO_DEVICES = [
   { id:'DEV001', name:'Samsung Galaxy S24', brand:'samsung', cat:'phone', price:89000, cond:'new', loc:'nairobi', phone:'0712500001', emoji:'📱', ram:'8GB', storage:'256GB', battery:'4000mAh', screen:'6.2"', camera:'50MP', os:'Android 14' },
   { id:'DEV002', name:'iPhone 15 Pro', brand:'apple', cat:'phone', price:185000, cond:'new', loc:'nairobi', phone:'0723500002', emoji:'📱', ram:'8GB', storage:'256GB', battery:'3274mAh', screen:'6.1"', camera:'48MP', os:'iOS 17' },
@@ -635,7 +636,7 @@ const DEMO_TECHS = [
   { id:'T006', name:'Grace Achieng', spec:'support', skills:['IT Support','Printer Setup','Office 365','Remote Support'], loc:'Nairobi / Karen', phone:'0767600006', rate:2000, exp:5, rating:4.6, jobs:134, emoji:'🖥️', certified:false },
 ];
 
-const PHONE_COMPARE_DATA = DEMO_DEVICES.filter(d => d.cat === 'phone' || d.cat === 'laptop');
+const PHONE_COMPARE_DATA = _demoAllowed ? DEMO_DEVICES.filter(d => d.cat === 'phone' || d.cat === 'laptop') : [];
 let _selectedCompare = [];
 let _activeBrand = 'all';
 let _fsDevices = [];  /* approved device listings from Firestore */
@@ -651,7 +652,7 @@ function filterDevices() {
   let list = [
     ..._fsDevices.map(d=>({...d, id:d._id||d.id})),
     ...local.filter(d => !_fsDevices.some(f=>(f._id||f.id)===d.id)),
-    ...DEMO_DEVICES.filter(d => !allIds.has(d.id)),
+    ...(_demoAllowed?DEMO_DEVICES.filter(d => !allIds.has(d.id)):[]),
   ];
   if (_activeBrand !== 'all') list = list.filter(d => d.brand === _activeBrand);
   if (cond)  list = list.filter(d => d.cond === cond);
@@ -792,7 +793,7 @@ window.clearCompare = clearCompare;
 function filterTechs() {
   const q    = (document.getElementById('techSearch')?.value||'').toLowerCase();
   const spec = document.getElementById('techSpeciality')?.value||'';
-  let list   = [...DEMO_TECHS];
+  let list   = [...(_demoAllowed?DEMO_TECHS:[])];
   if (spec) list = list.filter(t => t.spec === spec);
   if (q)    list = list.filter(t => (t.name+t.skills.join(' ')+t.loc).toLowerCase().includes(q));
   renderTechsGrid(list);
@@ -953,7 +954,7 @@ const DEMO_IT = [
 function filterITServices(cat, btn) {
   document.querySelectorAll('#thpanel-itservices .th-pill').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  let list = cat==='all' ? [...DEMO_IT] : DEMO_IT.filter(s=>s.cat===cat);
+  let list = !_demoAllowed ? [] : (cat==='all' ? [...DEMO_IT] : DEMO_IT.filter(s=>s.cat===cat));
   const cnt=document.getElementById('itsCount'); if(cnt) cnt.textContent=list.length+' providers';
   const grid=document.getElementById('itsGrid'); if(!grid) return;
   grid.innerHTML=list.map(s=>`
@@ -1001,7 +1002,7 @@ let _flFilter = {q:'',role:''};
 function filterFreelancers() {
   _flFilter.q=(document.getElementById('flSearch')?.value||'').toLowerCase();
   _flFilter.role=document.getElementById('flSkill')?.value||'';
-  let list=[..._flFilter.role?DEMO_FL.filter(f=>f.role===_flFilter.role):DEMO_FL];
+  let list=_demoAllowed?[..._flFilter.role?DEMO_FL.filter(f=>f.role===_flFilter.role):DEMO_FL]:[];
   if(_flFilter.q) list=list.filter(f=>(f.name+f.title+f.skills.join(' ')).toLowerCase().includes(_flFilter.q));
   const cnt=document.getElementById('flCount'); if(cnt) cnt.textContent=list.length+' available';
   const grid=document.getElementById('flGrid'); if(!grid) return;
@@ -1040,7 +1041,7 @@ function filterStartups(sector, btn) {
   _stFilter=sector;
   document.querySelectorAll('#thpanel-startups .th-pill').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  let list=sector==='all'?[...DEMO_STARTUPS]:DEMO_STARTUPS.filter(s=>s.sector===sector);
+  let list=!_demoAllowed?[]:(sector==='all'?[...DEMO_STARTUPS]:DEMO_STARTUPS.filter(s=>s.sector===sector));
   const cnt=document.getElementById('stCount'); if(cnt) cnt.textContent=list.length+' startups';
   const grid=document.getElementById('stGrid'); if(!grid) return;
   const stageColor={Idea:'rgba(156,163,175,0.1)',MVP:'rgba(59,130,246,0.1)','Pre-Seed':'rgba(249,115,22,0.1)',Seed:'rgba(34,197,94,0.1)','Series A':'rgba(168,85,247,0.1)',Growth:'rgba(251,191,36,0.1)'};
@@ -1094,7 +1095,7 @@ let _lrnFilter = {q:'',type:''};
 function filterCourses() {
   _lrnFilter.q=(document.getElementById('lrnSearch')?.value||'').toLowerCase();
   _lrnFilter.type=document.getElementById('lrnType')?.value||'';
-  let list=[..._lrnFilter.type?DEMO_COURSES.filter(c=>c.type===_lrnFilter.type):DEMO_COURSES];
+  let list=_demoAllowed?[..._lrnFilter.type?DEMO_COURSES.filter(c=>c.type===_lrnFilter.type):DEMO_COURSES]:[];
   if(_lrnFilter.q) list=list.filter(c=>(c.name+c.provider+c.skills.join(' ')).toLowerCase().includes(_lrnFilter.q));
   const cnt=document.getElementById('lrnCount'); if(cnt) cnt.textContent=list.length+' programs';
   const grid=document.getElementById('lrnGrid'); if(!grid) return;
@@ -1132,7 +1133,7 @@ let _jobFilter = {q:'',type:''};
 function filterJobs() {
   _jobFilter.q=(document.getElementById('jobSearch')?.value||'').toLowerCase();
   _jobFilter.type=document.getElementById('jobType')?.value||'';
-  let list=[..._jobFilter.type?DEMO_JOBS.filter(j=>j.type===_jobFilter.type):DEMO_JOBS];
+  let list=_demoAllowed?[..._jobFilter.type?DEMO_JOBS.filter(j=>j.type===_jobFilter.type):DEMO_JOBS]:[];
   if(_jobFilter.q) list=list.filter(j=>(j.title+j.company+j.skills.join(' ')).toLowerCase().includes(_jobFilter.q));
   const cnt=document.getElementById('jobCount'); if(cnt) cnt.textContent=list.length+' jobs';
   const el=document.getElementById('jobsList'); if(!el) return;
@@ -1188,7 +1189,7 @@ function filterAITools(cat, btn) {
   _aiFilter=cat;
   document.querySelectorAll('#thpanel-aitools .th-pill').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
-  let list=cat==='all'?[...DEMO_AI]:DEMO_AI.filter(t=>t.cat===cat);
+  let list=!_demoAllowed?[]:(cat==='all'?[...DEMO_AI]:DEMO_AI.filter(t=>t.cat===cat));
   const cnt=document.getElementById('aiCount'); if(cnt) cnt.textContent=list.length+' tools';
   const grid=document.getElementById('aiGrid'); if(!grid) return;
   grid.innerHTML=list.map(t=>`
