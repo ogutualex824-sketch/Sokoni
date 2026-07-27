@@ -69,7 +69,35 @@ Alternative (single-engine) if you prefer one collection: canonicalize on `booki
 | **A. Reservation core** | extract shared slot-lock/capacity/buffer/waitlist/hold module; unit + emulator tests | concurrency suite (double-book, buffer, cap, waitlist) |
 | **B. Authoritative service create** | `bookingCreateService` CF (reservation-core + providerAvailability) writing `providerBookings`; close the rules hole; repoint Book Now behind a flag | loop closes: customer→provider; emulator + rules-unit |
 | **C. Settlement→wallet** | credit `providerPayouts` net → `wallets.balance` + `walletTransactions` on completion; delete false comment | wallet reconciliation test |
-| **D. Provider control center completeness** | per-service fee/deposit/images; calendar view; reschedule/no-show/cancel/contact; link the availability editor; persist breaks | — |
+| **D. Provider ops onto the canonical foundation** | 4 sub-phases (below) — lifecycle ops, **availability convergence**, rate-card fields, calendar | per sub-phase |
+
+### Phase D sub-phases
+
+Phase D is not primarily feature work — it converges provider operations onto the authoritative
+booking/settlement backend already in production. Four shippable increments, backend-first:
+
+- **D1 — Booking lifecycle ops.** Implements `docs/BOOKING_LIFECYCLE_CONTRACT.md` (v1.0): new ops
+  `providerRescheduleBooking` (in-place slot move via reservation-core), `providerCancelBooking`,
+  `providerMarkNoShow`, `providerStartBooking` (→in_progress), `providerContactCustomer`; dashboard
+  buttons. Gate: emulator state-transition + reschedule re-lock + rules suite; every terminal transition
+  releases the slot lock; only `completed` settles.
+- **D2 — Availability convergence (the architectural heart).** *One authoritative availability
+  configuration path.* Today TWO paths write `providerAvailability` (the rich `availability-manager.html`
+  via `setProviderAvailability`, and a blind-merge `providerUpdateAvailability`), the dashboard reaches
+  neither (its Availability tab is a stub → onboarding), yet the authoritative engine
+  (`bookingCreateService`) already trusts `providerAvailability`. D2: dashboard → availability manager →
+  **normalized, server-validated** save → the booking engine consumes the same normalized model; stub
+  removed. Folds in: the **breaks editor** (UI hard-codes `breaks:[]`) + **honoring breaks in the create
+  path** (`booking-service.js` ignores them today); the `maxSim`↔`maxSimultaneous` round-trip bug. Gate:
+  create-path rejects a slot inside a break; breaks round-trip; malformed config rejected.
+  **Follow-on convergence candidate:** blackout `overrides` are written **directly to Firestore from the
+  client** today — bring them onto the same server-authoritative save path (or record as the next
+  convergence step), aligning with the platform's trajectory toward server-owned business state.
+- **D3 — Rate-card fields.** Extend the already-canonical `providerServices` CRUD with per-service
+  **fee, deposit, images[]** (Storage upload). Deposit activates the deferred cancel/no-show refund policy
+  in the lifecycle contract §6.
+- **D4 — Provider calendar.** First day/week UI over the already-populated `providerCalendar` /
+  `providerGetBookings` (zero UI consumers today). Presentation over an existing backend.
 | **E. Service page + reviews + client cutover** | rate cards, slots, reviews list, response time, Book Now wired to `bookingCreateService`; `providerReviews` creation CF gated on a completed booking; multi-dimension ratings | reviews gated on completion; publicationContract-style check |
 | **F. Legacy retirement** | after cutover: deprecate + instrument the legacy client create path, measure usage, remove at zero traffic | zero legacy booking-create traffic before removal |
 
