@@ -70,7 +70,24 @@ Alternative (single-engine) if you prefer one collection: canonicalize on `booki
 | **B. Authoritative service create** | `bookingCreateService` CF (reservation-core + providerAvailability) writing `providerBookings`; close the rules hole; repoint Book Now behind a flag | loop closes: customer→provider; emulator + rules-unit |
 | **C. Settlement→wallet** | credit `providerPayouts` net → `wallets.balance` + `walletTransactions` on completion; delete false comment | wallet reconciliation test |
 | **D. Provider control center completeness** | per-service fee/deposit/images; calendar view; reschedule/no-show/cancel/contact; link the availability editor; persist breaks | — |
-| **E. Service page + reviews** | rate cards, slots, reviews list, response time, Book Now wired; `providerReviews` creation CF gated on a completed booking; multi-dimension ratings | reviews gated on completion; publicationContract-style check |
+| **E. Service page + reviews + client cutover** | rate cards, slots, reviews list, response time, Book Now wired to `bookingCreateService`; `providerReviews` creation CF gated on a completed booking; multi-dimension ratings | reviews gated on completion; publicationContract-style check |
+| **F. Legacy retirement** | after cutover: deprecate + instrument the legacy client create path, measure usage, remove at zero traffic | zero legacy booking-create traffic before removal |
+
+## Legacy retirement lifecycle (Phase F)
+
+The legacy service-booking create path — `SokoniPay.bookNow` (localStorage) + `SokoniDB.saveBooking` raw `addDoc` to top-level `bookings`, plus `hub-wiring.js saveBooking` — must NOT become a permanent dual implementation. After the Phase E client cutover, retire it the same way the publication subsystem was converged:
+
+1. **Deprecate** — mark the legacy path deprecated in code; new work never routes through it.
+2. **Instrument** — emit a telemetry event whenever the legacy create path runs (which page, which flow), so its residual usage is measured, not guessed.
+3. **Measure** — watch the metric across releases until legacy booking-create traffic reaches zero (all clients on `bookingCreateService`).
+4. **Remove** — in a dedicated cleanup release, delete the legacy create code and any now-orphaned `bookings`-write client paths. Then the top-level `bookings` create rule can be fully closed to CF-only (`create: if false`), completing the security posture the Phase-B tightening began.
+
+```
+legacy path → feature flag → authoritative backend → client cutover →
+observe production → zero legacy traffic → remove legacy code
+```
+
+No silent caps, no permanent dual paths: the retirement is complete only when the metric is zero and the code is gone.
 
 ## 7. Open decisions for review
 - **SoT confirmation** — provider stack canonical + shared reservation core (recommended) vs single-engine on `booking.js`.
