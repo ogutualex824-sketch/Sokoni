@@ -265,7 +265,12 @@
       <h1>Shop Smarter on <span class="hero-brand-gradient">SOKONI</span></h1>
       <p class="glass-hero-sub">Buy locally. Receive today. Pay safely with M-Pesa.</p>
       <!-- Live stat pills — populated dynamically; hide if no real data yet -->
-      <div class="glass-hero-stat-row" id="heroStatRow" style="display:none;">
+      <!-- min-height reserves the fully-populated (2-line) stat-row space up front.
+           The row is revealed early (_showRow), but the products/sellers/rating pills
+           reveal ~8s later when their counts load; without reserved height that reveal
+           grew the hero and shifted #storiesSection + everything below (measured CLS
+           source, 0.096). Reserving it here keeps the reveal shift-free. -->
+      <div class="glass-hero-stat-row" id="heroStatRow" style="display:none;min-height:68px;align-content:center;">
         <span class="glass-hero-stat-pill" id="hero-stat-products" style="display:none;">🛍️ <span class="glass-hero-stat-pill-val" id="hero-val-products">—</span> Products</span>
         <span class="glass-hero-stat-pill" id="hero-stat-sellers"  style="display:none;">🏪 <span class="glass-hero-stat-pill-val" id="hero-val-sellers">—</span> Sellers</span>
         <span class="glass-hero-stat-pill">🚚 Same-Day <span class="glass-hero-stat-pill-val">Nairobi</span></span>
