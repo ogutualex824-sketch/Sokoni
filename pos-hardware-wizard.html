@@ -790,6 +790,22 @@
       <!-- Four-layer environment report. Kept separate from the category cards
            so a platform capability can never be rendered as a found device. -->
       <div id="hwEnvReport" style="margin-top:14px"></div>
+
+      <!-- Dedicated Bluetooth (P58E / 58mm thermal) scan → connect → reconnect.
+           The BLE scan, GATT connect and auto-reconnect all live in
+           window.P58EPrinter (sokoni-bluetooth-printer.js); this is only its
+           control surface, so no GATT logic is duplicated here. -->
+      <div class="bt-p58e-panel" id="btP58ePanel" style="margin-top:14px;padding:14px;border:1px solid var(--border,#2a2a2a);border-radius:12px;background:var(--surface2,rgba(255,255,255,.03))">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:800;font-size:14px">&#128994; Bluetooth Receipt Printer (P58E / 58mm)</div>
+        <div style="font-size:12px;color:var(--muted,#9a9a9a);margin:4px 0 10px">Scan for your P58E, connect, and it reconnects automatically next time.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <button class="btn-primary" id="p58eScanBtn" type="button">&#128994; Scan &amp; Connect</button>
+          <button class="btn-ghost" id="p58eReconnectBtn" type="button" style="display:none">&#8635; Reconnect</button>
+          <button class="btn-ghost" id="p58eForgetBtn" type="button" style="display:none">Forget</button>
+        </div>
+        <div id="p58eStatus" style="font-size:12px;margin-top:10px;color:var(--muted,#9a9a9a)">Not connected.</div>
+        <a href="#" id="p58eAnyLink" style="display:none;font-size:12px;color:var(--accent,#71ff00);margin-top:6px">Can&#39;t see your printer? Scan all Bluetooth devices &rarr;</a>
+      </div>
     </div>
 
     <div class="hw-categories" id="hwCategories">
@@ -1982,6 +1998,61 @@ function openAddModal(categoryPreset) {
 }
 
 document.getElementById('btnAddManual').addEventListener('click', () => openAddModal(null));
+
+/* ── Bluetooth P58E: scan → connect → reconnect ────────────────────────────────
+   Thin control surface over window.P58EPrinter — the engine owns the BLE scan,
+   GATT connect, health-poll and automatic reconnect. We only drive it and mirror
+   its status events into the panel. ─────────────────────────────────────────── */
+(function _wireP58E () {
+  const scanBtn   = document.getElementById('p58eScanBtn');
+  const recBtn    = document.getElementById('p58eReconnectBtn');
+  const forgetBtn = document.getElementById('p58eForgetBtn');
+  const statusEl  = document.getElementById('p58eStatus');
+  const anyLink   = document.getElementById('p58eAnyLink');
+  if (!scanBtn) return;
+
+  const COLOR = { ok: 'var(--accent,#71ff00)', warn: 'var(--amber,#ffb300)', err: '#ff6b6b', '': 'var(--muted,#9a9a9a)' };
+  const setStatus = (txt, cls) => { statusEl.textContent = txt; statusEl.style.color = COLOR[cls || '']; };
+  const busy = (b, label) => { scanBtn.disabled = b; scanBtn.innerHTML = b ? ('<span class="spinner"></span> ' + (label || 'Working…')) : '🔵 Scan &amp; Connect'; };
+  const showPaired = (paired) => { recBtn.style.display = paired ? '' : 'none'; forgetBtn.style.display = paired ? '' : 'none'; };
+  const P = () => window.P58EPrinter;
+  const firstLine = (m) => String(m || '').split('\n')[0];
+
+  if (!P()) { setStatus('Bluetooth printer engine not loaded.', 'err'); scanBtn.disabled = true; return; }
+  if (!navigator.bluetooth) { setStatus('This browser/device does not support Web Bluetooth — use Chrome on Android or desktop.', 'warn'); }
+
+  /* Live status straight from the engine's own lifecycle events. */
+  P().on('scanning',         ()   => { busy(true, 'Scanning…');   setStatus('Scanning for Bluetooth printers…'); });
+  P().on('connecting',       (ev) => { busy(true, 'Connecting…'); setStatus('Connecting to ' + ((ev && ev.name) || 'printer') + '…'); });
+  P().on('connected',        (ev) => { busy(false); setStatus('✓ Connected: ' + ((ev && ev.name) || 'P58E') + ' — reconnects automatically.', 'ok'); showPaired(true); anyLink.style.display = 'none'; });
+  P().on('reconnecting',     (ev) => { setStatus('Reconnecting… attempt ' + ((ev && ev.attempt) || 1) + '/' + ((ev && ev.max) || '—'), 'warn'); });
+  P().on('reconnect_failed', ()   => { busy(false); setStatus('Could not reconnect — power the printer on, then tap Reconnect.', 'err'); });
+  P().on('disconnected',     ()   => { busy(false); setStatus('Disconnected. It reconnects when back in range, or tap Reconnect.', 'warn'); });
+  P().on('error',            (ev) => { busy(false); setStatus(firstLine(ev && ev.message) || 'Bluetooth error.', 'err'); });
+
+  scanBtn.addEventListener('click', async () => {
+    anyLink.style.display = 'none';
+    try { await P().requestAndPair(); }                 /* filtered scan → connect */
+    catch (e) { busy(false); setStatus(firstLine(e.message) || 'Scan cancelled.', 'err'); anyLink.style.display = ''; }
+  });
+  anyLink.addEventListener('click', async (ev) => {     /* "can't see it" → scan all */
+    ev.preventDefault();
+    try { await P().requestAndPairAny(); }
+    catch (e) { setStatus(firstLine(e.message) || 'Scan cancelled.', 'err'); }
+  });
+  recBtn.addEventListener('click', async () => {
+    setStatus('Reconnecting…', 'warn');
+    try { const ok = await P().autoConnect(); if (!ok) await P().requestAndPair(); }
+    catch (e) { setStatus(firstLine(e.message) || 'Reconnect failed.', 'err'); }
+  });
+  forgetBtn.addEventListener('click', async () => {
+    try { await P().forget(); showPaired(false); setStatus('Printer forgotten. Scan to pair again.'); } catch (e) {}
+  });
+
+  /* On load: silently reconnect to a remembered printer (auto-reconnect). */
+  if (P().isConnected) { showPaired(true); setStatus('✓ Connected — reconnects automatically.', 'ok'); }
+  else { Promise.resolve(P().autoConnect()).then(ok => { if (ok) showPaired(true); }).catch(() => {}); }
+})();
 
 function closeAddModal() {
   document.getElementById('addDeviceModal').classList.remove('open');
