@@ -108,6 +108,51 @@ function _isAdmin(token) {
   return !!(token?.admin || token?.superAdmin);
 }
 
+/* ── Public registry projection (providers/{uid}) ─────────────────────────────
+   `providers/{uid}` is the ONLY doc the service directory + global search read.
+   The directory silently drops any doc missing `updatedAt` (its orderBy) and
+   search needs `searchableTerms`/`nameLower`, so EVERY publish and EVERY self-edit
+   must project onto this doc — otherwise an edit changes nothing a customer sees
+   (or, worse, self-invisibles the provider). These helpers are the single place
+   that projection happens. They NEVER set status/verified/featured (merge:true
+   leaves admin/publish values intact); the client rules also block those. */
+function _providerSearchTerms(p) {
+  const src = [p.name, p.businessName, p.category, ...(p.categories || []), ...(p.skills || []),
+               p.serviceType, p.location, p.city, p.description]
+    .filter(Boolean).join(' ').toLowerCase();
+  const words = Array.from(new Set(src.split(/[^a-z0-9]+/).filter(w => w.length >= 2)));
+  const terms = new Set();
+  for (const w of words) {
+    terms.add(w);
+    for (let i = 2; i <= Math.min(w.length, 6); i++) terms.add(w.slice(0, i));
+  }
+  return Array.from(terms).slice(0, 300);
+}
+/* Project the private pricing record onto the flat rate/rateType the directory
+   card reads (sokoni-providers.js reads `rate`/`rateType`). */
+function _rateFromPricing(pricing) {
+  if (!pricing) return null;
+  if (pricing.hourly && pricing.hourly.enabled && pricing.hourly.amount) return { rate: Number(pricing.hourly.amount) || 0, rateType: 'hourly' };
+  if (pricing.fixed  && pricing.fixed.enabled  && pricing.fixed.amount)  return { rate: Number(pricing.fixed.amount)  || 0, rateType: 'fixed' };
+  if (pricing.quotation) return { rate: 0, rateType: 'quote' };
+  return null;
+}
+/* Read-merge-write the registry doc for a self-edit: overlays `patch`, re-stamps
+   updatedAt, recomputes nameLower/searchableTerms from the MERGED view. No-op if
+   the provider hasn't published yet (no registry doc to project onto). */
+async function _mirrorToRegistry(uid, patch) {
+  if (!patch || !Object.keys(patch).length) return;
+  const ref  = _db().collection('providers').doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) return; /* not published — providerPublish creates the doc */
+  const merged = { ...snap.data(), ...patch };
+  const out = { ...patch, updatedAt: _ts() };
+  const nm = merged.name || merged.businessName;
+  if (nm) out.nameLower = String(nm).toLowerCase();
+  out.searchableTerms = _providerSearchTerms(merged);
+  await ref.set(out, { merge: true });
+}
+
 /* ── Generate unique provider ID ─────────────────────────────────────────────── */
 async function _genProviderId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -283,20 +328,32 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
      document instead of gaining a second listing. */
   const cats = [draft.profile.category, draft.profile.subcategory]
     .map(c => _san(c, 100)).filter(Boolean);
+  const _pubName  = _san(draft.profile.name, 120);
+  const _pubDesc  = _san(draft.profile.bio, 2000);
+  const _pubLoc   = _san((draft.coverage && (draft.coverage.area || draft.coverage.city)) || '', 160);
+  const _pubCity  = _san((draft.coverage && draft.coverage.city) || '', 100);
+  const _pubSkills = (draft.profile.qualifications || []).slice(0, 10).map(q => _san(q, 200));
+  const _pubRate  = _rateFromPricing(draft.pricing);
   batch.set(_db().collection('providers').doc(uid), {
     uid, providerId,
-    name:        _san(draft.profile.name, 120),
+    name:        _pubName,
     category:    cats[0] || '',
     categories:  cats,
-    description: _san(draft.profile.bio, 2000),
-    location:    _san((draft.coverage && (draft.coverage.area || draft.coverage.city)) || '', 160),
-    city:        _san((draft.coverage && draft.coverage.city) || '', 100),
-    skills:      (draft.profile.qualifications || []).slice(0, 10).map(q => _san(q, 200)),
+    description: _pubDesc,
+    location:    _pubLoc,
+    city:        _pubCity,
+    skills:      _pubSkills,
     status:      'active',
     searchable:  true,
     isPublic:    true,
     acceptsBookings: true,
     available:   true,
+    /* Index inline — do NOT rely on the create-only indexProviderCreate trigger,
+       which never fires on a re-publish of an existing doc. */
+    nameLower:       _pubName ? _pubName.toLowerCase() : '',
+    searchableTerms: _providerSearchTerms({ name: _pubName, category: cats[0], categories: cats, skills: _pubSkills, description: _pubDesc, location: _pubLoc, city: _pubCity }),
+    /* Booking fee projected onto the flat rate/rateType the directory card reads. */
+    ...(_pubRate || {}),
     /* Verification and featuring are admin decisions and are never granted by
        the act of publishing. merge:true leaves an existing admin value alone. */
     rating: 0, reviewCount: 0, jobsCompleted: 0,
@@ -366,6 +423,22 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = _ts();
     await _db().collection('providerProfiles').doc(uid).update(updates);
+  }
+
+  /* Item 2: propagate the public fields to the discovery registry so the edit
+     actually shows in the directory/search (and re-stamp updatedAt so a rename or
+     recategorise can never drop the provider out of the orderBy). Only the profile
+     section carries public fields; other sections are private working records. */
+  if (section === 'profile') {
+    const mirror = {};
+    if (updates.name)           mirror.name        = updates.name;
+    if (updates.bio)            mirror.description  = updates.bio;
+    if (updates.qualifications) mirror.skills       = updates.qualifications;
+    if (updates.category) {
+      mirror.category   = updates.category;
+      mirror.categories = [updates.category, updates.subcategory].filter(Boolean);
+    }
+    await _mirrorToRegistry(uid, mirror);
   }
 
   return { success: true, section };
@@ -467,6 +540,9 @@ exports._h.providerUpdatePricing = _h.providerUpdatePricing = async (req) => {
     currency: 'KES',
   };
   await _db().collection('providerProfiles').doc(uid).update({ pricing, updatedAt: _ts() });
+  /* Item 2: project the fee onto the public registry so a fee change is reflected
+     on the directory card (which reads rate/rateType), editable anytime. */
+  await _mirrorToRegistry(uid, _rateFromPricing(pricing) || {});
   return { success: true, pricing };
 };
 
