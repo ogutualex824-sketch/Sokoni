@@ -3,11 +3,19 @@
 Clean starting point for the next session/agent. Live production = **`mysokoni.co.ke`**
 (Firebase Hosting, project `sokoni-aeb26`). Live SW at time of writing: **v130**.
 
-> **Deploy discipline (read first):** ~20 concurrent agent worktrees deploy hosting;
-> deploying from a stale one ROLLS BACK production. A predeploy guard
-> (`scripts/deploy/guard-no-rollback.js`) now aborts any deploy behind live, but the
-> durable fix is operational: **one deploy authority, always from latest.** See
-> `AGENTS.md` / `CLAUDE.md` "Operational Guardrails".
+> **Deploy discipline (read first):** ~20 concurrent agent worktrees deploy hosting.
+> Two guards now protect production, but the durable fix is operational — **one deploy
+> authority, always from latest** (`AGENTS.md` / `CLAUDE.md`):
+> - `scripts/deploy/guard-no-rollback.js` — aborts a deploy whose tree is behind live
+>   (stops stale-worktree ROLLBACKS).
+> - `scripts/deploy/guard-deploy-cooldown.js` — aborts a deploy if production was
+>   deployed < 120s ago (stops rapid SERVICE-WORKER THRASH).
+>
+> **Outage 2026-07-27 ("most pages white/black"):** five worktrees deployed within
+> minutes, bumping the SW v131→v136 back-to-back; devices blanked mid-update. The
+> server was NEVER broken (every page served full HTML and rendered, incl. through the
+> SW) — the damage was deploy CADENCE. Fix = the cooldown guard above. Device recovery:
+> one hard-refresh (Ctrl/Cmd+Shift+R) — the SW self-heals on reload.
 
 ---
 
