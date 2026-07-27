@@ -14,6 +14,11 @@ const FieldValue = admin.firestore.FieldValue;
    legacy OR canonical, so this prices existing (un-migrated) venues correctly. */
 const { normalize: _normalizePricing, compute: _computePricing } = require('./pricing-schema');
 
+/* Shared reservation primitives — the ONE definition of slot-key, buffered
+   overlap, capacity + per-customer caps, shared with the service-appointment
+   engine so the two can never drift (docs/BOOKING_CONVERGENCE.md). */
+const _rc = require('./reservation-core');
+
 exports._h = {}; // handler registry — consumed by booking-dispatch.js
 
 /* ─── Helpers ───────────────────────────────────────────── */
@@ -299,7 +304,7 @@ exports.bookingHoldSlot = onCall(
 
       for (const doc of bSnap.docs) {
         const b = doc.data();
-        if ((startTs - bufBeforeMs) < (b.endTs + bufAfterMs) && (endTs + bufAfterMs) > (b.startTs - bufBeforeMs)) return false;
+        if (_rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufBeforeMs, bufAfterMs)) return false;
       }
 
       /* Check existing holds */
@@ -471,7 +476,7 @@ exports.bookingCreate = onCall(
     /* Slot-lock document: keyed on the exact time window.
        Writing this atomically inside the transaction prevents two concurrent
        requests for the identical slot from both committing. */
-    const slotKey    = `${date}_${startTs}_${endTs}`;
+    const slotKey    = _rc.slotKey(date, startTs, endTs);
     const slotLockRef = db.collection('venues').doc(venueId).collection('slotLocks').doc(slotKey);
 
     /* Authoritative per-customer cap: counter doc read + incremented inside the
@@ -525,7 +530,7 @@ exports.bookingCreate = onCall(
       ── */
       if (venue.capacity?.max) {
         const concurrent = venue.capacity.concurrent || 1;
-        if (existingBookings.length >= concurrent) {
+        if (_rc.capacityExceeded(existingBookings.length, concurrent)) {
           isConflict   = true;
           conflictCode = 'resource-exhausted';
           return;
@@ -541,7 +546,7 @@ exports.bookingCreate = onCall(
         const cSnap = await txn.get(counterRef);
         counterExisted = cSnap.exists;
         counterSeed    = cSnap.exists ? Number(cSnap.data().active || 0) : customerActiveCount;
-        if (counterSeed >= maxPerCustomer) {
+        if (_rc.customerCapExceeded(counterSeed, maxPerCustomer)) {
           isConflict   = true;
           conflictCode = 'failed-precondition';
           return;
@@ -550,9 +555,7 @@ exports.bookingCreate = onCall(
 
       /* ── 4. Overlap check (against pre-fetched snapshot; includes the provider
              buffer so a booking reserves [start-bufferBefore, end+bufferAfter]) ─  */
-      const hasOverlap = existingBookings.some(b =>
-        (startTs - bufBeforeMs) < (b.endTs + bufAfterMs) &&
-        (endTs   + bufAfterMs)  > (b.startTs - bufBeforeMs));
+      const hasOverlap = _rc.bufferedOverlaps(startTs, endTs, existingBookings, bufBeforeMs, bufAfterMs);
       if (hasOverlap) {
         isConflict   = true;
         conflictCode = 'already-exists';
