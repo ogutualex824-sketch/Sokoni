@@ -2967,7 +2967,13 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
 (function _profileAuthGate(){
   var HTML = document.documentElement;
   function reveal(){ HTML.classList.add('sk-auth-ok'); }
+  /* The live Firebase user is the ground truth. By the time SokoniAuthState.ready
+     resolves, onAuthStateChanged has fired, so currentUser is authoritative. */
+  function liveUser(){ try { return window.firebaseAuth && window.firebaseAuth.currentUser; } catch(_){ return null; } }
   function toLogin(){
+    /* Only reached when auth AUTHORITATIVELY reports NO user (stale loggedIn flag
+       with no real session). Clear the stale cache so login.html's already-logged-in
+       guard can't bounce us to home, then go to login. */
     try { localStorage.removeItem('loggedIn'); localStorage.removeItem('sokoniUser'); } catch(_){}
     try { location.replace('login.html?redirect=profile.html'); }
     catch(_){ location.href = 'login.html?redirect=profile.html'; }
@@ -2975,23 +2981,26 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
   var AS = window.SokoniAuthState;
   if (AS && AS.ready && typeof AS.ready.then === 'function'){
     AS.ready.then(function(session){
-      if (session && session.uid) reveal(); else toLogin();
-    }).catch(function(){
-      /* Never trap a real user on the splash: fall back to the flag we already know is 'true'. */
-      reveal();
-    });
+      /* Reveal if EITHER the resolution-aware state OR the live SDK sees a user.
+         Redirect only when BOTH agree there is none — this is what stops a
+         genuinely signed-in user being bounced (→ login → home) on a slow mobile
+         session restore, the "Profile jumps to home / can't sign in" report. */
+      if ((session && session.uid) || liveUser()) reveal(); else toLogin();
+    }).catch(function(){ reveal(); });
   } else {
-    /* SokoniAuthState unavailable — we only reached here because the flag was
-       'true', so reveal rather than strand the user on the splash. */
+    /* SokoniAuthState unavailable — we only reached here because the loggedIn flag
+       was 'true'; reveal rather than strand the user on the splash. */
     reveal();
   }
-  /* Absolute failsafe past SokoniAuthState's own 12s optimistic backstop. */
+  /* Failsafe: if resolution stalls past 12s, REVEAL optimistically — never sign a
+     user out on a slow network (the app-wide anti-loop rule). Redirect only if
+     Firebase has authoritatively resolved with NO user AND the SDK has none live. */
   setTimeout(function(){
     if (HTML.classList.contains('sk-auth-ok')) return;
     if (AS && AS.isResolved && AS.isResolved() &&
-        !(AS.getCurrentSession && AS.getCurrentSession())) toLogin();
+        !(AS.getCurrentSession && AS.getCurrentSession()) && !liveUser()) toLogin();
     else reveal();
-  }, 14000);
+  }, 12000);
 })();
 
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
@@ -4020,39 +4029,89 @@ function saveSettings(){
   upToast('Preferences saved!', true);
 }
 
-function deactivateAccount(_c){
-  if(!_c){_skConfirm('Are you sure you want to deactivate your account? You can reactivate by logging in again.',()=>deactivateAccount(true));return;}
-  saveToFirestore({deactivated:true, deactivatedAt: new Date().toISOString()});
-  logoutUser();
+async function deactivateAccount(_c){
+  if(!_c){_skConfirm('Deactivate your account and sign out? You can reactivate anytime by logging back in and opening your profile.',()=>deactivateAccount(true));return;}
+  var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
+  try{
+    toast('Deactivating…','info');
+    /* AWAIT the write — the old code fired it and immediately logged out, so the
+       navigation usually aborted the request and the flag never persisted. */
+    await saveToFirestore({ deactivated:true, deactivatedAt: new Date().toISOString() });
+    toast('Account deactivated. Signing you out…','success');
+    setTimeout(function(){ logoutUser(true); }, 700);
+  }catch(e){
+    toast('Could not deactivate: ' + ((e&&e.message)||'please try again.'),'error');
+  }
+}
+window.deactivateAccount = deactivateAccount;
+
+/* Reactivate on return: when a signed-in user opens their profile, clear any
+   deactivated flag so "log back in to reactivate" actually holds. */
+function _reactivateIfNeeded(data){
+  try{
+    if(data && data.deactivated === true && _user && _user.uid){
+      saveToFirestore({ deactivated:false, reactivatedAt: new Date().toISOString() }).catch(function(){});
+    }
+  }catch(_){}
 }
 
-async function deleteAccountPermanently(_c){
-  if(!_c){_skConfirm('⚠️ PERMANENTLY DELETE your account? This cannot be undone. All your data will be removed within 30 days.',()=>deleteAccountPermanently(true));return;}
-  var confirm2 = prompt('Type DELETE to permanently delete your account:');
-  if(confirm2 !== 'DELETE') return;
+/* In-page typed confirmation (mobile-reliable — native prompt() is often
+   suppressed in installed PWAs / in-app browsers, which is why Delete "did
+   nothing" on phones). Resolves true only when the word is typed exactly. */
+function _acctTypedConfirm(word, message){
+  return new Promise(function(resolve){
+    var ov = document.createElement('div');
+    ov.className = 'pv-modal';
+    ov.innerHTML =
+      '<div class="pv-box" role="dialog" aria-modal="true" aria-label="Confirm">' +
+        '<div class="pv-title">Delete account</div>' +
+        '<div class="pv-hint">' + message + '</div>' +
+        '<input id="_actIn" class="pv-input" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Type ' + word + '">' +
+        '<button id="_actYes" type="button" class="pv-cta" disabled style="background:#dc2626;color:#fff;">Delete permanently</button>' +
+        '<button id="_actNo" type="button" class="pv-link">Cancel</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    try { document.body.style.overflow = 'hidden'; } catch(_){}
+    var inp = ov.querySelector('#_actIn'), yes = ov.querySelector('#_actYes'), no = ov.querySelector('#_actNo');
+    function close(v){ try{ ov.remove(); }catch(_){}; try{ document.body.style.overflow=''; }catch(_){}; resolve(v); }
+    inp.addEventListener('input', function(){ yes.disabled = inp.value.trim().toUpperCase() !== word.toUpperCase(); });
+    yes.onclick = function(){ if(!yes.disabled) close(true); };
+    no.onclick  = function(){ close(false); };
+    ov.addEventListener('click', function(e){ if(e.target === ov) close(false); });
+    try { inp.focus(); } catch(_){}
+  });
+}
+
+async function deleteAccountPermanently(){
+  var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
+  /* Reliable in-page confirmation (replaces native prompt(), which is suppressed
+     in many mobile/PWA/in-app browsers — the reason Delete appeared to do nothing
+     on phones). */
+  var ok = await _acctTypedConfirm('DELETE',
+    'This permanently deletes your account. All your data is removed within 30 days and cannot be recovered. Type DELETE to confirm.');
+  if(!ok) return;
   try{
     var {getAuth} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
     var {getFunctions,httpsCallable} = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
     var auth = getAuth();
-    var user = auth.currentUser;
-    if(!user){ (window._skToast||alert)('Please sign in again before deleting your account.'); window.location.href='login.html'; return; }
-    /* Wipe local state before CF call so nothing lingers if CF is slow */
-    ['sokoniUser','sokoniStore','sokoniMiniStore','sokoniNotifications',
-     'sokoniRecentSearches','sokoniLoyaltyPoints','sokoniEvents',
-     'sellerProducts','sokoniCart'].forEach(function(k){ localStorage.removeItem(k); });
-    /* Call server-side CF — disables Auth, anonymises user doc, revokes tokens, queues 30-day purge */
+    if(!auth.currentUser){ toast('Please sign in again before deleting your account.','error'); window.location.href='login.html?redirect=profile.html'; return; }
+    toast('Deleting your account…','info');
+    /* Server-side CF — disables Auth, anonymises the user doc, revokes tokens,
+       queues a 30-day purge. Authoritative; the client only reflects the result. */
     var fns = getFunctions(undefined, 'us-central1');
-    var deleteMyAccount = httpsCallable(fns, 'deleteMyAccount');
-    var result = await deleteMyAccount();
-    var purgeDate = result.data && result.data.purgeAfter ? new Date(result.data.purgeAfter).toLocaleDateString() : '30 days';
-    (window._skToast||alert)('Your account has been deleted. Personal data will be permanently purged by ' + purgeDate + '.');
-    window.location.href = "/";
+    var result = await httpsCallable(fns, 'deleteMyAccount')();
+    var purgeDate = result && result.data && result.data.purgeAfter ? new Date(result.data.purgeAfter).toLocaleDateString() : 'about 30 days';
+    toast('Your account has been deleted. Data will be purged by ' + purgeDate + '.','success');
+    /* Fully clear the client session (listeners + all user storage) before leaving. */
+    try { if(window.sokoniSignOut) await window.sokoniSignOut(); } catch(_){}
+    setTimeout(function(){ window.location.replace('/'); }, 900);
   }catch(e){
-    if(e.code === 'auth/requires-recent-login'){
-      (window._skToast||alert)('For security, please sign out and sign back in before deleting your account.');
-      window.location.href = 'login.html?next=profile.html';
+    var code = (e && e.code) || '';
+    if(code === 'auth/requires-recent-login' || code === 'functions/unauthenticated'){
+      toast('For security, please sign out and sign back in, then delete.','error');
+      window.location.href = 'login.html?redirect=profile.html';
     } else {
-      (window._skToast||alert)('Error deleting account: ' + (e.message||'Please try again or contact support@mysokoni.co.ke'));
+      toast('Could not delete account: ' + ((e&&e.message)||'please try again or email support@mysokoni.co.ke'),'error');
     }
   }
 }
@@ -4157,6 +4216,7 @@ function listenFirestoreProfile(uid){
     _profUserDataUnsub = m.onSnapshot(m.doc(db,'users',uid), function(snap){
       if(!snap.exists()) return;
       var data = snap.data();
+      _reactivateIfNeeded(data);
       /* merge non-sensitive fields into localStorage user */
       _user = getUser() || {};
       if(data.name) _user.name = data.name;
