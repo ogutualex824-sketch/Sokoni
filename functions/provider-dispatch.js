@@ -60,6 +60,8 @@ const ROUTES = [
   'providerAddService',
   'providerListServices',
   'providerRemoveService',
+  'providerUpdateService',
+  'providerToggleService',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');

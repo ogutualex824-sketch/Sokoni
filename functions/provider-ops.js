@@ -341,7 +341,9 @@ _h.providerAddService = async (req) => {
   const ref = await _db().collection('providerServices').add({
     providerId: uid, name, category: _san(d.category, 120), subcategory: _san(d.subcategory, 120),
     description: _san(d.description, 1000), priceType: _san(d.priceType, 40) || 'quotation',
-    price: Math.max(0, Math.round(Number(d.price) || 0)), active: true,
+    price: Math.max(0, Math.round(Number(d.price) || 0)),
+    durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
+    active: true,
     createdAt: _ts(), updatedAt: _ts(),
   });
   return { success: true, serviceId: ref.id, remaining: cap === -1 ? -1 : cap - activeCount - 1 };
@@ -367,6 +369,55 @@ _h.providerRemoveService = async (req) => {
   if (snap.data().providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
   await ref.update({ active: false, removedAt: _ts(), updatedAt: _ts() });
   return { success: true };
+};
+
+/* ── 13. providerUpdateService — edit a rate card (owner-only, whitelisted fields).
+   providerId/createdAt are never client-mutable; a non-owner is rejected before
+   any write. Only fields the caller actually sent are patched. ──────────────── */
+_h.providerUpdateService = async (req) => {
+  const uid = _uid(req);
+  const id  = _san(req.data?.serviceId, 128);
+  if (!id) throw new HttpsError('invalid-argument', 'serviceId is required.');
+  const ref  = _db().collection('providerServices').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Service not found.');
+  if (snap.data().providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
+  const d = req.data || {};
+  const patch = { updatedAt: _ts() };
+  if (d.name !== undefined) {
+    const n = _san(d.name, 200).trim();
+    if (!n) throw new HttpsError('invalid-argument', 'Service name cannot be empty.');
+    patch.name = n;
+  }
+  if (d.category !== undefined)    patch.category    = _san(d.category, 120);
+  if (d.subcategory !== undefined) patch.subcategory = _san(d.subcategory, 120);
+  if (d.description !== undefined) patch.description = _san(d.description, 1000);
+  if (d.priceType !== undefined)   patch.priceType   = _san(d.priceType, 40) || 'quotation';
+  if (d.price !== undefined)       patch.price       = Math.max(0, Math.round(Number(d.price) || 0));
+  if (d.durationMins !== undefined || d.duration !== undefined) {
+    patch.durationMins = Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0));
+  }
+  if (d.active !== undefined)      patch.active      = d.active === true;
+  await ref.update(patch);
+  return { success: true };
+};
+
+/* ── 14. providerToggleService — enable/disable a rate card (owner-only).
+   Pass {active} to set explicitly, or omit to flip. Never touches removedAt, so a
+   deleted card stays deleted. ────────────────────────────────────────────────── */
+_h.providerToggleService = async (req) => {
+  const uid = _uid(req);
+  const id  = _san(req.data?.serviceId, 128);
+  if (!id) throw new HttpsError('invalid-argument', 'serviceId is required.');
+  const ref  = _db().collection('providerServices').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Service not found.');
+  const cur = snap.data();
+  if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
+  if (cur.removedAt) throw new HttpsError('failed-precondition', 'This service was deleted.');
+  const next = req.data?.active !== undefined ? (req.data.active === true) : !(cur.active !== false);
+  await ref.update({ active: next, updatedAt: _ts() });
+  return { success: true, active: next };
 };
 
 module.exports = { _h };
