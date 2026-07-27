@@ -17,17 +17,19 @@ Clean starting point for the next session/agent. Live production = **`mysokoni.c
   account renders only its own listings; foreign cached listings cannot render,
   survive, or sync. (Commits `bbf5410` and earlier; fixes the reported "another
   seller's vapes on a service-provider account" leak.)
-- ⏸ **Ready but NOT deployed:** commit **`1c0f164`** — OwnerCache foundation
+- ✅ **Now LIVE (was blocked):** commit **`1c0f164`** — OwnerCache foundation
   (`sokoni-owner-cache.js`, uid-namespaced storage) + removal of the fabricated
-  `Math.random()` seller stats. Code is complete and syntax-verified; OwnerCache is
-  unit-verified against the exact leak scenario.
-- 🚧 **Operational blocker (NOT product code):** deployment of `1c0f164` is blocked
-  by a **hanging predeploy gate** — `node scripts/gate-inventory.js` (wraps
-  `node scripts/test-inventory.js --gate`). The process **hangs without producing any
-  output** before deployment begins; it does not reach a check and does not implicate
-  the changed files. The application code is verified; deployment could not proceed
-  because of the pipeline. **Investigate and stabilize this predeploy gate before
-  attempting further hosting deployments.**
+  `Math.random()` seller stats — shipped at **SW v134** (commit `98a39fa`), verified
+  live. Also live: the **P58E Bluetooth scan/connect/reconnect button** on the
+  Configure Hardware page (`pos-hardware-wizard.html`), wired to the existing
+  `window.P58EPrinter` engine.
+- ⚠️ **Intermittent predeploy gate (not a hard block):** `node scripts/gate-inventory.js`
+  (wraps `node scripts/test-inventory.js --gate`) **hung with no output on several
+  attempts, then passed on a later retry** — so it is FLAKY, not permanently broken,
+  and it blocks/unblocks deploys unpredictably. It still warrants stabilizing (it
+  appears to hang waiting on a resource/emulator), but a hosting deploy is currently
+  achievable by retrying until the gate clears. Do NOT edit it blindly; investigate
+  what it waits on.
 - ▶️ **Next work, once the pipeline is fixed (in order):**
   1. Deploy `1c0f164`.
   2. Complete the **atomic OwnerCache migration** — move *every* `seller.js`
