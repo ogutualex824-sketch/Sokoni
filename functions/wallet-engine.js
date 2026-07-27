@@ -90,6 +90,74 @@ function _normalizePhone(raw) {
 }
 
 /**
+ * Find a SOKONI user by phone, tolerant of how phones are actually stored.
+ * Firebase-Auth users carry `phoneNumber` in "+254…" form; some legacy docs use
+ * `phone` in "254…" form. _normalizePhone yields "254…", so the old
+ * where('phone','==','254…') query matched NEITHER — every recipient lookup
+ * returned USER_NOT_FOUND. This checks both fields in both formats (first hit
+ * wins → one read for a valid recipient). Returns the doc snapshot or null.
+ */
+async function _findUserByPhone(db, normalizedPhone) {
+  if (!normalizedPhone) return null;
+  const plus  = `+${normalizedPhone}`;             // "+254742544979"
+  const local = `0${normalizedPhone.slice(3)}`;    // "0742544979" (Kenyan local form)
+  const attempts = [
+    ['phoneNumber', plus],            // Firebase Auth default: "+254…" (most common)
+    ['phone',       local],           // observed in data: "0742…" (local, leading 0)
+    ['phone',       normalizedPhone], // "254…"
+    ['phoneNumber', local],           // "0742…" in phoneNumber
+    ['phone',       plus],            // "+254…" in phone
+    ['phoneNumber', normalizedPhone], // "254…" in phoneNumber
+  ];
+  for (const [field, val] of attempts) {
+    const snap = await db.collection('users').where(field, '==', val).limit(1).get();
+    if (!snap.empty) return snap.docs[0];
+  }
+  return null;
+}
+
+/**
+ * Authorize a money-out action with the wallet PIN — SERVER-SIDE, so a client can't
+ * skip it by calling the CF directly. No-op if the user has no PIN set (backward
+ * compatible). If a PIN is set it MUST match; wrong PINs are counted and the wallet
+ * locks+freezes after PIN_MAX_ATTEMPTS (shared with walletV2VerifyPin's tracking).
+ * Throws:
+ *   failed-precondition 'PIN_REQUIRED'  — PIN is set but none supplied (client should prompt)
+ *   permission-denied   'Incorrect PIN' — wrong PIN (or lock message once locked)
+ */
+async function _assertPinOk(db, uid, pin) {
+  const wref  = db.collection('wallets').doc(uid);
+  const wsnap = await wref.get();
+  const w = wsnap.exists ? wsnap.data() : {};
+  if (!w.pinHash) return;                       // no PIN configured → nothing to authorize against
+  if (w.pinLocked) throw new HttpsError('failed-precondition', 'Wallet is PIN-locked. Reset it in Security.');
+  if (!pin || !/^\d{4}$/.test(String(pin))) {
+    throw new HttpsError('failed-precondition', 'PIN_REQUIRED');
+  }
+  if (_sha256(`${pin}${uid}`) === w.pinHash) {
+    await db.collection('walletPinAttempts').doc(uid).set({ verifyAttempts: 0 }, { merge: true }).catch(() => {});
+    return;
+  }
+  // Wrong PIN — track attempts within the window; lock+freeze at the cap.
+  const rateRef = db.collection('walletPinAttempts').doc(uid);
+  let locked = false;
+  await db.runTransaction(async (t) => {
+    const rs  = await t.get(rateRef);
+    const now = Date.now();
+    let attempts = 0, windowStart = now;
+    if (rs.exists) {
+      const rd = rs.data();
+      const ws = rd.windowStart?.toMillis ? rd.windowStart.toMillis() : 0;
+      if (now - ws < PIN_WINDOW_MS) { attempts = rd.verifyAttempts ?? 0; windowStart = ws; }
+    }
+    attempts += 1;
+    t.set(rateRef, { verifyAttempts: attempts, windowStart: Timestamp.fromMillis(windowStart) }, { merge: true });
+    if (attempts >= PIN_MAX_ATTEMPTS) { t.update(wref, { pinLocked: true, frozen: true }); locked = true; }
+  });
+  throw new HttpsError('permission-denied', locked ? 'Too many wrong PINs — wallet locked. Reset it in Security.' : 'Incorrect PIN');
+}
+
+/**
  * Generate a prefixed random ID suitable for Firestore doc IDs.
  * Format: {prefix}_{base36-timestamp}_{6-char-random}
  */
@@ -229,8 +297,8 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
   try {
     const walletRef = await _ensureWallet(db, uid);
 
-    // Fan-out: wallet doc, savings subcollection, last 5 transactions in parallel
-    const [walletSnap, savingsSnap, txSnap] = await Promise.all([
+    // Fan-out: wallet doc, savings subcollection, last 5 transactions, payouts in parallel
+    const [walletSnap, savingsSnap, txSnap, payoutSnap] = await Promise.all([
       walletRef.get(),
       db.collection('wallets').doc(uid).collection('savings').get(),
       db.collection('walletTransactions')
@@ -238,6 +306,7 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
         .orderBy('createdAt', 'desc')
         .limit(5)
         .get(),
+      db.collection('payoutRequests').where('sellerUid', '==', uid).limit(100).get().catch(() => null),
     ]);
 
     const w = walletSnap.data();
@@ -246,6 +315,21 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
     let totalSaved = 0;
     for (const vDoc of savingsSnap.docs) {
       totalSaved += vDoc.data().currentAmount || 0;
+    }
+
+    // Paid-out totals for the dashboard cards (today / this month)
+    let todayPaid = 0, monthPaid = 0;
+    if (payoutSnap) {
+      const now = new Date();
+      const startDay   = new Date(now); startDay.setHours(0, 0, 0, 0);
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      for (const d of payoutSnap.docs) {
+        const p = d.data();
+        if (p.status !== 'paid') continue;
+        const ms = p.processedAt?.toMillis ? p.processedAt.toMillis() : (p.updatedAt?.toMillis ? p.updatedAt.toMillis() : 0);
+        if (ms >= startMonth.getTime()) monthPaid += (p.amount || 0);
+        if (ms >= startDay.getTime())   todayPaid += (p.amount || 0);
+      }
     }
 
     const last5Transactions = txSnap.docs.map((d) => {
@@ -264,11 +348,15 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
     return {
       balance:         w.balance         ?? 0,
       pendingBalance:  w.pendingBalance   ?? 0,
+      pendingPayout:   w.pendingPayout    ?? 0,
       savingsBalance:  w.savingsBalance   ?? 0,
       cashbackBalance: w.cashbackBalance  ?? 0,
       rewardPoints:    w.rewardPoints     ?? 0,
       tier:            w.tier             ?? 'bronze',
       frozen:          w.frozen           ?? false,
+      hasPin:          !!w.pinHash,
+      todayPaid,
+      monthPaid,
       pinLocked:       w.pinLocked        ?? false,
       dailyLimit:      w.dailyLimit       ?? 50_000,
       monthlyLimit:    w.monthlyLimit     ?? 500_000,
@@ -293,18 +381,23 @@ exports.walletV2Dashboard = onCall(BASE_OPTS, async (request) => {
 /**
  * Transfer funds from caller to another SOKONI user identified by phone number.
  *
- * @param {{ phone: string, amount: number, note?: string }} data
+ * @param {{ phone?: string, toUid?: string, amount: number, note?: string }} data
+ *        Identify the recipient by `phone` (normal send) OR `toUid` (QR scan-to-pay,
+ *        which lets phone-less users receive). `toUid` takes precedence.
  * @returns {{ success: boolean, recipientName?: string, newBalance?: number, txId?: string, error?: string }}
  */
 exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
   const senderUid = _requireAuth(request);
   const db        = _db();
 
-  const { phone, amount, note } = request.data || {};
+  const { phone, toUid, amount, note, pin } = request.data || {};
 
   // ── Validation ──────────────────────────────────────────────────────────────
-  const normalizedPhone = _normalizePhone(phone);
-  if (!normalizedPhone) {
+  /* Recipient may be identified by phone (normal send) or by uid (QR scan-to-pay,
+     which lets phone-less users receive). toUid takes precedence when supplied. */
+  const wantsUid        = typeof toUid === 'string' && toUid.trim().length > 0;
+  const normalizedPhone = wantsUid ? null : _normalizePhone(phone);
+  if (!wantsUid && !normalizedPhone) {
     throw new HttpsError('invalid-argument', 'Invalid Kenyan phone number');
   }
   const safeAmount = Number(amount);
@@ -315,18 +408,20 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
 
   try {
     await _assertNotFrozen(db, senderUid);
+    await _assertPinOk(db, senderUid, pin);   // authorize the send (no-op if no PIN set)
 
-    // ── Recipient lookup ──────────────────────────────────────────────────────
-    const recipientQuery = await db.collection('users')
-      .where('phone', '==', normalizedPhone)
-      .limit(1)
-      .get();
-
-    if (recipientQuery.empty) {
+    // ── Recipient lookup: by uid (QR) or by phone (tolerant of stored formats) ──
+    let recipientDoc;
+    if (wantsUid) {
+      const snap = await db.collection('users').doc(toUid.trim()).get();
+      recipientDoc = snap.exists ? snap : null;
+    } else {
+      recipientDoc = await _findUserByPhone(db, normalizedPhone);
+    }
+    if (!recipientDoc) {
       return { success: false, error: 'USER_NOT_FOUND' };
     }
 
-    const recipientDoc  = recipientQuery.docs[0];
     const recipientUid  = recipientDoc.id;
     const recipientData = recipientDoc.data();
 
@@ -449,6 +544,42 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
+// 2b. walletV2SavePhone — persist a Firebase-VERIFIED phone so phone-less
+//     (Google/email) users can receive money by phone.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Save the caller's phone to their users doc — but ONLY the number Firebase already
+ * verified via linkWithPhoneNumber, read from the ID-token `phone_number` claim.
+ * A client-supplied number is never trusted, so nobody can claim a number they do
+ * not control; Firebase Auth guarantees one phone links to one account, which closes
+ * the money-interception risk that an unverified "add phone" toggle would open.
+ *
+ * @returns {{ success: boolean, phone: string }}
+ */
+exports.walletV2SavePhone = onCall(BASE_OPTS, async (request) => {
+  const uid = _requireAuth(request);
+  const db  = _db();
+
+  const verified = request.auth?.token?.phone_number;   // "+254…" once the phone is linked
+  if (!verified) {
+    throw new HttpsError('failed-precondition', 'Phone not verified yet. Enter the SMS code first.');
+  }
+  const normalized = _normalizePhone(verified);
+  if (!normalized) {
+    throw new HttpsError('invalid-argument', 'Only Kenyan (+254) numbers can receive wallet money.');
+  }
+  const e164 = `+${normalized}`;
+
+  await db.collection('users').doc(uid).set({
+    phoneNumber:     e164,
+    phoneVerifiedAt: Timestamp.now(),
+  }, { merge: true });
+
+  return { success: true, phone: e164 };
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
 // 3. walletV2Request  — create a money request
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -481,9 +612,9 @@ exports.walletV2Request = onCall(BASE_OPTS, async (request) => {
     let toPhone = normalizedPhone;
 
     if (normalizedPhone) {
-      const q = await db.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-      if (!q.empty) {
-        toUid = q.docs[0].id;
+      const recipientDoc = await _findUserByPhone(db, normalizedPhone);
+      if (recipientDoc) {
+        toUid = recipientDoc.id;
       }
     }
 
@@ -1505,8 +1636,8 @@ exports.walletV2EscrowCreate = onCall(BASE_OPTS, async (request) => {
     const normalizedPhone = _normalizePhone(counterpartyPhone);
     if (!normalizedPhone) throw new HttpsError('invalid-argument', 'Invalid counterparty phone number');
     sellerPhone = normalizedPhone;
-    const q = await db.collection('users').where('phone', '==', normalizedPhone).limit(1).get();
-    if (!q.empty) sellerUid = q.docs[0].id;
+    const sellerDoc = await _findUserByPhone(db, normalizedPhone);
+    if (sellerDoc) sellerUid = sellerDoc.id;
   }
 
   try {

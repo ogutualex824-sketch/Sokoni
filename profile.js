@@ -8,11 +8,23 @@ const loggedIn = localStorage.getItem("loggedIn");
 
 /* CHECK LOGIN */
 
-if(loggedIn !== "true" || !user){
+if(loggedIn !== "true"){
+    /* Session flag ALONE — not the sokoniUser cache. Requiring `user` here (the
+       old `|| !user`) bounced a logged-in account whose profile cache was empty
+       or blocked by App Check to login.html, feeding the profile↔login loop (the
+       same anti-pattern as auth-guard.js and the isLoggedIn u.name bug). */
+    try {
+        console.warn('[SOKONI AUTH REDIRECT]', { page: location.pathname, loggedIn: loggedIn, hasUser: !!user, reason: 'profile.js→login' });
+        var _l = JSON.parse(localStorage.getItem('sk_auth_redirects') || '[]');
+        _l.push({ t: Date.now(), page: location.pathname, loggedIn: loggedIn, hasUser: !!user, reason: 'profile.js→login' });
+        while (_l.length > 25) _l.shift();
+        localStorage.setItem('sk_auth_redirects', JSON.stringify(_l));
+    } catch(e) {}
     /* Delay redirect so splash animation (600ms hide + 520ms fade = ~1120ms) can complete */
     setTimeout(function(){ window.location.href = "login.html"; }, 1200);
     throw new Error("redirect");
 }
+if(!user) user = {};   /* profile cache absent — proceed; firebase/bootstrap fills it. Never redirect for a missing cache. */
 
 
 

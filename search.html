@@ -374,7 +374,14 @@
       flex-shrink: 0;
     }
 
-    .result-thumb {
+    /* Selector is intentionally specific — .result-card > img.result-thumb
+       (0,2,1). A global responsive rule ([class*="-card"] > img, specificity
+       0,1,1) in sokoni-responsive.css matches this thumbnail because
+       "result-card" contains "-card", and it forces width:100%/height:auto,
+       stretching the 48px thumb across the whole card and pushing the details
+       off the right edge of the screen. This higher-specificity rule reclaims
+       the fixed 48x48 size. */
+    .result-card > img.result-thumb {
       width: 48px;
       height: 48px;
       border-radius: 12px;
@@ -689,7 +696,35 @@ import { db } from "./firebase.js";
    requires for each collection (a list query without them is denied outright),
    searches sellers so a store is findable by name, and applies the platform
    visibility contract. See sokoni-firestore-search.js for the full rationale. */
-import { firestoreSearch } from "./sokoni-firestore-search.js";
+import { firestoreSearch, warm as warmCatalogue } from "./sokoni-firestore-search.js";
+
+/* Preload the catalogue the moment the page starts, in parallel with everything
+   else. By the time a query is typed the data is usually already in memory, so
+   the search is a local match rather than a round trip. Fire-and-forget: a
+   failure here costs nothing, the search path fetches on demand as before. */
+warmCatalogue(db).catch(() => {});
+
+/* Pre-warm the Algolia engine's secured key the moment the engine object exists,
+   NOT on the first query. The key comes from a Cloud Function that cold-starts in
+   several seconds; deferring it to the first search meant the very first query on
+   a fresh session raced that cold start and, when it lost, was issued without a
+   key — no results, ~1 in 6 cold loads. Kicking init off here runs the cold start
+   during page load and the time the user spends typing, so the key is almost
+   always ready by search time. Fire-and-forget and idempotent: doSearch still
+   awaits init, so a slow warm-up simply falls back to the same path as before —
+   this only removes dead time, it never adds any. */
+(function prewarmSearchEngine() {
+  let waited = 0;
+  const poll = setInterval(function () {
+    waited += 100;
+    if (window.sokoniSearch && typeof window.sokoniSearch.init === "function") {
+      clearInterval(poll);
+      window.sokoniSearch.init().catch(() => {});
+    } else if (waited >= 5000) {
+      clearInterval(poll); /* engine script never loaded — nothing to warm */
+    }
+  }, 100);
+})();
 
 /* ── Tab definitions ── */
 const TABS = [
@@ -735,9 +770,47 @@ let _scrollObserver  = null;          /* active IntersectionObserver for load-mo
    engine is skipped for the rest of the session after it throws.
    A zero-hit result never trips a breaker: an index can legitimately miss one
    query and answer the next. Only a thrown error does. */
-let _algoliaDown   = false;
-let _typesenseDown = false;
+const _BREAKER_KEY = "sokoni_search_engine_down_v1";
+const _BREAKER_TTL = 6 * 60 * 60 * 1000;   /* re-probe a failed engine every 6h */
+
+/* The breaker is persisted, not just per session. A credential fault — which is
+   what Algolia returns today — does not heal between page loads, so re-probing
+   it on every fresh page costs the user seconds and can never succeed. Six hours
+   is short enough that fixing the key restores Algolia on its own, without a
+   deploy, and long enough that nobody pays for the dead path twice in a visit.
+   Clear it immediately with: localStorage.removeItem("sokoni_search_engine_down_v1") */
+function _breakerRead() {
+  try {
+    const raw = localStorage.getItem(_BREAKER_KEY);
+    if (!raw) return {};
+    const v = JSON.parse(raw);
+    return (Date.now() - (v.at || 0) < _BREAKER_TTL) ? v : {};
+  } catch (_) { return {}; }
+}
+function _breakerTrip(engine, reason) {
+  try {
+    const v = _breakerRead();
+    v[engine] = reason || true;
+    v.at = Date.now();
+    localStorage.setItem(_BREAKER_KEY, JSON.stringify(v));
+  } catch (_) {}
+}
+const _breaker      = _breakerRead();
+let _algoliaDown    = Boolean(_breaker.algolia);
+let _typesenseDown  = Boolean(_breaker.typesense);
+const _ALGOLIA_BUDGET_MS = 1500;      /* stop waiting on the Algolia QUERY after this */
+/* Engine init is a cold-start Cloud Function call for the secured key and can take
+   several seconds. It is bounded SEPARATELY and generously: racing it against the
+   1.5s query budget meant a cold-start key fetch blew the budget, threw, and the
+   Algolia query was never issued — search fell to a fallback that can itself be
+   unavailable, rendering zero results over a live catalogue. */
+const _ALGOLIA_INIT_BUDGET_MS = 6000;
 const _TS_BUDGET_MS = 1200;           /* cap on the Typesense attempt */
+
+if (_algoliaDown || _typesenseDown) {
+  console.info("[SOKONI Search] skipping previously failed engine(s):",
+    [_algoliaDown && "algolia", _typesenseDown && "typesense"].filter(Boolean).join(", "));
+}
 
 /* ── Geo: request once per session (non-blocking, best-effort) ── */
 let _userGeo = null;
@@ -1199,12 +1272,38 @@ async function doSearch(rawQuery) {
       })
     : null;
 
-  /* ── Path A: Algolia (primary — falls through to Firestore on 0 hits) ── */
+  /* ── Path A: Algolia (primary — falls through to Firestore on 0 hits) ──
+     Budgeted. On a first visit the engine has to cold-start a Cloud Function to
+     fetch its secured key before it can even attempt a query; measured at
+     several seconds, during which the Firestore pass had already finished and
+     was sitting on an answer the page refused to render. Past the budget we
+     stop waiting and let Firestore answer. The Algolia request is not
+     cancelled — if it succeeds it populates the engine's cache for the next
+     query — we simply stop making the buyer wait for it. */
   let algoliaFailed = false;
   if (window.sokoniSearch && !_algoliaDown) {
     try {
       const eng       = window.sokoniSearch;
-      await eng.init();
+      /* Init on its OWN generous clock, and a slow init no longer ABORTS the
+         query. The previous code raced init against the 1.5s query budget with a
+         single shared promise, so on a cold page load the key fetch exceeded the
+         budget, THREW here, and eng.search() below was never reached — Algolia
+         was silently skipped on every fresh load. eng.init() resolves even on a
+         handled key-fetch failure, so the only thing caught here is a genuine
+         >6s hang; either way the query still runs and decides. */
+      try {
+        const _initBudget = new Promise((_, rej) =>
+          setTimeout(() => rej(Object.assign(new Error("init budget"),
+            { _budget: true })), _ALGOLIA_INIT_BUDGET_MS));
+        await Promise.race([eng.init(), _initBudget]);
+      } catch (_) { /* proceed — a keyless query degrades to the fallback path */ }
+
+      /* Fresh budget scoped to the QUERY, so it runs with its full window instead
+         of whatever a slow init left of a shared clock. A warm Algolia query is
+         well under this; init (the slow part) is already done above. */
+      const _budget   = new Promise((_, rej) =>
+        setTimeout(() => rej(Object.assign(new Error("Algolia budget exceeded"),
+          { _budget: true })), _ALGOLIA_BUDGET_MS));
       const userToken = eng.getUserToken();
 
       /* Geo params (present only when browser granted permission) */
@@ -1232,14 +1331,14 @@ async function doSearch(rawQuery) {
 
       if (activeTab === "all") {
         /* ── Single HTTP request to unified index — replaces 9 parallel queries ── */
-        const res = await eng.search(q, {
+        const res = await Promise.race([_budget, eng.search(q, {
           indexes:     [UNIFIED_INDEX],
           hitsPerPage: HITS_PER_PAGE,
           page:        currentSearchPage,
           userToken,
           ...geoParams,
           skipFirestoreFallback: true,
-        });
+        })]);
         const ir   = res.results?.[UNIFIED_INDEX] || {};
         algoliaHits = (ir.hits || []).map(h => ({ ...h, _idx: UNIFIED_INDEX, _queryID: ir.queryID }));
         nbHits      = ir.nbHits  || 0;
@@ -1262,7 +1361,7 @@ async function doSearch(rawQuery) {
         if (activeTab !== "professionals") {
           specOpts.filters = { hub: _TAB_HUB_ALIAS[activeTab] || activeTab };
         }
-        const res  = await eng.search(q, specOpts);
+        const res  = await Promise.race([_budget, eng.search(q, specOpts)]);
         const ir   = res.results?.[specIndex] || {};
         algoliaHits = (ir.hits || []).map(h => ({ ...h, _idx: specIndex, _queryID: ir.queryID }));
         nbHits      = ir.nbHits  || 0;
@@ -1350,7 +1449,10 @@ async function doSearch(rawQuery) {
       /* A thrown error is an engine fault (credentials, transport), not a miss
          — it will recur identically on every later query, so stop paying for it. */
       _algoliaDown = true;
-      console.warn("[SOKONI Search] Algolia unavailable, skipping it for this session:", e.message);
+      /* Only a real engine fault is worth remembering across page loads; a
+         timeout may just be a cold start. */
+      if (!e._budget) _breakerTrip("algolia", e.message);
+      console.warn("[SOKONI Search] Algolia unavailable, skipping it:", e.message);
     }
   }
 
@@ -1429,7 +1531,8 @@ async function doSearch(rawQuery) {
     } catch (tsErr) {
       if (tsErr.name !== "AbortError") {
         _typesenseDown = true;
-        console.warn("[SOKONI Search] Typesense unavailable, skipping it for this session:", tsErr.message);
+        _breakerTrip("typesense", tsErr.message);
+        console.warn("[SOKONI Search] Typesense unavailable, skipping it:", tsErr.message);
       }
     }
   }
@@ -1448,19 +1551,32 @@ async function doSearch(rawQuery) {
 /* ──────────────────────────────────────────
    INPUT HANDLING (debounced)
 ────────────────────────────────────────── */
+/* The side effects a search needs — URL sync, recent-search persistence,
+   analytics, and the search itself. This used to run PER KEYSTROKE inside
+   triggerSearch, which is what made typing lag: each character triggered a
+   localStorage read+parse+write (_saveRecentSearch), a `new URL()` parse plus
+   history.replaceState (updateUrlParam), and an analytics call. Typing "shoes"
+   paid all of that five times over. None of it is needed until a search actually
+   runs, so it now runs once per committed search (debounced, or on Enter). */
+function _commitSearch(q) {
+  updateUrlParam(q);
+  if (q) {
+    _saveRecentSearch(q);
+    if (window.SokoniRecs) SokoniRecs.trackSearch(q);
+  }
+  doSearch(q);
+}
+
 function triggerSearch(val) {
   lastQuery = val.trim();
   currentSearchPage = 0;
   hasMoreResults    = false;
   if (_scrollObserver) { _scrollObserver.disconnect(); _scrollObserver = null; }
-  updateClearBtn();
-  updateUrlParam(lastQuery);
-  if (lastQuery) {
-    _saveRecentSearch(lastQuery);
-    if (window.SokoniRecs) SokoniRecs.trackSearch(lastQuery);
-  }
+  updateClearBtn();                 /* cheap: one button visibility toggle */
   clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => doSearch(lastQuery), 200); /* 200ms search-as-you-type */
+  /* Per keystroke this is now just a few assignments + rescheduling the timer,
+     so the input field renders characters without jank. */
+  debounceTimer = setTimeout(() => _commitSearch(lastQuery), 200); /* search-as-you-type */
 }
 
 searchInput.addEventListener("input", () => triggerSearch(searchInput.value));
@@ -1470,8 +1586,7 @@ searchInput.addEventListener("keydown", e => {
     clearTimeout(debounceTimer);
     lastQuery = searchInput.value.trim();
     updateClearBtn();
-    updateUrlParam(lastQuery);
-    doSearch(lastQuery);
+    _commitSearch(lastQuery);       /* Enter also now persists the recent search */
   }
 });
 
@@ -1598,7 +1713,9 @@ function init() {
     // briefly: doSearch now starts its Firestore pass in parallel, so every
     // millisecond spent here is pure dead time before the path that answers.
     // The old 3s ceiling was a third of the measured 9s cold-start latency.
-    if (window.sokoniSearch) {
+    if (window.sokoniSearch || _algoliaDown) {
+      /* Nothing to wait for when the engine is known to be down — go straight
+         to the path that will answer. */
       doSearch(urlQ);
     } else {
       let waited = 0;
@@ -1680,7 +1797,7 @@ init();
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 </body>

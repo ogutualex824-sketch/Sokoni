@@ -30,7 +30,12 @@
     "scan:guards": "node scripts/scan-firestore-guards.js",
     "audit:invokers": "node scripts/audit-callable-invokers.js --all --probe",
     "release:preflight": "node scripts/audit-callable-invokers.js --all --snapshot .release-preflight.json",
-    "release:postflight": "node scripts/audit-callable-invokers.js --all --compare .release-preflight.json"
+    "release:postflight": "node scripts/audit-callable-invokers.js --all --compare .release-preflight.json",
+    "scan:hidden-blur": "node scripts/scan-hidden-backdrop-blur.js",
+    "scan:xss": "node scripts/scan-xss-sinks.js",
+    "check:variants": "node scripts/check-variant-parity.js",
+    "check:profile-rules": "node scripts/check-profile-rules.js",
+    "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

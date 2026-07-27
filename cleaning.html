@@ -421,46 +421,72 @@
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
 <script>
 const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 /* ── PROVIDER DATA ── */
-const PROVIDERS = [
-  { id:'CL01', name:'ShineClean Services', emoji:'✨', location:'nairobi', locationLabel:'Nairobi (All Areas)', rate:'KES 3,500', rateType:'per job', rating:4.9, jobs:600, phone:'0778901217', verified:true, available:true,
-    skills:['Deep Clean','Post-Construction','Office Cleaning','Steam Clean','Fumigation'],
-    bio:'Professional 5-person team — 7 yrs Nairobi. Own industrial equipment. Monthly corporate contracts available.', type:['deep','post','office'] },
+/* ══ CLEANERS & MAMAFUA — from the canonical `providers` registry ════════════
+   Eight hardcoded providers used to live here, complete with invented ratings
+   and job counts ("4.9★ · 1120+ jobs" for a person who does not exist). They
+   are gone. This hub now reads `providers` through SokoniProviders, filtered to
+   the cleaning bucket, so a mamafua onboarded once appears here, on the
+   homepage, on providers.html and in global search from the same record.
 
-  { id:'CL02', name:'Angela Nyambura Clean', emoji:'🌸', location:'nairobi', locationLabel:'Nairobi West / Westlands', rate:'KES 1,500', rateType:'per job', rating:4.8, jobs:340, phone:'0789012318', verified:true, available:true,
-    skills:['House Cleaning','Carpet Steam','Move-in/out','Fumigation','Sofa Clean'],
-    bio:'Solo cleaning pro — 5 yrs Nairobi West. Thorough, honest, affordable. Eco-friendly products available.', type:['house','carpet','move','fumigation'] },
+   The type chips (house / laundry / deep / carpet / fumigation / office /
+   move / post) are matched against a provider's skills and categories rather
+   than a hand-maintained `type` array, so a new provider is filtered correctly
+   without anyone editing this file. ────────────────────────────────────────── */
 
-  { id:'CL03', name:'CleanMasters Kenya', emoji:'🏆', location:'nairobi', locationLabel:'Nairobi CBD & Surrounding', rate:'KES 8,000', rateType:'daily', rating:4.7, jobs:180, phone:'0790123419', verified:true, available:true,
-    skills:['Office Cleaning','School Cleaning','ISO Standards','Daily Contract','Hospital Grade'],
-    bio:'Corporate cleaning company — 10-person team. Daily & weekly contracts. ISO cleaning standards. Nairobi.', type:['office','deep'] },
+let PROVIDERS = [];
+let _clLoaded = false;
+let _clError  = null;
 
-  { id:'CL04', name:'Mombasa Clean Team', emoji:'🌊', location:'mombasa', locationLabel:'Mombasa & Coastal Region', rate:'KES 2,500', rateType:'per job', rating:4.8, jobs:220, phone:'0701234520', verified:true, available:true,
-    skills:['Beach House','Post-Event','Hotel Standard','Fumigation','Airbnb Turnover'],
-    bio:'Coastal property specialists — 6 yrs Mombasa. Airbnb & hotel turnover experts. Own transport.', type:['house','post','fumigation'] },
+/* Chip → the words that indicate a provider offers it. Matched against
+   category, categories, serviceType and skills. */
+const CL_TYPE_MATCH = {
+  house:      ['house', 'residential', 'home clean', 'housekeeping', 'cleaning'],
+  laundry:    ['laundry', 'mamafua', 'mama fua', 'washing', 'ironing', 'dry clean'],
+  deep:       ['deep clean', 'deep', 'post-construction', 'spring clean'],
+  carpet:     ['carpet', 'sofa', 'upholstery', 'steam'],
+  fumigation: ['fumigation', 'pest', 'bedbug', 'cockroach', 'termite'],
+  office:     ['office', 'corporate', 'commercial', 'school'],
+  move:       ['move-in', 'move-out', 'move', 'moving'],
+  post:       ['post-event', 'post event', 'post-construction', 'after party'],
+};
 
-  { id:'CL05', name:'Purity Kamau Cleaning', emoji:'🌿', location:'nairobi', locationLabel:'Kilimani / Westlands / Lavington', rate:'KES 1,200', rateType:'per job', rating:4.9, jobs:290, phone:'0712345621', verified:true, available:true,
-    skills:['Residential','Carpet Steam','Sofa Steam','Move-out','Eco Products'],
-    bio:'Reliable house cleaner — 4 yrs Westlands. Eco-friendly products only. Same-day bookings available.', type:['house','carpet','move'] },
+function _clHaystack(p) {
+  return [p.category, (p.categories || []).join(' '), p.serviceType,
+          (p.skills || []).join(' '), p.description, p.categoryLabel]
+    .filter(Boolean).join(' ').toLowerCase();
+}
 
-  { id:'CL06', name:'Mama Jane Laundry', emoji:'🧺', location:'nairobi', locationLabel:'Nairobi (Collect & Deliver)', rate:'KES 300', rateType:'per load', rating:4.9, jobs:1120, phone:'0711223344', verified:true, available:true,
-    skills:['Hand Wash','Machine Wash','Ironing','Dry Cleaning','Pickup & Delivery'],
-    bio:'Expert mamafua — 8 yrs Nairobi. Clothes collected & delivered same day. Gentle on all fabrics. Bulk orders welcome.', type:['laundry'] },
+function _clMatchesType(p, type) {
+  if (!type) return true;
+  const words = CL_TYPE_MATCH[type] || [type];
+  const hay = _clHaystack(p);
+  return words.some(w => hay.indexOf(w) !== -1);
+}
 
-  { id:'CL07', name:'FreshSpace Cleaning', emoji:'💫', location:'nairobi', locationLabel:'Nairobi (Eastlands & CBD)', rate:'KES 1,800', rateType:'per job', rating:4.7, jobs:155, phone:'0723456789', verified:true, available:true,
-    skills:['House Cleaning','Deep Clean','Kitchen Degreasing','Bathroom Scrub','Window Clean'],
-    bio:'Young professional team — 3 yrs. Specialize in thorough kitchen and bathroom deep cleans. Eastlands based, serve city-wide.', type:['house','deep'] },
+function _clMatchesLoc(p, loc) {
+  if (!loc) return true;
+  return (p.location + ' ' + p.city).toLowerCase().indexOf(String(loc).toLowerCase()) !== -1;
+}
 
-  { id:'CL08', name:'PestFree Kenya', emoji:'🛡️', location:'nairobi', locationLabel:'Nairobi & Kiambu', rate:'KES 2,500', rateType:'per job', rating:4.8, jobs:380, phone:'0734567890', verified:true, available:false,
-    skills:['Fumigation','Bedbugs','Cockroaches','Rats','Termites','Certification'],
-    bio:'Licensed pest control company — WHO-approved chemicals. Fumigation certificate provided. Serves homes, hotels & offices.', type:['fumigation'] },
-];
+function loadCleaners(force) {
+  if (!window.SokoniProviders) return Promise.resolve();
+  /* The `cleaning` bucket expands to cleaning + laundry + housekeeping in
+     SokoniProviders, so a provider filed under `laundry` reaches this hub
+     without needing a duplicate record under `cleaning`. */
+  return SokoniProviders.list({ category: 'cleaning', force: !!force }).then(function (r) {
+    PROVIDERS = r.providers;
+    _clError  = r.error;
+    _clLoaded = true;
+    renderProviders();
+  });
+}
 
 /* ── STATE ── */
 let activeType  = '';
@@ -469,52 +495,88 @@ let selectedProv = null;
 
 /* ── RENDER PROVIDERS ── */
 function renderProviders() {
-  const q = (document.getElementById('clSearch')?.value || '').toLowerCase();
-  let list = [...PROVIDERS];
-  if (activeType)  list = list.filter(p => !activeType || p.type.includes(activeType));
-  if (activeLoc)   list = list.filter(p => p.location === activeLoc);
-  if (q)           list = list.filter(p => p.name.toLowerCase().includes(q) || p.bio.toLowerCase().includes(q) || p.skills.some(s => s.toLowerCase().includes(q)));
-
   const grid = document.getElementById('clProviderGrid');
   const cnt  = document.getElementById('clProvCount');
-  if (cnt) cnt.textContent = list.length + ' providers found';
+  if (!grid) return;
+  const esc = window.SokoniProviders ? SokoniProviders.esc : (s => String(s == null ? '' : s));
+
+  if (!_clLoaded) {
+    if (cnt) cnt.textContent = 'Loading…';
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);">
+      <div style="font-size:40px;margin-bottom:10px;">⏳</div><div style="font-size:15px;">Loading cleaners…</div></div>`;
+    return;
+  }
+
+  const q = (document.getElementById('clSearch')?.value || '').toLowerCase();
+  let list = PROVIDERS.slice();
+  if (activeType) list = list.filter(p => _clMatchesType(p, activeType));
+  if (activeLoc)  list = list.filter(p => _clMatchesLoc(p, activeLoc));
+  if (q) list = list.filter(p =>
+    (p.name || '').toLowerCase().includes(q) ||
+    (p.description || '').toLowerCase().includes(q) ||
+    (p.skills || []).some(s => String(s).toLowerCase().includes(q)));
+
+  if (cnt) cnt.textContent = list.length + ' provider' + (list.length === 1 ? '' : 's') + ' found';
 
   if (!list.length) {
+    /* A read failure and an empty filter are different things; only one of
+       them is fixed by clearing filters. */
+    if (_clError && window.SokoniProviders) {
+      grid.innerHTML = SokoniProviders.emptyStateHtml(_clError, null);
+      return;
+    }
     grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px 20px;color:rgba(255,255,255,0.28);">
       <div style="font-size:40px;margin-bottom:10px;">🔍</div>
-      <div style="font-size:16px;">No cleaners found for this filter.<br><button type="button" onclick="clearFilters();" style="color:#00d4ff;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button></div>
+      <div style="font-size:16px;">No cleaners found${activeType || activeLoc || q ? ' for this filter' : ' yet'}.<br>
+      ${activeType || activeLoc || q
+        ? `<button type="button" onclick="clearFilters();" style="color:#00d4ff;font-weight:700;background:none;border:none;cursor:pointer;font-size:inherit;padding:0;font-family:inherit;">Clear filters →</button>`
+        : `<a href="provider-onboarding.html" style="color:#00d4ff;font-weight:700;">Register as a cleaner →</a>`}</div>
     </div>`;
     return;
   }
 
-  grid.innerHTML = list.map(p => `
-    <div class="cl-provider-card" id="prov-${p.id}">
+  grid.innerHTML = list.map(p => {
+    const waNum = String(p.phone || '').replace(/\D/g, '').replace(/^0/, '254');
+    const jsId  = esc(String(p.uid).replace(/'/g, "\\'"));
+    const jsNm  = esc(String(p.name || '').replace(/'/g, "\\'"));
+    /* Stars only where a rating exists. The old template ran
+       '★'.repeat(Math.floor(p.rating)) over hardcoded 4.7–4.9 values; against
+       a real registry that expression renders zero stars and the text "0 · 0+
+       jobs" for every new provider, which reads as a bad provider rather than
+       a new one. */
+    const ratingHtml = p.rating
+      ? `<span class="cl-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5 - Math.floor(p.rating))}</span>
+         <span class="cl-prov-rnum">${p.rating.toFixed(1)}${p.jobsCompleted ? ` · ${p.jobsCompleted}+ jobs` : ''}</span>`
+      : `<span class="cl-prov-rnum" style="color:rgba(255,255,255,0.4);">New on SOKONI</span>`;
+
+    return `
+    <div class="cl-provider-card" id="prov-${esc(p.uid)}">
       <div class="cl-prov-top">
-        <div class="cl-prov-avatar">${p.emoji}</div>
+        <div class="cl-prov-avatar">${esc(p.emoji || '🧹')}</div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
-            <div class="cl-prov-name">${p.name}</div>
+            <div class="cl-prov-name"><a href="${esc(p.profileUrl)}" style="color:inherit;text-decoration:none;">${esc(p.name)}</a></div>
             ${p.verified ? '<span class="cl-verified-badge">✓ Verified</span>' : ''}
           </div>
-          <div class="cl-prov-loc"><i class="fas fa-map-marker-alt" style="color:#00d4ff;font-size:9px;"></i> ${p.locationLabel}</div>
+          ${p.location ? `<div class="cl-prov-loc"><i class="fas fa-map-marker-alt" style="color:#00d4ff;font-size:9px;"></i> ${esc(p.location)}</div>` : ''}
           <div class="cl-prov-rating">
-            <span class="cl-prov-stars">${'★'.repeat(Math.floor(p.rating))}${'☆'.repeat(5-Math.floor(p.rating))}</span>
-            <span class="cl-prov-rnum">${p.rating} · ${p.jobs}+ jobs</span>
+            ${ratingHtml}
             ${p.available ? `<span class="cl-avail-dot"></span><span style="font-size:9px;color:#22c55e;font-weight:700;">Available</span>` : `<span style="font-size:9px;color:rgba(255,255,255,0.3);">Unavailable</span>`}
           </div>
         </div>
       </div>
-      <div class="cl-prov-bio">"${p.bio}"</div>
-      <div class="cl-prov-skills">${p.skills.map(s => `<span class="cl-prov-skill">${s}</span>`).join('')}</div>
+      ${p.description ? `<div class="cl-prov-bio">"${esc(p.description)}"</div>` : ''}
+      <div class="cl-prov-skills">${(p.skills || []).slice(0, 6).map(s => `<span class="cl-prov-skill">${esc(s)}</span>`).join('')}</div>
       <div class="cl-prov-foot">
-        <div class="cl-prov-rate">${p.rate} <small>${p.rateType}</small></div>
+        <div class="cl-prov-rate">${p.rate != null ? 'KES ' + Number(p.rate).toLocaleString() : '<small style="color:rgba(255,255,255,0.35);">Ask for a quote</small>'} ${p.rate != null && p.rateType ? `<small>${esc(p.rateType)}</small>` : ''}</div>
         <div style="display:flex;gap:6px;align-items:center;">
-          <a href="https://wa.me/254${p.phone.replace(/^0/,'')}?text=${encodeURIComponent('Hi! I found you on SOKONI and would like to book a cleaning service. Please confirm your availability.')}" target="_blank" class="cl-wa-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a>
-          <button type="button" class="cl-book-btn" onclick="openBookingFor('${p.id}','${p.name}')">Book →</button>
+          ${waNum ? `<a href="https://wa.me/${esc(waNum)}?text=${encodeURIComponent('Hi! I found you on SOKONI and would like to book a cleaning service. Please confirm your availability.')}" target="_blank" rel="noopener" class="cl-wa-btn"><i class="fab fa-whatsapp"></i> WhatsApp</a>` : ''}
+          <a class="cl-book-btn" href="${esc(p.profileUrl)}" style="text-decoration:none;display:inline-flex;align-items:center;">Book →</a>
         </div>
-<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('cl_'+(p.id||p.name),p.name,this,'cleaner')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'cleaner_'+'cl_'+(p.id||p.name),name:p.name,category:'cleaner',tagline:'',type:'cleaner'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
+<div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);"><button type="button" onclick="window.SokoniSocial&&SokoniSocial.toggleFollow('${jsId}','${jsNm}',this,'cleaner')" style="flex:1;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:rgba(255,255,255,0.5);font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;">❤ Follow</button><button type="button" onclick="window.SokoniSocial&&SokoniSocial.openShareModal({id:'cleaner_${jsId}',name:'${jsNm}',category:'cleaner',tagline:'',type:'cleaner'})" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.18);border-radius:8px;font-size:12px;cursor:pointer;flex-shrink:0;">📣</button></div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 /* ── FILTER HELPERS ── */
@@ -555,7 +617,7 @@ function openBooking() {
 }
 
 function openBookingFor(id, name) {
-  selectedProv = PROVIDERS.find(p => p.id === id);
+  selectedProv = PROVIDERS.find(p => String(p.uid) === String(id));
   document.getElementById('clModalSub').textContent = `Booking with: ${selectedProv?.emoji || ''} ${name} — confirm your details below.`;
   document.getElementById('clModalOverlay').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -660,7 +722,16 @@ window.filterProviders   = filterProviders;
 window.clearFilters      = clearFilters;
 
 /* ── INIT ── */
+/* Init — SokoniProviders is deferred and firebase.js is a module, so wait
+   for both rather than racing them. renderProviders() shows a loading state
+   until the first read resolves. */
 renderProviders();
+(function _clBoot(attempt){
+  attempt = attempt || 0;
+  if (window.SokoniProviders && window.firebaseDB) { loadCleaners(); return; }
+  if (attempt > 40) { _clLoaded = true; _clError = new Error('init timeout'); renderProviders(); return; }
+  setTimeout(function(){ _clBoot(attempt + 1); }, 150);
+}(0));
 </script>
 <script src="scroll-top.js" defer></script>
 <script src="seo.js" defer></script>
@@ -672,7 +743,8 @@ renderProviders();
 <script src="sokoni-intasend.js" defer></script>
 <script src="analytics.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
-  <script src="sw-register.js" defer></script>
+  <script src="sokoni-providers.js" defer></script>
+<script src="sw-register.js" defer></script>
 <script>
 /* Nav state init */
 (function(){

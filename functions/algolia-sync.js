@@ -121,6 +121,29 @@ const triggers = {
   ..._makeTriggers('coupons'),
   ..._makeTriggers('foods'),
 
+  /* ── Collections the PLATFORM actually writes to ─────────────────────────
+     The names above are the ones the search architecture was designed around;
+     these are the ones the app actually creates documents in. Without a trigger
+     here (and a mapping in algolia-indexer.js COLLECTION_INDEX_MAP) a write to
+     any of these never reaches an index — which is why search behaved as
+     product-only. Verified 2026-07-24: businesses, mechanics and
+     healthProviders held live documents that no index could see.
+
+     Naming drift, explicitly:
+       businesses       → shops   (the app creates shops as `businesses`)
+       entEvents        → events  (the events hub does NOT write `events`)
+       propertyListings → properties (the property hub does NOT write `properties`)
+  ── */
+  ..._makeTriggers('businesses'),
+  ..._makeTriggers('restaurants'),
+  ..._makeTriggers('mechanics'),
+  ..._makeTriggers('healthProviders'),
+  ..._makeTriggers('lawyers'),
+  ..._makeTriggers('entEvents'),
+  ..._makeTriggers('entVenues'),
+  ..._makeTriggers('propertyListings'),
+  ..._makeTriggers('bnbListings'),
+
   /* ── Production aliases — Firestore collection names → Algolia index names ──
      Each also automatically fans out to global_search via enqueue() in queue.js.
      stores     → sokoni_shops      (Firestore: 'stores', same data model as sellers)

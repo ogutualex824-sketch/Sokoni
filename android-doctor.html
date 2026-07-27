@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI — Android Doctor</title>
+  <meta name="robots" content="noindex,nofollow">
+  <style>
+    /* Deliberately dependency-free and tiny: this page must render on a phone
+       that is crashing everything else. No frameworks, no images, no fonts. */
+    :root{--bg:#050505;--card:#0e0e0e;--line:#1e1e1e;--txt:#f2f2f2;--dim:#8a8a8a;--acc:#71ff00;--bad:#ff5252;--warn:#ffb02e;}
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 -apple-system,Segoe UI,Roboto,system-ui,sans-serif;padding:18px 16px 60px;}
+    h1{font-size:20px;margin:0 0 4px;}
+    .sub{color:var(--dim);font-size:13px;margin:0 0 18px;}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin:0 0 14px;}
+    .k{color:var(--dim);font-size:12px;text-transform:uppercase;letter-spacing:.04em;}
+    .v{font-size:15px;font-weight:700;word-break:break-word;}
+    .row{display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line);}
+    .row:last-child{border-bottom:0;}
+    .verdict{font-size:16px;font-weight:800;padding:14px 16px;border-radius:14px;margin:0 0 14px;line-height:1.45;}
+    .verdict.bad{background:rgba(255,82,82,.12);border:1px solid rgba(255,82,82,.4);color:#ffd7d7;}
+    .verdict.ok{background:rgba(113,255,0,.1);border:1px solid rgba(113,255,0,.35);color:#e6ffcf;}
+    .verdict.warn{background:rgba(255,176,46,.12);border:1px solid rgba(255,176,46,.4);color:#ffe9c7;}
+    .tag{display:inline-block;background:rgba(255,82,82,.16);color:#ffb3b3;border:1px solid rgba(255,82,82,.35);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;margin:3px 5px 3px 0;}
+    .crash{background:var(--card);border:1px solid rgba(255,82,82,.3);border-radius:14px;padding:14px 16px;margin:0 0 12px;}
+    .crash h3{margin:0 0 8px;font-size:14px;color:var(--bad);}
+    pre{white-space:pre-wrap;word-break:break-word;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--dim);margin:8px 0 0;}
+    button{width:100%;padding:15px;border-radius:14px;border:none;font:800 16px/1 inherit;cursor:pointer;margin:0 0 12px;}
+    .primary{background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;}
+    .ghost{background:transparent;border:1px solid var(--line);color:var(--dim);}
+    .foot{color:var(--dim);font-size:12px;text-align:center;margin-top:22px;}
+  </style>
+</head>
+<body>
+  <h1>🩺 SOKONI Android Doctor</h1>
+  <p class="sub">This reads what your phone recorded the last time a page crashed. Screenshot or tap <b>Share</b> and send it to support.</p>
+
+  <div id="verdict" class="verdict warn">Reading device diagnostics…</div>
+
+  <button class="primary" id="shareBtn">📤 Share this report</button>
+  <button class="ghost" id="clearBtn">Clear recorded crashes</button>
+
+  <div class="card" id="deviceCard"></div>
+  <div id="crashList"></div>
+  <div id="redirectList"></div>
+
+  <p class="foot">SOKONI · Android Doctor · no data leaves your phone unless you tap Share.</p>
+
+  <script>
+  (function () {
+    'use strict';
+    var CRASHES = 'sk_sentinel_crashes', LIVE = 'sk_sentinel_live';
+    function readJSON(k, f){ try{ var r=localStorage.getItem(k); return r?JSON.parse(r):f; }catch(_){ return f; } }
+
+    /* ── live device snapshot ─────────────────────────────────────── */
+    var m = (window.performance && performance.memory) || null;
+    var c = navigator.connection || {};
+    var dev = {
+      'Phone / browser': (navigator.userAgent||'').slice(0,200),
+      'Device memory': (typeof navigator.deviceMemory==='number' ? navigator.deviceMemory+' GB' : 'not reported'),
+      'CPU cores': navigator.hardwareConcurrency || 'unknown',
+      'Network': c.effectiveType || 'unknown',
+      'Screen': (screen.width||0)+'×'+(screen.height||0)+' @'+(window.devicePixelRatio||1)+'x',
+      'JS memory now': m ? (Math.round(m.usedJSHeapSize/1048576)+' / '+Math.round(m.jsHeapSizeLimit/1048576)+' MB (used/max)') : 'not available',
+      'Online': navigator.onLine ? 'yes' : 'no'
+    };
+    var dc = document.getElementById('deviceCard');
+    dc.innerHTML = '<div class="k" style="margin-bottom:8px">This device, right now</div>' +
+      Object.keys(dev).map(function(k){ return '<div class="row"><span class="k">'+k+'</span><span class="v" style="text-align:right;max-width:62%">'+String(dev[k]).replace(/</g,'&lt;')+'</span></div>'; }).join('');
+
+    /* ── recorded crashes ─────────────────────────────────────────── */
+    var crashes = readJSON(CRASHES, []);
+    if (!Array.isArray(crashes)) crashes = [];
+    var verdict = document.getElementById('verdict');
+    var list = document.getElementById('crashList');
+
+    function human(sig){
+      var map = {
+        'heap-near-limit':'Ran out of memory (heap near the limit)',
+        'low-heap-ceiling':'Very low memory ceiling on this phone',
+        'low-device-memory':'Low-RAM device (≤2 GB)',
+        'appcheck-rejected':'Security check (App Check) was failing → sign-in blocked',
+        'reload-loop':'Page was reloading in a loop',
+        'died-during-load':'Crashed while the page was still loading',
+        'js-error':'A JavaScript error',
+        'js-promise':'An unhandled JavaScript error'
+      };
+      return map[sig] || sig;
+    }
+
+    if (!crashes.length) {
+      verdict.className = 'verdict ok';
+      verdict.textContent = '✅ No crashes have been recorded on this phone yet. If a page crashes, come back here and it will show the reason.';
+    } else {
+      var latest = crashes[crashes.length-1];
+      var sigs = latest.signals || [];
+      var oom = sigs.indexOf('heap-near-limit')>=0 || sigs.indexOf('low-device-memory')>=0 || sigs.indexOf('low-heap-ceiling')>=0;
+      verdict.className = 'verdict bad';
+      verdict.innerHTML = '⚠️ ' + crashes.length + ' crash(es) recorded. Most recent likely cause:<br>' +
+        (sigs.length ? sigs.map(function(s){return '<span class="tag">'+human(s)+'</span>';}).join('') : '<span class="tag">Unknown — no clear signal</span>') +
+        (oom ? '<div style="font-weight:600;font-size:14px;margin-top:8px;color:#ffd7d7">This looks like an out-of-memory crash — the phone could not hold the page in memory.</div>' : '');
+
+      list.innerHTML = crashes.slice().reverse().map(function(cr,i){
+        var p = cr.prior || {};
+        var h = p.heap || {};
+        return '<div class="crash"><h3>Crash #'+(crashes.length-i)+' · '+(cr.detectedAt||'')+'</h3>' +
+          '<pre>' + [
+            'signals    : ' + (cr.signals||[]).join(', '),
+            'page       : ' + (p.path||p.url||'?'),
+            'heap used  : ' + (h.usedMB!=null ? h.usedMB+' MB of '+h.limitMB+' MB limit' : 'n/a'),
+            'device RAM : ' + (p.dev && p.dev.deviceMemoryGB!=null ? p.dev.deviceMemoryGB+' GB' : 'not reported'),
+            'cores/net  : ' + ((p.dev&&p.dev.cores)||'?') + ' / ' + ((p.dev&&p.dev.net)||'?'),
+            'DOM nodes  : ' + (p.dom!=null?p.dom:'?'),
+            'last script: ' + (p.lastScript ? p.lastScript.name+' @'+p.lastScript.atMs+'ms' : 'n/a'),
+            'app check  : ' + (p.appCheck||'?'),
+            'js error   : ' + (p.lastError ? (p.lastError.msg+' ('+p.lastError.kind+')') : 'none'),
+            'alive for  : ' + (p.ageMs!=null ? Math.round(p.ageMs/1000)+'s before dying' : '?'),
+            'reloads    : ' + (cr.reloadCountNow!=null?cr.reloadCountNow:'?') + ' in the last minute'
+          ].join('\n').replace(/</g,'&lt;') + '</pre></div>';
+      }).join('');
+    }
+
+    /* ── auth-redirect log (loop diagnosis) ───────────────────────── */
+    var redirects = readJSON('sk_auth_redirects', []);
+    if (!Array.isArray(redirects)) redirects = [];
+    /* A redirect's identity: the guard reason (older entries) or from→to (sentinel
+       entries). Loop = the same identity 4+ times inside 15 seconds. */
+    var rkey = function(r){ return r.reason || ((r.from||'')+'→'+(r.to||'')); };
+    var loopHit = null;
+    for (var ri = 0; ri < redirects.length; ri++) {
+      var k = rkey(redirects[ri]);
+      var same = redirects.filter(function(x){ return rkey(x) === k && Math.abs((x.t||0) - (redirects[ri].t||0)) < 15000; });
+      if (same.length >= 4) { loopHit = { key: k, count: same.length, src: (redirects[ri].stack||'').split('  <<  ')[0] }; break; }
+    }
+    (function(){
+      var el = document.getElementById('redirectList');
+      if (!redirects.length) return;
+      var esc2 = function(s){ return String(s==null?'':s).replace(/</g,'&lt;'); };
+      var rows = redirects.slice().reverse().slice(0, 14).map(function(r){
+        var when = ''; try { when = new Date(r.t).toLocaleTimeString(); } catch(e){}
+        var label = r.reason || ((r.from||'?')+' → '+(r.to||'?')+(r.how?' ('+r.how+')':''));
+        var src = r.stack ? '<div style="color:var(--dim);font-size:11px;margin-top:2px;word-break:break-all">'+esc2((r.stack||'').split('  <<  ').slice(0,2).join('  <<  '))+'</div>' : '';
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><div class="row" style="border:0;padding:0"><span class="k">'+when+'</span><span class="v" style="text-align:right;max-width:66%">'+esc2(label)+'</span></div><div class="k" style="font-size:11px">loggedIn='+r.loggedIn+' · cache='+(r.hasCache!=null?r.hasCache:r.hasUser)+' · uid='+(r.uid?'yes':'no')+'</div>'+src+'</div>';
+      }).join('');
+      el.innerHTML =
+        (loopHit ? '<div class="verdict bad" style="margin-bottom:10px">🔁 REDIRECT LOOP: <b>'+esc2(loopHit.key)+'</b> fired '+loopHit.count+'× in 15s. This is the "keeps reloading" bug.'+(loopHit.src?'<div style="font-size:11px;margin-top:6px;word-break:break-all">source: '+esc2(loopHit.src)+'</div>':'')+'</div>' : '') +
+        '<div class="card"><div class="k" style="margin-bottom:8px">Recent auth redirects ('+redirects.length+')</div>'+rows+'</div>';
+    })();
+
+    /* ── share / copy ─────────────────────────────────────────────── */
+    function reportText(){
+      return 'SOKONI Android Doctor report\n' +
+        '============================\n' +
+        Object.keys(dev).map(function(k){return k+': '+dev[k];}).join('\n') +
+        '\n\nRecorded crashes: ' + crashes.length + '\n' +
+        JSON.stringify(crashes, null, 2) +
+        '\n\nAuth redirects: ' + redirects.length + (loopHit ? ' — LOOP: '+loopHit.reason+' x'+loopHit.count : '') + '\n' +
+        JSON.stringify(redirects, null, 2);
+    }
+    document.getElementById('shareBtn').addEventListener('click', function(){
+      var txt = reportText();
+      if (navigator.share) { navigator.share({ title:'SOKONI Android Doctor', text: txt }).catch(function(){}); return; }
+      if (navigator.clipboard) { navigator.clipboard.writeText(txt).then(function(){ alert('Report copied — paste it to support.'); }).catch(fallback); return; }
+      fallback();
+      function fallback(){ var t=document.createElement('textarea'); t.value=txt; document.body.appendChild(t); t.select(); try{document.execCommand('copy');alert('Report copied — paste it to support.');}catch(_){ alert('Please screenshot this page.'); } t.remove(); }
+    });
+    document.getElementById('clearBtn').addEventListener('click', function(){
+      try{ localStorage.removeItem(CRASHES); }catch(_){}
+      location.reload();
+    });
+  })();
+  </script>
+</body>
+</html>

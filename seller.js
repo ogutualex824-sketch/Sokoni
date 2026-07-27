@@ -3,6 +3,20 @@
    Shows empty setup screen if user hasn't registered as seller
 ═════════════════════════════════════════════════════════════════ */
 
+/* True for a base64 data: URI. Product image fields must reference Cloud Storage,
+   never a data: URI — a data: URI in a product doc bloats the record and poisons
+   the Algolia batch it ships in (the "PEACH MANGO ICE" incident). Used to strip
+   base64 out of every product write; the Firestore rule enforces the same
+   server-side. Delegates to the shared Product Validation Contract
+   (sokoni-product-validator.js) when it has loaded, so the write path and the
+   Algolia pipeline apply the identical rule; the inline check is the fallback if
+   the module has not parsed yet. */
+const _isDataUri = v => (
+  (typeof window !== 'undefined' && window.SokoniProductValidator)
+    ? window.SokoniProductValidator.isDataUri(v)
+    : (typeof v === 'string' && v.startsWith('data:'))
+);
+
 const _esc = s => String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 function initSellerDashboard() {
@@ -382,6 +396,50 @@ function showNotification(message,type){
    Works on any uploaded photo automatically.
 ========================= */
 
+/* Resize + recompress a File/Blob to a JPEG Blob before upload.
+   Mirrors compressImage()'s dimensions (max 800px, q0.82) but returns a Blob via
+   canvas.toBlob() rather than a base64 dataURL, so no ~33% base64 inflation is
+   paid on the wire.
+
+   WHY THIS EXISTS: _uploadImagesToStorage used to send imageItems[i].file — the
+   RAW original the seller picked — straight to Storage, then the product's `image`
+   field was overwritten with that URL (seller.js ~881), discarding the compressed
+   800px copy that had already been computed. Measured on production: real merchant
+   uploads were 694KB each, served full-size into 158px cards, so on a mobile
+   connection a product grid effectively never finished loading — reported as
+   "product images not working". An 800px JPEG at q0.82 is ~80-140KB, ~5-8x smaller.
+
+   Fails OPEN: any error (decode failure, tainted canvas, no toBlob) resolves to
+   the original file, so a listing never fails to upload because compression could
+   not run — it just uploads large, exactly as before. */
+function _compressToBlob(file, maxW, quality) {
+    maxW = maxW || 800; quality = quality || 0.82;
+    return new Promise(function (resolve) {
+        try {
+            var img = new Image();
+            var url = URL.createObjectURL(file);
+            img.onload = function () {
+                try {
+                    var w = img.width, h = img.height;
+                    if (w > maxW) { h = Math.round((maxW / w) * h); w = maxW; }
+                    var canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    URL.revokeObjectURL(url);
+                    if (!canvas.toBlob) { resolve(file); return; }
+                    canvas.toBlob(function (blob) {
+                        /* Only keep the recompressed blob if it is actually smaller;
+                           a tiny source can grow when re-encoded. */
+                        resolve(blob && blob.size < file.size ? blob : file);
+                    }, 'image/jpeg', quality);
+                } catch (e) { URL.revokeObjectURL(url); resolve(file); }
+            };
+            img.onerror = function () { URL.revokeObjectURL(url); resolve(file); };
+            img.src = url;
+        } catch (e) { resolve(file); }
+    });
+}
+
 /* Upload an array of {file} objects to Firebase Storage.
    Returns array of download URLs on success, null on failure. */
 async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
@@ -396,7 +454,21 @@ async function _uploadImagesToStorage(productId, sellerUid, imageItems) {
                 window.firebaseStorage,
                 `product-images/${sellerUid || 'anon'}/${productId}/${i}.jpg`
             );
-            const snap = await uploadBytes(storageRef, imageItems[i].file, { contentType: 'image/jpeg' });
+            /* Compress before upload — see _compressToBlob. The raw file was being
+               stored and then served full-size into thumbnail-sized cards. */
+            const blob = await _compressToBlob(imageItems[i].file);
+            /* cacheControl is the other half of "images don't cache well".
+               Firebase Storage defaults uploads to `private, max-age=0`, so the
+               browser revalidated (usually re-downloaded) every product image on
+               every view — measured on production: a live product image returned
+               `Cache-Control: private, max-age=0`. A product photo is immutable
+               once uploaded (a new photo is a new object path), so it is safe to
+               cache for a year. public+immutable lets the browser, the SW image
+               cache, and any CDN keep it instead of re-fetching. */
+            const snap = await uploadBytes(storageRef, blob, {
+                contentType: 'image/jpeg',
+                cacheControl: 'public, max-age=31536000, immutable',
+            });
             urls.push(await getDownloadURL(snap.ref));
         }
         return urls;
@@ -745,6 +817,13 @@ async function addProduct(){
             uploadedAt: Date.now(),
             wholesalePrice:  wholesalePrice > 0 ? wholesalePrice : null,
             minWholesaleQty: wholesalePrice > 0 ? minWholesaleQty : null,
+            /* Category-dependent variants (colours / sizes / storage / pack size).
+               Spread from the shared schema so upload and edit write the SAME
+               keys — the drift these two forms are prone to is exactly what the
+               schema exists to prevent. */
+            ...(window.SokoniProductSchema && window.SokoniProductSchema.serializeVariants
+                ? window.SokoniProductSchema.serializeVariants('product', productCategory)
+                : {}),
             isDigital,
             digitalUrl:      isDigital ? digitalUrl : null,
             digitalLicense:  isDigital ? digitalLicense : null,
@@ -899,14 +978,77 @@ async function addProduct(){
                             try { if (typeof displaySellerProducts === 'function') displaySellerProducts(); } catch (_) {}
                         }
                     } catch (_) { /* cache is best-effort; the document is written regardless */ }
-                } else {
-                    /* Base64 fallback — strip very large images to avoid 1MB limit */
-                    fsProduct.images = (fsProduct.images || []).map(function(b){
-                        return b && b.length > 200000 ? b.substring(0, 200000) : b;
-                    });
+                }
+
+                /* PRIORITY-1 GUARD (2026-07-25): NEVER persist a base64 data: URI to
+                   a product doc. The old "base64 fallback" here truncated a data: URI
+                   to ~200KB and stored it — which is exactly how "PEACH MANGO ICE" put
+                   a 195KB image into `images`, blew past Algolia's 10KB record cap and
+                   stalled search indexing for every product in its batch. A product
+                   with no image shows the placeholder (the seller can re-add the photo);
+                   a poisoned index is far worse. This strips the string `image` field
+                   and every `images[]` entry regardless of which upload branch ran, so
+                   it is the client half of the defence-in-depth the Firestore rule now
+                   enforces server-side. */
+                fsProduct.image  = _isDataUri(fsProduct.image) ? '' : (fsProduct.image || '');
+                if (Array.isArray(fsProduct.images)) {
+                    fsProduct.images = fsProduct.images.filter(function(v){ return !_isDataUri(v); });
                 }
 
                 await m.setDoc(m.doc(db,'products',newProduct.id), fsProduct);
+
+                /* ── SYNC TO INVENTORY MANAGER ──────────────────────────────────
+                   The storefront product (top-level `products`) and the back-office
+                   inventory manager are SEPARATE collections with no bridge, so an
+                   uploaded product never appeared in inv-products.html. That page reads
+                   tenants/{uid}/inventory_products via SokoniInventory. Mirror the product
+                   there, keyed by the SAME id so the two stay linked, mapping the
+                   storefront fields to the inventory schema saveProduct() expects
+                   (price->sellingPrice, costPrice->buyingPrice, stock->stockLevel) and
+                   assigning the default branch (warehouseId). Also mirror to posProducts —
+                   the same two writes SokoniInventory.saveProduct does — so the product is
+                   visible at POS checkout too.
+
+                   FULLY SEPARATE and fire-and-forget: the products write above has already
+                   succeeded and is awaited; this runs after it and is wrapped so a sync
+                   failure (rules, offline, quota) can NEVER affect the storefront listing,
+                   which is the merchant's revenue path. Branch stock separation and a
+                   branch picker on the upload form are follow-on; this establishes the
+                   link and the default-branch assignment. */
+                if (sellerUid) {
+                    try {
+                        const _img = (storageUrls && storageUrls[0]) || newProduct.image || '';
+                        const _sku = 'SKU-' + String(newProduct.id).slice(-8).toUpperCase();
+                        const _wh  = (newProduct.warehouseId || newProduct.branchId || 'main');
+                        const _invProduct = {
+                            id:           newProduct.id,
+                            name:         newProduct.name || '',
+                            sellingPrice: Number(newProduct.price)     || 0,
+                            buyingPrice:  Number(newProduct.costPrice)  || 0,
+                            category:     newProduct.category || '',
+                            stockLevel:   Number(newProduct.stock) || 0,
+                            reorderPoint: 10,
+                            unit:         'pcs',
+                            imageUrl:     _img,
+                            description:  newProduct.description || '',
+                            sku:          _sku,
+                            warehouseId:  _wh,
+                            active:       true,
+                            tenantId:     sellerUid,
+                            sourceProductId: newProduct.id,   /* link back to the storefront product */
+                            createdAt:    m.serverTimestamp(),
+                            updatedAt:    m.serverTimestamp(),
+                        };
+                        m.setDoc(m.doc(db, 'tenants', sellerUid, 'inventory_products', newProduct.id), _invProduct, { merge: true })
+                          .catch(function (e) { console.warn('[SOKONI] inventory sync (non-blocking):', e && e.message); });
+                        m.setDoc(m.doc(db, 'posProducts', newProduct.id), {
+                            name: _invProduct.name, price: _invProduct.sellingPrice, cost: _invProduct.buyingPrice,
+                            category: _invProduct.category, sku: _sku, unit: 'pcs', stockLevel: _invProduct.stockLevel,
+                            reorderPoint: 10, imageUrl: _img, description: _invProduct.description,
+                            sellerId: sellerUid, status: 'active', tenantId: sellerUid, updatedAt: m.serverTimestamp(),
+                        }, { merge: true }).catch(function () { /* POS mirror is best-effort */ });
+                    } catch (_) { /* sync must never break the upload */ }
+                }
             } catch(e){
                 console.warn('[SOKONI] Product Firestore/Storage save:', e.message);
             }
@@ -1368,6 +1510,34 @@ function _syncEditCategoryOptions(currentCat) {
     }
 }
 
+/* Keep the variant chips in step with the chosen category, on both forms.
+   Bound once, lazily, because the edit modal's category <select> is rebuilt by
+   _syncEditCategoryOptions() and a listener attached to the old node would be
+   discarded — binding on the element that survives (the select id) after each
+   open is simpler than re-binding inside the rebuild. */
+function _bindVariantCategorySync() {
+  var schema = window.SokoniProductSchema;
+  if (!schema || !schema.renderVariants) return;
+  [['productCategory', 'product'], ['editCategory', 'edit']].forEach(function (pair) {
+    var sel = document.getElementById(pair[0]);
+    if (!sel || sel._skVarSync) return;
+    sel.addEventListener('change', function () {
+      /* Re-render for the new category. Current selections are re-read first so
+         an attribute shared by both categories (colours, usually) keeps what the
+         seller already picked instead of silently resetting. */
+      var keep = schema.serializeVariants(pair[1], sel.value) || {};
+      schema.renderVariants(pair[1], sel.value, keep);
+    });
+    sel._skVarSync = true;
+  });
+}
+document.addEventListener('DOMContentLoaded', function () {
+  _bindVariantCategorySync();
+  var schema = window.SokoniProductSchema;
+  var sel = document.getElementById('productCategory');
+  if (schema && schema.renderVariants && sel) schema.renderVariants('product', sel.value, {});
+});
+
 function editProduct(index) {
     _editIndex = index;
     _editImages = [];
@@ -1392,6 +1562,14 @@ function editProduct(index) {
         const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
         setVal("editName", p.name); setVal("editPrice", p.price); setVal("editCategory", p.category || "other");
         setVal("editStock", p.stock); setVal("editDescription", p.description);
+    }
+
+    /* Variant chips for this product's category, pre-selected from what it
+       already has. Rendered AFTER populate so the category select holds the
+       product's real category, and re-bound because the select was rebuilt. */
+    if (window.SokoniProductSchema && window.SokoniProductSchema.renderVariants) {
+        window.SokoniProductSchema.renderVariants('edit', p.category, p);
+        _bindVariantCategorySync();
     }
 
     /* Load images into multi-image editor */
@@ -1447,6 +1625,10 @@ function saveEditProduct() {
         name  = patch.name;
         price = patch.price;
         cat   = patch.category || "other";
+        /* Variants are keyed off the CURRENT category, and keys that no longer
+           apply come back null so a re-categorised product actively loses stale
+           values — a shirt changed to "electronics" must not keep its sizes. */
+        if (schema.serializeVariants) Object.assign(patch, schema.serializeVariants('edit', cat));
     } else {
         /* Fallback if the schema failed to load — the original hand read. */
         name  = document.getElementById("editName")?.value.trim();
@@ -1516,6 +1698,15 @@ function saveEditProduct() {
                 fsPatch.image = _editImages[0];
                 fsPatch.images = _editImages.slice();
                 fsPatch.imageStorageUrls = _editImages.slice();
+            }
+            /* Defence-in-depth: never let a base64 data: URI reach the doc via `patch`.
+               DELETE the offending key (rather than blanking it) so a good existing
+               Storage image is left untouched — updateDoc only writes the keys present.
+               Matches the create path and the server-side rule. */
+            if (_isDataUri(fsPatch.image)) delete fsPatch.image;
+            if (Array.isArray(fsPatch.images)) {
+                var _cleanImgs = fsPatch.images.filter(function(v){ return !_isDataUri(v); });
+                if (_cleanImgs.length) fsPatch.images = _cleanImgs; else delete fsPatch.images;
             }
             await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), fsPatch);
         } catch (e) {

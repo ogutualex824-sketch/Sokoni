@@ -963,120 +963,56 @@ function scrollToRegister(){
    PROVIDER DATA
 ══════════════════════════════════════════════ */
 /* ══ DEMO PROVIDERS — shown when no real providers are registered yet ══ */
-const DEMO_PROVIDERS = [
-  /* ── HAIR & BEAUTY ── */
-  { id:"DP01", name:"Joyce Wanjiru Beauty", phone:"0712345601", category:"hair-beauty", skills:["Natural Hair","Braids & Twists","Bridal Makeup","Wigs"], bio:"Master stylist, 8 yrs top Nairobi salons. Bridal specialist. Mobile service available.", location:"nairobi", rate:800, rateType:"per job", rating:4.9, jobsCompleted:412, available:true, verified:true },
-  { id:"DP02", name:"Barber Kevin Njoroge", phone:"0723456702", category:"hair-beauty", skills:["Fades","Line-ups","Beard Shaping","Kids Cuts"], bio:"Precision fades & low cuts — 6 yrs Westlands. Home visits weekends.", location:"nairobi", rate:400, rateType:"per job", rating:4.8, jobsCompleted:930, available:true, verified:true },
-  { id:"DP03", name:"Naomi Atieno Styles", phone:"0734567803", category:"hair-beauty", skills:["Locs","Weaves","Nails","Cornrows"], bio:"Certified cosmetologist — 5 yrs Kisumu. Expert locs & natural Afro styles.", location:"kisumu", rate:600, rateType:"per job", rating:4.7, jobsCompleted:280, available:true, verified:true },
-  { id:"DP04", name:"Barber Tony Otieno", phone:"0745678904", category:"hair-beauty", skills:["Classic Cuts","Skin Fades","Colouring","Shaves"], bio:"10 yrs seasoned barber — Westgate Nairobi. Clean fades, group discounts.", location:"nairobi", rate:350, rateType:"per job", rating:5.0, jobsCompleted:1240, available:true, verified:true },
-  { id:"DP05", name:"Grace Muthoni Beauty", phone:"0756789005", category:"hair-beauty", skills:["Facials","Waxing","Manicure/Pedicure","Event Makeup"], bio:"CIDESCO-certified beauty therapist — 7 yrs Karen. Bridal & event specialist.", location:"nairobi", rate:1200, rateType:"per job", rating:4.9, jobsCompleted:520, available:true, verified:true },
-  { id:"DP06", name:"Fatuma Hassan Salon", phone:"0767890106", category:"hair-beauty", skills:["Henna Art","Relaxer","Hair Treatments","Bridal Styles"], bio:"Mombasa premier stylist — 9 yrs Old Town. Expert coastal bridal henna.", location:"mombasa", rate:700, rateType:"per job", rating:4.8, jobsCompleted:380, available:true, verified:true },
-  /* ── PLUMBING ── */
-  { id:"DP07", name:"Peter Kamau Plumbing", phone:"0778901207", category:"plumbing", skills:["Pipe Fitting","Leak Repair","Borehole","Water Tank"], bio:"NCA-licensed plumber — 12 yrs. Emergency callouts 24/7. All Nairobi zones.", location:"nairobi", rate:1500, rateType:"per job", rating:4.8, jobsCompleted:340, available:true, verified:true },
-  { id:"DP08", name:"Amos Odhiambo Plumbers", phone:"0789012308", category:"plumbing", skills:["Drainage","Sewer Lines","Pumps","Bathroom Fitting"], bio:"10 yrs Kisumu. Drainage & bathroom renovation specialist. No callout fee.", location:"kisumu", rate:1200, rateType:"per job", rating:4.7, jobsCompleted:215, available:true, verified:true },
-  { id:"DP09", name:"Dennis Mutua Plumbers", phone:"0790123409", category:"plumbing", skills:["Gas Plumbing","Solar Water Heater","Tile Work","Borehole"], bio:"Gas & plumbing expert — 8 yrs. KEBS-approved gas installer. Mombasa region.", location:"mombasa", rate:1800, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
-  { id:"DP10", name:"Charles Waweru Fundi", phone:"0701234510", category:"plumbing", skills:["Leak Repair","Pipe Install","Water Tanks","Emergency"], bio:"Fast-response plumber — 6 yrs Nakuru. Same-day fixes. All brands.", location:"nakuru", rate:1000, rateType:"per job", rating:4.6, jobsCompleted:167, available:true, verified:false },
-  { id:"DP11", name:"Mark Omondi Drainage", phone:"0712345611", category:"plumbing", skills:["Septic Tank","CCTV Drain","Pressure Testing","Pump Repair"], bio:"Drainage & septic systems — 14 yrs. ELC certified. Commercial & residential.", location:"nairobi", rate:2500, rateType:"per job", rating:4.9, jobsCompleted:455, available:true, verified:true },
-  /* ── ELECTRICAL ── */
-  { id:"DP12", name:"James Gitau Electricals", phone:"0723456712", category:"electrical", skills:["Wiring","Solar PV","DB Board","Security Lights"], bio:"ERC-licensed electrician — 10 yrs. Solar installation specialist. Nairobi.", location:"nairobi", rate:2000, rateType:"per job", rating:4.9, jobsCompleted:310, available:true, verified:true },
-  { id:"DP13", name:"Boniface Ouma Power", phone:"0734567813", category:"electrical", skills:["Generator Install","Inverter/UPS","CCTV","3-Phase"], bio:"Industrial & domestic electrician — 9 yrs Mombasa. ERC certified. Emergency same-day.", location:"mombasa", rate:1800, rateType:"per job", rating:4.7, jobsCompleted:195, available:true, verified:true },
-  { id:"DP14", name:"Edwin Kiptoo Electrics", phone:"0745678914", category:"electrical", skills:["Rewiring","Security Cameras","Solar","Power Faults"], bio:"Licensed — 7 yrs Eldoret. Rapid response. All brands of distribution boards.", location:"eldoret", rate:1500, rateType:"per job", rating:4.6, jobsCompleted:142, available:true, verified:false },
-  { id:"DP15", name:"Robert Mwangi Smart Home", phone:"0756789015", category:"electrical", skills:["Smart Home","Automation","Data Cabling","Solar Grid-Tie"], bio:"Smart home & solar specialist — 11 yrs. Master Electrician. Nairobi CBD & suburbs.", location:"nairobi", rate:3000, rateType:"per job", rating:5.0, jobsCompleted:278, available:true, verified:true },
-  { id:"DP16", name:"Lucy Wanjiku Electrics", phone:"0767890116", category:"electrical", skills:["Wiring","Repairs","Sockets","Light Install"], bio:"ERC-licensed — 6 yrs Nakuru. Kenya's top female electrician. Punctual & professional.", location:"nakuru", rate:1200, rateType:"per job", rating:4.8, jobsCompleted:120, available:true, verified:true },
-  /* ── CLEANING ── */
-  { id:"DP17", name:"ShineClean Services", phone:"0778901217", category:"cleaning", skills:["Deep Clean","Post-Construction","Office Cleaning","Steam Clean"], bio:"Professional 5-person team — 7 yrs Nairobi. Own industrial equipment. Monthly contracts.", location:"nairobi", rate:3500, rateType:"per job", rating:4.9, jobsCompleted:600, available:true, verified:true },
-  { id:"DP18", name:"Angela Nyambura Clean", phone:"0789012318", category:"cleaning", skills:["House Cleaning","Carpet Steam","Move-in/out","Fumigation"], bio:"Solo cleaning pro — 5 yrs Nairobi West. Thorough, honest and affordable.", location:"nairobi", rate:1500, rateType:"per job", rating:4.8, jobsCompleted:340, available:true, verified:true },
-  { id:"DP19", name:"CleanMasters Kenya", phone:"0790123419", category:"cleaning", skills:["Office Cleaning","School Cleaning","ISO Standards","Daily Contract"], bio:"Corporate cleaning company — 10-person team. Daily & weekly contracts. Nairobi.", location:"nairobi", rate:8000, rateType:"daily", rating:4.7, jobsCompleted:180, available:true, verified:true },
-  { id:"DP20", name:"Mombasa Clean Team", phone:"0701234520", category:"cleaning", skills:["Beach House","Post-Event","Hotel Standard","Fumigation"], bio:"Coastal property specialists — 6 yrs Mombasa. Airbnb turnover experts.", location:"mombasa", rate:2500, rateType:"per job", rating:4.8, jobsCompleted:220, available:true, verified:true },
-  { id:"DP21", name:"Purity Kamau Cleaning", phone:"0712345621", category:"cleaning", skills:["Residential","Carpet","Sofa Steam","Move-out"], bio:"Reliable house cleaner — 4 yrs Westlands. Eco-friendly products. Same-day bookings.", location:"nairobi", rate:1200, rateType:"per job", rating:4.9, jobsCompleted:290, available:true, verified:true },
-  /* ── MAMAFUA / LAUNDRY ── */
-  { id:"DP_L01", name:"Mama Jane Laundry", phone:"0711223344", category:"laundry", skills:["Hand Wash","Machine Wash","Ironing","Dry Cleaning"], bio:"Expert mamafua — 8 yrs Nairobi. Clothes collected & delivered same day. Gentle on fabrics.", location:"nairobi", rate:300, rateType:"per job", rating:4.9, jobsCompleted:1120, available:true, verified:true },
-  { id:"DP_L02", name:"FreshWash Services", phone:"0722334455", category:"laundry", skills:["Bulk Laundry","Uniforms","Linen","Hotels"], bio:"Commercial laundry specialists — 5 yrs. Hotels, schools, hospitals. Bulk discounts.", location:"nairobi", rate:1500, rateType:"per job", rating:4.8, jobsCompleted:640, available:true, verified:true },
-  { id:"DP_L03", name:"CleanThreads Mombasa", phone:"0733445566", category:"laundry", skills:["Delicate Fabrics","Stain Removal","Pressing","Pickup/Delivery"], bio:"Premium laundry Mombasa — 4 yrs. WhatsApp booking. 24hr turnaround.", location:"mombasa", rate:400, rateType:"per job", rating:4.7, jobsCompleted:380, available:true, verified:true },
-  { id:"DP_L04", name:"Mary Njeri Mamafua", phone:"0744556677", category:"laundry", skills:["Home Laundry","Bedsheets","Baby Clothes","Woollen Items"], bio:"Trusted mama fua Westlands — 6 yrs. Careful handling. Available Mon–Sat 7am–6pm.", location:"nairobi", rate:250, rateType:"per job", rating:5.0, jobsCompleted:890, available:true, verified:true },
-  { id:"DP_L05", name:"SpinCycle Kisumu", phone:"0755667788", category:"laundry", skills:["Machine Wash","Quick Dry","Ironing","Pickup Service"], bio:"Modern laundry Kisumu — 3 yrs. Industrial machines, fast turnaround. Free pickup within 5km.", location:"kisumu", rate:350, rateType:"per job", rating:4.8, jobsCompleted:290, available:true, verified:false },
-  /* ── PHOTOGRAPHY ── */
-  { id:"DP22", name:"Victor Osei Photography", phone:"0723456722", category:"photography", skills:["Weddings","Events","Corporate","Product"], bio:"Award-winning — 9 yrs. Canon 5D Mark IV. 200+ weddings. @victorpix Instagram.", location:"nairobi", rate:15000, rateType:"per job", rating:5.0, jobsCompleted:230, available:true, verified:true },
-  { id:"DP23", name:"Brenda Achieng Visuals", phone:"0734567823", category:"photography", skills:["Fashion","Portraits","Real Estate","Graduation"], bio:"Fashion & portrait photographer — 6 yrs. Studio in Westlands. Headshots & editorial.", location:"nairobi", rate:8000, rateType:"per job", rating:4.8, jobsCompleted:165, available:true, verified:true },
-  { id:"DP24", name:"Coast Photography KE", phone:"0745678924", category:"photography", skills:["Weddings","Beach","Events","Products"], bio:"Mombasa's top wedding photographer — 11 yrs. Outdoor coastal ceremony specialist.", location:"mombasa", rate:12000, rateType:"per job", rating:4.9, jobsCompleted:190, available:true, verified:true },
-  { id:"DP25", name:"Mike Wangari Snaps", phone:"0756789025", category:"photography", skills:["Sports","Concerts","News","Action Shots"], bio:"Sports & events photographer — 7 yrs. 24hr delivery. Nairobi + Kisumu.", location:"nairobi", rate:6000, rateType:"per job", rating:4.7, jobsCompleted:300, available:true, verified:false },
-  { id:"DP26", name:"Sandra Njoki Studio", phone:"0767890126", category:"photography", skills:["Baby Photoshoots","Maternity","Family","Newborn"], bio:"Baby & family photographer — 5 yrs Karen. Patient approach. Studio + home visits.", location:"nairobi", rate:7000, rateType:"per job", rating:4.9, jobsCompleted:145, available:true, verified:true },
-  /* ── VIDEOGRAPHY ── */
-  { id:"DP_V01", name:"Kevin Mwangi Films", phone:"0711223301", category:"videography", skills:["Wedding Films","4K Video","Drone","Same-Week Edit"], bio:"Cinematic wedding filmmaker — 8 yrs Nairobi. Sony FX6 + DJI drone. Same-week highlight reel.", location:"nairobi", rate:35000, rateType:"per job", rating:5.0, jobsCompleted:140, available:true, verified:true },
-  { id:"DP_V02", name:"Savanna Cinema KE", phone:"0722334402", category:"videography", skills:["Music Videos","Corporate","Events","Animation"], bio:"Full-service production house — 10 yrs. Music videos, brand films, corporate docs. Nairobi & Mombasa.", location:"nairobi", rate:50000, rateType:"per job", rating:4.9, jobsCompleted:95, available:true, verified:true },
-  { id:"DP_V03", name:"Mombasa Visuals Studio", phone:"0733445503", category:"videography", skills:["Weddings","Coastal Events","Drone","4K Aerial"], bio:"Coastal wedding & events videographer — 6 yrs. Drone certified. 24-hr teaser delivery.", location:"mombasa", rate:25000, rateType:"per job", rating:4.8, jobsCompleted:112, available:true, verified:true },
-  { id:"DP_V04", name:"Rift Lens Productions", phone:"0744556604", category:"videography", skills:["Short Films","Brand Ads","TikTok Content","Reels"], bio:"Content & brand videographer — 5 yrs Nakuru. Specialises in social media video for businesses.", location:"nakuru", rate:15000, rateType:"per job", rating:4.7, jobsCompleted:78, available:true, verified:false },
-  /* ── PHONE REPAIR ── */
-  { id:"DP27", name:"TechFix Nairobi", phone:"0778901227", category:"phone-repair", skills:["Samsung","iPhone","Tecno","Screen Replacement"], bio:"Phone repair experts — 7 yrs CBD Nairobi. Same-day screens. 90-day warranty.", location:"nairobi", rate:1500, rateType:"per job", rating:4.9, jobsCompleted:1200, available:true, verified:true },
-  { id:"DP28", name:"Ibrahim Hassan iRepair", phone:"0789012328", category:"phone-repair", skills:["iPhone","iPad","Mac","Data Recovery"], bio:"Apple specialist — 8 yrs. Genuine parts iPhone 12-15 series. Mombasa.", location:"mombasa", rate:2000, rateType:"per job", rating:4.8, jobsCompleted:450, available:true, verified:true },
-  { id:"DP29", name:"Kariuki Cell Repairs", phone:"0790123429", category:"phone-repair", skills:["All Brands","Water Damage","Battery","Software Flash"], bio:"General phone technician — 6 yrs Nakuru. Water damage specialist. No fix, no fee.", location:"nakuru", rate:800, rateType:"per job", rating:4.7, jobsCompleted:680, available:true, verified:false },
-  { id:"DP30", name:"Kelvin Ochieng Mobile", phone:"0701234530", category:"phone-repair", skills:["Infinix","Tecno","Samsung","Xiaomi"], bio:"Affordable smartphone repairs — 5 yrs Kisumu. Online WhatsApp quote.", location:"kisumu", rate:700, rateType:"per job", rating:4.6, jobsCompleted:390, available:true, verified:false },
-  { id:"DP31", name:"DigiMend Solutions", phone:"0712345631", category:"phone-repair", skills:["Motherboard Repair","IC Chip Level","Data Recovery","Unlocking"], bio:"Advanced board-level repair — 10 yrs. Other shops send us their hard cases. Nairobi.", location:"nairobi", rate:3500, rateType:"per job", rating:5.0, jobsCompleted:290, available:true, verified:true },
-  /* ── TUTORING ── */
-  { id:"DP32", name:"Teacher Collins Mwangi", phone:"0723456732", category:"tutoring", skills:["Maths","Physics","Chemistry","KCSE"], bio:"BSc Maths UoN — 8 yrs tutoring KCSE. Average 3-grade improvement. Nairobi.", location:"nairobi", rate:700, rateType:"hourly", rating:4.9, jobsCompleted:340, available:true, verified:true },
-  { id:"DP33", name:"Esther Auma Language", phone:"0734567833", category:"tutoring", skills:["English","Kiswahili","Literature","CBC"], bio:"Language arts teacher — 10 yrs primary & secondary. CBC specialist. Nairobi & online.", location:"nairobi", rate:500, rateType:"hourly", rating:4.8, jobsCompleted:210, available:true, verified:true },
-  { id:"DP34", name:"Dr. Paul Ndirangu PhD", phone:"0745678934", category:"tutoring", skills:["University Maths","Statistics","MATLAB","Research"], bio:"Lecturer offering private stats tutoring. PhD Mathematics (UoN). Online & in-person.", location:"remote", rate:1500, rateType:"hourly", rating:5.0, jobsCompleted:120, available:true, verified:true },
-  { id:"DP35", name:"Mercy Wambua CBC", phone:"0756789035", category:"tutoring", skills:["Grade 1-9 CBC","English","Maths","Arts"], bio:"Junior secondary CBC specialist — 6 yrs. Home visits Kisumu. Child-friendly approach.", location:"kisumu", rate:450, rateType:"hourly", rating:4.7, jobsCompleted:180, available:true, verified:false },
-  { id:"DP36", name:"Kevin Rotich Science", phone:"0767890136", category:"tutoring", skills:["Chemistry","Biology","IGCSE","A Level"], bio:"IGCSE & A-Level tutor — 7 yrs. International schools background. Online sessions.", location:"nairobi", rate:1000, rateType:"hourly", rating:4.9, jobsCompleted:265, available:true, verified:true },
-  /* ── FITNESS ── */
-  { id:"DP37", name:"Coach Brian Maina PT", phone:"0778901237", category:"fitness", skills:["Weight Loss","Muscle Building","HIIT","Nutrition Plans"], bio:"ACE-certified personal trainer — 6 yrs Nairobi CBD. Transformation packages.", location:"nairobi", rate:2000, rateType:"hourly", rating:5.0, jobsCompleted:310, available:true, verified:true },
-  { id:"DP38", name:"Stella Kimani Yoga", phone:"0789012338", category:"fitness", skills:["Yoga","Pilates","Prenatal Fitness","Mindfulness"], bio:"RYT 500-certified — 8 yrs. Studio in Lavington. Prenatal & postnatal specialist.", location:"nairobi", rate:1500, rateType:"hourly", rating:4.9, jobsCompleted:420, available:true, verified:true },
-  { id:"DP39", name:"Coach Felix Njoroge", phone:"0790123439", category:"fitness", skills:["Boxing","CrossFit","Cardio","Endurance"], bio:"Pro boxer turned fitness coach — 9 yrs. Online training programs. Nairobi South.", location:"nairobi", rate:1800, rateType:"hourly", rating:4.8, jobsCompleted:190, available:true, verified:true },
-  { id:"DP40", name:"Sandra Achieng Fit", phone:"0701234540", category:"fitness", skills:["Ladies Fitness","Aerobics","Zumba","Weight Loss"], bio:"Ladies fitness specialist — 5 yrs Kisumu. Group & one-on-one. 100+ transformations.", location:"kisumu", rate:1000, rateType:"hourly", rating:4.7, jobsCompleted:145, available:true, verified:false },
-  { id:"DP41", name:"Mike Otieno Bodybuilding", phone:"0712345641", category:"fitness", skills:["Bodybuilding","Powerlifting","Meal Plans","Contest Prep"], bio:"Competitive bodybuilder & coach — 12 yrs Mombasa. Competition prep specialist.", location:"mombasa", rate:2500, rateType:"hourly", rating:4.9, jobsCompleted:230, available:true, verified:true },
-  /* ── CATERING ── */
-  { id:"DP42", name:"Mama Rose Catering", phone:"0723456742", category:"catering", skills:["Kenyan Cuisine","Nyama Choma","Buffet","Weddings"], bio:"Pro caterer — 15 yrs. Health-certified. Up to 500 guests. Own full kitchen trailer.", location:"nairobi", rate:15000, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
-  { id:"DP43", name:"Chef Daniel Kiplagat", phone:"0734567843", category:"catering", skills:["Continental","Indian","Fusion","Finger Food"], bio:"Trained chef — 10 yrs 5-star hotels. Now freelance. Upscale corporate events.", location:"nairobi", rate:25000, rateType:"per job", rating:5.0, jobsCompleted:95, available:true, verified:true },
-  { id:"DP44", name:"Coast Flavors Catering", phone:"0745678944", category:"catering", skills:["Coastal Cuisine","Seafood","Pilau","Wedding Cakes"], bio:"Mombasa coastal specialists — 9 yrs. Biryani, seafood, pilau. Up to 300 guests.", location:"mombasa", rate:12000, rateType:"per job", rating:4.8, jobsCompleted:140, available:true, verified:true },
-  { id:"DP45", name:"Kisumu Fish BBQ", phone:"0756789045", category:"catering", skills:["Lake Fish","BBQ","Local Cuisines","Budget Events"], bio:"Lakeside catering Kisumu — 7 yrs. Tilapia, omena, ugali. Community events.", location:"kisumu", rate:8000, rateType:"per job", rating:4.7, jobsCompleted:120, available:true, verified:false },
-  { id:"DP46", name:"Sweet Delights Bakery", phone:"0767890146", category:"catering", skills:["Wedding Cakes","Birthday Cakes","Pastries","Desserts"], bio:"Professional baker & cake artist — 8 yrs Nairobi. Custom tiered cakes. Delivery.", location:"nairobi", rate:5000, rateType:"per job", rating:4.9, jobsCompleted:310, available:true, verified:true },
-  /* ── EVENT PLANNERS ── */
-  { id:"DP_E01", name:"Vivian Waweru Events", phone:"0711234501", category:"events", skills:["Weddings","Corporate","Décor","Venue Sourcing"], bio:"Professional event planner — 9 yrs Nairobi. 300+ events. Own full décor stock. Full-service packages.", location:"nairobi", rate:25000, rateType:"per job", rating:5.0, jobsCompleted:180, available:true, verified:true },
-  { id:"DP_E02", name:"Grand Occasions Kenya", phone:"0722345602", category:"events", skills:["Marquee Tents","Birthdays","Corporate","Outdoor Setups"], bio:"Event planning company — 6 yrs Nairobi. Tents, lighting, décor, catering coordination. Fully managed.", location:"nairobi", rate:35000, rateType:"per job", rating:4.9, jobsCompleted:142, available:true, verified:true },
-  { id:"DP_E03", name:"Coastal Celebrations KE", phone:"0733456703", category:"events", skills:["Beach Weddings","Cultural Events","Sound & Lighting","Birthdays"], bio:"Mombasa event specialist — 7 yrs. Beach weddings, cultural ceremonies, corporate events. Full setup.", location:"mombasa", rate:20000, rateType:"per job", rating:4.8, jobsCompleted:95, available:true, verified:true },
-  { id:"DP_E04", name:"Rift Eventions Ltd", phone:"0744567804", category:"events", skills:["Graduations","Religious Events","NGO Events","School Functions"], bio:"Budget-friendly event planner — 5 yrs Nakuru & Kisumu. Schools, churches, community events.", location:"nakuru", rate:15000, rateType:"per job", rating:4.7, jobsCompleted:78, available:true, verified:false },
-  /* ── GRAPHIC DESIGN ── */
-  { id:"DP47", name:"Ken Njagi Designs", phone:"0778901247", category:"graphic-design", skills:["Logo Design","Branding","Flyers","Social Media"], bio:"Brand identity specialist — 7 yrs. 200+ logos for Kenyan SMEs. Behance: kenjagi.", location:"nairobi", rate:3000, rateType:"per job", rating:4.9, jobsCompleted:280, available:true, verified:true },
-  { id:"DP48", name:"Aisha Omar Creative", phone:"0789012348", category:"graphic-design", skills:["UI/UX","App Mockups","Web Design","Figma"], bio:"UX designer — 5 yrs. Adobe XD & Figma expert. Startups & established brands.", location:"nairobi", rate:5000, rateType:"per job", rating:4.8, jobsCompleted:145, available:true, verified:true },
-  { id:"DP49", name:"FredzGraphix Studio", phone:"0790123449", category:"graphic-design", skills:["3D Visuals","Packaging","Vehicle Branding","Banners"], bio:"Print & 3D design studio — 9 yrs Mombasa. Large format printing partnerships.", location:"mombasa", rate:4000, rateType:"per job", rating:4.7, jobsCompleted:200, available:true, verified:false },
-  { id:"DP50", name:"Lilian Wahu Designs", phone:"0701234550", category:"graphic-design", skills:["Canva Pro","Instagram Graphics","Cards","Templates"], bio:"Social media content creator — 3 yrs. Affordable. Same-day delivery for simple jobs.", location:"remote", rate:800, rateType:"per job", rating:4.6, jobsCompleted:350, available:true, verified:false },
-  { id:"DP51", name:"Big Print Kenya", phone:"0712345651", category:"graphic-design", skills:["Corporate Identity","Annual Reports","Presentations","Publishing"], bio:"Corporate design agency — 12 yrs Nairobi. Fortune-500 quality at SME prices.", location:"nairobi", rate:15000, rateType:"per job", rating:4.9, jobsCompleted:110, available:true, verified:true },
-  /* ── ACCOUNTING ── */
-  { id:"DP52", name:"CPA Jane Njoroge", phone:"0723456752", category:"accounting", skills:["Tax Returns (KRA)","Bookkeeping","Payroll","QuickBooks"], bio:"CPA-K licensed — 9 yrs. KRA iTax, payroll, VAT returns & audit prep.", location:"nairobi", rate:5000, rateType:"per job", rating:4.9, jobsCompleted:320, available:true, verified:true },
-  { id:"DP53", name:"Francis Ochieng ACCA", phone:"0734567853", category:"accounting", skills:["IFRS Statements","Audit","Sage","Xero"], bio:"ACCA qualified — 12 yrs. SME & NGO financial statements & audit prep.", location:"nairobi", rate:8000, rateType:"per job", rating:4.8, jobsCompleted:190, available:true, verified:true },
-  { id:"DP54", name:"Mombasa Tax Consultants", phone:"0745678954", category:"accounting", skills:["KRA Compliance","Business Reg","VAT","Corporate Tax"], bio:"Tax compliance specialists — 8 yrs Mombasa. Sole traders, companies & NGOs.", location:"mombasa", rate:4000, rateType:"per job", rating:4.7, jobsCompleted:155, available:true, verified:true },
-  { id:"DP55", name:"Rachel Wambua Books", phone:"0756789055", category:"accounting", skills:["Bookkeeping","Petty Cash","Excel","NSSF/NHIF"], bio:"Small biz bookkeeper — 5 yrs. Affordable rates. Online service nationwide.", location:"remote", rate:2000, rateType:"monthly", rating:4.8, jobsCompleted:210, available:true, verified:false },
-  /* ── COMPUTER REPAIR ── */
-  { id:"DP56", name:"Techvault IT Services", phone:"0767890156", category:"computer-repair", skills:["Virus Removal","Data Recovery","Networking","Server Setup"], bio:"IT support firm — 8 yrs Nairobi. Onsite & remote. SLA contracts for businesses.", location:"nairobi", rate:2500, rateType:"per job", rating:4.9, jobsCompleted:520, available:true, verified:true },
-  { id:"DP57", name:"PC Doctor Kisumu", phone:"0778901257", category:"computer-repair", skills:["Laptop Repair","OS Install","Printer Setup","Networking"], bio:"Computer technician — 7 yrs Kisumu. All brands. Home & office visits.", location:"kisumu", rate:1500, rateType:"per job", rating:4.7, jobsCompleted:310, available:true, verified:false },
-  { id:"DP58", name:"Allan Mwenda CompuFix", phone:"0789012358", category:"computer-repair", skills:["Mac Repair","Windows","Data Recovery","SSD Upgrades"], bio:"Mac & PC specialist — 9 yrs Nairobi. Apple trained. Same-day RAM & SSD upgrades.", location:"nairobi", rate:3000, rateType:"per job", rating:4.8, jobsCompleted:280, available:true, verified:true },
-  { id:"DP59", name:"NetworkPro Kenya", phone:"0790123459", category:"computer-repair", skills:["CCTV Setup","WiFi","Structured Cabling","Mikrotik"], bio:"Network & CCTV installer — 10 yrs. Cisco certified. Commercial & residential.", location:"nairobi", rate:5000, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
-  { id:"DP60", name:"Mercy Njeri IT Support", phone:"0701234560", category:"computer-repair", skills:["Remote Support","Email Setup","MS Office","Cloud Storage"], bio:"Remote IT specialist — 4 yrs. Same-day Zoom/TeamViewer assistance. Nationwide.", location:"remote", rate:1000, rateType:"per job", rating:4.6, jobsCompleted:420, available:true, verified:false },
-  /* ── MARKETING ── */
-  { id:"DP_M01", name:"Brian Omondi Digital", phone:"0711223345", category:"marketing", skills:["Social Media Ads","Google Ads","SEO","Content"], bio:"Digital marketing specialist — 7 yrs Nairobi. Meta & Google certified. 3x average ROAS for SMEs.", location:"nairobi", rate:8000, rateType:"per job", rating:4.9, jobsCompleted:180, available:true, verified:true },
-  { id:"DP_M02", name:"Wanjiku Media KE", phone:"0722334456", category:"marketing", skills:["TikTok Marketing","Instagram","Influencer","Brand Strategy"], bio:"Social media agency — 5 yrs Nairobi. TikTok & Instagram growth specialists. 50+ brands managed.", location:"nairobi", rate:15000, rateType:"monthly", rating:4.8, jobsCompleted:95, available:true, verified:true },
-  { id:"DP_M03", name:"Seun Ade Copywriter", phone:"0733445567", category:"marketing", skills:["Copywriting","Email Marketing","Blogs","Sales Pages"], bio:"Professional copywriter — 6 yrs remote. Conversion-focused copy for Kenyan & East African brands.", location:"remote", rate:3000, rateType:"per job", rating:4.7, jobsCompleted:240, available:true, verified:false },
-  { id:"DP_M04", name:"Nairobi Growth Agency", phone:"0744556678", category:"marketing", skills:["WhatsApp Marketing","SMS Blasts","Bulk Email","Lead Gen"], bio:"Performance marketing firm — 8 yrs. 1M+ messages delivered. SME & corporate packages.", location:"nairobi", rate:5000, rateType:"per job", rating:4.8, jobsCompleted:320, available:true, verified:true },
-  /* ── HOME REPAIRS ── */
-  { id:"DP_H01", name:"Fundi Kamau Repairs", phone:"0755667789", category:"home-repairs", skills:["Painting","Tiling","Plastering","Gypsum"], bio:"General fundi — 10 yrs Nairobi. Interior & exterior painting, tiling, plastering. Own equipment.", location:"nairobi", rate:2000, rateType:"per job", rating:4.8, jobsCompleted:420, available:true, verified:true },
-  { id:"DP_H02", name:"Otieno Handyman Hub", phone:"0766778890", category:"home-repairs", skills:["Door Fitting","Fencing","Burglar Proofing","Welding"], bio:"Metalwork & carpentry fundi — 8 yrs Kisumu. Gate fabrication, burglar bars, door repairs.", location:"kisumu", rate:1500, rateType:"per job", rating:4.7, jobsCompleted:280, available:true, verified:false },
-  { id:"DP_H03", name:"HomeFix Nairobi Pro", phone:"0777889901", category:"home-repairs", skills:["Waterproofing","Roof Repair","Crack Sealing","Renovation"], bio:"Building maintenance specialists — 12 yrs. Roof leaks, waterproofing, crack repair. Commercial & residential.", location:"nairobi", rate:3500, rateType:"per job", rating:4.9, jobsCompleted:195, available:true, verified:true },
-  /* ── DELIVERY ── */
-  { id:"DP61", name:"Speedy Riders Nairobi", phone:"0712345661", category:"delivery-service", skills:["Food Delivery","Parcel","Documents","Same-Day"], bio:"Boda boda delivery network — 3 yrs. 15 riders across Nairobi. GPS tracked.", location:"nairobi", rate:200, rateType:"per job", rating:4.8, jobsCompleted:2400, available:true, verified:true },
-  { id:"DP62", name:"Kelvin Njomo Courier", phone:"0723456762", category:"delivery-service", skills:["Documents","Fragile Goods","CBD Delivery","Next-Day"], bio:"Professional courier — 5 yrs Nairobi. Reliable, insured. Corporate rates.", location:"nairobi", rate:300, rateType:"per job", rating:4.7, jobsCompleted:1100, available:true, verified:false },
-  { id:"DP63", name:"Mombasa Express Courier", phone:"0734567863", category:"delivery-service", skills:["Airport Pickup","Mombasa Island","Medical Samples","E-commerce"], bio:"Coastal delivery — 7 yrs. Mombasa Island & mainland. Medical sample specialists.", location:"mombasa", rate:250, rateType:"per job", rating:4.8, jobsCompleted:1600, available:true, verified:true },
-  { id:"DP64", name:"Kisumu Delivery Hub", phone:"0745678964", category:"delivery-service", skills:["Lakeside Delivery","Homabay","Siaya","Same-Day"], bio:"Western Kenya delivery — 4 yrs. Kisumu, Homabay, Siaya, Migori. Fast & reliable.", location:"kisumu", rate:150, rateType:"per job", rating:4.6, jobsCompleted:890, available:true, verified:false },
-  { id:"DP65", name:"QuickMove Kenya", phone:"0756789065", category:"delivery-service", skills:["Furniture","Appliances","House Moving","Large Items"], bio:"Moving & logistics — 6 yrs. Lorry, pickup & van available. Nairobi-wide.", location:"nairobi", rate:3500, rateType:"per job", rating:4.9, jobsCompleted:340, available:true, verified:true },
-];
+/* ══ PROVIDERS — read from the canonical Firestore registry ══════════════════
+   This block used to hold DEMO_PROVIDERS: 65 invented providers, each with a
+   fabricated rating and job count ("4.9★ · 1120 jobs"), merged ahead of any
+   real provider by getProviders(). Five of them were fake mamafua. A real
+   provider onboarded to Firestore could not outrank them and, because the
+   merge only ever read localStorage, could not appear here at all.
 
-function getProviders(){
-  let stored = [];
-  try{ stored = JSON.parse(localStorage.getItem("sokoniServiceProviders"))||[]; } catch(e){}
-  /* Always show demo providers merged with any real ones */
-  const storedIds = new Set(stored.map(p=>p.id));
-  return [...stored, ...DEMO_PROVIDERS.filter(d=>!storedIds.has(d.id))];
+   The directory now comes from `providers` via SokoniProviders — the same
+   source the homepage, providers.html, the Cleaning hub and global search
+   read, so a provider onboarded once shows up in all of them.
+═══════════════════════════════════════════════════════════════════════════ */
+
+let _providerCache = [];
+let _providerErr   = null;
+let _providersLoaded = false;
+
+/* Synchronous accessor. Callers below are all render/lookup paths that run
+   after load; before the first load resolves this is an empty list, which
+   renders the loading state rather than a wrong one. */
+function getProviders(){ return _providerCache; }
+
+/* Provider records are server-owned now. Local mutation would only ever
+   diverge from the registry — a job count "saved" here was visible to exactly
+   one browser and was overwritten on the next read. Kept as a no-op because
+   several call sites still invoke it. */
+function saveProviders(){ /* server-owned; see comment above */ }
+
+function loadProvidersFromRegistry(force){
+  if(!window.SokoniProviders) return Promise.resolve();
+  return SokoniProviders.list({ force: !!force }).then(function(r){
+    _providerCache   = r.providers;
+    _providerErr     = r.error;
+    _providersLoaded = true;
+    if(typeof renderProviders === 'function') renderProviders();
+  });
 }
-function saveProviders(d){ localStorage.setItem("sokoniServiceProviders",JSON.stringify(d)); }
+
+/* Wait for the deferred module and the Firestore handle rather than racing
+   them; report a failure to load instead of silently showing nothing. */
+(function _bootProviders(attempt){
+  attempt = attempt || 0;
+  if(window.SokoniProviders && window.firebaseDB){ loadProvidersFromRegistry(); return; }
+  if(attempt > 40){
+    _providersLoaded = true;
+    _providerErr = new Error('init timeout');
+    if(typeof renderProviders === 'function') renderProviders();
+    return;
+  }
+  setTimeout(function(){ _bootProviders(attempt+1); }, 150);
+}(0));
 function getBookings(){   try{return JSON.parse(localStorage.getItem("sokoniServiceBookings"))||[];}catch(e){return[];} }
 function saveBookings(d){ localStorage.setItem("sokoniServiceBookings",JSON.stringify(d)); }
 
@@ -1089,30 +1025,48 @@ function renderProviders(){
   const grid = document.getElementById("providersGrid");
   const countEl = document.getElementById("providerCount");
   if(!grid) return;
+  const esc = window.SokoniProviders ? SokoniProviders.esc : (s => String(s == null ? "" : s));
   let providers = getProviders();
 
-  /* Filter by active category */
+  /* Still waiting on the first read — say so instead of rendering "none found",
+     which would tell the visitor this category is empty when it is not. */
+  if(!_providersLoaded){
+    if(countEl) countEl.textContent = "";
+    grid.innerHTML = `<div class="sv-empty" style="grid-column:1/-1;"><div class="sv-empty-icon">⏳</div><p>Loading providers…</p></div>`;
+    return;
+  }
+
+  /* Filter by active category. A provider carries a primary `category` plus a
+     `categories` list, so one filed under `laundry` still reaches the Cleaning
+     tab without being duplicated into two records. */
   const CAT_ALIASES = {
     "cleaning": ["cleaning","laundry"],   /* cleaning & laundry are the same hub */
   };
   if(activeCat){
     const matchCats = CAT_ALIASES[activeCat] || [activeCat];
-    providers = providers.filter(p => matchCats.includes(p.category));
+    providers = providers.filter(p => {
+      const have = [p.category].concat(p.categories || []).filter(Boolean);
+      return have.some(c => matchCats.includes(String(c).toLowerCase()));
+    });
   }
 
   /* Filter by search */
   const q = (document.getElementById("svSearchInput")?.value||"").toLowerCase();
   if(q) providers = providers.filter(p =>
-    p.name.toLowerCase().includes(q) ||
-    p.skills.join(" ").toLowerCase().includes(q) ||
-    (p.bio||"").toLowerCase().includes(q) ||
-    (CAT_LABEL[p.category]||"").toLowerCase().includes(q)
+    (p.name||"").toLowerCase().includes(q) ||
+    (p.skills||[]).join(" ").toLowerCase().includes(q) ||
+    (p.description||"").toLowerCase().includes(q) ||
+    (p.categoryLabel||"").toLowerCase().includes(q) ||
+    (p.location||"").toLowerCase().includes(q)
   );
 
   if(countEl) countEl.textContent = `(${providers.length} found)`;
 
   if(!providers.length){
-    grid.innerHTML = `<div class="sv-empty" style="grid-column:1/-1;"><div class="sv-empty-icon">👷</div><p>No verified providers in this category yet.<br>Be the first to register!</p><a href="javascript:void(0)" onclick="openProviderDash()" style="margin-top:16px;display:inline-block;padding:11px 22px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;border-radius:10px;font-weight:700;font-family:inherit;font-size:13px;text-decoration:none;">+ Register as Provider</a></div>`;
+    /* A failed read and an empty category are different facts. */
+    grid.innerHTML = window.SokoniProviders
+      ? SokoniProviders.emptyStateHtml(_providerErr, activeCat ? (CAT_LABEL[activeCat]||activeCat) : null)
+      : `<div class="sv-empty" style="grid-column:1/-1;"><div class="sv-empty-icon">👷</div><p>No providers in this category yet.</p></div>`;
     return;
   }
 
@@ -1131,19 +1085,27 @@ function renderProviders(){
   setTimeout(function(){ if(window.SokoniSocial) SokoniSocial.patchServicesFollowBtns(); },150);
 
   grid.innerHTML = providers.map(p => {
-    const initials   = p.name.split(" ").map(w=>w[0]).join("").substring(0,2).toUpperCase();
-    const stars      = "★".repeat(Math.round(p.rating||5)) + "☆".repeat(5-Math.round(p.rating||5));
+    const initials   = String(p.name||"?").trim().split(/\s+/).map(w=>w[0]).join("").substring(0,2).toUpperCase();
     const coverCls   = CAT_COVER[p.category] || "cv-green";
-    const firstName  = p.name.split(" ")[0];
-    const locLabel   = p.location.charAt(0).toUpperCase()+p.location.slice(1);
-    const bioText    = p.bio ? p.bio.substring(0,72)+(p.bio.length>72?"...":"") : "";
-    const rateLabel  = RATE_LABEL[p.rateType]||p.rateType||"";
-    const pid        = p.uid || p.id;
+    const firstName  = esc(String(p.name||"").split(" ")[0]);
+    const locLabel   = p.location ? esc(p.location.charAt(0).toUpperCase()+p.location.slice(1)) : "";
+    const bioText    = p.description ? esc(p.description.substring(0,72)+(p.description.length>72?"...":"")) : "";
+    const rateLabel  = esc(RATE_LABEL[p.rateType]||p.rateType||"");
+    const pid        = esc(p.uid);
+    const jsId       = esc(String(p.uid).replace(/'/g,"\\'"));
+    const jsName     = esc(String(p.name||"").replace(/'/g,"\\'"));
+    const catLabel   = esc(p.categoryLabel || CAT_LABEL[p.category] || p.category || "");
+    /* Stars are drawn only from a real rating. This used to fall back to
+       `p.rating||5`, which painted five filled stars on every provider who had
+       never been rated — an invented endorsement on a brand-new account. */
+    const starsHtml  = p.rating
+      ? `<div class="pv-stars">${"★".repeat(Math.round(p.rating))}${"☆".repeat(5-Math.round(p.rating))} <span>${p.rating.toFixed(1)}${p.jobsCompleted?` · ${p.jobsCompleted} jobs`:""}</span></div>`
+      : `<div class="pv-stars" style="color:rgba(255,255,255,0.4);font-size:12px;">New on SOKONI</div>`;
     return `
     <div class="pv-card ${p.available===false?'pv-unavail':''}" data-provider-id="${pid}">
       <div class="pv-cover ${coverCls}">
         <div class="pv-avatar-wrap">
-          <div class="pv-avatar">${initials}</div>
+          <div class="pv-avatar">${esc(initials)}</div>
         </div>
       </div>
       <div class="pv-body">
@@ -1153,18 +1115,18 @@ function renderProviders(){
                away on any long provider name — the trust signal vanished exactly
                where it mattered. As a sibling with flex-shrink:0 it always shows;
                the name truncates with an ellipsis instead. -->
-          <div class="pv-name" style="margin-bottom:0;">${p.name}</div>
+          <div class="pv-name" style="margin-bottom:0;"><a href="${esc(p.profileUrl)}" style="color:inherit;text-decoration:none;">${esc(p.name)}</a></div>
           ${p.verified?`<span class="pv-verified">✅ Verified</span>`:""}
           <div data-avail-provider="${pid}" style="flex-shrink:0;"></div>
         </div>
-        <div class="pv-cat">${CAT_EMOJI[p.category]||"🛠️"} ${CAT_LABEL[p.category]||p.category} · 📍 ${locLabel}</div>
-        <div class="pv-stars">${stars} <span>${p.rating||"5.0"} · ${p.jobsCompleted||0} jobs</span></div>
-        <div class="pv-skills">${(p.skills||[]).slice(0,3).map(s=>`<span class="pv-skill">${s}</span>`).join("")}</div>
+        <div class="pv-cat">${esc(p.emoji||"🛠️")} ${catLabel}${locLabel?` · 📍 ${locLabel}`:""}</div>
+        ${starsHtml}
+        <div class="pv-skills">${(p.skills||[]).slice(0,3).map(s=>`<span class="pv-skill">${esc(s)}</span>`).join("")}</div>
         ${bioText?`<div class="pv-bio">"${bioText}"</div>`:""}
-        <div class="pv-rate">KES ${Number(p.rate||0).toLocaleString()} <span>${rateLabel}</span></div>
+        ${p.rate!=null?`<div class="pv-rate">KES ${Number(p.rate).toLocaleString()} <span>${rateLabel}</span></div>`:``}
         <div class="pv-foot">
-          <button type="button" class="pv-book-btn" onclick="openBookingModal('${p.id}')">📩 Book ${firstName}</button>
-          <button type="button" class="pv-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${p.uid||p.id}',otherName:'${p.name.replace(/'/g,"\\'")}',type:'customer-provider',context:'${(CAT_LABEL[p.category]||p.category).replace(/'/g,"\\'")} · SOKONI Services'}):location.href='messages.html'" title="Message ${firstName}">💬 Message ${firstName}</button>
+          <a class="pv-book-btn" href="${esc(p.profileUrl)}" style="text-decoration:none;display:flex;align-items:center;justify-content:center;">📩 Book ${firstName}</a>
+          <button type="button" class="pv-book-btn" style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);color:#71ff00;" onclick="window.SokoniInbox?SokoniInbox.openChat({otherUid:'${jsId}',otherName:'${jsName}',type:'customer-provider',context:'${catLabel} · SOKONI Services'}):location.href='messages.html'" title="Message ${firstName}">💬 Message ${firstName}</button>
         </div>
       </div>
     </div>`;
@@ -1177,7 +1139,7 @@ let _currentBookingRef = null;
 let _svcBkgId = null;
 
 function openBookingModal(providerId){
-  const p = getProviders().find(x=>x.id===providerId);
+  const p = getProviders().find(x=>String(x.uid)===String(providerId));
   if(!p) return;
   if(typeof SokoniPay !== "undefined"){
     SokoniPay.bookNow({
@@ -1197,7 +1159,7 @@ function openBookingModal(providerId){
 
 function _openBookingDetails(providerId){
   _currentBookingProviderId = providerId;
-  const p = getProviders().find(x=>x.id===providerId);
+  const p = getProviders().find(x=>String(x.uid)===String(providerId));
   if(!p) return;
 
   const infoEl = document.getElementById("bookModalProviderInfo");
@@ -1244,7 +1206,7 @@ function submitBooking(){
     return;
   }
 
-  const p = getProviders().find(x=>x.id===_currentBookingProviderId);
+  const p = getProviders().find(x=>String(x.uid)===String(_currentBookingProviderId));
   if(!p) return;
 
   const booking = {
@@ -1441,10 +1403,9 @@ function updateJobStatus(id, status){
         "Non-payment suspends your listing."
       ), 100);
     }
-    /* Bump provider job count */
-    const providers = getProviders();
-    const pv = providers.find(p=>p.id===bk.providerId);
-    if(pv){ pv.jobsCompleted = (pv.jobsCompleted||0)+1; saveProviders(providers); }
+    /* Job counts are server-owned and derive from completed bookings. This
+       used to increment the local copy and "save" it, which changed a number
+       on one browser and was discarded on the next read from the registry. */
   }
 
   bk.status    = status;
@@ -1801,8 +1762,28 @@ function registerProvider(){
   const user = JSON.parse(localStorage.getItem("sokoniUser")||"null");
   const provider = {
     id: "SP"+Date.now(), name, phone, category: cat, location: loc,
-    rate, rateType, skills, bio, rating: 5.0,
-    jobsCompleted: 0, available: true, verified: false,
+    rate, rateType, skills, bio,
+    /* `rating: 5.0` used to be written here — a perfect score invented for an
+       account that had never been rated by anyone. Ratings are earned, so a
+       new provider starts with none and the cards render "New on SOKONI". */
+    rating: 0, ratingCount: 0,
+    /* Explicitly pending. The registry serves `active` and `approved` only, so
+       a listing is not public until an admin reviews the application created
+       below — omitting the field entirely just made the record invisible for
+       an unexplained reason. */
+    status: "pending",
+    /* `verified` is NOT written here, and must never be added back.
+       firestore.rules noAdminFields() rejects a create carrying any of
+       isAdmin / suspended / banned / adminApproved / featured / verified /
+       flagged / adminNote / role / approved / approvedAt / approvedBy /
+       commissionRate — the KEY's presence is what fails, not its value. So
+       `verified: false`, which reads as a harmless honest default, made the
+       whole write 403 and self-registration had never once succeeded. That is
+       why the providers collection was empty despite this form existing.
+       Verified against production: identical payload with the key → 403,
+       without it → 200. Absence already means unverified; normalize() in
+       sokoni-providers.js tests `d.verified === true`. */
+    jobsCompleted: 0, available: true,
     email: user?.email||"",
     serviceSpec: specData,
     socials: {
@@ -1816,9 +1797,10 @@ function registerProvider(){
     createdAt: Date.now()
   };
 
-  const all = getProviders();
-  all.unshift(provider);
-  saveProviders(all);
+  /* The local array is a read-through cache of the registry, so pushing into
+     it only made the new listing appear on this one browser until the next
+     refresh — it looked like it had been published when nothing had been.
+     The authoritative write is SokoniDB.saveProvider below. */
 
   /* Map services.html category to provider.html CATS key */
   const catMap = {
@@ -2075,7 +2057,7 @@ function sharePage(){
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script type="module">
@@ -2135,6 +2117,7 @@ document.addEventListener('keydown', function(e){
 });
 </script>
 
+<script src="sokoni-providers.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="analytics.js" defer></script>
 <script src="sokoni-config.js" defer></script>

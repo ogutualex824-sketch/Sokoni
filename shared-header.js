@@ -21,6 +21,28 @@
     h.style.color = 'var(--txt,#e8e8e8)';
   }());
 
+  /* ── SERVICE-WORKER SELF-UPDATE (every shared-header page) ────────────
+     195 pages load this header but never included sw-register.js, so they
+     never checked for a new worker and never auto-reloaded when one took
+     control — they rendered whatever the active (possibly stale) worker
+     held. That is the "page loads old version / must clear browsing data"
+     class of bug (earnings/plans were two of them). Inject sw-register.js
+     here, once, so EVERY page carrying the shared header self-updates.
+     Pages that already include it directly are skipped by the src check,
+     and sw-register.js itself is idempotent, so double-loading is safe. */
+  (function _ensureSwRegister() {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+      if (window.__sokoniSwRegisterInjected) return;
+      if (document.querySelector('script[src*="sw-register"]')) return;
+      window.__sokoniSwRegisterInjected = true;
+      var s = document.createElement('script');
+      s.src = '/sw-register.js';
+      s.defer = true;
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) { /* SW wiring must never break header rendering */ }
+  }());
+
   /* ── SPLASH SCREEN — unique per page, runs on every page load ────────
      Injects a full-screen branded splash overlay immediately, before any
      content paints, then fades out once the page is ready (min 1.8 s).
@@ -543,9 +565,16 @@
       backdrop-filter: none; -webkit-backdrop-filter: none;
       border-bottom: none;
       box-shadow: none;
-      will-change: transform;
-      transform: translateZ(0);
-      -webkit-transform: translateZ(0);
+      /* No will-change/translateZ promotion here — deliberately. This header
+         never animates transform (it only transitions background/backdrop/
+         shadow on scroll), so 'will-change: transform' bought nothing and had a
+         real cost: it promotes the fixed header to a GPU compositing layer, and
+         iOS Safari CLIPS an absolutely-positioned descendant that extends past
+         that layer's box to the layer's backing store. That is why the search
+         autocomplete showed only its first row — rows 2-6 hang below the 58px
+         header and were clipped away. The header still forms its own stacking
+         context (position: fixed + z-index), so it keeps painting above the
+         hero; it simply no longer traps and clips the dropdown. */
       transition: background .3s ease, backdrop-filter .3s ease,
                   box-shadow .3s ease, border-color .3s ease;
     }
@@ -682,17 +711,37 @@
     }
     #sk-nav-search {
       width: 100%; padding: 10px 16px 10px 40px;
+      /* box-sizing: without it, width:100% + 56px horizontal padding makes the
+         input's border-box 56px WIDER than #sk-nav-search-wrap on any page that
+         lacks a global box-sizing reset, so its right edge (and the tail of the
+         placeholder) overruns and is clipped. border-box folds the padding into
+         the 100%, so the field is exactly as wide as its wrapper. */
+      box-sizing: border-box;
+      /* appearance: none removes the iOS Safari native searchfield styling.
+         type=search on iOS renders its own constrained text box (and a cancel
+         decoration) that clips the placeholder and collides with autofill — the
+         reported symptom. Resetting appearance makes it a plain text field that
+         fills the width. Pseudo-element resets below drop the native buttons. */
+      -webkit-appearance: none; appearance: none;
       background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.12);
       border-radius: 28px; color: rgba(255,255,255,0.92); font-size: 14px;
       font-family: 'Segoe UI', system-ui, sans-serif; outline: none;
       transition: border-color .2s, background .2s, box-shadow .2s;
     }
+    #sk-nav-search::-webkit-search-decoration,
+    #sk-nav-search::-webkit-search-cancel-button,
+    #sk-nav-search::-webkit-search-results-button,
+    #sk-nav-search::-webkit-search-results-decoration { -webkit-appearance: none; display: none; }
     #sk-nav-search:focus {
       border-color: rgba(113,255,0,0.45);
       background: rgba(255,255,255,0.1);
       box-shadow: 0 0 0 3px rgba(113,255,0,0.08), 0 4px 20px rgba(0,0,0,0.3);
     }
-    #sk-nav-search::placeholder { color: rgba(255,255,255,0.32); font-size: 14px; }
+    #sk-nav-search::placeholder {
+      color: rgba(255,255,255,0.32); font-size: 14px;
+      /* Show the full placeholder instead of Safari's default clip-to-fit. */
+      text-overflow: ellipsis; overflow: hidden;
+    }
     #sk-nav-search-icon {
       position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
       font-size: 15px; pointer-events: none; opacity: .45;
@@ -701,12 +750,33 @@
     /* ── Autocomplete dropdown ── */
     #sk-nav-search-dropdown {
       position: absolute; top: calc(100% + 6px); left: 0; right: 0;
-      background: rgba(14,14,14,0.98);
+      /* Opaque fill and NO backdrop-filter — deliberately. The header is a
+         promoted compositing layer (will-change: transform), and the hero card
+         has its own backdrop-filter. On iOS Safari a backdrop-filter element
+         inside a promoted layer can be composited BEHIND another page element
+         that also uses backdrop-filter — which is exactly the "search dropdown
+         hides behind the hero" report. A solid panel samples nothing across that
+         layer boundary, so it reads above the hero on every engine; the blur was
+         invisible anyway behind a near-opaque fill. */
+      background: #0e0e0e;
       border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 16px; overflow: hidden;
+      border-radius: 16px;
+      /* Cap the height and scroll INSIDE the panel. Without this the list has
+         no max-height, so on a phone with the keyboard open the lower rows sit
+         behind the keyboard with no way to reach them — "only the top shows,
+         the rest is cut". min(62vh,460px) is the safe default; the visualViewport
+         handler in _wireSearch tightens it to the real space above the keyboard
+         when one is open, so nothing is ever unreachable on any device. */
+      max-height: min(62vh, 460px);
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
       box-shadow: 0 12px 40px rgba(0,0,0,0.6);
-      z-index: 700; display: none;
-      backdrop-filter: blur(20px);
+      z-index: 100002; display: none;
+    }
+    /* Slim scrollbar so the scroll affordance does not look broken on desktop. */
+    #sk-nav-search-dropdown::-webkit-scrollbar { width: 8px; }
+    #sk-nav-search-dropdown::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,0.16); border-radius: 8px;
     }
     #sk-nav-search-dropdown.open { display: block; }
     .sk-ac-item {
@@ -1174,7 +1244,8 @@
         ? '<div id="sk-nav-search-wrap" role="search">' +
             '<span id="sk-nav-search-icon" aria-hidden="true">🔍</span>' +
             '<input id="sk-nav-search" type="search" placeholder="Search products, services…" ' +
-              'autocomplete="off" aria-label="Search SOKONI" ' +
+              'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" ' +
+              'enterkeyhint="search" aria-label="Search SOKONI" ' +
               'onkeydown="if(event.key===\'Enter\'&&this.value.trim()){' +
                 'document.getElementById(\'sk-nav-search-dropdown\').classList.remove(\'open\');' +
                 'location.href=\'search.html?q=\'+encodeURIComponent(this.value.trim())}">' +
@@ -1523,7 +1594,7 @@
       rolePills +
       '<div class="sk-acct-links">' +
         '<a class="sk-acct-link" href="profile.html" onclick="window._skCloseAcct()"><i class="fas fa-user"></i> My Profile</a>' +
-        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Account Centre</a>' +
+        '<a class="sk-acct-link" href="account-centre.html" onclick="window._skCloseAcct()"><i class="fas fa-gear"></i> Settings</a>' +
         '<a class="sk-acct-link" href="account-centre.html#employment" onclick="window._skCloseAcct()"><i class="fas fa-briefcase"></i> My Workspaces</a>' +
         '<a class="sk-acct-link" href="wallet.html" onclick="window._skCloseAcct()"><i class="fas fa-wallet"></i> Wallet</a>' +
         '<div class="sk-acct-separator"></div>' +
@@ -1587,7 +1658,14 @@
 
   window._skSignOutFromAcct = function () {
     window._skCloseAcct();
-    if (window.sokoniSignOut) { window.sokoniSignOut(); } else { location.href = 'login.html'; }
+    /* sokoniSignOut clears the session but does NOT navigate — without this redirect
+       the page stayed put and Sign Out looked broken ("not working"). Always land on
+       login (even if the network sign-out throws, local state is cleared). */
+    if (window.sokoniSignOut) {
+      window.sokoniSignOut().finally(function () { location.href = 'login.html'; });
+    } else {
+      location.href = 'login.html';
+    }
   };
 
   window._skSwitchWorkspace = function (businessId) {
@@ -1642,6 +1720,7 @@
 
     let _acTimer = null;
     let _focusIdx = -1;
+    let _warmStarted = false;
 
     function _items() {
       return Array.from(dropdown.querySelectorAll('.sk-ac-item'));
@@ -1657,6 +1736,35 @@
       dropdown.classList.remove('open');
       _focusIdx = -1;
     }
+
+    /* Size the panel to the space actually visible above the keyboard. On a
+       phone the software keyboard shrinks window.visualViewport but NOT the CSS
+       viewport, so a vh-based cap alone still lets rows hide behind the keyboard.
+       Reading visualViewport.height gives the real visible height, so the list
+       is bounded to it and scrolls for the rest — reachable on every device.
+       Falls back to the CSS max-height (min(62vh,460px)) when unsupported. */
+    function _fitDropdown() {
+      try {
+        if (!dropdown.classList.contains('open')) return;
+        var vv = window.visualViewport;
+        if (!vv) return; /* CSS max-height already applies */
+        var top = dropdown.getBoundingClientRect().top;
+        var avail = vv.height - top - 12;               /* 12px breathing room */
+        if (avail < 140) avail = 140;                   /* never collapse to nothing */
+        dropdown.style.maxHeight = Math.round(avail) + 'px';
+      } catch (e) {}
+    }
+    /* Re-fit whenever the panel opens (any of the render paths toggles .open) or
+       the visible viewport changes (keyboard show/hide, rotate). One observer
+       covers every current and future open-site, so no render path can forget. */
+    try {
+      new MutationObserver(_fitDropdown).observe(dropdown,
+        { attributes: true, attributeFilter: ['class'] });
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', _fitDropdown);
+        window.visualViewport.addEventListener('scroll', _fitDropdown);
+      }
+    } catch (e) {}
 
     function _fmt(n) {
       if (!n) return '';
@@ -1719,25 +1827,78 @@
     }
 
     function _query(q) {
-      /* Try SokoniSearchPro first, then SokoniSearch, then nothing */
+      /* Cached suggestions first — they render in the same frame the user
+         typed in. Anything that needs the network can only arrive after the
+         next keystroke, by which point it is answering a stale prefix. */
+      var api = window.SokoniFirestoreSearch;
+      if (api && api.suggest) {
+        var instant = api.suggest(q, 6);
+        if (instant && instant.length) {
+          _render(instant.map(function(r) {
+            var num = r.price ? Number(String(r.price).replace(/[^0-9.]/g, '')) : null;
+            return {
+              id: r.id, name: r.title, href: r.link,
+              category: r.subtitle, hub: r.tab,
+              price: (num && !isNaN(num)) ? num : null,
+            };
+          }), q);
+          return;
+        }
+      }
+
+      /* Try SokoniSearchPro first, then SokoniSearch, then Firestore */
       if (window.SokoniSearchPro && window.SokoniSearchPro.autocomplete) {
         window.SokoniSearchPro.autocomplete(q, { limit: 6 })
-          .then(function(r) { _render(r, q); })
-          .catch(function() { _fallback(q); });
+          .then(function(r) { if (r && r.length) _render(r, q); else _firestoreSuggest(q); })
+          .catch(function() { _firestoreSuggest(q); });
         return;
       }
       if (window.SokoniSearch) {
         const r = window.SokoniSearch.getSuggestions
           ? window.SokoniSearch.getSuggestions(q, 6)
           : [];
-        _render(r.map(function(s) {
-          return typeof s === 'string'
-            ? { name: s, type: 'product' }
-            : s;
-        }), q);
-        return;
+        if (r && r.length) {
+          _render(r.map(function(s) {
+            return typeof s === 'string'
+              ? { name: s, type: 'product' }
+              : s;
+          }), q);
+          return;
+        }
       }
-      _fallback(q);
+      _firestoreSuggest(q);
+    }
+
+    /* Last resort before the bare "search for X" shortcut: read Firestore
+       directly. An empty autocomplete usually means the Algolia index is stale
+       or its key is unavailable, not that the catalogue is empty — and a buyer
+       typing a product name deserves the product, not a dead dropdown. */
+    function _firestoreSuggest(q) {
+      if (!window.firebaseDB) { _fallback(q); return; }
+      /* The module is an ES module; load it on demand so every page carrying
+         the shared header gets the fallback without another blocking script. */
+      const ready = window.SokoniFirestoreSearch
+        ? Promise.resolve(window.SokoniFirestoreSearch)
+        : import('/sokoni-firestore-search.js').then(function() { return window.SokoniFirestoreSearch; });
+
+      ready
+        .then(function(api) {
+          if (!api) throw new Error('firestore search unavailable');
+          return api.search(q, { limit: 6 });
+        })
+        .then(function(rows) {
+          if (!rows || !rows.length) { _fallback(q); return; }
+          _render(rows.map(function(r) {
+            /* _render formats the price itself, so hand it a number. */
+            const num = r.price ? Number(String(r.price).replace(/[^0-9.]/g, '')) : null;
+            return {
+              id: r.id, name: r.title, href: r.link,
+              category: r.subtitle, hub: r.tab,
+              price: (num && !isNaN(num)) ? num : null,
+            };
+          }), q);
+        })
+        .catch(function() { _fallback(q); });
     }
 
     function _fallback(q) {
@@ -1798,6 +1959,17 @@
 
     input.addEventListener('focus', function() {
       if (this.value.trim().length === 0) _renderFocusState();
+      /* Warm the catalogue on first focus — the user has signalled intent to
+         search, so the data is loading while they type the first character. */
+      if (!_warmStarted && window.firebaseDB) {
+        _warmStarted = true;
+        import('/sokoni-firestore-search.js')
+          .then(function() {
+            var api = window.SokoniFirestoreSearch;
+            if (api && api.warm) api.warm();
+          })
+          .catch(function() {});
+      }
     });
 
     input.addEventListener('keydown', function(e) {

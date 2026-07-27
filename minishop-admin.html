@@ -20,8 +20,8 @@
       --ms-surface:#0d0d0d;
       --ms-surface2:#141414;
       --ms-border:rgba(255,255,255,.08);
-      --ms-accent:#00bcd4;
-      --ms-accent2:#7c4dff;
+      --ms-accent:#71ff00;
+      --ms-accent2:#00d4ff;
       --ms-success:#4caf50;
       --ms-warn:#ff9800;
       --ms-danger:#f44336;
@@ -37,17 +37,26 @@
     .msa-spinner{width:36px;height:36px;border:3px solid var(--ms-border);border-top-color:var(--ms-accent);border-radius:50%;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
+    /* ── Header unit: title bar + tab belt ──────────────────────────────────
+       These two MUST stick together. Previously only .msa-topbar was sticky,
+       so on scroll the bar floated over a tab belt that had already scrolled
+       away — the two read as stacked on top of each other. Sticking the
+       wrapper instead keeps them as one solid unit with a single shadow. */
+    .msa-header{position:sticky;top:0;z-index:100;background:rgba(13,13,13,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--ms-border);box-shadow:0 8px 24px -12px rgba(0,0,0,.9)}
+
     /* ── Top Bar ── */
-    .msa-topbar{display:flex;align-items:center;gap:16px;padding:12px 24px;background:var(--ms-surface);border-bottom:1px solid var(--ms-border);position:sticky;top:0;z-index:100}
+    .msa-topbar{display:flex;align-items:center;gap:16px;padding:12px 24px;min-width:0}
     .msa-back{color:var(--ms-muted);text-decoration:none;font-size:13px;display:flex;align-items:center;gap:6px;transition:color .15s;flex-shrink:0}
     .msa-back:hover{color:var(--ms-accent)}
-    .msa-topbar h1{flex:1;font-size:16px;font-weight:700;letter-spacing:.3px}
+    /* min-width:0 lets the title actually shrink inside a flex row; without it
+       a long shop name forces the bar wider than the viewport. */
+    .msa-topbar h1{flex:1;min-width:0;font-size:16px;font-weight:700;letter-spacing:.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .msa-topbar-shop-url{font-size:12px;color:var(--ms-muted);font-family:monospace;display:none}
     .msa-topbar-shop-url.visible{display:block}
     .msa-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--ms-radius);border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-text);cursor:pointer;font-size:13px;font-weight:500;transition:background .15s,border-color .15s;text-decoration:none;white-space:nowrap}
-    .msa-btn:hover{border-color:var(--ms-accent);background:rgba(0,188,212,.1)}
+    .msa-btn:hover{border-color:var(--ms-accent);background:rgba(113,255,0,.1)}
     .msa-btn.primary{background:var(--ms-accent);border-color:var(--ms-accent);color:#000;font-weight:700}
-    .msa-btn.primary:hover{background:#00acc1;border-color:#00acc1}
+    .msa-btn.primary:hover{background:#5cd400;border-color:#5cd400}
     .msa-btn.success{background:rgba(76,175,80,.15);border-color:rgba(76,175,80,.4);color:#a5d6a7}
     .msa-btn.danger{background:rgba(244,67,54,.1);border-color:rgba(244,67,54,.4);color:#ef9a9a}
     .msa-btn:disabled{opacity:.5;cursor:not-allowed}
@@ -55,14 +64,24 @@
     .msa-btn-sm:hover{background:rgba(255,255,255,.1)}
 
     /* ── Tab Navigation ── */
-    .msa-tabs{display:flex;gap:0;border-bottom:1px solid var(--ms-border);background:var(--ms-surface);padding:0 24px;overflow-x:auto;scrollbar-width:none}
+    /* scroll-snap so a flicked belt lands on a tab boundary instead of
+       stopping half-way through a label. */
+    .msa-tabs{display:flex;gap:0;padding:0 24px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding-left:24px}
     .msa-tabs::-webkit-scrollbar{display:none}
-    .msa-tab{padding:12px 18px;border:none;background:none;color:var(--ms-muted);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;margin-bottom:-1px}
+    /* Fades the belt at the right edge so it reads as scrollable rather than
+       cut off — six tabs never fit a phone. */
+    .msa-tabs-wrap{position:relative}
+    .msa-tabs-wrap::after{content:'';position:absolute;top:0;right:0;bottom:0;width:32px;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(13,13,13,.92))}
+    /* min-height 44px — the platform tap-target floor. The old 12px padding
+       gave a 42px target on a phone. */
+    .msa-tab{display:inline-flex;align-items:center;min-height:44px;padding:0 18px;border:none;background:none;color:var(--ms-muted);cursor:pointer;font-size:13px;font-weight:500;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap;margin-bottom:-1px;scroll-snap-align:start;flex:0 0 auto}
     .msa-tab:hover{color:var(--ms-text)}
     .msa-tab.active{color:var(--ms-accent);border-bottom-color:var(--ms-accent)}
 
-    /* ── Content ── */
-    .msa-content{padding:24px;max-width:1100px;margin:0 auto}
+    /* ── Content ──
+       Extra top padding gives the sticky header room to breathe instead of the
+       first card butting straight up against it. */
+    .msa-content{padding:28px 24px 96px;max-width:1100px;margin:0 auto}
     .msa-panel{display:block}
     .msa-panel[hidden]{display:none!important}
 
@@ -75,24 +94,95 @@
     .msa-handle-claim{text-align:center;padding:32px 20px}
     .msa-handle-claim h2{font-size:22px;font-weight:800;margin-bottom:8px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .msa-handle-claim p{color:var(--ms-muted);font-size:14px;margin-bottom:24px}
-    .msa-handle-input-row{display:flex;align-items:stretch;max-width:480px;margin:0 auto;gap:0}
-    .msa-handle-prefix{background:var(--ms-surface2);border:1px solid var(--ms-border);border-right:none;border-radius:var(--ms-radius) 0 0 var(--ms-radius);padding:10px 14px;font-size:14px;color:var(--ms-muted);white-space:nowrap;display:flex;align-items:center}
-    #msaHandleInput{flex:1;background:var(--ms-surface2);border:1px solid var(--ms-border);border-left:none;border-right:none;padding:10px 12px;color:var(--ms-text);font-size:16px;outline:none}
+    /* This row was the page's horizontal overflow: prefix + input + button in a
+       nowrap flex, and the input carried an implicit min-width of its default
+       size. At 390px the three summed to 519px, so the WHOLE document scrolled
+       sideways — which is what made the sticky header slide out of line with
+       the belt beneath it. min-width:0 lets the input shrink; the mobile rule
+       further down stacks the prefix onto its own line. */
+    .msa-handle-input-row{display:flex;align-items:stretch;max-width:480px;margin:0 auto;gap:0;min-width:0}
+    .msa-handle-prefix{background:var(--ms-surface2);border:1px solid var(--ms-border);border-right:none;border-radius:var(--ms-radius) 0 0 var(--ms-radius);padding:10px 14px;font-size:14px;color:var(--ms-muted);white-space:nowrap;display:flex;align-items:center;flex-shrink:0}
+    #msaHandleInput{flex:1;min-width:0;background:var(--ms-surface2);border:1px solid var(--ms-border);border-left:none;border-right:none;padding:10px 12px;color:var(--ms-text);font-size:16px;outline:none}
     #msaHandleInput:focus{border-color:var(--ms-accent)}
     #msaClaimBtn{border-radius:0 var(--ms-radius) var(--ms-radius) 0;padding:10px 20px;border:1px solid var(--ms-accent);background:var(--ms-accent);color:#000;font-weight:700;cursor:pointer;font-size:14px;transition:background .15s;white-space:nowrap}
-    #msaClaimBtn:hover{background:#00acc1}
+    #msaClaimBtn:hover{background:#5cd400}
     #msaHandleDisplay{display:none}
     #msaHandleDisplay.visible{display:block}
     .msa-handle-url-row{display:flex;align-items:center;gap:10px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px 16px}
     #msaHandleUrl{flex:1;font-family:monospace;font-size:14px;color:var(--ms-accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .msa-handle-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
 
-    /* ── Quick Stats ── */
-    #msaViewStats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
-    .msa-stat{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:14px 16px;text-align:center;transition:border-color .2s}
-    .msa-stat:hover{border-color:var(--ms-accent)}
-    .msa-stat-label{font-size:11px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
-    .msa-stat-value{font-size:26px;font-weight:800;line-height:1}
+    /* ── Shop Hero ───────────────────────────────────────────────────────────
+       Replaces the plain "Your MiniShop URL" card once a handle exists. This is
+       the seller's shopfront looking back at them — cover, logo, name, standing —
+       so the page opens as a storefront rather than a settings form. */
+    .msa-hero{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:16px;overflow:hidden;margin-bottom:20px}
+    .msa-hero-cover{height:132px;background:linear-gradient(135deg,var(--ms-accent),var(--ms-accent2));background-size:cover;background-position:center;position:relative}
+    .msa-hero-cover::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,transparent 40%,rgba(5,5,5,.72))}
+    .msa-hero-body{padding:0 20px 20px;position:relative}
+    .msa-hero-logo{width:76px;height:76px;border-radius:20px;background:var(--ms-surface2);border:3px solid var(--ms-bg);margin-top:-38px;position:relative;z-index:1;display:flex;align-items:center;justify-content:center;font-size:30px;overflow:hidden;box-shadow:0 10px 30px -10px rgba(0,0,0,.9)}
+    .msa-hero-logo img{width:100%;height:100%;object-fit:cover}
+    .msa-hero-name{font-size:22px;font-weight:800;margin-top:12px;letter-spacing:-.2px;overflow-wrap:anywhere}
+    .msa-hero-tagline{color:var(--ms-muted);font-size:13.5px;margin-top:3px;overflow-wrap:anywhere}
+    .msa-hero-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+    .msa-chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid var(--ms-border);color:var(--ms-muted)}
+    .msa-chip--ok{background:rgba(113,255,0,.10);border-color:rgba(113,255,0,.32);color:var(--ms-accent)}
+
+    /* Compact address row — the big Claim block collapses to this once claimed,
+       so it stops dominating the page. */
+    .msa-hero-url{display:flex;align-items:center;gap:10px;background:var(--ms-bg);border:1px solid var(--ms-border);border-radius:12px;padding:11px 14px;margin-top:16px;min-width:0}
+    .msa-hero-url-text{flex:1;min-width:0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;color:var(--ms-accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .msa-hero-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+
+    /* ── Shop Health ─────────────────────────────────────────────────────────
+       Every check below is computed from data the platform already holds. No
+       check is listed that cannot be evaluated — a checklist that can never go
+       green is worse than no checklist. */
+    .msa-health{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:14px;padding:20px;margin-bottom:20px}
+    .msa-health-top{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+    .msa-health-ring{width:78px;height:78px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;position:relative;background:conic-gradient(var(--ms-accent) 0deg,rgba(255,255,255,.07) 0deg)}
+    .msa-health-ring::before{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--ms-surface)}
+    .msa-health-score{position:relative;font-size:20px;font-weight:800;line-height:1}
+    .msa-health-score small{font-size:10px;font-weight:600;color:var(--ms-muted);display:block;margin-top:1px}
+    .msa-health-head{flex:1;min-width:180px}
+    .msa-health-head h2{font-size:15px;font-weight:700;margin-bottom:3px}
+    .msa-health-head p{font-size:12.5px;color:var(--ms-muted)}
+    .msa-health-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:8px;margin-top:18px}
+    .msa-health-item{display:flex;align-items:center;gap:9px;font-size:12.5px;padding:9px 12px;border-radius:10px;background:var(--ms-bg);border:1px solid var(--ms-border)}
+    .msa-health-item.done{color:var(--ms-muted)}
+    .msa-health-item.done .msa-health-mark{color:var(--ms-accent)}
+    .msa-health-item.todo{color:var(--ms-text)}
+    .msa-health-mark{font-weight:800;flex-shrink:0;width:15px;text-align:center}
+    .msa-health-item.todo .msa-health-mark{color:rgba(255,255,255,.28)}
+    .msa-health-item .msa-health-go{margin-left:auto;font-size:11px;font-weight:700;color:var(--ms-accent);text-decoration:none;white-space:nowrap}
+
+    /* ── Quick Actions ── */
+    .msa-quick{display:grid;grid-template-columns:repeat(auto-fit,minmax(132px,1fr));gap:10px;margin-bottom:24px}
+    .msa-quick-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:76px;padding:14px 10px;border-radius:14px;background:var(--ms-surface);border:1px solid var(--ms-border);color:var(--ms-text);font-size:12.5px;font-weight:600;cursor:pointer;text-decoration:none;text-align:center;transition:border-color .18s,transform .18s}
+    .msa-quick-btn:hover{border-color:rgba(113,255,0,.4);transform:translateY(-2px)}
+    .msa-quick-btn span{font-size:19px;line-height:1}
+    @media(prefers-reduced-motion:reduce){.msa-quick-btn:hover{transform:none}}
+
+    /* Empty state shown inside a stat card when the metric is genuinely zero —
+       distinct from "Unavailable", which means the read failed. */
+    .msa-empty-hint{font-size:11px;color:var(--ms-muted);margin-top:7px;line-height:1.35}
+
+    /* ── Quick Stats ─────────────────────────────────────────────────────────
+       Only metrics the platform can actually compute appear here. Cards for
+       sales, conversion, wishlist and abandonment are deliberately absent until
+       the events behind them are captured — a tile that can never be populated
+       is indistinguishable from a broken one. */
+    #msaViewStats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+    .msa-stat{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:14px;padding:16px;transition:border-color .2s,transform .2s;position:relative;overflow:hidden}
+    .msa-stat:hover{border-color:rgba(113,255,0,.35);transform:translateY(-2px)}
+    .msa-stat-icon{font-size:17px;line-height:1;margin-bottom:10px;opacity:.9}
+    .msa-stat-label{font-size:10.5px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
+    .msa-stat-value{font-size:26px;font-weight:800;line-height:1;letter-spacing:-.5px}
+    /* A failed read must not look like a real zero. */
+    .msa-stat.is-error .msa-stat-value{font-size:14px;font-weight:600;color:var(--ms-warn)}
+    .msa-stat-skeleton .msa-stat-value{color:transparent;background:linear-gradient(100deg,#1a1a1a 30%,#242424 50%,#1a1a1a 70%);background-size:220% 100%;border-radius:6px;animation:msa-shimmer 1.3s linear infinite;display:inline-block;min-width:52px}
+    @keyframes msa-shimmer{to{background-position:-120% 0}}
+    @media(prefers-reduced-motion:reduce){.msa-stat-skeleton .msa-stat-value{animation:none}.msa-stat:hover{transform:none}}
 
     /* ── Preview Card ── */
     .msa-preview-card{border:1px solid var(--ms-border);border-radius:12px;overflow:hidden;max-width:320px}
@@ -153,7 +243,7 @@
     .msa-check-item{display:flex;align-items:center;gap:8px;background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:10px 12px;cursor:pointer;transition:border-color .15s;font-size:13px}
     .msa-check-item:hover{border-color:var(--ms-accent)}
     .msa-check-item input{accent-color:var(--ms-accent);width:14px;height:14px;cursor:pointer;flex-shrink:0}
-    .msa-check-item.checked{border-color:rgba(0,188,212,.4);background:rgba(0,188,212,.05)}
+    .msa-check-item.checked{border-color:rgba(113,255,0,.4);background:rgba(113,255,0,.05)}
 
     /* ── Section Divider ── */
     .msa-section{margin-bottom:28px}
@@ -166,7 +256,7 @@
     .msa-kpi-label{font-size:11px;color:var(--ms-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
     .msa-kpi-value{font-size:28px;font-weight:800;line-height:1;margin-bottom:2px}
     .msa-kpi-sub{font-size:11px;color:var(--ms-muted)}
-    .msa-kpi.accent{border-color:rgba(0,188,212,.3);background:rgba(0,188,212,.05)}
+    .msa-kpi.accent{border-color:rgba(113,255,0,.3);background:rgba(113,255,0,.05)}
     .msa-kpi.success{border-color:rgba(76,175,80,.3);background:rgba(76,175,80,.05)}
 
     /* ── Date Range ── */
@@ -220,7 +310,7 @@
     .msa-ai-type-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px}
     .msa-ai-type-btn{padding:10px 12px;border-radius:var(--ms-radius);border:1px solid var(--ms-border);background:var(--ms-surface2);color:var(--ms-muted);cursor:pointer;font-size:12px;font-weight:500;text-align:center;transition:all .15s}
     .msa-ai-type-btn:hover{color:var(--ms-text)}
-    .msa-ai-type-btn.active{border-color:var(--ms-accent);background:rgba(0,188,212,.1);color:var(--ms-accent);font-weight:700}
+    .msa-ai-type-btn.active{border-color:var(--ms-accent);background:rgba(113,255,0,.1);color:var(--ms-accent);font-weight:700}
     #msaAiOutput{min-height:140px;font-size:14px;line-height:1.6}
     .msa-ai-history-item{background:var(--ms-surface2);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px;margin-bottom:8px;font-size:12px;cursor:pointer;transition:border-color .15s}
     .msa-ai-history-item:hover{border-color:var(--ms-accent)}
@@ -239,7 +329,7 @@
     .msa-toast{background:var(--ms-surface);border:1px solid var(--ms-border);border-radius:var(--ms-radius);padding:12px 16px;font-size:13px;display:flex;align-items:center;gap:10px;pointer-events:auto;box-shadow:0 4px 16px rgba(0,0,0,.4);animation:toast-in .25s ease;min-width:220px;max-width:340px}
     .msa-toast.success{border-color:rgba(76,175,80,.4)}
     .msa-toast.error{border-color:rgba(244,67,54,.4)}
-    .msa-toast.info{border-color:rgba(0,188,212,.3)}
+    .msa-toast.info{border-color:rgba(113,255,0,.3)}
     @keyframes toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 
     /* ── Modal ── */
@@ -261,16 +351,35 @@
     }
     #msa-print-area{display:none}
 
-    /* ── Responsive ── */
+    /* ── Responsive ──────────────────────────────────────────────────────────
+       Nothing in this page may exceed the viewport width. A single overflowing
+       row scrolls the whole document sideways, and once that happens the
+       sticky header no longer lines up with anything below it. */
     @media(max-width:600px){
-      .msa-topbar{padding:10px 14px}
+      .msa-topbar{padding:10px 14px;gap:10px}
       .msa-topbar h1{font-size:14px}
+      .msa-tabs{padding:0 14px}
       .msa-content{padding:14px}
       #msaViewStats{grid-template-columns:repeat(2,1fr)}
       .msa-stats-grid{grid-template-columns:repeat(2,1fr)}
+
+      /* "← Seller Dashboard" costs 112px of a 390px bar. The arrow alone reads
+         the same and gives the shop name room to breathe. */
+      .msa-back{font-size:0;gap:0}
+      .msa-back::before{content:'\2190';font-size:18px;line-height:1}
+
+      /* Stack the URL prefix above the input instead of letting the three
+         pieces fight over one line. */
+      .msa-handle-input-row{flex-wrap:wrap;max-width:100%}
+      .msa-handle-prefix{width:100%;border-right:1px solid var(--ms-border);border-bottom:none;border-radius:var(--ms-radius) var(--ms-radius) 0 0;justify-content:center;font-size:13px}
+      #msaHandleInput{border-left:1px solid var(--ms-border);border-radius:0 0 0 var(--ms-radius);flex:1 1 60%}
+      #msaClaimBtn{border-radius:0 0 var(--ms-radius) 0;flex:0 0 auto}
+      .msa-handle-claim{padding:24px 14px}
+      .msa-handle-claim h2{font-size:19px}
     }
     @media(max-width:420px){
       #msaViewStats{grid-template-columns:1fr 1fr}
+      .msa-stat-value{font-size:22px}
     }
 
     /* ── Flash Sales / Promotions ── */
@@ -293,9 +402,26 @@
 <body>
 
 <!-- Auth Gate -->
+<!-- Full-screen loading gate. It MUST reach a terminal state: the spinner is
+     swapped for #msaGateError if auth cannot be established, because an overlay
+     that spins forever is indistinguishable from a frozen app. -->
 <div id="msaAuthGate">
-  <div class="msa-spinner"></div>
-  <span style="color:var(--ms-muted);font-size:13px">Loading your MiniShop&hellip;</span>
+  <div id="msaGateLoading" style="display:flex;flex-direction:column;align-items:center;gap:16px">
+    <div class="msa-spinner"></div>
+    <span style="color:var(--ms-muted);font-size:13px">Loading your MiniShop&hellip;</span>
+  </div>
+  <div id="msaGateError" style="display:none;text-align:center;padding:0 28px;max-width:420px">
+    <div style="font-size:34px;margin-bottom:12px">&#128268;</div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:8px">Couldn&rsquo;t load your MiniShop</div>
+    <div id="msaGateErrorMsg" style="color:var(--ms-muted);font-size:13.5px;line-height:1.5;margin-bottom:20px">
+      We couldn&rsquo;t reach SOKONI. Check your connection and try again.
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <button class="msa-btn primary" id="msaGateRetry">Try again</button>
+      <a class="msa-btn" href="login.html?redirect=minishop-admin.html">Sign in</a>
+      <a class="msa-btn" href="seller.html">Seller Dashboard</a>
+    </div>
+  </div>
 </div>
 
 <!-- Print Area -->
@@ -306,23 +432,30 @@
   <p style="margin-top:24px;font-size:13px;color:#888">Scan to visit our shop on SOKONI</p>
 </div>
 
-<!-- Top Bar -->
-<div class="msa-topbar">
-  <a href="seller.html" class="msa-back">&#8592; Seller Dashboard</a>
-  <h1>My MiniShop</h1>
-  <span class="msa-topbar-shop-url" id="msaTopbarUrl"></span>
-  <a href="#" id="msaViewShop" target="_blank" class="msa-btn" style="font-size:12px">Open MiniShop &#8599;</a>
-</div>
+<!-- Header unit — title bar and tab belt stick together as one block.
+     Splitting them is what made the bar float over the belt on scroll. -->
+<header class="msa-header">
+  <div class="msa-topbar">
+    <a href="seller.html" class="msa-back" aria-label="Back to Seller Dashboard">&#8592; Seller Dashboard</a>
+    <h1>My MiniShop</h1>
+    <span class="msa-topbar-shop-url" id="msaTopbarUrl"></span>
+    <a href="#" id="msaViewShop" target="_blank" class="msa-btn" style="font-size:12px">Open MiniShop &#8599;</a>
+  </div>
 
-<!-- Tabs -->
-<div class="msa-tabs" role="tablist">
-  <button class="msa-tab active" data-tab="overview" role="tab" aria-selected="true">My MiniShop</button>
-  <button class="msa-tab" data-tab="customize" role="tab" aria-selected="false">Customize</button>
-  <button class="msa-tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
-  <button class="msa-tab" data-tab="share" role="tab" aria-selected="false">Share &amp; Promote</button>
-  <button class="msa-tab" data-tab="ai" role="tab" aria-selected="false">AI Marketing</button>
-  <button class="msa-tab" data-tab="6" role="tab" aria-selected="false" onclick="msAdminTab(6)">&#x26A1; Flash Sales</button>
-</div>
+  <!-- Tabs. The first tab used to repeat "My MiniShop", duplicating the <h1>
+       directly above it — two identical labels stacked one under the other.
+       It is the overview panel, so it is now named for what it shows. -->
+  <div class="msa-tabs-wrap">
+    <div class="msa-tabs" role="tablist">
+      <button class="msa-tab active" data-tab="overview" role="tab" aria-selected="true">Overview</button>
+      <button class="msa-tab" data-tab="customize" role="tab" aria-selected="false">Customize</button>
+      <button class="msa-tab" data-tab="analytics" role="tab" aria-selected="false">Analytics</button>
+      <button class="msa-tab" data-tab="share" role="tab" aria-selected="false">Share &amp; Promote</button>
+      <button class="msa-tab" data-tab="ai" role="tab" aria-selected="false">AI Marketing</button>
+      <button class="msa-tab" data-tab="6" role="tab" aria-selected="false" onclick="msAdminTab(6)">&#x26A1; Flash Sales</button>
+    </div>
+  </div>
+</header>
 
 <!-- ══════════ PANEL: OVERVIEW ══════════ -->
 <div class="msa-content">
@@ -342,37 +475,92 @@
       </div>
     </div>
 
-    <!-- Handle Display (shown when handle claimed) -->
-    <div class="msa-card" id="msaHandleDisplay">
-      <h2>&#127760; Your MiniShop URL</h2>
-      <div class="msa-handle-url-row">
-        <span id="msaHandleUrl">mysokoni.co.ke/shop/</span>
-        <button class="msa-btn-sm" id="msaCopyHandle" title="Copy URL">Copy</button>
-      </div>
-      <div class="msa-handle-actions">
-        <button class="msa-btn" id="msaQrBtn">&#9644; Show QR Code</button>
-        <button class="msa-btn-sm" id="msaEditHandleBtn" title="Edit handle (within 48h)">Edit Handle</button>
-        <a href="#" id="msaViewShopBtn" target="_blank" class="msa-btn success">Open Shop &#8599;</a>
-      </div>
+    <!-- Shop Hero (shown when handle claimed) — the seller's storefront looking
+         back at them. Replaces the old plain "Your MiniShop URL" card, and the
+         big Claim block above collapses away once this is visible. -->
+    <div id="msaHandleDisplay">
+      <section class="msa-hero">
+        <div class="msa-hero-cover" id="msaHeroCover"></div>
+        <div class="msa-hero-body">
+          <div class="msa-hero-logo" id="msaHeroLogo">&#127978;</div>
+          <h2 class="msa-hero-name" id="msaHeroName">Your Shop</h2>
+          <div class="msa-hero-tagline" id="msaHeroTagline">Add a tagline in Customize</div>
+
+          <div class="msa-hero-badges" id="msaHeroBadges">
+            <span class="msa-chip msa-chip--ok" id="msaChipClaimed">&#10004; Claimed</span>
+          </div>
+
+          <div class="msa-hero-url">
+            <span class="msa-hero-url-text" id="msaHandleUrl">mysokoni.co.ke/shop/</span>
+            <button class="msa-btn-sm" id="msaCopyHandle" title="Copy shop link">Copy</button>
+          </div>
+
+          <div class="msa-hero-actions">
+            <a href="#" id="msaViewShopBtn" target="_blank" class="msa-btn primary">Visit Shop &#8599;</a>
+            <button class="msa-btn" id="msaQrBtn">&#9644; QR Code</button>
+            <button class="msa-btn-sm" id="msaEditHandleBtn" title="Edit handle (within 48h)">Edit Handle</button>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Quick Stats -->
+    <!-- Quick Actions. Every target is a page that exists — a dead tile on the
+         primary action row is worse than one fewer action. -->
+    <div class="msa-quick" id="msaQuickActions">
+      <a class="msa-quick-btn" href="seller.html#products"><span>&#10133;</span>Add Product</a>
+      <button class="msa-quick-btn" type="button" id="msaQaShare"><span>&#128228;</span>Share Shop</button>
+      <button class="msa-quick-btn" type="button" id="msaQaDiscount"><span>&#127991;</span>Create Discount</button>
+      <a class="msa-quick-btn" href="seller.html#orders"><span>&#128230;</span>View Orders</a>
+      <button class="msa-quick-btn" type="button" id="msaQaAnalytics"><span>&#128202;</span>Analytics</button>
+    </div>
+
+    <!-- Shop Health. Guidance, not just measurement — every check is derived
+         from data the platform already stores, so each one can actually go
+         green. Nothing aspirational is listed. -->
+    <section class="msa-health" id="msaHealth" hidden>
+      <div class="msa-health-top">
+        <div class="msa-health-ring" id="msaHealthRing">
+          <div class="msa-health-score"><span id="msaHealthScore">0</span><small>% done</small></div>
+        </div>
+        <div class="msa-health-head">
+          <!-- "Storefront Setup", NOT "Shop Health". merchant-success.html already
+               owns "Health Score — your business performance index", graded A+ to F
+               from fulfilment, reviews and orders. This panel measures something
+               different: how completely the storefront is filled in. Two panels
+               both called health, one a performance grade and one a checklist,
+               would read as the same number disagreeing with itself. -->
+          <h2>Storefront Setup</h2>
+          <p id="msaHealthHint">Finish these to help customers find and trust your shop.</p>
+        </div>
+      </div>
+      <div class="msa-health-list" id="msaHealthList"></div>
+    </section>
+
+    <!-- Shop performance. Every tile here maps to a value the platform actually
+         stores (minishopAnalytics views / daily buckets, follower count, product
+         count). Sales, conversion, wishlist adds and cart abandonment are NOT
+         shown because nothing captures those events yet — an unpopulatable tile
+         is indistinguishable from a broken one. -->
     <div id="msaViewStats">
-      <div class="msa-stat">
+      <div class="msa-stat msa-stat-skeleton" id="msaStatViewsToday">
+        <div class="msa-stat-icon">&#128064;</div>
         <div class="msa-stat-label">Views Today</div>
-        <div class="msa-stat-value" id="msaViewsToday">&#8212;</div>
+        <div class="msa-stat-value" id="msaViewsToday">0</div>
       </div>
-      <div class="msa-stat">
+      <div class="msa-stat msa-stat-skeleton" id="msaStatTotalViews">
+        <div class="msa-stat-icon">&#128200;</div>
         <div class="msa-stat-label">Total Visits</div>
-        <div class="msa-stat-value" id="msaTotalViews">&#8212;</div>
+        <div class="msa-stat-value" id="msaTotalViews">0</div>
       </div>
-      <div class="msa-stat">
+      <div class="msa-stat msa-stat-skeleton" id="msaStatFollowers">
+        <div class="msa-stat-icon">&#128101;</div>
         <div class="msa-stat-label">Followers</div>
-        <div class="msa-stat-value" id="msaFollowers">&#8212;</div>
+        <div class="msa-stat-value" id="msaFollowers">0</div>
       </div>
-      <div class="msa-stat">
-        <div class="msa-stat-label">Shop Orders</div>
-        <div class="msa-stat-value" id="msaOrdersFromShop">&#8212;</div>
+      <div class="msa-stat msa-stat-skeleton" id="msaStatProducts">
+        <div class="msa-stat-icon">&#128230;</div>
+        <div class="msa-stat-label">Products</div>
+        <div class="msa-stat-value" id="msaProductCount">0</div>
       </div>
     </div>
 
@@ -455,16 +643,16 @@
       <div class="msa-section">
         <div class="msa-section-title">Accent Color</div>
         <div id="msaColorSwatches">
-          <div class="msa-swatch selected" data-color="#00bcd4" style="background:#00bcd4" title="Cyan"></div>
-          <div class="msa-swatch" data-color="#7c4dff" style="background:#7c4dff" title="Purple"></div>
+          <div class="msa-swatch selected" data-color="#71ff00" style="background:#71ff00" title="Cyan"></div>
+          <div class="msa-swatch" data-color="#00d4ff" style="background:#00d4ff" title="Purple"></div>
           <div class="msa-swatch" data-color="#4caf50" style="background:#4caf50" title="Green"></div>
           <div class="msa-swatch" data-color="#ff5722" style="background:#ff5722" title="Coral"></div>
           <div class="msa-swatch" data-color="#ff9800" style="background:#ff9800" title="Orange"></div>
           <div class="msa-swatch" data-color="#2196f3" style="background:#2196f3" title="Blue"></div>
         </div>
         <div class="msa-color-custom">
-          <input type="color" id="msaColorPicker" value="#00bcd4" title="Custom color">
-          <input type="text" class="msa-color-hex" id="msaColorHex" value="#00bcd4" maxlength="7" placeholder="#00bcd4">
+          <input type="color" id="msaColorPicker" value="#71ff00" title="Custom color">
+          <input type="text" class="msa-color-hex" id="msaColorHex" value="#71ff00" maxlength="7" placeholder="#71ff00">
           <span style="font-size:12px;color:var(--ms-muted)">Custom hex</span>
         </div>
       </div>
@@ -955,7 +1143,7 @@
     shopUrl: null,
     shopName: null,
     config: {},
-    accentColor: '#00bcd4',
+    accentColor: '#71ff00',
     aiType: 'product_description',
     analyticsRange: 'today'
   };
@@ -1010,13 +1198,60 @@
     if (g) { g.style.opacity = '0'; g.style.transition = 'opacity .3s'; setTimeout(function(){ g.remove(); }, 300); }
   }
 
+  /* ── Auth gate ceiling ──────────────────────────────────────────────────
+     Both waits below used to be unbounded, and either one hanging left the
+     full-screen gate spinning forever with no way out — which is what
+     "the page just sits there" is.
+
+       1. `typeof firebase === 'undefined'` polled every 300ms with no limit.
+          firebase.js is a module script; if it fails to evaluate (App Check
+          403, blocked CDN, offline) the global never appears and this loops
+          for as long as the tab is open.
+       2. onAuthStateChanged may never invoke its callback if Auth cannot
+          initialise — App Check failures do exactly this, and are known to be
+          intermittent on this platform.
+
+     A loading state that cannot terminate is a defect in its own right, so
+     both now have a ceiling and a visible, actionable failure. */
+  var _GATE_TIMEOUT_MS = 12000;
+  var _gateStart   = Date.now();
+  var _gateSettled = false;
+
+  function _gateFail(reason) {
+    if (_gateSettled) return;
+    _gateSettled = true;
+    var loading = document.getElementById('msaGateLoading');
+    var errBox  = document.getElementById('msaGateError');
+    var msgEl   = document.getElementById('msaGateErrorMsg');
+    if (msgEl && reason) msgEl.textContent = reason;
+    if (loading) loading.style.display = 'none';
+    if (errBox)  errBox.style.display  = 'block';
+    console.warn('[MSA] auth gate timed out:', reason);
+  }
+
   function checkAuth() {
-    // Wait for Firebase Auth
+    if (_gateSettled) return;
+
+    // Wait for Firebase Auth — bounded.
     if (typeof firebase === 'undefined' || !firebase.auth) {
+      if (Date.now() - _gateStart > _GATE_TIMEOUT_MS) {
+        _gateFail('SOKONI didn’t finish loading. This is usually a network or ad-blocker issue.');
+        return;
+      }
       setTimeout(checkAuth, 300);
       return;
     }
-    firebase.auth().onAuthStateChanged(function(user) {
+
+    /* Auth exists, but the state callback can still never fire. */
+    var authTimer = setTimeout(function () {
+      _gateFail('We couldn’t confirm your sign-in. Check your connection and try again.');
+    }, Math.max(2000, _GATE_TIMEOUT_MS - (Date.now() - _gateStart)));
+
+    firebase.auth().onAuthStateChanged(function (user) {
+      clearTimeout(authTimer);
+      if (_gateSettled) return;   // already failed and reported; don't fight the UI
+      _gateSettled = true;
+
       if (!user) {
         window.location.href = 'login.html?redirect=minishop-admin.html';
         return;
@@ -1026,6 +1261,20 @@
     });
   }
 
+  /* Retry re-arms the whole gate rather than reloading, so a transient App
+     Check failure costs one tap instead of a full page load. */
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest && e.target.closest('#msaGateRetry');
+    if (!btn) return;
+    _gateSettled = false;
+    _gateStart   = Date.now();
+    var loading = document.getElementById('msaGateLoading');
+    var errBox  = document.getElementById('msaGateError');
+    if (errBox)  errBox.style.display  = 'none';
+    if (loading) loading.style.display = 'flex';
+    checkAuth();
+  });
+
   // ── Load Shop Data ─────────────────────────────────
   function loadShopData(uid) {
     if (typeof firebase === 'undefined' || !firebase.firestore) {
@@ -1034,8 +1283,24 @@
       return;
     }
     var db = firebase.firestore();
+
+    /* Ceiling on the read. A Firestore get() against an unreachable backend can
+       settle from an empty local cache — or never settle at all — and a promise
+       that never settles runs neither .then nor .catch, so the gate above would
+       stay up forever. Whichever finishes first wins; the gate always comes
+       down. */
+    var _readTimedOut = false;
+    var readTimer = setTimeout(function () {
+      _readTimedOut = true;
+      console.warn('[MSA] shop read timed out — showing the page without shop data');
+      hideAuthGate();
+      initUI();
+    }, 10000);
+
     db.collection('shops').where('ownerId','==',uid).limit(1).get()
       .then(function(snap) {
+        clearTimeout(readTimer);
+        if (_readTimedOut) return;   // UI already initialised by the timeout path
         if (!snap.empty) {
           var doc = snap.docs[0];
           var data = doc.data();
@@ -1052,6 +1317,8 @@
         initUI();
       })
       .catch(function(err) {
+        clearTimeout(readTimer);
+        if (_readTimedOut) return;
         console.error('[MSA] loadShopData:', err);
         hideAuthGate();
         initUI();
@@ -1102,6 +1369,7 @@
     var viewShopBtn = document.getElementById('msaViewShopBtn');
     if (viewShop && _state.shopUrl) viewShop.href = _state.shopUrl;
     if (viewShopBtn && _state.shopUrl) viewShopBtn.href = _state.shopUrl;
+    updateHero();
     refreshQr();
   }
 
@@ -1150,19 +1418,202 @@
       .finally(function(){ setLoading(btn, false); btn.textContent = 'Claim'; });
   }
 
+  /* Tile id -> the card wrapper that carries the loading / error state. */
+  var _STAT_CARDS = {
+    msaViewsToday:  'msaStatViewsToday',
+    msaTotalViews:  'msaStatTotalViews',
+    msaFollowers:   'msaStatFollowers',
+    msaProductCount:'msaStatProducts'
+  };
+
+  function _statSet(tileId, value) {
+    var el = document.getElementById(tileId);
+    var card = document.getElementById(_STAT_CARDS[tileId]);
+    if (card) card.classList.remove('msa-stat-skeleton', 'is-error');
+    if (el) el.textContent = fmt(value);
+    _statHint(tileId, value);
+  }
+
+  /* An unreadable metric must never render as "0". A seller with 200 views
+     seeing a confident zero is worse than seeing nothing — they cannot tell a
+     dead pipe from a dead shop. */
+  function _statFail(tileId) {
+    var el = document.getElementById(tileId);
+    var card = document.getElementById(_STAT_CARDS[tileId]);
+    if (card) { card.classList.remove('msa-stat-skeleton'); card.classList.add('is-error'); }
+    if (el) el.textContent = 'Unavailable';
+  }
+
+  function _allStatsFail() {
+    Object.keys(_STAT_CARDS).forEach(_statFail);
+  }
+
+  /**
+   * Load shop performance.
+   *
+   * This used to delegate to window.SokoniMiniShop.getQuickStats — a function
+   * that does not exist anywhere in the codebase. The `else` branch therefore
+   * ran every single time and wrote a hardcoded '0' into all four tiles, so the
+   * dashboard reported zero views and zero followers to every seller no matter
+   * what their real traffic was. Wired to the real sources now.
+   */
   function loadQuickStats() {
-    // Delegate to SokoniMiniShop or show skeleton
-    var ids = ['msaViewsToday','msaTotalViews','msaFollowers','msaOrdersFromShop'];
-    if (window.SokoniMiniShop && window.SokoniMiniShop.getQuickStats) {
-      window.SokoniMiniShop.getQuickStats(_state.shopId)
-        .then(function(stats) {
-          document.getElementById('msaViewsToday').textContent = fmt(stats.viewsToday);
-          document.getElementById('msaTotalViews').textContent = fmt(stats.totalViews);
-          document.getElementById('msaFollowers').textContent = fmt(stats.followers);
-          document.getElementById('msaOrdersFromShop').textContent = fmt(stats.orders);
-        }).catch(function(){ ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='0'; }); });
+    if (!_state.shopId) { _allStatsFail(); return; }
+    if (typeof firebase === 'undefined' || !firebase.functions) { _allStatsFail(); return; }
+
+    // Analytics: getMinishopAnalytics is owner-scoped and returns
+    // { analytics: { views, sources, daily }, followerCount }.
+    firebase.functions().httpsCallable('getMinishopAnalytics')({ shopId: _state.shopId })
+      .then(function(res) {
+        var d = (res && res.data) || {};
+        var a = d.analytics || {};
+        var today = new Date();
+        var key = today.getFullYear() +
+                  String(today.getMonth() + 1).padStart(2, '0') +
+                  String(today.getDate()).padStart(2, '0');
+        _statSet('msaViewsToday', (a.daily && a.daily[key]) || 0);
+        _statSet('msaTotalViews', a.views || 0);
+        _statSet('msaFollowers',  d.followerCount || 0);
+      })
+      .catch(function(e) {
+        console.warn('[MSA] analytics unavailable', e && e.code);
+        _statFail('msaViewsToday'); _statFail('msaTotalViews'); _statFail('msaFollowers');
+      });
+
+    // Product count — single-field query, no composite index.
+    if (firebase.firestore) {
+      firebase.firestore().collection('products')
+        .where('shopId', '==', _state.shopId).get()
+        .then(function(snap) {
+          /* Firestore resolves getDocs from an empty local cache when the
+             backend is unreachable, so an offline read looks like "no products".
+             Treat a cached empty result as unknown, not as zero. */
+          if (snap.metadata && snap.metadata.fromCache && snap.empty) {
+            _statFail('msaProductCount'); renderHealth(null); return;
+          }
+          _statSet('msaProductCount', snap.size);
+          renderHealth(snap.size);
+        })
+        .catch(function(){ _statFail('msaProductCount'); renderHealth(null); });
     } else {
-      ids.forEach(function(id){ var el=document.getElementById(id); if(el) el.textContent='0'; });
+      _statFail('msaProductCount');
+      renderHealth(null);
+    }
+  }
+
+  /* A real zero and a broken read look identical on a number tile, so a genuine
+     zero gets a line telling the seller what to do about it. "Unavailable" is
+     never given a hint — there is nothing the seller can do about a failed read. */
+  var _EMPTY_HINTS = {
+    msaViewsToday: 'No visits today yet. Share your link to bring people in.',
+    msaTotalViews: 'No visitors yet. Share your MiniShop to start receiving traffic.',
+    msaFollowers:  'No followers yet. Shoppers can follow from your shop page.',
+    msaProductCount: 'No products yet. Add one so your shop has something to show.'
+  };
+
+  function _statHint(tileId, value) {
+    var card = document.getElementById(_STAT_CARDS[tileId]);
+    if (!card) return;
+    var old = card.querySelector('.msa-empty-hint');
+    if (old) old.remove();
+    if (Number(value) !== 0 || !_EMPTY_HINTS[tileId]) return;
+    var p = document.createElement('div');
+    p.className = 'msa-empty-hint';
+    p.textContent = _EMPTY_HINTS[tileId];
+    card.appendChild(p);
+  }
+
+  /* ── Shop Health ──────────────────────────────────────────────────────────
+     Weighted checks over data the platform already holds. Deliberately NOT
+     included: fulfilment rate, response time, review score — nothing measures
+     those yet, and a checklist item that can never turn green is worse than an
+     absent one.
+
+     `productCount` is passed in rather than re-queried so the panel cannot
+     disagree with the Products tile beside it. */
+  function renderHealth(productCount) {
+    var cfg = _state.config || {};
+
+    var checks = [
+      { id:'handle',   label:'Claim your shop link', w:20, done: !!_state.handle,             tab:null },
+      { id:'logo',     label:'Add a shop logo',      w:15, done: !!(cfg.logoImage || cfg.logoUrl),   tab:'customize' },
+      { id:'cover',    label:'Add a cover photo',    w:15, done: !!(cfg.coverImage || cfg.coverUrl), tab:'customize' },
+      { id:'desc',     label:'Write a description',  w:15, done: !!((cfg.description || cfg.tagline || '').trim()), tab:'customize' },
+      /* Products are managed in the seller dashboard, not on this page, so this
+         one routes off-page. Both hash targets are handled by seller.html's
+         _HASH_MOBILE / _HASH_DESKTOP maps. */
+      { id:'products', label:'Upload 10+ products',  w:20, done: productCount != null && productCount >= 10, href:'seller.html#products' },
+      { id:'delivery', label:'Set delivery areas',   w:15, done: !!(cfg.deliveryAreas && cfg.deliveryAreas.length), tab:'customize' }
+    ];
+
+    /* A check whose input could not be read is scored as not-done but must not
+       be presented as a confirmed gap, so the product check is dropped from the
+       denominator when the count is unknown. */
+    var scored = checks.filter(function(c){ return !(c.id === 'products' && productCount == null); });
+    var earned = 0, total = 0;
+    scored.forEach(function(c){ total += c.w; if (c.done) earned += c.w; });
+    var score = total ? Math.round((earned / total) * 100) : 0;
+
+    var scoreEl = document.getElementById('msaHealthScore');
+    var ringEl  = document.getElementById('msaHealthRing');
+    var listEl  = document.getElementById('msaHealthList');
+    var hintEl  = document.getElementById('msaHealthHint');
+    var wrapEl  = document.getElementById('msaHealth');
+    if (!listEl || !wrapEl) return;
+
+    if (scoreEl) scoreEl.textContent = score;
+    if (ringEl)  ringEl.style.background =
+      'conic-gradient(var(--ms-accent) ' + (score * 3.6) + 'deg, rgba(255,255,255,.07) 0deg)';
+
+    var remaining = checks.filter(function(c){ return !c.done; }).length;
+    if (hintEl) {
+      hintEl.textContent = remaining === 0
+        ? 'Your shop is fully set up. Nice work.'
+        : remaining + (remaining === 1 ? ' step left' : ' steps left') + ' to a complete shop.';
+    }
+
+    listEl.innerHTML = '';
+    checks.forEach(function(c) {
+      var row = document.createElement('div');
+      row.className = 'msa-health-item ' + (c.done ? 'done' : 'todo');
+      var mark = document.createElement('span');
+      mark.className = 'msa-health-mark';
+      mark.textContent = c.done ? '✓' : '○';
+      row.appendChild(mark);
+      var txt = document.createElement('span');
+      txt.textContent = c.label;
+      row.appendChild(txt);
+      if (!c.done && (c.tab || c.href)) {
+        var go = document.createElement('a');
+        go.className = 'msa-health-go';
+        go.textContent = 'Fix';
+        if (c.href) {
+          go.href = c.href;
+        } else {
+          go.href = '#';
+          go.addEventListener('click', function(e){ e.preventDefault(); switchTab(c.tab); });
+        }
+        row.appendChild(go);
+      }
+      listEl.appendChild(row);
+    });
+
+    wrapEl.hidden = false;
+  }
+
+  /* Populate the hero from the shop's own branding. */
+  function updateHero() {
+    var cfg = _state.config || {};
+    var cover = document.getElementById('msaHeroCover');
+    var logo  = document.getElementById('msaHeroLogo');
+    var name  = document.getElementById('msaHeroName');
+    var tag   = document.getElementById('msaHeroTagline');
+
+    if (name) name.textContent = _state.shopName || 'Your Shop';
+    if (tag)  tag.textContent  = cfg.tagline || 'Add a tagline in Customize';
+    if (cover && cfg.coverImage) cover.style.backgroundImage = 'url(' + encodeURI(cfg.coverImage) + ')';
+    if (logo && cfg.logoImage) {
+      logo.innerHTML = '<img src="' + esc(cfg.logoImage) + '" alt="">';
     }
   }
 
@@ -1192,6 +1643,19 @@
     if (copyBtn) copyBtn.addEventListener('click', function(){ copyText(_state.shopUrl || ''); });
     var qrBtn = document.getElementById('msaQrBtn');
     if (qrBtn) qrBtn.addEventListener('click', function(){ switchTab('share'); });
+
+    /* Quick actions. Each one routes to a tab that exists on this page or a
+       page that exists on disk — verified, because a dead tile on the primary
+       action row is worse than one fewer action. */
+    var qaShare = document.getElementById('msaQaShare');
+    if (qaShare) qaShare.addEventListener('click', function(){ switchTab('share'); });
+    var qaAnalytics = document.getElementById('msaQaAnalytics');
+    if (qaAnalytics) qaAnalytics.addEventListener('click', function(){ switchTab('analytics'); });
+    var qaDiscount = document.getElementById('msaQaDiscount');
+    if (qaDiscount) qaDiscount.addEventListener('click', function(){
+      /* Flash Sales is a legacy numeric tab driven by msAdminTab(6). */
+      if (typeof msAdminTab === 'function') msAdminTab(6); else switchTab('6');
+    });
     var editBtn = document.getElementById('msaEditHandleBtn');
     if (editBtn) editBtn.addEventListener('click', function(){
       if (_state.handle) {
@@ -1429,13 +1893,26 @@
       return;
     }
 
-    if (!_state.shopId || typeof firebase === 'undefined') {
+    if (!_state.shopId || typeof firebase === 'undefined' || !firebase.functions) {
       toast('Shop not loaded', 'error');
       if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false;
       return;
     }
-    firebase.firestore().collection('shops').doc(_state.shopId)
-      .update({ minishopConfig: cfg, minishopUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+
+    /* Saves through saveMinishopConfig rather than writing shops/{id}
+       .minishopConfig directly.
+
+       The direct write is why a seller's cover and logo never reached their
+       storefront: this controller wrote coverImage / logoImage / phone into the
+       shop document, while the storefront reads coverUrl / logoUrl /
+       contactPhone out of minishopConfig/{shopId}. Two stores, two schemas,
+       never meeting — and because this page's own preview read back the same
+       document it had just written, it always looked like the save had worked.
+
+       The CF now normalises legacy field names, so collectConfig() can keep
+       emitting its existing shape; it lands in canonical form in the canonical
+       store, server-validated instead of client-written. */
+    firebase.functions().httpsCallable('saveMinishopConfig')({ shopId: _state.shopId, config: cfg })
       .then(function(){ toast('Changes saved!', 'success'); })
       .catch(function(e){ toast(e.message || 'Save failed', 'error'); })
       .finally(function(){ if(textEl) textEl.textContent='Save Changes'; if(btn) btn.disabled=false; });
@@ -1581,7 +2058,7 @@
     }).join('');
     // Copy link row
     container.innerHTML += '<div class="msa-share-card" style="grid-column:1/-1">' +
-      '<div class="msa-share-icon" style="background:rgba(0,188,212,.15);color:var(--ms-accent)">&#128279;</div>' +
+      '<div class="msa-share-icon" style="background:rgba(113,255,0,.15);color:var(--ms-accent)">&#128279;</div>' +
       '<div class="msa-share-info"><div class="msa-share-platform">Direct Link</div><div class="msa-share-text-preview">' + esc(url) + '</div></div>' +
       '<button class="msa-btn-sm" id="msaCopyShopUrl">Copy Link</button>' +
       '</div>';

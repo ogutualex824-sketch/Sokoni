@@ -20,8 +20,11 @@
  * Index count is preserved at 199/200.
  */
 
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { onCall, onRequest, HttpsError } = require('firebase-functions/v2/https');
+const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
+/* Markup lives in profile-page.js — the engine owns data, not presentation. */
+const { renderProfilePage: _profilePage, renderProfileError: _profileErrorPage } = require('./profile-page');
 
 if (!admin.apps.length) admin.initializeApp();
 
@@ -428,6 +431,144 @@ exports.profileGenerateCard = onCall({ region: 'us-central1' }, async (req) => {
     profileUrl:    `https://mysokoni.co.ke/profile/${uid}`,
   };
 });
+
+/* ═══════════════════════════════════════════════════════════════
+   PUBLIC PROFILE  (onRequest GET — no auth)
+
+   Backs https://mysokoni.co.ke/profile/{uid}, the URL every other
+   function in this file already hands out as `profileUrl`. Until
+   this existed that path had no hosting rewrite and hard-404'd, so
+   every shared profile link was dead and the client fell back to
+   sharing /profile — the owner's private dashboard shell.
+
+   This is the ONLY profile endpoint reachable without auth, so the
+   allowlist below is the whole security boundary. It is built by
+   naming each field explicitly; a spread of the user document here
+   would leak email, phone and wallet in one edit. Never widen it to
+   a spread, and never echo a field the owner did not publish.
+
+   Deliberately NOT returned: email, phone, wallet, documents,
+   orders, KRA/bank verification detail, and the numeric trust score
+   (the coarse level is a public signal; the exact number is not).
+   ═══════════════════════════════════════════════════════════════ */
+exports.profileGetPublicProfile = onRequest(
+  /* minInstances: 1 — this function IS the page at /profile/{uid}, so a cold
+     start is not a slow API call, it is a blank screen on a link somebody just
+     tapped in WhatsApp. One warm instance is the cost of that path being a
+     function at all. */
+  { region: 'us-central1', cors: false, minInstances: 1, memory: '256MiB' },
+  async (req, res) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type');
+    /* The response varies on nothing but the path, but it IS shared cache
+       content — say so explicitly so no intermediary keys it on a cookie. */
+    res.set('Vary', 'Accept-Encoding');
+
+    if (req.method === 'OPTIONS') { res.status(204).send(''); return; }
+    if (req.method !== 'GET')     { res.status(405).send('Method not allowed.'); return; }
+
+    /* Served through a hosting rewrite at /profile/**, so the uid arrives as a
+       path segment. ?uid= is kept working for direct calls and for the JSON
+       mode used by non-browser clients. */
+    const fromPath = (req.path || '').match(/^\/profile\/([^/?#]+)/);
+    const uid = decodeURIComponent(fromPath ? fromPath[1] : String(req.query.uid || '')).trim();
+    const wantsJson = String(req.query.format || '').toLowerCase() === 'json';
+
+    /* Firebase UIDs are 28 alphanumerics. Validating the shape before
+       touching Firestore turns a scripted scan of this open endpoint into
+       a rejected string compare rather than a billed document read. */
+    if (!/^[A-Za-z0-9]{20,64}$/.test(uid)) {
+      res.set('Cache-Control', 'public, max-age=300');
+      if (wantsJson) { res.status(400).json({ error: 'A valid uid is required.' }); return; }
+      res.status(404).send(_profileErrorPage(
+        'Profile not found',
+        'This link does not point to a SOKONI profile.'
+      ));
+      return;
+    }
+
+    try {
+      const [userSnap, profSnap, verifSnap, handleSnap] = await Promise.all([
+        db.collection('users').doc(uid).get(),
+        db.collection('professionalProfiles').doc(uid).get().catch(() => null),
+        db.collection('verifications').doc(uid).get().catch(() => null),
+        /* Single-field query — no composite index consumed (see file header). */
+        db.collection('shopHandles').where('uid', '==', uid).limit(1).get().catch(() => null),
+      ]);
+
+      /* A missing user and a user who opted out are answered identically.
+         Distinguishing them would turn this endpoint into an oracle that
+         confirms whether a given uid exists. */
+      const user = userSnap.exists ? userSnap.data() : null;
+      if (!user || user.profileVisibility === 'private') {
+        res.set('Cache-Control', 'public, max-age=60');
+        if (wantsJson) { res.status(404).json({ found: false }); return; }
+        res.status(404).send(_profileErrorPage(
+          'Profile unavailable',
+          'This profile is private or no longer exists.'
+        ));
+        return;
+      }
+
+      const prof  = profSnap?.exists  ? profSnap.data()  : {};
+      const verif = verifSnap?.exists ? verifSnap.data() : {};
+
+      /* Badge NAMES only. The underlying documents stay private. */
+      const verifiedTypes = Object.entries(verif)
+        .filter(([k, v]) => k.endsWith('Verified') && v === true)
+        .map(([k]) => k.replace('Verified', ''));
+
+      const shopDoc = handleSnap && !handleSnap.empty ? handleSnap.docs[0] : null;
+
+      /* createdAt is exposed as a year-month string. The exact signup
+         timestamp is a correlation handle and is not public data. */
+      let memberSince = '';
+      try {
+        const created = user.createdAt?.toDate ? user.createdAt.toDate()
+                      : user.createdAt ? new Date(user.createdAt) : null;
+        if (created && !isNaN(created)) memberSince = created.toISOString().slice(0, 7);
+      } catch (_) { /* unparseable timestamp is simply omitted */ }
+
+      const payload = {
+        found:         true,
+        uid,
+        sokoniId:      _sokoniId(uid),
+        displayName:   user.displayName || user.name || 'SOKONI Member',
+        photoURL:      user.photoURL    || null,
+        headline:      prof.headline    || '',
+        location:      user.location    || '',
+        skills:        (prof.skills     || []).slice(0, 5),
+        isVerified:    verifiedTypes.length > 0,
+        verifiedTypes,
+        trustLevel:    _trustScore(user, verif, 0).level,
+        memberSince,
+        shop: shopDoc ? {
+          handle: shopDoc.id,
+          url:    `https://mysokoni.co.ke/shop/${shopDoc.id}`,
+        } : null,
+        profileUrl:    `https://mysokoni.co.ke/profile/${uid}`,
+      };
+
+      /* Public profiles are identical for every viewer, so they are safe to
+         cache at the edge. This is also what keeps the endpoint cheap under
+         a link that may be forwarded to a large WhatsApp group at once. */
+      res.set('Cache-Control', 'public, max-age=300, s-maxage=600, stale-while-revalidate=86400');
+      if (wantsJson) { res.status(200).json(payload); return; }
+      res.set('Content-Type', 'text/html; charset=utf-8');
+      res.status(200).send(_profilePage(payload));
+    } catch (err) {
+      logger.error('[profile] public profile read failed', { uid, err: err.message });
+      /* An error must never be cached as if it were the profile. */
+      res.set('Cache-Control', 'no-store');
+      if (wantsJson) { res.status(500).json({ error: 'Could not load this profile.' }); return; }
+      res.status(500).send(_profileErrorPage(
+        'Could not load this profile',
+        'Something went wrong on our side. Please try again shortly.'
+      ));
+    }
+  }
+);
 
 /* ═══════════════════════════════════════════════════════════════
    EMPLOYMENT OVERVIEW

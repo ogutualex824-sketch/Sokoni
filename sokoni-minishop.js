@@ -77,10 +77,27 @@ window.SokoniMiniShop = (() => {
 
   // ─── CF Caller ───────────────────────────────────────────────────────────────
   async function _callCF(name, data) {
-    if (typeof firebase === 'undefined' || !firebase.functions) throw new Error('Firebase not loaded');
-    const fn = firebase.functions().httpsCallable(name);
-    const result = await fn(data || {});
-    return result.data;
+    /* minishop-admin.html loads the MODULAR firebase.js, so the compat
+       `firebase` global does not exist. This used to call firebase.functions()
+       and threw "Firebase not loaded" for EVERY minishop CF (claim handle, save
+       config, …) — which is why the whole minishop setup was dead and no shop
+       could ever be published. Prefer firebase.js's shared, App-Check-aware
+       modular callable (window.sokoniCallable), waiting briefly for the module
+       to publish it; fall back to compat only where a page actually provides it. */
+    for (let i = 0; i < 60 && typeof window.sokoniCallable !== 'function'
+                          && (typeof firebase === 'undefined' || !firebase.functions); i++) {
+      await new Promise(function (r) { setTimeout(r, 100); });
+    }
+    if (window.__sokoniAppCheckReady) { try { await window.__sokoniAppCheckReady; } catch (_) {} }
+    if (typeof window.sokoniCallable === 'function') {
+      const result = await window.sokoniCallable(name)(data || {});
+      return result.data;
+    }
+    if (typeof firebase !== 'undefined' && firebase.functions) {
+      const result = await firebase.functions().httpsCallable(name)(data || {});
+      return result.data;
+    }
+    throw new Error('Firebase not loaded');
   }
 
   // ─── Source Detection ────────────────────────────────────────────────────────
@@ -713,7 +730,19 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     const statusMode = params.get('mode') === 'status';
 
     try {
-      const res = await fetch(CF + '/getMinishopPublic?handle=' + encodeURIComponent(handle));
+      /* Bound the fetch. With no timeout, a slow cold start or a stalled
+         connection left the page on its loading skeleton forever — the
+         "just loads and never opens" symptom. Abort after 15s so the catch
+         below can surface the not-found/error state instead of hanging. */
+      const _ctrl = new AbortController();
+      const _to = setTimeout(function () { _ctrl.abort(); }, 15000);
+      let res;
+      try {
+        res = await fetch(CF + '/getMinishopPublic?handle=' + encodeURIComponent(handle),
+          { signal: _ctrl.signal });
+      } finally {
+        clearTimeout(_to);
+      }
       if (res.status === 404) { _showNotFound(); return; }
       if (!res.ok) throw new Error('Server error ' + res.status);
       const data = await res.json();

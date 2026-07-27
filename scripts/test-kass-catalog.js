@@ -1,4 +1,4 @@
-/* KASS VAPES catalogue — SmartPOS verification.
+/* KASS SHOP catalogue — SmartPOS verification.
 
    Seeds the catalogue into PosInventory (IndexedDB, real browser) and exercises
    the till workflow the sprint asks for: category filtering, search, barcode

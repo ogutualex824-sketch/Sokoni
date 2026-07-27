@@ -39,6 +39,7 @@ window.SokoniWalletV2 = (function () {
   /* ─── CONSTANTS ─── */
   const CF_REGION        = 'us-central1';
   const POLL_INTERVAL_MS = 3000;
+  const MIN_SEND         = 10;        // KES — matches backend MIN_SEND (P2P minimum)
   const MAX_POLL_SECS    = 90;
   const PHONE_RE         = /^(?:254|\+254|0)[17]\d{8}$/;
   const TX_PAGE_SIZE     = 25;
@@ -78,6 +79,19 @@ window.SokoniWalletV2 = (function () {
     );
     const fns = getFunctions(window.firebaseApp, CF_REGION);
     return httpsCallable(fns, name);
+  }
+
+  /* Invoke a callable with a hard timeout. A callable can hang indefinitely when
+     the App Check token fetch stalls (App Check 403s intermittently) — leaving a
+     disabled submit button that looks permanently dead. This guarantees the caller
+     always resolves/rejects so the button re-enables and the user sees a message. */
+  async function _callTimed(name, payload, ms = 20000) {
+    const fn = await _cf(name);
+    return Promise.race([
+      fn(payload),
+      new Promise((_, rej) =>
+        setTimeout(() => rej(new Error('Request timed out — check your connection and try again.')), ms)),
+    ]);
   }
 
   async function _db() {
@@ -186,12 +200,25 @@ window.SokoniWalletV2 = (function () {
         _userPhone = user.phoneNumber || '';
         _userName  = user.displayName || user.email?.split('@')[0] || 'User';
 
+        /* Prompt phone-less accounts to verify a phone so they can RECEIVE money. */
+        _showAddPhoneBanner(!_userPhone);
+
         /* Update avatar */
         const av = document.getElementById('wal-top-avatar');
         if (av) av.textContent = (_userName[0] || '?').toUpperCase();
 
         await loadDashboard();
         await checkSellerStatus();
+
+        /* Deep-link from chat's "Send money": open the pay sheet for that contact. */
+        try {
+          const _pp = new URLSearchParams(location.search);
+          const _payUid = _pp.get('pay');
+          if (_payUid && _payUid !== _uid) {
+            openPayToUid(_payUid, _pp.get('name') || 'this contact');
+            history.replaceState(null, '', location.pathname);   // don't reopen on refresh
+          }
+        } catch (_) {}
       });
     } catch (e) {
       console.error('[WalletV2] init error', e);
@@ -200,6 +227,9 @@ window.SokoniWalletV2 = (function () {
 
   /* ─── DASHBOARD ─── */
   async function loadDashboard() {
+    /* Optimistic: paint the last-known balance instantly from cache so the wallet
+       doesn't sit blank while it re-syncs; the CF below refreshes it. */
+    try { const _cb = localStorage.getItem('_walletBal'); const _be = document.getElementById('balVal'); if (_cb != null && _be && !_be.textContent.trim()) _be.textContent = _fmt(Number(_cb) || 0); } catch (_) {}
     try {
       let data;
       try {
@@ -218,11 +248,19 @@ window.SokoniWalletV2 = (function () {
       /* Update balance */
       const balEl = document.getElementById('balVal');
       if (balEl) balEl.textContent = _fmt(data.balance);
+      try { localStorage.setItem('_walletBal', String(data.balance || 0)); } catch (_) {}
 
       /* Sub-balance mini cards */
       _setText('savingsTotal', 'KSh ' + _fmtShort(data.savingsBalance || 0));
       _setText('cashbackVal', 'KSh ' + _fmtShort(data.cashbackBalance || 0));
       _setText('rewardPts', (data.rewardPoints || 0) + ' pts');
+      _setText('todayPaidVal', 'KSh ' + _fmtShort(data.todayPaid || 0));
+      _setText('monthPaidVal', 'KSh ' + _fmtShort(data.monthPaid || 0));
+      _renderPendingPayout();   /* pending-withdrawals indicator */
+
+      /* Keep the "Set PIN / Change PIN" label in sync with whether a PIN exists */
+      const _pinBtnL = document.getElementById('pinBtnLabel');
+      if (_pinBtnL) _pinBtnL.textContent = data.hasPin ? 'Change PIN' : 'Set PIN';
 
       /* Freeze badge */
       _frozen = !!data.frozen;
@@ -305,14 +343,15 @@ window.SokoniWalletV2 = (function () {
   function _txIcon(tx) {
     const type = tx.type || '';
     const dir  = tx.direction || (tx.amount > 0 ? 'in' : 'out');
-    if (type.includes('topup') || type === 'credit') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: null };
-    if (type === 'send') return { cls: 'out', icon: 'fa-paper-plane', emoji: null };
-    if (type === 'receive') return { cls: 'in', icon: 'fa-arrow-down', emoji: null };
-    if (type.includes('savings')) return { cls: 'save', icon: 'fa-piggy-bank', emoji: null };
-    if (type.includes('escrow')) return { cls: 'escrow', icon: 'fa-lock', emoji: null };
-    if (type === 'payout') return { cls: 'out', icon: 'fa-arrow-up-right', emoji: null };
-    if (dir === 'in') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: null };
-    return { cls: 'out', icon: 'fa-arrow-up-right', emoji: null };
+    if (type.includes('topup') || type === 'credit') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: '💵' };
+    if (type === 'send') return { cls: 'out', icon: 'fa-paper-plane', emoji: '📤' };
+    if (type === 'receive') return { cls: 'in', icon: 'fa-arrow-down', emoji: '📥' };
+    if (type.includes('savings')) return { cls: 'save', icon: 'fa-piggy-bank', emoji: '🐷' };
+    if (type.includes('escrow')) return { cls: 'escrow', icon: 'fa-lock', emoji: '🔒' };
+    if (type === 'payout') return { cls: 'out', icon: 'fa-arrow-up-right', emoji: '🏧' };
+    if (type === 'refund') return { cls: 'in', icon: 'fa-rotate-left', emoji: '↩️' };
+    if (dir === 'in') return { cls: 'in', icon: 'fa-arrow-down-left', emoji: '📥' };
+    return { cls: 'out', icon: 'fa-arrow-up-right', emoji: '📤' };
   }
 
   function _txTitle(tx) {
@@ -333,7 +372,7 @@ window.SokoniWalletV2 = (function () {
     if (!el) return;
 
     if (!txs || txs.length === 0) {
-      el.innerHTML = '<div class="empty-state"><i class="fas fa-receipt"></i><h4>No transactions</h4><p>Your transaction history will appear here</p></div>';
+      el.innerHTML = '<div class="empty-state"><div class="empty-emoji">🧾</div><h4>No transactions</h4><p>Your transaction history will appear here</p></div>';
       return;
     }
 
@@ -341,7 +380,7 @@ window.SokoniWalletV2 = (function () {
     const items = txs.slice(0, limit);
 
     el.innerHTML = items.map(tx => {
-      const { cls, icon } = _txIcon(tx);
+      const { cls, emoji } = _txIcon(tx);
       const isIn = cls === 'in' || cls === 'save';
       const amt = Math.abs(tx.amount || 0);
       const sign = isIn ? '+' : '−';
@@ -350,7 +389,7 @@ window.SokoniWalletV2 = (function () {
       const title = _txTitle(tx);
       const note = tx.note || tx.description || tx.category || '';
       return `<div class="tx-item" onclick="W2.openTxDetail(${_esc(JSON.stringify(tx))})">
-        <div class="tx-icon ${_esc(cls)}"><i class="fas ${_esc(icon)}"></i></div>
+        <div class="tx-icon ${_esc(cls)} emoji">${emoji}</div>
         <div class="tx-info">
           <div class="tx-name">${title}</div>
           ${note ? `<div class="tx-desc">${_esc(note)}</div>` : ''}
@@ -528,7 +567,10 @@ window.SokoniWalletV2 = (function () {
       const fn = await _cf('confirmWalletTopUp');
       const res = await fn({ txId: _stkTxId });
       const s = res.data;
-      if (s.status === 'confirmed') {
+      /* confirmWalletTopUp returns 'completed' (matching the webhook/sweep and
+         the wallet ledger) — not 'confirmed'. The old string never matched, so
+         a successful top-up polled until timeout instead of showing success. */
+      if (s.status === 'completed') {
         _stopPoll();
         document.getElementById('stkAnim').style.display = 'none';
         document.getElementById('stkSuccessIcon').style.display = 'flex';
@@ -596,48 +638,28 @@ window.SokoniWalletV2 = (function () {
     document.getElementById('sndContactCard').style.display = 'none';
     document.getElementById('sndNotFound').style.display = 'none';
 
-    try {
-      /* Look up user via CF (walletV2Send will also validate — this is just UX preview) */
-      const normPhone = _normalizePhone(phone);
-      const { getFirestore, collection, query, where, limit, getDocs } = await import(
-        'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'
-      );
-      const db = getFirestore(window.firebaseApp);
-      const q = query(collection(db, 'users'), where('phone', '==', normPhone), limit(1));
-      const snap = await getDocs(q);
-
-      document.getElementById('sndStep1Searching').style.display = 'none';
-
-      if (snap.empty) {
-        document.getElementById('sndNotFound').style.display = 'block';
-        document.getElementById('sndStep1Next').disabled = true;
-        _sendRecipient = null;
-      } else {
-        const user = snap.docs[0].data();
-        if (snap.docs[0].id === _uid) {
-          toast('You cannot send money to yourself', 'error');
-          document.getElementById('sndNotFound').style.display = 'block';
-          document.getElementById('sndStep1Next').disabled = true;
-          _sendRecipient = null;
-          return;
-        }
-        _sendRecipient = {
-          uid: snap.docs[0].id,
-          name: user.displayName || user.name || 'SOKONI User',
-          phone: normPhone
-        };
-        const av = document.getElementById('sndAvatar');
-        if (av) av.textContent = (_sendRecipient.name[0] || '?').toUpperCase();
-        _setText('sndName', _sendRecipient.name);
-        _setText('sndPhoneDisp', '+' + normPhone);
-        document.getElementById('sndContactCard').style.display = 'flex';
-        document.getElementById('sndStep1Next').disabled = false;
-      }
-    } catch (e) {
-      document.getElementById('sndStep1Searching').style.display = 'none';
-      console.error('[wallet] recipient search failed', e);
-      toast(_skWhy(e, 'Could not search right now.'), 'error');
+    /* The recipient is resolved and validated SERVER-SIDE by walletV2Send. The
+       client MUST NOT query the users collection here: firestore.rules restricts
+       user reads to your own doc (auth.uid == userId), so the old
+       where('phone','==',…) query returned permission-denied — surfaced as
+       "You do not have access to do that" — and blocked EVERY transfer. Accept a
+       valid Kenyan phone; walletV2Send returns the recipient's real name on
+       success, rejects USER_NOT_FOUND, and blocks self-sends. */
+    const normPhone = _normalizePhone(phone);
+    document.getElementById('sndStep1Searching').style.display = 'none';
+    if (!normPhone) {
+      document.getElementById('sndNotFound').style.display = 'block';
+      document.getElementById('sndStep1Next').disabled = true;
+      _sendRecipient = null;
+      return;
     }
+    _sendRecipient = { uid: null, name: '+' + normPhone, phone: normPhone };
+    const av = document.getElementById('sndAvatar');
+    if (av) av.textContent = '👤';
+    _setText('sndName', '+' + normPhone);
+    _setText('sndPhoneDisp', 'Recipient name confirmed on send');
+    document.getElementById('sndContactCard').style.display = 'flex';
+    document.getElementById('sndStep1Next').disabled = false;
   }
 
   function sendStep1Next() {
@@ -698,23 +720,28 @@ window.SokoniWalletV2 = (function () {
   async function executeSend() {
     if (!_sendRecipient || _sendAmount < 10) return;
     if (_frozen) return toast('Wallet is frozen. Unfreeze in Security settings.', 'error');
+    let pin = null;
+    if (_dashboard?.hasPin) {
+      pin = await _promptPin('Enter your PIN to send KSh ' + _fmt(_sendAmount));
+      if (!pin) return;   // cancelled — don't send
+    }
     const btn = document.getElementById('sndConfirmBtn');
     if (btn) btn.disabled = true;
 
     try {
       const note = document.getElementById('sndNote')?.value?.trim() || '';
-      const fn = await _cf('walletV2Send');
-      const res = await fn({ phone: _sendRecipient.phone, amount: _sendAmount, note });
+      const res = await _callTimed('walletV2Send', { phone: _sendRecipient.phone, amount: _sendAmount, note, pin });
       const d = res.data;
       if (d.success) {
         /* Update dashboard cache */
         if (_dashboard) _dashboard.balance = d.newBalance;
         _setText('balVal', _fmt(d.newBalance));
         _setText('wdrAvail', 'KSh ' + _fmt(d.newBalance));
+        const rcptName = d.recipientName || _sendRecipient.name;
         const msgEl = document.getElementById('sndSuccessMsg');
-        if (msgEl) msgEl.textContent = 'KSh ' + _fmt(_sendAmount) + ' sent to ' + _sendRecipient.name;
+        if (msgEl) msgEl.textContent = 'KSh ' + _fmt(_sendAmount) + ' sent to ' + rcptName;
         sendGoStep(4);
-        toast('Sent KSh ' + _fmt(_sendAmount) + ' to ' + _sendRecipient.name, 'success');
+        toast('Sent KSh ' + _fmt(_sendAmount) + ' to ' + rcptName, 'success');
       } else {
         toast(d.error === 'USER_NOT_FOUND' ? 'Recipient not found on SOKONI' : 'Transfer failed', 'error');
         if (btn) btn.disabled = false;
@@ -726,9 +753,82 @@ window.SokoniWalletV2 = (function () {
   }
 
   /* ─── WITHDRAW / PAYOUT ─── */
+  let _wdrIdemKey     = '';
+  let _payoutStartedAt = 0;
+
   function openWithdraw() {
-    _setText('wdrAvail', 'KSh ' + _fmt(_dashboard?.balance || 0));
     openOverlay('ovlWithdraw');
+    /* Reset to the form view (a prior success may have left the success panel up). */
+    const form = document.getElementById('wdrForm');    if (form) form.style.display = '';
+    const succ = document.getElementById('wdrSuccess');  if (succ) succ.style.display = 'none';
+    _wdrClearError();
+    const amtI = document.getElementById('wdrAmount'); if (amtI) amtI.value = '';
+    const sum  = document.getElementById('wdrSummary'); if (sum) sum.style.display = 'none';
+
+    /* Fresh idempotency key per withdraw session — reused across retries of THIS
+       attempt so a double-tap or timeout-retry can't create two withdrawals. */
+    _wdrIdemKey = (_uid || 'anon') + '_' + Date.now();
+
+    /* Prefill the user's own M-Pesa number (most payouts go there). */
+    const wp = document.getElementById('wdrPhone');
+    if (wp && _userPhone) {
+      wp.value = String(_userPhone).replace(/^\+?254/, '0');
+      const note = document.getElementById('wdrSavedNote'); if (note) note.style.display = 'block';
+    }
+
+    if (_dashboard) {
+      const b = _dashboard.balance || 0;
+      _setText('wdrAvail', 'KSh ' + _fmt(b));
+      _wdrApplyBalanceState(b);
+    } else {
+      _setText('wdrAvail', 'Loading…');
+      loadDashboard().then(() => {
+        const b = _dashboard?.balance || 0;
+        _setText('wdrAvail', 'KSh ' + _fmt(b));
+        _wdrApplyBalanceState(b);
+      }).catch(() => {});
+    }
+  }
+
+  /* Empty-state: below the minimum, hide the fields and show a helpful message. */
+  function _wdrApplyBalanceState(bal) {
+    const low    = (bal || 0) < 100;
+    const empty  = document.getElementById('wdrEmpty');
+    const fields = document.getElementById('wdrFields');
+    if (empty)  empty.style.display  = low ? 'block' : 'none';
+    if (fields) fields.style.display = low ? 'none'  : '';
+  }
+
+  function _wdrClearError() {
+    const e = document.getElementById('wdrError');
+    if (e) { e.style.display = 'none'; e.textContent = ''; }
+  }
+  function _wdrShowError(msg) {
+    const e = document.getElementById('wdrError');
+    if (e) { e.textContent = msg; e.style.display = 'block'; }
+    console.warn('[payout] error surfaced:', msg);
+  }
+
+  /* Live withdrawal summary + button enable/disable as the amount changes. */
+  function wdrAmountInput() {
+    _wdrClearError();
+    const amt = Number(document.getElementById('wdrAmount')?.value) || 0;
+    const bal = _dashboard ? (_dashboard.balance || 0) : null;
+    const sum = document.getElementById('wdrSummary');
+    const btn = document.getElementById('wdrSubmitBtn');
+    if (amt > 0) {
+      _setText('wsAmount', 'KSh ' + _fmt(amt));
+      _setText('wsFee', 'KSh 0');
+      _setText('wsReceive', 'KSh ' + _fmt(amt));
+      /* Client hint only — the server risk engine is authoritative. KSh 20,000 is the
+         default instant ceiling; eligible sellers get it instantly, others 24h. */
+      _setText('wsArrival', amt <= 20000 ? '⚡ Instant · 1–3 min' : '⏳ Under review');
+      if (sum) sum.style.display = 'block';
+    } else if (sum) {
+      sum.style.display = 'none';
+    }
+    const ok = amt >= 100 && (bal == null || amt <= bal);
+    if (btn) btn.disabled = !ok;
   }
 
   function wdrMethodChange() {
@@ -737,36 +837,193 @@ window.SokoniWalletV2 = (function () {
     document.getElementById('wdrBankFields').style.display  = method === 'bank'  ? '' : 'none';
   }
 
+  /* Map any failure to a specific, honest message — never "something went wrong". */
+  function _payoutErr(e) {
+    const msg  = (typeof e === 'string') ? e : (e && e.message) || '';
+    const code = (e && e.code) || '';
+    if (!navigator.onLine)                                                        return 'You appear to be offline. Check your connection and try again.';
+    if (/timed out|timeout/i.test(msg))                                           return 'The request timed out. Check your connection and try again.';
+    if (code === 'unauthenticated' || /unauthenticat|sign ?in|token/i.test(msg))  return 'Your session expired. Please sign in again, then retry.';
+    if (code === 'resource-exhausted' || /maximum|per day|too many/i.test(msg))   return msg || 'Payout limit reached. Try again later.';
+    if (/insufficient/i.test(msg))                                                return 'Insufficient balance for this payout.';
+    if (/minimum/i.test(msg))                                                     return 'Minimum payout is KSh 100.';
+    if (/duplicate|already/i.test(msg))                                           return 'This withdrawal was already submitted.';
+    return msg || 'Payout failed. Please try again.';
+  }
+
   async function requestPayout() {
+    console.log('[payout] button clicked');
+    const btn = document.getElementById('wdrSubmitBtn');
+    _wdrClearError();
+
+    /* Non-sticking in-flight guard: block rapid double-taps, but auto-recover if the
+       prior attempt is >30s old (iOS can suspend a backgrounded promise + its timeout,
+       which used to leave the button permanently disabled → "does nothing"). */
+    if (btn && btn.dataset.busy === '1' && (Date.now() - _payoutStartedAt) < 30000) {
+      console.log('[payout] ignored — already in flight');
+      return;
+    }
+
     const amt    = Number(document.getElementById('wdrAmount')?.value);
     const method = document.getElementById('wdrMethod')?.value || 'mpesa';
-    if (!amt || amt < 100) return toast('Minimum withdrawal is KSh 100', 'error');
-    if (amt > (_dashboard?.balance || 0)) return toast('Insufficient balance', 'error');
+    const bal    = _dashboard ? (_dashboard.balance || 0) : null;
 
-    let payload = { amount: amt, method };
+    if (!amt || amt < 100)         return _wdrShowError('Enter an amount of at least KSh 100.');
+    if (bal != null && amt > bal)  return _wdrShowError('Enter an amount between KSh 100 and your available balance (KSh ' + _fmt(bal) + ').');
+
+    const payload = { amount: amt, method, idempotencyKey: _wdrIdemKey || ((_uid || 'anon') + '_' + Date.now()) };
     if (method === 'mpesa') {
       const phone = document.getElementById('wdrPhone')?.value?.trim();
-      if (!PHONE_RE.test(phone)) return toast('Enter a valid M-Pesa number', 'error');
+      if (!PHONE_RE.test(phone || '')) { document.getElementById('wdrPhone')?.focus(); return _wdrShowError('Enter the M-Pesa number to receive the payout.'); }
       payload.accountNumber = _normalizePhone(phone);
     } else {
       payload.accountNumber = document.getElementById('wdrAccNum')?.value?.trim();
       payload.bankName      = document.getElementById('wdrBank')?.value?.trim();
-      if (!payload.accountNumber || !payload.bankName) return toast('Enter account and bank details', 'error');
+      if (!payload.accountNumber || !payload.bankName) return _wdrShowError('Enter your account number and bank name.');
+    }
+    console.log('[payout] validation passed', { amount: amt, method });
+
+    if (!navigator.onLine) return _wdrShowError('You appear to be offline. Check your connection and try again.');
+
+    /* Instant payouts require a verified PIN — collect it if the user has one set.
+       The server decides whether to grant instant; a missing PIN just routes to review. */
+    if (_dashboard?.hasPin) {
+      const pin = await _promptPin('Enter your PIN to withdraw KSh ' + _fmt(amt));
+      if (!pin) return;   // cancelled — don't submit
+      payload.pin = pin;
     }
 
+    /* Loading state — "Sending your money…" + spinner, taps blocked. */
+    const origLabel = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.dataset.busy = '1';
+      btn.disabled = true;
+      btn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:8px"></span>Sending your money…';
+    }
+    _payoutStartedAt = Date.now();
+    const _reset = () => { if (btn) { btn.dataset.busy = '0'; btn.disabled = false; btn.innerHTML = origLabel || '🏧 Request Payout'; } };
+
     try {
-      const fn = await _cf('requestSellerPayout');
-      const res = await fn(payload);
-      if (res.data?.success) {
-        toast('Payout requested! Processing within 24h.', 'success');
-        closeOverlay('ovlWithdraw');
-        loadDashboard();
+      console.log('[payout] request sent', { amount: amt, method, key: payload.idempotencyKey });
+      const res = await _callTimed('requestSellerPayout', payload, 25000);
+      console.log('[payout] response received', res && res.data);
+      const d = (res && res.data) || {};
+      if (d.success) {
+        const raw  = d.accountNumber || payload.accountNumber || '';
+        const acct = raw ? ('0' + String(raw).slice(3)) : 'your account';
+        /* Optimistic refresh — no page reload. */
+        if (_dashboard) {
+          _dashboard.balance       = Math.max(0, (_dashboard.balance || 0) - amt);
+          _dashboard.pendingPayout = (_dashboard.pendingPayout || 0) + amt;
+        }
+        _setText('balVal', _fmt(_dashboard?.balance || 0));
+        _renderPendingPayout();
+        _wdrRenderSuccess(d, amt, acct);
+        const form = document.getElementById('wdrForm');   if (form) form.style.display = 'none';
+        const succ = document.getElementById('wdrSuccess'); if (succ) succ.style.display = 'block';
+        _wdrIdemKey = '';   // consumed — next withdrawal gets a fresh key
+        loadDashboard();    // authoritative refresh
+        console.log('[payout] wallet refreshed');
       } else {
-        toast(res.data?.message || 'Payout request failed', 'error');
+        _wdrShowError(_payoutErr(d.message));
       }
     } catch (e) {
-      toast(e.message || 'Payout request failed. Try again.', 'error');
+      console.error('[payout] error', e);
+      _wdrShowError(_payoutErr(e));
+    } finally {
+      _reset();
     }
+  }
+
+  /* Mode-aware success panel: instant (sent + ref + ETA), scheduled, or under review. */
+  function _wdrRenderSuccess(d, amt, acct) {
+    const mode    = d.mode || 'review';
+    const titleEl = document.querySelector('#wdrSuccess h3');
+    const emojiEl = document.querySelector('#wdrSuccess > div');
+    let title, msg, emoji;
+    if (mode === 'instant' || d.status === 'processing') {
+      emoji = '✅'; title = 'KSh ' + _fmt(amt) + ' sent successfully';
+      msg = 'On its way to ' + acct + '. Expected arrival: ' + (d.estimatedArrival || '1–3 minutes') + '.' +
+            (d.reference ? '\nReference: ' + d.reference : '');
+    } else if (mode === 'scheduled') {
+      emoji = '🗓️'; title = 'Withdrawal scheduled';
+      msg = 'KSh ' + _fmt(amt) + ' to ' + acct + ' — processed within 24 hours.';
+    } else {
+      emoji = '⏳'; title = 'Under review';
+      msg = 'KSh ' + _fmt(amt) + ' to ' + acct + '. Approved withdrawals arrive within 24 hours.';
+    }
+    if (emojiEl) emojiEl.textContent = emoji;
+    if (titleEl) titleEl.textContent = title;
+    _setText('wdrSuccessMsg', msg);
+  }
+
+  /* Pending-withdrawals indicator on the dashboard (shown only when > 0). */
+  function _renderPendingPayout() {
+    const row = document.getElementById('pendingPayoutRow');
+    if (!row) return;
+    const p = _dashboard?.pendingPayout || 0;
+    if (p > 0) { _setText('pendingPayoutVal', 'KSh ' + _fmt(p)); row.style.display = 'flex'; }
+    else row.style.display = 'none';
+  }
+
+  /* ─── PAYOUT HISTORY / DETAILS ─── */
+  async function openPayouts() {
+    openOverlay('ovlPayouts');
+    const list = document.getElementById('payoutsList');
+    if (list) list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:20px 0">Loading…</p>';
+    try {
+      const res = await _callTimed('getPayoutHistory', {}, 20000);
+      _renderPayouts(res?.data?.payouts || []);
+    } catch (e) {
+      if (list) list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:20px 0">Could not load withdrawals. ' + _esc(e.message || '') + '</p>';
+    }
+  }
+
+  function _payoutStatusMeta(s) {
+    const m = {
+      pending:         { t: 'Requested',  c: 'var(--sub)', i: '🕒' },
+      approving:       { t: 'Approving',  c: 'var(--sub)', i: '🕒' },
+      approved:        { t: 'Approved',   c: 'var(--g)',   i: '✓'  },
+      processing:      { t: 'Processing', c: '#f6c945',    i: '⏳' },
+      approval_failed: { t: 'Retrying',   c: '#f6c945',    i: '⚠️' },
+      paid:            { t: 'Paid',       c: 'var(--g)',   i: '✅' },
+      rejected:        { t: 'Rejected',   c: 'var(--red)', i: '✕'  },
+      failed:          { t: 'Failed',     c: 'var(--red)', i: '✕'  },
+    };
+    return m[s] || { t: s || 'Unknown', c: 'var(--sub)', i: '•' };
+  }
+
+  function _payoutDate(ts) {
+    const secs = ts?._seconds ?? ts?.seconds;
+    if (!secs) return '';
+    const d = new Date(secs * 1000);
+    return d.toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) +
+           ' · ' + d.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  function _renderPayouts(payouts) {
+    const list = document.getElementById('payoutsList');
+    if (!list) return;
+    if (!payouts.length) {
+      list.innerHTML = '<p style="text-align:center;color:var(--sub);font-size:13px;padding:24px 0">No withdrawals yet.</p>';
+      return;
+    }
+    list.innerHTML = payouts.map((p) => {
+      const st = _payoutStatusMeta(p.status);
+      return '<div style="background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:12px 14px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+          '<span style="font-weight:800;font-size:15px">KSh ' + _fmt(p.amount) + '</span>' +
+          '<span style="font-size:12px;font-weight:700;color:' + st.c + '">' + st.i + ' ' + _esc(st.t) + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--sub);line-height:1.7">' +
+          '<div>To ' + _esc(p.destinationMasked || '—') + ' · ' + _esc(String(p.method || '').toUpperCase()) + '</div>' +
+          (p.fee ? '<div>Fee KSh ' + _fmt(p.fee) + ' · You receive KSh ' + _fmt(p.netAmount) + '</div>' : '') +
+          '<div>' + _esc(_payoutDate(p.createdAt)) + '</div>' +
+          (p.intasendRef ? '<div>Ref: ' + _esc(p.intasendRef) + '</div>' : '') +
+          '<div style="opacity:.7">ID: ' + _esc(p.id) + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
   }
 
   /* ─── REQUEST MONEY ─── */
@@ -1138,6 +1395,32 @@ window.SokoniWalletV2 = (function () {
     }
   }
 
+  /* ─── PIN AUTHORIZATION (verify before a send) ───
+     Server enforces the PIN too (walletV2Send → _assertPinOk); this just collects
+     it so the user isn't rejected. Resolves the entered PIN, or null if cancelled. */
+  let _pinResolve = null;
+  function _promptPin(sub) {
+    return new Promise((resolve) => {
+      _pinResolve = resolve;
+      const i = document.getElementById('pinVerifyInput'); if (i) i.value = '';
+      _setText('pinVerifySub', sub || 'Authorize this payment');
+      openOverlay('ovlPinVerify');
+      setTimeout(() => document.getElementById('pinVerifyInput')?.focus(), 120);
+    });
+  }
+  function pinVerifySubmit() {
+    const pin = document.getElementById('pinVerifyInput')?.value?.trim();
+    if (!/^\d{4}$/.test(pin || '')) return toast('Enter your 4-digit PIN', 'error');
+    const r = _pinResolve; _pinResolve = null;
+    closeOverlay('ovlPinVerify');
+    if (r) r(pin);
+  }
+  function pinVerifyCancel() {
+    const r = _pinResolve; _pinResolve = null;
+    closeOverlay('ovlPinVerify');
+    if (r) r(null);
+  }
+
   /* ─── QR CODE ─── */
   function qrTabSwitch(mode) {
     _qrMode = mode;
@@ -1281,9 +1564,259 @@ window.SokoniWalletV2 = (function () {
     a.click();
   }
 
-  function qrScan() {
-    toast('Point camera at a SOKONI QR code to pay', 'default', 4000);
-    /* Camera scanning requires getUserMedia + QR decode library — see WALLET_V2_ARCHITECTURE.md */
+  /* ─── SCAN TO PAY ───
+     Lets a payer send to a recipient by scanning their "Pay Me" QR — the key path
+     for phone-less users, who have no phone to be found by but always have a uid.
+     Camera decode uses the native BarcodeDetector (Android Chrome); every other
+     device (incl. iPhone Safari, which lacks BarcodeDetector) uses the paste box.
+     Payment goes through walletV2Send({ toUid }), reusing all its guards. */
+  let _scanStream  = null;
+  let _scanTimer   = null;
+  let _scanPayload = null;   // { uid, amount|null }
+
+  function qrCopyCode() {
+    const code = _qrData?.qrPayload;
+    if (!code) return toast('Generate your QR first', 'error');
+    try {
+      navigator.clipboard.writeText(code);
+      toast('Pay code copied — share it so anyone can pay you', 'success');
+    } catch (_) {
+      toast('Could not copy. Long-press to copy your QR image instead.', 'error');
+    }
+  }
+
+  async function qrScan() {
+    _scanPayload = null;
+    const paste = document.getElementById('scanPaste'); if (paste) paste.value = '';
+    /* Restore the scanner UI (a prior "pay contact" open may have hidden these) */
+    const pg = document.getElementById('scanPasteGroup'); if (pg) pg.style.display = '';
+    const amtG = document.getElementById('scanAmtGroup'); if (amtG) amtG.style.display = 'none';
+    const amtI = document.getElementById('scanAmt'); if (amtI) amtI.value = '';
+    _setText('scanStatus', 'Point your camera at a SOKONI Pay QR');
+    openOverlay('ovlScan');
+    _startScanCamera();
+  }
+
+  /* Open the pay sheet targeting a known uid (e.g. "Send money" from a chat).
+     Reuses the scan-to-pay flow: no camera/paste, just the amount + Pay button. */
+  function openPayToUid(uid, name) {
+    _stopScanCamera();
+    _scanPayload = { uid: String(uid), amount: null };
+    const cam = document.getElementById('scanCamWrap');   if (cam) cam.style.display = 'none';
+    const pg  = document.getElementById('scanPasteGroup'); if (pg)  pg.style.display = 'none';
+    const amtG = document.getElementById('scanAmtGroup');  if (amtG) amtG.style.display = '';
+    const amtI = document.getElementById('scanAmt');       if (amtI) amtI.value = '';
+    _setText('scanStatus', 'Send money to ' + (name || 'this contact'));
+    openOverlay('ovlScan');
+  }
+
+  async function _startScanCamera() {
+    const wrap  = document.getElementById('scanCamWrap');
+    const video = document.getElementById('scanVideo');
+    if (!('BarcodeDetector' in window) || !navigator.mediaDevices?.getUserMedia) {
+      _setText('scanStatus', 'Live scan isn\'t supported on this device — paste the pay code below.');
+      return;
+    }
+    let detector;
+    try {
+      const formats = await window.BarcodeDetector.getSupportedFormats?.();
+      if (formats && !formats.includes('qr_code')) {
+        _setText('scanStatus', 'QR scan unsupported here — paste the code below.'); return;
+      }
+      detector = new window.BarcodeDetector({ formats: ['qr_code'] });
+    } catch (_) {
+      _setText('scanStatus', 'QR scan unavailable — paste the code below.'); return;
+    }
+    try {
+      _scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    } catch (_) {
+      _setText('scanStatus', 'Camera blocked — allow access or paste the pay code below.'); return;
+    }
+    if (wrap) wrap.style.display = 'block';
+    video.srcObject = _scanStream;
+    try { await video.play(); } catch (_) {}
+    const tick = async () => {
+      if (!_scanStream) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes && codes.length) { _onScanDecoded(codes[0].rawValue); return; }
+      } catch (_) {}
+      _scanTimer = setTimeout(tick, 350);
+    };
+    _scanTimer = setTimeout(tick, 400);
+  }
+
+  function _stopScanCamera() {
+    if (_scanTimer) { clearTimeout(_scanTimer); _scanTimer = null; }
+    if (_scanStream) { _scanStream.getTracks().forEach(t => t.stop()); _scanStream = null; }
+    const wrap  = document.getElementById('scanCamWrap'); if (wrap) wrap.style.display = 'none';
+    const video = document.getElementById('scanVideo'); if (video) video.srcObject = null;
+  }
+
+  function _parsePayCode(raw) {
+    if (!raw) return null;
+    try {
+      const o = JSON.parse(String(raw).trim());
+      if (o && o.uid) {
+        return { uid: String(o.uid), amount: o.amount != null ? Number(o.amount) : null };
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  function _acceptScan(parsed) {
+    _scanPayload = parsed;
+    const amtG = document.getElementById('scanAmtGroup');
+    if (parsed.amount && parsed.amount >= MIN_SEND) {
+      if (amtG) amtG.style.display = 'none';
+      _setText('scanStatus', 'Ready to pay KSh ' + _fmt(parsed.amount));
+    } else {
+      if (amtG) amtG.style.display = 'block';
+      _setText('scanStatus', 'Pay code recognised — enter an amount to send.');
+    }
+  }
+
+  function _onScanDecoded(raw) {
+    _stopScanCamera();
+    const parsed = _parsePayCode(raw);
+    if (!parsed) { _setText('scanStatus', 'That QR isn\'t a SOKONI pay code.'); return; }
+    _acceptScan(parsed);
+  }
+
+  function qrScanClose() {
+    _stopScanCamera();
+    closeOverlay('ovlScan');
+  }
+
+  async function qrScanPay() {
+    if (!_scanPayload) {
+      const parsed = _parsePayCode(document.getElementById('scanPaste')?.value);
+      if (!parsed) return toast('Scan or paste a valid SOKONI pay code first', 'error');
+      _acceptScan(parsed);
+    }
+    if (!_scanPayload) return;
+    let amount = _scanPayload.amount;
+    if (!amount || amount < MIN_SEND) amount = Number(document.getElementById('scanAmt')?.value);
+    if (!amount || amount < MIN_SEND) return toast('Enter an amount (min KSh ' + MIN_SEND + ')', 'error');
+    if (_frozen) return toast('Wallet is frozen. Unfreeze in Security settings.', 'error');
+    if (_dashboard && amount > (_dashboard.balance || 0)) return toast('Insufficient balance', 'error');
+
+    let pin = null;
+    if (_dashboard?.hasPin) {
+      pin = await _promptPin('Enter your PIN to send KSh ' + _fmt(amount));
+      if (!pin) return;   // cancelled — don't send
+    }
+
+    const btn = document.getElementById('scanPayBtn');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await _callTimed('walletV2Send', { toUid: _scanPayload.uid, amount, note: 'Wallet payment', pin });
+      const d = res.data;
+      if (d.success) {
+        if (_dashboard) _dashboard.balance = d.newBalance;
+        _setText('balVal', _fmt(d.newBalance));
+        toast('Sent KSh ' + _fmt(amount) + ' to ' + (d.recipientName || 'recipient'), 'success');
+        qrScanClose();
+        loadDashboard();
+      } else {
+        toast(d.error === 'USER_NOT_FOUND' ? 'Recipient not found on SOKONI' : 'Payment failed', 'error');
+        if (btn) btn.disabled = false;
+      }
+    } catch (e) {
+      toast(e.message || 'Payment failed. Try again.', 'error');
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /* ─── ADD PHONE (verify to receive money) ───
+     Phone-less accounts (Google/email sign-ups) can't be found by senders. This
+     links a Firebase-verified phone to the account via linkWithPhoneNumber, then
+     walletV2SavePhone persists only the token-verified number. Firebase enforces
+     one phone per account, so nobody can claim a number they don't control. */
+  let _apStage    = 'send';
+  let _apConfirm  = null;
+  let _apVerifier = null;
+
+  function _showAddPhoneBanner(show) {
+    const b = document.getElementById('addPhoneBanner');
+    if (b) b.style.display = show ? 'flex' : 'none';
+  }
+
+  function addPhoneOpen() {
+    _apStage = 'send';
+    _apConfirm = null;
+    const pg = document.getElementById('apPhoneGroup'); if (pg) pg.style.display = '';
+    const cg = document.getElementById('apCodeGroup');  if (cg) cg.style.display = 'none';
+    const btn = document.getElementById('apSubmitBtn'); if (btn) { btn.textContent = '📲 Send code'; btn.disabled = false; }
+    openOverlay('ovlAddPhone');
+  }
+
+  async function addPhoneSubmit() {
+    const btn = document.getElementById('apSubmitBtn');
+
+    if (_apStage === 'send') {
+      const raw = document.getElementById('apPhone')?.value?.trim();
+      const norm = _normalizePhone(raw);
+      if (!norm) return toast('Enter a valid Kenyan phone number', 'error');
+      const fullPhone = '+' + norm;
+      if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+      try {
+        const { getAuth, RecaptchaVerifier, linkWithPhoneNumber } = await import(
+          'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js'
+        );
+        const auth = getAuth(window.firebaseApp);
+        if (!auth.currentUser) throw new Error('Please sign in again.');
+        if (!_apVerifier) {
+          _apVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', { size: 'invisible' });
+        }
+        _apConfirm = await linkWithPhoneNumber(auth.currentUser, fullPhone, _apVerifier);
+        _apStage = 'verify';
+        const pg = document.getElementById('apPhoneGroup'); if (pg) pg.style.display = 'none';
+        const cg = document.getElementById('apCodeGroup');  if (cg) cg.style.display = '';
+        document.getElementById('apCode')?.focus();
+        if (btn) { btn.textContent = '✓ Verify & save'; btn.disabled = false; }
+        toast('Code sent to ' + fullPhone, 'success');
+      } catch (e) {
+        let msg = e.message || 'Could not send code. Try again.';
+        if (e.code === 'auth/credential-already-in-use' ||
+            e.code === 'auth/account-exists-with-different-credential' ||
+            e.code === 'auth/provider-already-linked') {
+          msg = 'That number is already linked to a SOKONI account.';
+        }
+        toast(msg, 'error');
+        try { _apVerifier?.clear(); } catch (_) {}
+        _apVerifier = null;
+        if (btn) { btn.disabled = false; btn.textContent = '📲 Send code'; }
+      }
+      return;
+    }
+
+    /* verify stage */
+    const code = document.getElementById('apCode')?.value?.trim();
+    if (!code || code.length < 6 || !_apConfirm) return toast('Enter the 6-digit code', 'error');
+    if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
+    try {
+      await _apConfirm.confirm(code);   /* links & verifies the phone on the account */
+      const { getAuth } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+      const auth = getAuth(window.firebaseApp);
+      await auth.currentUser.getIdToken(true);   /* refresh so the token carries phone_number */
+      const res = await _callTimed('walletV2SavePhone', {});
+      if (res.data?.success) {
+        _userPhone = String(res.data.phone || '').replace(/^\+/, '');
+        _showAddPhoneBanner(false);
+        closeOverlay('ovlAddPhone');
+        toast('Phone verified — people can now send you money', 'success');
+      } else {
+        toast('Could not save your phone. Try again.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '✓ Verify & save'; }
+      }
+    } catch (e) {
+      let msg = e.message || 'Wrong or expired code. Try again.';
+      if (e.code === 'auth/invalid-verification-code') msg = 'Wrong code. Check your SMS and try again.';
+      if (e.code === 'auth/code-expired')             msg = 'Code expired. Tap Send code again.';
+      toast(msg, 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '✓ Verify & save'; }
+    }
   }
 
   /* ─── MERCHANT WALLET ─── */
@@ -1355,7 +1888,7 @@ window.SokoniWalletV2 = (function () {
     sendStep1Next, sendStep2Next, executeSend,
     sndKey, sndKeyDel, setSendAmt,
     /* Withdraw */
-    openWithdraw, wdrMethodChange, requestPayout,
+    openWithdraw, wdrMethodChange, requestPayout, wdrAmountInput, openPayouts,
     /* Request */
     openRequest, createRequest, shareReqLink, copyReqLink,
     /* Savings */
@@ -1367,8 +1900,12 @@ window.SokoniWalletV2 = (function () {
     openSecurity, toggleFreeze, saveLimits, openLimits,
     /* PIN */
     openPinSetup, pinKey, pinKeyDel,
+    pinVerifySubmit, pinVerifyCancel,
     /* QR */
     qrTabSwitch, qrUpdateAmount, qrGenerate, qrShare, qrDownload, qrScan,
+    qrCopyCode, qrScanClose, qrScanPay,
+    /* Add phone */
+    addPhoneOpen, addPhoneSubmit,
     /* Merchant */
     openMerchantWallet,
     /* Split */

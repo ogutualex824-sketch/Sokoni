@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════════════════
-   KASS VAPES — merchant catalogue
+   KASS SHOP — merchant catalogue
 
-   The product data for the KASS Vapes brand, held as data rather than embedded
+   The product data for the KASS Shop brand, held as data rather than embedded
    in a seeding script, so the same catalogue can be loaded into:
 
      • PosInventory (IndexedDB) for SmartPOS testing — works offline, no auth
@@ -27,7 +27,7 @@ window.KassCatalog = (() => {
   'use strict';
 
   const MERCHANT = Object.freeze({
-    businessName: 'KASS VAPES',
+    businessName: 'KASS SHOP',
     businessType: 'Vape & Lifestyle Store',
     brand:        'kass',              /* matches functions/brands.js */
     tier:         'Premium',

@@ -142,16 +142,19 @@ function _itemSummary(order) {
    orders/{id}  →  escrow: { held, released, refunded, currency }
 ───────────────────────────────────────────────────────────── */
 function _escrowUpdate(status, order) {
+  /* Escrow timestamps are payout money-movement events → server-generated, never
+     the client clock. serverTimestamp() is legal inside this nested map (only
+     arrayUnion forbids the sentinel). */
   const total = Number(order.orderTotal || 0);
   switch (status) {
     case 'paid':
-      return { escrow: { held: total, released: 0, refunded: 0, currency: 'KES', heldAt: new Date().toISOString() } };
+      return { escrow: { held: total, released: 0, refunded: 0, currency: 'KES', heldAt: serverTimestamp() } };
     case 'completed':
-      return { escrow: { held: 0, released: order.sellerNet || 0, refunded: 0, releasedAt: new Date().toISOString() } };
+      return { escrow: { held: 0, released: order.sellerNet || 0, refunded: 0, releasedAt: serverTimestamp() } };
     case 'refunded':
-      return { escrow: { held: 0, released: 0, refunded: total, refundedAt: new Date().toISOString() } };
+      return { escrow: { held: 0, released: 0, refunded: total, refundedAt: serverTimestamp() } };
     case 'cancelled':
-      return { escrow: { held: 0, released: 0, refunded: 0, cancelledAt: new Date().toISOString() } };
+      return { escrow: { held: 0, released: 0, refunded: 0, cancelledAt: serverTimestamp() } };
     default:
       return {};
   }
@@ -217,7 +220,25 @@ const SokoniOrders = {
   TRANSITIONS,
 
   /* ── createOrder(opts) ──
-     Initial order creation — writes with status = pending_payment.
+     ⚠️ UNREACHABLE BY THE CURRENT CHECKOUT FLOW — DO NOT REUSE WITHOUT REDESIGN.
+     ────────────────────────────────────────────────────────────────────────
+     Checkout (checkout.html) writes the order document itself and then calls
+     transitionOrder(); it never calls createOrder(). This method is retained
+     only for reference.
+
+     It is INCOMPATIBLE WITH FIRESTORE RULES as written: it sets `escrow` (and a
+     pending_payment status) in the create payload, and firestore.rules
+     `clientOrderInit()` explicitly REJECTS a create that carries `escrow`,
+     `paymentVerified`, `inventoryApplied`, etc. A client call to this method
+     is therefore denied outright. `escrow` is money, not intent — only the
+     server-side payment callback may open it.
+
+     If order creation ever needs to move here, it must first be stripped of
+     every server-owned field (escrow, settlement, payout, fulfilment) so the
+     create payload satisfies clientOrderInit — or be moved into a Cloud
+     Function, which bypasses rules. Wiring it into checkout as-is will break
+     ordering platform-wide. See docs/RELEASE_ACCEPTANCE.md §Write-path P3.
+
      opts: { id, buyerUid, buyerName, buyerPhone, sellerUid, sellerName,
              sellerPhone, items[], orderTotal, deliveryFee, category,
              pickupAddress, pickupCoords, deliveryAddress, deliveryCoords,
@@ -281,11 +302,16 @@ const SokoniOrders = {
     return id;
   },
 
-  /* ── transitionOrder(orderId, toStatus, actorUid?, meta?) ──
+  /* ── transitionOrder(orderId, toStatus, actorUid?, meta?, serverStampFields?) ──
      The ONLY way to change order status.
+     serverStampFields: extra event-time field names to stamp with the SERVER
+     clock (serverTimestamp()) on the order doc. They are set on the patch AFTER
+     the meta spread and are kept OFF the arrayUnion history entry, so callers can
+     server-stamp method-specific event times (acceptedAt, inTransitAt, …) without
+     the sentinel ever landing inside an array (which Firestore forbids).
      Returns { ok, error }
   */
-  async transitionOrder(orderId, toStatus, actorUid, meta) {
+  async transitionOrder(orderId, toStatus, actorUid, meta, serverStampFields) {
     const snap = await getDoc(doc(db, 'orders', orderId));
     if (!snap.exists()) return { ok: false, error: 'Order not found: ' + orderId };
     const order      = snap.data();
@@ -297,6 +323,11 @@ const SokoniOrders = {
       return { ok: false, error: `Illegal transition: ${fromStatus} → ${toStatus}` };
     }
 
+    /* `now` (client ISO) is used ONLY for the statusHistory[].at mirror below —
+       arrayUnion forbids the serverTimestamp() sentinel, so the array keeps a
+       client value. That entry is a display mirror; the authoritative event trail
+       is orderEvents/{id}/events (server-stamped, see _writeEvent) plus the
+       scalar fields below, which ARE server-generated. */
     const now = new Date().toISOString();
     const actor = actorUid || _uid() || 'system';
     const historyEntry = { status: toStatus, at: now, by: actor, ...(meta || {}) };
@@ -304,19 +335,29 @@ const SokoniOrders = {
     /* Build update patch */
     const patch = {
       status:        toStatus,
-      updatedAt:     now,
+      updatedAt:     serverTimestamp(),
       _updatedAt:    serverTimestamp(),
       statusHistory: arrayUnion(historyEntry),
       ...( meta || {} ),
       ..._escrowUpdate(toStatus, order),
     };
 
-    /* Status-specific patches */
-    if (toStatus === ORDER_STATUS.CANCELLED)  patch.cancelledAt  = now;
-    if (toStatus === ORDER_STATUS.COMPLETED)  patch.completedAt  = now;
-    if (toStatus === ORDER_STATUS.DELIVERED)  patch.deliveredAt  = now;
-    if (toStatus === ORDER_STATUS.PICKED_UP)  patch.pickedUpAt   = now;
-    if (toStatus === ORDER_STATUS.REFUNDED)   patch.refundedAt   = now;
+    /* Status-specific event times — server-generated so no client clock can
+       influence payout/SLA chronology. Set after the ...meta spread so they win,
+       and kept OFF the arrayUnion history entry (which cannot hold the sentinel).
+       paidAt/confirmedAt were previously passed via meta by markPaid/sellerConfirm
+       and are now stamped here instead. */
+    if (toStatus === ORDER_STATUS.PAID)       patch.paidAt       = serverTimestamp();
+    if (toStatus === ORDER_STATUS.CONFIRMED)  patch.confirmedAt  = serverTimestamp();
+    if (toStatus === ORDER_STATUS.CANCELLED)  patch.cancelledAt  = serverTimestamp();
+    if (toStatus === ORDER_STATUS.COMPLETED)  patch.completedAt  = serverTimestamp();
+    if (toStatus === ORDER_STATUS.DELIVERED)  patch.deliveredAt  = serverTimestamp();
+    if (toStatus === ORDER_STATUS.PICKED_UP)  patch.pickedUpAt   = serverTimestamp();
+    if (toStatus === ORDER_STATUS.REFUNDED)   patch.refundedAt   = serverTimestamp();
+
+    /* Caller-specified event times (e.g. acceptedAt, inTransitAt) — server clock,
+       set on the doc, never inside the arrayUnion history entry. */
+    (serverStampFields || []).forEach(function (f) { patch[f] = serverTimestamp(); });
 
     await updateDoc(doc(db, 'orders', orderId), patch);
     await _writeEvent(orderId, fromStatus, toStatus, actor, meta || {});
@@ -350,18 +391,19 @@ const SokoniOrders = {
 
   /* ── markPaid(orderId, paymentMeta?) ── */
   async markPaid(orderId, paymentMeta) {
+    /* paidAt is stamped server-side in transitionOrder (toStatus === PAID). It is
+       intentionally NOT passed in meta: meta is spread into the arrayUnion history
+       entry, and a serverTimestamp() sentinel is illegal inside an array. */
     return this.transitionOrder(orderId, ORDER_STATUS.PAID, _uid(), {
       paymentMethod: paymentMeta?.method || 'mpesa',
       paymentRef:    paymentMeta?.ref    || null,
-      paidAt:        new Date().toISOString(),
     });
   },
 
   /* ── sellerConfirm(orderId, sellerUid) ── */
   async sellerConfirm(orderId, sellerUid) {
-    return this.transitionOrder(orderId, ORDER_STATUS.CONFIRMED, sellerUid, {
-      confirmedAt: new Date().toISOString(),
-    });
+    /* confirmedAt is stamped server-side in transitionOrder (toStatus === CONFIRMED). */
+    return this.transitionOrder(orderId, ORDER_STATUS.CONFIRMED, sellerUid, {});
   },
 
   /* ── assignRider(orderId, driver) ── */
@@ -380,40 +422,33 @@ const SokoniOrders = {
 
   /* ── riderAccept(orderId, driverUid) ── */
   async riderAccept(orderId, driverUid) {
-    return this.transitionOrder(orderId, ORDER_STATUS.RIDER_EN_ROUTE, driverUid, {
-      acceptedAt: new Date().toISOString(),
-    });
+    return this.transitionOrder(orderId, ORDER_STATUS.RIDER_EN_ROUTE, driverUid, {}, ['acceptedAt']);
   },
 
   /* ── riderReject(orderId, driverUid) ──
      Re-queues for a different driver (back to confirmed). */
   async riderReject(orderId, driverUid) {
-    const r = await this.transitionOrder(orderId, ORDER_STATUS.CONFIRMED, driverUid, {
+    return this.transitionOrder(orderId, ORDER_STATUS.CONFIRMED, driverUid, {
       rejectedDriverId:  driverUid,
-      rejectedAt:        new Date().toISOString(),
-    });
-    return r;
+    }, ['rejectedAt']);
   },
 
   /* ── riderPickedUp(orderId, driverUid) ── */
   async riderPickedUp(orderId, driverUid) {
-    return this.transitionOrder(orderId, ORDER_STATUS.PICKED_UP, driverUid, {
-      pickedUpAt: new Date().toISOString(),
-    });
+    /* pickedUpAt is stamped server-side by transitionOrder (toStatus === PICKED_UP). */
+    return this.transitionOrder(orderId, ORDER_STATUS.PICKED_UP, driverUid, {});
   },
 
   /* ── riderInTransit(orderId, driverUid) ── */
   async riderInTransit(orderId, driverUid) {
-    return this.transitionOrder(orderId, ORDER_STATUS.IN_TRANSIT, driverUid, {
-      inTransitAt: new Date().toISOString(),
-    });
+    return this.transitionOrder(orderId, ORDER_STATUS.IN_TRANSIT, driverUid, {}, ['inTransitAt']);
   },
 
   /* ── riderDelivered(orderId, driverUid, proofData?) ──
      proofData: { pin?, photoUrl?, signatureUrl?, note? } */
   async riderDelivered(orderId, driverUid, proofData) {
+    /* deliveredAt is stamped server-side by transitionOrder (toStatus === DELIVERED). */
     return this.transitionOrder(orderId, ORDER_STATUS.DELIVERED, driverUid, {
-      deliveredAt:  new Date().toISOString(),
       proofPin:     proofData?.pin       || null,
       proofPhoto:   proofData?.photoUrl  || null,
       proofSig:     proofData?.signatureUrl || null,
@@ -424,27 +459,28 @@ const SokoniOrders = {
   /* ── buyerConfirm(orderId, buyerUid) ──
      Buyer receipt confirmation → completed → escrow released. */
   async buyerConfirm(orderId, buyerUid) {
+    /* completedAt is stamped by transitionOrder (COMPLETED); buyerConfirmedAt marks
+       the same moment and is server-stamped via serverStampFields. */
     return this.transitionOrder(orderId, ORDER_STATUS.COMPLETED, buyerUid, {
-      buyerConfirmedAt: new Date().toISOString(),
       sellerPayoutReady: true,
-    });
+    }, ['buyerConfirmedAt']);
   },
 
   /* ── cancelOrder(orderId, cancelledByUid, reason?) ── */
   async cancelOrder(orderId, cancelledByUid, reason) {
+    /* cancelledAt is stamped server-side by transitionOrder (toStatus === CANCELLED). */
     return this.transitionOrder(orderId, ORDER_STATUS.CANCELLED, cancelledByUid, {
       cancelledBy:  cancelledByUid,
       cancelReason: reason || '',
-      cancelledAt:  new Date().toISOString(),
     });
   },
 
   /* ── refundOrder(orderId, adminUid, reason?) ── */
   async refundOrder(orderId, adminUid, reason) {
+    /* refundedAt is stamped server-side by transitionOrder (toStatus === REFUNDED). */
     return this.transitionOrder(orderId, ORDER_STATUS.REFUNDED, adminUid, {
       refundedBy:    adminUid,
       refundReason:  reason || '',
-      refundedAt:    new Date().toISOString(),
     });
   },
 
@@ -455,12 +491,14 @@ const SokoniOrders = {
     if (!snap.exists()) return { ok: false, error: 'Order not found' };
     const order      = snap.data();
     const fromStatus = order.status;
+    /* now = client ISO, used ONLY for the arrayUnion history mirror (the sentinel
+       is illegal in an array). updatedAt is server-generated. */
     const now        = new Date().toISOString();
     const histEntry  = { status: toStatus, at: now, by: adminUid, override: true, reason: reason || '' };
 
     await updateDoc(doc(db, 'orders', orderId), {
       status:        toStatus,
-      updatedAt:     now,
+      updatedAt:     serverTimestamp(),
       _updatedAt:    serverTimestamp(),
       statusHistory: arrayUnion(histEntry),
       ..._escrowUpdate(toStatus, order),
@@ -572,7 +610,7 @@ const SokoniOrders = {
       updatedAt: serverTimestamp(),
     });
     await updateDoc(doc(db, 'orders', orderId), {
-      disputed: true, disputeId: id, updatedAt: new Date().toISOString(),
+      disputed: true, disputeId: id, updatedAt: serverTimestamp(),
     }).catch(() => {});
     return id;
   },

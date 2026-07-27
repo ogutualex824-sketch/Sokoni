@@ -12,10 +12,17 @@
  *  3. Queue depths — pending counts in `algoliaQueue` and `typesenseQueue`
  *  4. Last successful sync timestamp from `searchConfig/lastSync`
  *
- * Response codes:
- *  200  all engines healthy
- *  206  degraded (one engine down, or queues above warning threshold)
- *  503  both engines down
+ * Response codes — driven by CUSTOMER IMPACT, not by a roll-up of every backend:
+ *  200  customer search is healthy (a REQUIRED engine is serving). An optional
+ *       backend may still be down — see `redundancy` and `engines[].required`.
+ *  206  degraded — a required engine is down but another can serve, or the
+ *       indexing queue for a required engine is above the warning threshold.
+ *  503  down — no engine can serve customer search.
+ *
+ * `status` answers "can a customer search right now?". `redundancy` answers
+ * "are the secondary backends healthy?". Collapsing the two made the endpoint
+ * report the whole subsystem as degraded while customer search was fine — an
+ * alert that overstates impact gets muted, which is worse than no alert.
  *
  * Never calls another Cloud Function — all reads are direct Firestore or raw HTTPS.
  */
@@ -73,7 +80,13 @@ function _rawGet(transport, opts) {
       });
     });
     req.on('error', (err) => {
-      resolve({ ok: false, statusCode: 0, latencyMs: Date.now() - start, error: err.message });
+      /* Keep the error CODE, not just the message — the code is what
+         distinguishes a dead hostname (ENOTFOUND) from a refused connection
+         (ECONNREFUSED) from a TLS rejection. The message alone loses that. */
+      resolve({
+        ok: false, statusCode: 0, latencyMs: Date.now() - start,
+        error: err.message, errorCode: err.code || null, errorObj: err,
+      });
     });
     req.setTimeout(PING_TIMEOUT_MS, () => {
       req.destroy();
@@ -86,6 +99,88 @@ function _rawGet(transport, opts) {
 /** Convenience wrapper — always uses HTTPS transport */
 function _httpsGet(opts) {
   return _rawGet(https, opts);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   FAILURE TAXONOMY
+
+   A health check that collapses every failure into one message costs an
+   operator a full investigation to learn something the probe already knew.
+   Concretely: Typesense reported `missing_config` while the real fault was a
+   cluster hostname that no longer resolves — two different problems, two
+   different owners, one indistinguishable message.
+
+   Each code below names the LAYER that failed, so the report says where to
+   look rather than merely that something is wrong.
+══════════════════════════════════════════════════════════════════════ */
+const FAIL = {
+  CONFIG_MISSING:   'CONFIG_MISSING',    // we never had enough config to try
+  DNS_FAILURE:      'DNS_FAILURE',       // hostname does not resolve
+  CONNECT_FAILURE:  'CONNECT_FAILURE',   // resolved, but TCP refused/unreachable
+  TLS_FAILURE:      'TLS_FAILURE',       // connected, TLS handshake rejected
+  TIMEOUT:          'TIMEOUT',           // no answer within budget
+  AUTH_FAILURE:     'AUTH_FAILURE',      // reached it; credentials rejected
+  COLLECTION_ERROR: 'COLLECTION_ERROR',  // authenticated; index/collection missing
+  HTTP_ERROR:       'HTTP_ERROR',        // reachable, unexpected status
+  HEALTHY:          'HEALTHY',
+};
+
+/**
+ * Map a Node socket/DNS/TLS error to the layer that actually failed.
+ * Node reports these as error codes on the request; anything unrecognised is
+ * returned as CONNECT_FAILURE rather than guessed at.
+ */
+function _classifyTransportError(err) {
+  const code = (err && (err.code || err.errno)) || '';
+  const msg  = String((err && err.message) || err || '');
+
+  if (code === 'ENOTFOUND' || code === 'EAI_AGAIN' || /getaddrinfo/i.test(msg)) {
+    return FAIL.DNS_FAILURE;
+  }
+  if (/CERT|SSL|TLS|DEPTH_ZERO|SELF_SIGNED|ERR_TLS/i.test(code) || /certificate|SSL|TLS/i.test(msg)) {
+    return FAIL.TLS_FAILURE;
+  }
+  if (code === 'ECONNREFUSED' || code === 'EHOSTUNREACH' || code === 'ENETUNREACH' || code === 'ECONNRESET') {
+    return FAIL.CONNECT_FAILURE;
+  }
+  if (code === 'ETIMEDOUT' || msg === 'timeout') return FAIL.TIMEOUT;
+  return FAIL.CONNECT_FAILURE;
+}
+
+/**
+ * Map an HTTP status from a reached endpoint to the layer that failed.
+ * A 401/403 proves DNS, TCP and TLS all succeeded — the fault is credentials,
+ * which is a different owner from a dead host.
+ */
+function _classifyHttpStatus(status) {
+  if (status >= 200 && status < 300) return FAIL.HEALTHY;
+  if (status === 401 || status === 403) return FAIL.AUTH_FAILURE;
+  if (status === 404) return FAIL.COLLECTION_ERROR;
+  return FAIL.HTTP_ERROR;
+}
+
+/** Build the per-engine result in one shape, whatever the outcome. */
+function _result(raw) {
+  if (raw.error && raw.statusCode === 0) {
+    const code = raw.error === 'timeout'
+      ? FAIL.TIMEOUT
+      : _classifyTransportError(raw.errorObj || { code: raw.errorCode, message: raw.error });
+    return {
+      status:     'down',
+      failure:    code,
+      statusCode: 0,
+      latencyMs:  raw.latencyMs || 0,
+      error:      raw.error,
+    };
+  }
+  const code = _classifyHttpStatus(raw.statusCode);
+  return {
+    status:     code === FAIL.HEALTHY ? 'ok' : 'down',
+    failure:    code,
+    statusCode: raw.statusCode,
+    latencyMs:  raw.latencyMs || 0,
+    error:      code === FAIL.HEALTHY ? null : raw.error || null,
+  };
 }
 
 /**
@@ -113,9 +208,14 @@ function _withTimeout(promise, ms) {
  */
 async function _pingAlgolia(config) {
   if (!config.appId || !config.algoliaSearchKey) {
-    return { ok: false, statusCode: 0, latencyMs: 0, error: 'missing_config' };
+    return {
+      status: 'down', failure: FAIL.CONFIG_MISSING, statusCode: 0, latencyMs: 0,
+      error: 'missing_config',
+      detail: !config.appId ? 'appId absent from searchConfig/engines'
+                            : 'algoliaSearchKey absent from searchConfig/engines',
+    };
   }
-  return _withTimeout(
+  const raw = await _withTimeout(
     _httpsGet({
       hostname: `${config.appId}-dsn.algolia.net`,
       path:     '/1/indexes',
@@ -127,6 +227,7 @@ async function _pingAlgolia(config) {
     }),
     PING_TIMEOUT_MS
   );
+  return _result(raw);
 }
 
 /**
@@ -136,23 +237,40 @@ async function _pingAlgolia(config) {
  * @returns {Promise<{ok, statusCode, latencyMs, error?}>}
  */
 async function _pingTypesense(config) {
-  if (!config.typesenseHost) {
-    return { ok: false, statusCode: 0, latencyMs: 0, error: 'missing_config' };
+  /* Fall back to TYPESENSE_NODES ("host:port:protocol"), which is where the
+     host actually lives in this deployment. Reading only the Firestore config
+     made the probe report CONFIG_MISSING while a perfectly well-specified —
+     but dead — host sat in the environment, hiding the real fault. */
+  let host     = config.typesenseHost;
+  let port     = config.typesensePort;
+  let protocol = config.typesenseProtocol;
+
+  if (!host && process.env.TYPESENSE_NODES) {
+    const [h, p, proto] = String(process.env.TYPESENSE_NODES).split(':');
+    host = h; port = Number(p) || undefined; protocol = proto || undefined;
   }
-  const useHttps  = (config.typesenseProtocol || 'https') === 'https';
-  const port      = config.typesensePort || (useHttps ? 443 : 8108);
+  if (!host && process.env.TYPESENSE_HOST) host = process.env.TYPESENSE_HOST;
+
+  if (!host) {
+    return {
+      status: 'down', failure: FAIL.CONFIG_MISSING, statusCode: 0, latencyMs: 0,
+      error: 'missing_config',
+      detail: 'no typesenseHost in searchConfig/engines and no TYPESENSE_NODES/TYPESENSE_HOST in env',
+    };
+  }
+
+  const useHttps  = (protocol || 'https') === 'https';
+  const resolved  = port || (useHttps ? 443 : 8108);
   const transport = useHttps ? https : http;
 
   // Typesense /health is unauthenticated — no API key required
-  return _withTimeout(
-    _rawGet(transport, {
-      hostname: config.typesenseHost,
-      port,
-      path:     '/health',
-      method:   'GET',
-    }),
+  const raw = await _withTimeout(
+    _rawGet(transport, { hostname: host, port: resolved, path: '/health', method: 'GET' }),
     PING_TIMEOUT_MS
   );
+  const out = _result(raw);
+  out.host = host;   /* name the host in the report — the fault is often the host itself */
+  return out;
 }
 
 /**
@@ -235,37 +353,73 @@ exports.searchHealth = onRequest(
       _queueDepth('typesenseQueue'),
     ]);
 
-    /* ── 4. Determine statuses ────────────────────────────────────────────── */
-    const algoliaStatus   = algoliaPing.ok   ? 'ok' : 'down';
-    const typesenseStatus = typesensePing.ok ? 'ok' : 'down';
+    /* ── 4. Determine statuses ──────────────────────────────────────────────
+       The probes now return a classified {status, failure} rather than a bare
+       `ok` boolean, so read that directly. */
+    const algoliaStatus   = algoliaPing.status;
+    const typesenseStatus = typesensePing.status;
 
     const algoliaQueueWarn   = algoliaQueueDepth   > QUEUE_WARN_THRESHOLD;
     const typesenseQueueWarn = typesenseQueueDepth > QUEUE_WARN_THRESHOLD;
 
+    /* ── Optional vs required backends ──────────────────────────────────────
+       `status` answers ONE question: can a customer search right now? It must
+       therefore be driven by the engine that actually serves traffic.
+
+       Algolia is authoritative. Typesense is a secondary backend held for
+       redundancy — no production feature requires it to succeed. Folding its
+       state into the headline meant the endpoint reported the whole search
+       subsystem as `degraded` while customer search was entirely healthy. That
+       overstates impact, and an alert that cries wolf gets muted, which is
+       worse than no alert.
+
+       Secondary state is not hidden — it is reported under `redundancy`, with
+       full per-engine detail below. Operators keep the visibility; the headline
+       stops lying about customer impact. */
+    const ENGINE_REQUIRED = { algolia: true, typesense: false };
+
+    const requiredDown = (ENGINE_REQUIRED.algolia   && algoliaStatus   === 'down')
+                      || (ENGINE_REQUIRED.typesense && typesenseStatus === 'down');
+    const anyEngineUp  = algoliaStatus === 'ok' || typesenseStatus === 'ok';
+    const requiredQueueWarn = (ENGINE_REQUIRED.algolia   && algoliaQueueWarn)
+                           || (ENGINE_REQUIRED.typesense && typesenseQueueWarn);
+
     let overallStatus;
-    if (algoliaStatus === 'down' && typesenseStatus === 'down') {
-      overallStatus = 'down';
-    } else if (algoliaStatus === 'down' || typesenseStatus === 'down' || algoliaQueueWarn || typesenseQueueWarn) {
-      overallStatus = 'degraded';
-    } else {
-      overallStatus = 'ok';
-    }
+    if (requiredDown && !anyEngineUp)      overallStatus = 'down';      /* nothing can serve */
+    else if (requiredDown)                 overallStatus = 'degraded';  /* primary down, secondary serving */
+    else if (requiredQueueWarn)            overallStatus = 'degraded';  /* serving, but indexing lags */
+    else                                   overallStatus = 'ok';        /* customer search healthy */
+
+    /* Redundancy: the state of optional backends, reported separately. */
+    const optionalDown = (!ENGINE_REQUIRED.typesense && typesenseStatus === 'down')
+                      || (!ENGINE_REQUIRED.algolia   && algoliaStatus   === 'down');
+    const redundancyStatus = optionalDown ? 'degraded' : 'ok';
 
     /* ── 5. Build response payload ────────────────────────────────────────── */
     const payload = {
+      /* Customer-facing search status — NOT a roll-up of every backend. */
       status: overallStatus,
+      /* Optional/secondary backends, reported without inflating `status`. */
+      redundancy: redundancyStatus,
       engines: {
         algolia: {
+          required:   ENGINE_REQUIRED.algolia,
           status:     algoliaStatus,
+          failure:    algoliaPing.failure,      /* which LAYER failed */
           latencyMs:  algoliaPing.latencyMs,
           statusCode: algoliaPing.statusCode,
           error:      algoliaPing.error || null,
+          detail:     algoliaPing.detail || null,
         },
         typesense: {
+          required:   ENGINE_REQUIRED.typesense,
           status:     typesenseStatus,
+          failure:    typesensePing.failure,
           latencyMs:  typesensePing.latencyMs,
           statusCode: typesensePing.statusCode,
           error:      typesensePing.error || null,
+          detail:     typesensePing.detail || null,
+          host:       typesensePing.host || null,
         },
       },
       queues: {

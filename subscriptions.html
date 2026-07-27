@@ -27,6 +27,24 @@
   <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
   <script src="sokoni-intasend.js" defer></script>
+  <script>
+  /* This page loads the MODULAR SDK (sokoni-init.js), which exposes
+     window.firebaseApp/Auth/DB but NOT window.sokoniCallable — that lives in
+     firebase.js, which this page does not load. subscribePlan() and the
+     activateSubscription() calls depend on window.sokoniCallable, so shim it via
+     the modular functions SDK (resolved against window.firebaseApp at call time).
+     Without this the subscribe buttons threw "sokoniCallable is not a function"
+     and dead-ended on "Could not start payment." */
+  window.sokoniCallable = window.sokoniCallable || function (name) {
+    return async function (payload) {
+      const { getFunctions, httpsCallable } = await import(
+        'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js'
+      );
+      const fn = httpsCallable(getFunctions(window.firebaseApp, 'us-central1'), name);
+      return fn(payload || {});
+    };
+  };
+  </script>
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;min-height:100vh;padding-bottom:80px;}
@@ -233,7 +251,7 @@
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
@@ -311,7 +329,11 @@ async function subscribePlan(planKey, price){
      rejected rather than charged. The local `price` is display only. */
   let _intent = null;
   try {
-    const _cf = firebase.functions().httpsCallable('createPaymentIntent');
+    /* This page loads the MODULAR SDK (sokoni-init.js), so the compat
+       `firebase` global does not exist — firebase.functions() threw
+       "firebase is not defined" and crashed the subscribe flow. Use the shared
+       App-Check-aware callable firebase.js exposes. */
+    const _cf = window.sokoniCallable('createPaymentIntent');
     const _r  = await _cf({ planId: planKey, billingCycle: 'monthly' });
     _intent = _r && _r.data;
   } catch(e){
@@ -356,7 +378,7 @@ async function subscribePlan(planKey, price){
            returns "free" for everyone regardless of payment status. */
         (async function(){
           try {
-            const _fn = firebase.functions().httpsCallable('activateSubscription');
+            const _fn = window.sokoniCallable('activateSubscription');
             await _fn({ plan: planKey, paymentRef: ref });
             /* Invalidate local cache so the next plan read hits Firestore,
                then re-render plan cards to show the active plan badge. */
@@ -521,7 +543,7 @@ window.addEventListener('load', function(){
         if (subSnap.exists()) return;   /* already activated */
 
         /* Doc missing but payment ref present — activate now */
-        const _fn = firebase.functions().httpsCallable('activateSubscription');
+        const _fn = window.sokoniCallable('activateSubscription');
         await _fn({ plan: stored.plan, paymentRef: stored.ref });
         console.log('[sub-recovery] Activated plan:', stored.plan, 'ref:', stored.ref);
         _showBanner('Your ' + stored.plan + ' plan is now active. Listing limit updated.');

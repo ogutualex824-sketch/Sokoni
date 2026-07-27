@@ -114,39 +114,112 @@ function _sizeOptionsHTML(label, options) {
   '</div></div>';
 }
 
+/* ── Seller-declared variants ───────────────────────────────────────────────
+   Rendered from what the seller actually saved through sokoni-product-schema.js.
+   Labels and group order come from that schema, so this page cannot describe an
+   attribute differently from the form that captured it.
+
+   This displaces the old behaviour of *guessing*: every clothing item used to be
+   offered XS–3XL because a regex matched the word "shirt", which presented a
+   guess as stock. A seller who carries only M and L now says so and only that is
+   offered. The guesswork survives below as a fallback for products saved before
+   variants existed — never in preference to a declared value. ─────────────── */
+
+var _VARIANT_LABELS = {
+  colors: 'Colour', sizes: 'Size', storage: 'Storage',
+  weights: 'Pack size', volumes: 'Volume', materials: 'Material',
+};
+
+/* A colour NAME is not a reliable CSS colour: "Multicolour" and "Beige" render
+   as transparent, which the previous swatch used directly as a background and
+   drew as an invisible circle. Known names map to hex; anything unmapped falls
+   back to a neutral chip that still reads its name as text. */
+var _COLOR_HEX = {
+  black:'#111111', white:'#ffffff', grey:'#8a8a8a', gray:'#8a8a8a', navy:'#1b2a4a',
+  blue:'#2563eb', red:'#dc2626', green:'#16a34a', yellow:'#eab308', orange:'#ea580c',
+  pink:'#ec4899', purple:'#7c3aed', brown:'#78350f', beige:'#e3d5b8',
+  gold:'#c9a227', silver:'#c0c0c0',
+  multicolour:'linear-gradient(135deg,#dc2626,#eab308,#16a34a,#2563eb,#7c3aed)',
+  multicolor:'linear-gradient(135deg,#dc2626,#eab308,#16a34a,#2563eb,#7c3aed)',
+};
+
+function _pvEsc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+/* Grouping and normalisation live in the schema module, not here — a second
+   copy is how the upload and edit forms drifted in the first place. If the
+   schema fails to load, this returns nothing and the legacy category fallback
+   below takes over, which degrades to the previous behaviour rather than an
+   error. Labels are titled for display: the schema's form labels are plural
+   ("Colours"), which reads wrong above a single chosen value. */
+function _variantGroups(prod) {
+  var S = window.SokoniProductSchema;
+  if (!S || typeof S.variantGroups !== 'function') return [];
+  return S.variantGroups(prod).map(function (g) {
+    return { key: g.key, label: _VARIANT_LABELS[g.key] || g.label || g.key, values: g.values };
+  });
+}
+
+function _variantGroupHTML(g, autoSelect) {
+  var chips = g.values.map(function (v, i) {
+    var on  = (autoSelect && i === 0) ? 'true' : 'false';
+    var dot = '';
+    if (g.key === 'colors') {
+      var hex = _COLOR_HEX[v.toLowerCase()];
+      dot = '<span class="sk-pvar-dot" style="background:' +
+            (hex || 'rgba(255,255,255,0.25)') + '"></span>';
+    }
+    return '<button type="button" class="sk-pvar-chip" data-vkey="' + _pvEsc(g.key) +
+           '" data-vval="' + _pvEsc(v) + '" aria-pressed="' + on + '">' +
+           dot + _pvEsc(v) + '</button>';
+  }).join('');
+  return '<div class="product-option sk-pvar-group" data-vgroup="' + _pvEsc(g.key) + '">' +
+           '<h3>' + _pvEsc(g.label) + '</h3>' +
+           '<div class="sk-pvar-chips">' + chips + '</div>' +
+         '</div>';
+}
+
 function getVariantHTML(prod) {
   var catRaw  = (prod.category || '') + ' ' + (prod.name || '') + ' ' + (prod.description || '');
   var cat     = catRaw.toLowerCase();
   var html    = '';
 
-  /* 1 — Color swatches (seller-defined) */
-  if (prod.colors && prod.colors.length) {
-    html += '<div class="product-option"><h3>Select Color</h3>' +
-      '<div class="sizes" style="gap:10px;">' +
-        prod.colors.map(function(clr, i) {
-          var border = i === 0 ? '#71ff00' : 'rgba(255,255,255,0.18)';
-          if (i === 0) window._selectedColor = clr;
-          return '<button class="color-swatch" onclick="selectProductColor(this,\'' + clr.replace(/'/g,"\\'") + '\')" ' +
-            'title="' + clr + '" ' +
-            'style="width:30px;height:30px;border-radius:50%;background:' + clr + ';' +
-            'border:2px solid ' + border + ';cursor:pointer;padding:0;transition:border-color .2s;flex-shrink:0;"></button>';
-        }).join('') +
-      '</div></div>';
+  _pvarEnsureStyles();
+  window._selectedVariants = {};
+  window._selectedSize     = null;
+  window._selectedColor    = null;
+  window._primaryVariantKey = null;
+
+  /* 1 — Everything the seller declared, each attribute exactly once. An empty
+         attribute produces no group, so no heading appears without values. */
+  var groups = _variantGroups(prod);
+  if (groups.length) {
+    /* The first non-colour group is what the order's legacy `selectedSize`
+       field mirrors — "256GB" for a phone, "M" for a shirt. Chosen before any
+       preselection runs so the mirror is already pointed at the right group. */
+    groups.forEach(function (g) {
+      if (g.key !== 'colors' && !window._primaryVariantKey) window._primaryVariantKey = g.key;
+    });
+    groups.forEach(function (g) {
+      /* Preselect only when there is a single option: with several, an implicit
+         first choice is a choice the shopper did not make. */
+      var autoSelect = g.values.length === 1;
+      if (autoSelect) _setSelectedVariant(g.key, g.values[0]);
+      html += _variantGroupHTML(g, autoSelect);
+    });
+    return html;
   }
 
-  /* 2 — Seller-defined variants override everything */
+  /* 2 — Legacy free-form variants list, kept for products that predate the schema */
   if (prod.variants && prod.variants.length) {
     if (prod.variants[0]) window._selectedSize = prod.variants[0];
     return html + _sizeOptionsHTML('Select Variant', prod.variants);
   }
 
-  /* 3 — Seller-defined sizes */
-  if (prod.sizes && prod.sizes.length) {
-    window._selectedSize = prod.sizes[0];
-    return html + _sizeOptionsHTML('Select Size', prod.sizes);
-  }
-
-  /* 4 — Category-based defaults */
+  /* 3 — Category-based defaults (fallback only: nothing was declared) */
   var isCloth = /\b(shirt|tshirt|t-shirt|blouse|dress|skirt|jacket|hoodie|sweater|jumper|coat|trouser|pant|jean|short|legging|suit|fashion|cloth|wear|apparel|cap|hat|beanie|scarf|glove|underwear|lingerie|swimwear|romper|kaftan|kanzu|kanga|kitenge)\b/.test(cat);
   var isShoe  = /\b(shoe|boot|sandal|sneaker|slipper|footwear|heel|loafer|trainer|pump|moccasin)\b/.test(cat);
   var isPhone = /\b(phone|smartphone|iphone|android|laptop|tablet|ipad|computer|pc|desktop|tv|television|camera|headphone|earphone|earbuds|speaker|smartwatch|gadget|electronics|tech)\b/.test(cat);
@@ -185,6 +258,56 @@ function getVariantHTML(prod) {
   /* 5 — Nothing matched → return empty (quantity only) */
   return html;
 }
+
+/* Records a chosen variant and mirrors it onto the two legacy globals the cart
+   and order payloads already read, so nothing downstream needs to change to
+   keep working. */
+function _setSelectedVariant(key, val) {
+  window._selectedVariants = window._selectedVariants || {};
+  window._selectedVariants[key] = val;
+  if (key === 'colors') window._selectedColor = val;
+  else if (key === window._primaryVariantKey || !window._primaryVariantKey) window._selectedSize = val;
+}
+
+/* One delegated listener rather than an onclick per chip: variant values are
+   stored strings, and interpolating them into an inline handler is the
+   js-handler injection context this codebase is removing. data-* carries them
+   safely and the browser hands back the decoded value. */
+function _pvarInit() {
+  document.addEventListener('click', function (e) {
+    var chip = e.target && e.target.closest ? e.target.closest('.sk-pvar-chip') : null;
+    if (!chip) return;
+    var group = chip.closest('.sk-pvar-group');
+    if (!group) return;
+    var all = group.querySelectorAll('.sk-pvar-chip');
+    for (var i = 0; i < all.length; i++) all[i].setAttribute('aria-pressed', 'false');
+    chip.setAttribute('aria-pressed', 'true');
+    _setSelectedVariant(chip.getAttribute('data-vkey'), chip.getAttribute('data-vval'));
+  });
+}
+
+/* The renderer ships its own styles, for the same reason the seller-side schema
+   does: a second page adopting these chips must not have to remember to copy a
+   stylesheet. Injected once. */
+function _pvarEnsureStyles() {
+  if (typeof document === 'undefined' || document.getElementById('sk-pvar-css')) return;
+  var s = document.createElement('style');
+  s.id = 'sk-pvar-css';
+  s.textContent =
+    '.sk-pvar-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}' +
+    '.sk-pvar-chip{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;' +
+      'background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);' +
+      'border-radius:10px;color:rgba(255,255,255,0.78);font-size:13px;font-weight:600;' +
+      'cursor:pointer;transition:border-color .18s,background .18s,color .18s;' +
+      'min-height:38px;line-height:1}' +
+    '.sk-pvar-chip:hover{border-color:rgba(113,255,0,0.45);color:#fff}' +
+    '.sk-pvar-chip[aria-pressed="true"]{background:rgba(113,255,0,0.12);border-color:#71ff00;color:#71ff00}' +
+    '.sk-pvar-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;' +
+      'border:1px solid rgba(255,255,255,0.28);display:inline-block}';
+  (document.head || document.documentElement).appendChild(s);
+}
+
+if (typeof document !== 'undefined') _pvarInit();
 
 function selectProductSize(btn) {
   var parent = btn.closest ? btn.closest('.sizes') : btn.parentNode;
@@ -866,15 +989,21 @@ function renderRelatedProducts(){
 }
 
 function openRelatedProduct(id){
-    let all = [];
-    try { all = JSON.parse(localStorage.getItem("sellerProducts")) || []; } catch(e) {}
-    if(!all.length){ try { all = JSON.parse(localStorage.getItem("sokoniProducts")) || []; } catch(e) {} }
-    const p = all.find(x => String(x.id) === String(id));
-    if(p){
-        localStorage.setItem("selectedProduct", JSON.stringify(p));
-        window.scrollTo({ top: 0, behavior: "smooth" });
-        window.location.reload();
-    }
+    if(!id) return;
+    /* Cache the product for an instant render if we have it locally; otherwise
+       product.js resolves it from Firestore via the ?id. */
+    try {
+        let all = JSON.parse(localStorage.getItem("sellerProducts")) || [];
+        if(!all.length) all = JSON.parse(localStorage.getItem("sokoniProducts")) || [];
+        const p = all.find(x => String(x.id) === String(id));
+        if(p) localStorage.setItem("selectedProduct", JSON.stringify(p));
+    } catch(e) {}
+    /* Navigate with the NEW ?id. product.js resolves the product from the URL id
+       (authoritative), so the old approach — set selectedProduct then location.
+       reload() WITHOUT changing ?id — just re-rendered the CURRENT product: the
+       old ?id won and overwrote selectedProduct, so the tap appeared dead. And a
+       related product not cached locally never opened at all. */
+    window.location.href = "product.html?id=" + encodeURIComponent(id);
 }
 window.openRelatedProduct = openRelatedProduct;
 
@@ -930,6 +1059,9 @@ function addToCart(){
     const item = Object.assign({}, product, {
         selectedSize:  window._selectedSize  || null,
         selectedColor: window._selectedColor || null,
+        /* Full map alongside the two legacy fields: a shopper can now pick a
+           material or a pack size, and neither has a legacy field to land in. */
+        selectedVariants: Object.assign({}, window._selectedVariants || {}),
     });
 
     for(let i = 0; i < quantity; i++){
@@ -954,6 +1086,9 @@ function buyNowProduct(){
     const item = Object.assign({}, product, {
         selectedSize:  window._selectedSize  || null,
         selectedColor: window._selectedColor || null,
+        /* Full map alongside the two legacy fields: a shopper can now pick a
+           material or a pack size, and neither has a legacy field to land in. */
+        selectedVariants: Object.assign({}, window._selectedVariants || {}),
     });
 
     for(let i = 0; i < quantity; i++){

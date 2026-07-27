@@ -393,3 +393,29 @@ A task is complete only when:
 # Long-Term Goal
 
 Continuously evolve SOKONI into a scalable, secure, maintainable, enterprise-grade digital platform capable of supporting sustained growth, while ensuring every code change leaves the project in a better state than before.
+
+---
+
+# Operational Guardrails (hard-won — do not violate)
+
+Multiple AI agents (Claude Code, Cursor, Copilot) work this repo in **parallel git worktrees**. The rules below prevent the failures that have actually happened. See also `AGENTS.md`.
+
+## Deploying
+* Live production is **`mysokoni.co.ke`** (Firebase Hosting). `sokoni.co.ke` is an unrelated site — never use it to judge state.
+* **Only deploy hosting from the latest commit.** Deploying from an older worktree **rolls back production** (this repeatedly reverted the earn page). The predeploy guard `scripts/deploy/guard-no-rollback.js` will **abort** a deploy whose tree is behind live — if it stops you, update to latest; never force past it.
+* **One deploy at a time.** If another deploy is running, wait for its exit code. Never run two concurrent deploys.
+* **Verify live after every deploy** with a cache-buster: `curl -s "https://mysokoni.co.ke/<file>?cb=$RANDOM" | grep <marker>`, and confirm `curl -s https://mysokoni.co.ke/version.json` shows your commit.
+
+## PWA / freshness
+* The service worker is **correct** — HTML/CSS/JS are network-first, the SW file is `no-cache`, updates are intentionally flash-free (`e430b89`). **Do not "fix" SW caching.**
+* **Every new user-facing page MUST self-update:** load `shared-header.js` (it injects `sw-register.js`) **or** add `<script src="/sw-register.js" defer></script>` before `</body>`. A page with neither serves stale after deploys.
+* Never hand-edit `CACHE_VERSION` or regress the `-vNN` counter — the predeploy bump owns it.
+
+## Inventory / payments (correctness-critical)
+* Stock deductions run **inside a Firestore transaction**, floored at zero (never negative), writing `stock` + `updatedAt` + `inventoryVersion: increment(1)` **together** atomically. All reads before any writes.
+* **Never trust client payment/stock.** Server is authoritative. Guard oversell **before** charging; a post-payment race is flagged in `oversoldAlerts`, never rejected.
+
+## Repo discipline
+* Another process writes this repo. **Never overwrite or `git worktree remove --force` others' dirty work** — verify ownership first.
+* Commit in small, focused chunks. New Cloud Functions must be re-exported by name in `functions/index.js`. Update `CHANGELOG.md` with every change.
+* **Evidence over assumption:** verify the actual execution path and check live before claiming something works. Never fabricate data to make a result look complete.

@@ -313,7 +313,11 @@
     function shortId(id){ return esc(String(id||'').slice(0,10)+'…'); }
 
     function fmtDate(iso){
-      try{ return new Date(iso).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+      /* Accepts an ISO string OR a Firestore Timestamp (now that action times are
+         written with serverTimestamp()). Without the .toDate() branch, new Date()
+         on a Timestamp object yields Invalid Date. */
+      try{ var d=(iso&&typeof iso.toDate==='function')?iso.toDate():new Date(iso);
+           return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
       catch(e){ return esc(iso); }
     }
 
@@ -465,9 +469,11 @@
 
     async function reportAction(action, flagId, targetId){
       try {
-        await updateDoc('flags', flagId, { status: action==='dismiss'?'dismissed':'actioned', action:action, actedAt:new Date().toISOString() });
+        /* Server clock — this is an audit record of an admin enforcement action. */
+        var f = await getFS();
+        await updateDoc('flags', flagId, { status: action==='dismiss'?'dismissed':'actioned', action:action, actedAt:f.serverTimestamp() });
         if(action==='ban' && targetId){
-          await updateDoc('users', targetId, { suspended:true, suspendedAt:new Date().toISOString() });
+          await updateDoc('users', targetId, { suspended:true, suspendedAt:f.serverTimestamp() });
         }
         showToast('Report '+action+'d.');
       } catch(e){ showToast('Action failed: '+e.message, true); }
@@ -521,21 +527,22 @@
 
     async function verifAction(action, appId, uid){
       try {
+        /* Server clock — verification decisions are audited events. */
+        var f = await getFS();
         if(action==='approve'){
-          await updateDoc('applications', appId, { status:'approved', approvedAt:new Date().toISOString() });
+          await updateDoc('applications', appId, { status:'approved', approvedAt:f.serverTimestamp() });
           if(uid){
-            var f = await getFS();
             /* Try to update provider doc if it exists */
             var q = f.query(f.collection(db,'providers'), f.where('uid','==',uid), f.limit(1));
             var snap = await f.getDocs(q);
-            snap.forEach(async function(d){ await f.updateDoc(d.ref,{verified:true,status:'active',approvedAt:new Date().toISOString()}); });
+            snap.forEach(async function(d){ await f.updateDoc(d.ref,{verified:true,status:'active',approvedAt:f.serverTimestamp()}); });
           }
           showToast('Application approved and provider verified.');
         } else if(action==='reject'){
-          await updateDoc('applications', appId, { status:'rejected', rejectedAt:new Date().toISOString() });
+          await updateDoc('applications', appId, { status:'rejected', rejectedAt:f.serverTimestamp() });
           showToast('Application rejected.');
         } else {
-          await updateDoc('applications', appId, { status:'info_requested', infoRequestedAt:new Date().toISOString() });
+          await updateDoc('applications', appId, { status:'info_requested', infoRequestedAt:f.serverTimestamp() });
           showToast('More info requested from applicant.');
         }
       } catch(e){ showToast('Action failed: '+e.message, true); }
@@ -697,10 +704,12 @@
 
     async function fraudAction(action, alertId, targetId){
       try {
-        var updates = { status: action==='clear'?'cleared':action, updatedAt:new Date().toISOString() };
+        /* Server clock — fraud enforcement is an audited event. */
+        var f = await getFS();
+        var updates = { status: action==='clear'?'cleared':action, updatedAt:f.serverTimestamp() };
         await updateDoc('fraudAlerts', alertId, updates);
         if(action==='ban' && targetId){
-          await updateDoc('users', targetId, { suspended:true, suspendedAt:new Date().toISOString(), suspendReason:'fraud' });
+          await updateDoc('users', targetId, { suspended:true, suspendedAt:f.serverTimestamp(), suspendReason:'fraud' });
         }
         showToast('Alert '+action+'d.');
       } catch(e){ showToast('Action failed: '+e.message, true); }

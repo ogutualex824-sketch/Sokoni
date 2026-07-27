@@ -211,7 +211,7 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
@@ -219,6 +219,10 @@ content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
 <!-- PRODUCT JS -->
 
+<!-- Variant labels and per-category ordering come from the same schema the
+     seller forms use, so the page cannot describe an attribute differently
+     from the form that captured it. Must load before product.js. -->
+<script src="sokoni-product-schema.js"></script>
 <script src="product.js"></script>
 
 <script src="sokoni-audit.js" defer></script>

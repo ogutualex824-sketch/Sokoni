@@ -605,6 +605,13 @@ exports.requestWithdrawal = onCall(
   OPT,
   async (req) => {
     if (!req.auth) throw new HttpsError('unauthenticated', 'Login required');
+    /* RETIRED — seller earnings now converge into wallets.balance (sweepEarningsToWallet)
+       and withdraw through the wallet (requestSellerPayout). This debited withdrawableBalance
+       (the field the sweep drains), so it must not also disburse. seller-wallet.html should
+       point to the main Wallet → Withdraw. */
+    throw new HttpsError('failed-precondition',
+      'Withdrawals now go through your SOKONI Wallet (open Wallet → Withdraw). This method is retired.');
+    /* eslint-disable no-unreachable */
     const uid = req.auth.uid;
     const { amountCents, method, accountDetails = {} } = req.data;
 

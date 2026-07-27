@@ -992,8 +992,15 @@ function finishSetup(){
         const u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
         const uid=u?(u.uid||u.id||null):null;
         const ts=m.serverTimestamp();
-        /* Save provider profile (keyed by profile.id so no-uid fallback still works) */
-        m.setDoc(m.doc(db,'providers',_profile.id),Object.assign({},_profile,{uid:uid||null,updatedAt:ts})).catch(function(){});
+        /* NOTE (2026-07-27): the direct write to `providers/{PRV…}` was REMOVED.
+           It was keyed by a 'PRV…' id (not uid) with status:'available' and no
+           merge — the security rules reject exactly that (create allows only
+           status absent or 'pending', and the directory only shows active/
+           approved), so it silently failed and NEVER produced a visible listing.
+           The canonical, rules-compliant way to appear in the directory is the
+           server publish flow (provider-onboarding.html → providerPublish), which
+           writes a complete uid-keyed `providers` doc. This lightweight setup only
+           records the admin application below; discovery comes from publishing. */
         /* Save pending application to Firestore for admin review */
         m.setDoc(m.doc(db,'applications',app.id),Object.assign({},app,{uid:uid||null,createdAt:ts})).catch(function(){});
         /* Update user document to mark as provider */
@@ -1924,7 +1931,7 @@ window.showTab = function(name, btn){
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script>

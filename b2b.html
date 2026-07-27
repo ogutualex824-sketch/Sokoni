@@ -206,8 +206,14 @@ a{text-decoration:none;}
 .b2-perk p{font-size:10px;color:rgba(255,255,255,0.4);line-height:1.5;}
 
 /* ── MODAL ── */
-.b2-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
-.b2-modal-ov.open{opacity:1;pointer-events:all;}
+/* visibility:hidden when closed — NOT opacity alone. A shared stylesheet
+   (sokoni-platform-override.css) forces background:var(--surf)!important on any
+   [class*="-modal"], which matches this full-screen OVERLAY and makes it opaque;
+   combined with the overlay computing opacity:1 while closed, it painted a solid
+   sheet over the whole page (the "B2B page is black" report). visibility:hidden
+   guarantees the closed overlay never paints, whatever forces opacity/background. */
+.b2-modal-ov{position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:200;display:flex;align-items:flex-end;justify-content:center;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s,visibility .2s;}
+.b2-modal-ov.open{opacity:1;visibility:visible;pointer-events:all;}
 .b2-modal-box{background:#111;border-radius:24px 24px 0 0;padding:22px;max-width:700px;width:100%;max-height:92vh;overflow-y:auto;transform:translateY(40px);transition:transform .3s;}
 .b2-modal-ov.open .b2-modal-box{transform:translateY(0);}
 .b2-modal-title{font-size:16px;font-weight:900;color:white;margin-bottom:16px;padding-right:40px;}

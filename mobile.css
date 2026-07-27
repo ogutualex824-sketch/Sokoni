@@ -4154,7 +4154,14 @@ input:focus, select:focus, textarea:focus {
 button:active, .btn:active, [role="button"]:active { opacity: 0.82 !important; transform: scale(0.985) !important; }
 img { max-width: 100%; height: auto; }
 [class*="-card"], .profile-card, .adm-card, .product-card {
-  will-change: transform;
+  /* will-change removed: this wildcard matches EVERY element with "-card" in its
+     class, so on a 40-card grid it promoted 40+ elements to permanent GPU
+     compositor layers. On mobile that exhausts layer memory and the compositor
+     paints black tiles — the "black screen while scrolling" report. The
+     transition below animates hover perfectly well without it; the browser
+     promotes on demand for the ~200ms the transition runs. Three other
+     stylesheets had the same wildcard (premium.css, style.css, compact-grid.css)
+     and index.html a per-card copy — all removed together. */
   transition: transform 0.18s ease, box-shadow 0.18s ease;
 }
 
@@ -4286,4 +4293,30 @@ img { max-width: 100%; height: auto; }
   .prop-filter-bar::-webkit-scrollbar { display: none; }
   .prop-type-btn { flex-shrink: 0 !important; white-space: nowrap !important; }
 
+}
+
+/* ── MOBILE GPU CRASH FIX (2026-07-25) ─────────────────────────────────────
+   The home page is ~12,700px tall and the loaded stylesheets declare ~100
+   backdrop-filter layers (many blur(24-28px) + saturate). On a real phone GPU,
+   compositing that many blur layers while scrolling a long page exhausts GPU
+   memory: the renderer crashes (screen goes black), the browser reloads
+   (white -> SOKONI), and the page cannot be scrolled to the bottom. Desktop and
+   headless GPUs never hit the ceiling, so it only reproduces on phones.
+
+   backdrop-filter is the single most expensive compositor op here and the root
+   multiplier. Dropping it on phones removes the layer explosion. Elements keep
+   their semi-transparent dark backgrounds, so the theme is preserved — only the
+   blur is lost. Deliberate crash-over-polish trade, small screens only.
+
+   NOTE ON SPECIFICITY: sokoni-premium-v2.css / style.css set backdrop-filter with
+   !important on CLASS selectors, and among !important rules higher specificity wins
+   over source order. A plain `*` (0,0,0) would lose to `.card` (0,1,0), so this uses
+   `*:not(#_gpu)` — the :not() inherits the ID specificity (1,0,0), which beats any
+   realistic class-based rule regardless of which stylesheet loads last. #_gpu does
+   not exist, so it still matches every element. */
+@media (max-width: 768px) {
+  html *:not(#_gpu), html *:not(#_gpu)::before, html *:not(#_gpu)::after {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
 }

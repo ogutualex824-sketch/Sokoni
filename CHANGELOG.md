@@ -1,3 +1,1826 @@
+## [2026-07-27] — fix(commerce): stop overselling + propagate shop renames + Buy Now on category cards
+
+Scoped from a user real-time-sync design proposal. A 3-agent read-only audit mapped the 7-point
+design against live code: inventory deduction (transactional) and search-index sync were already
+**Built**; the real gaps were overselling, cart quantity revalidation, and shop-name staleness.
+Implemented the P0 (correctness) + P1 (propagation) scope the user approved; deferred blanket
+`onSnapshot` listeners (P2) on read-cost grounds.
+
+- **Overselling guard (P0)** — `products.stock` could go **negative**: `increment(-qty)` had no floor
+  and neither payment path blocked it. Now:
+  - STK-push initiation (`functions/index.js`) rejects **before charging** when a metered product has
+    `stock <= 0` or `stock < qty` — no money moves on an oversell.
+  - `createCheckoutSession` clamps each line to remaining stock and returns `adjustedItems` so the
+    session can never authorise more than exists.
+  - Both deduction paths (IntaSend webhook + Daraja STK callback) now floor the decrement at zero and
+    write an `oversoldAlerts` record for the genuine last-item race (the Daraja transaction was
+    restructured to read-before-write so the floor is transaction-safe). Payment already confirmed →
+    flag, never reject.
+- **Cart quantity revalidation (P1)** — `createCheckoutSession` previously only dropped fully
+  out-of-stock lines; it now also detects `qty > available`, clamps, and `checkout.html` warns the
+  buyer ("only N available") before payment. The charged `serverTotal` already reflects the clamp.
+- **Shop-name fan-out (P1)** — `functions/shop-name-sync.js` (NEW): `onDocumentUpdated` triggers on
+  `shops/{uid}` and `sellers/{uid}`; on a real name change (`name || storeName`) it batch-updates
+  `sellerName` across all `products where sellerUid == uid` (paginated, ≤400/batch). Each product
+  write rides the existing product-update triggers, so **both** search indexes (Algolia + Typesense)
+  self-correct — no separate reindex path. Fixes stale shop names on product cards and in search.
+- **Buy Now on category cards** — `category.js` cards rendered only Add-to-cart + Wishlist while a
+  `buyNowCat()` handler already existed unused; added a ⚡ Buy Now button beneath the two. (Home cards
+  already had all three.)
+
+Files: `functions/index.js`, `functions/shop-name-sync.js` (new), `category.js`, `checkout.html`.
+DB: writes `sellerNameSyncedAt` on products during a rename; `oversoldAlerts.path` field added.
+Security/payments: strengthens payment integrity (no charge for non-existent stock); no rules change.
+Deploy: functions (new `shopNameSync_shops`/`shopNameSync_sellers` + checkout changes) + hosting.
+
+---
+
+## [2026-07-27] — fix(provider): providers visible + self-edit everything incl. booking fee — DEPLOYED
+
+Investigation (3 read-only agents + a live prod audit) found "some service providers not visible" was
+NOT a search-index problem (Algolia/Typesense aren't wired to the live directory) and NOT broken fields
+on the 4 existing docs — it was that provider docs were **created incomplete or not at all**, and
+**self-edits never reached the public `providers/{uid}` doc** the directory reads. Root mechanism: the
+directory `orderBy('updatedAt')` silently drops any doc missing `updatedAt`; the registry write paths
+were broken/partial. Chose "fix the flow, no backfill" + "audit edit surface first"; then "do all".
+
+- **`provider.html`** — removed a client write to `providers/{PRV…}` (`status:'available'`, not uid-keyed,
+  no merge) that the security rules always rejected — it silently failed and never produced a listing.
+- **`functions/provider-onboarding.js`** — one place now projects onto the public registry:
+  `providerUpdateProfile` + `providerUpdatePricing` MIRROR name/category/description/skills/phone and the
+  **booking fee → `rate`/`rateType`** onto `providers/{uid}`, re-stamping `updatedAt` and regenerating
+  `searchableTerms`/`nameLower` — so a rename / recategorise / **fee change shows immediately** and an
+  edit can never self-invisible the provider (`status`/`verified` never touched; rules block them).
+  `providerPublish` writes terms/rate inline (not via the create-only trigger). Unpublished provider =
+  safe no-op. Pricing CF made tolerant of the dashboard's scalar shape (`{hourly:1500}`) — fixed fees
+  silently stored as `0` and inspection/emergency dropped — with non-negative clamping; `phone`/`email`
+  whitelisted (were dropped).
+- **`functions/index.js`** — new `indexProviderUpdate` trigger (mirror of `indexProductUpdate`)
+  regenerates provider search terms on every edit. **`search-terms.js`** `buildSearchTerms` extended to
+  read provider fields (businessName/categories/serviceType/skills/city) — additive, product terms
+  byte-identical. CF + triggers share it, so outputs match and the idempotency guard no-ops (no thrash).
+
+Verified: Firestore-emulator projection test 14/14 (edit→registry, fee→rate, scalar pricing stored not 0,
+negative clamped, unpublished no-op). Deployed: functions:providerDispatch + indexProviderCreate +
+indexProviderUpdate (created) + hosting; provider.html fix live. NOT backfilled — the ~11 provider-signal
+users with no doc still re-onboard through the (now-correct) publish flow, per the "no backfill" choice.
+
+---
+
+## [2026-07-27] — fix(sw): eliminate the "old version flashes, then reloads to new" update flash — DEPLOYED
+
+Diagnosis (verified, not the usual advice): the caching strategy was NOT the cause — the SW is
+already network-first for HTML, CSS **and** JS, versions its caches, and deletes old caches on
+activate. The flash came from the update *orchestration*: `service-worker.js` calls `skipWaiting()`
+on install, so every freshly-deployed worker auto-activates and fires `controllerchange` in each open
+tab — and `sw-register.js` reloaded on ANY `controllerchange`. That involuntary reload IS the
+"old loads, then reloads to the updated version" double-load. The file already had a complete
+user-initiated update path (a one-tap "Update available" toast + `_userRequestedUpdate` flag) that
+auto-skipWaiting was silently bypassing.
+
+Fix (`sw-register.js`): only reload on `controllerchange` when the update was **user-requested**
+(they tapped Update). A worker that activates on its own no longer force-reloads open tabs. Freshness
+is unaffected — network-first already gives a returning visitor the latest on load, and their next
+navigation is fully current under the new worker; the toast lets anyone force the swap immediately.
+`skipWaiting` is retained (the new worker's logic still activates promptly); the first-install,
+OAuth-in-flight, and POS work-in-progress reload exceptions are unchanged. Deployed from a clean
+worktree (main tree had other agents' WIP); live and verified. Trade-off: a critical fix now reaches
+an already-open tab on its next navigation or on tap, rather than via a forced reload — the correct
+price for removing the involuntary flash.
+
+---
+
+## [2026-07-27] — feat(booking): converge venue lifecycle onto one engine (Convergence Step 1) — STAGED, flagged
+
+Audit (3 parallel read-only agents + direct verification) found the booking domain fragmented across
+FIVE write-paths, and — critically — the hardened `booking.js` engine (buffers, per-customer cap,
+waitlist, slotLock-release) had **no live caller**: the live venue flow ran through the less-capable
+`venue-booking.js` model, so none of that hardening reached users. Step 1 converges the venue
+lifecycle onto the `booking.js` core, behind a client rollback flag. **Committed but NOT deployed** —
+one bundled release (indexes → functions → hosting) after final review.
+
+- **Unified pricing schema** (`functions/pricing-schema.js`, NEW): one canonical model + one
+  `compute()`/`normalize()` calculator (same normalize-write/resolve-read pattern as the minishop
+  config convergence). `normalize()` accepts legacy OR canonical, so reads price un-migrated venues
+  correctly — code deploy is decoupled from data migration. PAYMENT-SAFETY: proven byte-identical to
+  the live `_calcPrice` for existing venues (`scripts/test-pricing-schema.js`, 90/90 incl. 80 live
+  venue×booking parity checks). `bookingCreate` now prices via this calculator.
+- **Parity ops added to the core** (dispatcher-only): `bookingQuotePrice` (same calculator create
+  verifies payment against — quote == stored price), `bookingMarkNoShow` (terminal + fee; releases the
+  cap slot, does NOT re-offer the past slot), `bookingGetStats` (owner 30-day stats mirroring
+  `venueGetStats`). `bookingGetAvailability` slots now honor the venue's slot duration.
+- **Client repoint behind `USE_BOOKING_CORE`** (flip=false → instant client-only rollback; legacy
+  `venue*` endpoints stay live during cutover): `venue-booking.html` (availability/quote/create/
+  my-bookings) and `venue-manager.html` (calendar/block/stats/confirm/checkin/checkout/cancel + the
+  direct bookings-list read now core-aware: orders by `startTs`, reads `pricingBreakdown.total`). This
+  also fixes the pre-existing mismatch where the owner console read a `bookings` collection the live
+  create never wrote. Venue-config ops (`venueCreate`/`venueUpdate`) stay put.
+- **Index**: added `(venueId, status, startTs DESC)` for the status-filtered owner list.
+- **Bug caught by Gate 1 & fixed**: the owner console initially called dispatcher-only core ops by
+  name (`cf('bookingCancel')`) — would have 404'd in prod; now routed through `bookingDispatch`.
+
+Verified — both required release gates GREEN: **Gate 1 browser render** (Playwright, 17/17: both pages
+boot with zero console/network errors, render all core shapes, actions dispatch the right op); **Gate 2
+pricing pipeline** (emulator, quote==stored at component level across legacy/canonical/peak venues, no
+rounding drift). Plus pricing parity 90/90, waitlist 19, buffer 11, emulator concurrency 44/44.
+Payment/receipt legs are explicitly OUT OF SCOPE — this venue flow creates bookings without upfront
+payment. Deploy order when green-lit: firestore:indexes → functions:bookingDispatch → hosting; then a
+production smoke test (create/view/confirm/cancel/waitlist/buffer/cap + CF logs).
+
+---
+
+## [2026-07-26] — feat(booking): Phase 2 — waitlist (availability-as-inventory) + slotLock-release fix
+
+Architecture-reviewed (APPROVE WITH TWO REVISIONS, both applied). A waitlist turns a *lost* slot
+into recoverable inventory: when a booked slot frees up (cancellation or an expired offer), it is
+offered to the next person in line instead of silently going idle. Built as an ORCHESTRATION layer
+over the existing primitives — an "offer" IS a standard `bookingHolds` HOLD and acceptance goes
+through the existing `bookingCreate`, so payment / approval / capacity / idempotency are all
+inherited, not re-implemented. Config-gated: `venue.waitlistEnabled` defaults **false**, so existing
+venues are completely unchanged.
+
+- **`functions/booking-waitlist.js`** (NEW) — merged into `bookingDispatch`. Handlers:
+  `bookingJoinWaitlist`, `bookingLeaveWaitlist` (also declines an active offer), `bookingAcceptOffer`
+  (atomic offered→claimed CLAIM, then real `bookingCreate`, then completed; reverts to offered if
+  create fails), `bookingGetMyWaitlist` (with on-demand position). Server helpers `offerNextWaitlist`
+  (transactional: re-checks the slot is genuinely free, mints an offer HOLD + `offerId` +
+  `offerExpiresAt`, flips the entry to `offered`, notifies) and `reapExpiredOffers`.
+  - *Revision 1* — no stored mutable position; order is `(priority ASC, createdAt ASC)`, computed
+    on demand (`computePosition`), so the queue can't drift.
+  - *Revision 2* — explicit lifecycle `waiting → offered → claimed → completed | expired | cancelled`;
+    the offer carries `offerId` + `offerHoldId` + `offerExpiresAt` for stale/duplicate-safe accepts
+    (`canAccept` validates status, ownership, offerId match, and hold liveness).
+- **`bookingCleanupHolds`** now owns offer-expiry: expired offer HOLDs mark their entry `expired`
+  (only if still `offered` for that `offerId`) and re-offer the slot to the next person.
+- **`bookingCancel` — slotLock release (BEHAVIOR CHANGE, latent-bug fix)**: cancel now deletes
+  `venues/{id}/slotLocks/{date_startTs_endTs}`. Previously the lock was **never** released, so a
+  cancelled slot stayed permanently unbookable (bookingCreate's slot-lock CAS blocks it) — a
+  pre-existing bug that also blocked the waitlist. Cancel then calls `offerNextWaitlist`. Both
+  best-effort — a notification/offer failure never fails the cancel.
+- **`venue-booking.js`** — `waitlistEnabled` added to create + venueUpdate (coerced bool).
+
+Verified: `scripts/test-booking-waitlist.js` — 19 pure-helper assertions (ordering, position,
+double-accept gate). **Firestore-emulator concurrency pass — 24/24** (real handler code):
+same-slot double-book → exactly one wins; cancel→release→offer→accept re-books; two devices
+accept the same offer → exactly one claims (others "Offer no longer available"); reap expires +
+re-offers; concurrent `offerNextWaitlist` → one offer minted; **per-customer cap holds under a
+concurrent burst** (see below). Files: `functions/booking-waitlist.js` (new), `functions/booking.js`,
+`functions/venue-booking.js`, `functions/booking-dispatch.js`.
+
+**Per-customer cap hardening (same commit).** The Phase-1 cap was prefetch-optimistic — the
+emulator pass showed a concurrent burst of creates for *different* slots by one customer could
+exceed it. Fixed with a transactional per-`(customer, venue)` counter (`venues/{id}/
+customerCounters/{customerId}.active`): the authoritative check + increment now happen INSIDE
+`bookingCreate`'s transaction, so concurrent creates serialize on the one counter doc (the loser
+retries). Seeded from the real count the first time a capped venue is used (zero-touch for venues
+with no cap). Decremented, clamped ≥ 0, on every exit from the active set — `bookingCancel`,
+`bookingReject`, `bookingCheckOut`, `bookingAutoComplete`. `bookingReject` additionally now
+releases the slotLock + offers the waitlist (a rejected booking frees the slot exactly like a
+cancellation — same latent-bug class). Note: the venue-wide `capacity.concurrent` check remains
+prefetch-optimistic and counts whole-day active bookings rather than time-overlapping ones — a
+separate, lower-risk pre-existing behavior, not touched here.
+
+---
+
+## [2026-07-26] — feat(booking): Phase 1 — provider buffers + per-customer cap (extend, don't rebuild)
+
+Architecture-reviewed (APPROVE). The booking engine already had the hard parts (atomic
+`runTransaction` holds+create, capacity, idempotency, holds, cancellation/release, schedules).
+Phase 1 adds two low-risk, config-gated capabilities inside the EXISTING transaction — both
+default 0 so existing venues behave exactly as before:
+
+- **Buffer times** — new `bufferBeforeMins` / `bufferAfterMins` on the venue (venue-booking.js:
+  create + venueUpdate + clamps). `bookingCreate` and `bookingHoldSlot` now reserve
+  `[start-bufferBefore, end+bufferAfter]` so back-to-back bookings leave setup/cleanup time (the
+  hold's `endTs` pre-filter is widened so a booking ending within the buffer is still caught).
+  Legacy `bufferMins` kept for back-compat but NOT auto-applied (would surprise existing venues) —
+  owners opt in via the granular fields.
+- **Max bookings per customer** — new `maxBookingsPerCustomer` (0 = unlimited). Counts the
+  customer's active (`pending`/`confirmed`/`active`) bookings at the venue and rejects at the limit
+  with `failed-precondition` ("reached the maximum number of active bookings with this provider").
+  Ignores cancelled/completed/rejected/expired. Prefetched like the capacity check.
+
+Verified: `scripts/test-booking-buffer.js` — 11 assertions incl. the 60-min haircut + 15-min
+buffer example (10:30 & 11:00 blocked, 11:15 bookable) and buffer-0 no-change. Full transactional
+behaviour needs the emulator. Files: `functions/booking.js`, `functions/venue-booking.js`
+(existing CFs modified — no new exports). Deferred (approved): waitlist via HOLD lifecycle,
+underbooking analytics (split from pricing), recurring templates.
+
+---
+
+## [2026-07-26] — HOTFIX(auth): remove global redirect interceptor — it broke account creation
+
+REGRESSION from the previous commit: new users hit `auth/network-request-failed` on Create Account.
+Cause: the global redirect interceptor added to `sokoni-crash-sentinel.js` (the first script on
+every page, incl. login.html) overrode `Location.prototype.href`. Firebase Auth, App Check and
+reCAPTCHA read/validate `location` during the token exchange; redefining that prototype property
+corrupts that path, so the signUp request fails before it lands — surfacing as
+`auth/network-request-failed`. The interceptor also wasn't even capturing anything in testing.
+
+Fix: REMOVED the entire interceptor (assign/replace wraps + the href-setter override). Redirect
+reasons are still recorded by the individual guards (auth-guard.js, profile.js, sokoni-security.js,
+and the profile.html inline guard) into `sk_auth_redirects`, which `/android-doctor` shows — so the
+loop diagnosis is intact WITHOUT touching `location`. The real loop fix (profile.html:2889, gating
+on the session flag) stays. Verified: login.html loads clean, `firebaseAuth` initialises,
+`location.href` reads work, 0 pageerrors. Standing rule added in-file: NEVER override
+`Location.prototype.*`.
+
+Files: `sokoni-crash-sentinel.js`.
+
+---
+
+## [2026-07-26] — fix(auth): the ACTUAL profile↔login loop culprit — a 4th, HIDDEN inline guard in profile.html
+
+Reported still looping after the 3-guard fix. Stopped guessing: used Chrome DevTools Protocol to
+capture the INITIATOR STACK of the /login.html navigation. It named the exact source —
+**profile.html:2889**, an inline `<script>` "Auth guard" that no grep of the .js files had surfaced:
+    var _user = getUser();
+    if(!_user || !_user.uid){ window.location.href = 'login.html'; throw new Error('Not authenticated'); }
+The 4th copy of the same bug — gating on the sokoniUser CACHE (`_user.uid`). Every logged-in user
+whose cache was empty/App-Check-blocked (i.e. almost everyone on Android, but NOT the founder whose
+cache was populated from prior reads) hit it → login → home → loop. This is why "works for me, not
+others".
+
+Fix: gate on the SESSION FLAG alone (`localStorage.loggedIn === 'true'`); if the cache is absent set
+`_user = {}` and proceed — firebase.js/bootstrap populate it and profile.html's existing
+`sokoniAuthReady` listener (line 2962) re-reads it. Verified: loggedIn + NO/ malformed sokoniUser now
+RENDERS the profile (nav=1, 14 tabs) instead of bouncing; not-logged-in still → login.
+
+Also shipped, so this class of bug is never invisible again:
+- **Global redirect instrument + circuit breaker** in `sokoni-crash-sentinel.js` (first script):
+  wraps location.assign/replace and the href= setter to log every redirect to login/home with a
+  STACK TRACE + auth state into `sk_auth_redirects`, and BREAKS a detected loop (same target 4×/12s).
+- **/android-doctor** now shows the recent redirects, the stack SOURCE, and flags a loop in plain
+  language — so any future redirect loop names its own culprit without CDP.
+
+Files: `profile.html`, `sokoni-crash-sentinel.js`, `android-doctor.html`. No DB/API changes.
+
+---
+
+## [2026-07-26] — fix(auth): the LAST profile↔login loop — 3 guards still gated on the profile cache
+
+Founder diagnosis (correct): the Android splash/reload wasn't slowness — it's still a profile↔login
+redirect loop, and "one remaining script is checking auth before/without the canonical state".
+Reproduced in emulation the exact trigger — `loggedIn='true'` but NO/`malformed sokoniUser` (which
+is what happens when App Check blocks the Firestore read that populates that cache): **48
+navigations, infinite loop.**
+
+Root cause: THREE guards still required the `sokoniUser` PROFILE CACHE to decide "logged in",
+while login-side auth.js keys only on the `loggedIn` flag — so a logged-in user with an empty cache
+was judged logged-out and bounced to login, which bounced back. Same anti-pattern as the isLoggedIn
+`u.name` bug (gating a session on profile metadata), in three more places:
+- `auth-guard.js` (head, pre-paint): required `loggedIn && sokoniUser` → now `loggedIn` alone.
+- `profile.js`: `if(loggedIn!=='true' || !user)` → now the session flag alone; `user` defaults to
+  `{}` (all uses are `user.x || default` / null-guarded) so it renders while firebase/bootstrap
+  fill the cache.
+- `sokoni-security.js` `isLoggedIn()` (via sokoni-guards `requireAuth`): required a `sokoniUser`
+  object → now `loggedIn==='true'` alone (getSession() still short-circuits a real token).
+
+The session flag is authoritative for the optimistic path; SokoniAuthState/firebase resolve the real
+user and the bootstrap repairs the cache. Verified: the bug scenarios go from **nav=48 (infinite) →
+nav=3 (bounded, settles on home)**; a valid session renders profile (nav=1, 14 tabs); not-logged-in
+still → login. `sk_auth_redirects` confirms the three guards no longer fire.
+
+Instrumentation (per the founder's request): each guard now logs `[SOKONI AUTH REDIRECT]` + rings
+the reason into `localStorage.sk_auth_redirects`; `/android-doctor` shows the recent redirects and
+flags a LOOP (same reason 4×/15s) in plain language — so a real-device loop is diagnosable without
+chrome://inspect.
+
+Files: `auth-guard.js`, `profile.js`, `sokoni-security.js`, `android-doctor.html`. No DB/API changes.
+
+---
+
+## [2026-07-26] — feat(pwa): foreground update check — installed PWAs get "Update available" promptly (#7)
+
+Audited the PWA update lifecycle. Most of it was already in place and correct:
+- `_showUpdateToast()` auto-shows a "🔄 New version of SOKONI available [Update] [✕]" prompt on
+  `updatefound`→installed and for a waiting worker at load; one-tap Update → `_sokoniApplyUpdate()`
+  (SKIP_WAITING + controllerchange reload). Manual `sokoniCheckForUpdates()` also exists.
+- Cache strategy is sound: navigations are network-first (`networkFirstPage`), static js/css are
+  cache-first but version-invalidated + hosting `no-cache`/CDN `no-store`, dynamic data
+  (profile/orders/wallet) loads via the Firestore SDK (always live). `updateViaCache:'none'`.
+- Stale root-scope FCM SW is proactively unregistered (no competing workers); `controllerchange`
+  reload is guarded (first-install, OAuth-in-flight, POS veto).
+
+The one real gap: no FOREGROUND re-check. The browser only re-fetches service-worker.js on a
+navigation or its ~24h timer, so an installed PWA (or long-lived tab) backgrounded while a new
+version ships wouldn't notice until the next full navigation. Added a throttled
+visibilitychange/focus handler that calls `reg.update()` when the app returns to the foreground —
+so a returning user promptly gets the one-tap update prompt. Throttled to once/minute so rapid
+focus/blur (and the mobile keyboard) never hammer the network.
+
+Verified: sw-register.js parses, loads with 0 pageerrors, foreground events fire safely, apply/
+check functions intact. Files: `sw-register.js`. No breaking changes.
+
+---
+
+## [2026-07-26] — test(accounts): RC-10 account-baseline & navigation regression suite (#5)
+
+Locks in the 2026-07-26 account-consistency fixes so they cannot silently regress. New RC suite
+`tests/rc/suites/rc-10-account-baseline.js` (registered in rc-runner ALL_SUITES), 5 steps:
+1. Orders button is decoupled from the crashing Profile page (→ my-orders.html).
+2. Subscription page never renders "KES NaN".
+3. Auth-state is a single canonical resolution-aware source (SokoniAuthState exposed, permissions
+   delegates to it, the premature-`false` bug is gone — checked as a LIVE line, not a comment).
+4. Every account has a complete baseline (users/wallet/notificationPrefs) — via the Admin backend.
+5. A signed-in account does not loop profile.html ↔ login.html (renders tabs, stays on /profile).
+
+Steps 1–3 are static-safe and run everywhere; 4–5 need an authenticated backend and report BLOCKED
+(never a false pass) on static. Ran `--backend=static`: 3 PASS, 0 FAIL, 2 BLOCKED. Steps 4–5 run
+for real on `--backend=production/emulator`; #4's migration already proved 55/55 accounts have the
+baseline, and the loop fix was verified in emulation — this codifies both as repeatable checks.
+
+Files: `tests/rc/suites/rc-10-account-baseline.js` (new), `tests/rc/rc-runner.js` (register). Test-
+only — no app/deploy change.
+
+---
+
+## [2026-07-26] — feat(accounts): idempotent Admin-SDK migration for existing users (#4) — dry-run first
+
+`scripts/migrate-user-baselines.js` — scans EVERY Firebase Auth account and creates ONLY the
+missing baseline Firestore docs/fields (never overwriting valid data), so historical accounts
+behave like newly-created ones. Reuses the EXACT client-bootstrap planners (single gap-logic
+source) and, being Admin SDK, additionally backfills `createdAt` from the REAL Auth creation
+time (authentic history, not fabricated). Dry-run by DEFAULT; `--live` to write; `--limit N`.
+
+Verified: `scripts/test-migrate-baselines.js` — 16 assertions (idempotent, no-overwrite,
+createdAt-from-Auth, only-fills-missing), gate-run.
+
+DRY-RUN against production (read-only) surfaced the scale of the inconsistency: of 55 total
+accounts, **54 need repair** — 26 have NO users doc, 47 have no wallet, 51 have no
+notificationPrefs; 419 user fields to fill (roles 38, name 36, createdAt 36, onboarding 43…);
+0 errors. This is the root of the "account-specific bugs" — most accounts were never fully
+initialized. The LIVE run is gated on founder confirmation (writes to 54 production accounts).
+
+Files: `scripts/migrate-user-baselines.js` (new), `scripts/test-migrate-baselines.js` (new).
+Script only — no hosting/functions deploy; no data written yet.
+
+---
+
+## [2026-07-26] — feat(accounts): broaden auth-state + baseline bootstrap to authenticated pages (#3)
+
+Milestone 3: every authenticated entry point now shares the same two canonical modules —
+`sokoni-auth-state.js` (resolution-aware "who is signed in") and `sokoni-user-bootstrap.js`
+(idempotent baseline repair) — so no page implements its own initialization and every signed-in
+page starts from the same complete user state. Both self-hook on the verified session and fail
+open, so inclusion is additive and safe.
+
+Added where missing:
+- `wallet.html`, `my-orders.html`, `provider-dashboard.html` — both modules.
+- `seller.html`, `driver.html`, `landlord.html` — bootstrap (they already had auth-state).
+  (profile.html already had both.)
+
+Verified in Android-emulated Chromium (authed session): my-orders/seller/driver/landlord all
+load the modules (`SokoniAuthState` present, `ensureUserBaseline` present), nav=1 (no loop), 0
+non-vendor pageerrors. wallet.html + provider-dashboard.html redirect in headless because they
+carry their OWN live-auth gate (e.g. sokoni-wallet-v2.js) and there is no real Firebase user in
+emulation — on a signed-in device they don't redirect and the modules run; the inserts did not
+cause it (0 errors). FOLLOW-UP: migrate those pages' own redirect gates to SokoniAuthState so
+their intermittent-redirect class is closed too.
+
+Restaurant/hotel/settings/orders dashboards were not found as separate firebase-auth pages, so
+they are not in scope here. Files: wallet/my-orders/provider-dashboard/seller/driver/landlord
+.html (+1–2 script tags each). No DB/API changes.
+
+---
+
+## [2026-07-26] — fix(plans): the LAST "KES NaN" path (subscribe modal) + restore paid checkout
+
+The card prices were already guarded (c5b3572), but the **subscribe modal** still rendered
+"KES NaN/month": the card called `openModal(...price...)` with a phantom `price` variable
+declared NOWHERE in that scope → `undefined`, and `openModal` then did
+`Math.round(undefined/100)` with no `Number.isFinite` guard. Worse, the checkout path reads
+`plan.priceMonthly`/`plan.priceAnnual`, which the modal object never carried — so every paid
+subscription silently hit "not available for online checkout".
+
+Fixes (client-only, plans.html):
+- The card now passes BOTH `priceMonthly` and `priceAnnual` to the modal, so display and
+  checkout are cycle-correct for whichever toggle the buyer picks.
+- The modal price is `Number.isFinite`-guarded → shows "Contact Sales" instead of "KES NaN".
+- Plans with no valid price for a cycle get a "Contact Sales" CTA instead of a Subscribe
+  button that opens a broken modal / dead checkout.
+
+Note on the prices themselves: the source of truth (`functions/sub-billing.js` PLANS → the
+`subGetPlans` CF) already defines complete, finite prices for EVERY plan — so the NaN was
+purely this client bug, not missing data. Adjusting the price VALUES to a different table is a
+business decision (and a functions deploy), left for the founder to confirm.
+
+Verified: plans.html loads 0 pageerrors; guard yields "Contact Sales" for a missing price and
+"KES 999/month" for a valid one. Files: `plans.html`. No DB/API/schema changes.
+
+---
+
+## [2026-07-26] — feat(auth): single canonical auth-state source (SokoniAuthState) — kills the intermittent loop
+
+Milestone 2 of account-consistency: ONE resolution-aware source of "who is signed in", so no page
+decides authentication independently. Removes the last redirect-loop class — the intermittent one.
+
+Root cause of the intermittent loop: `sokoni-permissions.js` `isLoggedIn()` did
+`if (window.firebaseAuth) return false;` — concluding LOGGED-OUT the instant the firebaseAuth
+object exists, which is synchronous and happens long before `currentUser` resolves (and longer
+while App Check delays the token exchange on this project). `guardCurrentPage()` then bounced
+seller/driver/provider/landlord/admin pages to `login.html?next=…`, login bounced back on the
+cached `loggedIn` flag → the timing-dependent "page keeps reloading" that never reproduced on a
+fast desktop.
+
+New `sokoni-auth-state.js` → `window.SokoniAuthState`:
+- **The invariant:** auth is authoritative ONLY after Firebase init completes (first
+  onAuthStateChanged). Before that, `isLoggedIn()` returns an OPTIMISTIC value from cache — it
+  NEVER concludes "logged out" while resolving, so a guard can't redirect mid-resolution.
+- **After resolution it is authoritative:** resolved + no user → `false` EVEN with a stale
+  `loggedIn` flag (a genuine sign-out is not overridden). 12s backstop resolves to the optimistic
+  cached session (never fabricates a logout on a slow/offline cold start).
+- API: `getCurrentSession()` (uid/email/displayName/phoneNumber/roles/resolved), `isLoggedIn()`,
+  `isResolved()`, `whenResolved(cb)`, `ready` (Promise). Reads only firebase.js's readiness
+  contract + live listener; never writes/redirects/throws.
+- `sokoni-permissions.js` `isLoggedIn()` now delegates to it (with a bug-free standalone fallback
+  for pages where the module isn't loaded — the premature-`false` is gone either way).
+
+Verified: `scripts/test-auth-state.js` (12 assertions incl. the invariant), gate-run. Emulation:
+profile (new+named) and seller all nav=1 (no loop); `SokoniAuthState` present; optimistic-true
+during resolution; authoritative after. Wired into profile.html + the guarded pages that consume
+permissions (seller/driver/landlord). Next: broaden ensureUserBaseline, then the server migration.
+
+Files: `sokoni-auth-state.js` (new), `scripts/test-auth-state.js` (new), `sokoni-permissions.js`,
+`profile.html`, `seller.html`, `driver.html`, `landlord.html`. No DB/API changes. No breaking changes.
+
+---
+
+## [2026-07-26] — fix(pos): P58E compatibility told iPhone users to install Chrome, which cannot work
+
+Asked to connect the P58E from a phone — which surfaced the check the panel
+actually shows merchants.
+
+### The message was wrong on the one device where it matters most
+
+`checkCompatibility()`, which the P58E panel renders, said only:
+
+> Web Bluetooth API not available — use Chrome on Android or Desktop.
+
+On an iPhone that advice is actively harmful. **Every** iOS browser — Chrome and
+Edge included — is required to run on WebKit, which implements no Web Bluetooth
+at all. A merchant follows the instruction, installs Chrome, hits the identical
+wall, and concludes the printer is broken.
+
+The adapter already knew this: `diagnose()` detects iOS and explains it. But
+that is a console tool, and the panel used the checker that did not. iOS is now
+detected by name and called out first, including the iPadOS case (which reports
+as MacIntel with touch points).
+
+### It also rejected a browser that works
+
+Missing `getDevices()` (Chrome < 85) was listed as an *issue*, so `supported`
+went false and a red **Browser Not Supported** banner appeared — on a browser
+where pairing and printing work fine and only silent reconnect is missing. That
+would lose a sale to a cosmetic limitation.
+
+Blockers and degradations are now separate: `issues` drive `supported`, while
+`warnings` describe a working-but-degraded setup and render in accent blue as
+"Works, with one limitation" rather than a red rejection.
+
+| device | supported | shows |
+|---|---|---|
+| iPhone / iPad | **false** | one blocker, named honestly |
+| Android Chrome 120 | **true** | nothing |
+| Android Chrome 80 | **true** | one warning — chooser opens each time |
+
+### For the client test
+
+**Android phone with Chrome.** An iPhone cannot drive a Bluetooth printer from a
+web page in any browser — that is the platform, not SOKONI.
+
+## [2026-07-26] — feat(accounts): centralized idempotent user baseline bootstrap (ensureUserBaseline)
+
+Milestone 1 of the account-consistency program: ONE shared path that gives every AUTHENTICATED
+user the same baseline Firestore structure, creating ONLY what is missing and NEVER overwriting
+valid data — so pages can assume a baseline instead of each re-implementing (and diverging on) it.
+
+`sokoni-user-bootstrap.js` → `window.ensureUserBaseline()`:
+- **Idempotent by construction** — reads each doc, computes only ABSENT fields/docs, writes only
+  those with `{merge:true}`. A complete account triggers ZERO writes; safe to run every login.
+- **Auth = identity provider, not profile completeness** — derives uid only from the verified
+  `firebaseAuth.currentUser` after `waitForFirebaseReady`, never from `localStorage.loggedIn` or
+  cached profile. Never redirects, never throws — a bootstrap failure cannot reintroduce the
+  profile↔login loop.
+- **Bounded by firestore.rules (verified against the live rules)** — may create/repair only
+  `users/{uid}` (roles-array; never `role`/admin/privilege/`provider`/`createdAt`/`profileEditCount`,
+  so `profileEditWithinLimit()` stays satisfied via `nc==pc`), `wallets/{uid}` (balance EXACTLY 0),
+  and `notificationPrefs/{uid}`. Server-owned docs (shops, subscriptions, provider status/settings,
+  wallet v2 balances) are deliberately left to the server migration.
+- Existing accounts missing onboarding flags are treated as ONBOARDED (never re-onboarded); a
+  missing display name is backfilled from the auth token (the field whose absence caused the loop).
+
+Verified: `scripts/test-user-bootstrap.js` — 33 assertions on the pure planners (idempotency,
+no-overwrite invariant, and that no client write can contain a rules-forbidden field). Wired into
+`profile.html`; emulation confirms it self-hooks, fails open on unreachable Firestore, and does not
+change rendering or navigation (brand-new account still: 14 tabs, no loop, 0 pageerrors).
+
+Files: `sokoni-user-bootstrap.js` (new), `scripts/test-user-bootstrap.js` (new), `profile.html`
+(+1 include). Next: broaden the include, then the idempotent server migration for existing users
+and the post-migration rules audit.
+
+---
+
+## [2026-07-26] — fix(auth): CRITICAL — new accounts couldn't open Profile (isLoggedIn required a display name)
+
+Reported: "most users face reload / over-reload — nobody can open or access their profile."
+Reproduced and root-caused in Android-emulated Chromium: it is an infinite **profile.html ↔
+login.html redirect loop** (36+ bounces in ~6s) that fires DETERMINISTICALLY for any account
+missing a display `name` — i.e. every brand-NEW account, and any account whose profile doc
+hadn't finished writing.
+
+Root cause — `sokoni-security.js` `isLoggedIn()` legacy fallback:
+    return !!(u && u.name && localStorage.getItem('loggedIn') === 'true');
+It required `u.name`. A signed-in account with no display name was judged NOT logged in, so
+`requireAuth()` (via sokoni-guards.js on `data-require-auth` pages) redirected to login.html;
+login.html saw `localStorage.loggedIn==='true'` and redirected straight back; the two ping-
+ponged forever — the "profile won't open / page keeps reloading" report.
+
+Fix: authentication is a real identity (uid OR email OR name) + the loggedIn flag — a display
+name is profile metadata, not proof of a session:
+    return !!(u && (u.uid || u.email || u.name) && localStorage.getItem('loggedIn') === 'true');
+
+Verified: brand-new account (uid+email, no name) now stays on /profile.html (1 navigation, was
+36+), renders fully (14 tabs, switchTab defined, content present), 0 pageerrors — across 3 runs.
+Accounts WITH a name are unchanged. Real sessions (getSession()) already short-circuit above this.
+
+Files: `sokoni-security.js` (1 line). No DB/API changes. No breaking changes. Fixes the platform-
+wide "new users can't access their profile" outage. (Follow-up: the intermittent App-Check
+live-auth loop class in sokoni-permissions.js, and the broader account-initialization program.)
+
+---
+
+## [2026-07-26] — fix(profile): low-memory guard so the Profile page stops crashing on budget Android
+
+Reported: the **Profile** button crashes the page while loading on low-RAM Android for providers
+(Pacifique the barber, **Ann the mama fua**). Same root cause as the Orders button and "reload snap":
+profile.html is the heaviest page and auto-runs a large dashboard cascade on load — the command-
+summary dashboard, an in-memory search index, adaptive hubs/cards, and module/exec/notification
+summaries. On a budget device that cascade exhausts the renderer → "Aw, Snap!" (OOM).
+
+Fix — a single low-memory guard, `window.__SK_LOWMEM`, set from `navigator.deviceMemory` (≤2 GB, or
+unreported + ≤4 cores on Android). When true, seven OPTIONAL widgets early-return
+(`_loadOverviewDashboard`, `_buildSearchIndex`, `_renderAdaptiveHubs`, `_renderAdaptiveCards`,
+`_renderExecCmds`, `_renderNotifSummary`, `_renderModuleSummaries`). Their containers are already
+`display:none`/static-fallback, so skipping them leaves no stuck skeletons — the CORE profile
+(avatar, name, basic stats, all 14 tabs, Orders, Wallet, static hub links, every button) still loads.
+
+Capable devices are UNAFFECTED — `__SK_LOWMEM` is false and every widget renders exactly as before.
+Verified in Android-emulated Chromium both ways: capable = unchanged; low-mem (deviceMemory=2) =
+widgets skipped, 0 pageerrors, 14 tabs present, `switchTab` toggles panels (orders/wallet/bookings/
+identity), page never navigates to home. `data-lowmem="1"` is exposed on `<html>` for future CSS.
+
+Files: `profile.html` (+1 flag block, 7 one-line guards). No DB/API/security changes. No breaking changes.
+
+---
+
+## [2026-07-26] — fix(pwa): updates now appear on a normal reload (no "clear browsing data")
+
+The service worker is cache-first for the app shell and only serves new assets
+when CACHE_VERSION bumps — at which point a fresh SW installs, re-caches, and
+sw-register.js auto-reloads once. All that machinery was correct.
+
+The broken link: the bump never ran on deploy. scripts/deploy/bump-sw-version.js
+existed ("Run from CI before the hosting deploy step") but was wired into neither
+the npm deploy:hosting script nor the hosting predeploy. So every deploy shipped
+new files while the SW kept serving the OLD precache, and only clearing browsing
+data (which wipes the SW) revealed updates.
+
+Fix: added `node scripts/deploy/bump-sw-version.js` as the first hosting predeploy
+step in firebase.json. Now EVERY hosting deploy — any path, any agent — bumps
+CACHE_VERSION, so a new SW ships and clients reload onto fresh assets on the next
+normal visit. No cache-clearing.
+
+### Files
+`firebase.json`.
+
+## [2026-07-26] — fix(orders): separate the Orders button from Profile — dedicated lean page
+
+Reported: on Pacifique's Android the **Orders** button and the **Profile** button were "tied
+together" and crashed the page while loading. Root cause: the bottom-nav Orders link pointed at
+`profile.html#orders` — the same 7k-line profile.html that OOM-crashes low-RAM Android (see the
+crash-sentinel entries). Orders and Profile loaded the identical heavy page.
+
+Fix — give Orders its own lightweight URL:
+- New `my-orders.html` — a self-contained, dependency-free buyer orders page. Renders instantly
+  from the `sokoniOrders` localStorage cache, then goes live via the canonical
+  `SokoniDB.listenUserOrders(uid)` (same data source profile.html uses — extend, don't rebuild),
+  merges + sorts newest-first, and refreshes the cache. No event-bus / observability / gateway /
+  kass-widget / 7-layer dashboard cascade — so it does not reproduce the profile-page crash.
+  Ships the crash sentinel too.
+- Repointed the Orders button everywhere: `sokoni-nav-engine.js` canonical tab **and 86 static
+  bottom-nav bars** (`href="profile.html#orders"` → `href="my-orders.html"`). One-line change per
+  file; line endings preserved.
+
+Propagation: the 86 static pages are network-first (fresh on any reload); the nav-engine.js change
+rides the already-committed service-worker `v115` bump, which purges old caches on activate — so
+updates land on a normal reload without clearing browsing data.
+
+Files: `my-orders.html` (new), `sokoni-nav-engine.js`, + 86 page HTMLs (Orders href only).
+No DB/API/security changes. No breaking changes. profile.html's own Orders tab is unchanged.
+
+---
+
+## [2026-07-26] — feat(pricing): single-source "Pricing, Earnings & Fees" hub (earnings.html)
+
+One authoritative page for everything it costs to earn on SOKONI, so pricing lives
+in one place and a seller never has to contact support to understand fees.
+
+### Data-driven, not hardcoded
+- **Commission table + calculator read live from `window.SokoniCommission`** (the
+  client mirror generated from the single `functions/commission-config.js`,
+  drift-guarded). Every sale category in the live config is rendered dynamically
+  with a humanised fallback label, so a newly-added hub can never be silently
+  missed. Platform-revenue/internal keys (subscriptions, advertising, saas,
+  default) are excluded from the sales table by design.
+- **Delivery table reads `window.SokoniDeliveryPricing.CONFIG`** — per-vehicle
+  base/per-km/per-min and the rider minimum payout, straight from the pricing
+  engine.
+
+### Accurate where sourced, honest where not
+Sections with canonical figures: subscriptions (Free · Starter 999 · Growth 2,499
+· Enterprise 4,999 /mo — `priceKES` is cents, confirmed via plans.html's /100
+render), commission (marketplace 3%, services 15%, legal 5%, digital 10%, vehicles
+flat 2,000, min KES 10), delivery, advertising (Pro Boost 500, VIP 1,500).
+
+Figures NOT defined anywhere in the code are shown as **"Fee confirming — contact
+support"** rather than invented: M-Pesa/bank/card/international withdrawal fees and
+premium/business verification. A page that promises "no hidden fees" must not
+carry a single guessed number; the minimum withdrawal (KES 100) is real and shown.
+
+### Sections
+Subscriptions · Sales commission · Payments & withdrawals · Delivery & logistics ·
+Advertising · Other platform fees · Earnings calculator · FAQ · transparency
+promise. Premium dark, responsive, sticky section nav.
+
+### Also
+- Linked the hub from the homepage "Earn Today / Become a Seller" area.
+- Replaced inaccurate homepage copy "Paid plans from KES 500/month" (the cheapest
+  paid plan is KES 999; 500 is a boost price) with a link to the single-source
+  page.
+
+**Open (needs the real numbers from ops):** withdrawal/payment and verification
+fees, currently marked "confirming". Client-side only page; no rules/functions
+changed.
+
+### Files
+`earnings.html` (new), `index.html`.
+
+## [2026-07-26] — fix(profile): "tabs jump to home" is the OOM crash — add crash sentinel
+
+Reported: on Pacifique's Android, tapping the profile tabs (Overview/Orders/Bookings/
+Wallet/…) "leads to the home page". Investigated the tab wiring end-to-end and it is
+**correct**: the tabs are `<button type="button">` (not links, not in a form), all 14
+`panel-*` targets exist, and all **seven** chained `switchTab` layers only toggle DOM
+classes + lazy-load that tab's dashboard — **none navigate**. Verified in Android-emulated
+Chromium: tapping tabs does not navigate. So it is not a button bug.
+
+What it actually is: profile.html is the heaviest page in the app (7k+ lines, sokoni-orders
+module, event-bus, observability, gateway, kass-widget, and a cascade of dashboard renders
+per tab). On a low-RAM Android, a tab tap triggers enough rendering to hit Chrome's
+"Aw, Snap!" renderer crash (OOM) — the same fault as the "reload snap" report — after which
+a reload lands on home. Same root cause, surfaced on the heaviest page.
+
+Action (telemetry-first, per the standing decision): wired `sokoni-crash-sentinel.js` into
+`profile.html` so the next tab-tap crash is captured on the real device — the breadcrumb
+shows heap climbing then an abnormal exit right after the tap, readable at `/android-doctor`.
+No behavior change to the tabs. Verified: sentinel initialises on the authed provider
+profile, 0 pageerrors.
+
+Files: `profile.html` (+1 include). See the sentinel entry below for the mechanism.
+
+---
+
+## [2026-07-26] — feat(diagnostics): Android crash sentinel + on-device doctor
+
+Reported: on Android (Chrome), most accounts fail to open — the tab shows Chrome's
+"Aw, Snap!" page (its button reads *Reload*, hence "reload snap"). "Aw, Snap!" is a
+**renderer crash**, on budget Android almost always out-of-memory. A crash cannot be
+reported from the tab that died, so this captures it on the *next* load.
+
+**What shipped (diagnostics only — no behavior change to the app):**
+
+- `sokoni-crash-sentinel.js` — FIRST `<head>` script. Writes a synchronous localStorage
+  breadcrumb every 2s (heap, device memory, cores, network, last script loaded, App Check
+  state, JS errors, reload count), marks it clean only on an orderly exit, and on the next
+  load detects that the previous run ended abnormally and classifies WHY from evidence
+  (`heap-near-limit`, `low-device-memory`, `appcheck-rejected`, `reload-loop`, …). Two sinks:
+  a localStorage ring buffer (100% reliable) and a best-effort beacon to the existing
+  `logClientDiagnostic` CF via its anonymous `auth-*` surface (no functions deploy).
+- `android-doctor.html` — dependency-free page the merchant opens at `/android-doctor` on
+  the phone; shows the recorded crash reason in plain language + a Share button.
+- Wired into `index.html` (home, the reported page) and `login.html` (the auth surface).
+
+**Why it matters:** turns an unreproducible "his phone says reload snap" into measured
+evidence (OOM vs App Check 403 vs reload loop) captured from the actual failing device,
+so the fix targets the real cause instead of a guess.
+
+Files: `sokoni-crash-sentinel.js` (new), `android-doctor.html` (new), `index.html`, `login.html`.
+No database, API, or security changes. No breaking changes.
+
+---
+
+## [2026-07-26] — fix(pos): P58E now searches, connects, and auto-reconnects on open
+
+Follow-up to the duplicate-global fix. With `P58EPrinter` finally defined, two
+gaps in the flow above it became reachable — and visible.
+
+### Auto-reconnect had never once run
+
+Page init already called `PrinterManager.autoReconnect()`, which delegates to
+`window.P58EPrinter.autoConnect()`. `P58EPrinter` was `undefined` on production,
+so that call returned `false` on **every session since the feature shipped**. No
+merchant has ever had a printer reconnect by itself; the capability was written,
+wired, and dead.
+
+It also only refreshed the status bar. A restored connection still rendered
+"Pair P58E Printer", which reads as *it didn't work* even when it had. The panel
+and checklist now re-render too.
+
+### Pairing asked for the picker every time
+
+`pairP58E()` went straight to `requestAndPair()`, so a merchant who paired
+yesterday still got the browser chooser today. It now tries `autoConnect()`
+first — Chrome 85+ exposes `getDevices()`, which re-attaches to an
+already-permitted printer with **no dialog at all** — and only opens the picker
+when the printer is genuinely unknown to that browser.
+
+So the flow is now: **search → detect → connect**, one tap, nothing to select
+in the common case; and on the next visit, connected before the merchant
+touches anything.
+
+### The one step that cannot be removed
+
+First-time pairing on a browser that has never seen the printer **must** show
+the chooser and **must** be triggered by a user gesture. That is the Web
+Bluetooth permission model, not a SOKONI limitation — no amount of code removes
+it, and anything claiming to would be lying about where the permission came
+from. Every subsequent connection is silent.
+
+## [2026-07-26] — fix(deploy): SW version format blocked every hosting deploy
+
+Caught by the release gate on the first deploy after `bump-sw-version.js` was
+wired into the predeploy chain. Nothing shipped — the gate did its job.
+
+`CACHE_VERSION` has to satisfy two contracts at once:
+
+1. **unique per deploy**, so each release gets a fresh cache → the timestamp
+2. **ends in `-vNN`, monotonically increasing** → the counter
+
+`bump-sw-version.js` emitted only `sokoni-YYYYMMDDHHMMSS`, satisfying (1) and
+breaking (2). `test-navigation.js` compares that `NN` against the version a
+specific fix landed in — that comparison is how the gate proves users receive a
+*corrected* worker rather than merely a *different* one. A bare timestamp is
+unique but not comparable, so the check could never pass and
+`test-inventory --gate` failed the entire deploy:
+
+```
+FAIL  test-navigation — CACHE_VERSION is missing or does not end in -vNN
+                        cannot verify users get the fixed worker
+```
+
+Now emits `sokoni-<stamp>-v<N>`, satisfying both. The counter continues from any
+existing `-vNN`, or resumes above the highest already shipped (v115) so the
+sequence never moves backwards after the timestamp-only interlude. Verified
+monotonic across consecutive runs: v116 → v117 → v118.
+
+Gate after the fix: **PASS 54, FAIL 0**.
+
+## [2026-07-26] — fix(cache): updates now arrive on reload instead of requiring users to clear browsing data
+
+Reported as "all updates should be available upon any reload, not deleting all
+browsing data". Confirmed and fixed at the layer actually responsible.
+
+### The leak
+
+Every `.js` and `.css` was served as:
+
+```
+Cache-Control: public, max-age=3600, must-revalidate
+```
+
+`must-revalidate` does **not** force revalidation while a response is fresh — it
+only governs what happens after expiry. So for a full hour the browser served
+JavaScript from disk **without contacting the server at all**.
+
+A user reloading after a deploy therefore got current HTML referencing the same
+filenames, and the browser quietly supplied yesterday's JavaScript. Clearing
+site data was the only reliable escape, which is exactly the reported symptom.
+
+### It also defeated the service worker
+
+`bump-sw-version.js` correctly bumps `CACHE_VERSION` on every deploy, so the SW
+builds a fresh cache each release. But the fetches that **populate** that cache
+go through the browser's HTTP cache — so the new service-worker cache was being
+filled with hour-old files. The version bump was doing its job and being undone
+one layer down.
+
+### Fix
+
+`no-cache, must-revalidate` for JS and CSS: still stored, but revalidated every
+time. Unchanged files return `304` (headers only); changed files arrive
+immediately.
+
+This costs nothing at the edge, because `CDN-Cache-Control: no-store` was
+already set on these files — the hour of `max-age` bought **no** CDN benefit
+whatsoever. It was pure client-side staleness.
+
+### The allowlist this replaces
+
+The service worker carries an `ALWAYS_FRESH` list whose comments record four
+separate incidents where a stale asset outlived the fix for it — the offline
+detector, the drawer stylesheet, `seller.js`, and the POS startup path. Each
+was resolved by appending one more filename.
+
+That pattern only ever protects files that have already caused an outage. The
+P58E printer fix committed minutes earlier would have hit it precisely:
+`sokoni-bluetooth-printer.js` was not on the list, so a returning merchant would
+have kept the broken build. The printer bundle is added for the demo, but the
+header change is what stops the next one needing its own entry.
+
+### Also
+
+`scripts/generate-version.js` added to the hosting predeploy chain.
+`version.json` was reporting commit `55c96cd` from **2026-07-18** — eight days
+and many deploys stale — because nothing regenerated it. Anything reasoning
+about build identity was reading a fossil.
+
+## [2026-07-26] — fix(pos): P58E printer could not be configured — duplicate global killed the adapter
+
+Reported as "configure the P58E, I want to test for a client". The P58E support
+was already written and complete; it was never reachable.
+
+### Root cause
+
+`sokoni-universal-printer.js` and `sokoni-bluetooth-printer.js` **both** declared
+
+```js
+const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+```
+
+at global scope. They load together as classic scripts on every POS printer
+page, and two top-level `const`s of one identifier throw:
+
+```
+Identifier 'SOKONI_LEGAL_NAME' has already been declared
+```
+
+That aborts the script that parses second. `window.P58EPrinter` was therefore
+**never assigned** — so pairing, configuration and test printing were all
+impossible, on production, for every merchant.
+
+Confirmed against live `mysokoni.co.ke/pos-printer-setup` before the fix:
+`typeof window.P58EPrinter === "undefined"`, with that exact page error.
+
+### Why it went unnoticed
+
+The page renders its entire UI — "Discover P58E", "Setup", "Hardware Tests",
+"Test Print" all present and clickable. Only the hardware layer was missing, so
+it presented as a printer or Bluetooth problem rather than a script one.
+
+Each file is also individually valid: `node --check` passes on both, and any
+test loading them in isolation passes. It only breaks when they share a global
+scope — which is exactly what a browser does.
+
+### Fix
+
+`const` → `var` in both files. `var` redeclaration is legal and idempotent here
+because both assign the identical literal.
+
+The literal stays in **both** files deliberately — `verify-company-identity`
+scans each for the canonical name, so "fixing" this by deleting one declaration
+would have traded a printer outage for a compliance-gate failure.
+
+Verified in a real browser after the fix: `P58EPrinter`, `SokoniPrinter`,
+`PrinterManager` and `PosPrintService` all resolve to objects, and the P58E
+adapter exposes its full method surface.
+
+### Regression guard
+
+New `scripts/test-printer-globals.js` loads the bundle's declarations and fails
+on any shared global lexical name.
+
+It tracks real **brace depth** rather than column-0 position. The first version
+used `/^const /m` and reported `ESC`, `CMD` and `PrintQueue` as collisions —
+all three false positives, since every script wraps its body in an IIFE written
+unindented. What made `SOKONI_LEGAL_NAME` genuine is that it sits *before* the
+IIFE opens, at depth zero. Verified both ways: 7/7 green now, and exit 1 with
+the offending identifier named when the `const` is reintroduced.
+
+## [2026-07-26] — fix(brands,minishop): brand name printed on documents; two colliding health scores
+
+Two open items closed, and the root cause of a third found.
+
+### KASS brand name on documents
+
+`functions/brands.js` still had `displayName: 'KASS Vapes'` after the merchant
+renamed to KASS SHOP everywhere else. That value feeds `brandName` in
+`documentBranding()`, so receipts printed a different name than the storefront
+and the seller record showed. Renamed.
+
+`domains: ['kassvapes.co.ke']` is deliberately **not** renamed — it is live
+infrastructure and host→brand resolution depends on it. `test-brands` 36/36.
+
+### Two health scores no longer collide
+
+`merchant-success.html` already owns **"Health Score — your business
+performance index"**, graded A+ to F from fulfilment, reviews and orders. The
+MiniShop panel added earlier the same day was called **"Shop Health"** and
+measured something entirely different: how completely the storefront is filled
+in.
+
+Two panels both called health — one a performance grade, one a checklist —
+read as the same number disagreeing with itself. The MiniShop one is now
+**"Storefront Setup"**, and its ring reads `% done` rather than `/100`, which
+stops it looking like a grade. Both engines kept; only the collision removed.
+
+### Root cause found for the handle that never existed
+
+**The `shops` collection is empty and has no writer anywhere in the codebase.**
+
+`claimMinishopHandle` → `_assertShopOwner` → reads `shops/{shopId}` →
+`NOT_FOUND`. **No merchant has ever been able to claim a MiniShop handle,
+because it is structurally impossible.** That is why every handle probed this
+session returned 404, and why the per-shop preview work has never run its happy
+path against real data.
+
+A second bug sits in the same path: `minishop-admin` queries
+`where('ownerId', ...)` while `_assertShopOwner` checks `sellerUid` — two field
+names for one relationship, so fixing only the missing writer would produce a
+shop its owner still cannot open.
+
+Written up with three options and a recommendation in
+[[MINISHOP_SHOPS_COLLECTION_GAP]]. Not patched here: it is identity-adjacent,
+and the fast fix (backfill `shops/` from `sellers/`) would create a fourth home
+for the same merchant — exactly the duplication the config convergence removed
+that morning. It belongs in front of the Architecture Review Gate.
+
+Nothing built today is invalidated by it. The prerenderer, schema convergence,
+resolver, admin redesign and auth-gate ceiling all fail closed and honestly
+against an empty `shops/`, and work the moment one exists.
+
+## [2026-07-26] — chore(onboarding): split Maina's profile name from the shop name
+
+The first onboarding used the business name for both, so the owner's profile
+read as "Maina Groceries" — a company where a person should be.
+
+Now separated, which is the distinction the platform already assumes:
+
+| store | value | meaning |
+|---|---|---|
+| Firebase Auth `displayName` | `Maina` | who signs in |
+| `users/{uid}.name` / `.displayName` | `Maina` | the person, shown on their profile |
+| `sellers/{uid}.name` / `shopName` / `businessName` | `Maina Groceries` | the business, shown to customers and in search |
+
+The re-run also surfaced a gap in the script: `accounts:update` only ran when
+creating a *new* account, so correcting the name would have fixed Firestore and
+left Firebase Auth still saying "Maina Groceries". The reuse branch now syncs
+`displayName` too — otherwise the script is only idempotent for the data it
+happens to write second.
+
+Verified across all three stores: auth `displayName=Maina`, `users/` name and
+displayName `Maina`, `sellers/` name/shopName/businessName `Maina Groceries`,
+category still `food`, `status: active`, `isVisible: true`.
+
+The read-back that misreported on the first apply now works and printed
+`OK — discoverable`.
+
+## [2026-07-26] — chore(onboarding): Maina Groceries — grocery seller, phone-OTP login
+
+Onboarded **Maina Groceries** (phone 0706603915) as a marketplace grocery seller.
+Account `zewfgP9OpcSTc34x07UCecTo0Mh2`; signs in by OTP on +254706603915.
+
+### The category was the part worth getting right
+
+Three plausible values existed and only one works:
+
+| value | verdict |
+|---|---|
+| **`food`** | **Correct** — the marketplace slug, titled "Groceries & Fresh Food" |
+| `grocery` | A Food Hub vendor category in `sokoni-food.js`, which is **localStorage-only** and never touches Firestore. A merchant filed there would exist on one browser and nowhere else. |
+| `groceries` | A display label, not a slug |
+
+Valid categories are exactly the 36 keys of `categoryMeta` in `category.js`, and
+products are matched with `p.category.toLowerCase() === category.toLowerCase()`.
+Either wrong value would have listed the shop in a category no page resolves —
+a silent no-op that reads as a successful onboarding.
+
+### Written
+
+- `sellers/{uid}` — name, category `food` / Groceries, `status: active`,
+  `isVisible: true`, searchableTerms including Swahili (*mboga*, *duka*).
+- `users/{uid}` — `roles: ["seller","buyer"]`. The **array** is what
+  `sokoni-nav-engine._role()` reads; the boolean alone would let the owner sign
+  in successfully and still land as a buyer.
+
+Honest starting state: `verified: false`, `shopPublished: false`, all counters
+zero, and `onboardingPending` listing what the owner still has to add — logo,
+cover, description, address, hours, delivery areas, products, prices. No
+products, ratings or reviews were invented.
+
+### Script
+
+`scripts/onboard-maina-groceries.js` — dry run by default, `--apply` to write.
+Idempotent: a re-run detects the existing account and record and would merge
+rather than duplicate.
+
+One bug found and fixed in it after the first apply: the read-back called
+`.fields` on `req()`'s `{status, body}` result, where `body` is a raw string, so
+it printed `name=undefined … ** CHECK **` on a run whose writes had actually
+succeeded. The real state was verified out-of-band before anything was changed.
+A verification step that cries wolf is worse than none — the next person learns
+to ignore it.
+
+### Verified in production
+
+`sellers/`: name="Maina Groceries", category=food, status=active, isVisible=true,
+verified=false, productCount=0.
+`users/`: roles=[seller,buyer], role=seller, hasSellerProfile=true.
+Auth: phone +254706603915 attached, providers `phone, password`, not disabled.
+Listed under `category.html?cat=food`.
+
+## [2026-07-26] — fix(minishop-admin): loading overlay could spin forever — three unbounded waits
+
+Reported as the MiniShop page "splashing — it stays there and doesn't move".
+
+### It is not the splash
+
+Measured the splash lifecycle on both local and production: `#sk-spl` / `#sk-splash`
+gets its dismiss class at ~2.5s and is removed from the DOM by ~4.5s, with zero
+page errors. The splash works.
+
+The stuck overlay is `#msaAuthGate` — a *second* full-screen element on the same
+page, dark background, centred spinner, "Loading your MiniShop…". It reads
+exactly like a splash, and unlike the splash it had **no terminal state**.
+
+### Three waits with no ceiling
+
+1. `checkAuth()` polled `typeof firebase === 'undefined'` every 300 ms **with no
+   limit**. `firebase.js` is a module script; if it fails to evaluate — App Check
+   403, blocked CDN, offline — the global never appears and this loops for as
+   long as the tab stays open.
+2. `onAuthStateChanged` may never invoke its callback when Auth cannot
+   initialise. App Check failures do exactly that, and are known to be
+   intermittent on this platform.
+3. `loadShopData()`'s Firestore `get()` had `.then` and `.catch` but no timeout.
+   A promise that never settles runs **neither**, so the gate stayed up.
+
+Any one of the three left a full-screen spinner with no way out and no
+explanation — [[feedback_healthy_looking_failure]] in its purest form: the app
+looks busy rather than broken, so nobody reports it as an error.
+
+### Changes
+
+- 12 s ceiling across the auth gate, covering both the module-load poll and the
+  auth-state callback, each with its own message so the two are distinguishable
+  in support.
+- The gate now has a real failure state — heading, cause, and three ways out
+  (Try again / Sign in / Seller Dashboard) — instead of an endless spinner.
+- **Try again re-arms the gate in place** rather than reloading, so a transient
+  App Check blip costs one tap.
+- 10 s ceiling on the shop read; on timeout the page initialises without shop
+  data rather than hanging, and the late promise is ignored so it cannot
+  double-initialise.
+
+### Verified
+
+Each failure mode reproduced and observed to terminate:
+
+| simulated failure | result |
+|---|---|
+| `firebase.js` never loads | error state at 12 s — "SOKONI didn't finish loading…" |
+| `onAuthStateChanged` never fires | error state at 12 s — "We couldn't confirm your sign-in…" |
+| happy path (auth ok, empty shop) | gate removed, page rendered, health panel intact |
+
+## [2026-07-26] — fix(minishop): last readers onto the resolver; merchant health score graded on the wrong field
+
+Completes the schema convergence. Every consumer of MiniShop **display** config
+now reads through `resolve()`; nothing outside the schema module knows about the
+two stores.
+
+### Scope was narrower than it looked — and blanket conversion would have broken things
+
+Five readers bypassed the resolver, but only **three** read display config. The
+other two read `handle`, which `resolve()` deliberately drops (it is a protected
+routing field, not display config). Converting those would have returned
+`undefined` and broken handle lookups in campaigns and QR generation.
+
+Converted: `merchant-success.js` ×2, `minishop-v3.js` ×1.
+Correctly left alone: `minishop-campaigns.js`, `qr.js`, `minishop-v3.js:986`,
+and the `followerCount` / `handle` reads in `minishop.js` — all non-display
+fields that live canonically in `minishopConfig` already.
+
+### The deterministic bug
+
+`_calcHealthScore` checked `config.phone` — the **legacy** name — and never
+`config.contactPhone`, the canonical one. It falls back to `shop.phone` /
+`shop.contactPhone`, so it was not always zero (an earlier note overstated
+this); but a merchant whose number lives solely in their MiniShop config — the
+normal case once saved through the CF — silently lost those 2 points and was
+graded down for a complete profile.
+
+Compounding it, `merchant-success.js` read only the canonical store, so a
+merchant whose branding is still legacy-only scored zero for `coverUrl`,
+`logoUrl`, `description`, `category`, `socialLinks` and `responseTime` —
+fields they had actually filled in. This file attaches a **letter grade** to
+that score, which is why it was the priority.
+
+### Verification
+
+Audited every assignment from a `minishopConfig` snapshot across `functions/`
+and classified each as resolved, or raw-but-provably-non-display. Result: 3
+resolved, 6 raw reading only `handle` / `followerCount`, 0 unaccounted. Nine
+apparent hits in `availability.js`, `loyalty-enterprise.js`,
+`release-readiness.js` and `search-queue.js` were false positives — those files
+contain **zero** `minishopConfig` references; the pattern had matched unrelated
+`configSnap` variables.
+
+Affected functions: `getMerchantDashboard`, `getMerchantHealthScore`,
+`miniShopOGMeta`. Tests 73 + 57 green; syntax gate 1,083 files clean.
+
+### Still open
+
+Two health-scoring systems now exist — `_calcHealthScore` (merchant: verification,
+fulfilment, reviews, response, orders) and the MiniShop panel added earlier today
+(storefront completeness). They measure different things, which is defensible,
+but that is a decision worth taking explicitly rather than inheriting. Not
+resolved here.
+
+## [2026-07-26] — chore(minishop): schema versioning, explicit protected fields, and an E2E share verifier
+
+Three follow-ups on the schema convergence.
+
+### Schema versioning
+
+Persisted configs now carry `schemaVersion` (currently **2**). Unversioned
+documents are v1 by definition — either pre-convergence shape.
+
+`forWrite()` is the only writer entry point, so no document can be persisted
+without a stamp, and a client cannot forge one (the field is not in the
+allowlist; the stamp is applied after normalisation). `readVersion()` reports a
+stored document's version, defaulting to 1.
+
+Readers deliberately do **not** branch on version yet: v1 and v2 differ only by
+key names, which `normalize()` already reconciles. The stamp exists so a future
+genuinely breaking change — restructuring a field rather than renaming one — can
+tell documents apart without guessing at their age. Speculative version branches
+rot, so none were added.
+
+### Protected fields, explicit and enumerated
+
+`normalize()` was already an allowlist, so mass assignment was structurally
+impossible — but only as an emergent property that a future widening could
+silently undo. `PROTECTED_FIELDS` now names all 20 explicitly (ownership,
+financial identity, money, platform-granted standing, server counters, server
+timestamps, routing identity, and the legacy blob), `assertNoProtected()`
+enforces it inside `forWrite()`, and the tests assert **each field by name** so a
+regression report says which one escaped rather than just "a field leaked".
+
+### `scripts/verify-minishop-share.js`
+
+One command that walks the whole public share chain for a handle and reports
+each step separately, so a failure names its own cause:
+
+```
+node scripts/verify-minishop-share.js <handle>
+```
+
+Checks the data layer (config resolves under canonical names, legacy blob not
+echoed, sensitive fields stripped), the prerenderer (served by the function not
+the static shell, markup intact after meta injection, exactly one `<title>`,
+publicly cacheable), and the card itself (title names *this* shop rather than the
+generic fallback, `og:url` correct, and the `og:image` is the shop's own **and
+actually loads** — an image that 404s renders as a blank card, which is worse
+than the fallback logo).
+
+Exits non-zero on failure so it can gate a release. On an unclaimed handle it
+says so plainly instead of reporting a cascade of failures.
+
+It cannot check how WhatsApp visually renders the card or whether its crawler
+holds a stale copy — those still need a human with a phone. Everything upstream
+is now covered.
+
+### Tests
+
+`scripts/test-minishop-config-schema.js` 36 → **73 assertions**, all passing.
+
+## [2026-07-26] — fix(minishop): converge the config schema — one definition, one store, one set of names
+
+Completes the repair flagged in the previous commit as "a bridge, not the fix".
+
+### The full diagnosis
+
+It was a **three-way** split, not two, and the root cause was two controllers
+bound to the same form:
+
+- `minishop-admin.html` ships a built-in controller that wrote
+  `shops/{id}.minishopConfig` **directly from the client** as `coverImage`,
+  `logoImage`, `phone`, `email` and flat social keys.
+- `sokoni-minishop.js` — loaded by the same page, with the built-in one as an
+  `onerror` fallback — wrote `minishopConfig/{id}` through `saveMinishopConfig`
+  as `coverUrl`, `logoUrl`, `contactPhone`, `socialLinks{}`.
+- The storefront reads `minishopConfig/{id}` and renders a third set.
+
+Which schema a save produced depended on whether `sokoni-minishop.js` had
+loaded. And the page's own preview read back the same document it had just
+written, so a save that never reached the storefront still looked successful.
+
+Measured against the storefront's actual read set:
+
+- **7 fields it renders were absent from the CF allowlist** — `brandColor`,
+  `category`, `deliveryPolicy`, `fontFamily`, `location`, `responseTime`,
+  `tagline` — and the allowlist drops unknown keys silently, so even the
+  *correct* controller lost them on **every save**.
+- **12 fields the legacy controller wrote were read by nothing.**
+
+### The fix
+
+New `functions/minishop-config-schema.js` is the single definition: canonical
+field list, per-field sanitisation, legacy-name aliases, and the read-time merge.
+
+- `saveMinishopConfig` now normalises instead of allowlisting. It accepts either
+  schema and always persists canonical, so both controllers converge.
+- `getMinishopPublic` resolves across **both** stores, so shops configured
+  before this commit render their existing branding with no migration step.
+- `minishop-page.js` uses the shared resolver in place of its local bridge.
+- The admin's built-in controller now saves through the CF rather than writing
+  `shops/{id}` directly — server-validated instead of client mass-assignment.
+
+No migration script is needed: reads resolve across both stores, and the first
+save through either controller rewrites that shop in canonical form.
+
+### Also fixed
+
+The inherited sanitiser stripped tags but kept their contents, so
+`<script>alert(1)</script>` was stored as the literal text `alert(1)`. Not an
+injection risk — every consumer escapes on output — but not what the seller
+typed. Script and style blocks are now removed with their contents.
+
+### Tests
+
+`scripts/test-minishop-config-schema.js` — 36 assertions covering legacy→canonical
+mapping, the seven previously-dropped fields, mass-assignment rejection
+(`sellerUid`, `bankDetails`), sanitisation, both store-precedence directions, and
+the live failure case: a shop whose data exists **only** in the legacy store must
+still resolve. `scripts/test-public-pages.js` still 57/57.
+
+## [2026-07-26] — feat(minishop-admin): shop health, quick actions, empty states — and a config schema split that broke shop branding
+
+Second redesign slice. Also fixes a platform bug found while wiring it, which
+was silently defeating the per-shop link previews shipped earlier today.
+
+### MiniShop branding was written to one place and read from another
+
+Two config stores exist, with two naming schemes, and they never meet:
+
+| | store | keys |
+|---|---|---|
+| `minishop-admin.html` writes | `shops/{id}.minishopConfig` | `coverImage`, `logoImage`, `tagline`, `phone` |
+| `saveMinishopConfig` CF writes | `minishopConfig/{id}` | `coverUrl`, `logoUrl`, `contactPhone` |
+| public storefront **reads** | `minishopConfig/{id}` | `coverUrl`, `logoUrl` |
+
+So a seller uploads a cover and logo in the MiniShop admin, the admin's own
+preview shows it back to them because it reads the same store it wrote — and the
+public storefront never sees it. A textbook healthy-looking failure.
+
+It also defeated `minishopPage`: that function read only the CF store, so almost
+every shared shop link would have fallen back to the SOKONI logo — the exact
+defect per-shop previews exist to fix. `minishop-page.js` now resolves branding
+across **both** stores and **both** key names.
+
+That is a bridge, not the fix. Converging the two stores onto one schema is the
+real repair and needs its own change — it touches the storefront, the admin and
+the CF allowlist together.
+
+### Shop Health
+
+Weighted checklist over data the platform already holds: shop link claimed,
+logo, cover, description, 10+ products, delivery areas. Score ring plus a "Fix"
+link that jumps to the tab (or page) that resolves each gap.
+
+Deliberately excluded: fulfilment rate, response time, review score. Nothing
+measures those yet, and a checklist item that can never turn green is worse than
+an absent one. When the product count cannot be read, that check is dropped from
+the denominator rather than scored as a confirmed gap.
+
+### Quick Actions
+
+Add Product · Share Shop · Create Discount · View Orders · Analytics. Every
+target verified to exist — the two off-page links use `seller.html#products` and
+`#orders`, both present in that page's `_HASH_MOBILE` and `_HASH_DESKTOP` maps.
+
+### Empty states
+
+A genuine `0` now carries a line telling the seller what to do about it ("No
+visitors yet. Share your MiniShop to start receiving traffic."). `Unavailable`
+never gets a hint — there is nothing a seller can do about a failed read. The
+three states are now visually distinct: real value, actionable zero (with hint),
+failed read (14px warn orange).
+
+### Verified
+
+390×844 and 1280×900: `scrollWidth == clientWidth` at both. All six tabs measure
+exactly 44px. Failure-state styling confirmed by computed style, not by eye —
+`14px / rgb(255,152,0) / 600`.
+
+## [2026-07-26] — feat(minishop-admin): storefront hero, sourced performance tiles, and a real fix for stats that always read 0
+
+First slice of the MiniShop redesign — the page should read as the seller's
+business home, not a settings form. Scoped to what the platform can actually
+compute; sections needing data we do not capture are deliberately absent.
+
+### The tiles were never wired
+
+`loadQuickStats()` delegated to `window.SokoniMiniShop.getQuickStats` — **a
+function that does not exist anywhere in the codebase.** The `else` branch ran on
+every load and wrote a hardcoded `'0'` into all four tiles, so every seller's
+dashboard reported zero views and zero followers regardless of real traffic. The
+`.catch` did the same thing, so a failed read was also indistinguishable from a
+genuine zero.
+
+Now wired to real sources: `getMinishopAnalytics` (owner-scoped) for
+`views`, `daily.{YYYYMMDD}` and `followerCount`, plus a single-field `products`
+query for the product count. A failed read renders **"Unavailable"** in warn
+colour, never `0`. A Firestore read that resolves `fromCache && empty` — the
+offline failure mode that looks like success — is treated as unknown, not zero.
+
+### Changes
+
+- **Branded hero** replaces the plain "Your MiniShop URL" card: cover, logo,
+  shop name, tagline, status chip, compact address row with Copy, and
+  Visit Shop / QR / Edit Handle actions. The large Claim block still shows only
+  while unclaimed, so it stops dominating the page once a handle exists.
+- **Performance tiles** rebuilt with icons, shimmer-on-load and hover lift.
+  "Shop Orders" was **removed** — nothing attributes orders to a shop yet, so the
+  tile could never be populated. Replaced with Products, which is real.
+- **Tabs**: `min-height:44px` (was a 42px target on a phone) and
+  `scroll-snap-type: x proximity`, so a flicked belt lands on a tab boundary.
+- **Spacing**: content padding 24px → 28px top / 96px bottom.
+
+### Not built, and why
+
+Today's sales, conversion, wishlist adds, cart abandonment, returning customers,
+top city, average session, most-viewed product, SEO score, pixels, themes and
+custom domain are **not** in this commit. `minishopAnalytics/{shopId}` stores only
+`views`, `sources.*` and `daily.*` — there is no event capture behind any of those
+numbers. Rendering them would mean fabricating data, which
+[[feedback_healthy_looking_failure]] forbids. They need an events + rollup layer
+first; tracked as the next phase.
+
+## [2026-07-26] — fix(minishop-admin): header and tab belt collided; page scrolled sideways on mobile
+
+Reported as the MiniShop header and the belt beneath it sitting "on top of each other".
+
+### Root cause — measured, not guessed
+
+Rendered at 390×844 with the page's own CSS: `document.scrollWidth` was **519px against
+a 390px viewport — 129px of horizontal overflow.**
+
+The source was the handle-claim row, not the header. `.msa-handle-input-row` is a
+`nowrap` flex of prefix + input + Claim button, and `#msaHandleInput` carried its
+default implicit minimum width, so the three summed to 519px and pushed the whole
+document sideways. Once the document scrolls horizontally, `.msa-topbar` — which was
+`position:sticky` **on its own**, with the tab belt left static — no longer lines up
+with anything beneath it. That misalignment is what reads as two bars on top of each
+other.
+
+Two contributing faults:
+
+- Only the top bar was sticky. On scroll it floated over a belt that had already
+  scrolled away.
+- `.msa-topbar h1` had `flex:1` with no `min-width:0`, so the title could not shrink;
+  `← Seller Dashboard` alone consumed 112px of a 390px bar.
+
+### Changes
+
+- New `.msa-header` wrapper holds the title bar and tab belt as **one** sticky unit,
+  with a blurred translucent backdrop and a single shadow.
+- Overflow eliminated: `min-width:0` on the input and row; under 600px the URL prefix
+  stacks onto its own line. Measured after: **scrollWidth 390 = clientWidth 390.**
+- Mobile back link collapses to the arrow glyph (112px → 15.5px), giving the shop name
+  195px instead of 86px. Title truncates with an ellipsis instead of forcing width.
+- Tab belt keeps `overflow-x:auto` (six tabs never fit a phone) and gains a right-edge
+  fade so it reads as scrollable rather than clipped. The only elements now crossing the
+  viewport edge are tab buttons inside that scroller, which is intended.
+- **Removed the duplicated "My MiniShop" tab.** It repeated the `<h1>` directly above
+  it — two identical labels stacked one under the other, which is literally what was
+  reported. It is the overview panel, so it is now labelled "Overview". All tab
+  selectors are flat `.msa-tab[data-tab=…]` lookups, so the new wrapper does not affect
+  switching.
+- Palette aligned to the platform premium rule: `--ms-accent` cyan `#00bcd4` →
+  `#71ff00`, `--ms-accent2` purple `#7c4dff` → `#00d4ff`, with all 21 hardcoded
+  cyan/purple literals swept (0 remaining).
+
+### Verification
+
+Playwright at 390×844 and 1280×900 against the real stylesheet. The first two probe
+runs were **invalid and discarded** — one hit a stale server already on the port, the
+other landed on `index.html` after the auth gate redirected — so the harness now
+asserts the landed URL and the presence of `.msa-topbar` before any number is read.
+
+No functional change: no JS touched, no CF, no data path.
+
+## [2026-07-25] — feat(share): per-entity link previews for profiles and shops; caching policy corrected
+
+Closes the two follow-ups left open by the profile-share fix earlier today.
+
+### 1. Link previews are now per-member and per-shop
+
+Preview crawlers do not run JavaScript, so a client-rendered page can only ever show
+one generic card for every entity. Every shop shared on WhatsApp previewed as "Shop on
+SOKONI" with the SOKONI logo — for sellers who distribute their storefront almost
+entirely through WhatsApp, that card *is* the shopfront.
+
+- `/profile/{uid}` is now rendered **server-side** by `profileGetPublicProfile`. Title,
+  description and `og:image` come from the member. No client JS at all, works with JS
+  disabled, and one round trip instead of two. Replaces `public-profile.html`, deleted
+  here — the client page could not have solved the preview problem.
+- `/shop/{handle}` and `/@{handle}` are served by a new `minishopPage`, which fetches
+  the same `minishop.html` Hosting serves, swaps the `<head>` metadata, and returns it.
+  The storefront still renders client-side from `sokoni-minishop.js` — the markup is
+  **not** duplicated into the functions bundle, because a second copy would drift from
+  the file the UI is built from. Template is held in module memory for 5 minutes; the
+  TTL is what stops a warm instance serving the previous deploy's markup forever.
+- New `functions/html-render.js` — shared escaping, URL guards, meta building and
+  template cache. New `functions/profile-page.js` splits markup from data so it can be
+  tested without Firestore.
+
+Fail-open for the shop page, in three stages: shop read fails → generic metadata;
+template fetch fails with a stale copy in memory → stale copy; no template at all →
+302 to `/minishop?handle=…`, which `sokoni-minishop.js` already supports. No page is
+the only unacceptable outcome.
+
+### 2. Caching policy — `no-cache` rather than `no-store`
+
+The earlier fix set the document default to `no-store`, which was correct for
+freshness but removed edge caching from public pages that had been served with
+`max-age=3600`. Default is now `no-cache, must-revalidate`: still always fresh, but
+the response is **stored**, so an unchanged page costs a `304` instead of a full
+transfer — which matters on the mobile networks these pages are actually read on.
+
+Safe only because of a structural property, now written down: every SOKONI page is a
+user-agnostic shell, with member data fetched client-side through authenticated CFs.
+Pages touching auth or payment state remain explicitly `no-store, private`. A page that
+ever renders user data at the origin must be added to that block in the same commit.
+
+`/profile/**`, `/shop/**` and `/@**` get `public, max-age=300, s-maxage=600,
+stale-while-revalidate=86400`, set **identically** in the function and in
+`firebase.json` so nothing depends on which layer wins. This is what keeps a link
+forwarded to a large WhatsApp group from becoming a burst of Firestore reads.
+
+### Security
+
+These functions write other people's display names, bios and shop names into markup —
+the exact shape of a stored XSS. Every interpolation goes through `esc` / `attr` /
+`httpsUrl`. `scripts/test-public-pages.js` (57 assertions, all passing) covers it; the
+strongest enumerates every tag the renderer emitted and requires the set to be exactly
+the tags the page owns, so any element a payload opens is caught. Verified against the
+real `minishop.html`: metadata replaced cleanly, all 6 scripts and the stylesheet
+preserved, exactly one `<title>`.
+
+### Performance
+
+Both functions run `minInstances: 1` — they *are* the pages, and a cold start is a
+blank screen on a tapped link, not a slow API call. **Deployment risk:** reserved
+instances consume Cloud Run CPU quota, which this project has hit before. If deploy
+fails on quota, drop to `minInstances: 0` to ship and expect cold starts until quota
+is available.
+
+Invocations are roughly neutral for the shop page (previously static file + client XHR;
+now one function response + the same XHR) and strictly cheaper for profiles.
+
+### Deployment
+
+Rewrites reference functions by name, so **functions must deploy before hosting**:
+
+```
+firebase deploy --only functions:profileGetPublicProfile,functions:minishopPage
+firebase deploy --only hosting
+```
+
+Both need `allUsers` run.invoker or they 403 at Cloud Run — for these two that is the
+page failing to load, not a degraded feature. Verification commands:
+[[PUBLIC_PAGE_PRERENDER]]
+
+Related: [[PUBLIC_PAGE_PRERENDER]] · [[HOSTING_HEADERS]] · [[MiniShop]]
+
+## [2026-07-25] — fix(profile): shared profile links 404'd and fell back to the private dashboard
+
+Reported as a suspected session leak: a profile link shared to WhatsApp produced a
+preview that looked like the sharer's authenticated seller dashboard.
+
+### It is not a session leak — ruled out with evidence
+
+Hosting is static and auth is client-side, so a crawler that does not run JS cannot
+see member data. Fetching the page anonymously with WhatsApp's user-agent returns
+364 KB containing **zero** user data — the only matches for a sensitive-string sweep
+were 14× `KASS` (the AI concierge) and the literal placeholder `SKN-XXXXXXXX`. All
+profile data arrives via `profileGetOverview`, an authenticated onCall. No auth
+material appears in any URL. What the reporter saw was the link opened in WhatsApp's
+in-app browser on their own signed-in phone.
+
+### Root cause of the real defect
+
+`profileGetOverview` and `profileGenerateCard` both hand out
+`https://mysokoni.co.ke/profile/{uid}` as `profileUrl`, but no hosting rewrite ever
+matched `/profile/**`. Verified in production: that path returned **404**. Every
+profile link ever shared was dead.
+
+Worse, `piShareProfile()` fell back to `window.location.href` whenever the overview
+call had not resolved yet — so the shared URL became `/profile`, the owner's private
+dashboard shell, whose OG card read "SOKONI — My Profile". A dead link plus a
+first-person preview is what read as an account leak.
+
+### Changes
+
+- **New** `profileGetPublicProfile` (onRequest GET, unauthenticated) in
+  `functions/profile-engine.js`. Explicit field allowlist — never a spread of the user
+  document. Returns display name, photo, headline, location, up to 5 skills, badge
+  names, coarse trust level, member month and MiniShop link. Withholds email, phone,
+  wallet, documents, orders and the numeric trust score. Unknown uid and opted-out
+  member (`users/{uid}.profileVisibility === 'private'`) return an identical 404 so the
+  endpoint cannot be used as a uid-existence oracle. uid shape is validated before any
+  Firestore read, so a scripted scan costs a string compare rather than a billed read.
+  Shop lookup is a single-field query on `shopHandles` — no composite index consumed.
+- **New** `public-profile.html`, served at `/profile/{uid}` via a new rewrite. All
+  member-supplied text rendered through `textContent`; the two URLs that become
+  `href`/`src` are scheme-checked, blocking `javascript:`, `data:` and
+  protocol-relative values. Failure states are honest — no fabricated profile.
+- `piShareProfile()` now derives the public URL from the signed-in uid when the
+  overview has not loaded, and shares nothing if it cannot. The `location.href`
+  fallback is gone.
+- `/profile` marked `noindex` with a neutral OG card.
+
+### Security
+
+Adds one unauthenticated endpoint. Its allowlist is the entire boundary — see the
+warning comment above it. Firebase UIDs are unguessable, and the endpoint is
+enumeration-resistant by shape-validating before reading and by answering
+missing/private identically. Responses are edge-cacheable because a public profile is
+identical for every viewer.
+
+### Deployment
+
+Requires `firebase deploy --only functions:profileGetPublicProfile,hosting`. The new
+CF needs `allUsers` run.invoker or it will 403 at Cloud Run — see
+[[CALLABLE_INVOKER_GAPS]]. Verify after deploy: `/profile/{uid}` returns 200 and
+renders, and `/profile` still serves the private dashboard.
+
+Related: [[HOSTING_HEADERS]] · [[MiniShop]] · [[Authentication]]
+
+## [2026-07-25] — fix(hosting): header rules were silently overriding each other; HTML rule matched nothing
+
+Found while investigating the profile share report. Two independent faults in
+`firebase.json`, both proven against production.
+
+### 1. Rule order was inverted — last match wins
+
+Firebase Hosting applies every matching rule, and for a repeated header key the **last**
+match wins. The file was written specific-first, so generic rules were overriding the
+specific ones beneath them.
+
+Proof: `/service-worker.js` had an explicit `no-cache, no-store, must-revalidate` rule,
+but production served `public, max-age=3600, must-revalidate` — the value from the
+generic `**/*.@(js|css)` rule 100 lines below it. **The service worker was being
+browser-cached for an hour despite a rule forbidding exactly that**, the same class of
+fault as the earlier Cloudflare SW cache incident.
+
+### 2. `**/*.html` matched nothing
+
+With `cleanUrls: true`, real requests never end in `.html`, so the site-wide HTML
+no-store rule was dead. Measured before the fix:
+
+| path | status | Cache-Control served |
+|---|---|---|
+| `/profile` | 200 | `max-age=3600` (shared edge, `X-Cache: HIT`) |
+| `/seller` | 200 | `max-age=3600` |
+| `/minishop` | 200 | `max-age=3600` |
+| `/wallet` | 200 | `no-store, private` (had a hand-written extensionless twin) |
+
+Only the nine pages with hand-written extensionless twins were ever protected. Not a
+data leak — the HTML is user-agnostic — but the declared policy was not in force and
+deploys could serve stale HTML for an hour.
+
+### Changes
+
+- Header block reordered **generic → specific** so narrow rules actually win. Order is
+  now load-bearing; adding a specific rule above a generic one that sets the same key
+  is a silent no-op.
+- `**/*.html` replaced with `**` (with the asset rules below it overriding), which is
+  the only pattern that reaches extensionless page URLs.
+- Both service workers moved below `**/*.@(js|css)` — the exact pair that regressed.
+- Removed the now-duplicate generic asset rules that would have re-broken the SW rules.
+- Added `profile` and `seller` to the private-page rules with `noindex, nofollow`.
+
+### Performance
+
+Pages that were being edge-cached for an hour are now `no-store`, matching the
+project's declared intent. This trades edge caching for deploy freshness on public
+pages such as `/` and `/shop/**`. If origin load becomes a concern, the follow-up is
+`no-cache` (revalidate via ETag → 304) rather than `no-store` for public pages only —
+deliberately not bundled here, as it is a policy change rather than a fix.
+
+Full rules and the ordering contract: [[HOSTING_HEADERS]]
+
+## [2026-07-25] — chore(auth): sweep hardcoded authDomain to the app origin across all pages
+
+Follow-up to the sign-in fix. 56 files hardcoded `authDomain: "auth.mysokoni.co.ke"`
+in their own Firebase init. None perform OAuth sign-in — they read session state, which
+is keyed by apiKey under the page origin, not the authDomain — so they were not the bug.
+But leaving the cross-origin value scattered means any page that ever *does* start a
+redirect sign-in would silently reintroduce it. Swept all of them to `mysokoni.co.ke`
+so same-origin is the single consistent default.
+
+Surgical replacement: only the quoted bare hostname (`"auth.mysokoni.co.ke"` /
+`'auth.mysokoni.co.ke'`), which is exactly the authDomain value — never the
+`https://auth.mysokoni.co.ke` URL form used in CSP/links, which is left intact. All
+swept JS re-parsed clean.
+
+54 files committed here (change is only the authDomain value). Two — `wishlist.html`,
+`digital.html` — also carried unrelated in-flight edits from the parallel process and
+were left for that process's own commit to avoid bundling; the authDomain edit is
+already in their working tree.
+
+## [2026-07-25] — fix(auth): Google sign-in returned to the login page and stalled — cross-origin authDomain
+
+Google (and Facebook) sign-in ran the full OAuth round-trip, came back to the login
+page, and stopped there with no error — worst in the installed PWA. Phone and email
+sign-in were unaffected.
+
+### Evidence
+
+Server-side truth, from Firebase Auth `lastLoginAt`: the last successful `google.com`
+sign-in was **2026-07-24 20:35 UTC**. Across all of 2026-07-25, **zero** Google
+sessions were created, while phone and password sessions were created normally. A
+completed sign-in updates `lastLoginAt`, so the redirect was **not** producing a
+session — the failure is in the OAuth return, not in anything after it. "No error, no
+navigation, just stays" is the signature of `getRedirectResult()` resolving to
+**null**.
+
+### Root cause
+
+`getRedirectResult()` reads the pending sign-in from the Firebase auth helper iframe
+(`/__/auth/iframe`) on return. `authDomain` was `auth.mysokoni.co.ke` — a **subdomain**,
+which is a **different origin** from the app at `https://mysokoni.co.ke`. Modern
+browsers partition a cross-origin iframe's storage (Chrome 115+ storage partitioning,
+Safari ITP), so the iframe can't read the record it wrote before the redirect, and
+`getRedirectResult()` comes back empty. The in-code comment even stated the goal was a
+same-origin helper — but a subdomain never achieved it.
+
+### Fix (two parts — the second is essential)
+
+`firebase.js`: `authDomain` → `mysokoni.co.ke`, the app's own origin, so the helper
+iframe is same-origin and its storage is not partitioned.
+
+`firebase.json`: the CSP `frame-src` listed `https://auth.mysokoni.co.ke` but **not
+`'self'`**. Because `frame-src` is explicitly present it overrides `default-src 'self'`,
+so once the helper iframe became same-origin the browser **blocked it** — trading the
+storage-partition failure for a CSP failure. Added `'self'` to `frame-src`. Without this
+the authDomain change alone does nothing; the iframe never loads. (The old
+`auth.mysokoni.co.ke` entry is kept, harmless, until the config sweep lands.) Confirmed
+`injectCSP()` in `security.js` is a no-op, so no second meta-CSP intersects and
+re-blocks it.
+
+Verified before changing: the app origin serves the helper
+(`/__/auth/handler` + `/__/auth/iframe` → 200), `mysokoni.co.ke` is an authorized
+domain, the OAuth client accepts `https://mysokoni.co.ke/__/auth/handler` as a redirect
+URI, and App Check for `identitytoolkit` is UNENFORCED (so it was never the blocker).
+The session is stored in IndexedDB keyed by apiKey under the page origin, not the
+authDomain, so pages still initialising with the old value keep sharing the session —
+only the OAuth helper origin moves. Users must reach the app on the apex
+`mysokoni.co.ke` (canonical) for the iframe to be same-origin.
+
+**Files:** `firebase.js` (config). ~60 other files hardcode the old authDomain for
+their own init; they do not perform OAuth and share the session regardless, so they are
+left for a separate consistency sweep. **Database/API/Breaking:** none.
+
+**Causation is inferred, not directly observed** — OAuth cannot be completed headlessly.
+The evidence (server truth + null-result signature + cross-origin iframe + verified
+same-origin helper) is strong, but one real sign-in on a phone is the confirming test.
+
+## [2026-07-25] — fix(kass): the concierge closed itself on every send
+
+Typing a message and tapping **send** dismissed the whole KASS widget; you had to
+reopen it to see the reply. Reported as "it sends and closes the chat bot."
+
+Root cause was a DOM-detachment race in the outside-click handler, not the send
+logic. Sending calls `_setSending(true)`, which swaps the send button's icon via
+`_sendBtn.innerHTML = _SPIN_SVG`. The icon element the user tapped is the click's
+`e.target`; the innerHTML swap **detaches it** before the same click finishes
+bubbling to the document-level backdrop handler. That handler closed the widget
+whenever `!_modal.contains(e.target)` — and a detached node is contained by
+nothing, so a tap inside the composer was mis-classified as a click on the
+backdrop.
+
+Only the pointer/click path tripped it; pressing Enter (keydown, no bubbling
+click) was fine — which is why it looked intermittent and hit mobile hardest.
+
+Fix: decide inside-vs-outside on **pointerdown**, when the icon is still in the
+tree, and require the gesture to both start and end outside before closing. The
+send button starts the gesture inside the modal, so it can no longer self-close.
+No change to send, auth, or close semantics otherwise.
+
+**Files:** `kass-widget.js` (one handler). Shared script, so the fix reaches every
+page that embeds the widget. **Not** the full-page `chat.html`, which is a
+different surface. **Database/API/Breaking:** none.
+
+## [2026-07-25] — fix(wallet): top-up called IntaSend's checkout endpoint, so no STK was ever pushed
+
+Subscriptions sent the M-Pesa PIN prompt; wallet top-ups did not. End-to-end
+comparison against the known-good subscription flow (`initiateSTKPush`) found the
+divergence in the IntaSend transport, not in auth, App Check, or the constructor
+(all already correct/identical).
+
+**Root cause (backend).** `initiateWalletTopUp` called `client.collection().charge()`.
+Per the vendored SDK (`node_modules/intasend-node/dist/collection.js`):
+
+```js
+charge(payload)       -> this.secret_key = ''; send(payload, '/api/v1/checkout/')
+mpesaStkPush(payload) -> method='M-PESA'; currency='KES'; send(payload, '/api/v1/payment/mpesa-stk-push/')
+```
+
+`charge()` posts to `/api/v1/checkout/` — it mints a hosted-checkout invoice and
+**blanks the secret key** — so the call returned HTTP 200 with an invoice while
+**never pushing an STK to the phone**. The subscription flow hits
+`/api/v1/payment/mpesa-stk-push/`, which is what actually prompts. Switched the
+wallet to `collection().mpesaStkPush()` with the STK payload (`amount`,
+`phone_number`, `api_ref`, `narrative`; `method`/`currency` injected by the SDK).
+Response still carries `invoice.invoice_id`, so `invoiceId` capture and the
+confirm-poll / webhook / sweep paths are unchanged.
+
+**Secondary (frontend).** `sokoni-wallet-v2.js` (the `W2` object behind
+`wallet.html`) polled `confirmWalletTopUp` for `status === 'confirmed'`, but the
+function returns `'completed'` (matching the webhook, sweep, and ledger). The
+string never matched, so even a paid top-up polled until timeout instead of
+showing success. Changed the client check to `'completed'`.
+
+**Preserved, not touched:** the transactional ledger, the idempotent webhook
+finalizer (`_finalizeWalletTopUp`), `confirmWalletTopUp`, `sweepStaleWalletTopUps`,
+and App Check enforcement on the callable (`initiateWalletTopUp` keeps
+`enforceAppCheck: true` — it is stricter than `initiateSTKPush` and is not
+implicated here: the handler executed and returned an invoice, which it could not
+have done had App Check blocked it).
+
+- **Files:** `functions/wallet.js` (STK method), `sokoni-wallet-v2.js` (status string)
+- **DB / API / webhook / idempotency:** unchanged
+- **Security:** unchanged (App Check retained)
+- **Breaking:** none
+- **Deploy:** redeploy `initiateWalletTopUp`; ship `sokoni-wallet-v2.js` to hosting.
+
+---
+
+## [2026-07-24] — feat(wallet): IntaSend webhook now finalizes wallet top-ups (seconds, not up to 30 min)
+
+Wallet top-ups had **three** ways to reach `completed`, and the fastest one wasn't
+wired in:
+
+| Path | Trigger | Latency |
+|------|---------|---------|
+| `confirmWalletTopUp` (poll) | client stays on the page and calls it | fast, but only if the app is open |
+| `sweepStaleWalletTopUps` | scheduled | **up to 30 min** |
+| IntaSend webhook | payment settles server-side | *was not handling top-ups at all* |
+
+Both webhook handlers (`webhookIntasend` — the canonical production receiver — and
+the secondary `intasendWebhook`) key off `payments/{api_ref}`. A wallet top-up sets
+`api_ref` to its `walletTransactions` doc id (`wtop_…`) and creates **no** `payments`
+doc, so every top-up webhook fell through the `if (!snap.exists) return 200` guard and
+was acknowledged with no effect. A buyer who paid and closed the tab waited for the
+30-minute sweep to see their balance.
+
+### Change
+
+Added one shared helper, `_finalizeWalletTopUp(apiRef, state, amount, tag)`, called
+from **both** webhook handlers immediately after the `api_ref` check. When `api_ref`
+starts with `wtop_` it routes the ref to the **same idempotent transactional claim**
+`confirmWalletTopUp` and `sweepStaleWalletTopUps` already use:
+
+- reads `wallets/{uid}` **and** `walletTransactions/{ref}` inside the transaction;
+- no-ops if `status === 'completed'` (a concurrent path or an IntaSend retry already won);
+- on `COMPLETE`, credits **`tx.amount`** (the figure recorded server-side at
+  initiation — never the webhook-supplied amount) and clears `pendingTopUp` only if it
+  still points at this ref;
+- on `FAILED`/`CANCELLED`/`EXPIRED`, marks the tx failed and clears the flag;
+- on `PENDING`/unknown, acks and leaves it to the poll or sweep.
+
+All three paths now **converge on one claim**, so IntaSend's webhook retries cannot
+double-credit — the transaction, not the HTTP layer, is the guard. A transaction error
+propagates (→ 5xx → IntaSend retry), which is the intended recovery. The helper lives
+in one place so the two near-identical endpoints can never drift.
+
+**Architecture:** unchanged. No `onCall`/App Check/auth changes, no new collection, no
+new balance field, no second ledger. The poll (`confirmWalletTopUp`) and the sweep
+(`sweepStaleWalletTopUps`) are retained as complementary UX and recovery paths.
+
+- **Files:** `functions/index.js`
+- **DB:** none (`walletTransactions.resolvedBy` now records `"webhookIntasend"` /
+  `"intasendWebhook"` alongside the existing `"sweepStaleWalletTopUps"`)
+- **API:** none (webhook URL and contract unchanged)
+- **Security:** none — reuses the existing `challenge`-based webhook verification
+- **Breaking:** none
+- **Deploy:** redeploy `webhookIntasend` and `intasendWebhook`. No secret or config change.
+
+---
+
 ## [2026-07-24] — fix(wallet): STK push sent `Bearer [object Object]` to IntaSend and got HTTP 500
 
 `intasend-node` takes **three positional arguments**:
@@ -68,6 +1891,635 @@ old expression evaluated true, it would have failed the other way.
 **Still unproven:** the STK prompt itself. That needs one real top-up on a real
 handset — everything up to the gateway handshake is now verified, the prompt is not.
 
+## [2026-07-24] — refactor(providers): one registry, one client, five surfaces; the demo directory is gone
+
+`providers` is now the single canonical service-provider registry, and every
+provider-facing surface reads it through one client. Onboarding a provider once
+puts them on the homepage, providers.html, services.html, the Cleaning hub, the
+public profile page and global search — which was not previously true of any of
+them except search.
+
+### What the directory actually was
+
+Five sources of truth that disagreed:
+
+| Source | What it held |
+|---|---|
+| `providers.html` | 17 hardcoded providers, zero Firestore reads |
+| `services.html` | `localStorage` merged ahead of 65 hardcoded `DEMO_PROVIDERS` |
+| `cleaning.html` | 8 hardcoded providers |
+| `provider-wiring.js` | mirrored `localStorage` into `providers` on a 500ms timer |
+| `providerProfiles` | a second Firestore registry written by the deployed CF |
+
+Roughly 90 invented people, several with invented five-star ratings and job
+counts ("4.9★ · 1120+ jobs"), five of them fake mamafua competing directly with
+the real one. No real provider could outrank them and, on three of those pages,
+no real provider could appear at all.
+
+### The new shape
+
+- **`sokoni-providers.js`** — the one client. Applies the `status in [active,
+  approved]` rules guard, normalises the field-name drift left by several
+  historical writers, expands category buckets (Cleaning shows `laundry` too),
+  escapes for `innerHTML`, and caches for 2 minutes.
+- **`provider-profile.html`** — the public profile that did not exist.
+- Hardcoded arrays deleted from `providers.html`, `services.html`,
+  `cleaning.html`; a Firestore-backed featured strip added to `index.html`.
+
+### Bugs found and fixed on the way
+
+**A blocked read rendered as an empty marketplace.** Firestore's `getDocs` does
+not reject when the backend is unreachable — it serves the local persistence
+cache and resolves normally. On a cold page that cache is empty, so an App Check
+rejection arrived as a successful snapshot of zero documents and rendered
+*"No providers yet — be the first to offer this service"*. Caught by the browser
+probe, not by reasoning. `snap.metadata.fromCache && snap.size === 0` now
+separates "the server told us it is empty" from "we never reached the server".
+
+**A blocked read could also hang forever.** `getDoc` in particular never settles
+while the SDK retries a backend it will not reach, leaving the profile page on
+its loading skeleton indefinitely. Reads now carry an 8-second ceiling.
+
+**Search results opened the wrong page.** The adapter emitted
+`provider.html?id=…`, but `provider.html` is the provider's own dashboard and
+reads only `?tab=` and `?cat=` — it never read that id. Every provider result
+opened the setup wizard. Repointed to `provider-profile.html?uid=` here and in
+`sokoni-recommendations.js`.
+
+**Every QR code and published profile link was a 404.** `providerPublish` and
+`providerGenerateQR` built `https://mysokoni.co.ke/provider/{providerId}`;
+`firebase.json` rewrites `/shop`, `/@`, `/card` and `/pay`, but not `/provider`.
+
+**`SokoniDB.saveProvider` keyed documents by phone digits.** A provider who
+re-registered with a different number got a second listing, and an account
+already onboarded under its uid got a competing document. Now uid-keyed, making
+the write idempotent.
+
+**Publishing did not publish.** `providerPublish` wrote only `providerProfiles`,
+so a provider who completed the entire flow — subscription, legal agreement,
+custom auth claim — was invisible everywhere a customer could look. It now also
+writes the canonical `providers` record. The two collections are not rivals:
+`providerProfiles` holds the private working record, `providers` holds the
+public listing.
+
+**Ratings were invented at three separate sites.** `services.html` painted five
+filled stars via `p.rating||5` on providers who had never been rated;
+`registerProvider` wrote `rating: 5.0` into new records; `providers.html` shipped
+a fixed "4.8★ / 47 Counties" stats bar regardless of contents. Unrated providers
+now read "New on SOKONI" and the stats are computed from what is loaded.
+
+### Security
+
+`noAdminFields()` covers `verified`, `featured` and `approved` — but **not
+`status`**. Any signed-in user could create `providers/{their-own-uid}` with
+`status:'active'` and appear immediately as a live provider in global search and
+on the homepage, bypassing the application review that both onboarding forms
+submit. Latent while the registry was empty and unread; reachable the moment it
+started serving the directory. The create rule now permits `pending` only;
+promotion stays an admin action. **Rules are edited but NOT deployed — deploy
+`firestore:rules` to close this.**
+
+### Verification
+
+`scripts/probe-provider-directory.js` — real Chromium, two passes:
+
+- **Live pass**: App Check refuses browser reads from `localhost`, so this can
+  only prove that no demo name survives on any page (it does not) and that a
+  blocked read is reported as a blocked read (it is, on 3–4 of 4 samples; the
+  403 is intermittent, so runs disagree).
+- **Injected pass**: the two real production records are injected client-side to
+  exercise the render path App Check hides. Green on all five surfaces every
+  run — correct providers, correct category filtering (Ann on the Cleaning hub,
+  King Bruce not), `provider-profile.html?uid=` links, no invented stars,
+  pending fields prompted rather than fabricated.
+
+Read-path correctness is evidenced separately over REST by
+`scripts/audit-provider-onboarding.js`. `scripts/check-inline-js.js` is new —
+inline `<script>` blocks are parsed by nothing in this repo's toolchain, so a
+broken edit reached production as a blank page; it now fails at the gate.
+
+**Not evidence of production correctness.** No page in this change has been
+loaded against a reachable Firestore from an App Check-registered origin. That
+requires a deploy or a registered debug token.
+
+### Files
+
+`sokoni-providers.js`, `provider-profile.html`, `scripts/check-inline-js.js`,
+`scripts/probe-provider-directory.js` (new); `providers.html`, `services.html`,
+`cleaning.html`, `index.html`, `provider-wiring.js`, `sokoni-db.js`,
+`sokoni-firestore-search.js`, `sokoni-recommendations.js`,
+`functions/provider-onboarding.js`, `firestore.rules` (modified).
+
+### Deployment
+
+1. `firebase deploy --only firestore:rules` — closes the self-publish gap
+2. `firebase deploy --only functions:providerDispatch` — publishing writes `providers`
+3. `firebase deploy --only hosting` — the pages
+
+Deploying hosting alone leaves the self-publish gap open. Order matters.
+
+### Migration
+
+No data migration. `providerProfiles` is empty in production, so there is
+nothing to move; if it later holds records, `providerPublish` projects them
+forward on the next publish.
+
+---
+
+## [2026-07-24] — fix(auth+wallet): sign-in and wallet top-up were blocked by a client guard and a missing IAM binding
+
+Two separate production faults, two different layers. Neither was in the logic
+each appeared to be in.
+
+### 1 · Wallet STK push — blocked at Cloud Run, never reached the function
+
+`initiateWalletTopUp` had **no `run.invoker` binding**, so requests were rejected
+by Cloud Run IAM before the function executed. Same fault on
+`bookLegalConsultation`.
+
+Verified by response body, not status code alone — a 403 from IAM returns HTML,
+a rejection from the function returns callable JSON:
+
+| Endpoint | Before | After |
+|---|---|---|
+| `initiateWalletTopUp` | 403 + HTML | **401 + function JSON** |
+| `bookLegalConsultation` | 403 + HTML | **401 + function JSON** |
+
+`allUsers` / `roles/run.invoker` applied to both. Confirmed the services existed
+before reading their policies — `getIamPolicy` returns an empty policy for a
+non-existent resource, which reads identically to "no bindings". The function
+already carries `INTASEND_PRIVATE_KEY`, so no secret work was needed.
+
+### 2 · Google sign-in and phone OTP — a client guard stricter than its backend
+
+Both paths aborted before contacting Firebase when App Check reported
+`rejected`. The guard existed to avoid a "doomed OAuth round-trip". Live App
+Check configuration shows the round-trip was never doomed:
+
+```
+firestore.googleapis.com         ENFORCED
+firebasestorage.googleapis.com   ENFORCED
+identitytoolkit.googleapis.com   UNENFORCED   ← sign-in
+```
+
+Authentication does not require an App Check token. Since App Check is known to
+403 intermittently, a transient rejection produced a hard sign-in outage the
+backend would have allowed. Blocking client-side bought no protection, because
+nothing server-side was checking.
+
+Both guards now log and proceed. The `pending` wait is unchanged, error handling
+is unchanged, and App Check is **not** weakened — enforcement is server-side and
+untouched. The dependency is recorded in-code: if App Check enforcement is ever
+enabled for Authentication, this decision must be revisited.
+
+Ruled out by direct verification, not assumption: authorized domains
+(`mysokoni.co.ke`, `www`, `auth.` all present), Google and Facebook IdPs (enabled,
+client IDs set), phone sign-in (enabled), OAuth redirect URIs (both registered),
+App Check reCAPTCHA registration (site secret set), and the custom auth domain
+(`/__/auth/handler` and `/__/auth/iframe` both 200).
+
+**Files:** `auth.js` (3 hunks). **Infrastructure:** 2 Cloud Run IAM bindings.
+**Database:** none. **API:** none. **Breaking:** none.
+
+e document
+
+Onboarded two existing accounts into the `providers` registry, and audited every
+account in the project against it. **No Auth user was created and no account was
+duplicated.** The audit also established that most of the provider *directory*
+is not data-driven at all, which bounds what onboarding can achieve — see
+**Discoverability is narrower than it looks** below.
+
+### The premise correction
+
+The task named the account by phone: **+254 748 346 783**. Enumerating all 34
+Auth users shows **no account carries that number**. The account is real, but is
+keyed on email:
+
+| | |
+|---|---|
+| uid | `H7p6ktBHogM5GcBy6mz8negKVbG2` |
+| Auth displayName | `Ann` |
+| Auth email | `momanyi07@gmail.com` (no phone on the Auth record) |
+| sign-in | password |
+| created / last login | 2026-07-21 |
+
+`0748346783` occurs in exactly one place in the entire database:
+`applications/e0cOABIkbtu2Vb1suG5y` — a business application submitted
+2026-07-21, `status: pending`, name **"Langa'ta mamafua"**, category `cleaning`,
+hub `home-services`. That application also carries `momanyiann07@mail.com`,
+which matches **no** Auth account and is very likely a typo of her gmail. Every
+field written for her was copied from that application or her Auth record;
+nothing was invented.
+
+A single targeted `accounts:lookup` by phone is **not** sufficient evidence for
+a negative here — the same call returned zero for FRED (`+254714582086`) whose
+Auth record demonstrably carries that number. The no-duplicate guarantee rests
+on the full 34-user enumeration, not the lookup.
+
+### Onboarded
+
+| Account | uid | Category | Verified |
+|---|---|---|---|
+| Ann — "Langa'ta mamafua" | `H7p6ktBHog…` | `laundry` / label **Mama Fua** | `true` (explicitly authorised) |
+| King Bruce — Artist / MC | `aOdQxmUGLC…` | `mc` / entertainment | `false` — nothing on file to verify against |
+
+Nine documents per account, all keyed by uid: `providers`, `providerSettings`,
+`providerNotifications`, `providerAnalytics`, `providerSubscriptions` (plan
+`free_trial`, 14-day trial, 20% commission — mirrors `PLANS.free_trial` in
+`functions/provider-onboarding.js`), `wallets` (opens at zero), and
+`notificationPrefs`, plus the `users` link and — for Ann —
+`applications/e0cOABIkbtu2Vb1suG5y` moved `pending → approved`.
+
+Counters start at 0. No rating, review count or completed-job figure was seeded.
+
+### Held — 4 accounts, with reasons
+
+These were **not** skipped for convenience; each one's own data says it does not
+belong in the `providers` professionals directory, and filing it there would
+break the task's own "correct category" requirement.
+
+- **John wa Pork** — `accountType=seller`, `businessType=butchery`. A shop, not a
+  bookable professional; belongs in `sellers`. `upload_health_permit` unticked.
+- **FRED** — `accountType=rider`, `driverStatus=pending_verification`. Licence,
+  good-conduct certificate and insurance all unticked. Publishing an unverified
+  rider as bookable bypasses a safety control, not a profile-completeness step.
+- **T.M.M & Partners Advocates** — `accountStatus=invited` (never completed),
+  `businessType=law_firm`. Advocates are regulated; no LSK practising number on
+  file, and legal professionals are read from the dedicated `lawyers` registry.
+- **Joseph / Automate Joe** — already carries `mechanicId=automate-joe`,
+  `featured=true`, `searchIndexed=true`. Mechanics are read from the `mechanics`
+  collection; a second record would be the exact duplicate this work prevents.
+
+### Discoverability is narrower than it looks
+
+Before this change the `providers` collection **did not exist** — zero
+documents. Every "verified provider" a visitor has ever seen on this platform is
+a hardcoded array. Writing Firestore data therefore reaches only the surfaces
+that actually read Firestore:
+
+| Surface | Reads `providers`? | Ann visible? |
+|---|---|---|
+| `search.html` (global search) | yes — `sokoni-firestore-search.js`, guard `status in [active, approved]` | **yes** |
+| `providers.html` | no — hardcoded 17-entry `PROVIDERS` array | no |
+| `services.html` | no — `localStorage` + hardcoded 65-entry `DEMO_PROVIDERS` | no |
+| `cleaning.html` | no — hardcoded array | no |
+| `index.html` (homepage) | no — never queries `providers` | no |
+
+Verified by simulating the live adapter against production: `providers` holds 2
+documents, both pass the status guard, and every required query — *Ann*,
+*Mama Fua*, *Laundry*, *mamafua*, *cleaning*, *washing*, *house cleaning* —
+returns her.
+
+Two further gaps found, **not** fixed here:
+
+1. **Search results link to a page that ignores the id.** The adapter emits
+   `provider.html?id=<uid>`, but `provider.html` reads only `?tab=` and `?cat=`
+   — there is no `id` handler. Clicking a provider result opens the *provider's
+   own dashboard*, not the provider's public profile. This affects every
+   provider result, not just Ann's.
+2. **Two parallel provider registries.** The canonical Cloud Function workflow
+   (`providerPublish`) writes `providerProfiles/{uid}`, but global search reads
+   `providers/{...}`. A provider onboarded through the deployed CF would not be
+   findable by search at all.
+
+### Files
+
+- `scripts/audit-provider-onboarding.js` — **new**, read-only, no `--apply` by design
+- `scripts/onboard-providers.js` — **new**, dry-run default, uid-keyed so a re-run cannot duplicate
+
+### Database
+
+New collections: `providers`, `providerSettings`, `providerNotifications`,
+`providerAnalytics`, `providerSubscriptions`, `notificationPrefs`, `wallets`.
+`applications/e0cOABIkbtu2Vb1suG5y` → `approved`. No index changes; the existing
+`providers (status ASC, updatedAt DESC)` index covers the search guard.
+
+### Security
+
+`providers` rules already gate reads on `status in [active, approved]` and deny
+client writes to `status` / `verified` / `approved`; both writes went through
+the Admin REST path, which is the intended channel. `providerSettings`,
+`providerNotifications` and `providerAnalytics` are `allow write: if false` —
+server-only — and were written accordingly. Personal data published: name,
+business name, area and phone, for two accounts only, each of which had already
+submitted those details for the purpose of being listed.
+
+### Left for the account holder
+
+`photo`, `kycDocuments`, `exactLocation`, `bio`, `pricing`, `workingHours`,
+`serviceRadius` — recorded in `profilePending` on each document, written as
+absent, never invented.
+
+### Caches
+
+No server-side cache to purge. `sokoni-firestore-search.js` holds a 10-minute
+session scan cache and a 30-minute `localStorage` catalogue cache, so a visitor
+with a warm cache may not see her for up to 30 minutes. New sessions see her
+immediately.
+
+---
+
+## [2026-07-24] — fix(search): one malformed product was blocking Algolia indexing for every product batched with it
+
+Found by the variant acceptance probe, which failed twice for a reason that had
+nothing to do with variants. **Pre-existing, live, and unrelated to the feature
+under test.**
+
+### What was happening
+
+`products/1784487444890` ("PEACH MANGO ICE") stores a base64 `data:` URI as its
+image — 195,425 bytes in `images`, 195,397 in `image`, 397,980 for the whole
+document. The live transformer passed it straight through, producing a
+**195,884-byte** Algolia record against a **10,000-byte** limit.
+
+**Algolia rejects the entire batch when one record is oversized.** Worse, the
+queue's error handler then marked *every* item in the group failed — not just
+the offender — so the same poison record failed them all again on each retry
+until the whole set reached the DLQ:
+
+```
+gs__products | upsert | failed | products_VP99 …
+ERR: Record at the position 4 objectID=products_1784487444890 is too big
+     size=195884/10000 bytes
+```
+
+26+ consecutive failures on one document in a single 30-entry window. New and
+edited products were not reaching the index.
+
+### Why it was invisible
+
+`algolia-backfill.js` already carried both defences — `safeImageUrl()` rejects
+data URIs, `enforceSize()` caps records at 9KB. Neither had ever been ported to
+the live path. The **recovery path was hardened and the runtime path was not**,
+which is the `runtime path ≠ recovery path` pattern already recorded in
+KNOWN_LIMITATIONS. Reading either file alone looks correct.
+
+### The fix — three defences
+
+New `functions/algolia-sanitize.js`, imported by **both** paths so they cannot
+diverge again:
+
+1. **Sanitise before batching.** Base64 `data:` URIs are stripped from every
+   image field (flat `imageUrl`/`thumbnail`, the `images[]` array, and
+   `seller.logo`). The poison record measures **400,658 → 602 bytes** and
+   **still indexes** — search keeps the product rather than losing it.
+2. **Isolate, never cascade.** `_flushIsolating` retries a rejected batch one
+   record at a time, so only a genuine offender is marked failed. An irreducible
+   record is held out *before* the batch is sent. The happy path still costs
+   exactly one batch call.
+3. **Actionable diagnostics.** Every isolation logs the `objectID`, the
+   collection/docId, and the measured size against the limit.
+
+`objectID` is preserved through every trimming step, so a degraded record stays
+findable and repairable.
+
+### Verification
+
+`npm run test:algolia-isolation` — **14 checks**. The Algolia stub reproduces
+the real all-or-nothing rejection semantics, and the suite first proves the
+incident reproduces *without* the fix (whole batch rejected, nothing indexed)
+before proving it does not with it. Covers: valid records untouched, offender
+sanitised and still indexed, unfixable record isolated before the batch,
+neighbours unaffected, diagnostics name the objectID and reason, and the queue
+continues with subsequent batches.
+
+### Recovery
+
+153 queue entries driven to `dlq` status by the poison record were reset to
+`pending` with `attempts: 0` so the fixed drain could reprocess them.
+
+### Files
+
+`functions/algolia-sanitize.js` (new), `functions/algolia-queue.js`,
+`functions/scripts/algolia-backfill.js` (now imports the shared helpers instead
+of carrying its own), `scripts/test-algolia-batch-isolation.js` (new),
+`package.json`.
+
+**Deployed:** `processAlgoliaQueue`. **No breaking changes.**
+
+### Recommended follow-up (not implemented)
+
+`seller-wiring.js` persists product images as base64 data URIs. Rejecting or
+normalising them at save time would stop oversized documents entering any
+downstream system rather than defending at each consumer — but existing products
+depend on current behaviour for rendering, so it needs its own change.
+
+## [2026-07-24] — feat(variants): saved product variants integrated across display, search, indexing and filtering
+
+The seller forms already captured colour, size, storage, pack size, volume and
+material. Nothing downstream read them. This wires that data through the product
+page, the product cards, search, the Algolia index and category filters.
+
+Scope was explicitly display/consumption — the upload form and edit modal were
+**not** modified.
+
+### Two defects found in the existing pipeline (fixed)
+
+**1 — `indexProductUpdate` could not see a variant edit, and extending it would
+have looped.** The guard was a fixed `TEXT_FIELDS` list compared with `!==`.
+That is wrong in both directions: array fields compare by *reference*, so two
+snapshots of an unchanged array always look changed; and any field outside the
+list — a seller adding colours — always looks unchanged and leaves the product's
+terms stale. Adding the variant arrays to that list would therefore have re-armed
+the very infinite update loop the list was written to prevent.
+
+Replaced with an idempotence check: regenerate the terms, write only if they
+differ from what is stored. Self-limiting (the trigger's own write produces
+identical terms on the next pass), field-list-free, and correct for any field
+`search-terms.js` learns later.
+
+Measured on live data: **0 of 129 products** currently carry an array in those
+fields, so the loop was **latent, never firing** — this is a fix for a trap, not
+an incident.
+
+**2 — colour swatches drew invisible circles.** The old swatch used the colour
+*name* directly as a CSS background. `Navy` works; `Multicolour` and `Beige` are
+not CSS colours and rendered transparent, with no text label to fall back on.
+Names now map to hex, `Multicolour` to a gradient, and every chip carries its
+name as text so an unmapped custom colour still reads.
+
+### Product page — declared values replace guesswork
+`getVariantHTML` offered every clothing item XS–3XL because a regex matched the
+word "shirt". That presented a guess as stock. Saved values are now authoritative
+and the category guess survives only as a fallback for products that predate
+variants. Attributes with no values render nothing — no empty headings.
+
+Preselection now happens only when an attribute has exactly one option; with
+several, an implicit first choice is a choice the shopper did not make.
+
+`selectedVariants` joins `selectedSize`/`selectedColor` on the cart and order
+payloads, since material and pack size have no legacy field to land in.
+
+### Cards, search, index, filters
+- **Cards** — one quiet line between name and price: `Black • XL`,
+  `Black • 256GB`, `500ml`. Capped at two parts. Absent entirely when a product
+  declares nothing, so pre-variant products keep their exact current layout.
+- **Search terms** — variant values indexed at minimum length 1 (the 2-character
+  floor silently dropped sizes `S`/`M`/`L`), plus number/unit splitting so
+  `256 gb` matches a product stored as `256GB`.
+- **Algolia** — variant fields are `unordered()` searchable attributes and
+  refinable facets; always emitted as arrays so facet counts stay correct across
+  products created before variants existed.
+- **Filters** — category page facets are derived from the products **in view**,
+  not from a per-category table. A Material filter appears in Fashion only when
+  a fashion product actually declares a material, single-option attributes are
+  suppressed, and irrelevant categories render no bar at all. OR within an
+  attribute, AND across them.
+
+### One definition, not five
+Normalisation, grouping and the card summary live in `sokoni-product-schema.js`;
+term generation and Algolia normalisation in `functions/search-terms.js`, shared
+by the live trigger and the backfill script. Cloud Functions bundle only
+`functions/`, so the browser schema cannot be required there — `npm run
+check:variants` asserts the two key lists are identical, because a value saved
+under a key the indexer does not read is unsearchable with no error anywhere.
+
+### Verification
+- `npm run check:variants` — 33 checks: parity, term generation, and every shape
+  a real document holds (missing, null, empty, scalar, non-string, whitespace).
+- Trigger simulation against the real generator: converges in exactly 1 write;
+  a colours-only edit regenerates terms; a removed colour stops matching; an
+  unrelated write costs 0 writes; 81 terms / 535 bytes for a fully-populated
+  product.
+- Real browser (Playwright, 430px): correct groups per category, 0 empty
+  headings, 0 page errors; a hostile `"><img src=x onerror=…>` colour renders as
+  text and does not fire; pre-variant product falls back to the legacy chips;
+  filter AND/OR and the filtered-empty state verified with recovery.
+
+### Files
+`sokoni-product-schema.js`, `product.js`, `product.html`, `script.js`,
+`category.js`, `category.html`, `index.html`, `style.css`,
+`sokoni-firestore-search.js` (cache key → v2, since v1 payloads were slimmed
+without the variant fields), `functions/search-terms.js`, `functions/index.js`,
+`functions/algolia-indexer.js`, `functions/algolia-admin.js`,
+`functions/scripts/algolia-backfill.js`, `scripts/check-variant-parity.js`,
+`package.json`.
+
+**No breaking changes.** No database migration: every read path treats a missing
+attribute as absent.
+
+﻿## [2026-07-24] — security(wishlist): stored XSS in the saved-items card + premium polish
+
+Asked for polish on the cart / wishlist / checkout product listings; found a
+security defect while reading the wishlist renderer.
+
+### Stored XSS — `wishlist.html` (fixed)
+Product **name**, **category** and **image URL** were interpolated **raw** into
+the card template:
+
+```js
+<h3 class="wish-card-name">${p.name}</h3>
+<img src="${p.image || '...'}" alt="${p.name}">
+```
+
+A product saved as `<img src=x onerror=…>` executed on render. `cart.js` has
+carried `_esc()` and `_safeImgSrc()` all along — this page never adopted them.
+Both helpers added; every field now escaped; `javascript:`/`data:` image URIs
+rejected.
+
+Second path: the share button serialised the product name into an inline
+`onclick` string literal, escaping single quotes **only** — double quotes and
+backslashes still broke out. It now takes an **index** (`shareWish(idx)`) and
+looks the product up in JS, so no user text is ever parsed as code.
+
+Verified: no raw `${p.name}` / `${p.image}` / `${p.category}` remain; `_esc`
+renders the payload inert. **Not** verified by live render — the page is
+Firebase-auth-gated and a localStorage stub does not satisfy it, so the proof is
+inspection plus unit test, not an end-to-end hostile-product render.
+
+### Self-inflicted breakage, caught before it mattered
+The first draft of the fix put a literal closing-script sequence inside a JS
+template string, in a comment *about* escaping. The HTML parser ended the script
+block there and orphaned the rest of the file — `Unexpected end of input`, the
+whole wishlist dead. Found because a render test returned zero cards and the
+cause was checked rather than blamed on the harness; confirmed mine via
+`git stash`. A warning now sits in that function. Live check after deploy:
+**2 inline blocks, 0 syntax errors.**
+
+### Polish
+Wishlist card typography ran 2px smaller than cart and checkout on every line
+(name 11→13px, category 9→10px, price 13→15px) — that gap is what made it feel
+like a lesser surface. Now matched to `.cart-card-*` / `.os-item-*`, mobile
+breakpoint included. The share button's 9-property inline style became a class.
+
+**Cart and checkout were already premium** (`.cart-page-card`, `.os-item`: dark
+surface, subtle border, green hover, `#71ff00` price) — checkout was reworked
+2026-07-23. Nothing changed there.
+
+**Not changed:** the wishlist's pink/purple accent (9+ usages) is a deliberate
+saved-items identity. Unifying it with the `#71ff00` platform accent is a design
+decision, not polish.
+
+### ⚠️ Flagged, NOT verified — same pattern elsewhere
+A heuristic grep for raw `${x.name|title|description|category}` interpolation
+hits **12+ files**. Spot-checks show it is *partly* real, not uniformly:
+- `product.js` — has escape helpers (10 uses) yet still interpolates raw
+  `${p.name}` at ~857/861: **partial** escaping.
+- `services.html` — **zero** escape calls.
+
+This is a pattern worth a proper audit, not a list of confirmed holes; a grep
+cannot tell a genuine sink from trusted data. There is currently **no scanner**
+for this class, despite escaping being a standing platform rule — the wishlist
+hole survived precisely because nothing checks.
+
+Files: `wishlist.html`. Hosting deploy only.
+
+## [2026-07-24] — fix(ui): full-screen frosted layer over the wallet — WebKit blurs at opacity:0
+
+**Reported:** the wallet page covered by a dim blurred layer, content ("a sheet
+with details") visible behind it, nothing usable.
+
+**Root cause — not wallet-specific.** WebKit composites `backdrop-filter` **even
+at `opacity: 0`**. A fully transparent element still renders its blur, producing
+a full-screen frosted sheet with nothing on it to explain why.
+
+This is **already documented in this codebase**: `security.js:880-893` records
+the identical bug on the privacy scrim ("the black scrim stayed invisible while
+the blur kept rendering … exactly what was reported on iPhone Safari"). It was
+fixed there and then reintroduced elsewhere.
+
+**The actual culprit was shared, not local.** `#sk-drawer-backdrop`
+(`sokoni-drawers.css`) is `position:fixed; inset:0` with an **unconditional**
+`backdrop-filter`, sitting at `opacity:0` whenever the drawer is closed — i.e.
+almost always — and `shared-header.js:398` injects that stylesheet into **every
+page**. The wallet is simply where it was noticed.
+
+Fixes, both deployed:
+- `sokoni-drawers.css` — blur moved to `#sk-drawer-backdrop.is-active`; closed
+  state gets `visibility:hidden` (transition-delayed so the fade still animates).
+- `wallet.html` — same treatment for its ten `.overlay` sheets; blur scoped to
+  `.overlay.open .ovl-backdrop`, and the missing `-webkit-backdrop-filter` added
+  (older iOS previously got no blur when open while still paying for it closed).
+
+Verified: closed → `backdrop-filter: none`, `visibility: hidden`; open →
+`blur(4px)`, sheet renders sharp, unchanged from before.
+
+### Correction — a correct hypothesis withdrawn on bad evidence
+This cause was identified early, tested in **Playwright's WebKit**, observed to
+render sharp, and **wrongly withdrawn as refuted**. Playwright's WebKit build
+does not reproduce the iOS Safari behaviour. The explanation was only recovered
+by reading the comment left by whoever hit it in `security.js`.
+**This bug class is not detectable by the automated browser testing available
+here — the static scan is the detector.** Noted in the scanner header.
+
+### New: `npm run scan:hidden-blur`
+`scripts/scan-hidden-backdrop-blur.js` finds `position:fixed/absolute` elements
+that are `opacity:0` without `visibility:hidden` while carrying an un-gated
+`backdrop-filter`. Its first version reported **139 findings, nearly all noise**
+(CSS comments parsed as selectors); after stripping comments and requiring a
+genuine same-or-descendant match plus a positioned covering element, it reports
+**6 real ones**. A scanner with that false-positive rate is worse than none.
+
+Remaining, not fixed (separate pages, same one-line pattern):
+`index.html` `.n-panel` · `pos.css` `.modal-overlay` ·
+`inv-products.html` `.inv-modal-overlay` · `sokoni-inv-shell.css`
+`.inv-cmd-overlay` · `compact-grid.css` `.compare-icon-btn` (small, low impact).
+`index.html` is the highest-traffic and would be the one to do next.
+
+Files: `sokoni-drawers.css`, `wallet.html`, `scripts/scan-hidden-backdrop-blur.js`,
+`package.json`. Hosting deploy only — no rules, functions, indexes or schema.
+
+## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
 
 ﻿## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
 
@@ -270,6 +2722,92 @@ internally, which is the actual security boundary for a Firebase callable.
 
 Verification order: re-probe both (expect 403 → 401), then one authenticated export
 → `dataExportQueue` doc → `processDataExport` → Storage object → status `ready`.
+
+## [2026-07-24] — feat(search): multi-entity indexing + sync certified; two phantom defects withdrawn
+
+**Root cause of "search is product-only" — two independent things, only one a defect:**
+
+1. **Defect (fixed).** Nine collections the platform actually writes to were
+   registered in neither `COLLECTION_INDEX_MAP` nor the sync triggers, so
+   `enqueue()` returned early (`algolia-queue.js:84`) and their documents could
+   never reach any index. Naming drift is the root: the architecture was built
+   around `events`/`properties`/`sellers`; the app writes `entEvents`,
+   `propertyListings`, `businesses`. Registered all nine (reusing existing
+   transformers — a shop is a shop wherever it lives), added triggers, extended
+   the backfill. **+3 previously unreachable records recovered** (129 → 132).
+2. **Not a defect.** Jobs, properties, vehicles and events have **zero**
+   Firestore documents. A pipeline cannot index data that does not exist; those
+   acceptance rows are *pending*, not *failing*. No records were fabricated to
+   make them look green.
+
+**Staged deploy** (10 functions, not 27): `processAlgoliaQueue` — essential, as
+the triggers only enqueue and the drain resolves the mapping — plus create/
+update/delete triggers for the three collections holding production data.
+The other six stay registered but undeployed; 18 functions for empty
+collections buys nothing today.
+
+**Sync certified** on `businesses`→`sokoni_shops`:
+`create=PASS update=PASS delete=PASS`, each observed after a full drain interval
+and before cleanup. Measured latency **331–333s**, matching the documented
+`every 5 minutes` schedule — indexing is eventually consistent by design.
+
+### Two findings withdrawn — measurement error, not system error
+An earlier probe reported `create=FAIL, delete=FAIL`. Both were artefacts: it
+waited **75s** against a **5-minute** drain, measuring the scheduler rather than
+the pipeline. The refuting evidence was inside the same run — `update=PASS`
+returned the record from Algolia, which could only exist if create had already
+synced. The corrected probe (330s/step) returned PASS on all three.
+
+The probe also left an orphan in `sokoni_shops`/`global_search`, because cleanup
+verified Firestore only — the exact gap that matters when delete-sync is the
+thing under test. Removed, verified at 0; the probe now purges from every store
+on every exit path, **after** recording the verdict so cleanup cannot manufacture
+a PASS.
+
+Recorded in `docs/RELEASE_ACCEPTANCE.md`: a section on testing asynchronous
+paths (match the observation window to the execution window; positive controls;
+verify the instrument itself), plus a cross-cutting row so "my new shop isn't in
+search yet" gets the 5-minute answer instead of an investigation.
+
+Files: `functions/algolia-indexer.js`, `functions/algolia-sync.js`,
+`functions/scripts/algolia-backfill.js`. 10 functions deployed.
+
+## [2026-07-24] — feat(search-health): optional backends — `status` now means customer impact
+
+`searchHealth` reported the entire search subsystem as `degraded` (HTTP 206)
+because Typesense was unavailable — while customer search was completely healthy
+on Algolia. That overstates impact, and an alert that overstates impact gets
+muted, which is worse than no alert at all.
+
+Engines are now classified **required vs optional**:
+- `algolia` — `required: true`. Authoritative; serves customer traffic.
+- `typesense` — `required: false`. Secondary backend held for redundancy; no
+  production feature depends on it.
+
+The payload now answers two distinct questions instead of conflating them:
+- **`status`** — *can a customer search right now?* Driven only by required
+  engines. `ok` (200) / `degraded` (206) / `down` (503).
+- **`redundancy`** — *are the secondary backends healthy?* Reported separately,
+  never inflating `status`.
+
+Secondary state is not hidden: each engine still carries `required`, `status`,
+`failure`, `host` and latency, so operators keep full visibility. Queue-depth
+warnings likewise only degrade the headline when they belong to a required
+engine — a backlog on a dead optional backend is not a customer problem.
+
+Live after deploy:
+```
+status     : ok         <- customer-facing
+redundancy : degraded   <- secondary backends
+HTTP       : 200
+algolia    required=true  ok    HEALTHY      364ms
+typesense  required=false down  DNS_FAILURE  host=4kn6y5bfcxv8o702p-1.a2.typesense.net
+```
+
+Adding a Typesense cluster is now a deliberate infrastructure milestone rather
+than something forced by a red health check. See [[KNOWN_LIMITATIONS]] §1b.
+
+Files: `functions/search-health.js`. One function deployed.
 
 ## [2026-07-24] — feat(search-health): failure taxonomy — the probe now names the layer that failed
 

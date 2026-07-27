@@ -1472,7 +1472,13 @@ function bookTeleconsult(){
   const tc={ref,id:ref,patientName:name,phone,type,date,time:document.getElementById('tcTime')?.value,mode:document.getElementById('tcMode')?.value,symptoms:document.getElementById('tcSymptoms')?.value.trim(),createdAt:Date.now()};
   let tcs=[]; try{tcs=JSON.parse(localStorage.getItem('sokoniTeleconsults'))||[];}catch(e){}
   tcs.unshift(tc); localStorage.setItem('sokoniTeleconsults',JSON.stringify(tcs));
-  if(window.SokoniHealth) SokoniHealth.saveAppointment({...tc,providerName:'Sokoni Teleconsult'}).catch(e=>console.warn('[HC] tc:',e.message));
+  /* Teleconsults belong in healthTelemedicine, not healthAppointments. Routing
+     them through saveAppointment sent them to a collection whose rules make it
+     server-write-only (booking needs slot-locking) — and there is no
+     healthProviders doc for 'Sokoni Teleconsult' to book against, so the write
+     was denied outright. saveTelemedicine writes the owner-scoped record the
+     rules permit. */
+  if(window.SokoniHealth) SokoniHealth.saveTelemedicine({...tc,providerName:'Sokoni Teleconsult'}).catch(e=>console.warn('[HC] tc:',e.message));
   _tcRef=null;
   if(tcBtn){tcBtn.disabled=false;tcBtn.textContent='📱 Book Teleconsult & Pay via M-Pesa';}
   if(msgEl){msgEl.innerHTML=`✅ Booked! Ref: <strong style="color:#00c878;">${ref}</strong><br>A doctor will call ${phone} at your chosen time.`;msgEl.style.color='#00c878';}
@@ -1542,7 +1548,9 @@ function bookLabTest(){
   const booking={ref,id:ref,patientName:name,phone,tests,collection:document.getElementById('labCollection')?.value,date:document.getElementById('labDate')?.value,lab:document.getElementById('labPreferred')?.value,createdAt:Date.now()};
   let labs=[]; try{labs=JSON.parse(localStorage.getItem('sokoniLabBookings'))||[];}catch(e){}
   labs.unshift(booking); localStorage.setItem('sokoniLabBookings',JSON.stringify(labs));
-  if(window.SokoniHealth) SokoniHealth.saveAppointment({...booking,providerName:booking.lab||'Sokoni Lab',service:'Lab Test'}).catch(e=>console.warn('[HC] lab:',e.message));
+  /* Lab bookings belong in healthLabBookings (owner-writable), not the
+     server-only healthAppointments collection. */
+  if(window.SokoniHealth) SokoniHealth.saveLabBooking({...booking,providerName:booking.lab||'Sokoni Lab',service:'Lab Test'}).catch(e=>console.warn('[HC] lab:',e.message));
   if(window.SokoniInvoice) setTimeout(()=>SokoniInvoice.generate({type:'service',buyerName:name,buyerPhone:phone,items:[{name:tests,category:'Lab Tests',qty:1,price:0}],subtotal:0,total:0,paymentMethod:'Pay at Lab',paymentRef:ref,sellerName:booking.lab||'Sokoni Labs',date:new Date().toISOString()}),500);
   if(msgEl){msgEl.innerHTML=`✅ Lab booking confirmed! Ref: <strong style="color:#00c878;">${ref}</strong><br>The lab will contact ${phone} to confirm the date and home collection if selected.`;msgEl.style.color='#00c878';}
 }
@@ -1640,7 +1648,7 @@ window.loadMyHealthDash=loadMyHealthDash; window.submitProviderReg=submitProvide
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script src="nav-active.js" defer></script>

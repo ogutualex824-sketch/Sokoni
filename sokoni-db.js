@@ -12,6 +12,16 @@ import {
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
 
+/* Search keeps a warm catalogue cache (in-session 10 min, localStorage 30 min)
+   so queries match locally instead of hitting the network. Without an explicit
+   invalidation a seller who adds or removes a product and searches for it
+   immediately is served the pre-write scan and concludes search is broken —
+   the write succeeded, the cache simply had not expired. Any product write must
+   therefore drop that collection's cached copy. */
+function _invalidateProductSearchCache() {
+  try { window.SokoniFirestoreSearch?.invalidateScanCache?.('products'); } catch (_) {}
+}
+
 /* Helper — returns the current authenticated user's UID.
    Prefers auth.currentUser (JWT-verified). Falls back to localStorage
    ONLY as a same-tick fallback before Firebase Auth initialises. */
@@ -58,6 +68,11 @@ function _idemGuard(key) {
 
 const SokoniDB = {
 
+  /* Server-clock sentinel for callers (e.g. driver.html) that need an
+     authoritative event time without importing the Firestore SDK. Resolved by
+     Firestore on the server at commit — the client never supplies the value. */
+  serverTimestamp: () => serverTimestamp(),
+
   /* ════════════════════════════════════════
      APPLICATIONS  (providers, drivers, sellers)
   ════════════════════════════════════════ */
@@ -88,13 +103,28 @@ const SokoniDB = {
      PROVIDERS
   ════════════════════════════════════════ */
 
+  /**
+   * `providers` is the canonical service-provider registry and holds ONE
+   * document per account, keyed by Auth uid.
+   *
+   * This used to key the document by the phone number's digits. Two
+   * consequences, both live: a provider who re-registered with a different
+   * number got a second listing, and an account already onboarded under its
+   * uid got a second, competing document the moment it used this form. Keying
+   * by uid makes the write idempotent — re-registering updates the one record
+   * that account owns.
+   *
+   * firestore.rules require `uid == request.auth.uid` on create, so an
+   * unauthenticated caller cannot write here at all; failing fast with a clear
+   * error beats a rules rejection surfacing as a silent catch upstream.
+   */
   async saveProvider(profile) {
-    const id = (profile.phone || profile.id || Date.now())
-      .toString().replace(/\D/g, '');
-    await setDoc(doc(db, 'providers', id), {
-      ...profile, _localId: profile.id || id, uid: _uid(), updatedAt: serverTimestamp()
+    const uid = _uid();
+    if (!uid) throw new Error('Sign in before saving a provider profile');
+    await setDoc(doc(db, 'providers', uid), {
+      ...profile, _localId: profile.id || null, uid, updatedAt: serverTimestamp()
     }, { merge: true });
-    return id;
+    return uid;
   },
 
   async getProvider(id) {
@@ -171,7 +201,9 @@ const SokoniDB = {
      PROVIDERS — listen for all registered providers
   ════════════════════════════════════════ */
   listenProviders(callback, limitN = 50) {
-    const q = query(collection(db, 'providers'), orderBy('updatedAt', 'desc'), limit(limitN));
+    /* status guard is required by /providers; ordering moves to the client so
+       no composite index is needed. */
+    const q = query(collection(db, 'providers'), where('status', 'in', ['active', 'approved']), limit(limitN));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => _log.warn('[SokoniDB] providers:', err.message)
@@ -337,10 +369,23 @@ const SokoniDB = {
     return id;
   },
 
+  /* Approved reviews only — /reviews gates reads on status, so the previous
+     unfiltered listener was denied for every caller and delivered nothing.
+     A single equality filter needs no composite index; ordering is done on the
+     client so none is required, and the limit stops an unbounded read of the
+     whole collection as review volume grows. */
   listenReviews(callback) {
-    const q = query(collection(db, 'reviews'), orderBy('createdAt', 'desc'));
+    const q = query(
+      collection(db, 'reviews'),
+      where('status', '==', 'approved'),
+      limit(100)
+    );
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      snap => callback(
+        snap.docs
+          .map(d => ({ _fsId: d.id, ...d.data() }))
+          .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+      ),
       err  => _log.warn('[SokoniDB] reviews:', err.message)
     );
   },
@@ -516,11 +561,13 @@ const SokoniDB = {
       sellerUid: uid || product.sellerUid || '',
       _syncedAt: serverTimestamp(),
     }, { merge: true });
+    _invalidateProductSearchCache();
     return product.id;
   },
 
   async deleteProduct(productId) {
     await deleteDoc(doc(db, 'products', String(productId)));
+    _invalidateProductSearchCache();
   },
 
   async loadProducts(opts = {}) {
@@ -554,10 +601,13 @@ const SokoniDB = {
          permission-denied / unauthenticated  → App Check rejected the read
          unavailable / deadline-exceeded       → token not ready yet, transient
 
-       A transient failure is retried once after a short delay, by which time
-       the App Check token has normally arrived. A genuine rejection is
-       reported and not retried, because retrying a denied read only hammers a
-       wall. Neither weakens App Check. */
+       ALL of these are retried once after a short delay, by which time the App
+       Check token has normally arrived or refreshed. The earlier version
+       retried only unavailable/deadline and treated permission-denied as final,
+       but App Check 403s intermittently on this project and surfaces as
+       permission-denied, so a single hiccup permanently broke the load — see the
+       error handler below and fix 5d21705. One retry, then the error state.
+       Neither weakens App Check. */
     const t0 = Date.now();
     const emit = (phase, detail) => {
       const payload = { phase, ...detail, appCheck: (typeof window !== 'undefined' && window.__sokoniAppCheckState) || 'unknown', ms: Date.now() - t0 };
@@ -601,10 +651,29 @@ const SokoniDB = {
             }));
           } catch (_) {}
 
-          const transient = /unavailable|deadline-exceeded|internal/.test(code);
+          /* permission-denied / unauthenticated are included here deliberately.
+             The original code excluded them, reasoning that a denied read is
+             genuine and retrying only "hammers a wall". That is true for a real
+             rules rejection, but App Check is ENFORCED on Firestore on this
+             project and 403s INTERMITTENTLY — an identical session can succeed,
+             then be denied, then succeed again — and a denied App Check read
+             surfaces as permission-denied. The App Check token auto-refreshes, so
+             a read that 403s now usually succeeds ~1.5s later. This is the same
+             finding that fix 5d21705 acted on for providers.html/services.html;
+             the home + category catalogue listener never got the same resilience,
+             so an App Check hiccup during a normal browse left the grid stuck —
+             "the loading sometimes breaks". One transparent retry converts most
+             of those intermittent denials into a normal load.
+
+             Bounded to a single retry (attempt < 2): if it still fails on the
+             second attempt, the token has normally arrived, so a persistent
+             failure is a genuine rejection and is left to the error state rather
+             than retried into a loop. App Check is not weakened — the client just
+             stops treating a transient 403 as permanent. */
+          const transient = /unavailable|deadline-exceeded|internal|permission-denied|unauthenticated/.test(code);
           if (transient && attempt < 2) {
-            _log.warn('[SokoniDB] retrying products listener (token likely not ready)', { attempt });
-            setTimeout(() => attach(attempt + 1), 1500 * attempt);
+            _log.warn('[SokoniDB] retrying products listener (App Check token likely not ready)', { code, attempt });
+            setTimeout(() => attach(attempt + 1), 1500);
           }
         }
       );

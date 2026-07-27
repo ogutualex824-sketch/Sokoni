@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-no-header="true" style="background:#050505">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -239,6 +239,7 @@ body{
   transition:transform .15s;
 }
 .qa-btn:active .qa-icon{transform:scale(.9)}
+.qa-icon.emoji{font-size:21px;line-height:1}
 .qa-icon.blue{background:rgba(59,130,246,.1);color:var(--blue)}
 .qa-icon.amber{background:rgba(245,158,11,.1);color:var(--amber)}
 .qa-icon.purple{background:rgba(168,85,247,.1);color:var(--purple)}
@@ -306,6 +307,10 @@ body{
   display:flex;align-items:center;justify-content:center;
   font-size:18px;flex-shrink:0;
 }
+.tx-icon.emoji{font-size:20px;line-height:1}
+.empty-emoji{font-size:38px;line-height:1;margin-bottom:10px;opacity:.85}
+.more-card-icon.emoji{font-size:22px;line-height:1}
+.menu-item-icon.emoji{font-size:19px;line-height:1}
 .tx-icon.in{background:rgba(113,255,0,.08);color:var(--g)}
 .tx-icon.out{background:rgba(239,68,68,.08);color:var(--red)}
 .tx-icon.save{background:rgba(59,130,246,.08);color:var(--blue)}
@@ -617,12 +622,34 @@ body{
   z-index:var(--sk-z-sheet, 100010);
   display:flex;flex-direction:column;
   pointer-events:none;opacity:0;
-  transition:opacity .2s;
+  /* visibility, not just opacity. WebKit composites backdrop-filter EVEN AT
+     OPACITY 0 (see the same finding recorded in security.js, where it produced
+     an intermittent full-screen "glass" layer on iPhone Safari with no modal on
+     it). With ten closed overlays on this page, each holding a blurring
+     backdrop, that renders as a dim blurred sheet over the whole wallet — the
+     content is there, just behind frosted glass, and nothing can be tapped.
+     visibility:hidden takes the element out of rendering entirely, so no
+     backdrop-filter can be composited while it is closed. */
+  visibility:hidden;
+  transition:opacity .2s, visibility 0s linear .2s;
 }
-.overlay.open{pointer-events:all;opacity:1}
+.overlay.open{
+  pointer-events:all;opacity:1;
+  visibility:visible;
+  /* visibility flips immediately on open; on close it is delayed by the fade
+     above so the sheet still animates out instead of vanishing. */
+  transition:opacity .2s, visibility 0s;
+}
 .ovl-backdrop{
   flex:1;background:rgba(0,0,0,.7);
+}
+/* The blur is applied ONLY while open — belt and braces against the WebKit
+   opacity-0 compositing behaviour above. A filter that is never applied cannot
+   be composited. -webkit- prefix included: it was missing, so older iOS got no
+   blur when open while still paying for it when closed. */
+.overlay.open .ovl-backdrop{
   backdrop-filter:blur(4px);
+  -webkit-backdrop-filter:blur(4px);
 }
 .ovl-sheet{
   background:var(--sur);
@@ -871,7 +898,9 @@ body{
   <a href="/" style="color:var(--sub);font-size:18px;text-decoration:none;padding:4px;flex-shrink:0">
     <i class="fas fa-arrow-left"></i>
   </a>
-  <span id="wal-top-title">Wallet</span>
+  <a href="/" style="flex:1;display:flex;align-items:center;text-decoration:none;min-width:0">
+    <img src="/assets/sokoni-logo-dark.png" alt="SOKONI" style="height:30px;width:auto;max-width:150px;object-fit:contain;object-position:left">
+  </a>
   <a href="notifications.html" id="wal-top-notif">
     <i class="fas fa-bell"></i>
     <span class="notif-dot" id="notifDot" style="display:none"></span>
@@ -885,6 +914,13 @@ body{
   <!-- ── HOME PANEL ── -->
   <section id="panHome" class="w-panel active">
 
+    <!-- Add-phone prompt (shown only to phone-less accounts so they can receive money) -->
+    <div id="addPhoneBanner" style="display:none;margin:0 0 12px;padding:12px 14px;background:var(--ga2);border:1px solid rgba(113,255,0,.25);border-radius:14px;align-items:center;gap:10px">
+      <span style="font-size:22px">📱</span>
+      <span style="flex:1;font-size:13px;color:var(--txt);line-height:1.35">Add your phone so people can <strong>send you money</strong>.</span>
+      <button class="btn btn-sm btn-primary" style="width:auto;padding:0 14px" onclick="W2.addPhoneOpen()">Add</button>
+    </div>
+
     <!-- Balance hero -->
     <div class="bal-hero">
       <div class="bal-frozen-badge" id="frozenBadge"><i class="fas fa-snowflake"></i> Frozen</div>
@@ -894,6 +930,9 @@ body{
         <span id="balVal">—</span>
       </div>
       <div id="balTier" style="margin-bottom:12px"></div>
+      <div id="pendingPayoutRow" onclick="W2.openPayouts()" style="display:none;align-items:center;justify-content:center;gap:6px;font-size:12px;color:var(--sub);margin-bottom:10px;cursor:pointer">
+        <span>⏳</span> Pending withdrawal: <b id="pendingPayoutVal" style="color:var(--txt)">KSh 0</b> · arrives within 24h ›
+      </div>
       <div class="bal-sub-row">
         <div class="bal-mini" id="miniSavings" onclick="W2.openVaultsList()">
           <div class="bal-mini-label">Savings</div>
@@ -908,52 +947,62 @@ body{
           <div class="bal-mini-val" id="rewardPts">0 pts</div>
         </div>
       </div>
+      <div class="bal-sub-row" style="margin-top:10px">
+        <div class="bal-mini">
+          <div class="bal-mini-label">Paid today</div>
+          <div class="bal-mini-val" id="todayPaidVal">KSh 0</div>
+        </div>
+        <div class="bal-mini">
+          <div class="bal-mini-label">This month</div>
+          <div class="bal-mini-val" id="monthPaidVal">KSh 0</div>
+        </div>
+      </div>
     </div>
 
     <!-- Quick Actions -->
     <div class="qa-grid">
       <button class="qa-btn" onclick="W2.openAddMoney()">
-        <div class="qa-icon"><i class="fas fa-plus"></i></div>
+        <div class="qa-icon emoji">💰</div>
         <span class="qa-lbl">Add</span>
       </button>
       <button class="qa-btn" onclick="W2.showPanel('panSend')">
-        <div class="qa-icon blue"><i class="fas fa-paper-plane"></i></div>
+        <div class="qa-icon emoji blue">📤</div>
         <span class="qa-lbl">Send</span>
       </button>
       <button class="qa-btn" onclick="W2.openWithdraw()">
-        <div class="qa-icon amber"><i class="fas fa-arrow-down-to-line"></i></div>
+        <div class="qa-icon emoji amber">🏧</div>
         <span class="qa-lbl">Withdraw</span>
       </button>
       <button class="qa-btn" onclick="W2.openRequest()">
-        <div class="qa-icon purple"><i class="fas fa-hand-holding-dollar"></i></div>
+        <div class="qa-icon emoji purple">🙏</div>
         <span class="qa-lbl">Request</span>
       </button>
       <button class="qa-btn" onclick="W2.openSplit()">
-        <div class="qa-icon teal"><i class="fas fa-scissors"></i></div>
+        <div class="qa-icon emoji teal">✂️</div>
         <span class="qa-lbl">Split</span>
       </button>
       <button class="qa-btn" onclick="W2.showPanel('panQR')">
-        <div class="qa-icon"><i class="fas fa-qrcode"></i></div>
+        <div class="qa-icon emoji">📲</div>
         <span class="qa-lbl">QR Pay</span>
       </button>
       <button class="qa-btn" onclick="W2.openVaultsList()">
-        <div class="qa-icon blue"><i class="fas fa-piggy-bank"></i></div>
+        <div class="qa-icon emoji blue">🐷</div>
         <span class="qa-lbl">Savings</span>
       </button>
       <button class="qa-btn" onclick="W2.showPanel('panMore')">
-        <div class="qa-icon" style="background:var(--sur3)"><i class="fas fa-ellipsis" style="color:var(--sub)"></i></div>
+        <div class="qa-icon emoji" style="background:var(--sur3)">⚙️</div>
         <span class="qa-lbl">More</span>
       </button>
     </div>
 
     <!-- AI Insight -->
     <div class="ai-insight" id="aiInsight">
-      <div class="ai-insight-icon"><i class="fas fa-brain"></i></div>
+      <div class="ai-insight-icon">🧠</div>
       <div class="ai-insight-body">
         <p id="aiInsightText"><span class="skel" style="height:14px;width:100%;display:block;margin-bottom:6px"></span><span class="skel" style="height:14px;width:70%;display:block"></span></p>
       </div>
       <button class="ai-dismiss" onclick="document.getElementById('aiInsight').classList.add('hidden')">
-        <i class="fas fa-times"></i>
+        <span style="font-size:18px;line-height:1">✕</span>
       </button>
     </div>
 
@@ -1157,6 +1206,9 @@ body{
         <button class="btn btn-secondary btn-sm" onclick="W2.qrDownload()">
           <i class="fas fa-download"></i> Save
         </button>
+        <button class="btn btn-secondary btn-sm" onclick="W2.qrCopyCode()">
+          <i class="fas fa-copy"></i> Copy code
+        </button>
         <button class="btn btn-primary btn-sm" onclick="W2.qrScan()">
           <i class="fas fa-camera"></i> Scan
         </button>
@@ -1206,38 +1258,39 @@ body{
   <!-- ── MORE PANEL ── -->
   <section id="panMore" class="w-panel">
     <div style="padding:20px 16px 0">
+      <button type="button" onclick="W2.showPanel('panHome')" style="display:inline-flex;align-items:center;gap:6px;background:var(--sur2);border:1px solid var(--bor);color:var(--txt);font-size:13px;font-weight:700;border-radius:20px;padding:7px 14px;cursor:pointer;margin-bottom:12px">← Back to Wallet</button>
       <h2 style="font-size:22px;font-weight:900;margin-bottom:4px">More</h2>
       <p style="font-size:13px;color:var(--sub)">Wallet tools &amp; settings</p>
     </div>
 
     <div class="more-grid">
       <div class="more-card" onclick="W2.openVaultsList()">
-        <div class="more-card-icon blue"><i class="fas fa-piggy-bank"></i></div>
+        <div class="more-card-icon emoji blue">🐷</div>
         <h4>Savings</h4>
         <p>Goal-based vaults</p>
       </div>
       <div class="more-card" onclick="W2.openAnalytics()">
-        <div class="more-card-icon purple"><i class="fas fa-chart-pie"></i></div>
+        <div class="more-card-icon emoji purple">📊</div>
         <h4>Analytics</h4>
         <p>Spending breakdown</p>
       </div>
       <div class="more-card" onclick="W2.openSecurity()">
-        <div class="more-card-icon amber"><i class="fas fa-shield-halved"></i></div>
+        <div class="more-card-icon emoji amber">🛡️</div>
         <h4>Security</h4>
         <p>PIN, freeze, limits</p>
       </div>
       <div class="more-card" id="merchantCard" onclick="W2.openMerchantWallet()" style="display:none">
-        <div class="more-card-icon teal"><i class="fas fa-store"></i></div>
+        <div class="more-card-icon emoji teal">🏪</div>
         <h4>Merchant</h4>
         <p>Payouts &amp; float</p>
       </div>
       <div class="more-card" onclick="W2.openRequest()">
-        <div class="more-card-icon"><i class="fas fa-hand-holding-dollar"></i></div>
+        <div class="more-card-icon emoji">🙏</div>
         <h4>Request</h4>
         <p>Ask for money</p>
       </div>
       <div class="more-card">
-        <div class="more-card-icon" style="background:var(--sur3)"><i class="fas fa-credit-card" style="color:var(--dim)"></i></div>
+        <div class="more-card-icon emoji" style="background:var(--sur3)">💳</div>
         <h4 style="color:var(--sub)">Cards</h4>
         <p>Virtual cards</p>
         <span class="badge-soon">Soon</span>
@@ -1249,39 +1302,39 @@ body{
     </div>
     <div class="menu-list">
       <div class="menu-item" onclick="W2.openSecurity()">
-        <div class="menu-item-icon"><i class="fas fa-key"></i></div>
+        <div class="menu-item-icon emoji">🔑</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Wallet PIN</div>
           <div class="menu-item-desc">Secure transfers with a PIN</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <div class="menu-item" onclick="W2.openWithdraw()">
-        <div class="menu-item-icon"><i class="fas fa-arrow-down-to-line"></i></div>
+        <div class="menu-item-icon emoji">🏧</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Withdraw to M-Pesa</div>
           <div class="menu-item-desc">Send wallet balance to M-Pesa</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <div class="menu-item" onclick="W2.openLimits()">
-        <div class="menu-item-icon"><i class="fas fa-sliders"></i></div>
+        <div class="menu-item-icon emoji">🎚️</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Transaction Limits</div>
           <div class="menu-item-desc" id="limitsDesc">Daily & monthly limits</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <div class="menu-item" onclick="W2.openAnalytics()">
-        <div class="menu-item-icon"><i class="fas fa-chart-bar"></i></div>
+        <div class="menu-item-icon emoji">📈</div>
         <div class="menu-item-info">
           <div class="menu-item-name">Spending Analytics</div>
           <div class="menu-item-desc">Where your money goes</div>
         </div>
-        <i class="fas fa-chevron-right chevron"></i>
+        <span class="chevron">›</span>
       </div>
       <a href="sfos-wallet.html" class="menu-item" style="text-decoration:none">
-        <div class="menu-item-icon" style="background:var(--ga);"><i class="fas fa-landmark" style="color:var(--g)"></i></div>
+        <div class="menu-item-icon emoji" style="background:var(--ga);">🏦</div>
         <div class="menu-item-info">
           <div class="menu-item-name" style="color:var(--g)">Financial OS</div>
           <div class="menu-item-desc">Enterprise dashboard — merchant, escrow, health score</div>
@@ -1297,7 +1350,7 @@ body{
 <!-- ═══ BOTTOM NAV ═══ -->
 <nav id="wal-nav">
   <button class="wn-btn active" id="navHome" onclick="W2.showPanel('panHome')">
-    <i class="fas fa-home"></i>
+    <i class="fas fa-house"></i>
     <span class="wn-lbl">Home</span>
   </button>
   <button class="wn-btn" id="navSend" onclick="W2.showPanel('panSend')">
@@ -1327,7 +1380,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Add Money via M-Pesa</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlAddMoney')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlAddMoney')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body" id="addMoneyBody">
       <div class="form-group">
@@ -1373,49 +1426,198 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Withdraw to M-Pesa</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlWithdraw')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlWithdraw')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
-      <div class="info-row">
-        <span class="k">Available to withdraw</span>
-        <span class="v" style="color:var(--g)" id="wdrAvail">KSh —</span>
-      </div>
-      <div class="form-group" style="margin-top:16px">
-        <label class="form-label">Amount (KSh)</label>
-        <input type="number" class="form-input" id="wdrAmount" placeholder="Min KSh 100">
-      </div>
-      <div class="form-group">
-        <label class="form-label">Payout Method</label>
-        <select class="form-input" id="wdrMethod" onchange="W2.wdrMethodChange()">
-          <option value="mpesa">M-Pesa</option>
-          <option value="bank">Bank Transfer</option>
-        </select>
-      </div>
-      <div id="wdrMpesaFields">
-        <div class="form-group">
-          <label class="form-label">M-Pesa Number</label>
-          <input type="tel" class="form-input" id="wdrPhone" inputmode="tel" placeholder="07XX XXX XXX">
+      <!-- FORM -->
+      <div id="wdrForm">
+        <div class="info-row">
+          <span class="k">Available to withdraw</span>
+          <span class="v" style="color:var(--g)" id="wdrAvail">KSh —</span>
+        </div>
+
+        <!-- Empty state: balance below minimum -->
+        <div id="wdrEmpty" style="display:none;text-align:center;padding:18px 6px">
+          <div style="font-size:40px;margin-bottom:8px">🐷</div>
+          <p style="font-size:14px;color:var(--txt);font-weight:600;margin-bottom:4px">You need at least KSh 100 to withdraw</p>
+          <p style="font-size:13px;color:var(--sub)">Sell items or receive payments to grow your balance.</p>
+        </div>
+
+        <div id="wdrFields">
+          <div class="form-group" style="margin-top:16px">
+            <label class="form-label">Amount (KSh)</label>
+            <input type="number" class="form-input" id="wdrAmount" placeholder="Min KSh 100" min="100" inputmode="numeric" oninput="W2.wdrAmountInput()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Payout Method</label>
+            <select class="form-input" id="wdrMethod" onchange="W2.wdrMethodChange()">
+              <option value="mpesa">M-Pesa</option>
+              <option value="bank">Bank Transfer</option>
+            </select>
+          </div>
+          <div id="wdrMpesaFields">
+            <div class="form-group">
+              <label class="form-label">M-Pesa Number</label>
+              <input type="tel" class="form-input" id="wdrPhone" inputmode="tel" placeholder="07XX XXX XXX">
+              <div id="wdrSavedNote" style="display:none;font-size:12px;color:var(--g);margin-top:6px">✓ Your saved M-Pesa number</div>
+            </div>
+          </div>
+          <div id="wdrBankFields" style="display:none">
+            <div class="form-group">
+              <label class="form-label">Account Number</label>
+              <input type="text" class="form-input" id="wdrAccNum" placeholder="Account number">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Bank</label>
+              <input type="text" class="form-input" id="wdrBank" placeholder="Bank name">
+            </div>
+          </div>
+
+          <!-- Withdrawal summary -->
+          <div id="wdrSummary" style="display:none;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:var(--radius-s);padding:12px 14px;margin-bottom:14px">
+            <div class="info-row"><span class="k">Amount</span><span class="v" id="wsAmount">KSh 0</span></div>
+            <div class="info-row"><span class="k">Fee</span><span class="v" id="wsFee">KSh 0</span></div>
+            <div class="info-row" style="border-top:1px solid rgba(255,255,255,.08);margin-top:8px;padding-top:8px">
+              <span class="k" style="font-weight:700">You'll receive</span>
+              <span class="v" id="wsReceive" style="color:var(--g);font-weight:800">KSh 0</span>
+            </div>
+            <div class="info-row">
+              <span class="k">Estimated arrival</span>
+              <span class="v" id="wsArrival" style="font-weight:700">—</span>
+            </div>
+          </div>
+
+          <!-- Inline error (never fail silently) -->
+          <div id="wdrError" role="alert" style="display:none;background:rgba(225,29,72,.12);border:1px solid rgba(225,29,72,.35);color:#ff8f8f;border-radius:var(--radius-s);padding:10px 12px;margin-bottom:12px;font-size:13px;line-height:1.4"></div>
+
+          <div style="background:var(--ga2);border:1px solid rgba(113,255,0,.2);border-radius:var(--radius-s);padding:12px;margin-bottom:16px">
+            <p style="font-size:12px;color:var(--sub)">
+              <i class="fas fa-info-circle" style="color:var(--g)"></i>
+              Payouts are processed within 24 hours. Minimum withdrawal is KSh 100.
+            </p>
+          </div>
+          <button class="btn btn-primary" id="wdrSubmitBtn" onclick="W2.requestPayout()">
+            🏧 Request Payout
+          </button>
+          <p style="text-align:center;margin-top:12px">
+            <a onclick="W2.openPayouts()" style="font-size:13px;color:var(--g);cursor:pointer;text-decoration:underline">View past withdrawals ›</a>
+          </p>
         </div>
       </div>
-      <div id="wdrBankFields" style="display:none">
-        <div class="form-group">
-          <label class="form-label">Account Number</label>
-          <input type="text" class="form-input" id="wdrAccNum" placeholder="Account number">
+
+      <!-- SUCCESS + PROCESSING TIMELINE -->
+      <div id="wdrSuccess" style="display:none;text-align:center;padding:8px 0">
+        <div style="font-size:46px;margin-bottom:8px">✅</div>
+        <h3 style="font-size:18px;font-weight:800;margin-bottom:6px">Withdrawal request received</h3>
+        <p id="wdrSuccessMsg" style="font-size:14px;color:var(--sub);margin-bottom:18px"></p>
+        <div style="text-align:left;max-width:260px;margin:0 auto 20px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--txt)"><span style="color:var(--g)">✓</span> Request received</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--txt)"><span style="color:var(--g)">✓</span> Verification</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--txt)"><span>⏳</span> Processing</div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:14px;color:var(--sub)"><span>•</span> Sent to M-Pesa</div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Bank</label>
-          <input type="text" class="form-input" id="wdrBank" placeholder="Bank name">
-        </div>
+        <button class="btn btn-primary" onclick="W2.closeOverlay('ovlWithdraw')">Done</button>
       </div>
-      <div style="background:var(--ga2);border:1px solid rgba(113,255,0,.2);border-radius:var(--radius-s);padding:12px;margin-bottom:16px">
-        <p style="font-size:12px;color:var(--sub)">
-          <i class="fas fa-info-circle" style="color:var(--g)"></i>
-          Payouts are processed within 24 hours. Minimum withdrawal is KSh 100.
-        </p>
+    </div>
+  </div>
+</div>
+
+<!-- ── PAYOUT HISTORY / DETAILS ── -->
+<div class="overlay" id="ovlPayouts">
+  <div class="ovl-backdrop" onclick="W2.closeOverlay('ovlPayouts')"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Your withdrawals</h3>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlPayouts')"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <div id="payoutsList" style="display:flex;flex-direction:column;gap:10px">
+        <p id="payoutsLoading" style="text-align:center;color:var(--sub);font-size:13px;padding:20px 0">Loading…</p>
       </div>
-      <button class="btn btn-primary" onclick="W2.requestPayout()">
-        <i class="fas fa-arrow-down-to-line"></i> Request Payout
+    </div>
+  </div>
+</div>
+
+<!-- ── SCAN TO PAY ── -->
+<div class="overlay" id="ovlScan">
+  <div class="ovl-backdrop" onclick="W2.qrScanClose()"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Scan to Pay</h3>
+      <button class="ovl-close" onclick="W2.qrScanClose()"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <div id="scanCamWrap" style="position:relative;border-radius:var(--radius-s);overflow:hidden;background:#000;aspect-ratio:1/1;display:none;margin-bottom:12px">
+        <video id="scanVideo" playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+        <div style="position:absolute;inset:14%;border:2px solid var(--g);border-radius:16px;pointer-events:none"></div>
+      </div>
+      <p id="scanStatus" style="font-size:13px;color:var(--sub);text-align:center;margin-bottom:14px">Point your camera at a SOKONI Pay QR</p>
+
+      <div class="form-group" id="scanPasteGroup">
+        <label class="form-label">Or paste a SOKONI pay code</label>
+        <textarea class="form-input" id="scanPaste" rows="2" placeholder="Paste the pay code here" style="resize:none"></textarea>
+      </div>
+
+      <div class="form-group" id="scanAmtGroup" style="display:none">
+        <label class="form-label">Amount to send (KSh)</label>
+        <input type="number" class="form-input" id="scanAmt" inputmode="numeric" placeholder="Min KSh 10" min="10">
+      </div>
+
+      <button class="btn btn-primary" id="scanPayBtn" onclick="W2.qrScanPay()">
+        💸 Pay
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ADD PHONE (verify to receive money) ── -->
+<div class="overlay" id="ovlAddPhone">
+  <div class="ovl-backdrop" onclick="W2.closeOverlay('ovlAddPhone')"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Add your phone</h3>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlAddPhone')"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <p style="font-size:13px;color:var(--sub);margin-bottom:14px">Verify a phone number so people can send you money. We'll text you a 6-digit code.</p>
+      <div class="form-group" id="apPhoneGroup">
+        <label class="form-label">Phone number</label>
+        <input type="tel" class="form-input" id="apPhone" inputmode="tel" placeholder="07XX XXX XXX">
+      </div>
+      <div class="form-group" id="apCodeGroup" style="display:none">
+        <label class="form-label">Enter the 6-digit code</label>
+        <input type="text" class="form-input" id="apCode" inputmode="numeric" maxlength="6" placeholder="Code from SMS">
+      </div>
+      <button class="btn btn-primary" id="apSubmitBtn" onclick="W2.addPhoneSubmit()">
+        📲 Send code
+      </button>
+      <!-- invisible reCAPTCHA anchor for Firebase phone verification -->
+      <div id="recaptcha-container"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PIN AUTHORIZATION (verify to send) ── -->
+<div class="overlay" id="ovlPinVerify">
+  <div class="ovl-backdrop" onclick="W2.pinVerifyCancel()"></div>
+  <div class="ovl-sheet">
+    <div class="ovl-drag"></div>
+    <div class="ovl-hdr">
+      <h3>Enter your wallet PIN</h3>
+      <button class="ovl-close" onclick="W2.pinVerifyCancel()"><span style="font-size:18px;line-height:1">✕</span></button>
+    </div>
+    <div class="ovl-body">
+      <p id="pinVerifySub" style="font-size:13px;color:var(--sub);margin-bottom:14px">Authorize this payment</p>
+      <div class="form-group">
+        <input type="password" class="form-input" id="pinVerifyInput" inputmode="numeric" maxlength="4"
+               autocomplete="off" placeholder="••••"
+               style="text-align:center;letter-spacing:10px;font-size:24px"
+               onkeydown="if(event.key==='Enter')W2.pinVerifySubmit()">
+      </div>
+      <button class="btn btn-primary" id="pinVerifyBtn" onclick="W2.pinVerifySubmit()">Authorize</button>
     </div>
   </div>
 </div>
@@ -1427,7 +1629,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Request Money</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlRequest')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlRequest')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body" id="reqBody">
       <div class="form-group">
@@ -1470,7 +1672,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Savings Vaults</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaults')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaults')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div style="padding:12px 20px">
       <button class="btn btn-primary btn-sm" style="width:auto;padding:0 20px" onclick="W2.openNewVault()">
@@ -1488,7 +1690,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Create Savings Vault</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlNewVault')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlNewVault')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div style="margin-bottom:16px">
@@ -1542,7 +1744,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3 id="vdTitle">Vault</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaultDetail')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlVaultDetail')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div style="text-align:center;margin-bottom:20px">
@@ -1588,7 +1790,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Spending Analytics</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlAnalytics')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlAnalytics')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div style="padding:16px 20px 0;display:flex;gap:8px">
       <button class="ftab active" id="anTabWeek" onclick="W2.loadAnalytics('week',this)">This week</button>
@@ -1627,7 +1829,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Wallet Security</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlSecurity')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlSecurity')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
 
@@ -1677,7 +1879,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3 id="pinSetupTitle">Set Wallet PIN</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlPinSetup')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlPinSetup')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body" style="text-align:center">
       <p style="color:var(--sub);font-size:13px;margin-bottom:8px" id="pinSetupSubtitle">Choose a 4-digit PIN for your wallet</p>
@@ -1712,7 +1914,7 @@ body{
     <div class="ovl-drag"></div>
     <div class="ovl-hdr">
       <h3>Transaction</h3>
-      <button class="ovl-close" onclick="W2.closeOverlay('ovlTxDetail')"><i class="fas fa-times"></i></button>
+      <button class="ovl-close" onclick="W2.closeOverlay('ovlTxDetail')"><span style="font-size:18px;line-height:1">✕</span></button>
     </div>
     <div class="ovl-body">
       <div style="text-align:center;margin-bottom:24px">
@@ -1732,6 +1934,8 @@ body{
 
 <!-- ═══ SCRIPTS ═══ -->
 <script type="module" src="firebase.js"></script>
+<script src="sokoni-auth-state.js"></script>
+<script src="sokoni-user-bootstrap.js" defer></script>
 <script src="sokoni-payment-trust.js"></script>
 <script src="sokoni-wallet-v2.js"></script>
 <script>

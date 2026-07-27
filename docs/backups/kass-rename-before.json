@@ -1,0 +1,108 @@
+[
+ {
+  "id": "sellers/xrH21J5GFbW8PluCZ2ny5nIuf602",
+  "before": {
+   "businessName": "KASS VAPES",
+   "shopName": "KASS VAPES",
+   "nameLower": "kass vapes",
+   "storeName": "KASS VAPES",
+   "name": "KASS VAPES"
+  }
+ },
+ {
+  "id": "users/xrH21J5GFbW8PluCZ2ny5nIuf602",
+  "before": {
+   "displayName": "KASS VAPES",
+   "businessName": "KASS VAPES",
+   "name": "KASS VAPES",
+   "shopName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "businesses/SOK-GL58F7",
+  "before": {
+   "name": "KASS VAPES",
+   "businessName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784487444890",
+  "before": {
+   "businessName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784487555096",
+  "before": {
+   "sellerName": "KASS VAPES",
+   "businessName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784487613418",
+  "before": {
+   "sellerName": "KASS VAPES",
+   "businessName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784756919866",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784757301039",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784760733776",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784760778858",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784760823489",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784761050969",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784762628239",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784762785525",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784762904410",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ },
+ {
+  "id": "products/1784796275236",
+  "before": {
+   "sellerName": "KASS VAPES"
+  }
+ }
+]

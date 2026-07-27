@@ -63,6 +63,26 @@
     .cat-sort-bar .cat-filter-btn{width:auto !important;padding:9px 16px !important;text-align:center !important;}
     .cat-sort-bar{flex-wrap:nowrap !important;overflow-x:auto;gap:8px;padding:14px 16px 10px;}
 
+    /* ── Variant filter bar ──────────────────────────────────────────────
+       Horizontally scrollable so a long colour list never wraps the page or
+       pushes the grid down on a phone. */
+    .cat-vfilter-bar{display:flex;align-items:center;gap:14px;flex-wrap:nowrap;overflow-x:auto;
+      padding:4px 16px 12px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+    .cat-vfilter-bar::-webkit-scrollbar{display:none;}
+    .cat-vfilter-group{display:flex;align-items:center;gap:6px;flex-shrink:0;}
+    .cat-vfilter-label{color:rgba(255,255,255,0.38);font-size:11px;font-weight:800;
+      text-transform:uppercase;letter-spacing:0.6px;margin-right:2px;white-space:nowrap;}
+    .cat-vfilter-chip{padding:7px 13px;background:rgba(255,255,255,0.04);
+      border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.72);
+      font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap;
+      min-height:34px;transition:border-color .18s,background .18s,color .18s;}
+    .cat-vfilter-chip:hover{border-color:rgba(113,255,0,0.45);color:#fff;}
+    .cat-vfilter-chip[aria-pressed="true"]{background:rgba(113,255,0,0.12);border-color:#71ff00;color:#71ff00;}
+    .cat-vfilter-clear{padding:7px 13px;background:transparent;border:1px solid rgba(255,255,255,0.18);
+      border-radius:9px;color:rgba(255,255,255,0.55);font-size:12px;font-weight:700;font-family:inherit;
+      cursor:pointer;white-space:nowrap;min-height:34px;flex-shrink:0;}
+    .cat-vfilter-clear:hover{color:#fff;border-color:rgba(255,255,255,0.35);}
+
     /* ── AGE GATE MODAL ── */
     .age-gate-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.95);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
     .age-gate-box{background:#111;border:1px solid rgba(255,30,30,0.25);border-radius:22px;padding:32px 28px;max-width:380px;width:100%;text-align:center;}
@@ -255,6 +275,10 @@
     <button type="button" class="cat-filter-btn" onclick="sortProducts('high',this)">Price ↓</button>
     <button type="button" class="cat-filter-btn" onclick="sortProducts('popular',this)">🔥 Popular</button>
   </div>
+  <!-- Variant filters. Populated from the variants the products in view
+       actually declare, so this stays empty (and hidden) for categories where
+       no seller has entered any. -->
+  <div id="catVariantFilters" class="cat-vfilter-bar" style="display:none;"></div>
   <div id="catProductsGrid" class="cat-premium-grid"></div>
 </section>
 
@@ -265,7 +289,7 @@
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
@@ -461,6 +485,9 @@ if(ADULT_CATS_LOCAL.has(_cat) && !_ageOk()){
 <script src="adult-gate.js"></script>
 
 <script src="sokoni-offers.js" defer></script>
+<!-- Shared product schema: supplies the card variant summary and the variant
+     filter facets. Deferred like category.js, so it evaluates first. -->
+<script src="sokoni-product-schema.js" defer></script>
 <script src="category.js" defer></script>
 <script src="scroll-memory.js" defer></script>
 <script src="market-actions.js" defer></script>

@@ -26,7 +26,12 @@
    the SKIP_CACHE_PATTERNS fix below never reaches users whose browser already
    holds v100, and Google sign-in would stay broken for exactly the people
    already affected. */
-const CACHE_VERSION = "sokoni-20260724-app-shell-v101";
+/* v103 — bumped to force clients off cached wallet JS. Static assets (incl.
+   sokoni-wallet-v2.js) are Cache-First, so the send-money fix, payout load-race
+   + double-tap guards, emoji/close-button/logo UI, and the More page never
+   reached already-installed clients — hard-refresh can't beat Cache-First. This
+   bump invalidates the old cache so every client re-fetches current assets. */
+const CACHE_VERSION = "sokoni-20260727083122-v124";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
@@ -655,6 +660,15 @@ self.addEventListener("fetch", event => {
     "sokoni-desktop.css","security.js","sokoni-permissions.js","sokoni-pay.js","sokoni-db.js","sokoni-config.js",
     "sokoni-payment-engine.js","sokoni-payment-trust.js","sokoni-fraud-engine.js","sokoni-webhook-engine.js",
     "sokoni-offline.js","sokoni-ui.js","shared-header.js","sw-register.js",
+    /* The menu drawer's CSS and JS MUST stay network-first alongside shared-header.js,
+       because the header builds the drawer markup and the two are versioned together.
+       shared-header.js was ALWAYS_FRESH but sokoni-drawers.css / sokoni-drawer.js were
+       only precached + stale-while-revalidate, so a returning user got the NEW header
+       markup with the OLD drawer stylesheet. After sokoni-drawers.css changed by ~600
+       lines that mismatch rendered the menu as a black, empty panel ("menu brings a
+       black blank"). Keeping all three fresh together guarantees the drawer a page
+       opens is styled by the stylesheet that matches its markup. */
+    "sokoni-drawers.css","sokoni-drawer.js",
     /* Auth-critical scripts: a stale version of any of these can silently
        break sign-in, getRedirectResult, or session persistence. Always
        fetch from network when reachable so fixes deploy immediately. */
@@ -676,7 +690,17 @@ self.addEventListener("fetch", event => {
        that dies before the page settles may never reach that second launch, so
        the fix could not arrive by the very failure it repairs.
        Anything on the POS startup path must land on the first load. */
-    "pos-omni.js", "pos-modules.js"];
+    "pos-omni.js", "pos-modules.js",
+    /* Printer stack. Same argument as the POS startup path: these drive
+       physical hardware a merchant is standing in front of, and a stale copy
+       presents as "the printer is broken" rather than "the page is old" — so
+       nobody thinks to reload, let alone clear site data. The P58E adapter in
+       particular was dead on production because of a duplicate global; a
+       merchant holding a stale sokoni-bluetooth-printer.js would still see the
+       broken build after the fix shipped. Hardware paths must land on the first
+       load. */
+    "sokoni-universal-printer.js", "sokoni-bluetooth-printer.js",
+    "sokoni-printer-manager.js", "sokoni-pos-print-service.js"];
   if (ALWAYS_FRESH.some(f => url.pathname.endsWith(f))) {
     event.respondWith(networkFirst(request, STATIC_CACHE));
     return;
@@ -688,10 +712,13 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  /* CSS / JS — Stale While Revalidate (cached version served instantly;
-     background fetch keeps cache fresh for the next load) */
+  /* CSS / JS — Network First so EVERY reload gets the latest deploy when online,
+     with the cached copy as an offline fallback. Was Stale-While-Revalidate, which
+     served the OLD file on reload and only fetched the new one for the NEXT load —
+     that is why updates appeared to require clearing browsing data. Network-First
+     removes the stale-first-reload entirely; offline still works from cache. */
   if (["css","js"].includes(ext)) {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(networkFirst(request, STATIC_CACHE));
     return;
   }
 

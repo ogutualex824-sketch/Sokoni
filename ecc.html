@@ -1303,7 +1303,7 @@ window.toggleAlertPanel = () => {
 window.ackAlert = async (id) => {
   if(!confirm('Acknowledge this alert?')) return;
   try {
-    await updateDoc(doc(db,'eccAlerts',id), { status:'acknowledged', acknowledgedBy:_user?.uid, acknowledgedAt:Date.now() });
+    await updateDoc(doc(db,'eccAlerts',id), { status:'acknowledged', acknowledgedBy:_user?.uid, acknowledgedAt:serverTimestamp() });
   } catch(e) { alert('Error: '+e.message); }
 };
 

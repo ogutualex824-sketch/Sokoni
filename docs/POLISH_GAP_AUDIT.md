@@ -1,0 +1,457 @@
+# SOKONI — Polish Gap Audit
+
+**Purpose.** Classify the pre-beta polish areas so effort goes where it actually
+pays. Started 2026-07-24.
+
+**Why this exists.** A feature-shaped roadmap assumed things were missing that
+turned out to be built (image swipe, lightbox, voice search) and assumed things
+worked that turned out to be broken (Algolia indexing). Neither is visible from
+reading the roadmap or the code. This document separates the two.
+
+This is a **reliability document**, not a checklist: a row can move backwards.
+
+---
+
+## Status — what we believe
+
+| Status | Meaning | Priority |
+|---|---|---|
+| 🔴 **Built but broken** | Runtime evidence disproves it | **Highest** |
+| 🟠 **Built but fragile** | Works, but no recovery path / no resilience | High |
+| 🟡 **Partly verified** | Some legs proven, others not | Medium |
+| ⬜ **Missing** | Never implemented | Depends on roadmap |
+| ✅ **Built** | Verified working | Monitor only |
+| ❔ **Unaudited** | Not examined — **not** a claim either way | — |
+
+## Evidence quality — why we believe it
+
+Tracked **separately from status**, so a static code review can never be read as
+equivalent to a successful production run.
+
+| Level | Meaning |
+|---|---|
+| **Runtime** | Observed in production or a controlled end-to-end test |
+| **Integration** | Verified across components in a test environment |
+| **Static** | Code inspection only |
+| **None** | Not yet examined |
+
+## Confidence — how much weight to place on it
+
+A third axis, independent of the other two. Evidence quality says *what kind* of
+observation backs a row; confidence says *how much* of it there was.
+
+| Confidence | Meaning |
+|---|---|
+| **High** | Multiple independent observations agree |
+| **Medium** | Single direct observation |
+| **Low** | Weak signal or partial observation |
+| **Withdrawn** | Previously asserted, later invalidated |
+
+Runtime evidence at **Medium** is not the same as Runtime at **High**: the batch
+drain was sampled twice, minutes apart, by different means — the create-path
+symptom has two probe runs but one method, and every proposed *cause* for it is
+currently Withdrawn or absent.
+
+## Governing rules
+
+1. **A row without evidence is ❔, never ✅.** "I read the code and it looks
+   right" is Static, and Static alone caps a row at ❔.
+2. Only **Runtime** or **Integration** may justify ✅ or 🔴.
+3. **Last Verified is part of the claim.** Evidence expires; an undated ✅ is an
+   assumption wearing a tick.
+4. **Corrections stay visible.** When a finding is revised, the original is
+   retained with a *Revised* note — the reasoning trail is the point.
+5. **A symptom and its explanation are separate claims** with separate evidence.
+   A verified symptom does not confer any confidence on a proposed cause.
+6. **Record the revision under test.** Before attributing runtime behaviour:
+   confirm branch, confirm working-tree state, record the commit hash, and
+   confirm the *deployed* revision matches it. This repository has concurrent
+   writers (see *Evidence integrity*), so "which code produced this?" is a real
+   question, not a formality.
+
+---
+
+## Evidence integrity
+
+Runtime evidence is only as good as the instrument. Three times this session an
+observation was an artefact of the probe rather than a fact about the system —
+and each looked like a clean result at the time. For any significant probe,
+record these four things **before** running it:
+
+| Item | Ask |
+|---|---|
+| **Observation target** | What exactly is being read — queue entry, Algolia record, Firestore document, log line? |
+| **Probe side effects** | What does the probe create, modify or delete? |
+| **Risk to validity** | Could any side effect change the thing being measured, or exclude the subject from the path under test? |
+| **Mitigation** | Usually: observe before mutating; separate observation from teardown |
+
+### Worked examples from 2026-07-24
+
+| Probe | Side effect | How it invalidated the result |
+|---|---|---|
+| Variant e2e #1 | Created the test product with `status:'draft'` for safety | `_shouldSkip` excludes drafts from indexing — the probe removed its own subject from the path it was testing, then reported the path broken |
+| Variant e2e #3 | Purged the product on exit | `enqueue` uses a deterministic queue id, so the purge **overwrote** the create's queue entry. The probe could not have observed an upsert even if one existed |
+| Batch-fix inference | *(no probe at all)* | Assumed a drained backlog implied new work indexes. Draining says nothing about intake |
+
+### Required probe structure
+
+Observation and teardown must be **separate phases**, in this order:
+
+```
+create test subject
+      ↓
+observe queue DURING the processing window
+      ↓
+observe the destination index
+      ↓
+record all evidence
+      ↓
+── phase boundary: nothing above may be undone by anything below ──
+      ↓
+cleanup
+```
+
+The property that matters: **no destructive action occurs before every
+observation has been recorded.** Cleanup still has to run on every exit path,
+including failures — but always after the verdict, never before it.
+
+### Log transitions, not snapshots — and attribute them
+
+A snapshot cannot show a mutation. Two snapshots that disagree only *suggest*
+one; a recorded transition **is** one. Sample fast enough to resolve the event
+you are testing for: a race decided in ~5s is invisible to 8s sampling, which is
+how probe v3 saw only a stable end state and mistook it for the original.
+
+A transition answers *what happened*. It does not answer *who did it* — and with
+concurrent triggers that is the question that turns a strong hypothesis into a
+root cause. Capture identity alongside every sample:
+
+| Field | Source |
+|---|---|
+| `createTime` / `updateTime` | Firestore REST returns both on every document GET — already fetched, usually discarded |
+| generation / revision counter | distinguishes rewrite from no-op |
+| execution id / correlation id | ties a write to the specific function invocation that made it |
+| worker id, attempt count | separates producer behaviour from consumer behaviour |
+
+The difference in practice:
+
+```
+pending → partial → processed                       (what)
+
+t+1.0  algoliaSync_products_create  wrote upsert/pending
+t+3.2  algoliaSync_products_update  wrote partial/pending   ← overwrite, attributed
+t+5.8  processAlgoliaQueue          processed partial       (who)
+```
+
+---
+
+## Production incident — search returned zero results (2026-07-24)
+
+**Reported:** "search has stopped working again." **Reproduced, diagnosed,
+fixed, verified — 4/5 runs now render correct results.**
+
+Three layered bugs, each masking the next. Peeled one at a time with runtime
+evidence; every fix exposed the layer beneath it.
+
+| # | Bug | Evidence | Fix |
+|---|---|---|---|
+| 1 | Cold-start budget skip | Browser got a valid key (200) but **never issued an Algolia query**; init lost the 1.5s query-budget race, threw, and `eng.search()` was never reached | `search.html` — init on its own 6s budget; a slow init no longer aborts the query |
+| 2 | Invalid `responseFields` | Once queries fired they returned **HTTP 400 "Unknown response field `queryID`"** — `queryID`/`abTestID`/`abTestVariantID` are not valid `responseFields`; Algolia rejects the whole query | `sokoni-search-engine.js:66` — removed the three invalid fields |
+| 3 | Firestore fallback blocked | `firestore.googleapis.com` 403 (App Check) — so when Algolia failed, nothing caught the ball | Not fixed here; owned by concurrent App Check work. Made moot by fixing the Algolia path |
+
+**Verification (production, post-fix):** 5 fresh-context runs of `?q=vape` →
+4 rendered 4 cards (the exact count the index holds); 1 cold first-hit rendered
+0 despite receiving the 4 hits, with a `404` on a wildcard `*` index.
+
+**Third bug found + fixed (2026-07-24):** the `404 *` was **not** a wildcard
+index — `/1/indexes/*/queries` is Algolia's multi-query batch endpoint (`*` is
+literal in that path). `AlgoliaBrowserClient.multiSearch` **threw** on any 4xx,
+so a 404 on a *secondary* query (an autocomplete/suggestions index that was never
+created, or a transient host miss) aborted the whole render even when the primary
+query had already returned hits. Fix: a 404 retries the next host, then degrades
+to a well-formed empty result — it never throws and never aborts the render.
+Other 4xx (400/403) still surface. Also fixed a latent bug where all-hosts-fail
+returned `undefined`, throwing at the call site.
+
+**Verified (production, other agent stopped, tree stable):** 6 fresh runs of
+`?q=vape` → **5 rendered 5 cards; the `404`-abort is gone from every run.** The
+single miss is a pure cold-start (CF init exceeded the 6s budget, no query
+fired) — first-query-only, and it self-corrects on the next keystroke.
+
+**Residual — ✅ resolved / reframed (2026-07-24):** the earlier "~1/6 cold miss"
+was largely a **probe wait-time artifact**, not a user-facing failure — a short
+observation window snapshotted the page before the cold-start render completed.
+Re-measured with an adequate wait and a proper diagnostic: **8/8 rendered**,
+every run fetching the key, main query 200, 5 cards. A real user waits naturally
+and sees results; they may wait a couple extra seconds on a truly cold first
+query, which the pre-warm below reduces.
+
+**Pre-warm fix:** `search.html` now kicks off `sokoniSearch.init()` (the
+secured-key Cloud Function fetch) the moment the engine object exists, instead of
+on the first query — so the cold start overlaps page load and typing time.
+Idempotent (init returns the in-flight promise) and fire-and-forget, so it can
+only remove dead time, never add latency. Deliberately did **not** bump the init
+budget: that governs how long `doSearch` delays the parallel Firestore render,
+and raising it would slow the common path to rescue a rare cold direct-link.
+
+**On the App Check 403:** present on every headless run, and it does **not** block
+search — the Algolia path uses a secured search key that does not require App
+Check. The 403 is a headless-attestation artifact; real browsers attest normally.
+This is why chasing it as "the search bug" earlier was a wrong turn.
+
+**Probe-validity corrections made mid-investigation** (all recorded in *Revised
+findings*): read `sokoni_global` from a comment (real index `global_search`);
+filtered `algolia.net` and missed `algolianet.com`; assumed localhost would
+reproduce production's key fetch (it does not — localhost fails the key call, so
+it could not validate the fix). Four target-of-observation errors in one
+investigation; each caught by re-checking against the actual wire.
+
+**Ownership note:** both fixes are in files the concurrent process is actively
+rewriting (uncommitted). They are **live** (deployed from the working tree) but
+**not committed by me** — committing would take ownership of the other agent's
+in-flight work. Durability risk: if that agent checks out these files, the fix
+is lost and search breaks again. Flagged to the user.
+
+## 🔴 Built but broken
+
+| Item | Evidence | Method | Last verified |
+|---|---|---|---|
+| **Product create → Algolia record** | Product created through the real write path reached Firestore with correct variant terms in **22s** and was **never present in `sokoni_products` within 608s**, across two independent probe runs | Runtime — end-to-end probe | 2026-07-24 |
+
+> ⚠️ **The stated cause was withdrawn.** See *Revised findings*: "zero `upsert`
+> entries in the queue" was an artefact of the probe, not a fact about the
+> system.
+
+**Symptom and candidate causes, tracked separately.** One confirmed symptom;
+every explanation still owes evidence.
+
+| Claim | Status | Confidence | Evidence |
+|---|---|---|---|
+| Product missing from `sokoni_products` after create | 🔴 **Verified symptom** | High | Runtime — three probe runs, latest ABSENT after 670s |
+| `algoliaSync_products_create` deployed | ✅ | Medium | Runtime — function list shows **ACTIVE** |
+| `algoliaSync_products_create` invoked | ✅ | Medium | Runtime — invocation at 13:27:11Z matching the probe |
+| Queue write missing | ✅ **DISPROVEN** | High | Runtime — phase-separated probe observed **both** entries: `products_<id>` and `gs__products_<id>` |
+| **Primary queue entry is `partial`, not `upsert`, for a brand-new product** | 🔴 **Verified** | High | Runtime — queue sampled at t+2s..t+90s: `products_<id>` = **`partial/pending`**, fanout = `upsert/pending` |
+| Drain processed it incorrectly | ❔ **Unknown** | — | Queue sampling stopped at t+90s; state at 670s unobserved |
+| Batch poisoning | ✅ **Fixed** | High | Runtime — `{done:147, dlq:152}` → `{done:306, dlq:0}`, two samples |
+
+### ✅ ROOT CAUSE CONFIRMED — deterministic-id race between two triggers
+
+**Verdict: SUPPORTS. Confirmed by direct observation**, probe v4, 2026-07-24.
+Evidence: Runtime. Confidence: **High** — the mutation itself was recorded, not
+inferred from disagreeing snapshots.
+
+```
+t+  0.8s  product        (none)              → created HTTP 200
+t+  2.1s  queue:primary  (start)             → absent
+t+  6.8s  queue:primary  absent              → upsert/pending      ← create trigger
+t+  7.9s  queue:gs       absent              → upsert/pending
+t+ 12.3s  queue:primary  upsert/pending      → partial/pending     ← OVERWRITE
+t+136.3s  algolia        (start)             → absent (HTTP 404)
+t+225.6s  queue:primary  partial/pending     → partial/done        ← drain "succeeded"
+t+225.9s  queue:gs       upsert/pending      → upsert/done
+```
+
+`upsert/pending` **existed** at t+6.8s and **became** `partial/pending` at
+t+12.3s on the same deterministic document id, with no delete between them. The
+overwrite is an observed event.
+
+**The full mechanism, now evidenced end to end:**
+
+1. Product created → `algoliaSync_products_create` enqueues **`upsert`** at
+   `products_<id>` (t+6.8s).
+2. `indexProductCreate` writes `searchableTerms` + `nameLower` back onto the
+   same product document.
+3. That write fires `algoliaSync_products_update`, which enqueues **`partial`**
+   at the **same** deterministic queue id — **destroying the pending upsert**
+   (t+12.3s).
+4. The drain applies `buildPartialUpdate` to an object that **never received its
+   creating upsert**, and marks the entry **`done`** (t+225.6s).
+5. The product is **absent from `sokoni_products`** for the full 660s window,
+   with no error, no retry and no DLQ entry.
+
+**Why the global index is unaffected:** `enqueue` coerces every non-delete
+global write to `upsert` (`operation === 'delete' ? 'delete' : 'upsert'`), so
+`gs__products_<id>` kept a full upsert and completed correctly. The primary
+index is the only casualty — which is why this was invisible to any check that
+only asked whether indexing "worked".
+
+**Blast radius:** every product created through the normal flow. The create
+path's own bookkeeping write destroys its indexing work.
+
+**Attribution — remaining gap.** `algoliaSync_products_update` is the only
+component that enqueues `partial`, so step 3 is attributed by code path rather
+than by observation. Per the agreed sequence this should be confirmed
+**read-only first** (Cloud Function execution windows against t+12.3s, plus the
+`beforeData` signature, which only the update trigger sets) before any
+instrumentation is considered.
+
+---
+
+### Original hypothesis (retained — now confirmed)
+
+Recorded before the evidence existed, and left in place so the reasoning trail
+survives:
+
+1. Product is created → `algoliaSync_products_create` enqueues **`upsert`** at
+   queue id `products_<id>`.
+2. `indexProductCreate` writes `searchableTerms` + `nameLower` **back onto the
+   same product document**.
+3. That write fires `algoliaSync_products_update` → enqueues **`partial`** — and
+   `enqueue` uses a *deterministic* id, so it **overwrites the `upsert`** before
+   the drain (every 5 min) ever sees it.
+4. The drain then applies `buildPartialUpdate` to an object that **does not yet
+   exist in Algolia**, because the full upsert that would have created it was
+   destroyed in step 3.
+
+The `gs__` fanout entry is `upsert` because `enqueue` coerces every non-delete
+global write to `upsert` (`operation === 'delete' ? 'delete' : 'upsert'`) — which
+is why the two entries disagree, and is itself the clue that the primary entry
+was rewritten rather than created as `partial`.
+
+**Why this is the same class as the batch poisoning:** the system's own
+bookkeeping write triggers a second event that silently destroys the first one's
+work. No error, no retry, no DLQ.
+
+**To confirm or kill it:** sample the queue at t+1s and again at t+10s. If the
+primary entry is `upsert` first and `partial` after, the race is proven.
+
+**Scope note.** The probe's deletes fanned out to **both** `gs__products` and
+`products`, so the delete path works for both targets while the create path
+produced neither.
+
+**Narrowed 2026-07-24 (Runtime — Cloud Function logs + deployment list):**
+
+| Ruled out | Evidence |
+|---|---|
+| Not deployed | `algoliaSync_products_create` is **ACTIVE** |
+| Never fired | Invoked at **13:27:11Z**, matching the probe's create; its paired delete ran 13:38:15Z |
+| Queue broken | The delete handler's `enqueue` wrote successfully in the same window |
+| Drain broken | Queue drained to `{done:306, dlq:0}` |
+
+**The queue-based half of this diagnosis is WITHDRAWN.** `enqueue` derives a
+**deterministic** document id:
+
+```js
+const queueId = `${collection}_${docId}`;   // one queue doc per (collection, docId)
+```
+
+so a create's `upsert` entry and a later `delete` entry for the same product
+write to **the same document**. The probe purges on exit, which **overwrote the
+upsert entry with a delete before the queue was ever inspected**. "6 entries, all
+delete, zero upsert" was therefore guaranteed by the probe's own cleanup — it
+could not have observed an upsert even if one existed.
+
+**What survives:** the product never appeared in `sokoni_products` within 608s,
+twice, and the purge happened *after* that window — so the drain had ~2 cycles
+to act while the entry should still have been present. That symptom is real and
+unexplained.
+
+**What does not survive:** any claim about whether the create path enqueues.
+Not proven either way.
+
+**Probe redesign required before the next attempt:** sample the queue *during*
+the observation window, not after cleanup. A deterministic queue id means
+cleanup is destructive to the evidence, so the queue must be read while the
+product still exists.
+
+---
+
+## 🟠 Built but fragile — *operational resilience gaps*
+
+> **Operational resilience gaps** — functionality works under nominal conditions
+> but lacks automatic recovery from drift, stale state, partial failure, or
+> deployment/configuration divergence.
+
+Named as a class deliberately: these read as four unrelated tickets and are one
+recurring design omission. Track systemic improvement, not just closures.
+
+| Item | Why fragile | Evidence | Method | Last verified |
+|---|---|---|---|---|
+| `algoliaQueue` stale-job reclaim | `_claimBatch` selects only `pending`/`failed`. A job set to `processing` by an invocation that then dies is **unreachable forever**, and a stuck job looks identical to a busy one | Same `processing: 1` in two measurements 7min apart, and present before the batch fix | Runtime — repeated queue status sampling | 2026-07-24 |
+| Product image storage (producer) | `seller-wiring.js` writes base64 `data:` URIs, so oversized documents are still manufactured. Consumers hardened; producer not | One product at 397,980 bytes; 195KB in `image` and again in `images` | Runtime — Firestore document inspection | 2026-07-24 |
+| Backfill vs live-trigger record schema | Backfill produces 6 fields where the trigger produces 28; recovered documents are present but under-searchable | Observed in `sokoni_services` | Runtime — index record comparison | 2026-07-24 |
+| Live Algolia index settings | `algoliaSetupIndexes` is an admin-only `onCall`, so committed settings stay **inert** until invoked. Live: 7 searchable / 7 facets vs 15 / 26 declared | Read from the live index before and after the variant push (7 → 13 each) | Runtime — Algolia settings API | 2026-07-24 |
+
+**Fix guidance captured** (see [[KNOWN_LIMITATIONS]]): reclaim on
+`status = 'processing' AND updatedAt < now - margin`, where the margin **must
+exceed maximum legitimate processing time** or it races a live worker and
+double-indexes. Base64 migration is detect → upload → replace → remove —
+**not** rejecting legacy products.
+
+---
+
+## ✅ Built
+
+| Item | Evidence | Method | Last verified |
+|---|---|---|---|
+| Algolia batch isolation | Backlog drained `{done:147, dlq:152}` → `{done:306, dlq:0}`; all 153 released entries reached `done`, zero failures. Confirmed by two independent samples ~7min apart | Runtime — production queue drain metrics | 2026-07-24 |
+| Algolia sanitiser / isolation logic | 14 checks; stub reproduces Algolia's all-or-nothing rejection and proves the incident reproduces *without* the fix first | Integration — `npm run test:algolia-isolation` | 2026-07-24 |
+| Variant schema ↔ indexer parity | 33 checks incl. every malformed document shape | Integration — `npm run check:variants` | 2026-07-24 |
+| Search matching logic | 23 checks — typo, Swahili↔EN, suggest, scan window, cache poisoning | Integration — `npm run test:search` | 2026-07-24 |
+| Variant display, cards, filters, encoding | Correct groups per category, 0 empty headings, 0 page errors; hostile `"><img …>` payload renders inert | Runtime — Playwright browser probe at 430px | 2026-07-24 |
+| Variant edit → Firestore terms | Colours-only edit propagated in 0s; old term removed, new term added | Runtime — production probe | 2026-07-24 |
+
+---
+
+## 🟡 Partly verified
+
+| Item | Proven | Not proven | Last verified |
+|---|---|---|---|
+| Variant pipeline end-to-end | Firestore write, term generation, edit propagation, display, filters | Algolia record, search-by-variant, facet-by-variant, edit re-index — **all blocked** by the 🔴 above | 2026-07-24 |
+
+---
+
+## ⬜ Missing (confirmed absent — product page)
+
+| Item | Method |
+|---|---|
+| Pinch-to-zoom (tap-to-lightbox exists) | Static — source audit |
+| Estimated delivery | Static — source audit |
+| Seller response time | Static — source audit |
+
+Already present, contrary to the roadmap's assumption: image swipe, full-screen
+lightbox, stock chips (`Out of Stock` / `Only N left`), units sold, "You may
+like", recently viewed, recent searches, trending searches, voice search.
+
+---
+
+## ❔ Unaudited
+
+Listed so this audit's own coverage gaps are visible rather than implied.
+Evidence level for every row below: **None**.
+
+| Area | Note |
+|---|---|
+| 3 — Seller post-publish confirmation | Not examined |
+| 4 — Inventory intelligence | Not examined |
+| 5 — Order timeline | `timeline` appears in the codebase; coverage unknown |
+| 6 — Actionable notifications | Not examined |
+| 7 — Buyer trust indicators | `prdTrustStrip` exists; contents unverified |
+| 8 — Seller dashboard health | Not examined |
+| 9 — Timestamp standardisation | Products use `uploadedAt`; full spread unmeasured |
+| 10 — Consistency sweep | `skeleton` appears in the codebase; coverage unknown |
+
+> A grep hit is **not** evidence a feature works. Twice this session that
+> assumption class was wrong.
+
+---
+
+## Revised findings
+
+Kept rather than overwritten, so the reasoning trail survives.
+
+| Date | Original finding | Revised to | What changed it |
+|---|---|---|---|
+| 2026-07-24 | Variant Algolia leg failed because the probe created the product as `status: 'draft'`, which `_shouldSkip` excludes | **Wrong.** Re-run with an indexable product failed identically. The draft skip is real but was not the cause | A second probe with `status:'active'` |
+| 2026-07-24 | Algolia leg blocked by batch poisoning; expected to pass once fixed | **Partly wrong.** Batch poisoning was real and is fixed, but a *second, independent* defect — the create path never enqueuing — also blocks it | Post-fix re-probe, which failed for a different reason |
+| 2026-07-24 | Homepage-inventory and scroll-freeze fixes listed as verified | Removed from ✅ — no runtime evidence was presented in this session | Applying rule 1 to inherited claims |
+| 2026-07-24 | "The create path enqueues nothing — 6 queue entries, all `delete`, zero `upsert`" | **Withdrawn.** `enqueue` uses a deterministic queue id (`${collection}_${docId}`), so the probe's own purge **overwrote** the upsert entry with a delete before the queue was read. The observation was manufactured by the cleanup and could never have shown otherwise. Symptom (never indexed in 608s, twice) stands; **cause is unknown again** | Reading `enqueue` after asserting the conclusion — the order that should have been reversed |
+
+---
+
+## Carried over (not verified here)
+
+🔴 Google Sign-In across devices · 🔴 OTP sign-in · 🔴 Wallet top-up invocation
+(IAM). These predate this audit; evidence level **None** in this session.
+Tracked in [[RELEASE_ACCEPTANCE]].

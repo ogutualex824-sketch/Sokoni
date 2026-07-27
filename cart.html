@@ -56,7 +56,14 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
 .cart-page-card{background:rgba(16,16,16,0.96);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:14px;display:flex;gap:14px;align-items:center;transition:border-color .2s,transform .15s;animation:cartIn .3s ease;}
 @keyframes cartIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
 .cart-page-card:hover{border-color:rgba(113,255,0,0.2);transform:translateY(-1px);}
-.cart-card-img{width:64px;height:64px;border-radius:12px;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.07);background:#111;}
+/* Dimensions are !important on purpose. A global rule in mobile.css —
+   `img, video, canvas { max-width:100% !important; height:auto !important }` —
+   overrides an un-!important height, so .cart-card-img's height:64px was being
+   replaced with height:auto and a tall/portrait product photo stretched far
+   past its 64px box: the "cart images cover the whole phone screen" report.
+   Locking width AND height (plus min/max) makes the thumbnail immune to that
+   override on every device. */
+.cart-card-img{width:64px!important;height:64px!important;min-width:64px;max-width:64px;max-height:64px;border-radius:12px;object-fit:cover;flex-shrink:0;border:1px solid rgba(255,255,255,0.07);background:#111;}
 .cart-card-info{flex:1;min-width:0;}
 .cart-card-info h3{font-size:13px;font-weight:800;color:rgba(255,255,255,0.92);margin:0 0 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .cart-card-cat{font-size:10px;color:rgba(255,255,255,0.35);text-transform:uppercase;letter-spacing:.5px;margin:0 0 6px;}
@@ -198,7 +205,7 @@ body{font-family:'Segoe UI',system-ui,sans-serif;background:#050505;color:white;
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 

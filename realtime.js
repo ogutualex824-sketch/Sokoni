@@ -196,8 +196,10 @@
     const db = _getDb(); if (!db) return;
     try {
       const { collection, onSnapshot, query, where } = await import(FS_URL);
-      let q = collection(db, 'providers');
-      if (hub) q = query(q, where('hub', '==', hub));
+      /* /providers gates reads on status, so an unfiltered list query is denied
+         outright — the hub pages showed no providers at all. */
+      let q = query(collection(db, 'providers'), where('status', 'in', ['active', 'approved']));
+      if (hub) q = query(collection(db, 'providers'), where('status', 'in', ['active', 'approved']), where('hub', '==', hub));
       _track(onSnapshot(q,
         snap => {
           const providers = snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; });

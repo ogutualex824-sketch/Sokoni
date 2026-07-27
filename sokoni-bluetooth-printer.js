@@ -20,7 +20,20 @@
      58mm (32) -> 'Bravilex International Co.' / 'Limited'
      80mm (48) -> a single line
    Source of truth: sokoni-company.js (legalName). */
-const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+/* `var`, NOT `const`. This file and sokoni-universal-printer.js both declare
+   this name, and both load as classic scripts on every POS printer page. Two
+   top-level `const`s of the same identifier throw
+
+       Identifier 'SOKONI_LEGAL_NAME' has already been declared
+
+   which aborts whichever script parses second — so window.P58EPrinter was never
+   assigned, and with it SokoniUniversalPrinter, the printer manager and the
+   print service. The P58E could not be paired or configured at all.
+
+   `var` redeclaration is legal and idempotent here because both files assign
+   the identical literal. The literal stays in BOTH files deliberately:
+   verify-company-identity scans for the canonical name in each. */
+var SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
 function _legalNameLines(width) {
   const W = Number(width) || 32;
   const lines = []; let line = '';
@@ -90,6 +103,11 @@ const KEY_TEST_SEQ   = 'p58e_test_seq';
 ───────────────────────────────────────────────────────────────── */
 const CONNECT_TIMEOUT_MS = 12000; /* 12s — prevents gatt.connect() hanging indefinitely */
 const HEALTH_INTERVAL_MS = 5000;  /* 5s — poll gatt.connected to catch stale connections */
+/* Cadence of the indefinite watch that takes over once the fast reconnect
+   ladder is exhausted. Slow on purpose: a printer that has been away for two
+   minutes is usually off or out of range, so retrying hard achieves nothing and
+   costs battery. 30s recovers a returning printer within one customer. */
+const SLOW_WATCH_MS = 30000;
 
 const DEFAULT_SETTINGS = {
   autoConnect:    true,
@@ -185,6 +203,59 @@ class P58EService {
   /* ─────────────────────────────────────────────────────────────
      DISCOVERY — opens the browser Bluetooth picker
   ───────────────────────────────────────────────────────────── */
+  /**
+   * Open the chooser with NO filters — every nearby BLE device is listed.
+   *
+   * Why this exists: `requestDevice({filters})` only shows devices matching a
+   * service UUID or a name PREFIX. Cheap thermal printers are wildly
+   * inconsistent about both. A unit advertising "BlueTooth Printer",
+   * "58Printer" or "MPT-II" matches no prefix in PROFILE.nameFilters — the
+   * prefix must match the START of the name — so the chooser opens completely
+   * empty and the merchant concludes the printer is broken when it is sitting
+   * right there, powered on.
+   *
+   * Unfiltered listing is the reliable escape hatch: the merchant can see the
+   * device and pick it by eye, whatever it calls itself.
+   *
+   * MUST be called from its own user gesture. Chrome spends the gesture on the
+   * first requestDevice(), so this cannot be chained automatically after a
+   * failed filtered attempt — it needs a second, deliberate tap. That is a
+   * platform rule, not a UI choice.
+   */
+  async requestDeviceAny () {
+    if (!navigator.bluetooth) throw new Error('Web Bluetooth is not available in this browser.');
+    this._setStatus('scanning');
+    this._emit('scanning', { unfiltered: true });
+    try {
+      const device = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: PROFILE.services,
+      });
+      return device;
+    } catch (e) {
+      this._setStatus('idle');
+      if (e?.name === 'NotFoundError') {
+        throw new Error(
+          'No Bluetooth devices found, or the chooser was dismissed.\n\n' +
+          'On Android: make sure Location is ON — Chrome cannot scan for ' +
+          'Bluetooth devices without it, even though the printer has nothing ' +
+          'to do with your location.\n\n' +
+          'Also check the printer is in BLE pairing mode (blue LED blinking).'
+        );
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Pair using the unfiltered chooser, then connect. Same contract as
+   * requestAndPair(), for the "I can't see my printer" path.
+   */
+  async requestAndPairAny () {
+    const device = await this.requestDeviceAny();
+    return this._connectDevice(device, true);
+  }
+
   async requestDevice () {
     /* iOS / WebKit: all browsers on iPhone and iPad use WebKit, which
        does not implement Web Bluetooth. Show a friendly explanation
@@ -416,6 +487,12 @@ class P58EService {
         connectedAt: new Date().toISOString(),
       };
       this._reconnectAttempts = 0;
+      /* A successful connect clears the manual-disconnect suppression and any
+         slow watch still running, so recovery is armed again for the NEXT drop.
+         Without this, one deliberate disconnect would disable auto-recovery for
+         the rest of the session. */
+      this._manualDisconnect = false;
+      clearInterval(this._watchTimer);
 
       if (savePaired) {
         this._paired = {
@@ -473,10 +550,42 @@ class P58EService {
   /* ─────────────────────────────────────────────────────────────
      AUTO-RECONNECT after GATT disconnect (exponential backoff)
   ───────────────────────────────────────────────────────────── */
+  /**
+   * Slow, indefinite watch for a printer that went away for longer than the
+   * fast backoff window.
+   *
+   * The fast ladder gives up after _MAX_RECONNECT attempts — about 2.3 minutes.
+   * That is far shorter than the normal life of a till: a merchant switches the
+   * printer off between customers, it sleeps, it walks out of range in a bag.
+   * Before this, exhausting the ladder set status 'error' and stopped dead, and
+   * because the health monitor had already been stopped nothing was left
+   * watching. The printer could come back, sit there powered on and in range,
+   * and SOKONI would never notice — "it doesn't reconnect".
+   *
+   * So the ladder no longer terminates recovery; it hands over to a steady
+   * retry. Cheap (one GATT connect attempt every 30s), silent while it fails,
+   * and it stops the moment it succeeds or the merchant disconnects on purpose.
+   */
+  _startSlowWatch (device) {
+    clearInterval(this._watchTimer);
+    this._watchTimer = setInterval(async () => {
+      if (this._manualDisconnect) { clearInterval(this._watchTimer); return; }
+      if (this._status === 'connected') { clearInterval(this._watchTimer); return; }
+      try {
+        await this._connectDevice(device);
+        clearInterval(this._watchTimer);
+        this._markCheck('reconnect');
+      } catch (_) { /* still away — keep watching, stay quiet */ }
+    }, SLOW_WATCH_MS);
+  }
+
   _scheduleReconnect (device) {
     if (this._reconnectAttempts >= this._MAX_RECONNECT) {
       this._setStatus('error');
       this._emit('reconnect_failed', { attempts: this._reconnectAttempts });
+      /* Exhausted the FAST ladder — not the end of recovery. Keep a slow watch
+         so the printer re-attaches by itself whenever it comes back. */
+      if (!this._manualDisconnect) this._startSlowWatch(device);
       return;
     }
     const delay = Math.min(1500 * Math.pow(2, this._reconnectAttempts), 30000); // max 30s
@@ -520,7 +629,13 @@ class P58EService {
   ───────────────────────────────────────────────────────────── */
   async disconnect () {
     clearTimeout(this._reconnectTimer);
+    clearInterval(this._watchTimer);
     this._stopHealthMonitor();
+    /* Deliberate disconnect: suppress BOTH the fast ladder and the slow watch.
+       A merchant who taps Disconnect must not have the printer quietly
+       re-attach 30 seconds later. Cleared again on the next successful
+       connect, so this never becomes a permanent opt-out. */
+    this._manualDisconnect  = true;
     this._reconnectAttempts = this._MAX_RECONNECT; /* stop auto-reconnect loop */
     if (this._btDevice?.gatt?.connected) {
       try { this._btDevice.gatt.disconnect(); } catch(e) {}
@@ -937,14 +1052,43 @@ class P58EService {
   ───────────────────────────────────────────────────────────── */
   static checkCompatibility () {
     const issues = [];
-    if (!navigator.bluetooth) issues.push('Web Bluetooth API not available — use Chrome on Android or Desktop.');
+    const ua    = navigator.userAgent || '';
+    /* iPadOS reports as MacIntel with touch points, so the platform check is
+       needed alongside the UA test. */
+    const isIOS = /iP(hone|od|ad)/.test(ua) ||
+                  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+    /* iOS is called out by name and FIRST, because "use Chrome" is actively
+       misleading there: every iOS browser — Chrome, Edge, Firefox included — is
+       required to run on WebKit, which implements no Web Bluetooth at all.
+       A merchant told only "use Chrome" will install Chrome on their iPhone,
+       hit exactly the same wall, and conclude the printer is broken. */
+    if (isIOS) {
+      issues.push('iPhone and iPad cannot connect Bluetooth printers from a web page. ' +
+                  'Every iOS browser — including Chrome and Edge — runs on WebKit, which ' +
+                  'does not implement Web Bluetooth. Use an Android phone or a ' +
+                  'Windows/Mac computer with Chrome or Edge.');
+    } else if (!navigator.bluetooth) {
+      issues.push('Web Bluetooth is not available in this browser — use Chrome or Edge ' +
+                  'on Android, Windows or Mac.');
+    }
+
     if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
       issues.push('Page must be served over HTTPS for Bluetooth to work.');
     }
-    if (!navigator.bluetooth?.getDevices) {
-      issues.push('navigator.bluetooth.getDevices not available — auto-reconnect requires Chrome 85+.');
+    /* A DEGRADATION, not a blocker — the printer still pairs and prints, the
+       chooser just opens each time. Keeping it out of `issues` matters: it
+       drives `supported`, and flagging this browser as unsupported would show a
+       red "Browser Not Supported" banner to a merchant whose printer works
+       perfectly, and probably lose the sale.
+       Only meaningful where Bluetooth exists at all; on iOS it is noise stacked
+       under a hard blocker. */
+    const warnings = [];
+    if (!isIOS && navigator.bluetooth && !navigator.bluetooth.getDevices) {
+      warnings.push('Auto-reconnect needs Chrome 85 or newer. Pairing and printing ' +
+                    'still work — the chooser will just open each time.');
     }
-    return { supported: issues.length === 0, issues };
+    return { supported: issues.length === 0, issues, warnings, isIOS };
   }
 
   /* Instance proxy — allows external code to call P58EPrinter.checkCompatibility()

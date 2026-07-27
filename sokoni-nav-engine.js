@@ -54,6 +54,12 @@
       if (u.isDriver)                   return 'driver';
       if (r.indexOf('rider')      > -1) return 'rider';
       if (r.indexOf('provider')   > -1) return 'provider';
+      /* Mirror the seller fallbacks below: a service provider onboarded with
+         isProvider/registeredAs.provider but no explicit roles array (as the
+         onboarding scripts wrote them) was falling through to 'buyer' and could
+         not reach their provider workspace after logging in. */
+      if (u.isProvider)                 return 'provider';
+      if (u.registeredAs && u.registeredAs.provider) return 'provider';
       if (r.indexOf('seller')     > -1) return 'seller';
       if (u.isSeller)                   return 'seller';
       if (u.registeredAs && u.registeredAs.seller) return 'seller';
@@ -72,7 +78,8 @@
       if (r.indexOf('admin')      > -1 || u.isAdmin)                            out.push('admin');
       if (r.indexOf('driver')     > -1 || u.isDriver)                           out.push('driver');
       if (r.indexOf('rider')      > -1)                                         out.push('rider');
-      if (r.indexOf('provider')   > -1)                                         out.push('provider');
+      if (r.indexOf('provider')   > -1 || u.isProvider ||
+          (u.registeredAs && u.registeredAs.provider))                          out.push('provider');
       if (r.indexOf('seller')     > -1 || u.isSeller ||
           (u.registeredAs && u.registeredAs.seller))                            out.push('seller');
       out.push('buyer');
@@ -198,7 +205,7 @@
     { i:'🏠',  l:'Home',     h:'/' },
     { i:'🛍️', l:'Shop',     h:'category.html?cat=all' },
     { i:'🛠️', l:'Services', h:'services.html' },
-    { i:'📦',  l:'Orders',   h:'profile.html#orders' },
+    { i:'📦',  l:'Orders',   h:'my-orders.html' },
     { i:'👤',  l:'Profile',  h:'profile.html' }
   ];
 

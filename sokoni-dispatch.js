@@ -424,6 +424,17 @@
   /*
    * computeAnalyticsSummary(deliveries[]) → AnalyticsSummary
    */
+  /* Timestamp field → milliseconds. Accepts a Firestore Timestamp (new,
+     server-stamped docs), a millis number, or an ISO string (legacy) so the
+     avg-time math survives the mixed-type window; new Date(Timestamp) is NaN. */
+  function _tsMs(v) {
+    if (v == null) return 0;
+    if (typeof v.toMillis === 'function') return v.toMillis();
+    if (typeof v.toDate === 'function')   return v.toDate().getTime();
+    if (typeof v === 'number')            return v;
+    var t = Date.parse(v); return isNaN(t) ? 0 : t;
+  }
+
   function computeAnalyticsSummary(deliveries) {
     if (!deliveries || !deliveries.length) {
       return { count:0, successRate:0, avgTimeMin:0, totalRevenue:0, avgFee:0 };
@@ -431,7 +442,7 @@
     var total    = deliveries.length;
     var success  = deliveries.filter(function (d) { return d.status === 'delivered' || d.status === 'buyer_confirmed'; }).length;
     var times    = deliveries.filter(function (d) { return d.createdAt && d.deliveredAt; })
-                             .map(function (d) { return (new Date(d.deliveredAt) - new Date(d.createdAt)) / 60000; });
+                             .map(function (d) { return (_tsMs(d.deliveredAt) - _tsMs(d.createdAt)) / 60000; });
     var revenue  = deliveries.reduce(function (s, d) { return s + (d.deliveryFee || 0); }, 0);
     return {
       count:       total,

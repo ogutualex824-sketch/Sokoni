@@ -448,6 +448,10 @@ input:checked+.slider:before{transform:translateX(18px)}
 
       <div class="actions-row">
         <button class="btn btn-primary" id="btnPairP58E" onclick="pairP58E()">&#128268; Pair P58E Printer</button>
+        <!-- Shown only after a filtered scan finds nothing. Needs its own tap:
+             Chrome spends the user gesture on the first requestDevice(), so the
+             unfiltered chooser cannot be chained automatically. -->
+        <button class="btn btn-outline" id="btnPairAnyP58E" onclick="pairAnyP58E()" style="display:none">&#128269; Show all nearby devices</button>
         <button class="btn btn-danger"  id="btnForgetP58E" onclick="forgetP58E()" style="display:none">&#128465; Forget Printer</button>
         <button class="btn btn-outline" id="btnReconnectP58E" onclick="reconnectP58E()" style="display:none">&#8635; Reconnect</button>
       </div>
@@ -1677,9 +1681,21 @@ function renderP58EPanel () {
      added to sokoni-bluetooth-printer.js that delegates to the static method safely. */
   const compat = PrinterManager.p58e.checkCompatibility?.() || { supported: true, issues: [] };
   const notice = document.getElementById('p58eBrowserNotice');
-  if (!compat.supported) {
+  /* Warnings are shown even when the browser IS supported — they describe a
+     degraded-but-working setup (e.g. no silent reconnect on Chrome < 85), and
+     a merchant should know the chooser will keep appearing rather than think
+     pairing failed. They must never turn the card red. */
+  const warn = (compat.warnings || []);
+  if (compat.supported && warn.length) {
     notice.style.display = '';
-    document.getElementById('p58eCompatMsg').innerHTML = compat.issues.map(i => '&#9888; ' + _esc(i)).join('<br>');
+    notice.querySelector('.card-top').style.background = 'linear-gradient(90deg,var(--acc),#1a73e8)';
+    notice.querySelector('.card-title').style.color = 'var(--txt)';
+    notice.querySelector('.card-title').innerHTML = '&#8505; Works, with one limitation';
+    document.getElementById('p58eCompatMsg').innerHTML = warn.map(i => _esc(i)).join('<br>');
+  } else if (!compat.supported) {
+    notice.style.display = '';
+    document.getElementById('p58eCompatMsg').innerHTML =
+      compat.issues.concat(warn).map(i => '&#9888; ' + _esc(i)).join('<br>');
   } else {
     notice.style.display = 'none';
   }
@@ -1726,8 +1742,52 @@ function renderP58EPanel () {
 
 async function pairP58E () {
   const btn = document.getElementById('btnPairP58E');
-  btn.disabled = true; btn.textContent = 'Opening picker…';
+  btn.disabled = true;
   try {
+    /* Search → detect → connect, and only fall back to the picker if the
+       printer is not already known to this browser.
+
+       This used to jump straight to requestAndPair(), so a merchant who had
+       paired yesterday still got the chooser dialog every single time. Chrome
+       85+ exposes getDevices(), which lets autoConnect() re-attach to an
+       already-permitted printer with no dialog at all — so try that first and
+       the common case becomes one tap with nothing to select.
+
+       The picker cannot be skipped for a printer this browser has never seen:
+       Web Bluetooth requires a user gesture and a human choice for first
+       permission, by design. That is the one step no code can remove. */
+    btn.textContent = 'Searching for printer…';
+
+    /* BOUNDED. autoConnect() calls navigator.bluetooth.getDevices() and then a
+       GATT connect, and either can hang indefinitely on some Android builds —
+       no error, no rejection, just silence. Awaiting it unbounded parked the
+       button on "Searching for printer…" forever and the picker never opened,
+       which is strictly worse than the old behaviour of going straight to the
+       chooser.
+
+       A convenience shortcut must never be able to block the path that
+       actually works, so it gets 3 seconds and then we move on regardless. A
+       late resolution is ignored: `settled` guards against the picker and a
+       slow auto-connect both driving the UI. */
+    let settled = false;
+    const restored = await Promise.race([
+      PrinterManager.p58e.autoConnect().then(r => { settled = true; return r; })
+                                       .catch(() => { settled = true; return false; }),
+      new Promise(res => setTimeout(() => res(false), 3000)),
+    ]);
+    if (!settled) _dbg('autoConnect timed out after 3s — falling through to picker');
+
+    if (restored) {
+      const known = PrinterManager.p58e.info;
+      toast('Connected to ' + (known?.name || 'P58E') + ' — no pairing needed');
+      _connectedDevice = { name: known?.name, type: 'bluetooth' };
+      updateStatusBar();
+      renderP58EPanel();
+      renderChecklist();
+      return;
+    }
+
+    btn.textContent = 'Opening picker…';
     const info = await PrinterManager.p58e.requestAndPair();
     if (info) {
       toast('Connected to ' + info.name);
@@ -1739,9 +1799,43 @@ async function pairP58E () {
       toast('Pairing cancelled');
     }
   } catch(e) {
-    toast('Pairing failed: ' + e.message, 5000);
+    /* "Nothing found" is the single most common Android failure and it is NOT
+       the same as a real error: the printer is usually sitting there powered on,
+       just advertising a name that matches none of our prefixes. Offer the
+       unfiltered chooser instead of leaving the merchant at a dead end. */
+    const msg = String(e && e.message || e);
+    const notFound = e?.name === 'NotFoundError' || /no .*(device|printer).*found|not found/i.test(msg);
+    if (notFound) {
+      const anyBtn = document.getElementById('btnPairAnyP58E');
+      if (anyBtn) anyBtn.style.display = '';
+      toast('No matching printer found. Tap "Show all nearby devices" to pick it by name.', 8000);
+      _dbg('Filtered scan found nothing — offering unfiltered chooser');
+    } else {
+      toast('Pairing failed: ' + msg, 5000);
+    }
   } finally {
     btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer';
+  }
+}
+
+/* Unfiltered pairing — its own handler because it needs its own user gesture. */
+async function pairAnyP58E () {
+  const btn = document.getElementById('btnPairAnyP58E');
+  btn.disabled = true; btn.textContent = 'Opening full list…';
+  try {
+    const info = await PrinterManager.p58e.requestAndPairAny();
+    if (info) {
+      toast('Connected to ' + info.name);
+      _connectedDevice = { name: info.name, type: 'bluetooth' };
+      btn.style.display = 'none';
+      updateStatusBar(); renderP58EPanel(); renderChecklist();
+    } else {
+      toast('Pairing cancelled');
+    }
+  } catch(e) {
+    toast(String(e && e.message || e), 9000);
+  } finally {
+    btn.disabled = false; btn.innerHTML = '&#128269; Show all nearby devices';
   }
 }
 
@@ -2356,7 +2450,32 @@ loadConfig();
 updateStatusBar();
 renderP58EPanel();
 renderChecklist();
-PrinterManager.autoReconnect().then(ok => { if (ok) updateStatusBar(); });
+/* Silent reconnect on open — this is the "auto pair" half. A merchant who
+   paired once should find the printer already connected when the page loads,
+   with nothing to tap.
+
+   It only ever appeared broken: autoReconnect() delegates to
+   window.P58EPrinter.autoConnect(), and P58EPrinter was undefined on production
+   because of a duplicate top-level const (fixed 2026-07-26). The call returned
+   false every time, so no session has ever auto-reconnected.
+
+   The panel is re-rendered too, not just the status bar — otherwise a restored
+   connection still showed "Pair P58E Printer", which reads as "it did not
+   work". */
+/* Also bounded — same hang risk as the pair path. This one does not block a
+   button, but an unresolved promise means the panel never re-renders, so the
+   page would sit showing "Pair" while a connection was silently in progress. */
+Promise.race([
+  PrinterManager.autoReconnect().catch(() => false),
+  new Promise(res => setTimeout(() => res(false), 5000)),
+]).then(ok => {
+  if (!ok) return;
+  const known = PrinterManager.p58e?.info;
+  if (known) _connectedDevice = { name: known.name, type: 'bluetooth' };
+  updateStatusBar();
+  renderP58EPanel();
+  renderChecklist();
+}).catch(() => { /* no paired printer, or the browser lacks getDevices() */ });
 </script>
 </body>
 </html>

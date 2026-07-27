@@ -1128,9 +1128,22 @@ exports.hubGetAuditTrail = onCall({ secrets: [] }, async req => {
   const allTax        = [...sellerInvs, ...hubInvs].filter(i => ["accepted","pending_submission"].includes(i.status));
   const duplicateRisk = allTax.length > 1;
 
-  // Chronological timeline
+  // Chronological timeline.
+  // Normalise every `at` to an ISO string first. Order event times (confirmedAt,
+  // paidAt) and delivery.deliveredAt are now server Timestamps on new docs, and
+  // the sort below uses localeCompare + the value is returned raw to the client —
+  // a Timestamp object would coerce to "[object Object]" (ordering collapses and
+  // the client renders "[object Object]"). ISO strings sort chronologically with
+  // localeCompare and display correctly, matching legacy string docs.
+  const _tsIso = (v) => {
+    if (v == null) return null;
+    if (typeof v.toDate === 'function')   return v.toDate().toISOString();
+    if (typeof v.toMillis === 'function') return new Date(v.toMillis()).toISOString();
+    if (typeof v === 'number')            return new Date(v).toISOString();
+    return typeof v === 'string' ? v : null;
+  };
   const events = [];
-  const push = (at, event, type, extra = {}) => { if (at) events.push({ at, event, type, ...extra }); };
+  const push = (at, event, type, extra = {}) => { const iso = _tsIso(at); if (iso) events.push({ at: iso, event, type, ...extra }); };
   push(order.createdAt,   "Order placed",   "order");
   push(order.confirmedAt, "Order confirmed","order");
   push(order.paidAt,      "Payment received","order");

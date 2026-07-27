@@ -65,7 +65,13 @@ const BRANDS = Object.freeze({
 
   kass: Object.freeze({
     id:            'kass',
-    displayName:   'KASS Vapes',
+    /* Renamed with the merchant (2026-07-26). This is the customer-facing name
+       and it feeds `brandName` in documentBranding(), so leaving it as
+       "KASS Vapes" printed a different name on receipts than the storefront and
+       seller record show. The `domains` below are deliberately NOT renamed —
+       kassvapes.co.ke is live infrastructure and host->brand resolution depends
+       on it. */
+    displayName:   'KASS SHOP',
     tagline:       'Vape devices, pods and e-liquids',
     domains:       ['kassvapes.co.ke', 'www.kassvapes.co.ke'],
     logo:          '/assets/brands/kass-logo.png',

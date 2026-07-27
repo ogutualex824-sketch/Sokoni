@@ -240,7 +240,29 @@ exports.deviceLogoutAll = onCall({ region: 'us-central1' }, async (req) => {
   });
 
   if (count > 0) await batch.commit();
-  return { count };
+
+  /* Marking device docs inactive only signs out devices that are running the app
+     with a live watcher on their doc — a device with the app closed keeps its
+     Firebase session, which is why "sign out other devices" left devices signed in.
+     revokeRefreshTokens invalidates EVERY refresh token on the account, so every
+     other device is forced to re-authenticate on its next token refresh (≤1h, and
+     immediately if the app is open). That also revokes THIS device, so we mint a
+     fresh custom token — issued after the revocation instant, therefore still valid
+     — and return it; the caller signs in with it to stay logged in here. If the
+     token step fails we do not fail the whole op: the doc-marking above already
+     logged out the watching devices, so a partial success is still an improvement
+     over the previous behaviour, never a regression. */
+  let refreshToken = null;
+  let revoked = false;
+  try {
+    await admin.auth().revokeRefreshTokens(uid);
+    revoked = true;
+    refreshToken = await admin.auth().createCustomToken(uid);
+  } catch (e) {
+    console.error('[deviceLogoutAll] token revoke/mint failed:', e && e.message);
+  }
+
+  return { count, revoked, refreshToken };
 });
 
 /* ═══════════════════════════════════════════════════════════════

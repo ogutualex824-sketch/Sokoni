@@ -102,6 +102,8 @@ Related: [[CHANGELOG]] [[docs/ARCHITECTURE]] [[docs/SECURITY]]
 | Firebase Authentication (email, Google, phone) | v1.0 | ✅ Done |
 | Multi-vendor marketplace — seller & buyer flows | v1.0 | ✅ Done |
 | Product listings, categories, search | v1.0 | ✅ Done |
+| Product variants — capture (upload + edit forms) | v1.2 | ✅ Done |
+| Product variants — display, search, indexing, filters | v1.2 | ✅ Done |
 | Shopping cart & checkout | v1.0 | ✅ Done |
 | Order management | v1.0 | ✅ Done |
 | Reviews & ratings | v1.0 | ✅ Done |

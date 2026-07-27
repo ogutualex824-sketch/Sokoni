@@ -303,6 +303,11 @@ function showGateway(options){
           serviceDesc:   options.serviceDesc||"",
           category:      options.category||"default",
           commissionPct,
+          /* Booking linkage — the webhook uses these to create bookings/{ref} and
+             notify both parties on payment COMPLETE. */
+          type:          options.bookingType || undefined,
+          providerId:    options.providerId  || undefined,
+          providerPhone: options.providerPhone || undefined,
         });
 
         msgEl.textContent="📲 M-PESA prompt sent to "+phone+" — enter your PIN on your phone";
@@ -375,12 +380,15 @@ function waConnect(providerPhone, message, opts){
    BOOK NOW — for platform bookings (replace existing modals)
 ═══════════════════════════════════════════════════════════ */
 function bookNow(opts, callback){
-  /* Lightweight: just collect deposit, then fire callback */
+  /* Collect payment, then the webhook creates the booking + notifies both parties
+     server-side (so a closed wizard can't lose the booking). */
   showGateway({
     providerName:  opts.providerName  || "Provider",
     category:      opts.category      || "default",
     serviceDesc:   opts.serviceDesc   || "Service Booking",
     providerPhone: opts.providerPhone || "",
+    providerId:    opts.providerId    || "",
+    bookingType:   "booking",
     onSuccess: function(ref){ if(callback) callback(ref); }
   });
 }

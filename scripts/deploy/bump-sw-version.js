@@ -22,8 +22,6 @@ const now    = new Date();
 const pad    = n => String(n).padStart(2, "0");
 const stamp  = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}` +
                `${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}`;
-const newVer = `sokoni-${stamp}`;
-
 const content    = fs.readFileSync(SW_FILE, "utf8");
 const versionRe  = /const CACHE_VERSION\s*=\s*["']sokoni-[^"']+["']/;
 const match      = content.match(versionRe);
@@ -34,6 +32,26 @@ if (!match) {
 }
 
 const oldVer    = match[0].match(/["']([^"']+)["']/)[1];
+
+/* The version must satisfy TWO contracts at once, and emitting only the
+   timestamp broke the second one — blocking every hosting deploy:
+
+     1. Unique per deploy, so each release gets a fresh cache.  -> the timestamp
+     2. Ends in "-vNN", monotonically increasing.               -> the counter
+
+   scripts/test-navigation.js asserts (2) and compares NN against the version a
+   specific fix landed in, which is how the gate proves users actually receive a
+   corrected worker rather than merely a different one. A bare timestamp is
+   unique but not comparable, so that check could never pass and
+   test-inventory --gate failed the whole deploy.
+
+   Counter derivation: continue from the existing "-vNN" when present, else
+   resume above the highest version already shipped (v115, deployed 2026-07-26)
+   so the sequence never goes backwards after the timestamp-only interlude. */
+const LAST_SHIPPED_V = 115;
+const prevN  = (/-v(\d+)\s*$/.exec(oldVer) || [])[1];
+const nextN  = Math.max(Number(prevN) || 0, LAST_SHIPPED_V) + 1;
+const newVer = `sokoni-${stamp}-v${nextN}`;
 const updated   = content.replace(versionRe, `const CACHE_VERSION = "${newVer}"`);
 
 fs.writeFileSync(SW_FILE, updated, "utf8");

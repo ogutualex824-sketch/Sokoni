@@ -33,6 +33,7 @@ const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
 
 const { AlgoliaClient, COLLECTION_INDEX_MAP, buildPartialUpdate, _chunk } = require('./algolia-indexer');
+const { sanitizeRecord } = require('./algolia-sanitize');
 
 const ALGOLIA_ADMIN_KEY = defineSecret('ALGOLIA_ADMIN_KEY');
 
@@ -223,6 +224,53 @@ const processAlgoliaQueue = onSchedule(
 
 /* ── Process a single group of (indexName, operation) items ─────────── */
 
+/**
+ * Send a set of {item, obj} tuples, isolating failures.
+ *
+ * Algolia fails a batch call as a unit, so the previous code marked EVERY item
+ * in the group failed when one record was rejected — and on retry the same bad
+ * record failed them all again, until the whole set reached the DLQ. One
+ * malformed document could therefore stop indexing for an unbounded number of
+ * unrelated products, which is exactly what happened on 2026-07-24.
+ *
+ * Now a rejected chunk is retried one record at a time. The offender is the
+ * only item marked failed; everything else indexes normally and the queue
+ * continues. Costs one extra round trip per record only in the rare failing
+ * chunk — the happy path is unchanged.
+ */
+async function _flushIsolating(algolia, db, indexName, tuples, send, label) {
+  for (const chunk of _chunk(tuples, ALGOLIA_BATCH)) {
+    try {
+      await send(indexName, chunk.map(t => t.obj));
+      for (const { item } of chunk) await _markDone(db, item.queueId);
+      continue;
+    } catch (err) {
+      console.error(
+        `[AlgoliaQueue] ${label} batch of ${chunk.length} rejected (${err.message}) — ` +
+        'retrying individually so one bad record cannot block the rest'
+      );
+    }
+    let recovered = 0;
+    for (const t of chunk) {
+      try {
+        await send(indexName, [t.obj]);
+        await _markDone(db, t.item.queueId);
+        recovered++;
+      } catch (e2) {
+        console.error(
+          `[AlgoliaQueue] ${label} FAILED objectID=${t.obj && t.obj.objectID} ` +
+          `(${t.item.collection}/${t.item.docId}) — ${e2.message}`
+        );
+        await _handleFailure(db, t.item, e2.message);
+      }
+    }
+    console.warn(
+      `[AlgoliaQueue] ${label} isolation: ${recovered}/${chunk.length} recovered, ` +
+      `${chunk.length - recovered} isolated`
+    );
+  }
+}
+
 async function _processGroup(algolia, db, groupKey, entries) {
   const [indexName, operation] = groupKey.split(':');
 
@@ -251,6 +299,40 @@ async function _processGroup(algolia, db, groupKey, entries) {
     }
   }
 
+  /* ── Sanitise before batching ──────────────────────────────────────────
+     Algolia rejects the WHOLE batch when one record is over 10,000 bytes, so a
+     single malformed document used to stall indexing for every product queued
+     beside it — observed 2026-07-24, 26+ consecutive upserts failing on one
+     product carrying a 195KB base64 image.
+
+     Every record is now sanitised with the same helpers the backfill uses, and
+     anything still oversized is failed INDIVIDUALLY here rather than being
+     allowed into a shared batch. A malformed document degrades itself, never
+     its neighbours. */
+  const batchable = [];
+  for (const t of transformed) {
+    const clean = sanitizeRecord(t.obj);
+    if (clean.actions.length) {
+      console.warn(
+        `[AlgoliaQueue] sanitised objectID=${t.obj.objectID} ` +
+        `(${t.item.collection}/${t.item.docId}) → ${clean.bytes} bytes: ${clean.actions.join('; ')}`
+      );
+    }
+    if (!clean.ok) {
+      console.error(
+        `[AlgoliaQueue] OVERSIZED objectID=${t.obj.objectID} ` +
+        `(${t.item.collection}/${t.item.docId}) — ${clean.reason}. ` +
+        'Isolated; the rest of the batch is unaffected.'
+      );
+      await _handleFailure(db, t.item, `oversized record: ${clean.reason}`);
+      continue;
+    }
+    t.obj = clean.record;
+    batchable.push(t);
+  }
+  transformed.length = 0;
+  transformed.push(...batchable);
+
   /* Batch delete */
   if (toDelete.length > 0) {
     try {
@@ -270,27 +352,15 @@ async function _processGroup(algolia, db, groupKey, entries) {
   /* Batch upsert (full) */
   const fullUpserts = transformed.filter(t => !t.isPartial);
   if (fullUpserts.length > 0) {
-    try {
-      for (const chunk of _chunk(fullUpserts.map(t => t.obj), ALGOLIA_BATCH)) {
-        await algolia.saveObjects(indexName, chunk);
-      }
-      for (const { item } of fullUpserts) await _markDone(db, item.queueId);
-    } catch (err) {
-      for (const { item } of fullUpserts) await _handleFailure(db, item, err.message);
-    }
+    await _flushIsolating(algolia, db, indexName, fullUpserts,
+      (idx, objs) => algolia.saveObjects(idx, objs), 'upsert');
   }
 
   /* Batch partial update */
   const partials = transformed.filter(t => t.isPartial);
   if (partials.length > 0) {
-    try {
-      for (const chunk of _chunk(partials.map(t => t.obj), ALGOLIA_BATCH)) {
-        await algolia.partialUpdateObjects(indexName, chunk);
-      }
-      for (const { item } of partials) await _markDone(db, item.queueId);
-    } catch (err) {
-      for (const { item } of partials) await _handleFailure(db, item, err.message);
-    }
+    await _flushIsolating(algolia, db, indexName, partials,
+      (idx, objs) => algolia.partialUpdateObjects(idx, objs), 'partial');
   }
 
   /* Handle re-queued items (changed while processing) */

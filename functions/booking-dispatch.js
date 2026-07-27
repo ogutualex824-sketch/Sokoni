@@ -15,6 +15,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const booking      = require('./booking');
 const venueBooking = require('./venue-booking');
 const availability = require('./availability');
+const waitlist     = require('./booking-waitlist');
 
 function _merge() {
   const seen = {}, result = {};
@@ -26,7 +27,7 @@ function _merge() {
   }
   return result;
 }
-const _H = _merge( booking._h, venueBooking._h, availability._h);
+const _H = _merge( booking._h, venueBooking._h, availability._h, waitlist._h);
 
 const _OPTS = {
   region:          'us-central1',

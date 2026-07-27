@@ -51,16 +51,31 @@
   inset: 0;
   z-index: var(--sk-d-bkdp-z);
   background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* NO backdrop-filter here — see .is-active below.
+     WebKit composites backdrop-filter EVEN AT OPACITY 0. This element is
+     injected on EVERY page (shared-header.js loads this file), is
+     position:fixed inset:0, and sits at opacity:0 whenever the drawer is
+     closed — i.e. almost always. With the blur applied unconditionally it
+     rendered a full-screen frosted sheet over the whole app on iOS Safari:
+     content visible but greyed and blurred behind glass, with no modal on it
+     to explain why. Reported on the wallet page; it was never wallet-specific.
+     The same finding is recorded in security.js for the privacy scrim. */
   opacity: 0;
-  transition: opacity var(--sk-d-dur) ease;
+  visibility: hidden;
+  transition: opacity var(--sk-d-dur) ease, visibility 0s linear var(--sk-d-dur);
   pointer-events: none;
   will-change: opacity;
 }
 #sk-drawer-backdrop.is-active {
   opacity: 1;
+  visibility: visible;
   pointer-events: auto;
+  /* Blur applied ONLY while the drawer is open. A filter that is never applied
+     cannot be composited, which is the only reliable guard against the WebKit
+     behaviour above. */
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  transition: opacity var(--sk-d-dur) ease, visibility 0s;
 }
 
 /* ── Drawer shell — slides in from the right ───────────────── */

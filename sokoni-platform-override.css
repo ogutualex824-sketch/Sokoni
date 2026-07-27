@@ -200,8 +200,27 @@ p { color: var(--text2); line-height: 1.6; }
   border: 1px solid var(--border) !important;
 }
 
-/* Modal / dialog backgrounds */
-.modal-content, .dialog, [class*="-modal"], [class*="-dialog"] {
+/* The `hidden` HTML attribute must always hide. Many modal overlays hide
+   themselves with `hidden` (e.g. <div class="ms-modal-overlay" hidden>), but a
+   base rule like `.ms-modal-overlay{display:flex}` is an AUTHOR style and so
+   overrides the user-agent `[hidden]{display:none}` — leaving the "hidden"
+   overlay at display:flex, covering the whole page (minishop, inv-products and
+   other pages went dark/black exactly this way). !important restores the
+   attribute's meaning platform-wide; pages that open the modal remove the
+   attribute (this.hidden=false), which is unaffected. */
+[hidden] { display: none !important; }
+
+/* Modal / dialog CONTENT boxes — NOT the full-screen overlays/backdrops.
+   The [class*="-modal"] wildcard used to also match overlay elements
+   (.b2-modal-ov, *-modal-overlay, *-modal-backdrop, …) and forced an OPAQUE
+   surface background onto them. An overlay is a see-through backdrop; making it
+   opaque turned it into a solid sheet that painted over the whole page (the
+   "B2B page is black" bug — and a latent trap on ~20 pages with the same
+   overlay naming). The :not() guards keep content boxes styled while leaving
+   overlays/backdrops with their own (transparent/scrim) background. */
+.modal-content, .dialog,
+[class*="-modal"]:not([class*="overlay"]):not([class*="backdrop"]):not([class*="modal-ov"]):not([class*="dialog-ov"]),
+[class*="-dialog"]:not([class*="overlay"]):not([class*="backdrop"]):not([class*="modal-ov"]):not([class*="dialog-ov"]) {
   background: var(--surf) !important;
   border: 1px solid var(--border2) !important;
   color: var(--text) !important;

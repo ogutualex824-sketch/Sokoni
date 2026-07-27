@@ -10,6 +10,10 @@ if (!admin.apps.length) admin.initializeApp();
 const db   = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
 
+/* Unified pricing — one calculator for the whole engine. normalize() accepts
+   legacy OR canonical, so this prices existing (un-migrated) venues correctly. */
+const { normalize: _normalizePricing, compute: _computePricing } = require('./pricing-schema');
+
 exports._h = {}; // handler registry — consumed by booking-dispatch.js
 
 /* ─── Helpers ───────────────────────────────────────────── */
@@ -27,40 +31,48 @@ function _authRequired(req) {
   return req.auth.uid;
 }
 
+/* ── Per-(customer, venue) active-booking counter ─────────────────────────────
+   Makes `maxBookingsPerCustomer` burst-safe. The prefetch count alone is
+   optimistic — a concurrent burst of creates for different slots can all read the
+   same stale count and slip past the cap. The authoritative check + increment now
+   happen INSIDE bookingCreate's transaction against this single counter doc, so
+   concurrent creates by one customer serialize on it (Firestore optimistic
+   concurrency retries the loser). Only touched when the venue sets a cap
+   (maxBookingsPerCustomer > 0) — zero overhead for everyone else. Decremented,
+   clamped at ≥ 0, whenever a booking leaves the active {pending,confirmed,active}
+   set (cancel / reject / check-out / auto-complete). */
+function _custCounterRef(venueId, customerId) {
+  return db.collection('venues').doc(venueId).collection('customerCounters').doc(String(customerId));
+}
+async function _decrCustomerCounter(venueId, customerId) {
+  if (!venueId || !customerId) return;
+  const ref = _custCounterRef(venueId, customerId);
+  try {
+    await db.runTransaction(async txn => {
+      const s = await txn.get(ref);
+      if (!s.exists) return; /* nothing counted (venue had no cap when created) */
+      const cur = Number(s.data().active || 0);
+      txn.set(ref, { active: Math.max(0, cur - 1), updatedAt: Date.now() }, { merge: true });
+    });
+  } catch (e) { console.warn('[booking] customer counter decrement:', e.message); }
+}
+
 /* ── Pricing (mirrors client engine) ─────────────────────── */
+/* Delegates to the unified calculator (functions/pricing-schema.js). Kept as a
+   thin adapter so the single call site (bookingCreate) is unchanged. normalize()
+   handles legacy AND canonical venue.pricing, so existing venues price identically
+   (proven byte-for-byte by scripts/test-pricing-schema.js). The returned breakdown
+   is the canonical shape { base, peakSurcharge, holidaySurcharge, addOns, subtotal,
+   memberDiscount, total, deposit, currency, duration } — bookingCreate reads .total
+   for its server-authoritative payment check. */
 function _calculatePrice(venue, startMins, endMins, dateStr, opts={}) {
-  const p = venue.pricing || {};
-  const duration = endMins - startMins;
-  if (duration <= 0) return { base:0, surcharge:0, discount:0, addOns:0, deposit:p.deposit||0, total:p.deposit||0 };
-
-  let base = 0;
-  const HALF=240, FULL=480;
-  if (duration >= FULL && p.fullDay) {
-    base = p.fullDay * Math.ceil(duration/FULL);
-  } else if (duration >= HALF && p.halfDay) {
-    base = p.halfDay;
-  } else {
-    base = (p.hourly||0) * (duration/60);
-  }
-
-  const dow = _dayOfWeek(dateStr);
-  let surcharge = 0;
-  if ((dow==='sat'||dow==='sun') && p.weekend) surcharge += p.weekend;
-
-  for (const [ps,pe] of (p.peak?.hours||[])) {
-    const psM=ps*60, peM=pe*60;
-    const ol = Math.max(0,Math.min(endMins,peM)-Math.max(startMins,psM));
-    if (ol>0 && p.peak?.rate) surcharge += (p.peak.rate-(p.hourly||0))*(ol/60);
-  }
-  if (opts.isHoliday && p.holiday) surcharge += p.holiday;
-
-  let discount=0;
-  if (opts.isMember && p.member?.discount) discount=(base+surcharge)*p.member.discount;
-  if (opts.promoDiscount) discount+=(base+surcharge)*opts.promoDiscount;
-
-  const addOns=(opts.addOns||[]).reduce((t,a)=>t+(a.price||0),0);
-  const subtotal=base+surcharge-discount+addOns;
-  return { base, surcharge, discount, addOns, subtotal, deposit:p.deposit||0, total:subtotal+(p.deposit||0), duration };
+  return _computePricing(_normalizePricing(venue.pricing), {
+    startMins, endMins, dateStr,
+    isMember:  !!opts.isMember,
+    isHoliday: !!opts.isHoliday,
+    addOns:    opts.addOns || [],
+    promoPct:  opts.promoDiscount || 0,
+  });
 }
 
 /* ── Check for booking overlap ───────────────────────────── */
@@ -222,7 +234,9 @@ exports.bookingGetAvailability = onCall(
     const openM  = _timeToMins(hours.open  || '08:00');
     const closeM = _timeToMins(hours.close || '22:00');
     const buffer = venue.config?.cleaningBuffer || 0;
-    const step   = 30;
+    /* Slot length = the venue's configured duration (fall back to 30) so a
+       displayed slot's length matches the booking the client then creates. */
+    const step   = Math.max(15, Number(venue.slotDurationMins || venue.config?.slotDuration || 30));
 
     const blocked = [...existingBookings, ...holds].map(b => [_timeToMins(b.startTime), _timeToMins(b.endTime)+buffer]);
 
@@ -235,12 +249,13 @@ exports.bookingGetAvailability = onCall(
       if (date === today && s <= nowM+15) continue;
       const overlap = blocked.some(([bs,be])=> s<be && s+step>bs);
       slots.push({
-        id:        `${date}_${_minsToTime(s)}`,
-        startTime: _minsToTime(s),
-        endTime:   _minsToTime(s+step),
-        startMins: s,
-        endMins:   s+step,
-        available: !overlap,
+        id:          `${date}_${_minsToTime(s)}`,
+        startTime:   _minsToTime(s),
+        endTime:     _minsToTime(s+step),
+        startMins:   s,
+        endMins:     s+step,
+        durationMins: step,
+        available:   !overlap,
       });
     }
 
@@ -266,18 +281,25 @@ exports.bookingHoldSlot = onCall(
     if (!venueId || !startTs || !endTs) throw new HttpsError('invalid-argument','venueId, startTs, endTs required');
     if (endTs <= startTs) throw new HttpsError('invalid-argument','endTs must be after startTs');
 
+    /* Provider buffer (default 0 = no change) so a hold reserves the same
+       [start-bufferBefore, end+bufferAfter] window that bookingCreate enforces. */
+    const _hv = (await db.collection('venues').doc(venueId).get()).data() || {};
+    const bufBeforeMs = Math.max(0, Number(_hv.bufferBeforeMins || 0)) * 60000;
+    const bufAfterMs  = Math.max(0, Number(_hv.bufferAfterMins  || 0)) * 60000;
+
     /* Atomic: check + write in transaction */
     const held = await db.runTransaction(async txn => {
-      /* Check for overlap */
+      /* Check for overlap (buffer-aware; widen the endTs pre-filter so a booking
+         ending within the buffer window is still caught). */
       const bSnap = await db.collection('bookings')
         .where('venueId','==',venueId)
-        .where('endTs','>',startTs)
+        .where('endTs','>', startTs - bufBeforeMs - bufAfterMs)
         .where('status','in',['pending','confirmed','active'])
         .get();
 
       for (const doc of bSnap.docs) {
         const b = doc.data();
-        if (b.startTs < endTs && b.endTs > startTs) return false;
+        if ((startTs - bufBeforeMs) < (b.endTs + bufAfterMs) && (endTs + bufAfterMs) > (b.startTs - bufBeforeMs)) return false;
       }
 
       /* Check existing holds */
@@ -424,6 +446,25 @@ exports.bookingCreate = onCall(
       .get();
     const existingBookings = existingSnap.docs.map(d => d.data());
 
+    /* ── Phase-1: provider buffer + per-customer cap (both default 0 = no change).
+       Buffer expands the reserved window to [start-before, end+after] so back-to-
+       back bookings leave setup/cleanup time. Per-customer cap counts this
+       customer's active (pending/confirmed/active) bookings at this venue and
+       rejects once the limit is reached. Prefetched like the capacity check
+       (optimistic; the slot-lock CAS below still prevents same-slot double-book). */
+    const bufBeforeMs = Math.max(0, Number(venue.bufferBeforeMins || 0)) * 60000;
+    const bufAfterMs  = Math.max(0, Number(venue.bufferAfterMins  || 0)) * 60000;
+    const maxPerCustomer = Math.max(0, Number(venue.maxBookingsPerCustomer || 0));
+    let customerActiveCount = 0;
+    if (maxPerCustomer > 0) {
+      const custSnap = await db.collection('bookings')
+        .where('venueId', '==', venueId)
+        .where('customerId', '==', uid)
+        .where('status', 'in', ['pending', 'confirmed', 'active'])
+        .get();
+      customerActiveCount = custSnap.size;
+    }
+
     const requiresApproval = venue.config?.approvalRequired || false;
     const bookingId = _uid();
 
@@ -432,6 +473,10 @@ exports.bookingCreate = onCall(
        requests for the identical slot from both committing. */
     const slotKey    = `${date}_${startTs}_${endTs}`;
     const slotLockRef = db.collection('venues').doc(venueId).collection('slotLocks').doc(slotKey);
+
+    /* Authoritative per-customer cap: counter doc read + incremented inside the
+       transaction below (only when the venue sets a cap). */
+    const counterRef = maxPerCustomer > 0 ? _custCounterRef(venueId, uid) : null;
 
     /* Idempotency record keyed by client-supplied key (document lookup — tx-safe) */
     const idemRef = idempotencyKey
@@ -442,10 +487,12 @@ exports.bookingCreate = onCall(
     let replayData  = null;
     let isConflict  = false;
     let conflictCode = 'already-exists';
+    let counterExisted = false;   /* whether the per-customer counter doc pre-existed */
+    let counterSeed    = 0;       /* real count to seed the counter with on first write */
 
     await db.runTransaction(async txn => {
       /* Reset per-attempt so transaction retries start clean */
-      isReplay = false; isConflict = false;
+      isReplay = false; isConflict = false; counterExisted = false; counterSeed = 0;
 
       /* ── 1. Idempotency guard (atomic document read) ───────────────────────
          Two concurrent requests with the same key: one commits, the other
@@ -485,8 +532,27 @@ exports.bookingCreate = onCall(
         }
       }
 
-      /* ── 4. Overlap check (against pre-fetched snapshot) ──────────────────  */
-      const hasOverlap = existingBookings.some(b => b.startTs < endTs && b.endTs > startTs);
+      /* ── 3b. Per-customer active-booking cap (0 = unlimited). The counter is read
+             INSIDE the txn so concurrent creates by one customer serialize on this
+             single doc (the prefetched `customerActiveCount` alone is optimistic and
+             a burst can slip past it). If no counter exists yet — the venue just
+             enabled the cap — fall back to the prefetched real count and seed. ──  */
+      if (maxPerCustomer > 0) {
+        const cSnap = await txn.get(counterRef);
+        counterExisted = cSnap.exists;
+        counterSeed    = cSnap.exists ? Number(cSnap.data().active || 0) : customerActiveCount;
+        if (counterSeed >= maxPerCustomer) {
+          isConflict   = true;
+          conflictCode = 'failed-precondition';
+          return;
+        }
+      }
+
+      /* ── 4. Overlap check (against pre-fetched snapshot; includes the provider
+             buffer so a booking reserves [start-bufferBefore, end+bufferAfter]) ─  */
+      const hasOverlap = existingBookings.some(b =>
+        (startTs - bufBeforeMs) < (b.endTs + bufAfterMs) &&
+        (endTs   + bufAfterMs)  > (b.startTs - bufBeforeMs));
       if (hasOverlap) {
         isConflict   = true;
         conflictCode = 'already-exists';
@@ -542,6 +608,15 @@ exports.bookingCreate = onCall(
       /* Slot lock — prevents same-slot concurrent write from committing */
       txn.set(slotLockRef, { bookingId, uid, venueId, date, startTime, endTime, createdAt: Date.now() });
 
+      /* Per-customer counter — atomic increment (seed from the real count the first
+         time, then increment). Same transaction → burst-safe against the cap. */
+      if (counterRef) {
+        txn.set(counterRef, {
+          active:    counterExisted ? FieldValue.increment(1) : (counterSeed + 1),
+          updatedAt: Date.now(),
+        }, { merge: true });
+      }
+
       /* Venue booking counter */
       txn.update(db.collection('venues').doc(venueId), {
         totalBookings: FieldValue.increment(1),
@@ -558,7 +633,9 @@ exports.bookingCreate = onCall(
     if (isReplay)   return { bookingId: replayData.bookingId, idempotent: true };
     if (isConflict) throw new HttpsError(
       conflictCode,
-      conflictCode === 'resource-exhausted' ? 'Venue is fully booked for this time' : 'Slot is no longer available'
+      conflictCode === 'resource-exhausted'  ? 'Venue is fully booked for this time'
+      : conflictCode === 'failed-precondition' ? 'You have reached the maximum number of active bookings with this provider'
+      : 'Slot is no longer available'
     );
 
     /* Send confirmation notification */
@@ -643,6 +720,23 @@ exports.bookingCancel = onCall(
         data:  { bookingId }, priority: 'high', category: 'bookings', read: false, createdAt: Date.now(),
       });
     }
+
+    /* Phase 2 (booking Phase 2): release the slot lock so the freed slot is
+       bookable again. bookingCreate's slot-lock CAS otherwise keeps a cancelled
+       slot permanently unbookable — a latent bug, and a blocker for the waitlist.
+       Then offer the slot to the next waitlisted customer (no-op if the venue has
+       no waitlist / the queue is empty). Both best-effort — must not fail cancel. */
+    try {
+      await db.collection('venues').doc(booking.venueId).collection('slotLocks')
+        .doc(`${booking.date}_${booking.startTs}_${booking.endTs}`).delete();
+    } catch (e) { console.warn('[booking] slotLock release on cancel:', e.message); }
+    try {
+      await require('./booking-waitlist').offerNextWaitlist(booking.venueId, {
+        date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
+      });
+    } catch (e) { console.warn('[booking] waitlist offer on cancel:', e.message); }
+    /* Booking left the active set → release its slot in the per-customer cap. */
+    await _decrCustomerCounter(booking.venueId, booking.customerId);
 
     return { cancelled: true, cancellationFee: fee };
   }
@@ -735,6 +829,8 @@ exports.bookingCheckOut = onCall(
       checkOut:  { time: time || Date.now(), by: uid },
       updatedAt: Date.now(),
     });
+    /* Completed → leaves the active set → release its slot in the per-customer cap. */
+    await _decrCustomerCounter(booking.venueId, booking.customerId);
     return { checkedOut: true };
   }
 );
@@ -902,9 +998,102 @@ exports.bookingReject = onCall(
       body:  _sanitize(reason || 'Your booking was declined by the venue.'),
       data:  { bookingId }, priority: 'high', category: 'bookings', read: false, createdAt: Date.now(),
     });
+    /* A rejected booking frees the slot exactly like a cancellation — release the
+       lock (else it stays permanently unbookable), offer the waitlist, and release
+       the per-customer cap slot. All best-effort. */
+    try {
+      await db.collection('venues').doc(booking.venueId).collection('slotLocks')
+        .doc(`${booking.date}_${booking.startTs}_${booking.endTs}`).delete();
+    } catch (e) { console.warn('[booking] slotLock release on reject:', e.message); }
+    try {
+      await require('./booking-waitlist').offerNextWaitlist(booking.venueId, {
+        date: booking.date, startTs: booking.startTs, endTs: booking.endTs,
+      });
+    } catch (e) { console.warn('[booking] waitlist offer on reject:', e.message); }
+    await _decrCustomerCounter(booking.venueId, booking.customerId);
     return { rejected: true };
   }
 );
+
+/* ═══════════════════════════════════════════════════════════
+   Convergence Step 1 — parity ops so the whole venue lifecycle
+   runs on this core: price quote, no-show, owner stats.
+   Dispatcher-only (registered on _h; served via bookingDispatch).
+═══════════════════════════════════════════════════════════ */
+
+/* Server price quote — the ONE calculator, shown before create so the quoted
+   price equals the price bookingCreate later verifies payment against. */
+exports._h.bookingQuotePrice = async (req) => {
+  const d = req.data || {};
+  const { venueId, date, startTime } = d;
+  if (!venueId || !date || !startTime) throw new HttpsError('invalid-argument','venueId, date, startTime required');
+  const durationMins = Number(d.durationMins) || (d.endTime ? (_timeToMins(d.endTime) - _timeToMins(startTime)) : 60);
+  if (!(durationMins > 0)) throw new HttpsError('invalid-argument','duration must be positive');
+  const venueSnap = await db.collection('venues').doc(venueId).get();
+  if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
+  const startMins = _timeToMins(startTime);
+  return _calculatePrice(venueSnap.data(), startMins, startMins + durationMins, date, {
+    isMember: !!d.isMember, addOns: d.addOns || [],
+  });
+};
+
+/* Owner marks a booking as no-show → terminal state + no-show fee. Releases the
+   per-customer cap slot. Does NOT re-offer the slot (its time has already passed,
+   unlike a cancellation), and does not touch the slot lock for the same reason. */
+exports._h.bookingMarkNoShow = async (req) => {
+  const uid = _authRequired(req);
+  const { bookingId, reason } = req.data || {};
+  if (!bookingId) throw new HttpsError('invalid-argument','bookingId required');
+  const ref = db.collection('bookings').doc(bookingId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found','Booking not found');
+  const booking = snap.data();
+  const venueSnap = await db.collection('venues').doc(booking.venueId).get();
+  const venue = venueSnap.exists ? venueSnap.data() : {};
+  if (booking.ownerId !== uid && venue.ownerId !== uid && !req.auth?.token?.admin) {
+    throw new HttpsError('permission-denied','Only the venue owner can mark a no-show');
+  }
+  if (['cancelled','completed','no_show'].includes(booking.status)) {
+    throw new HttpsError('failed-precondition', `Booking is already ${booking.status}`);
+  }
+  const pctRaw = venue.pricing?.cancellationPolicy?.noShowFeePercent;
+  const pct = Number.isFinite(Number(pctRaw)) ? Number(pctRaw) : 100;
+  const noShowFee = Math.round((booking.pricingBreakdown?.total || 0) * pct / 100 * 100) / 100;
+  await ref.update({
+    status: 'no_show', noShowAt: Date.now(), noShowBy: uid,
+    noShowFee, noShowReason: _sanitize(reason || ''), updatedAt: Date.now(),
+  });
+  await _decrCustomerCounter(booking.venueId, booking.customerId);
+  return { noShow: true, noShowFee };
+};
+
+/* Owner booking stats over the last 30 days (top-level bookings). Mirrors the
+   venue-booking.js venueGetStats output so existing reporting is unchanged. */
+exports._h.bookingGetStats = async (req) => {
+  const uid = _authRequired(req);
+  const { venueId } = req.data || {};
+  if (!venueId) throw new HttpsError('invalid-argument','venueId required');
+  const venueSnap = await db.collection('venues').doc(venueId).get();
+  if (!venueSnap.exists) throw new HttpsError('not-found','Venue not found');
+  if (venueSnap.data().ownerId !== uid && !req.auth?.token?.admin) {
+    throw new HttpsError('permission-denied','Not the venue owner');
+  }
+  const from = Date.now() - 30 * 86400000;
+  const snap = await db.collection('bookings')
+    .where('venueId', '==', venueId).where('startTs', '>=', from).limit(2000).get();
+  const all = snap.docs.map(d => d.data());
+  const TERMINAL = new Set(['cancelled', 'completed', 'no_show']);
+  const active    = all.filter(b => !TERMINAL.has(b.status));
+  const cancelled = all.filter(b => b.status === 'cancelled').length;
+  const noShows   = all.filter(b => b.status === 'no_show').length;
+  const totalRevenue  = Math.round(active.reduce((s, b) => s + (b.pricingBreakdown?.total || 0), 0) * 100) / 100;
+  const totalBookings = active.length;
+  const avgValue  = totalBookings > 0 ? Math.round(totalRevenue / totalBookings * 100) / 100 : 0;
+  const cancelRate = all.length > 0 ? Math.round(cancelled / all.length * 100) : 0;
+  const hourMap = {};
+  active.forEach(b => { const h = (b.startTime || '').split(':')[0]; if (h) hourMap[h] = (hourMap[h] || 0) + 1; });
+  return { totalRevenue, totalBookings, avgValue, cancelRate, noShows, cancelled, hourMap };
+};
 
 /* ═══════════════════════════════════════════════════════════
    16. SCHEDULED — Send Booking Reminders (every 30 minutes)
@@ -957,6 +1146,12 @@ exports.bookingCleanupHolds = functions.scheduler.onSchedule(
   { schedule: 'every 5 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1' },
   async () => {
     const snap = await db.collection('bookingHolds').where('expiresAt', '<', Date.now()).get();
+    const expired = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    /* Phase 2: any expired hold that was a waitlist OFFER must expire its waitlist
+       entry and re-offer the slot to the next person BEFORE we delete the hold
+       (reap ignores the expired hold since it filters expiresAt > now anyway). */
+    try { await require('./booking-waitlist').reapExpiredOffers(expired); }
+    catch (e) { console.warn('[booking] waitlist reap on cleanup:', e.message); }
     const batch = db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
     if (!snap.empty) await batch.commit();
@@ -978,6 +1173,12 @@ exports.bookingAutoComplete = functions.scheduler.onSchedule(
     const batch = db.batch();
     snap.docs.forEach(d => batch.update(d.ref, { status: 'completed', autoCompletedAt: Date.now() }));
     if (!snap.empty) await batch.commit();
+    /* Each auto-completed booking leaves the active set → release its per-customer
+       cap slot. Sequential + clamped ≥ 0; volume here is low (once daily). */
+    for (const d of snap.docs) {
+      const b = d.data();
+      await _decrCustomerCounter(b.venueId, b.customerId);
+    }
     return null;
   }
 );

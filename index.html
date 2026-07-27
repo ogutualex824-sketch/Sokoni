@@ -19,11 +19,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>SOKONI — Kenya's #1 Online Marketplace | Buy & Sell Products</title>
 
+  <!-- Crash Sentinel — FIRST script, before everything, so an "Aw, Snap!" (OOM) crash
+       during load still leaves a localStorage breadcrumb. Reported 2026-07-26: Android
+       accounts crash/reload. Read the captured reason on the phone at /android-doctor.
+       Self-contained, no dependencies, fails open. -->
+  <script src="sokoni-crash-sentinel.js"></script>
   <!-- Canonical root guard — verifies this really is the marketplace shell and self-heals
        if a different template ever renders at "/". Loads FIRST and synchronously so the
        check runs before the user can interact with a wrong page. Fails open. -->
   <script src="sokoni-root-guard.js"></script>
   <script src="security.js"></script>
+  <!-- Image rendering abstraction — loaded early so window.renderProductImage exists
+       before the deferred trending grid (script.js) and recommendations render. -->
+  <script src="sokoni-image.js"></script>
   <script src="splash.js"></script>
   <script>/* Capture ?ref=CODE from referral links — runs before any other JS */
   (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
@@ -183,7 +191,8 @@
     <div id="sk-nav-search-wrap" role="search">
       <span id="sk-nav-search-icon" aria-hidden="true">🔍</span>
       <input id="sk-nav-search" type="search" placeholder="Search products, services…"
-             autocomplete="off" aria-label="Search SOKONI"
+             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+             enterkeyhint="search" aria-label="Search SOKONI"
              onkeydown="if(event.key==='Enter'&&this.value.trim()){document.getElementById('sk-nav-search-dropdown').classList.remove('open');location.href='search.html?q='+encodeURIComponent(this.value.trim())}">
       <div id="sk-nav-search-dropdown" role="listbox" aria-label="Search suggestions"></div>
     </div>
@@ -243,7 +252,7 @@
   <!-- Negative margin pulls the hero behind the transparent floating nav.
        Extra padding-top inside ensures content clears the nav height. -->
   <section class="glass-hero" style="margin-top:-58px;padding-top:calc(58px + 24px);box-sizing:border-box;">
-    <div class="glass-hero-bg" style="position:absolute;inset:0;background:url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(0.82);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
+    <div class="glass-hero-bg" style="position:absolute;inset:0;background:linear-gradient(rgba(0,0,0,0.52),rgba(0,0,0,0.62)),url('assets/backG1.jpeg') center/cover no-repeat;filter:brightness(0.6);transform:scale(1.04);transition:transform 8s ease;pointer-events:none;z-index:0;"></div>
     <div class="glass-hero-card">
       <p class="glass-hero-badge" style="display:inline-flex;align-items:center;gap:6px;"><span style="font-size:20px;line-height:1;flex-shrink:0;">🇰🇪</span> Kenya's #1 Marketplace</p>
       <h1>Shop Smarter on <span class="hero-brand-gradient">SOKONI</span></h1>
@@ -1285,6 +1294,56 @@
     </div>
   </section>
 
+  <!-- ── FEATURED PROVIDERS ───────────────────────────────────────────────────
+       The homepage never queried the `providers` registry, so onboarding a
+       provider could not put them on the home page no matter what was written.
+       This strip reads the same registry as providers.html, the Cleaning hub
+       and global search. It hides itself when there is nothing to show, so an
+       empty registry leaves no gap — and it never renders placeholder people.
+  ──────────────────────────────────────────────────────────────────────────── -->
+  <section class="new-arrivals-section p9-reveal" id="featuredProvidersSection" style="display:none;">
+    <div class="section-title new-arrivals-title-row">
+      <div>
+        <h2>👷 Featured Providers</h2>
+        <p class="section-sub">Book verified professionals near you</p>
+      </div>
+      <a href="providers.html" class="see-all-link">All providers ›</a>
+    </div>
+    <div class="sk-featprov-scroll" id="featuredProvidersGrid" role="list" aria-label="Featured service providers"></div>
+  </section>
+  <style>
+    .sk-featprov-scroll {
+      display: flex; gap: 12px; overflow-x: auto; padding: 4px 2px 10px;
+      scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    }
+    .sk-featprov-scroll::-webkit-scrollbar { height: 0; }
+    .sk-featprov-card {
+      flex: 0 0 auto; width: 190px; scroll-snap-align: start;
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px; padding: 14px; text-decoration: none; color: inherit;
+      display: block; transition: border-color .2s;
+    }
+    .sk-featprov-card:hover { border-color: rgba(113,255,0,0.35); }
+    .sk-featprov-av {
+      width: 46px; height: 46px; border-radius: 12px; margin-bottom: 9px;
+      background: linear-gradient(135deg,#0d1a05,#1a2a0a);
+      border: 1px solid rgba(113,255,0,0.22); color: #71ff00;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 17px; font-weight: 800; object-fit: cover;
+    }
+    .sk-featprov-name {
+      font-size: 13.5px; font-weight: 800; color: #fff; margin-bottom: 3px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sk-featprov-cat { font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 7px; }
+    .sk-featprov-badge {
+      display: inline-block; font-size: 9.5px; font-weight: 800; padding: 3px 7px;
+      border-radius: 999px; background: rgba(113,255,0,0.1);
+      border: 1px solid rgba(113,255,0,0.28); color: #71ff00;
+    }
+    .sk-featprov-new { font-size: 10.5px; color: rgba(255,255,255,0.38); }
+  </style>
+
   <!-- SERVICES SECTION -->
   <section class="new-arrivals-section p9-reveal" id="servicesHomeSection">
     <div class="section-title new-arrivals-title-row">
@@ -1559,8 +1618,9 @@
     <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
       <button onclick="HubRegister.open()" style="padding:13px 28px;background:linear-gradient(135deg,#39ff14,#71ff00);border:none;border-radius:14px;color:#060b06;font-weight:900;font-size:14px;cursor:pointer;font-family:inherit;">🏢 Register My Business</button>
       <a href="onboarding-seller.html" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:14px;color:rgba(255,255,255,0.7);font-weight:800;font-size:14px;text-decoration:none;display:inline-block;">🛍️ Start Selling Products</a>
+      <a href="earnings.html" style="padding:13px 28px;background:rgba(255,255,255,0.06);border:1px solid rgba(113,255,0,0.25);border-radius:14px;color:#71ff00;font-weight:800;font-size:14px;text-decoration:none;display:inline-block;">💰 Pricing, Earnings &amp; Fees</a>
     </div>
-    <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.2);">100+ business categories · Free to join · Paid plans from KES 500/month</div>
+    <div style="margin-top:12px;font-size:11px;color:rgba(255,255,255,0.2);">100+ business categories · Free to join · <a href="earnings.html" style="color:rgba(113,255,0,0.55);text-decoration:none;">See all fees &amp; commissions →</a></div>
   </section>
 
   <!-- GET VERIFIED CTA -->
@@ -2035,7 +2095,10 @@
       cursor: pointer !important;
       transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease !important;
       contain: layout style !important;
-      will-change: transform !important;
+      /* will-change removed — see mobile.css. Every trending card was permanently
+         GPU-promoted; combined with the three stylesheet wildcards a homepage held
+         far more compositor layers than a mobile GPU can back, and scrolling
+         painted black. `contain` stays — it bounds work without forcing a layer. */
       position: relative !important;
     }
 
@@ -2392,8 +2455,8 @@
           <a href="https://facebook.com/mysokoni.ke" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
             <i class="fab fa-facebook-f"></i> @mysokoni.ke
           </a>
-          <a href="https://youtube.com/@SokoniKenya" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
-            <i class="fab fa-youtube"></i> @SokoniKenya
+          <a href="https://youtube.com/@mysokonike" target="_blank" rel="noopener noreferrer" class="social-handle-pill">
+            <i class="fab fa-youtube"></i> @mysokonike
           </a>
           <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer" class="social-handle-pill social-whatsapp">
             <i class="fab fa-whatsapp"></i> WhatsApp Us
@@ -2585,7 +2648,7 @@
           <a href="https://tiktok.com/@sokonike" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on TikTok">
             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M12.4 2.5c.3 1.7 1.4 2.9 3.1 3.1v2.5a5.6 5.6 0 0 1-3.1-1v4.8a4.7 4.7 0 1 1-4.7-4.7c.3 0 .5 0 .8.1v2.6a2.2 2.2 0 1 0 1.5 2.1V2.5h2.4Z"/></svg>
           </a>
-          <a href="https://youtube.com/@SokoniKenya" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on YouTube">
+          <a href="https://youtube.com/@mysokonike" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on YouTube">
             <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.2 6.2a2.2 2.2 0 0 0-1.5-1.5C15.3 4.3 10 4.3 10 4.3s-5.3 0-6.7.4A2.2 2.2 0 0 0 1.8 6.2 23 23 0 0 0 1.4 10c0 1.3.1 2.6.4 3.8a2.2 2.2 0 0 0 1.5 1.5c1.4.4 6.7.4 6.7.4s5.3 0 6.7-.4a2.2 2.2 0 0 0 1.5-1.5c.3-1.2.4-2.5.4-3.8s-.1-2.6-.4-3.8ZM8.4 12.4V7.6l4.2 2.4-4.2 2.4Z"/></svg>
           </a>
           <a href="https://wa.me/254705726803" target="_blank" rel="noopener noreferrer me" aria-label="SOKONI on WhatsApp">
@@ -2686,7 +2749,7 @@
     <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
     <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
     <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-    <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+    <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
     <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
   </nav>
 
@@ -3913,6 +3976,62 @@ document.addEventListener('DOMContentLoaded', function(){
   setTimeout(function(){ clearInterval(_t); }, 8000);
 });
 </script>
+<script src="sokoni-providers.js" defer></script>
+<script>
+/* Featured providers strip — reads the canonical `providers` registry.
+   Renders nothing and stays hidden unless there is something real to show:
+   an empty registry must not leave an empty section, and a failed read must
+   not be dressed up as "no providers". */
+(function () {
+  'use strict';
+  var MAX = 12;
+
+  function render(list) {
+    var sec  = document.getElementById('featuredProvidersSection');
+    var grid = document.getElementById('featuredProvidersGrid');
+    if (!sec || !grid || !list.length) return;
+    var esc = SokoniProviders.esc;
+
+    grid.innerHTML = list.map(function (p) {
+      var initials = String(p.name || '?').trim().split(/\s+/)
+        .map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
+      return '<a class="sk-featprov-card" role="listitem" href="' + esc(p.profileUrl) + '">'
+        + (p.photo
+            ? '<img class="sk-featprov-av" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '">'
+            : '<div class="sk-featprov-av">' + esc(initials) + '</div>')
+        + '<div class="sk-featprov-name">' + esc(p.name) + '</div>'
+        + '<div class="sk-featprov-cat">' + esc(p.emoji) + ' ' + esc(p.categoryLabel)
+        + (p.location ? ' · ' + esc(p.location) : '') + '</div>'
+        + (p.verified
+            ? '<span class="sk-featprov-badge">✅ Verified</span>'
+            : (p.rating
+                ? '<span class="sk-featprov-new">★ ' + p.rating.toFixed(1) + '</span>'
+                : '<span class="sk-featprov-new">New on SOKONI</span>'))
+        + '</a>';
+    }).join('');
+    sec.style.display = '';
+  }
+
+  function load() {
+    /* Featured first; if none are flagged featured, fall back to the newest
+       providers rather than showing an empty strip on a populated registry. */
+    SokoniProviders.list({ featuredOnly: true, limit: MAX }).then(function (r) {
+      if (r.error) return;                       /* stay hidden, say nothing false */
+      if (r.providers.length) return render(r.providers);
+      return SokoniProviders.list({ limit: MAX }).then(function (r2) {
+        if (!r2.error) render(r2.providers);
+      });
+    });
+  }
+
+  (function boot(attempt) {
+    attempt = attempt || 0;
+    if (window.SokoniProviders && window.firebaseDB) { load(); return; }
+    if (attempt > 40) return;                    /* section simply stays hidden */
+    setTimeout(function () { boot(attempt + 1); }, 150);
+  }(0));
+}());
+</script>
 <script src="sokoni-featured.js" defer></script>
 <script>
 /* Inject featured listings + sponsored ads on the home page */
@@ -3940,6 +4059,44 @@ document.addEventListener('DOMContentLoaded', function() {
   <script defer src="sokoni-fraud-engine.js"></script>
   <script defer src="sokoni-webhook-engine.js"></script>
   <script defer src="sokoni-search-pro.js"></script>
+  <script>
+  /* Hidden admin access: tap the home logo 9× → super admin (which still enforces the
+     admin claim). Robustness fixes for "9-tap not working": (1) also handle touchend —
+     on mobile a touch/swipe handler can swallow the synthetic click; (2) a visible
+     "Admin unlock: N/9" counter from the 3rd tap so you KNOW it's registering and keep
+     going (previously each tap did nothing visible, so people stopped before 9);
+     (3) a generous 1500ms rolling window. Delegated so shared-header re-rendering the
+     logo can't detach it. A single tap on home is a no-op (you're already home). */
+  (function(){
+    var taps = 0, last = 0, guard = 0, tip = null, tipT = null;
+    function showTip(n){
+      if (n < 3) return;                      /* stay hidden for casual taps */
+      if (!tip){
+        tip = document.createElement('div');
+        tip.style.cssText = 'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:2147483647;background:rgba(0,0,0,.88);color:#71ff00;font:800 13px system-ui,sans-serif;padding:7px 16px;border-radius:20px;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 18px rgba(0,0,0,.4)';
+        document.body.appendChild(tip);
+      }
+      tip.textContent = n >= 9 ? '🔓 Opening admin…' : ('Admin unlock: ' + n + '/9');
+      tip.style.opacity = '1';
+      clearTimeout(tipT);
+      tipT = setTimeout(function(){ if (tip) tip.style.opacity = '0'; }, 1100);
+    }
+    function bump(e){
+      var logo = e.target && e.target.closest && e.target.closest('#sk-nav-logo');
+      if (!logo) return;
+      var now = Date.now();
+      if (now - guard < 80) return;           /* one physical tap = touchend+click → count once */
+      guard = now;
+      if (e.cancelable) e.preventDefault();
+      taps = (now - last < 1500) ? (taps + 1) : 1;
+      last = now;
+      showTip(taps);
+      if (taps >= 9){ taps = 0; setTimeout(function(){ location.href = '/super-admin.html'; }, 300); }
+    }
+    document.addEventListener('click', bump, true);
+    document.addEventListener('touchend', bump, true);
+  })();
+  </script>
 </body>
 
 </html>

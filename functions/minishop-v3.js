@@ -41,6 +41,7 @@ const { onSchedule }                    = require('firebase-functions/v2/schedul
 const { defineSecret }                  = require('firebase-functions/params');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const logger                            = require('firebase-functions/logger');
+const { resolve: resolveConfig }        = require('./minishop-config-schema');
 
 /* ── Secrets ──────────────────────────────────────────────────────────────── */
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
@@ -548,7 +549,14 @@ exports.miniShopOGMeta = onRequest(
       }
 
       const shop   = shopSnap.data();
-      const config = configSnap.exists ? configSnap.data() : {};
+      /* Resolved rather than read straight off the canonical store: branding
+         for shops configured before the schema convergence still lives in
+         shops/{id}.minishopConfig under different key names. */
+      const config = resolveConfig(
+        configSnap.exists ? configSnap.data() : {},
+        shop.minishopConfig,
+        shop
+      );
 
       /* ── Build safe OG values ── */
       const shopName   = _san(shop.name || 'SOKONI Shop', 80);

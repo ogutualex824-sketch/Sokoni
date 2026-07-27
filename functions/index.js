@@ -1263,14 +1263,17 @@ async function _execChatTool(name, input, ctx) {
       const rows = [];
 
       if (!t || t === "products" || t === "all") {
-        let q = db.collection("products").limit(10);
+        /* Fetch a wider candidate set and surface up to 12 matches — the widget
+           now renders a compact, scrollable list, so KASS can recommend a fuller
+           set of products (was capped at 5) instead of a token handful. */
+        let q = db.collection("products").limit(30);
         if (category) q = q.where("category", "==", category);
         if (maxPrice)  q = q.where("price", "<=", maxPrice).orderBy("price");
         const snap = await q.get().catch(() => ({ docs: [] }));
         snap.docs.filter(d => {
           const n = (d.data().name || "").toLowerCase();
           return !query || n.includes(query.toLowerCase()) || (d.data().category || "").toLowerCase().includes(query.toLowerCase());
-        }).slice(0, 5).forEach(d => {
+        }).slice(0, 12).forEach(d => {
           const r = d.data();
           const card = { type:"product", id:d.id, name:r.name, price:r.price, category:r.category, image:r.imageUrl||r.image, rating:r.avgRating||r.rating, url:`product.html?id=${d.id}`, seller:r.sellerName||r.shopName };
           rows.push(card); ctx.addResult(card);
@@ -2229,6 +2232,7 @@ exports.createCheckoutSession = onCall(
     const sessionItems = [];
     let serverSubtotal = 0;
     const outOfStockItems = [];
+    const adjustedItems   = [];
     for (const item of cartItems) {
       const pid  = String(item.productId || item.id || "");
       const prod = priceMap[pid];
@@ -2243,7 +2247,17 @@ exports.createCheckoutSession = onCall(
       }
 
       const unitPrice = Number(prod.salePrice || prod.price || 0);
-      const qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
+      let   qty       = Math.max(1, Math.min(99, Math.round(Number(item.qty) || 1)));
+
+      /* Quantity revalidation: never authorise a session for more than remains.
+         When a metered product has fewer units than requested, clamp to what is
+         available (>=1 here, since <=0 was rejected as OOS above) and report the
+         adjustment so the buyer can be told "only N available" before paying. */
+      if (stockQty !== null && qty > stockQty) {
+        adjustedItems.push({ name: prod.name || pid, requested: qty, available: stockQty });
+        qty = stockQty;
+      }
+
       const lineTotal = unitPrice * qty;
       serverSubtotal += lineTotal;
       sessionItems.push({
@@ -2404,6 +2418,9 @@ exports.createCheckoutSession = onCall(
       serverTotal,
       itemCount:       sessionItems.length,
       outOfStockItems: outOfStockItems.length > 0 ? outOfStockItems : undefined,
+      /* Lines whose quantity was reduced to remaining stock — the page warns the
+         buyer ("only N available") and updates the cart before payment. */
+      adjustedItems:   adjustedItems.length > 0 ? adjustedItems : undefined,
       /* So the page can show the discount it actually received, and explain a
          code that was rejected, instead of asserting a discount of its own. */
       promoApplied:    promoApplied || undefined,
@@ -2716,15 +2733,29 @@ exports.verifyIntasendPayment = onRequest(
             const prodRef = db.collection('products').doc(String(item.productId));
             const snap    = await t.get(prodRef);
             if (!snap.exists) return;
-            const cur = snap.data().stock;
+            const pdata = snap.data();
+            const cur = pdata.stock;
+            const priorVer = Number(pdata.inventoryVersion) || 0;
+            /* Payment is already confirmed, so a last-item race is flagged, not
+               rejected — but stock must never go negative. Deduct at most what
+               remains; the oversoldAlerts record carries the true shortfall. */
+            let dec = qty;
             if (typeof cur === 'number' && cur < qty) {
+              dec = Math.max(0, cur);
               t.set(db.collection('oversoldAlerts').doc(), {
                 orderId, productId: item.productId,
                 requested: qty, available: cur,
                 createdAt: admin.firestore.FieldValue.serverTimestamp(),
               });
             }
-            t.update(prodRef, { stock: admin.firestore.FieldValue.increment(-qty) });
+            /* stock, updatedAt and inventoryVersion move together in ONE atomic
+               write so every listener gets a single, monotonic change signal. */
+            t.update(prodRef, {
+              stock:            admin.firestore.FieldValue.increment(-dec),
+              updatedAt:        admin.firestore.FieldValue.serverTimestamp(),
+              inventoryVersion: admin.firestore.FieldValue.increment(1),
+            });
+            console.log(`[webhook] stock deduct product=${item.productId} -${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
           }))
       );
       const stockFailed = stockResults.filter(r => r.status === 'rejected');
@@ -3211,6 +3242,19 @@ exports.darajaSTKPush = onCall(
           throw new HttpsError("failed-precondition", "Product is not available for sale: " + pid);
         }
 
+        /* Overselling guard — reject BEFORE the STK push, while no money has moved.
+           A finite stock field is authoritative; products without stock tracking
+           (stock undefined) are unmetered and pass. A genuine last-item race that
+           slips past this is caught again at deduction (floor + oversoldAlerts). */
+        const stk = Number(p.stock);
+        if (p.outOfStock === true || (Number.isFinite(stk) && stk <= 0)) {
+          throw new HttpsError("failed-precondition", "Out of stock: " + (p.name || pid));
+        }
+        if (Number.isFinite(stk) && stk < qty) {
+          throw new HttpsError("failed-precondition",
+            "Only " + stk + " left of " + (p.name || pid) + " — please reduce the quantity.");
+        }
+
         const unit = Number(p.price);
         if (!Number.isFinite(unit) || unit < 0) {
           throw new HttpsError("failed-precondition", "Product has no valid price: " + pid);
@@ -3569,6 +3613,25 @@ exports.darajaSTKCallback = onRequest(
                  transaction, so concurrent retries serialise on it. */
               if (o.inventoryApplied === true) return;
 
+              /* Stock. Prefer the server-priced line items recorded at STK
+                 time over anything the client later wrote onto the order. */
+              const lines = Array.isArray(payData.items) && payData.items.length
+                ? payData.items
+                : (Array.isArray(o.items) ? o.items : []);
+
+              /* Read every product BEFORE any write — a Firestore transaction
+                 requires all reads to precede all writes — so the deduction can
+                 be floored and never drive stock negative on a last-item race. */
+              const stockReads = [];
+              for (const line of lines) {
+                const pid = line && (line.productId || line.id);
+                const qty = Math.floor(Number(line && line.qty) || 0);
+                if (!pid || qty < 1) continue;
+                const pRef  = db.collection("products").doc(String(pid));
+                const pSnap = await txn.get(pRef);
+                stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap });
+              }
+
               txn.update(orderRef, {
                 status:          "paid",
                 paymentStatus:   "paid",
@@ -3585,19 +3648,31 @@ exports.darajaSTKCallback = onRequest(
                 updatedAt:       ts,
               });
 
-              /* Stock. Prefer the server-priced line items recorded at STK
-                 time over anything the client later wrote onto the order. */
-              const lines = Array.isArray(payData.items) && payData.items.length
-                ? payData.items
-                : (Array.isArray(o.items) ? o.items : []);
-
-              for (const line of lines) {
-                const pid = line && (line.productId || line.id);
-                const qty = Math.floor(Number(line && line.qty) || 0);
-                if (!pid || qty < 1) continue;
-                txn.update(db.collection("products").doc(pid), {
-                  stock: admin.firestore.FieldValue.increment(-qty),
+              /* Payment is already confirmed, so an oversell is flagged, not
+                 rejected — but stock is floored at zero and the shortfall is
+                 recorded for reconciliation (parity with the IntaSend path). */
+              for (const { ref, pid, qty, snap } of stockReads) {
+                const pdata = snap.exists ? snap.data() : {};
+                const cur = snap.exists ? pdata.stock : null;
+                const priorVer = Number(pdata.inventoryVersion) || 0;
+                let dec = qty;
+                if (typeof cur === "number" && cur < qty) {
+                  dec = Math.max(0, cur);
+                  txn.set(db.collection("oversoldAlerts").doc(), {
+                    orderId:   payData.orderId || checkoutId || null,
+                    productId: pid, requested: qty, available: cur,
+                    path:      "daraja",
+                    createdAt: ts,
+                  });
+                }
+                /* One atomic write: stock + updatedAt + inventoryVersion, so
+                   listeners see a single monotonic change signal. */
+                txn.update(ref, {
+                  stock:            admin.firestore.FieldValue.increment(-dec),
+                  updatedAt:        ts,
+                  inventoryVersion: admin.firestore.FieldValue.increment(1),
                 });
+                console.log(`[daraja] stock deduct product=${pid} -${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
               }
             });
           } catch (e) {
@@ -5750,6 +5825,85 @@ exports.initiateSTKPush = onCall(
   }
 );
 
+/* ── Shared wallet top-up finalizer for the IntaSend webhooks ────────────────
+   Wallet top-ups (initiateWalletTopUp) set api_ref to the walletTransactions
+   doc id ("wtop_…") and never create a payments/{ref} doc, so the payment path
+   in both webhook handlers below skips straight past them and acks with no
+   effect — leaving completion to the client poll (confirmWalletTopUp) or the
+   30-min sweep (sweepStaleWalletTopUps).
+
+   This routes the ref to the SAME idempotent claim those two paths use so all
+   three converge: whichever observes COMPLETE first credits the wallet inside a
+   transaction, and the others read status === 'completed' and no-op. IntaSend
+   retries webhooks on timeout/5xx, so the TRANSACTION — not the HTTP layer — is
+   the guard against double credit. We always credit tx.amount (recorded
+   server-side at initiation), never the webhook-supplied amount.
+
+   Lives as one helper (called from both webhookIntasend and the secondary
+   intasendWebhook) rather than a pasted block, so the two endpoints can never
+   drift. Returns true when the ref was a wallet top-up and the caller should ack
+   and return; false to fall through to the normal payments path. A transaction
+   error propagates (→ 5xx → IntaSend retry), which is the desired recovery. */
+async function _finalizeWalletTopUp(apiRef, state, amount, tag) {
+  if (!apiRef || !apiRef.startsWith("wtop_")) return false;
+
+  const txRef  = db.collection("walletTransactions").doc(apiRef);
+  const txSnap = await txRef.get();
+  if (!txSnap.exists) return true;   /* unknown ref — handled: nothing to credit */
+  const tx = txSnap.data();
+
+  const paid   = state === "COMPLETE";
+  const failed = ["FAILED", "CANCELLED", "EXPIRED"].includes(state);
+
+  /* Reconciliation aid only — the credited figure is always tx.amount. */
+  if (paid && amount && Math.round(amount) !== Math.round(tx.amount)) {
+    logger.warn(`[${tag}] wallet top-up amount mismatch`, { ref: apiRef, requested: tx.amount, webhook: amount });
+  }
+
+  if (paid) {
+    await db.runTransaction(async (t) => {
+      const walletRef = db.collection("wallets").doc(tx.uid);
+      const [walletSnap, txCheck] = await Promise.all([t.get(walletRef), t.get(txRef)]);
+      /* Already credited by confirmWalletTopUp / sweep / an earlier retry */
+      if (txCheck.exists && txCheck.data().status === "completed") return;
+
+      const current = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
+      if (!walletSnap.exists) {
+        t.set(walletRef, {
+          uid:          tx.uid,
+          balance:      current + tx.amount,
+          currency:     "KES",
+          lastTopUp:    admin.firestore.Timestamp.now(),
+          pendingTopUp: null,
+          createdAt:    admin.firestore.Timestamp.now(),
+        });
+      } else {
+        const update = { balance: current + tx.amount, lastTopUp: admin.firestore.Timestamp.now() };
+        /* Clear the flag only if it still points at THIS top-up — a newer
+           pending top-up the user just started must not be wiped. */
+        if (walletSnap.data().pendingTopUp === apiRef) update.pendingTopUp = null;
+        t.update(walletRef, update);
+      }
+      t.update(txRef, { status: "completed", updatedAt: admin.firestore.Timestamp.now(), resolvedBy: tag });
+    });
+    console.log(`[${tag}] Wallet top-up credited: ${apiRef}`);
+  } else if (failed) {
+    await db.runTransaction(async (t) => {
+      const walletRef = db.collection("wallets").doc(tx.uid);
+      const [walletSnap, txCheck] = await Promise.all([t.get(walletRef), t.get(txRef)]);
+      /* Do not overwrite a top-up a concurrent path already completed */
+      if (txCheck.exists && txCheck.data().status !== "pending") return;
+      t.update(txRef, { status: "failed", updatedAt: admin.firestore.Timestamp.now(), resolvedBy: tag });
+      if (walletSnap.exists && walletSnap.data().pendingTopUp === apiRef) {
+        t.update(walletRef, { pendingTopUp: null });
+      }
+    });
+    console.log(`[${tag}] Wallet top-up marked failed (${state}): ${apiRef}`);
+  }
+  /* PENDING / unknown state — handled: caller acks, poll or sweep finalizes later */
+  return true;
+}
+
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
   { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
@@ -5796,6 +5950,13 @@ exports.intasendWebhook = onRequest(
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
+
+    /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
+       the shared idempotent claim before the payments path below. */
+    if (await _finalizeWalletTopUp(apiRef, state, amount, "intasendWebhook")) {
+      res.status(200).send("OK");
+      return;
+    }
 
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
@@ -6669,6 +6830,40 @@ exports.webhookIntasend = onRequest(
 
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
+    /* First-rollout observability: log the ENTIRE webhook payload (challenge/secret
+       stripped) before parsing, so if IntaSend's B2C field names/format differ we can
+       see exactly what arrived and adapt. */
+    try {
+      const _rb = { ...(req.body || {}) };
+      delete _rb.challenge; delete _rb.signature; delete _rb.secret;
+      console.log("[webhookIntasend] raw payload:", JSON.stringify(_rb).slice(0, 4000));
+    } catch (_) { /* logging must never block the webhook */ }
+
+    /* Seller B2C payouts ("pout_…"): advance a withdrawal from its provider status.
+       Matches by api_ref (== our reqId) or by intasendRef (tracking_id). Stores the raw
+       payload on the payout for audit. No-op for non-payout events, so top-up/payment
+       handling below is unaffected. */
+    try {
+      if (await wallet.finalizeB2CPayoutFromWebhook(db, apiRef, state, req.body)) {
+        res.status(200).send("OK");
+        return;
+      }
+      if (checkoutId && await wallet.finalizeB2CPayoutFromWebhook(db, checkoutId, state, req.body)) {
+        res.status(200).send("OK");
+        return;
+      }
+    } catch (e) {
+      console.error("[webhookIntasend] B2C payout finalize error:", e.message);
+      /* fall through — don't block other webhook handling */
+    }
+
+    /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
+       the shared idempotent claim before the payments path below. */
+    if (await _finalizeWalletTopUp(apiRef, state, amount, "webhookIntasend")) {
+      res.status(200).send("OK");
+      return;
+    }
+
     const payRef = db.collection("payments").doc(apiRef);
     const snap   = await payRef.get();
     if (!snap.exists) { res.status(200).send("OK"); return; }
@@ -6770,13 +6965,51 @@ exports.webhookIntasend = onRequest(
       try {
         const _isSubscription =
           category === "subscription" || payData.meta?.category === "subscription";
-        const _sellerId = payData.uid;
+        /* For a service booking the earner is the PROVIDER (meta.providerId), not the
+           paying customer (payData.uid). Scoped to bookings so marketplace/POS flows,
+           where uid already means the seller, are unaffected. */
+        const _isBooking = payData.meta?.type === "booking";
+        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId : payData.uid;
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         if (_isSubscription) {
           console.log(`[webhookIntasend] wallet credit skipped (subscription): ${apiRef}`);
         } else if (!_sellerId || _netCents <= 0) {
           console.warn(`[webhookIntasend] wallet credit skipped (no seller or zero net): ${apiRef}`);
+        } else if (_isBooking) {
+          /* Booking earnings → the provider's WITHDRAWABLE wallet balance
+             (wallets.balance, in SHILLINGS) — the exact field the wallet UI shows and
+             requestSellerPayout pays out, so the provider can withdraw to M-Pesa. The
+             finos availableBalance/withdrawableBalance ledger (cents) is a SEPARATE
+             representation the withdraw flow does not read, which is why crediting it
+             would leave the earnings un-withdrawable. Idempotent via walletCreditedAt. */
+          const _netShillings = Math.round(Math.max(0, amount - sokoniCut));
+          const _payDoc = db.collection("payments").doc(apiRef);
+          const _walRef = db.collection("wallets").doc(_sellerId);
+          const _credited = await db.runTransaction(async (txn) => {
+            const snap = await txn.get(_payDoc);
+            if (!snap.exists || snap.data().walletCreditedAt) return false;
+            const wSnap = await txn.get(_walRef);
+            if (wSnap.exists) {
+              txn.update(_walRef, { balance: admin.firestore.FieldValue.increment(_netShillings) });
+            } else {
+              txn.set(_walRef, { uid: _sellerId, balance: _netShillings, currency: "KES",
+                createdAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+            }
+            txn.set(db.collection("walletTransactions").doc(`${_sellerId}_${apiRef}_booking`), {
+              uid: _sellerId, type: "booking_earning", amount: _netShillings,
+              description: `Booking earning — ${payData.meta?.serviceDesc || "service"} (ref ${apiRef})`,
+              status: "completed", createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+            txn.update(_payDoc, {
+              walletCreditedAt:  admin.firestore.FieldValue.serverTimestamp(),
+              walletCreditCents: _netShillings * 100,
+              walletCreditedTo:  _sellerId,
+            });
+            return true;
+          });
+          console.log(`[webhookIntasend] booking earning ${_credited ? "credited" : "already credited"} to provider wallet.balance`,
+            { ref: apiRef, provider: _sellerId, netShillings: _netShillings });
         } else {
           const { creditWalletTxn } = require('./finos-utils');
           const _payDoc = db.collection("payments").doc(apiRef);
@@ -6811,6 +7044,58 @@ exports.webhookIntasend = onRequest(
           reason: "wallet credit failed: " + walletErr.message,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => {});
+      }
+
+      /* ── Service bookings: create the booking + notify both parties ──────────
+         bookNow only collects payment; the booking itself MUST be created here,
+         server-side, because the customer's payment wizard may be closed before
+         this webhook arrives (money taken, but no confirmation — the reported bug).
+         Idempotent: keyed by the payment ref. Additive — no money flow changed. */
+      try {
+        const m = payData.meta || {};
+        if (m.type === "booking") {
+          const bookingRef = db.collection("bookings").doc(apiRef);
+          const created = await db.runTransaction(async (txn) => {
+            const b = await txn.get(bookingRef);
+            if (b.exists) return false;                    // already created — idempotent
+            txn.set(bookingRef, {
+              ref:           apiRef,
+              customerUid:   payData.uid || null,
+              providerId:    m.providerId || null,
+              providerName:  m.providerName || "",
+              providerPhone: m.providerPhone || "",
+              serviceDesc:   m.serviceDesc || "",
+              category:      m.category || "default",
+              amount, currency: "KES",
+              status:        "confirmed",                  // paid; awaiting provider fulfilment
+              paymentRef:    apiRef,
+              createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+              updatedAt:     admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return true;
+          });
+          if (created) {
+            const { notify } = require("./notify");
+            if (payData.uid) notify({
+              uid: payData.uid, type: "booking_confirmed",
+              title: "Booking confirmed ✅",
+              body: `Your booking with ${m.providerName || "the provider"} is confirmed. Ref ${apiRef}.`,
+              dedupeKey: `booking_confirmed_${apiRef}`,
+              data: { ref: apiRef, providerName: m.providerName || "" },
+            }).catch(() => {});
+            if (m.providerId) notify({
+              uid: m.providerId, type: "booking_new",
+              title: "New booking 📅",
+              body: `You have a new booking${m.serviceDesc ? " — " + m.serviceDesc : ""}. Ref ${apiRef}.`,
+              dedupeKey: `booking_new_${apiRef}`,
+              data: { ref: apiRef, customerUid: payData.uid || "" },
+            }).catch(() => {});
+            console.log(`[webhookIntasend] booking created + notified: ${apiRef}`);
+          }
+        }
+      } catch (bErr) {
+        /* Never fail the webhook on booking-creation error — payment stands. */
+        console.error("[webhookIntasend] booking creation failed (recoverable):", bErr.message);
       }
 
       try {
@@ -7665,16 +7950,30 @@ exports.indexProductCreate = onDocumentCreated("products/{productId}", async (ev
 
 exports.indexProductUpdate = onDocumentUpdated("products/{productId}", async (event) => {
   if (!event.data || !event.data.after) return;
-  const before = event.data.before.data() || {};
-  const after  = event.data.after.data()  || {};
-  /* Guard: only reindex when text content fields actually change.
-     Writing indexedAt back every update caused an infinite update loop. */
-  const TEXT_FIELDS = ["name", "title", "category", "description", "tags", "brand", "location", "county"];
-  const changed = TEXT_FIELDS.some(f => before[f] !== after[f]);
-  if (!changed) return;
+  const after = event.data.after.data() || {};
+
+  /* Guard: write only when the generated index actually differs from what is
+     stored. This replaced a fixed TEXT_FIELDS list compared with !==, which was
+     wrong in both directions: array fields (tags, and now the variant
+     attributes) compare by reference, so two snapshots of an unchanged array
+     always looked "changed" and re-armed the very update loop the list was
+     meant to prevent; and any field outside the list — a seller adding colours
+     or sizes — looked unchanged and left the product's terms stale.
+     Comparing the output instead is self-limiting: the trigger's own write
+     produces identical terms on the next pass, so the loop terminates after one
+     hop no matter which field moved, and no field list needs maintaining when
+     search-terms.js learns a new one. */
+  const nextTerms = _buildSearchTerms(after);
+  const nextName  = (after.name || "").toLowerCase();
+  const prevTerms = Array.isArray(after.searchableTerms) ? after.searchableTerms : null;
+  const sameTerms = prevTerms
+    && prevTerms.length === nextTerms.length
+    && prevTerms.every((t, i) => t === nextTerms[i]);
+  if (sameTerms && after.nameLower === nextName) return;
+
   await event.data.after.ref.update({
-    searchableTerms: _buildSearchTerms(after),
-    nameLower: (after.name || "").toLowerCase(),
+    searchableTerms: nextTerms,
+    nameLower: nextName,
   }).catch(() => {});
 });
 
@@ -7686,6 +7985,27 @@ exports.indexProviderCreate = onDocumentCreated("providers/{providerId}", async 
   await event.data.ref.update({
     searchableTerms: _buildSearchTerms(doc),
     nameLower: (doc.name || doc.businessName || "").toLowerCase(),
+  }).catch(() => {});
+});
+
+/* Mirror of indexProductUpdate for providers — regenerates searchableTerms/
+   nameLower whenever a provider edits their doc (rename, recategorise, new skills),
+   which the create-only indexProviderCreate never covered. Same output-comparison
+   idempotency guard, so it terminates after one hop and no-ops when the CF already
+   wrote matching terms (both use the shared _buildSearchTerms). */
+exports.indexProviderUpdate = onDocumentUpdated("providers/{providerId}", async (event) => {
+  if (!event.data || !event.data.after) return;
+  const after = event.data.after.data() || {};
+  const nextTerms = _buildSearchTerms(after);
+  const nextName  = (after.name || after.businessName || "").toLowerCase();
+  const prevTerms = Array.isArray(after.searchableTerms) ? after.searchableTerms : null;
+  const sameTerms = prevTerms
+    && prevTerms.length === nextTerms.length
+    && prevTerms.every((t, i) => t === nextTerms[i]);
+  if (sameTerms && after.nameLower === nextName) return;
+  await event.data.after.ref.update({
+    searchableTerms: nextTerms,
+    nameLower: nextName,
   }).catch(() => {});
 });
 
@@ -8014,6 +8334,12 @@ exports.algoliaQueueMonitor   = algoliaQueueModule.algoliaQueueMonitor;
    Each trigger with globalSearch:true also fans out to global_search index. */
 const algoliaSync = require("./algolia-sync");
 Object.assign(exports, algoliaSync);
+
+/* ── Shop-name fan-out: a shop rename propagates to all its products, which then
+   ride the product-update triggers above to correct both search indexes. ── */
+const shopNameSync = require("./shop-name-sync");
+exports.shopNameSync_shops   = shopNameSync.shopNameSync_shops;
+exports.shopNameSync_sellers = shopNameSync.shopNameSync_sellers;
 
 /* ── Admin: setup, backfill, health, orphan cleanup, rules, A/B testing ── */
 const algoliaAdminModule = require("./algolia-admin");
@@ -9657,6 +9983,10 @@ exports.getIncidentTimeline    = secIncident.getIncidentTimeline;
 /* ── MiniShop & Social Commerce Engine v1.0 ─────────────────────────────── */
 const minishop = require('./minishop');
 exports.getMinishopPublic          = minishop.getMinishopPublic;
+/* Prerenders /shop/{handle} and /@{handle} so each shop gets its own link
+   preview. See functions/minishop-page.js — the storefront itself is still
+   rendered client-side from the same static template. */
+exports.minishopPage               = require('./minishop-page').minishopPage;
 exports.claimMinishopHandle        = minishop.claimMinishopHandle;
 exports.saveMinishopConfig         = minishop.saveMinishopConfig;
 exports.trackMinishopView          = minishop.trackMinishopView;
@@ -9805,6 +10135,11 @@ exports.requestSellerPayout    = wallet.requestSellerPayout;
 exports.getPayoutHistory       = wallet.getPayoutHistory;
 exports.adminProcessPayout     = wallet.adminProcessPayout;
 exports.adminGetPendingPayouts = wallet.adminGetPendingPayouts;
+exports.adminPayoutOps         = wallet.adminPayoutOps;
+exports.reconcilePayouts       = wallet.reconcilePayouts;
+exports.processPayoutRetries   = wallet.processPayoutRetries;
+exports.sweepEarningsToWallet  = wallet.sweepEarningsToWallet;
+exports.getPayoutAnalytics     = wallet.getPayoutAnalytics;
 exports.refundToWallet           = wallet.refundToWallet;
 exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 
@@ -9812,6 +10147,7 @@ exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 const walletEngine = require('./wallet-engine');
 exports.walletV2Dashboard       = walletEngine.walletV2Dashboard;
 exports.walletV2Send            = walletEngine.walletV2Send;
+exports.walletV2SavePhone       = walletEngine.walletV2SavePhone;
 exports.walletV2Request         = walletEngine.walletV2Request;
 exports.walletV2GetRequests     = walletEngine.walletV2GetRequests;
 exports.walletV2SavingsList     = walletEngine.walletV2SavingsList;
@@ -10881,6 +11217,11 @@ exports.deviceTrust                   = _devEng.deviceTrust;
 exports.deviceUntrust                 = _devEng.deviceUntrust;
 exports.devicePing                    = _devEng.devicePing;
 
+/* ── Storage Integrity Auditor ─────────────────────────────── */
+const _integrity = require('./integrity-audit');
+exports.storageIntegrityAuditScheduled = _integrity.storageIntegrityAuditScheduled;
+exports.storageIntegrityAuditRun        = _integrity.storageIntegrityAuditRun;
+
 /* ── Profile & Identity Engine ─────────────────────────────── */
 const _profEng = require('./profile-engine');
 exports.profileGetOverview            = _profEng.profileGetOverview;
@@ -10888,6 +11229,7 @@ exports.profileGetCompletion          = _profEng.profileGetCompletion;
 exports.profileGetAchievements        = _profEng.profileGetAchievements;
 exports.profileGetActivityTimeline    = _profEng.profileGetActivityTimeline;
 exports.profileGenerateCard           = _profEng.profileGenerateCard;
+exports.profileGetPublicProfile       = _profEng.profileGetPublicProfile;
 exports.profileGetEmployment          = _profEng.profileGetEmployment;
 exports.profileUpdatePersonalization  = _profEng.profileUpdatePersonalization;
 exports.profileGetDocumentVault       = _profEng.profileGetDocumentVault;

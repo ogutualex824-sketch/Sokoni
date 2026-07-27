@@ -108,6 +108,49 @@ function _isAdmin(token) {
   return !!(token?.admin || token?.superAdmin);
 }
 
+/* ── Public registry projection (providers/{uid}) ─────────────────────────────
+   `providers/{uid}` is the ONLY doc the service directory + global search read.
+   The directory silently drops any doc missing `updatedAt` (its orderBy) and
+   search needs `searchableTerms`/`nameLower`, so EVERY publish and EVERY self-edit
+   must project onto this doc — otherwise an edit changes nothing a customer sees
+   (or, worse, self-invisibles the provider). These helpers are the single place
+   that projection happens. They NEVER set status/verified/featured (merge:true
+   leaves admin/publish values intact); the client rules also block those. */
+/* One term generator for the whole platform (functions/search-terms.js). Using it
+   here — and in the indexProviderCreate/Update triggers — means the CF's inline
+   write and the trigger's safety-net write produce IDENTICAL terms, so the trigger
+   idempotency guard no-ops instead of thrashing. */
+function _providerSearchTerms(p) {
+  /* No extra slice — buildSearchTerms is already bounded (prefixes ≤ 6). Matching
+     the trigger's output exactly is what lets the indexProviderUpdate idempotency
+     guard no-op instead of the CF and trigger overwriting each other. */
+  return require('./search-terms').buildSearchTerms(p);
+}
+/* Project the private pricing record onto the flat rate/rateType the directory
+   card reads (sokoni-providers.js reads `rate`/`rateType`). */
+function _rateFromPricing(pricing) {
+  if (!pricing) return null;
+  if (pricing.hourly && pricing.hourly.enabled && pricing.hourly.amount) return { rate: Number(pricing.hourly.amount) || 0, rateType: 'hourly' };
+  if (pricing.fixed  && pricing.fixed.enabled  && pricing.fixed.amount)  return { rate: Number(pricing.fixed.amount)  || 0, rateType: 'fixed' };
+  if (pricing.quotation) return { rate: 0, rateType: 'quote' };
+  return null;
+}
+/* Read-merge-write the registry doc for a self-edit: overlays `patch`, re-stamps
+   updatedAt, recomputes nameLower/searchableTerms from the MERGED view. No-op if
+   the provider hasn't published yet (no registry doc to project onto). */
+async function _mirrorToRegistry(uid, patch) {
+  if (!patch || !Object.keys(patch).length) return;
+  const ref  = _db().collection('providers').doc(uid);
+  const snap = await ref.get();
+  if (!snap.exists) return; /* not published — providerPublish creates the doc */
+  const merged = { ...snap.data(), ...patch };
+  const out = { ...patch, updatedAt: _ts() };
+  const nm = merged.name || merged.businessName;
+  if (nm) out.nameLower = String(nm).toLowerCase();
+  out.searchableTerms = _providerSearchTerms(merged);
+  await ref.set(out, { merge: true });
+}
+
 /* ── Generate unique provider ID ─────────────────────────────────────────────── */
 async function _genProviderId() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -237,7 +280,11 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
   if (!d.plan)         throw new HttpsError('failed-precondition', 'Subscription not activated.');
 
   const providerId = d.providerId || await _genProviderId();
-  const qrData     = `https://mysokoni.co.ke/provider/${providerId}`;
+  /* /provider/{providerId} has no hosting rewrite — firebase.json routes
+     /shop, /@, /card and /pay, but not /provider — so every QR code and
+     profile link built from it resolved to a 404. The public profile page is
+     provider-profile.html and it is keyed by uid. */
+  const qrData     = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;
 
   const batch = _db().batch();
   const ref   = _db().collection('providerProfiles').doc(uid);
@@ -260,6 +307,55 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     qrCode: qrData, rating: 0, reviewCount: 0, bookingCount: 0,
     featured: false, verified: false, searchable: true,
     updatedAt: _ts(),
+  }, { merge: true });
+
+  /* ── Publish to the canonical discovery registry ──────────────────────────
+     `providers` is the registry every provider-facing surface reads: global
+     search (sokoni-firestore-search.js), providers.html, services.html, the
+     Cleaning hub and the homepage strip, all via sokoni-providers.js.
+
+     Publishing wrote only providerProfiles until now, so a provider who
+     completed this entire flow — subscription, legal agreement, custom auth
+     claim and all — was invisible everywhere a customer could look. The two
+     collections are not rivals: providerProfiles holds the private working
+     record (draft, plan, coverage, pricing config), `providers` holds the
+     public listing. This is the one place that projects one onto the other.
+
+     Keyed by uid, matching scripts/onboard-providers.js, so a provider who was
+     onboarded by script and later publishes through this flow updates the same
+     document instead of gaining a second listing. */
+  const cats = [draft.profile.category, draft.profile.subcategory]
+    .map(c => _san(c, 100)).filter(Boolean);
+  const _pubName  = _san(draft.profile.name, 120);
+  const _pubDesc  = _san(draft.profile.bio, 2000);
+  const _pubLoc   = _san((draft.coverage && (draft.coverage.area || draft.coverage.city)) || '', 160);
+  const _pubCity  = _san((draft.coverage && draft.coverage.city) || '', 100);
+  const _pubSkills = (draft.profile.qualifications || []).slice(0, 10).map(q => _san(q, 200));
+  const _pubRate  = _rateFromPricing(draft.pricing);
+  batch.set(_db().collection('providers').doc(uid), {
+    uid, providerId,
+    name:        _pubName,
+    category:    cats[0] || '',
+    categories:  cats,
+    description: _pubDesc,
+    location:    _pubLoc,
+    city:        _pubCity,
+    skills:      _pubSkills,
+    status:      'active',
+    searchable:  true,
+    isPublic:    true,
+    acceptsBookings: true,
+    available:   true,
+    /* Index inline — do NOT rely on the create-only indexProviderCreate trigger,
+       which never fires on a re-publish of an existing doc. */
+    nameLower:       _pubName ? _pubName.toLowerCase() : '',
+    searchableTerms: _providerSearchTerms({ name: _pubName, category: cats[0], categories: cats, skills: _pubSkills, description: _pubDesc, location: _pubLoc, city: _pubCity }),
+    /* Booking fee projected onto the flat rate/rateType the directory card reads. */
+    ...(_pubRate || {}),
+    /* Verification and featuring are admin decisions and are never granted by
+       the act of publishing. merge:true leaves an existing admin value alone. */
+    rating: 0, reviewCount: 0, jobsCompleted: 0,
+    publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
   // Create availability doc
@@ -286,7 +382,7 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
 
   await batch.commit();
   logger.info('[provider] profile published', { uid, providerId });
-  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider/${providerId}` };
+  return { success: true, providerId, qrCode: qrData, profileUrl: `https://mysokoni.co.ke/provider-profile.html?uid=${uid}` };
 };
 
 /* ── 6. providerGetProfile ───────────────────────────────────────────────────── */
@@ -314,6 +410,9 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
     if (data.experience)     updates.experience    = data.experience;
     if (data.qualifications) updates.qualifications = data.qualifications.slice(0, 10).map(q => _san(q, 200));
     if (data.languages)      updates.languages     = data.languages.slice(0, 10).map(l => _san(l, 50));
+    /* Contact fields the dashboard sends but the CF used to silently drop. */
+    if (data.phone)          updates.phone         = _san(data.phone, 30);
+    if (data.email)          updates.email         = _san(data.email, 200);
   } else if (section === 'availability') {
     await _db().collection('providerAvailability').doc(uid).set({ uid, ...data, updatedAt: _ts() }, { merge: true });
   } else if (section === 'notifications') {
@@ -325,6 +424,23 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = _ts();
     await _db().collection('providerProfiles').doc(uid).update(updates);
+  }
+
+  /* Item 2: propagate the public fields to the discovery registry so the edit
+     actually shows in the directory/search (and re-stamp updatedAt so a rename or
+     recategorise can never drop the provider out of the orderBy). Only the profile
+     section carries public fields; other sections are private working records. */
+  if (section === 'profile') {
+    const mirror = {};
+    if (updates.name)           mirror.name        = updates.name;
+    if (updates.bio)            mirror.description  = updates.bio;
+    if (updates.qualifications) mirror.skills       = updates.qualifications;
+    if (updates.phone)          mirror.phone        = updates.phone;
+    if (updates.category) {
+      mirror.category   = updates.category;
+      mirror.categories = [updates.category, updates.subcategory].filter(Boolean);
+    }
+    await _mirrorToRegistry(uid, mirror);
   }
 
   return { success: true, section };
@@ -413,19 +529,33 @@ exports._h.providerUpdatePricing = _h.providerUpdatePricing = async (req) => {
   const uid  = _uid(req);
   const data = req.data?.data;
   if (!data) throw new HttpsError('invalid-argument', 'data required.');
+  /* Tolerant of BOTH shapes: the dashboard sends scalars ({hourly: 1500}) while
+     onboarding sends {hourly:{amount:1500}}; also accepts inspection/inspectionFee
+     and emergency/emergencyFee. Clamped non-negative with a sane ceiling so a fee
+     can't be set to a negative or absurd value. A value of 0 clears that fee. */
+  const _CEIL = 10_000_000;
+  const _amt = (x) => {
+    if (x === null || x === undefined) return 0;
+    const n = Number(typeof x === 'object' ? x.amount : x);
+    return Number.isFinite(n) ? Math.max(0, Math.min(_CEIL, n)) : 0;
+  };
+  const _fee = (x) => { const a = _amt(x); return a > 0 ? { enabled: true, amount: a } : null; };
   const pricing = {
-    hourly:        data.hourly        ? { enabled: true, amount: Number(data.hourly.amount) || 0 }        : null,
-    fixed:         data.fixed         ? { enabled: true, amount: Number(data.fixed.amount) || 0 }         : null,
+    hourly:        _fee(data.hourly),
+    fixed:         _fee(data.fixed),
     quotation:     !!data.quotation,
-    inspectionFee: data.inspectionFee ? { enabled: true, amount: Number(data.inspectionFee.amount) || 0 } : null,
-    emergencyFee:  data.emergencyFee  ? { enabled: true, amount: Number(data.emergencyFee.amount) || 0 }  : null,
-    travelFee:     data.travelFee     ? { enabled: true, amount: Number(data.travelFee.amount) || 0 }     : null,
+    inspectionFee: _fee(data.inspectionFee ?? data.inspection),
+    emergencyFee:  _fee(data.emergencyFee ?? data.emergency),
+    travelFee:     _fee(data.travelFee ?? data.travel),
     packages:      (data.packages || []).slice(0, 10).map(pkg => ({
-      name: _san(pkg.name, 100), price: Number(pkg.price) || 0, description: _san(pkg.description, 500),
+      name: _san(pkg.name, 100), price: _amt(pkg.price), description: _san(pkg.description, 500),
     })),
     currency: 'KES',
   };
   await _db().collection('providerProfiles').doc(uid).update({ pricing, updatedAt: _ts() });
+  /* Item 2: project the fee onto the public registry so a fee change is reflected
+     on the directory card (which reads rate/rateType), editable anytime. */
+  await _mirrorToRegistry(uid, _rateFromPricing(pricing) || {});
   return { success: true, pricing };
 };
 
@@ -469,7 +599,8 @@ exports._h.providerGenerateQR = _h.providerGenerateQR = async (req) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Profile not found.');
   const { providerId } = snap.data();
   if (!providerId) throw new HttpsError('failed-precondition', 'Publish your profile first.');
-  const qrData = `https://mysokoni.co.ke/provider/${providerId}`;
+  /* Same 404 as providerPublish — see the note there. */
+  const qrData = `https://mysokoni.co.ke/provider-profile.html?uid=${uid}`;
   await _db().collection('providerProfiles').doc(uid).update({ qrCode: qrData, updatedAt: _ts() });
   return { qrCode: qrData, providerId };
 };

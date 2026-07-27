@@ -1225,11 +1225,16 @@ tr:hover td{background:rgba(255,255,255,.02)}
 </div><!-- /main -->
 
 <!-- ════════════════════ BOTTOM NAV ════════════════════ -->
+<!-- Canonical marketplace bottom nav — Home / Shop / Services / Orders / Profile,
+     identical to the home page (sokoni-nav-engine.js _CANONICAL_TABS). The page's
+     own Inventory/POS/Seller navigation lives in its in-page tabs; the bottom bar
+     is the platform-wide nav so a merchant is never stranded in the back office
+     with no way back to Home or Services. -->
 <nav class="bottom-nav">
   <a class="nav-item" href="/"><span class="nav-icon">&#127968;</span><span class="nav-lbl">Home</span></a>
-  <button class="nav-item active" onclick="showPage('overview')"><span class="nav-icon">&#128200;</span><span class="nav-lbl">Inventory</span></button>
-  <a class="nav-item" href="pos.html"><span class="nav-icon">&#128179;</span><span class="nav-lbl">POS</span></a>
-  <a class="nav-item" href="seller.html"><span class="nav-icon">&#128722;</span><span class="nav-lbl">Seller</span></a>
+  <a class="nav-item" href="category.html?cat=all"><span class="nav-icon">&#128717;&#65039;</span><span class="nav-lbl">Shop</span></a>
+  <a class="nav-item" href="services.html"><span class="nav-icon">&#128736;&#65039;</span><span class="nav-lbl">Services</span></a>
+  <a class="nav-item" href="my-orders.html"><span class="nav-icon">&#128230;</span><span class="nav-lbl">Orders</span></a>
   <a class="nav-item" href="profile.html"><span class="nav-icon">&#128100;</span><span class="nav-lbl">Profile</span></a>
 </nav>
 

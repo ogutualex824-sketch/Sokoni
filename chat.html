@@ -53,6 +53,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--c-bg);color:var(-
 button{cursor:pointer;border:none;background:none;font-family:inherit}
 input,textarea,select{font-family:inherit}
 .mir{font-family:'Material Icons Round';font-style:normal;font-weight:400;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';vertical-align:middle}
+/* Emoji glyphs on action buttons — no icon-font dependency, always render */
+.emo{font-style:normal;font-size:20px;line-height:1;display:inline-block;vertical-align:middle}
 
 /* â”€â”€ Page layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #page{display:flex;flex-direction:column;height:100%;overflow:hidden}
@@ -296,6 +298,8 @@ input,textarea,select{font-family:inherit}
 .shic-cam{background:rgba(225,29,72,.15);color:#e11d48}
 .shic-gal{background:rgba(2,132,199,.15);color:#0284c7}
 .shic-doc{background:rgba(22,163,74,.15);color:#16a34a}
+.shic-money{background:rgba(113,255,0,.15)}
+.sh-ic .emo{font-size:22px}
 
 /* â”€â”€ Context menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 #ctx-menu{
@@ -483,7 +487,7 @@ input[type=file]{display:none}
   <!-- â”€â”€ Input area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
   <div id="input-area">
     <button class="ia-btn" onclick="openAttachSheet()" aria-label="Attach file">
-      <span class="mir">attach_file</span>
+      <span class="emo" aria-hidden="true">📎</span>
     </button>
     <div id="input-pill">
       <div id="rec-bar">
@@ -498,10 +502,10 @@ input[type=file]{display:none}
       onmousedown="startVoice(event)" onmouseup="stopVoice(event)"
       ontouchstart="startVoice(event)" ontouchend="stopVoice(event)"
       aria-label="Hold to record voice note">
-      <span class="mir">mic</span>
+      <span class="emo" aria-hidden="true">🎤</span>
     </button>
     <button id="btn-send" onclick="sendText()" aria-label="Send message">
-      <span class="mir">send</span>
+      <span class="emo" aria-hidden="true">📤</span>
     </button>
   </div>
 </div>
@@ -521,6 +525,9 @@ input[type=file]{display:none}
   </div>
   <div class="sh-item" onclick="doDocument()">
     <div class="sh-ic shic-doc"><span class="mir">description</span></div>Document
+  </div>
+  <div class="sh-item" onclick="sendMoneyInChat()">
+    <div class="sh-ic shic-money"><span class="emo" aria-hidden="true">💵</span></div>Send money
   </div>
 </div>
 
@@ -1351,6 +1358,29 @@ function closeAllOverlays() {
 }
 
 /* â”€â”€ More menu actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Wallet ↔ chat: pay the person you're talking to ─────────────────────────
+   Resolve the other participant's uid (same rule as the header) and deep-link to
+   the wallet, which opens a "send to this contact" flow via the toUid path. */
+function _peerUid() {
+  if (!CONV) return '';
+  var other = (CONV.participants || []).filter(function (u) { return u !== UID; })[0] || '';
+  if (other) return other;
+  if (CONV.buyerUid  && CONV.buyerUid  !== UID) return CONV.buyerUid;
+  if (CONV.sellerUid && CONV.sellerUid !== UID) return CONV.sellerUid;
+  return '';
+}
+function _peerName() {
+  var u = _peerUid();
+  return (CONV && ((CONV.participantNames || {})[u] || CONV.buyerName || CONV.sellerName)) || 'Contact';
+}
+function sendMoneyInChat() {
+  closeAllOverlays();
+  var uid = _peerUid();
+  if (!uid) { _toast("Can't identify this contact"); return; }
+  location.href = 'wallet.html?pay=' + encodeURIComponent(uid) +
+                  '&name=' + encodeURIComponent(_peerName());
+}
+
 function viewTransaction() {
   closeAllOverlays();
   if (!CONV || !CONV.transactionId) { _toast('No transaction linked'); return; }

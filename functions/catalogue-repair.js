@@ -23,7 +23,7 @@
  * same shape either way, so what you review is what you get.
  *
  * THE DEFECT THIS EXISTS FOR (measured 2026-07-22)
- * Three KASS VAPES products carry uid = the merchant's owner and sellerUid = an
+ * Three KASS SHOP products carry uid = the merchant's owner and sellerUid = an
  * admin account. Everything authoritative keys off sellerUid — the security
  * rule, the counter trigger, recountMarketplaceProducts, the store query — so
  * the merchant is locked out of their own catalogue by permission-denied, and

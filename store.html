@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" style="background:#050505">
 <head>
   <!-- Canonical template identifier — see index.html. The SW and sokoni-root-guard.js
        verify this before trusting a cached document. A merchant template must NEVER be
@@ -15,6 +15,10 @@
   <link rel="shortcut icon" href="/favicon.ico">
   <meta charset="UTF-8">
   <script src="security.js"></script>
+  <!-- Single image rendering abstraction (consistent lazy/decoding/CLS/fallback,
+       srcset-ready). Loaded early so window.renderProductImage exists before the
+       grid renders. -->
+  <script src="sokoni-image.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Store — SOKONI</title>
   <meta name="description" content="Browse SOKONI store — thousands of products from verified Kenyan sellers.">
@@ -85,6 +89,10 @@
     .st-store-name {
       font-size: 26px; font-weight: 900; color: white;
       margin-bottom: 5px; line-height: 1.2;
+      /* Defence in depth against a long name/code overrunning the phone's right
+         edge: keep it inside the container and break an unspaced string rather
+         than pushing the layout wider than the viewport. */
+      max-width: 100%; overflow-wrap: anywhere; word-break: break-word;
     }
     .st-tagline { font-size: 14px; color: rgba(255,255,255,0.5); margin-bottom: 10px; }
     .st-badges { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -241,12 +249,21 @@
     /* ── INFO SECTIONS (hours + policies 2-col) ── */
     .st-info-sections {
       max-width: 1100px; margin: 20px auto 0; padding: 0 24px;
-      display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+      /* minmax(0,1fr), NOT 1fr: a grid item defaults to min-width:auto, which
+         refuses to shrink below its content's intrinsic width. A wide child
+         inside a card (e.g. the hours grid, or a long unbreakable string) then
+         forced this "1fr" track to ~424px on a 390px phone, pushing the card
+         past the right edge — the overflow was masked from scrollWidth by
+         overflow-x:clip on <html>, so it read as content cut off on the right
+         rather than a scrollbar. minmax(0,…) lets the track shrink to the
+         container and the content wraps. */
+      display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px;
     }
-    @media(max-width: 768px){ .st-info-sections { grid-template-columns: 1fr; } }
+    @media(max-width: 768px){ .st-info-sections { grid-template-columns: minmax(0, 1fr); } }
     .st-info-card {
       background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
       border-radius: 16px; padding: 18px 20px;
+      min-width: 0;   /* permit the grid item to shrink below content width */
     }
 
     /* ── BUSINESS HOURS ── */
@@ -473,8 +490,20 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
            (store && (store.name === storeParm || sn === store.ownerName));
   });
 
-  /* Resolve display store */
-  const displayName = store?.name || storeParm || "Sokoni Store";
+  /* Resolve display store.
+     storeParm is whatever was in ?id= / ?seller= / ?store=, which for a real
+     seller link is the Firebase UID — a 28-char code like
+     D5Ql2EYr95bt79IpcGTmOMTK0P83. Falling back to it printed that raw UID as the
+     shop name ("the long code"), and a 28-char string in the 20px .st-store-name
+     heading also overran the right edge on a phone. A UID must NEVER be shown as
+     a name. Prefer the configured store name, then the sellerName the seller's
+     own products carry, and only use storeParm when it is clearly a name rather
+     than a UID. */
+  const _looksLikeUid = /^[A-Za-z0-9_-]{16,}$/.test(storeParm) && !/\s/.test(storeParm);
+  const _nameFromProducts = (products[0] && products[0].sellerName) ||
+                            (allProducts.find(p => (p.sellerUid||p.sellerId) === storeParm) || {}).sellerName || "";
+  const displayName = store?.name || _nameFromProducts ||
+                      (_looksLikeUid ? "Sokoni Store" : storeParm) || "Sokoni Store";
   document.title = displayName + " — SOKONI";
 
   /* Banner */
@@ -596,7 +625,9 @@ const _esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').repla
         ? `<div class="st-wholesale-tag">🏷️ Bulk: KES ${Number(p.wholesalePrice).toLocaleString()} (min ${p.minWholesaleQty})</div>`
         : "";
       return `<a class="st-product-card" href="product.html?id=${p.id}">
-        <img src="${p.image||'assets/default-product.png'}" alt="${p.name}" loading="lazy">
+        ${window.renderProductImage
+          ? renderProductImage({ src: p.image, alt: p.name, wrap: false })
+          : `<img src="${p.image||'assets/default-product.png'}" alt="${p.name}" loading="lazy" decoding="async">`}
         <div class="st-product-info">
           <div class="st-product-name">${p.name}</div>
           <div class="st-product-price">KES ${Number(p.price).toLocaleString()}</div>
@@ -912,10 +943,21 @@ async function _stLoadFirestore(uid) {
     var app = getApps().length ? getApps()[0] : initializeApp(cfg);
     var db  = getFirestore(app);
 
-    /* Shop metadata */
-    var shopSnap = await getDoc(doc(db, "shops", uid));
-    if (!shopSnap.exists()) shopSnap = await getDoc(doc(db, "sellers", uid));
-    var sd = shopSnap.exists() ? shopSnap.data() : {};
+    /* Shop metadata.
+       Both sources are frequently absent: /shops had no security rule at all
+       until this release (every read denied), and /sellers is empty in
+       production because the shop wizard's write is fire-and-forget. A store
+       page that depends on them alone renders as an unnamed, logo-less shell
+       even when the seller has a full catalogue live.
+       Each read is therefore individually guarded, and whatever is missing is
+       recovered further down from the seller's own products, which carry
+       businessName / sellerName / location. */
+    var sd = {};
+    try {
+      var shopSnap = await getDoc(doc(db, "shops", uid));
+      if (!shopSnap.exists()) shopSnap = await getDoc(doc(db, "sellers", uid));
+      if (shopSnap.exists()) sd = shopSnap.data() || {};
+    } catch (e) { /* denied or offline — the product-derived fallback covers it */ }
 
     if (sd.banner || sd.bannerUrl) {
       var bi = document.getElementById("stBannerImg");
@@ -925,10 +967,31 @@ async function _stLoadFirestore(uid) {
       var lw = document.getElementById("stLogoWrap");
       if (lw) lw.innerHTML = '<img src="' + (sd.logo || sd.logoUrl) + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
     }
+    /* ── Branch selection ──────────────────────────────────────────────
+       store.html?id=<uid>&branch=<branchId> opens one branch as its own
+       storefront. Branches live on the seller doc (sellers/{uid}.branches[]),
+       owned and queryable, so each has a shareable URL. The shop name stays
+       the business identity; the branch name qualifies it, never replaces it.
+       An unknown/absent branch id falls back to the main shop, so a stale link
+       never dead-ends. */
+    var _branchId = new URLSearchParams(location.search).get("branch") || "";
+    var _branch = null;
+    if (_branchId && Array.isArray(sd.branches)) {
+      _branch = sd.branches.filter(function (b) { return b && String(b.id) === String(_branchId); })[0] || null;
+    }
     if (sd.name || sd.storeName) {
       var dn = sd.name || sd.storeName;
+      if (_branch && _branch.name) dn = dn + " — " + _branch.name;
       document.title = dn + " — SOKONI";
       var sn = document.getElementById("stStoreName"); if (sn) sn.textContent = dn;
+    }
+    /* Branch address/phone override the shop's when a branch is open, so the
+       storefront shows that location's real contact details. */
+    if (_branch) {
+      if (_branch.address) { sd.address = _branch.address; sd.location = _branch.address; }
+      if (_branch.phone)   { sd.phone = _branch.phone; }
+      var _bt = document.getElementById("stTagline");
+      if (_bt) { _bt.textContent = "📍 " + (_branch.address || _branch.name); _bt.style.display = ""; }
     }
     if (sd.tagline || sd.bio) {
       var tl = document.getElementById("stTagline");
@@ -959,6 +1022,32 @@ async function _stLoadFirestore(uid) {
     if (!pSnap.empty) {
       var fsProds = [];
       pSnap.forEach(function(d) { fsProds.push(Object.assign({ id: d.id }, d.data())); });
+
+      /* Recover the shop's identity from its own goods when no shop document
+         was readable. Every product carries the seller's businessName /
+         sellerName and location, so a live catalogue is enough to name the
+         store — far better than showing a buyer an anonymous page. */
+      var pd = fsProds[0] || {};
+      if (!(sd.name || sd.storeName) && (pd.businessName || pd.sellerName)) {
+        var derived = pd.businessName || pd.sellerName;
+        document.title = derived + " — SOKONI";
+        var dsn = document.getElementById("stStoreName");
+        if (dsn) dsn.textContent = derived;
+      }
+      if (!(sd.tagline || sd.bio) && pd.location) {
+        var dtl = document.getElementById("stTagline");
+        if (dtl && !dtl.textContent.trim()) {
+          dtl.textContent = "📍 " + pd.location;
+          dtl.style.display = "";
+        }
+      }
+      if (!(sd.logo || sd.logoUrl)) {
+        var dlw = document.getElementById("stLogoWrap");
+        var dimg = pd.image || (Array.isArray(pd.images) ? pd.images[0] : null);
+        if (dlw && dimg && !dlw.querySelector("img")) {
+          dlw.innerHTML = '<img src="' + dimg + '" alt="" style="width:100%;height:100%;object-fit:cover;">';
+        }
+      }
 
       /* Re-render products grid */
       var grid  = document.getElementById("stProductsGrid");
@@ -1004,7 +1093,7 @@ async function _stLoadFirestore(uid) {
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 <script>

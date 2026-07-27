@@ -157,7 +157,7 @@ async function _runInlineHealthCheck(db) {
       return { depth, threshold: 500, status: depth > 100 ? "warn" : "ok" };
     }),
     _timed(async () => {
-      const appId = process.env.ALGOLIA_APP_ID || "FF2WSTR4YC";
+      const appId = process.env.ALGOLIA_APP_ID || "F2XND3V1FW";
       const r = await fetch(`https://${appId}-dsn.algolia.net/1/isalive`);
       if (!r.ok && r.status !== 401) throw new Error(`Algolia HTTP ${r.status}`);
       return { reachable: true, status: r.status };

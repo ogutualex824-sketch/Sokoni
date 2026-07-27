@@ -14,6 +14,8 @@
   <meta property="og:title" content="SOKONI — Driver Portal">
   <meta property="og:description" content="Track your rides, deliveries and earnings on SOKONI Driver Portal.">
   <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
+  <script src="sokoni-auth-state.js"></script>
+  <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-permissions.js"></script>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -609,7 +611,7 @@
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
@@ -1807,8 +1809,10 @@ function _clearDrvDelivery() {
 window._drvAcceptDelivery = async function(dRef) {
   const drv = window.currentDriver;
   try {
+    /* acceptedAt is server-owned (Firestore resolves the sentinel at commit) — the
+       rider's device clock never sets an authoritative delivery-acceptance time. */
     await SokoniDB.updatePackageRequest(dRef, {
-      status:'driver_accepted', acceptedAt:new Date().toISOString(),
+      status:'driver_accepted', acceptedAt:SokoniDB.serverTimestamp(),
       assignedDriverId: drv?.id || 'unknown',
       driverName: drv?.name || 'SOKONI Rider',
     });

@@ -490,17 +490,30 @@
           var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
           /* Save to applications */
           await fs.addDoc(fs.collection(db,'applications'), Object.assign({type:'professional', uid:uid}, proData));
-          /* Save stub to providers */
+          /* Save stub to the canonical providers registry.
+
+             Two defects fixed here, both of which made this write useless:
+
+             1. `verified: false` was rejected outright. noAdminFields() in
+                firestore.rules fails on the PRESENCE of the key, not its
+                value, so an honest-looking default 403'd the whole create and
+                no professional application ever produced a provider record.
+             2. addDoc() minted a random id. `providers` holds one document per
+                account keyed by Auth uid — a random id means re-submitting the
+                form creates a second listing for the same person, which is the
+                duplicate the registry exists to prevent. setDoc(uid) with
+                merge makes it idempotent. */
           {
-            await fs.addDoc(fs.collection(db,'providers'), {
+            await fs.setDoc(fs.doc(db, 'providers', uid), {
               uid:              uid,
               professionalType: proData.professionalType,
               fullName:         proData.fullName,
+              name:             proData.fullName,
               county:           proData.county,
-              verified:         false,
+              location:         proData.county,
               status:           'pending',
               createdAt:        new Date().toISOString()
-            });
+            }, { merge: true });
           }
         }
       } catch(err){ console.warn('[ProOnboarding]', err); }

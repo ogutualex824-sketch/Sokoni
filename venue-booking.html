@@ -278,6 +278,53 @@ function _vb(op, data) {
   return _vbDispatch(Object.assign({ op: op }, data || {}));
 }
 
+/* ── Booking-engine adapter (convergence Step 1) ──────────────────────────────
+   USE_BOOKING_CORE routes this venue flow onto the hardened booking.js core
+   (top-level `bookings`, holds, waitlist, buffers, per-customer cap, unified
+   pricing) instead of the legacy venue-booking.js path. Flip to false to
+   INSTANTLY roll back to the previous endpoints — a client-only revert, no
+   redeploy. Both endpoints stay deployed during the cutover. */
+var USE_BOOKING_CORE = true;
+
+function _addMins(hhmm, mins) {
+  var p = String(hhmm || '0:0').split(':');
+  var t = (+p[0]) * 60 + (+p[1] || 0) + (+mins || 0);
+  return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0');
+}
+function bkAvailability(venueId, date) {
+  return USE_BOOKING_CORE
+    ? _vb('bookingGetAvailability', { venueId: venueId, date: date })
+    : _vb('venueGetAvailability', { venueId: venueId, startDate: date, days: 1 });
+}
+function bkQuote(venueId, date, startTime, durationMins) {
+  return _vb(USE_BOOKING_CORE ? 'bookingQuotePrice' : 'venueCalculatePrice',
+    { venueId: venueId, date: date, startTime: startTime, durationMins: durationMins });
+}
+function bkCreate(o) {
+  if (USE_BOOKING_CORE) {
+    return _vb('bookingCreate', {
+      venueId: o.venueId, date: o.date, startTime: o.startTime,
+      endTime: _addMins(o.startTime, o.durationMins || 60),
+      notes: o.notes, idempotencyKey: o.idempotencyKey,
+    });
+  }
+  return _vb('venueCreateBooking', {
+    venueId: o.venueId, date: o.date, startTime: o.startTime,
+    durationMins: o.durationMins || 60, bookingModel: 'hourly',
+    notes: o.notes, idempotencyKey: o.idempotencyKey,
+  });
+}
+function bkMyBookings() {
+  if (!USE_BOOKING_CORE) return _vb('venueGetMyBookings', {});
+  /* booking.js returns a bare array of booking docs (keyed `id`); normalize to
+     the { data:{ bookings:[…] } } shape the renderer expects, and alias id→bookingId. */
+  return _vb('bookingGetMyBookings', {}).then(function (res) {
+    var arr = Array.isArray(res.data) ? res.data : ((res.data && res.data.bookings) || []);
+    arr.forEach(function (b) { if (!b.bookingId) b.bookingId = b.id; });
+    return { data: { bookings: arr } };
+  });
+}
+
 /* ── State ──────────────────────────────────────────────────────────────── */
 var S = {
   filter: 'all',
@@ -552,7 +599,7 @@ function loadSlots() {
   var grid = document.getElementById('slot-grid');
   clearEl(grid); grid.appendChild(mkSpinner());
   var date = document.getElementById('slot-date').value;
-  _vb('venueGetAvailability', { venueId: S.venue.id, startDate: date, days: 1 })
+  bkAvailability(S.venue.id, date)
     .then(function(res) {
       var slots = (res.data && res.data.slots) || [];
       renderSlots(grid, slots, date);
@@ -596,9 +643,7 @@ function selectSlot(slot, date, btn) {
 }
 
 function calcPrice(slot, date) {
-  _vb('venueCalculatePrice', {
-    venueId: S.venue.id, date: date, startTime: slot.startTime, durationMins: slot.durationMins || 60
-  }).then(function(res) {
+  bkQuote(S.venue.id, date, slot.startTime, slot.durationMins || 60).then(function(res) {
     S.priceCalc = res.data || {};
     var total = S.priceCalc.total || S.venue.pricePerHour || 0;
     renderStickyBar(
@@ -677,12 +722,11 @@ function submitBooking() {
   var btn = document.getElementById('confirm-btn');
   btn.disabled = true; btn.textContent = 'Processing…';
   var notes = (document.getElementById('booking-notes').value || '').trim().slice(0, 500);
-  _vb('venueCreateBooking', {
+  bkCreate({
     venueId: S.venue.id,
     date: S.slot.date,
     startTime: S.slot.startTime,
     durationMins: S.slot.durationMins || 60,
-    bookingModel: 'hourly',
     notes: notes,
     idempotencyKey: S.iKey
   }).then(function(res) {
@@ -704,7 +748,7 @@ function loadMyBookings() {
   var list = document.getElementById('bk-list');
   clearEl(list); list.appendChild(mkSpinner());
   if (!S.user) { clearEl(list); list.appendChild(mkAuthPrompt()); return; }
-  _vb('venueGetMyBookings', {})
+  bkMyBookings()
     .then(function(res) {
       var bks = (res.data && res.data.bookings) || [];
       clearEl(list);

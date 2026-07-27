@@ -71,8 +71,61 @@ window.onunhandledrejection = function(e) {
         window.location.replace(safe);
     }
 
+    /* ── REDIRECT-LOOP BREAKER ──────────────────────────────────────────────
+       A page that gates on the LIVE Firebase session (wallet.html loads
+       sokoni-wallet-v2.js, whose onAuthStateChanged redirects to
+       login.html?redirect=wallet.html the instant Firebase reports no user)
+       disagrees with this guard, which trusts localStorage.loggedIn. When the
+       Firebase session has not restored — expired token, or App Check
+       intermittently blocking the token exchange on this project — but
+       localStorage.loggedIn is still 'true', the two ping-pong forever:
+
+         wallet → login?redirect=wallet.html → wallet → login → …
+
+       Measured in production: 7 full bounces in 14s, the page never settling.
+       That is the "some pages don't even open" report — they are looping, not
+       loading.
+
+       localStorage.loggedIn is a cache of a past session; the live Firebase
+       state is authoritative. So when this guard is about to bounce a "logged
+       in" visitor straight back to the SAME destination that just sent them
+       here, and it has already done so once, the cache is lying: stop, clear
+       the stale flags, and let the login form render so the user can genuinely
+       re-authenticate. A real, restorable session never trips this — its
+       destination does not bounce back. */
+    function _wouldLoop() {
+        try {
+            var params = new URLSearchParams(location.search);
+            var cameFrom = params.get('redirect') || params.get('next');
+            if (!cameFrom) return false;               /* not a gated-page bounce */
+            var pending = sessionStorage.getItem('sokoniLoginRedirect') || cameFrom;
+            var key = 'sokoniAuthBounce';
+            var rec = {};
+            try { rec = JSON.parse(sessionStorage.getItem(key) || '{}'); } catch (_) {}
+            var now = Date.now();
+            /* Same destination, seen within the last 12s → this is the loop. */
+            var looping = rec.dest === pending && (now - (rec.ts || 0) < 12000) && (rec.count || 0) >= 1;
+            sessionStorage.setItem(key, JSON.stringify({
+                dest: pending,
+                count: (rec.dest === pending && now - (rec.ts || 0) < 12000) ? (rec.count || 0) + 1 : 1,
+                ts: now,
+            }));
+            return looping;
+        } catch (_) { return false; }
+    }
+
     /* Fast path — localStorage already reflects active session */
     if (localStorage.getItem('loggedIn') === 'true') {
+        if (_wouldLoop()) {
+            /* The cached session is stale and the destination keeps rejecting it.
+               Clear the lie and fall through to the login form instead of bouncing. */
+            try {
+                localStorage.removeItem('loggedIn');
+                localStorage.removeItem('sokoniUser');
+                sessionStorage.removeItem('sokoniLoginRedirect');
+            } catch (_) {}
+            return;
+        }
         document.addEventListener('DOMContentLoaded', _redir);
         return;
     }
@@ -761,13 +814,49 @@ async function completePasswordReset(){
    1. Standalone PWA — window.open() exits the PWA into full Safari; the
       popup result never comes back to the app context.
    2. In-app browsers (CriOS/FxiOS) — popups are suppressed by the host app. */
+/* Embedded webviews inside host apps. These are NOT browsers the user chose —
+   they are a WebView the host app controls, and window.open() is either ignored
+   outright or opens a chrome-less sheet whose postMessage never reaches the
+   opener, so signInWithPopup either throws
+   auth/operation-not-supported-in-this-environment or hangs with no error at all.
+
+   This case was missed entirely. The list below used to be only CriOS|FxiOS,
+   described in the comment as "in-app browsers" — but CriOS and FxiOS are Chrome
+   and Firefox on iOS, which are ordinary standalone browsers, while the actual
+   in-app webviews were never matched. Verified by simulating each environment
+   against the real function: Facebook (FBAN) and Instagram both selected the
+   popup flow.
+
+   That matters here more than it would elsewhere. A large share of traffic to a
+   marketplace arrives by someone tapping a shared product link inside Facebook,
+   Instagram or WhatsApp, and every one of those users was being handed the one
+   flow their browser cannot complete. */
+const _IN_APP_BROWSER = /FBAN|FBAV|FB_IAB|Instagram|Line\/|MicroMessenger|WhatsApp|TikTok|musical_ly|Snapchat|Twitter|LinkedInApp|Pinterest|; wv\)/i;
+
 function _isPopupSupported() {
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches
                       || window.navigator.standalone === true;
+    /* Standalone PWA — window.open() exits the PWA into full Safari and the
+       result never returns to the app context. */
     if (isStandalone) return false;
+    /* Host-app webviews — see above. */
+    if (_IN_APP_BROWSER.test(navigator.userAgent)) return false;
+    /* Chrome and Firefox on iOS. Both are WKWebView-based and have historically
+       been unreliable with the popup result round-trip, so they stay on redirect. */
     if (/CriOS|FxiOS/.test(navigator.userAgent)) return false;
-    /* Regular iOS Safari, Android Chrome, and all desktop browsers support
-       popups. Firebase signInWithPopup works correctly on all of these. */
+    /* ALL mobile browsers use redirect, not popup. This was the "Google sign-in
+       goes round the whole process then comes back to login and never signs in"
+       report on phones. signInWithPopup is a desktop pattern: on a phone the popup
+       opens as a background tab whose postMessage result frequently never reaches
+       the opener — Android Chrome drops it and iOS Safari's ITP blocks the
+       cross-context handoff — so the user authenticates at Google and lands back on
+       login with no session. Redirect is the reliable mobile flow (auth.mysokoni.co.ke
+       is same-site as the app, so getRedirectResult is not storage-partitioned).
+       Desktop keeps popup, which works there and is smoother. */
+    const _isMobile = /Android|iPhone|iPad|iPod|Mobile|Silk|BlackBerry|Opera Mini|IEMobile/i.test(navigator.userAgent)
+                   || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth <= 820);
+    if (_isMobile) return false;
+    /* Desktop browsers only from here — signInWithPopup works well on desktop. */
     return true;
 }
 
@@ -1059,7 +1148,14 @@ async function signInWithGoogle() {
                 const _isItpError = (
                     popupErr.code === 'auth/internal-error' ||
                     popupErr.code === 'auth/cors-unsupported' ||
-                    popupErr.code === 'auth/web-storage-unsupported'
+                    popupErr.code === 'auth/web-storage-unsupported' ||
+                    /* Thrown by embedded webviews that cannot host a popup at all.
+                       It was missing from this list, so it fell through to the
+                       `throw popupErr` branch below: the user was shown a failure
+                       on a device where redirect would have worked. Any environment
+                       that cannot support the popup is precisely the environment
+                       that should fall back, not surface an error. */
+                    popupErr.code === 'auth/operation-not-supported-in-this-environment'
                 );
                 if (popupErr.code === 'auth/popup-blocked' || _isItpError) {
                     /* Transparent fallback to redirect.

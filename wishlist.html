@@ -146,20 +146,31 @@
       font-size: 14px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.6));
     }
 
-    /* Card body */
-    .wish-card-body { padding: 9px 10px 11px; }
+    /* Card body — typography matched to the cart (.cart-card-*) and checkout
+       (.os-item-*) product rows so the same product reads identically wherever
+       it appears. Previously this card ran 2px smaller on every line, which is
+       what made the wishlist feel like a lesser surface than the cart. */
+    .wish-card-body { padding: 10px 11px 12px; }
     .wish-card-name {
-      font-size: 11px; font-weight: 800; color: rgba(255,255,255,0.9);
+      font-size: 13px; font-weight: 800; color: rgba(255,255,255,0.92);
       display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-      overflow: hidden; margin: 0 0 3px; line-height: 1.35;
+      overflow: hidden; margin: 0 0 4px; line-height: 1.35;
     }
     .wish-card-cat {
-      font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px;
-      color: rgba(255,255,255,0.3); margin: 0 0 6px;
+      font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+      color: rgba(255,255,255,0.35); margin: 0 0 6px;
     }
     .wish-card-price {
-      font-size: 13px; font-weight: 900; color: #71ff00; margin: 0 0 9px;
+      font-size: 15px; font-weight: 900; color: #71ff00; margin: 0 0 10px;
     }
+    /* Share — was a 9-property inline style attribute repeated per card. */
+    .wish-share-btn {
+      background: none; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px; padding: 7px 10px; cursor: pointer;
+      font-size: 13px; color: rgba(255,255,255,0.6);
+      font-family: inherit; transition: border-color .2s, color .2s;
+    }
+    .wish-share-btn:hover { border-color: rgba(113,255,0,0.35); color: #71ff00; }
 
     /* Action buttons */
     .wish-btns { display: flex; gap: 6px; }
@@ -230,8 +241,10 @@
         justify-content: space-between;
         min-width: 0;
       }
-      .wish-card-name { font-size: 12px; }
-      .wish-card-price { font-size: 14px; margin-bottom: 8px; }
+      /* Mobile keeps the same scale as the cart's horizontal rows — the card is
+         narrower here, not less important. */
+      .wish-card-name { font-size: 13px; }
+      .wish-card-price { font-size: 15px; margin-bottom: 8px; }
       .wish-btns { flex-wrap: wrap; gap: 5px; }
       .wish-cart-btn { flex: unset; width: 100%; padding: 8px 0; }
       .wish-buynow-btn { flex: 1; min-width: 0; padding: 8px 6px; text-align: center; }
@@ -292,7 +305,7 @@
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
@@ -324,6 +337,25 @@ function updateCartBadge(){
   } catch(e){}
 }
 updateCartBadge();
+
+/* Product names, categories and image URLs are seller-supplied and were being
+   interpolated RAW into this template — a stored-XSS hole: a product named
+   `<img src=x onerror=...>` saved to a wishlist executed on render. cart.js has
+   carried these two helpers all along; this page simply never adopted them.
+   Escaping is a standing platform rule, not a per-page choice. */
+function _esc(str){
+  return String(str == null ? '' : str)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;');
+}
+/* Blocks javascript:/data: URIs while allowing http(s), root-relative and
+   plain relative paths. */
+function _safeImgSrc(url){
+  if(!url) return 'assets/default-product.png';
+  var u = String(url);
+  return (/^https?:\/\//i.test(u) || /^\/[^/]/.test(u) || !/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(u))
+    ? _esc(u) : 'assets/default-product.png';
+}
 
 function renderWishlist(list){
   var container = document.getElementById("wishlistContainer");
@@ -358,20 +390,24 @@ function renderWishlist(list){
 
     var savedDate = p.savedAt ? new Date(p.savedAt).toLocaleDateString('en-KE', {day:'numeric',month:'short'}) : '';
 
+    var safeName = _esc(p.name);
+    var catRaw   = String(p.category || '');
+    var safeCat  = catRaw ? _esc(catRaw.charAt(0).toUpperCase() + catRaw.slice(1)) : 'Product';
+
     return `<div class="wish-card">
       <div class="wish-img-wrap">
         <span class="wish-heart-badge">❤️</span>
         <button class="wish-remove-btn" onclick="removeWishlist(${idx})" title="Remove">✕</button>
-        <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy" onerror="this.src='assets/default-product.png'">
+        <img src="${_safeImgSrc(p.image)}" alt="${safeName}" loading="lazy" onerror="this.src='assets/default-product.png'">
       </div>
       <div class="wish-card-body">
-        <h3 class="wish-card-name">${p.name}</h3>
-        <p class="wish-card-cat">${p.category ? p.category.charAt(0).toUpperCase()+p.category.slice(1) : 'Product'}${savedDate ? ' · Saved '+savedDate : ''}</p>
+        <h3 class="wish-card-name">${safeName}</h3>
+        <p class="wish-card-cat">${safeCat}${savedDate ? ' · Saved ' + _esc(savedDate) : ''}</p>
         <p class="wish-card-price">KES ${currentPrice.toLocaleString()}${priceBadge}</p>
         <div class="wish-btns">
           <button class="wish-cart-btn" onclick="moveToCart(${idx})">🛒 Add to Cart</button>
           <button class="wish-buynow-btn" onclick="buyNowWish(${idx})">Buy Now</button>
-          <button class="wish-share-btn" onclick="if(window.SokoniShare)SokoniShare.open({name:'${p.name.replace(/'/g,"\\'")}',price:${currentPrice},image:'${p.image||''}',url:window.location.href})" style="background:none;border:1px solid rgba(255,255,255,.15);border-radius:8px;padding:7px 10px;cursor:pointer;font-size:13px;color:rgba(255,255,255,.6);transition:all .2s;" title="Share">↑</button>
+          <button class="wish-share-btn" onclick="shareWish(${idx})" title="Share">↑</button>
         </div>
       </div>
     </div>`;
@@ -419,6 +455,25 @@ document.addEventListener("sokoniAuthReady",function(e){
 });
 if(window.firebaseAuth&&window.firebaseAuth.currentUser){
   _wishFSLoad(window.firebaseAuth.currentUser.uid);
+}
+
+/* Share by index. The old handler serialised the product NAME into an inline
+   onclick string literal, escaping single quotes only — double quotes,
+   backslashes and a literal closing-script sequence all still broke out of it.
+   Looking the product up by index means no user-supplied text is ever parsed
+   as code.
+   (Note for future edits: never write a literal closing-script tag inside these
+   template strings — the HTML parser ends the block there and orphans the rest
+   of the file. That is exactly how this function's first draft broke the page.) */
+function shareWish(index){
+  var p = _wishData[index];
+  if (!p || !window.SokoniShare) return;
+  SokoniShare.open({
+    name:  String(p.name || ''),
+    price: Number(p.price) || 0,
+    image: String(p.image || ''),
+    url:   window.location.href
+  });
 }
 
 function removeWishlist(index){

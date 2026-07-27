@@ -22,9 +22,11 @@ import {
   FacebookAuthProvider,
   getRedirectResult,
   linkWithCredential,
+  linkWithPhoneNumber,
+  reload,
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore,
+  getFirestore, terminate, clearIndexedDbPersistence,
   collection, doc, addDoc, setDoc, getDoc, getDocs, updateDoc, deleteDoc,
   query, where, orderBy, limit, limitToLast,
   startAfter, startAt, endAt, endBefore,
@@ -47,13 +49,22 @@ import {
 
 const firebaseConfig = {
   apiKey:            "AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE",
-  /* auth.mysokoni.co.ke is a custom authDomain that runs the Firebase auth
-     handler (/__/auth/) from the same origin as the app.  This prevents Apple
-     ITP from treating the Firebase iframe as third-party, which was the root
-     cause of getRedirectResult() throwing on every iOS Safari page load.
-     DEPLOY ONLY AFTER: (1) auth.mysokoni.co.ke added as a custom domain in
-     Firebase Hosting Console, (2) SSL provisioned (auto, ~minutes), (3) domain
-     added to Firebase Auth → Settings → Authorized domains. */
+  /* authDomain MUST be a domain registered as a redirect URI on the Google OAuth
+     client, or Google returns "Access blocked: This app's request is invalid" and
+     no sign-in can start.
+
+     REVERTED 2026-07-25 from "mysokoni.co.ke" back to "auth.mysokoni.co.ke".
+     The apex was tried to make the auth helper iframe same-origin (to dodge
+     cross-origin storage partitioning of getRedirectResult), but
+     https://mysokoni.co.ke/__/auth/handler is NOT a registered redirect URI on the
+     OAuth client, so Google blocked EVERY sign-in on every device. Verified against
+     Google's live OAuth page:
+         mysokoni.co.ke        -> ACCESS BLOCKED (invalid request)
+         auth.mysokoni.co.ke   -> account picker (works)
+         sokoni-aeb26.firebaseapp.com -> account picker (works)
+     The apex can only be used once it is added to the OAuth client's Authorized
+     redirect URIs in Google Cloud Console — until then this MUST stay on the
+     registered subdomain. */
   authDomain:        "auth.mysokoni.co.ke",
   projectId:         "sokoni-aeb26",
   storageBucket:     "sokoni-aeb26.firebasestorage.app",
@@ -63,7 +74,15 @@ const firebaseConfig = {
 };
 
 /* ── Initialize ── */
-const app = initializeApp(firebaseConfig);
+/* Reuse an existing [DEFAULT] app instead of throwing. Some pages (e.g.
+   legal-hub.html) run inline code that calls initializeApp before this module
+   executes. An unconditional initializeApp here then throws "app already exists
+   with different options" at module top level, halting firebase.js BEFORE App
+   Check is initialized or any window.* export is set — which silently disables
+   App Check for the entire page and 401s every App-Check-enforced call (the
+   legal directory's getLegalProviders was dead for exactly this reason). On
+   every normal page getApps() is empty and this behaves identically to before. */
+const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 /* ── App Check — must be initialised before any other Firebase service ──
    Production (mysokoni.co.ke, sokoni-aeb26.web.app) uses reCAPTCHA v3 attestation
@@ -258,6 +277,15 @@ window.firebaseSDK = {
   createUserWithEmailAndPassword:(e, p)       => createUserWithEmailAndPassword(auth, e, p),
   signInWithPopup:               (provider)   => signInWithPopup(auth, provider),
   signInWithPhoneNumber:         (phone, ver) => signInWithPhoneNumber(auth, phone, ver),
+  /* Verify/attach a phone to the CURRENTLY signed-in account (profile phone
+     verification). Sends an SMS and returns a ConfirmationResult; .confirm(code)
+     links the verified number so auth.currentUser.phoneNumber is set. */
+  linkWithPhoneNumber:           (phone, ver) => auth.currentUser
+                                    ? linkWithPhoneNumber(auth.currentUser, phone, ver)
+                                    : Promise.reject(new Error('No user')),
+  /* Refresh the current user so freshly-changed emailVerified/phoneNumber flags
+     are visible without a full page reload. */
+  reloadUser:                    ()           => auth.currentUser ? reload(auth.currentUser) : Promise.reject(new Error('No user')),
   signOut:                       ()           => signOut(auth),
   onAuthStateChanged:            (cb)         => onAuthStateChanged(auth, cb),
   updateProfile,
@@ -866,21 +894,68 @@ const _SOKONI_LS_KEYS = [
   "sokoniPermCache",
 ];
 
+/* Non-user infrastructure keys that MUST survive sign-out — everything else in
+   local/session storage is treated as user data and wiped. Matched case-insensitively
+   as a substring of the key name. */
+const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware/i;
+
 async function sokoniSignOut() {
+  /* 1. Stop any registered Firestore listeners so no post-signout snapshot can fire
+        into a stale UI. (Belt-and-suspenders — the caller-side redirect/reload also
+        tears every listener down.) */
   try {
-    await signOut(auth);
-  } catch (e) {
-    /* Always clear local state even if the network call fails */
-  }
-  /* Clear ALL SOKONI-managed localStorage keys to prevent stale session reuse */
-  _SOKONI_LS_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
-  /* Clear sessionStorage caches */
-  try {
-    sessionStorage.removeItem("sokoniPermCache");
-    sessionStorage.removeItem("_sk_pay_idem");
+    if (Array.isArray(window._sokoniListeners)) {
+      window._sokoniListeners.forEach(u => { try { if (typeof u === "function") u(); } catch (_) {} });
+      window._sokoniListeners = [];
+    }
   } catch (_) {}
-  /* Invalidate subscription cache */
-  if (window.SokoniSubscriptions) window.SokoniSubscriptions.invalidateCache();
+
+  /* 2. Firebase sign-out (clears the auth session in IndexedDB). Clear local state
+        even if the network call fails. */
+  try { await signOut(auth); } catch (e) { /* proceed to wipe regardless */ }
+
+  /* 3. SECURITY — wipe ALL user-specific local/session storage so the NEXT user can
+        never see the previous user's wallet, profile, cart, orders or seller data.
+        A fixed allow-list always missed keys (cart, _walletBal, sellerProfile, bnb_*,
+        b2b_*, chpro_*, permissions, authCache…); this clears everything EXCEPT the
+        non-user infra keys above. */
+  const _wipe = (store) => {
+    try {
+      Object.keys(store).forEach(k => {
+        if (!_SOKONI_LS_KEEP.test(k)) { try { store.removeItem(k); } catch (_) {} }
+      });
+    } catch (_) {}
+  };
+  _wipe(localStorage);
+  _wipe(sessionStorage);
+
+  /* 4. Invalidate any in-memory caches (the page reload after this clears the rest). */
+  try { if (window.SokoniSubscriptions) window.SokoniSubscriptions.invalidateCache(); } catch (_) {}
+
+  /* 5. HARDENING — purge Firestore's offline IndexedDB so no cached document can
+        survive into the next account's session on this device. Firestore's lifecycle
+        REQUIRES the instance be terminated before its persistence can be cleared, so
+        this is the correct (and only safe) place: it runs LAST, and every
+        sokoniSignOut() caller immediately redirects, reloads, or shows a terminal
+        session-revoked overlay — so the now-dead `db` instance is never touched again
+        and the next page re-initialises Firestore fresh.
+
+        Persistence is currently memory-only (getFirestore default), so this clears
+        nothing today — but it completes the security model and future-proofs the
+        moment persistentLocalCache is ever enabled, plus removes any legacy on-disk
+        cache from an older build. Best-effort and TIME-BOXED (1.5s) so a slow or
+        multi-tab-blocked IndexedDB delete can never stall the post-signout redirect;
+        clearIndexedDbPersistence throws failed-precondition when another tab still
+        holds Firestore open — that is expected and swallowed. */
+  try {
+    await Promise.race([
+      (async () => {
+        try { await terminate(db); } catch (_) {}
+        try { await clearIndexedDbPersistence(db); } catch (_) {}
+      })(),
+      new Promise((res) => setTimeout(res, 1500)),
+    ]);
+  } catch (_) {}
 }
 window.sokoniSignOut = sokoniSignOut;
 

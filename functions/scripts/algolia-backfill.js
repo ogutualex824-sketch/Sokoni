@@ -9,11 +9,16 @@ const https   = require('https');
 const fs      = require('fs');
 const os      = require('os');
 const path    = require('path');
+const { variantAttributes } = require('../search-terms');
+/* Sanitisation is shared with the LIVE queue path so the two cannot diverge —
+   that divergence is what let a 195KB base64 image reach production. */
+const { safeImageUrl, enforceSize: _enforce } = require('../algolia-sanitize');
+const enforceSize = rec => _enforce(rec).record;
 
 /* ── Config ─────────────────────────────────────────────────────── */
 
 const PROJECT_ID = 'sokoni-aeb26';
-const APP_ID     = process.env.ALGOLIA_APP_ID  || 'FF2WSTR4YC';
+const APP_ID     = process.env.ALGOLIA_APP_ID  || 'F2XND3V1FW';
 const ADMIN_KEY  = process.env.ALGOLIA_ADMIN_KEY;
 const BATCH_SIZE = 100;
 if (!ADMIN_KEY) {
@@ -42,6 +47,21 @@ const COLLECTIONS = [
   { col: 'properties',  index: 'sokoni_properties', global: true },
   { col: 'real_estate', index: 'sokoni_properties', global: true },
   { col: 'events',      index: 'sokoni_events',    global: true },
+
+  /* Collections the PLATFORM actually writes to. The list above uses the names
+     the search architecture was designed around; the app writes several of its
+     entities elsewhere (shops as `businesses`, events as `entEvents`, property
+     as `propertyListings`). Omitting them meant a backfill reported success
+     while silently covering only products. */
+  { col: 'businesses',       index: 'sokoni_shops',      global: true },
+  { col: 'restaurants',      index: 'sokoni_shops',      global: true },
+  { col: 'mechanics',        index: 'sokoni_services',   global: true },
+  { col: 'healthProviders',  index: 'sokoni_services',   global: true },
+  { col: 'lawyers',          index: 'sokoni_services',   global: true },
+  { col: 'entEvents',        index: 'sokoni_events',     global: true },
+  { col: 'entVenues',        index: 'sokoni_events',     global: true },
+  { col: 'propertyListings', index: 'sokoni_properties', global: true },
+  { col: 'bnbListings',      index: 'sokoni_properties', global: true },
 ];
 
 /* ── HTTP helpers ────────────────────────────────────────────────── */
@@ -141,6 +161,13 @@ function popularityScore(data) {
   return (data.views || 0) * 1 + (data.orders || data.orderCount || 0) * 5 + (data.rating || 0) * 10;
 }
 
+/* safeImageUrl / enforceSize now come from ../algolia-sanitize, which the live
+   queue path imports too. They used to live here only, which is how a 195KB
+   base64 image reached production through the runtime path while the recovery
+   path was immune. SOKONI products store images as base64 data: URIs (up to
+   200KB — see seller-wiring.js); a data URI is pixels, not an address, and is
+   useless in a search record regardless. */
+
 function transformDoc(col, docId, data) {
   const base = {
     objectID:         docId,
@@ -157,20 +184,32 @@ function transformDoc(col, docId, data) {
       return { ...base, name: data.name, brand: data.brand, category: data.category,
         description: (data.description||'').slice(0,500), price: data.price,
         salePrice: data.salePrice, inStock: data.inStock !== false,
-        sellerId: data.sellerId, sellerName: data.sellerName, imageUrl: data.imageUrl || data.image,
+        sellerId: data.sellerId, sellerName: data.sellerName,
+        imageUrl: safeImageUrl(data.imageUrl || data.thumbnail || data.image),
         rating: data.rating || 0, isFeatured: !!data.isFeatured, hub: data.hub,
         county: data.county || data['location.county'],
-        'seller.verified': data['seller.verified'] || false };
+        'seller.verified': data['seller.verified'] || false,
+        /* Same normaliser the live trigger uses, so a backfill over unchanged
+           data cannot produce a different variant representation. */
+        ...variantAttributes(data) };
     case 'sellers':
     case 'stores':
     case 'vendors':
+    /* the app creates shops as 'businesses'; restaurants are shops too */
+    case 'businesses':
+    case 'restaurants':
       return { ...base, name: data.name || data.shopName || data.storeName,
         description: (data.description||'').slice(0,500), category: data.category,
         county: data.county || data['location.county'], town: data.town,
         verified: !!data.verified, rating: data.rating || 0,
-        ownerId: data.ownerId || data.uid, imageUrl: data.imageUrl || data.logo };
+        ownerId: data.ownerId || data.uid,
+        imageUrl: safeImageUrl(data.imageUrl || data.logo || data.logoUrl) };
     case 'services':
     case 'providers':
+    /* service-like directories that live under their own names */
+    case 'mechanics':
+    case 'healthProviders':
+    case 'lawyers':
       return { ...base, name: data.name || data.title, category: data.category,
         description: (data.description||'').slice(0,500),
         county: data.county || data['location.county'], price: data.price,
@@ -190,12 +229,18 @@ function transformDoc(col, docId, data) {
         'seller.verified': data['seller.verified'] || false };
     case 'properties':
     case 'real_estate':
+    /* the property hub writes propertyListings; BnB is a property too */
+    case 'propertyListings':
+    case 'bnbListings':
       return { ...base, title: data.title || data.name, type: data.type,
         listingType: data.listingType || data.purpose, price: data.price,
         bedrooms: data.bedrooms, bathrooms: data.bathrooms,
         county: data.county || data['location.county'], town: data.town || data.area,
         agentId: data.agentId || data.uid };
     case 'events':
+    /* the events hub writes entEvents; venues are event entities */
+    case 'entEvents':
+    case 'entVenues':
       return { ...base, title: data.title || data.name, category: data.category,
         description: (data.description||'').slice(0,500), venue: data.venue,
         county: data.county, startDate: data.startDate, endDate: data.endDate,
@@ -251,9 +296,12 @@ async function backfillCollection({ col, index, global: globalSearch }) {
       if (data.status === 'deleted' || data.status === 'draft' || data._noIndex) { skipped++; continue; }
 
       try {
-        const record = transformDoc(col, docId, data);
+        /* enforceSize on BOTH records — Algolia rejects the entire batch if any
+           single record exceeds 10 KB, so one oversized document would
+           otherwise cost every other record in the same page. */
+        const record = enforceSize(transformDoc(col, docId, data));
         primary.push(record);
-        if (globalSearch) global.push(toGlobal(col, docId, record));
+        if (globalSearch) global.push(enforceSize(toGlobal(col, docId, record)));
       } catch { skipped++; }
     }
 

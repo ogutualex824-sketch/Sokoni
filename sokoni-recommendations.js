@@ -6,6 +6,23 @@
 (function (window) {
   'use strict';
 
+  /* Self-bootstrap the shared image render helper (sokoni-image.js) if the host page
+     didn't load it — so this engine's renderProductImage() upgrade activates on any
+     page, independent of a per-page <script> tag (which, on index.html, is subject to a
+     multi-agent deploy race on the shared file). Idempotent + fail-open: the render is
+     already guarded (falls back to an inline <img>) if the helper isn't ready. */
+  (function ensureSokoniImage(){
+    try {
+      if (typeof document === 'undefined' || window.renderProductImage) return;
+      if (document.querySelector('script[data-sk-image-boot],script[src*="sokoni-image.js"]')) return;
+      var s = document.createElement('script');
+      s.src = 'sokoni-image.js';
+      s.async = false;
+      s.setAttribute('data-sk-image-boot','1');
+      (document.head || document.documentElement).appendChild(s);
+    } catch (_) { /* fail open */ }
+  })();
+
   /* ── Firebase config (project sokoni-aeb26) ── */
   const FB_CONFIG = {
     apiKey:            'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE',
@@ -104,7 +121,9 @@
     const type = (item.type || 'product').toLowerCase();
     const id = item.id || '';
     if (type === 'service')  return 'services.html?id=' + encodeURIComponent(id);
-    if (type === 'provider') return 'provider.html?id=' + encodeURIComponent(id);
+    /* provider-profile.html is the public profile; provider.html is the
+       provider's own dashboard and ignores an id entirely. */
+    if (type === 'provider') return 'provider-profile.html?uid=' + encodeURIComponent(id);
     if (type === 'business' || type === 'mechanic')
                              return 'mechanic.html?id=' + encodeURIComponent(id);
     return 'product.html?id=' + encodeURIComponent(id);
@@ -610,7 +629,9 @@
          via absolute positioning (CSS). If the image fails to load, onerror removes
          the img element and the emoji underneath is revealed automatically. */
       const imgTag = item.image
-        ? '<img src="' + _esc(item.image) + '" loading="lazy" alt="' + name + '" onerror="this.remove()">'
+        ? (window.renderProductImage
+            ? window.renderProductImage({ src: item.image, alt: name, wrap: false, fallbackMode: 'remove' })
+            : '<img src="' + _esc(item.image) + '" loading="lazy" decoding="async" alt="' + name + '" onerror="this.remove()">')
         : '';
 
       return `<a href="${url}" class="sk-rec-card" onclick="${trackClick}">

@@ -180,9 +180,18 @@ const getAlgoliaSearchKey = onCall(
       analyticsTags:         [`role_${role}`, 'app_sokoni', 'platform_web'],
     };
 
-    /* Visibility filter — admins/moderators see all; others see only published content */
+    /* Visibility filter — admins/moderators see all; others see only content the
+       platform considers visible.
+       `status:active OR status:published` alone was wrong: it is an allowlist,
+       and the platform's visibility contract (realtime.js) treats an ABSENT
+       status as visible — most live products carry no status field at all. A
+       key carrying only that filter hides the bulk of the catalogue from every
+       non-admin searcher. The negated form matches the contract: everything is
+       visible except what is explicitly withdrawn. */
     if (!isAdmin && role !== 'moderator') {
-      restrictions.filters = 'status:active OR status:published';
+      restrictions.filters =
+        'NOT status:archived AND NOT status:deleted AND NOT status:hidden ' +
+        'AND NOT status:removed AND NOT status:banned AND NOT isVisible:false';
     }
 
     const key = _generateKey(searchKey, restrictions);

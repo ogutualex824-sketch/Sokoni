@@ -10148,6 +10148,22 @@ select optgroup {
     flex:1;
 }
 
+/* Card variant summary — "Black • XL". Deliberately quiet: it sits between the
+   name and the price, so it must read as supporting detail and never compete
+   with either. Single line, ellipsised, and absent entirely when a product
+   declares no variants. */
+.pcard-variants{
+    color:rgba(255,255,255,0.5);
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:0.2px;
+    margin-top:3px;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+body.light-mode .pcard-variants{ color:rgba(0,0,0,0.5); }
+
 .product-location-tag{
     background:rgba(0,153,255,0.1);
     border:1px solid rgba(0,153,255,0.2);
@@ -15215,7 +15231,9 @@ p { line-height:1.52; }
 .seller-card,
 [class*="-card"]:not([class*="modal"]):not([class*="n-panel"]):not([class*="nd-item"]):not([class*="mmenu"]):not([class*="toast"]) {
   transition:transform 0.18s var(--pk-ease), box-shadow 0.18s ease, border-color 0.18s ease !important;
-  will-change:transform;
+  /* will-change removed — see mobile.css. This [class*="-card"] wildcard was the
+     broadest of the four, promoting every card platform-wide to its own GPU
+     layer and blanking the screen on mobile scroll. */
 }
 .product-card:hover, .seller-card:hover {
   transform:translateY(-4px) !important;
@@ -15340,7 +15358,10 @@ textarea:focus, select:focus {
 .product-card img,
 [class*="-card"] img:not([class*="avatar"]):not([class*="logo"]):not([class*="icon"]) {
   transition:transform 0.25s var(--pk-ease) !important;
-  will-change:transform;
+  /* will-change removed — see the card rule above. This promoted every card's
+     IMAGE to its own layer on top of the card itself, doubling the compositor
+     layer count on a grid (40 cards -> 80 layers) and compounding the mobile
+     black-screen-on-scroll. The transition drives the hover-zoom without it. */
 }
 .product-card:hover img,
 [class*="-card"]:hover img:not([class*="avatar"]):not([class*="logo"]):not([class*="icon"]) {

@@ -69,6 +69,11 @@
       const payload = _trimPayload(product);
       payload._syncedAt = serverTimestamp();
       await setDoc(doc(db, 'products', String(product.id)), payload, { merge: true });
+      /* Drop the warm search cache for products, or the seller searches for the
+         item they just listed and is served the pre-write scan (up to 10 min
+         in-session / 30 min from localStorage) — which reads as "search is
+         broken" when the write actually succeeded. */
+      try { window.SokoniFirestoreSearch?.invalidateScanCache?.('products'); } catch(_) {}
     } catch(e) {
       console.warn('[SellerWiring] write failed:', e.message);
     }

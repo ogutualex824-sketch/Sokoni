@@ -12,6 +12,52 @@
      overlap already documented for seller.html. -->
 <html lang="en" class="sk-no-header" data-splash="1" data-require-auth="true" data-own-header>
 <head>
+  <script src="sokoni-crash-sentinel.js"></script>
+  <!-- ── Auth gate ──────────────────────────────────────────────────────────
+       An opaque splash covers the ENTIRE page until SokoniAuthState POSITIVELY
+       confirms a signed-in user (resolver runs alongside the auth guard below).
+       A signed-out visitor is redirected before this ever lifts, so no
+       authenticated layout — profile skeleton, wallet, trust score — is visible
+       to them, not even for a frame. Resolution-aware, so it never fights the
+       loggedIn-flag guard nor reintroduces the profile↔login loop. -->
+  <style id="sk-auth-gate-css">
+    #sk-auth-gate{ position:fixed; inset:0; z-index:2147483647; background:#050505;
+      display:flex; align-items:center; justify-content:center; flex-direction:column; gap:20px; }
+    #sk-auth-gate .sk-ag-spin{ width:44px; height:44px; border-radius:50%;
+      border:3px solid rgba(113,255,0,0.18); border-top-color:#71ff00;
+      animation:sk-ag-spin 0.8s linear infinite; }
+    #sk-auth-gate .sk-ag-txt{ color:#8a8a8a; letter-spacing:0.3px;
+      font:500 14px/1.4 "Segoe UI",system-ui,sans-serif; }
+    @keyframes sk-ag-spin{ to{ transform:rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce){ #sk-auth-gate .sk-ag-spin{ animation:none; } }
+    html.sk-auth-ok #sk-auth-gate{ display:none !important; }
+  </style>
+  <!-- ── Profile verification (email link + phone OTP) UI ── -->
+  <style id="pv-css">
+    .pv-btn{ margin-left:auto; flex:0 0 auto; background:#71ff00; color:#052e00;
+      border:0; border-radius:999px; padding:7px 16px; font:700 12px/1 "Segoe UI",system-ui,sans-serif;
+      cursor:pointer; letter-spacing:0.3px; }
+    .pv-btn:disabled{ opacity:0.55; cursor:default; }
+    .pv-modal{ position:fixed; inset:0; z-index:2147483646; background:rgba(0,0,0,0.72);
+      display:flex; align-items:center; justify-content:center; padding:20px; }
+    .pv-box{ position:relative; width:min(400px,100%); background:#0c0c0c;
+      border:1px solid rgba(113,255,0,0.22); border-radius:20px; padding:26px 22px 24px;
+      box-shadow:0 24px 70px rgba(0,0,0,0.7); font-family:"Segoe UI",system-ui,sans-serif; }
+    .pv-x{ position:absolute; top:12px; right:14px; background:transparent; border:0; color:#8a8a8a;
+      font-size:26px; line-height:1; cursor:pointer; }
+    .pv-title{ color:#fff; font-size:19px; font-weight:800; margin-bottom:6px; }
+    .pv-hint{ color:#9a9a9a; font-size:13px; margin-bottom:16px; }
+    .pv-input{ width:100%; box-sizing:border-box; background:#050505; color:#fff;
+      border:1px solid rgba(255,255,255,0.14); border-radius:12px; padding:14px 16px;
+      font-size:16px; margin-bottom:14px; }
+    .pv-input:focus{ outline:none; border-color:#71ff00; }
+    .pv-otp{ text-align:center; letter-spacing:8px; font-size:22px; font-weight:700; }
+    .pv-cta{ width:100%; background:#71ff00; color:#052e00; border:0; border-radius:12px;
+      padding:14px; font-size:15px; font-weight:800; cursor:pointer; }
+    .pv-cta:disabled{ opacity:0.6; cursor:default; }
+    .pv-link{ display:block; width:100%; margin-top:12px; background:transparent; border:0;
+      color:#8a8a8a; font-size:13px; cursor:pointer; }
+  </style>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -21,8 +67,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SOKONI — My Profile</title>
 <meta name="description" content="Your universal SOKONI profile — manage all roles, orders, listings, bookings and more.">
-<meta property="og:title" content="SOKONI — My Profile">
-<meta property="og:description" content="Universal profile across all SOKONI hubs.">
+<meta name="robots" content="noindex, nofollow">
+<!-- This is the OWNER'S private dashboard. If the URL ever reaches a link
+     preview the card must read as a neutral sign-in destination, not as
+     somebody's account — a first-person "My Profile" card is what made a
+     stray share look like a session leak. The shareable page is
+     /profile/{uid} (public-profile.html). -->
+<meta property="og:title" content="SOKONI">
+<meta property="og:description" content="Kenya's unified marketplace — sign in to your SOKONI account.">
 <meta property="og:image" content="https://mysokoni.co.ke/assets/logosokoni.png">
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
 <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
@@ -1596,6 +1648,12 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 </head>
 
 <body>
+<!-- Auth gate splash — first paint, opaque, covers the page until a verified session
+     is confirmed by the resolver near the auth guard below. Lifts via html.sk-auth-ok. -->
+<div id="sk-auth-gate" role="status" aria-live="polite" aria-label="Loading your profile">
+  <div class="sk-ag-spin"></div>
+  <div class="sk-ag-txt">Loading&hellip;</div>
+</div>
 <script src="sokoni-security.js"></script>
 <script src="sokoni-guards.js"></script>
 <script src="splash.js"></script>
@@ -1667,6 +1725,15 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
                   background:rgba(113,255,0,0.14);border-color:rgba(113,255,0,0.4);color:#71ff00;">
           &#127978; My Store
         </a>
+        <!-- My Shops & Branches — the seller's shop (business identity, distinct
+             from the person's name above) and each of its branches, every one a
+             separate shareable storefront (store.html?id=<uid>&branch=<id>).
+             Populated only for sellers by _renderMyBranches() from the seller's
+             own Firestore doc (sellers/{uid}.branches). Hidden otherwise. -->
+        <div id="upBranchesWrap" style="display:none;width:100%;margin-top:12px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#127978; My Shops &amp; Branches</div>
+          <div id="upBranchesList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
       </div>
 
       <!-- Meta info -->
@@ -2661,7 +2728,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
   <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
   <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
-  <a href="profile.html#orders" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
   <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
 </nav>
 
@@ -2757,11 +2824,19 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 </div>
 
 <!-- Scripts -->
+<!-- Canonical auth-state — THE single resolution-aware source of "who is signed
+     in". Loads before permissions/guards so they consume it and never conclude
+     "logged out" while Firebase Auth is still resolving. -->
+<script src="sokoni-auth-state.js"></script>
 <script src="sokoni-permissions.js"></script>
 <script src="profile.js"></script>
 <script src="sokoni-invoice.js"></script>
 <script type="module" src="session-manager.js"></script>
 <script type="module" src="firebase.js"></script>
+<!-- Centralized, idempotent baseline repair: gives every authenticated user the
+     same baseline (users doc / wallet / notificationPrefs), creating ONLY what is
+     missing, never overwriting. Self-hooks on the verified session; fails open. -->
+<script src="sokoni-user-bootstrap.js" defer></script>
 <!-- Canonical avatar resolver + upload. Not deferred: handleAvatarUpload is
      an inline onchange handler, so SokoniAvatar must exist before a user
      can reach the file picker. -->
@@ -2780,6 +2855,28 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 /* ═══════════════════════════════════════════════════════════════
    UNIVERSAL PROFILE — main controller
 ═══════════════════════════════════════════════════════════════ */
+
+/* ── Low-memory guard (2026-07-26) ──────────────────────────────
+   Reported: this page crashes ("Aw, Snap!" / renderer OOM) on low-RAM Android
+   for providers (Pacifique the barber, Ann the mama fua) — the Profile/Orders
+   buttons load it and the tab renders it. profile.html auto-runs a large
+   dashboard cascade on load: search index, adaptive hubs/cards, and module /
+   exec / notification summaries. On a budget device that cascade is what
+   exhausts the renderer. When the device reports low memory we skip those
+   OPTIONAL widgets, so the CORE profile — avatar, name, basic stats, tabs,
+   Orders, Wallet, quick actions, every button — still loads and works. Capable
+   devices are unaffected: __SK_LOWMEM is false and every widget renders as before. */
+window.__SK_LOWMEM = (function () {
+  try {
+    var m = navigator.deviceMemory;                     /* GB, Chrome/Android   */
+    if (typeof m === 'number' && m > 0 && m <= 2) return true;
+    /* deviceMemory unreported + few cores on Android ≈ budget device */
+    if (m == null && /Android/i.test(navigator.userAgent || '') &&
+        navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) return true;
+  } catch (e) {}
+  return false;
+})();
+if (window.__SK_LOWMEM) { try { document.documentElement.setAttribute('data-lowmem', '1'); } catch (e) {} }
 
 /* ── Helpers ── */
 function escHtml(s){
@@ -2838,12 +2935,64 @@ function getRoleDef(key){
   return ROLES.find(function(r){ return r.key===key; }) || ROLES[0];
 }
 
-/* ── Auth guard ── */
+/* ── Auth guard ──
+   BUGFIX 2026-07-26: this required the sokoniUser CACHE (_user.uid). An empty or
+   App-Check-blocked cache on a genuinely-logged-in account bounced to login →
+   the profile↔login loop. CDP named profile.html here as the redirect initiator —
+   the 4th, hidden copy of the same bug (after auth-guard.js / profile.js /
+   sokoni-security.js). Gate on the SESSION FLAG alone; firebase.js/bootstrap
+   populate the cache and the sokoniAuthReady listener re-reads it below. */
 var _user = getUser();
-if(!_user || !_user.uid){
-  window.location.href = 'login.html';
+if(localStorage.getItem('loggedIn') !== 'true'){
+  try { var _rl=JSON.parse(localStorage.getItem('sk_auth_redirects')||'[]'); _rl.push({t:Date.now(),from:location.pathname,to:'login.html',reason:'profile-inline-guard',loggedIn:false,hasCache:!!_user}); while(_rl.length>40)_rl.shift(); localStorage.setItem('sk_auth_redirects',JSON.stringify(_rl)); } catch(e){}
+  console.warn('[SOKONI AUTH REDIRECT] profile-inline-guard → login (loggedIn flag not set)');
+  /* Carry the return target so auth.js sends the user BACK to /profile after a
+     successful sign-in (spec: "return to /profile instead of the home page"). */
+  window.location.href = 'login.html?redirect=profile.html';
   throw new Error('Not authenticated');
 }
+if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokoniAuthReady fill it */
+
+/* ── Auth-gate resolver ─────────────────────────────────────────────────────
+   The synchronous flag guard above gives the fast redirect for the obvious
+   signed-out case (no loggedIn flag). This closes the subtler one the user saw
+   in screenshots: a STALE loggedIn flag with NO live Firebase session — where
+   the flag guard would let the authenticated layout paint. The page stays under
+   the opaque #sk-auth-gate splash until SokoniAuthState (resolution-aware) has
+   AUTHORITATIVELY reported a real user; only then do we reveal. If Firebase
+   reports no user, we clear the stale cache first — otherwise login.html's
+   already-logged-in guard would bounce us straight back and re-create the
+   profile↔login loop — then redirect. SokoniAuthState NEVER concludes
+   logged-out while auth is still resolving, so this cannot reintroduce the loop. */
+(function _profileAuthGate(){
+  var HTML = document.documentElement;
+  function reveal(){ HTML.classList.add('sk-auth-ok'); }
+  function toLogin(){
+    try { localStorage.removeItem('loggedIn'); localStorage.removeItem('sokoniUser'); } catch(_){}
+    try { location.replace('login.html?redirect=profile.html'); }
+    catch(_){ location.href = 'login.html?redirect=profile.html'; }
+  }
+  var AS = window.SokoniAuthState;
+  if (AS && AS.ready && typeof AS.ready.then === 'function'){
+    AS.ready.then(function(session){
+      if (session && session.uid) reveal(); else toLogin();
+    }).catch(function(){
+      /* Never trap a real user on the splash: fall back to the flag we already know is 'true'. */
+      reveal();
+    });
+  } else {
+    /* SokoniAuthState unavailable — we only reached here because the flag was
+       'true', so reveal rather than strand the user on the splash. */
+    reveal();
+  }
+  /* Absolute failsafe past SokoniAuthState's own 12s optimistic backstop. */
+  setTimeout(function(){
+    if (HTML.classList.contains('sk-auth-ok')) return;
+    if (AS && AS.isResolved && AS.isResolved() &&
+        !(AS.getCurrentSession && AS.getCurrentSession())) toLogin();
+    else reveal();
+  }, 14000);
+})();
 
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
 var _profSellerProductsUnsub = null;
@@ -2928,13 +3077,57 @@ function _syncMyStoreBtn(u){
   btn.style.display = isSeller ? 'inline-flex' : 'none';
 }
 
+/* List the seller's shop + branches, each linking to its own storefront URL.
+   The shop name (business identity) is deliberately shown separately from the
+   person's name in the header above — they are independent fields. */
+function _isSellerUser(u){
+  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
+  return roles.indexOf('seller') > -1 || roles.indexOf('vendor') > -1 ||
+         !!(u && u.isSeller) || !!(u && u.registeredAs && u.registeredAs.seller);
+}
+async function _renderMyBranches(u){
+  var wrap = document.getElementById('upBranchesWrap');
+  var list = document.getElementById('upBranchesList');
+  if(!wrap || !list) return;
+  var uid = u && (u.uid || u.id);
+  if(!uid || !_isSellerUser(u)){ wrap.style.display = 'none'; return; }
+  /* firebase.js (module) may not have published window.firebaseDB yet. */
+  for(var i=0;i<40 && !window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
+  var db = window.firebaseDB;
+  if(!db){ wrap.style.display = 'none'; return; }
+  try {
+    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap = await m.getDoc(m.doc(db, 'sellers', String(uid)));
+    var sd = (snap.exists && snap.exists()) ? (snap.data() || {}) : {};
+    var shopName = sd.shopName || sd.name || sd.storeName || sd.businessName || 'My Shop';
+    var branches = Array.isArray(sd.branches) && sd.branches.length ? sd.branches
+                 : [{ id:'main', name:'', isMain:true }];   /* single-shop seller */
+    list.innerHTML = branches.map(function(b){
+      var isMain = b.isMain || String(b.id) === 'main';
+      var label  = shopName + (b.name && !isMain ? ' &mdash; ' + escHtml(b.name) : '');
+      var url    = 'store.html?id=' + encodeURIComponent(uid) +
+                   (b.id && !isMain ? '&branch=' + encodeURIComponent(b.id) : '');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">'
+        + '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + label + '</div>'
+        + (b.address ? '<div style="font-size:11px;color:rgba(255,255,255,0.45);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">&#128205; ' + escHtml(b.address) + '</div>' : '')
+        + '</div><div style="display:flex;gap:6px;flex-shrink:0;">'
+        + '<a href="' + url + '" style="padding:7px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View</a>'
+        + '<a href="seller.html" style="padding:7px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:800;text-decoration:none;">Manage</a>'
+        + '</div></div>';
+    }).join('');
+    wrap.style.display = 'block';
+  } catch(e){ wrap.style.display = 'none'; }
+}
+
 function renderHeaderCard(){
   _user = getUser();
   if(!_user) return;
 
   _syncMyStoreBtn(_user);
+  _renderMyBranches(_user);   /* seller's shop + branches, each its own storefront */
 
-  /* Name */
+  /* Name — the PERSON's name (personal identity), independent of the shop name
+     which lives on the seller doc and is shown in "My Shops & Branches" below. */
   var nameEl = document.getElementById('upName');
   if(nameEl) nameEl.textContent = _user.name || 'Sokoni User';
 
@@ -3208,6 +3401,41 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 });
 
+/* Profile-edit rate limit — 3 edits per rolling 14-day window.
+   The window opens on the first edit; after 3 edits the account is locked until
+   14 days from that first edit, then it resets to a fresh 3. Count + window start
+   live on the user document (Firestore is authoritative, mirrored into
+   localStorage by listenFirestoreProfile), so the limit follows the account
+   across devices and cannot be dodged by clearing one browser.
+   NOTE: this is client-side enforcement — it stops ordinary over-editing but a
+   determined user could bypass it. Rules-level enforcement is a follow-up. */
+var PROFILE_EDIT_MAX = 3;
+var PROFILE_EDIT_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+function _profileEditGate(u){
+  var now = Date.now();
+  /* Key off the epoch-ms window start ONLY — the same field the security rule
+     reads — so client and rule never disagree. A doc written before this field
+     existed (ISO-only, from the first client-side version) is treated as a fresh
+     window: the count resets to 1 once, the rule accepts it (no ms → fresh
+     branch), and every edit after that is fully enforced. */
+  var startMs = (u && Number(u.profileEditWindowStartMs)) || 0;
+  var count = startMs ? ((u && Number(u.profileEditCount)) || 0) : 0;
+  /* No window yet, or the 14 days have elapsed → a fresh allowance of 3. */
+  if(!startMs || isNaN(startMs) || (now - startMs) >= PROFILE_EDIT_WINDOW_MS){
+    return { allowed:true, nextCount:1, nextStart:new Date(now).toISOString(),
+             nextStartMs:now, remainingAfter: PROFILE_EDIT_MAX - 1 };
+  }
+  if(count >= PROFILE_EDIT_MAX){
+    return { allowed:false, unlockAt:new Date(startMs + PROFILE_EDIT_WINDOW_MS) };
+  }
+  /* Continuing the same window — keep the exact ms start so it matches what the
+     rule has stored (the rule requires window start unchanged on a continuing edit). */
+  return { allowed:true, nextCount:count + 1,
+           nextStart:(u.profileEditWindowStart || new Date(startMs).toISOString()),
+           nextStartMs:startMs, remainingAfter: PROFILE_EDIT_MAX - (count + 1) };
+}
+
 function saveInlineEdit(){
   var name     = (document.getElementById('ieNameInput').value||'').trim();
   var username = (document.getElementById('ieHandleInput').value||'').trim().replace(/^@/,'');
@@ -3221,6 +3449,16 @@ function saveInlineEdit(){
   var bio   = bioEl ? (bioEl.value||'').trim().slice(0,300) : (_user && _user.bio) || '';
 
   _user = getUser();
+
+  /* Rate-limit gate — checked BEFORE any write. Blocked → tell the user when they
+     can edit again and stop; nothing is written and no edit is consumed. */
+  var gate = _profileEditGate(_user);
+  if(!gate.allowed){
+    var when = gate.unlockAt.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'});
+    upToast('You have used all ' + PROFILE_EDIT_MAX + ' profile edits. You can edit again on ' + when + '.', false);
+    return;
+  }
+
   _user.name = name;
   _user.username = username || slugify(name);
   /* phone deliberately NOT written — the field is read-only, and persisting it here only
@@ -3237,15 +3475,44 @@ function saveInlineEdit(){
      so saving a bio never blanks an existing photo. listenFirestoreProfile() already reads
      bio/avatarUrl/coverUrl back, so every surface refreshes without a reload. */
   var payload = {name:name, username:_user.username, location:location,
-                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt};
+                 tillNumber:till||null, bio:bio, updatedAt:_user.updatedAt,
+                 /* consume one edit — persisted atomically with the edit, so a
+                    failed write costs nothing (the count only advances if the
+                    whole setDoc lands) */
+                 profileEditCount: gate.nextCount,
+                 profileEditWindowStart: gate.nextStart,
+                 profileEditWindowStartMs: gate.nextStartMs};
   if(_ieAvatarData) payload.avatarUrl = _ieAvatarData;
   if(_ieCoverData)  payload.coverUrl  = _ieCoverData;
-  saveToFirestore(payload);
-
+  /* Optimistic local update already happened (setUser above), so the UI reflects
+     the edit immediately and the editor can close. But the toast now waits for the
+     ACTUAL server result — a false "Saved!" over a write that App Check denied is
+     what made the edit silently vanish on refresh. On failure we say so and keep
+     the editor's values in localStorage so nothing is lost before a retry. */
   _ieAvatarData = null; _ieCoverData = null;
   renderHeaderCard();
   toggleInlineEdit();
-  upToast('Profile saved!', true);
+  upToast('Saving…', true);
+  saveToFirestore(payload).then(function(){
+    /* Only now that the write landed do we advance the local counter — so a
+       failed save never burns one of the three edits. */
+    _user = getUser();
+    _user.profileEditCount = gate.nextCount;
+    _user.profileEditWindowStart = gate.nextStart;
+    _user.profileEditWindowStartMs = gate.nextStartMs;
+    setUser(_user);
+    var left = gate.remainingAfter;
+    upToast(left > 0
+      ? ('Profile saved — ' + left + ' edit' + (left === 1 ? '' : 's') + ' left in this 14-day window')
+      : 'Profile saved — that was your last edit; you can change it again in 14 days', true);
+  }).catch(function(err){
+    var code = (err && (err.code || err.message)) || 'unknown';
+    console.warn('[profile] save failed:', code);
+    var msg = code === 'not-signed-in' ? 'Please sign in again to save.'
+            : code === 'db-unavailable' ? 'You appear to be offline — changes will not save.'
+            : 'Could not save to the server. Check your connection and try again.';
+    upToast(msg, false);
+  });
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -3847,17 +4114,40 @@ function addRole(roleKey){
 /* ══════════════════════════════════════════════════════════════
    FIRESTORE SYNC
 ══════════════════════════════════════════════════════════════ */
+/* Returns a Promise that RESOLVES only when the write actually lands and REJECTS
+   on a real failure, so callers can stop telling the user "Saved!" when nothing
+   reached the server.
+
+   Why the retry: App Check is enforced on Firestore and 403s INTERMITTENTLY on
+   this project (an identical session can succeed then be denied), and a denied
+   write surfaces as permission-denied. The old code ran the write once,
+   fire-and-forget, and swallowed any rejection into a console.warn — so a single
+   App Check hiccup silently dropped the edit, the "Profile saved!" toast fired
+   anyway, and on refresh listenFirestoreProfile's snapshot overwrote the local
+   change with the stale server doc. That is exactly the reported "edit profile
+   doesn't save / goes back to what it was". Same one-retry pattern as the
+   catalogue listener in sokoni-db.js; the token normally refreshes within ~1.2s. */
 function saveToFirestore(fields){
-  if(!_user || !_user.uid) return;
+  if(!_user || !_user.uid) return Promise.reject(new Error('not-signed-in'));
   fields.updatedAt = fields.updatedAt || new Date().toISOString();
-  if(window.firebaseDB){
-    import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
-      var ref = m.doc(window.firebaseDB,'users',_user.uid);
-      m.setDoc(ref, fields, {merge:true}).catch(function(err){ console.warn('Profile Firestore write:', err); });
-    }).catch(function(){});
-  }
-  /* also call legacy helper if available */
+  /* legacy mirror helper, best-effort */
   if(window.sokoniUpdateProfile){ try{ window.sokoniUpdateProfile(fields); }catch(e){} }
+  if(!window.firebaseDB) return Promise.reject(new Error('db-unavailable'));
+
+  return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
+    var ref = m.doc(window.firebaseDB,'users',_user.uid);
+    function attempt(n){
+      return m.setDoc(ref, fields, {merge:true}).catch(function(err){
+        var code = (err && err.code) || '';
+        var transient = /unavailable|deadline|internal|permission-denied|unauthenticated/.test(code);
+        if(n < 2 && transient){
+          return new Promise(function(r){ setTimeout(r, 1200); }).then(function(){ return attempt(n+1); });
+        }
+        throw err;
+      });
+    }
+    return attempt(1);
+  });
 }
 
 function listenFirestoreProfile(uid){
@@ -3882,6 +4172,11 @@ function listenFirestoreProfile(uid){
       if(data.followingCount) _user.followingCount = data.followingCount;
       if(data.averageRating) _user.averageRating = data.averageRating;
       if(data.createdAt) _user.createdAt = data.createdAt;
+      /* Rate-limit counter is server-authoritative — mirror it so the 3-edit /
+         14-day window follows the account and survives a cleared browser. */
+      if(data.profileEditCount !== undefined) _user.profileEditCount = data.profileEditCount;
+      if(data.profileEditWindowStart) _user.profileEditWindowStart = data.profileEditWindowStart;
+      if(data.profileEditWindowStartMs !== undefined) _user.profileEditWindowStartMs = data.profileEditWindowStartMs;
       setUser(_user);
       renderHeaderCard();
       renderRoleSwitcher();
@@ -3894,9 +4189,15 @@ function listenFirestoreProfile(uid){
 ══════════════════════════════════════════════════════════════ */
 function logoutUser(_c){
   if(!_c){_skConfirm('Log out of SOKONI?',()=>logoutUser(true));return;}
-  localStorage.removeItem('sokoniUser');
-  localStorage.removeItem('sokoniCart');
-  window.location.href = 'login.html';
+  /* SECURITY: never do a partial (2-key) logout — that left the previous user's
+     wallet/profile/permissions caches on the device (cross-account leak). Route
+     through the canonical sokoniSignOut(), which awaits firebaseAuth.signOut(),
+     tears down Firestore listeners, and wipes ALL user-specific storage. Then a
+     hard redirect drops any remaining in-memory state. */
+  var _done = function(){ window.location.href = 'login.html'; };
+  try {
+    (window.sokoniSignOut ? window.sokoniSignOut() : Promise.resolve()).finally(_done);
+  } catch(_){ _done(); }
 }
 window.logoutUser = logoutUser;
 
@@ -4393,6 +4694,198 @@ window.logoutUser = logoutUser;
     if (devEl && window.firebase && firebase.auth && firebase.auth().currentUser) {
       devEl.textContent = 'Manage trusted devices and sessions';
     }
+
+    /* Email + phone verification actions, driven by the LIVE Firebase user. */
+    _pvInit();
+  }
+
+  /* ═══════════════════════════════════════════════════════════════════
+     PROFILE VERIFICATION — email link + phone SMS OTP
+     The Security panel's Email/Phone rows are driven from the LIVE Firebase
+     user (authoritative + immediate, unlike the cached CF overview). When a
+     channel is unverified we inject a "Verify" action; phone verification
+     links the SMS-verified number to the signed-in account so
+     currentUser.phoneNumber is set and the users doc is updated app-wide.
+  ═══════════════════════════════════════════════════════════════════ */
+  var _pvConfirm = null;        /* ConfirmationResult from linkWithPhoneNumber */
+  var _pvVerifier = null;       /* RecaptchaVerifier (invisible, reused)       */
+  var _pvPendingPhone = '';     /* E.164 phone awaiting OTP confirmation        */
+
+  function _pvToast(msg, type){ try { (window._skToast ? window._skToast(msg, type) : alert(msg)); } catch(_){ try{ alert(msg); }catch(e){} } }
+  function _pvUser(){ try { return window.firebaseAuth && window.firebaseAuth.currentUser; } catch(_){ return null; } }
+
+  /* Kenya-first E.164 normaliser: 07.. / 01.. / 2547.. / +2547.. / 7XXXXXXXX */
+  function _pvNormalizePhone(raw){
+    var s = String(raw||'').replace(/[^\d+]/g,'');
+    if (!s) return '';
+    if (s.charAt(0) === '+') return s;
+    if (s.indexOf('254') === 0) return '+' + s;
+    if (s.charAt(0) === '0')    return '+254' + s.slice(1);
+    if (s.length === 9)         return '+254' + s;
+    return '+' + s;
+  }
+
+  /* Paint a security row + (un)verified Verify button. */
+  function _pvRow(idBase, verified, yesText, noText, onVerify){
+    var st  = document.getElementById(idBase + 'Status');
+    var sub = document.getElementById(idBase);
+    if (st){ st.style.display=''; st.className = verified ? 'pi-sec-good' : 'pi-sec-warn'; st.textContent = verified ? '✓' : '!'; }
+    if (sub) sub.textContent = verified ? yesText : noText;
+    var row   = sub ? sub.closest('.pi-sec-item') : null;
+    var btnId = idBase + 'VerifyBtn';
+    var btn   = document.getElementById(btnId);
+    if (verified || !onVerify){ if (btn) btn.remove(); return; }
+    if (!row) return;
+    if (!btn){ btn = document.createElement('button'); btn.id = btnId; btn.type = 'button'; btn.className = 'pv-btn'; row.appendChild(btn); }
+    btn.textContent = 'Verify'; btn.disabled = false; btn.onclick = onVerify;
+  }
+
+  function _pvInit(){
+    var u = _pvUser();
+    if (!u){ document.addEventListener('sokoniAuthReady', function _h(){ document.removeEventListener('sokoniAuthReady', _h); _pvInit(); }); return; }
+    /* EMAIL — authoritative from the ID token. */
+    _pvRow('piSecEmail', !!u.emailVerified, 'Email verified',
+      (u.email ? 'Not verified — tap Verify' : 'No email on this account'),
+      (u.email ? _pvSendEmail : null));
+    /* PHONE — verified === linked to the auth account. */
+    _pvRow('piSecPhone', !!u.phoneNumber, 'Phone verified', 'Not verified — tap Verify', _pvStartPhone);
+  }
+
+  function _pvSendEmail(){
+    var u = _pvUser(); if (!u || !u.email) return;
+    var btn = document.getElementById('piSecEmailVerifyBtn');
+    if (btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+    (window.firebaseSDK && window.firebaseSDK.sendEmailVerification ? window.firebaseSDK.sendEmailVerification() : Promise.reject(new Error('unavailable')))
+      .then(function(){
+        _pvToast('Verification email sent to ' + u.email + '. Open it, tap the link, then come back.', 'success');
+        if (btn){ btn.textContent = "I've verified"; btn.disabled = false; btn.onclick = _pvRecheckEmail; }
+      })
+      .catch(function(e){
+        var c = e && e.code;
+        _pvToast(c === 'auth/too-many-requests' ? 'Too many attempts — wait a minute and try again.' : 'Could not send the email. Please try again.', 'error');
+        if (btn){ btn.disabled = false; btn.textContent = 'Verify'; }
+      });
+  }
+  function _pvRecheckEmail(){
+    var btn = document.getElementById('piSecEmailVerifyBtn');
+    if (btn){ btn.disabled = true; btn.textContent = 'Checking…'; }
+    (window.firebaseSDK && window.firebaseSDK.reloadUser ? window.firebaseSDK.reloadUser() : Promise.resolve())
+      .then(function(){ var u=_pvUser(); _pvInit(); if (u && u.emailVerified) _pvToast('Email verified ✓', 'success'); else _pvToast('Not verified yet — tap the link in the email first.', 'info'); })
+      .catch(function(){ _pvInit(); });
+  }
+
+  function _pvEnsureRecaptcha(){
+    if (_pvVerifier) return _pvVerifier;
+    if (!(window.firebaseSDK && window.firebaseSDK.RecaptchaVerifier && window.firebaseAuth)) return null;
+    var host = document.getElementById('pv-recaptcha');
+    if (!host){ host = document.createElement('div'); host.id = 'pv-recaptcha'; host.style.display = 'none'; document.body.appendChild(host); }
+    try { _pvVerifier = new window.firebaseSDK.RecaptchaVerifier(window.firebaseAuth, 'pv-recaptcha', { size: 'invisible' }); }
+    catch(e){ _pvVerifier = null; }
+    return _pvVerifier;
+  }
+
+  function _pvStartPhone(){
+    if (!_pvUser()) return;
+    var prefill = (_user && (_user.phoneNumber || _user.phone)) || '';
+    _pvOpenModal(String(prefill).replace(/[^\d+\s()-]/g,''));
+  }
+
+  function _pvOpenModal(prefill){
+    _pvCloseModal();
+    var ov = document.createElement('div');
+    ov.id = 'pv-modal'; ov.className = 'pv-modal';
+    ov.innerHTML =
+      '<div class="pv-box" role="dialog" aria-modal="true" aria-label="Verify phone">' +
+        '<button class="pv-x" type="button" aria-label="Close" onclick="window._pvCloseModal&&window._pvCloseModal()">×</button>' +
+        '<div class="pv-title">Verify your phone</div>' +
+        '<div id="pv-step1">' +
+          '<div class="pv-hint">We’ll text you a 6-digit code.</div>' +
+          '<input id="pv-phone" class="pv-input" type="tel" inputmode="tel" autocomplete="tel" placeholder="07XX XXX XXX" value="'+ (prefill||'') +'">' +
+          '<button id="pv-send" type="button" class="pv-cta">Send code</button>' +
+        '</div>' +
+        '<div id="pv-step2" style="display:none;">' +
+          '<div class="pv-hint" id="pv-sent-to"></div>' +
+          '<input id="pv-otp" class="pv-input pv-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">' +
+          '<button id="pv-verify" type="button" class="pv-cta">Verify</button>' +
+          '<button id="pv-back" type="button" class="pv-link">Change number</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    document.body.style.overflow = 'hidden';
+    document.getElementById('pv-send').onclick   = _pvSendCode;
+    document.getElementById('pv-verify').onclick = _pvVerifyCode;
+    document.getElementById('pv-back').onclick   = function(){ _pvShowStep(1); };
+    ov.addEventListener('click', function(e){ if (e.target === ov) _pvCloseModal(); });
+    var inp = document.getElementById('pv-phone'); if (inp) inp.focus();
+  }
+  window._pvCloseModal = function(){ var ov = document.getElementById('pv-modal'); if (ov) ov.remove(); try { document.body.style.overflow = ''; } catch(_){} };
+  function _pvShowStep(n){
+    var s1 = document.getElementById('pv-step1'), s2 = document.getElementById('pv-step2');
+    if (s1) s1.style.display = n === 1 ? '' : 'none';
+    if (s2) s2.style.display = n === 2 ? '' : 'none';
+  }
+
+  function _pvSendCode(){
+    var phone = _pvNormalizePhone((document.getElementById('pv-phone')||{}).value || '');
+    if (!/^\+\d{10,15}$/.test(phone)){ _pvToast('Enter a valid phone number.', 'error'); return; }
+    var btn = document.getElementById('pv-send');
+    if (btn){ btn.disabled = true; btn.textContent = 'Sending…'; }
+    var verifier = _pvEnsureRecaptcha();
+    if (!verifier){ _pvToast('Verification is unavailable right now. Please try again.', 'error'); if (btn){ btn.disabled=false; btn.textContent='Send code'; } return; }
+    window.firebaseSDK.linkWithPhoneNumber(phone, verifier)
+      .then(function(confirmation){
+        _pvConfirm = confirmation; _pvPendingPhone = phone;
+        var to = document.getElementById('pv-sent-to'); if (to) to.textContent = 'Code sent to ' + phone;
+        _pvShowStep(2);
+        var otp = document.getElementById('pv-otp'); if (otp) otp.focus();
+      })
+      .catch(function(e){
+        var c = e && e.code, msg;
+        if (c === 'auth/credential-already-in-use' || c === 'auth/account-exists-with-different-credential') msg = 'This phone is already linked to another SOKONI account.';
+        else if (c === 'auth/provider-already-linked' || c === 'auth/phone-number-already-exists') msg = 'A phone is already linked to this account.';
+        else if (c === 'auth/invalid-phone-number') msg = 'That phone number looks invalid.';
+        else if (c === 'auth/too-many-requests') msg = 'Too many attempts — please wait and try again.';
+        else if (c === 'auth/captcha-check-failed') msg = 'Verification check failed — reload the page and try again.';
+        else msg = 'Could not send the code. Please try again.';
+        _pvToast(msg, 'error');
+        try { if (_pvVerifier && _pvVerifier.clear) _pvVerifier.clear(); } catch(_){}
+        _pvVerifier = null;
+        if (btn){ btn.disabled = false; btn.textContent = 'Send code'; }
+      });
+  }
+
+  function _pvVerifyCode(){
+    if (!_pvConfirm){ _pvToast('Please request a code first.', 'error'); return; }
+    var code = (((document.getElementById('pv-otp')||{}).value) || '').replace(/\D/g,'');
+    if (code.length < 6){ _pvToast('Enter the 6-digit code.', 'error'); return; }
+    var btn = document.getElementById('pv-verify');
+    if (btn){ btn.disabled = true; btn.textContent = 'Verifying…'; }
+    _pvConfirm.confirm(code)
+      .then(function(){ return _pvPersistPhone(_pvPendingPhone); })
+      .then(function(){ _pvToast('Phone verified ✓', 'success'); _pvConfirm = null; _pvCloseModal(); _pvInit(); })
+      .catch(function(e){
+        var c = e && e.code, msg;
+        if (c === 'auth/invalid-verification-code') msg = 'Incorrect code. Check it and try again.';
+        else if (c === 'auth/code-expired') msg = 'That code expired — request a new one.';
+        else if (c === 'auth/credential-already-in-use') msg = 'This phone is already linked to another account.';
+        else msg = 'Verification failed. Please try again.';
+        _pvToast(msg, 'error');
+        if (btn){ btn.disabled = false; btn.textContent = 'Verify'; }
+      });
+  }
+
+  /* Persist the verified number to users/{uid} so the whole app sees it.
+     Canonical field is phoneNumber "+254…" (never the legacy 'phone'). */
+  function _pvPersistPhone(phone){
+    var u = _pvUser(); if (!u || !phone || !window.firebaseDB) return Promise.resolve();
+    return import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js')
+      .then(function(m){
+        return m.setDoc(m.doc(window.firebaseDB, 'users', u.uid),
+          { phoneNumber: phone, phoneVerified: true, phoneVerifiedAt: m.serverTimestamp() },
+          { merge: true });
+      })
+      .then(function(){ try { _user = getUser() || {}; _user.phoneNumber = phone; localStorage.setItem('sokoniUser', JSON.stringify(_user)); } catch(_){} })
+      .catch(function(e){ console.warn('[PV] persist phone failed', e && e.code); });
   }
 
   /* ─────────────────────────────────────────────
@@ -4457,14 +4950,34 @@ window.logoutUser = logoutUser;
     });
   };
 
+  /* Builds the PUBLIC profile URL for a uid. Kept in one place because the
+     value is what leaves the device — profileGetOverview returns the same
+     shape, and the two must not drift. */
+  function _publicProfileUrl(uid) {
+    return uid ? 'https://mysokoni.co.ke/profile/' + encodeURIComponent(uid) : '';
+  }
+
   window.piShareProfile = function() {
-    var url = _piOverview && _piOverview.profileUrl
-      ? _piOverview.profileUrl
-      : window.location.href;
+    /* NEVER fall back to window.location.href. This page is the owner's
+       private dashboard; when profileGetOverview had not resolved yet, the
+       old fallback shared "/profile" itself, so the recipient got a link to
+       their OWN dashboard shell and the sharer got a WhatsApp preview that
+       looked like their account was leaking. Derive the public URL from the
+       signed-in uid instead, and share nothing if we cannot. */
+    var url = (_piOverview && _piOverview.profileUrl) || '';
+    if (!url) {
+      var u = null;
+      try { u = window.firebase && firebase.auth && firebase.auth().currentUser; } catch (_) {}
+      url = _publicProfileUrl(u && u.uid);
+    }
+    if (!url) { _toast('Still loading your profile — try again in a moment.'); return; }
+
     if (navigator.share) {
       navigator.share({ title: 'SOKONI Profile', url: url }).catch(function(){});
     } else {
-      navigator.clipboard.writeText(url).then(function(){ _toast('Profile link copied!'); });
+      navigator.clipboard.writeText(url)
+        .then(function(){ _toast('Profile link copied!'); })
+        .catch(function(){ _toast(url); });
     }
   };
 
@@ -4560,6 +5073,7 @@ window.logoutUser = logoutUser;
      Uses already-cached _piOverview (set in Sprint-3 boot).
   ══════════════════════════════════════════════════════════════ */
   function _loadOverviewDashboard() {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional command-summary dashboard */
     function _render(ov) {
       /* Trust Score */
       var ts = ov.trust ? ov.trust.score : null;
@@ -5117,7 +5631,7 @@ window.logoutUser = logoutUser;
 
   function _buildSearchIndex(ov) {
     _searchIndex = [];
-    if (!ov) return;
+    if (window.__SK_LOWMEM || !ov) return;   /* low-mem: keep search index empty but valid */
     _searchIndex.push({ icon: '👤', text: 'My Profile', sub: 'Identity', action: function() { switchTab('identity'); } });
     _searchIndex.push({ icon: '💼', text: 'Career Profile', sub: 'Professional', action: function() { switchTab('career'); } });
     _searchIndex.push({ icon: '📁', text: 'Document Vault', sub: 'Documents', action: function() { switchTab('vault'); } });
@@ -5439,6 +5953,7 @@ window.logoutUser = logoutUser;
 
   /* ── Adaptive Hub Links (replace upQuickLinks when rendered) ── */
   function _renderAdaptiveHubs(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional adaptive dashboard */
     var hub = _el('upQuickLinks');
     if (!hub) return;
     var roles = ov ? (ov.roles || []) : [];
@@ -5649,6 +6164,7 @@ window.logoutUser = logoutUser;
   var DIRECT_KEYS = { businessCount: true, trustScore: true, orderCount: true, walletBalance: true };
 
   function _renderAdaptiveCards(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional adaptive cards */
     var wrap6    = _el6('pi6RoleCardWrap');
     var grid     = _el6('pi6RoleCards');
     if (!grid) return;
@@ -5860,6 +6376,7 @@ window.logoutUser = logoutUser;
   };
 
   function _renderExecCmds(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional exec-command widget */
     var wrap = _el6('pi6ExecCmdsWrap');
     if (!wrap) return;
     var role = _role(ov);
@@ -6202,6 +6719,7 @@ window.logoutUser = logoutUser;
      3. NOTIFICATION SUMMARY
   ───────────────────────────────────────────── */
   function _renderNotifSummary(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional notification summary */
     var wrap = _el7('pi7NotifSummary');
     if (!wrap) return;
 
@@ -6317,6 +6835,7 @@ window.logoutUser = logoutUser;
   };
 
   function _renderModuleSummaries(ov) {
+    if (window.__SK_LOWMEM) return;   /* low-mem: skip optional module summaries */
     var wrap = _el7('pi7ModuleCards');
     if (!wrap) return;
     var role = _role7(ov);

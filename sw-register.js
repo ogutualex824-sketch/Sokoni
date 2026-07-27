@@ -11,6 +11,13 @@
 (function () {
   "use strict";
 
+  /* ── Idempotency: shared-header.js now injects this script on pages that do
+     not include it directly, so a page could load it twice. Running the whole
+     registration/listener setup twice would double-bind controllerchange and
+     re-run update checks. Bail if we've already initialised. ── */
+  if (window.__sokoniSwRegisterInit) return;
+  window.__sokoniSwRegisterInit = true;
+
   /* ── HTTPS check — service workers need a secure context ── */
   const _isSecure = location.protocol === "https:" ||
                     location.hostname === "localhost" ||
@@ -144,6 +151,29 @@
           if (reg.waiting && navigator.serviceWorker.controller) {
             setTimeout(_showUpdateToast, 2000);
           }
+
+          /* ── FOREGROUND UPDATE CHECK ───────────────────────────────────────
+             The browser only re-fetches service-worker.js on a navigation or its
+             own ~24h timer. An installed PWA (or a long-lived tab) that is
+             backgrounded while a new version ships would otherwise not notice
+             until the next full navigation. So when the app returns to the
+             foreground — tab focus, PWA resume — ask for a fresh SW check. If a
+             newer version exists, updatefound → statechange → _showUpdateToast()
+             surfaces the one-tap "Update available" prompt promptly.
+
+             updateViaCache:'none' means this always hits the network for the SW
+             file. Throttled to at most once a minute so rapid focus/blur flips
+             (and the keyboard opening on mobile) never hammer the network. */
+          let _lastUpdateCheck = Date.now();   /* registration itself just checked */
+          const _foregroundUpdateCheck = () => {
+            if (document.visibilityState !== "visible") return;
+            const now = Date.now();
+            if (now - _lastUpdateCheck < 60000) return;
+            _lastUpdateCheck = now;
+            if (_swReg) { try { _swReg.update(); } catch (_) {} }
+          };
+          document.addEventListener("visibilitychange", _foregroundUpdateCheck);
+          window.addEventListener("focus", _foregroundUpdateCheck);
         })
         .catch(err => console.warn("[SOKONI SW] Registration failed:", err));
 
@@ -223,6 +253,25 @@
             return;
           }
         } catch (_) { /* a broken predicate must not block a legitimate update */ }
+
+        /* ── ONLY reload for a USER-REQUESTED update ──────────────────────────
+           This is the fix for the "old version loads, then reloads to the new one"
+           flash. The SW calls skipWaiting() on install, so a freshly-deployed
+           worker activates on its own and fires controllerchange in every open tab.
+           Reloading on THAT — an update the user never asked for — is exactly the
+           involuntary double-load being reported.
+
+           Content freshness does not depend on this reload: HTML, CSS and JS are
+           all network-first (see service-worker.js), so a returning visitor already
+           gets the latest on load, and their next navigation is fully current under
+           the new worker. The one-tap "Update available" toast lets anyone who wants
+           it immediately force the swap — that path sets _userRequestedUpdate and
+           gets the single expected reload below. Everyone else updates seamlessly on
+           their next navigation, with no flash. */
+        if (!_userRequestedUpdate) {
+          console.info('[SOKONI SW] new worker active — no forced reload (applies on next navigation; tap Update to apply now)');
+          return;
+        }
 
         if (!refreshing) { refreshing = true; window.location.reload(); }
       });

@@ -445,6 +445,13 @@
       </div>
 
       <div class="sa-card">
+        <h3>Payout Operations <button class="sa-btn-sm" onclick="SA.loadPayoutOps()" style="float:right">Refresh</button></h3>
+        <div id="saPayoutOps">
+          <div class="sa-spinner"><div></div></div>
+        </div>
+      </div>
+
+      <div class="sa-card">
         <h3>Pending Payout Requests</h3>
         <div id="saPayoutsList">
           <div class="sa-spinner"><div></div></div>
@@ -1144,7 +1151,8 @@ const SA={
     // Revenue chart — dummy 14-day data (replace with real data from Firestore if available)
     this._renderRevenueChart(financials.dailyRevenue||null);
 
-    // Pending payouts
+    // Payout operations + pending payouts
+    this.loadPayoutOps();
     this.loadPayouts();
 
     // Commission rates from Firestore
@@ -1193,6 +1201,7 @@ const SA={
                   <td style="font-size:11px;color:var(--muted)">${_esc(_fmtDate(p.createdAt))}</td>
                   <td>
                     <button class="sa-btn-sm success" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','approve')">Approve</button>
+                    <button class="sa-btn-sm" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','paid')">Mark Paid</button>
                     <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id||p.payoutId)}','reject')">Reject</button>
                   </td>
                 </tr>
@@ -1206,17 +1215,72 @@ const SA={
     }
   },
 
+  async loadPayoutOps(){
+    const el=document.getElementById('saPayoutOps');
+    if(!el)return;
+    el.innerHTML='<div class="sa-spinner"><div></div></div>';
+    try{
+      const fn=this._fns.httpsCallable('adminPayoutOps');
+      const res=await fn({});
+      const d=res.data||{};const c=d.counts||{};
+      const ago=(iso)=>{if(!iso)return '—';const m=Math.round((Date.now()-new Date(iso).getTime())/60000);return m<1?'just now':(m<60?m+'m ago':Math.round(m/60)+'h ago');};
+      const kpi=(label,val,cls)=>`<div class="fin-kpi ${cls||''}"><span>${label}</span><strong>${val}</strong></div>`;
+      const rows=(list,tag)=>!list||!list.length?'':`
+        <div style="margin-top:10px"><div style="font-size:12px;color:var(--muted);margin-bottom:4px">${tag}</div>
+        <div class="table-wrap"><table class="sa-table"><thead><tr><th>ID</th><th>Amount</th><th>Dest</th><th>Retries</th><th>Webhook</th><th></th></tr></thead><tbody>
+        ${list.map(p=>`<tr>
+          <td style="font-size:10px">${_esc(p.id)}</td>
+          <td>${_esc(_fmtMoney(p.amount))}</td>
+          <td style="font-size:11px">${_esc(p.destinationMasked||'—')}</td>
+          <td>${p.retryCount||0}</td>
+          <td style="font-size:11px">${_esc(p.lastWebhookState||'—')}</td>
+          <td>
+            <button class="sa-btn-sm" onclick="SA.processPayout('${_esc(p.id)}','paid')">Mark Paid</button>
+            <button class="sa-btn-sm danger" onclick="SA.processPayout('${_esc(p.id)}','reject')">Reject</button>
+          </td>
+        </tr>`).join('')}
+        </tbody></table></div></div>`;
+      el.innerHTML=`
+        <div class="fin-kpi-grid">
+          ${kpi('Processing',c.processing||0)}
+          ${kpi('Retrying',c.retrying||0,(c.retrying?'warn':''))}
+          ${kpi('Failed',c.failed||0,(c.failed?'danger':''))}
+          ${kpi('Reconcile exceptions',c.reconcileExceptions||0,(c.reconcileExceptions?'danger':''))}
+          ${kpi('Pending review',c.pending||0)}
+          ${kpi('Max retry count',d.maxRetryCount||0)}
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-top:8px">
+          Oldest processing: <strong style="color:var(--text)">${ago(d.oldestProcessingAt)}</strong> ·
+          Last webhook received: <strong style="color:var(--text)">${ago(d.lastWebhookAt)}</strong>
+        </div>
+        ${rows((d.lists||{}).needsReview,'⚠️ Reconciliation exceptions (need review)')}
+        ${rows((d.lists||{}).retrying,'🔁 Retrying')}
+        ${rows((d.lists||{}).processing,'⏳ Processing (awaiting webhook)')}
+        ${rows((d.lists||{}).failed,'✕ Failed')}
+      `;
+    }catch(e){
+      el.innerHTML='<p style="color:var(--muted);font-size:13px">Could not load payout ops: '+_esc(e.message)+'</p>';
+    }
+  },
+
   processPayout(id,action){
+    /* Map UI action → the adminProcessPayout contract { requestId, status }.
+       (Was sending { payoutId, action } which the function rejects.) */
+    const STATUS={approve:'approved',reject:'rejected',paid:'paid'};
+    const LABEL ={approve:'Approve',reject:'Reject',paid:'Mark Paid'};
+    const status=STATUS[action]||action;
+    const label =LABEL[action]||action;
     _confirm(
-      (action==='approve'?'Approve':'Reject')+' Payout',
-      'Payout ID: '+id+'. This action is irreversible.',
+      label+' Payout',
+      'Payout ID: '+id+'. This action is irreversible.'+
+        (action==='paid'?' Only mark Paid if the money was actually sent to the seller — this books a completed payout and releases the hold.':''),
       ()=>{
         const fn=this._fns.httpsCallable('adminProcessPayout');
-        fn({payoutId:id,action})
-          .then(()=>{_toast('Payout '+action+'d','success');this.loadPayouts();})
+        fn({requestId:id,status})
+          .then(()=>{_toast('Payout '+status,'success');this.loadPayouts();if(this.loadPayoutOps)this.loadPayoutOps();})
           .catch(e=>_toast('Error: '+e.message,'error'));
       },
-      action==='approve'?'Approve':'Reject',
+      label,
       action==='reject'
     );
   },
@@ -1585,26 +1649,45 @@ const SA={
 // ═══════════════════════════════════════════════════════════
 // Auth Gate — superAdmin custom claim check
 // ═══════════════════════════════════════════════════════════
-firebase.auth().onAuthStateChanged(async user=>{
-  if(!user){
-    location.href='login.html?redirect=super-admin.html';
-    return;
+(function(){
+  function runGate(){
+    firebase.auth().onAuthStateChanged(async user=>{
+      if(!user){
+        location.href='login.html?redirect=super-admin.html';
+        return;
+      }
+      try{
+        const idTokenResult=await user.getIdTokenResult(true);
+        if(idTokenResult.claims.superAdmin!==true){
+          // Not a super admin — redirect
+          location.href='admin-os.html?error=insufficient_privileges';
+          return;
+        }
+        // Authorized — hide gate, init app
+        document.getElementById('authGate').style.display='none';
+        SA.init(user);
+      }catch(err){
+        console.error('[SuperAdmin] Auth check failed:',err);
+        location.href='login.html?error=auth_check_failed';
+      }
+    });
   }
-  try{
-    const idTokenResult=await user.getIdTokenResult(true);
-    if(idTokenResult.claims.superAdmin!==true){
-      // Not a super admin — redirect
-      location.href='admin-os.html?error=insufficient_privileges';
+  /* firebase.js is a DEFERRED ES module that installs the window.firebase compat
+     shim used below; this classic script can run before it, and the shim is set up
+     just AFTER the sokoniFirebaseReady event — so poll for the shim itself, or the
+     "Verifying super admin access…" splash hangs forever (the bug this fixes). */
+  var tries=0;
+  (function wait(){
+    if(window.firebase && typeof window.firebase.auth==='function' && window.firebaseAuth){ runGate(); return; }
+    if(++tries>250){   /* ~7.5s */
+      var p=document.querySelector('#authGate p');
+      if(p)p.innerHTML='Could not reach authentication. Please refresh the page.';
+      console.error('[SuperAdmin] Firebase not ready — gate aborted');
       return;
     }
-    // Authorized — hide gate, init app
-    document.getElementById('authGate').style.display='none';
-    SA.init(user);
-  }catch(err){
-    console.error('[SuperAdmin] Auth check failed:',err);
-    location.href='login.html?error=auth_check_failed';
-  }
-});
+    setTimeout(wait,30);
+  })();
+})();
 </script>
 </body>
 </html>

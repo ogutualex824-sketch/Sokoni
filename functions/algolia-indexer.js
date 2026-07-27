@@ -548,11 +548,20 @@ const TRANSFORMERS = {
       condition:       _str(data.condition, 'new'),
       inStock:         data.inStock !== false,
       quantity:        _num(data.quantity),
+      /* Monotonic per-product change marker (bumped on every stock deduction).
+         Carried through so search records can later be ignored if older than the
+         latest version, and to correlate index state with order/payment logs. */
+      inventoryVersion: _num(data.inventoryVersion),
       minOrder:        _num(data.minOrder, 1),
       images,
       thumbnail:       images[0]?.url || _str(data.thumbnail || data.imageUrl || data.image || data.photo || data.coverImage),
       tags:            _arr(data.tags).slice(0, 30),
       keywords:        _arr(data.keywords).slice(0, 20),
+      /* Seller-declared variants, flat top-level arrays so one field serves as
+         both a searchable attribute and a facet. Always present as an array —
+         Algolia cannot facet a field that is absent on some records, which is
+         what a product saved before variants existed would otherwise produce. */
+      ..._variantAttributes(data),
       seller: {
         id:       _str(data.sellerId || data.seller?.id),
         name:     _str(data.sellerName || data.seller?.name, 'SOKONI Marketplace'),
@@ -1220,6 +1229,31 @@ const COLLECTION_INDEX_MAP = {
   /* ── Events ── */
   events:      { index: 'sokoni_events',    transformer: TRANSFORMERS.events,      globalSearch: true  },
 
+  /* ── Collections the PLATFORM actually writes to ─────────────────────────
+     Everything above maps a name the search architecture was designed around.
+     Several of those names are not what the app writes: the events hub writes
+     `entEvents`, the property hub writes `propertyListings`, shops are created
+     as `businesses`. None of those were registered, so enqueue() returned early
+     (algolia-queue.js:84) and their documents could never reach any index — the
+     same defect already recorded above for providerProfiles.
+
+     This is why search looked "product-only": it was not a ranking or query
+     problem, it was that only `products` had both a live collection AND a
+     registered mapping. Verified 2026-07-24 — `businesses`, `mechanics` and
+     `healthProviders` hold documents today and none were reachable.
+
+     Existing transformers are reused deliberately; a shop is a shop whether the
+     document lives in `sellers` or `businesses`. */
+  businesses:       { index: 'sokoni_shops',      transformer: TRANSFORMERS.sellers,    globalSearch: true },
+  restaurants:      { index: 'sokoni_shops',      transformer: TRANSFORMERS.sellers,    globalSearch: true },
+  mechanics:        { index: 'sokoni_services',   transformer: TRANSFORMERS.services,   globalSearch: true },
+  healthProviders:  { index: 'sokoni_services',   transformer: TRANSFORMERS.services,   globalSearch: true },
+  lawyers:          { index: 'sokoni_services',   transformer: TRANSFORMERS.services,   globalSearch: true },
+  entEvents:        { index: 'sokoni_events',     transformer: TRANSFORMERS.events,     globalSearch: true },
+  entVenues:        { index: 'sokoni_events',     transformer: TRANSFORMERS.events,     globalSearch: true },
+  propertyListings: { index: 'sokoni_properties', transformer: TRANSFORMERS.properties, globalSearch: true },
+  bnbListings:      { index: 'sokoni_properties', transformer: TRANSFORMERS.properties, globalSearch: true },
+
   /* ── Supplementary (dedicated sub-indexes; also in sokoni_global) ── */
   brands:      { index: 'sokoni_brands',     transformer: TRANSFORMERS.brands,      globalSearch: true  },
   categories:  { index: 'sokoni_categories', transformer: TRANSFORMERS.categories,  globalSearch: false },
@@ -1318,6 +1352,10 @@ function _arr(val, fallback = []) {
   if (val === null || val === undefined) return fallback;
   return fallback;
 }
+
+/* Variant attributes come from search-terms.js so the live trigger and the
+   backfill script normalise them identically. */
+const { variantAttributes: _variantAttributes } = require('./search-terms');
 
 function _unix(val) {
   if (!val) return 0;

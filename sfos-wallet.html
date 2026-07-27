@@ -818,9 +818,10 @@
       const fns      = getFunctions(window.firebaseApp, 'us-central1');
       const initiateFn = httpsCallable(fns, 'initiateWalletTopUp');
       const res = await initiateFn({ phone, amount });
-      const checkoutId = res.data?.checkoutId;
+      /* initiateWalletTopUp returns { txId, invoiceId, message } — not checkoutId */
+      const txId = res.data?.txId;
 
-      if (!checkoutId) throw new Error('No checkoutId returned');
+      if (!txId) throw new Error('No txId returned');
 
       statusEl.textContent = 'Check your phone and enter your M-Pesa PIN…';
       btn.textContent = 'Waiting for payment…';
@@ -832,10 +833,11 @@
       _stkPollTimer = setInterval(async () => {
         polls++;
         try {
-          const confirm = await confirmFn({ checkoutId });
+          const confirm = await confirmFn({ txId });
           const status  = confirm.data?.status;
 
-          if (status === 'COMPLETE') {
+          /* confirmWalletTopUp returns 'completed' | 'failed' | 'pending' */
+          if (status === 'completed') {
             clearInterval(_stkPollTimer);
             statusEl.className = 'success';
             statusEl.textContent = `KES ${amount.toLocaleString()} added to your wallet!`;
@@ -843,12 +845,10 @@
             SFOSCore.toast('Wallet topped up successfully', 'success');
             await SFOSCore.getWalletState();
             setTimeout(() => _closeOverlay('sfos-topup-overlay'), 2000);
-          } else if (status === 'FAILED' || status === 'CANCELLED') {
+          } else if (status === 'failed') {
             clearInterval(_stkPollTimer);
             statusEl.className = 'error';
-            statusEl.textContent = status === 'CANCELLED'
-              ? 'You cancelled the payment.'
-              : 'Payment failed. Please try again.';
+            statusEl.textContent = 'Payment failed. Please try again.';
             btn.disabled = false;
             btn.textContent = 'Pay via M-Pesa';
           } else if (polls >= maxPolls) {

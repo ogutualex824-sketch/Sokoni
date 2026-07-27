@@ -126,7 +126,7 @@ async function checkBackups() {
 async function checkAlgoliaReachability() {
   /* Light reachability check — ping the isalive endpoint (no auth required).
      Removed hardcoded search key; secrets should stay in Secret Manager only. */
-  const appId = process.env.ALGOLIA_APP_ID || 'FF2WSTR4YC';
+  const appId = process.env.ALGOLIA_APP_ID || 'F2XND3V1FW';
   const r = await fetch(`https://${appId}-dsn.algolia.net/1/isalive`);
   if (!r.ok && r.status !== 401) throw new Error(`Algolia HTTP ${r.status}`);
   return { reachable: true, status: r.status };

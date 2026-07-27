@@ -6,6 +6,25 @@ let getDocs = null;
    Defined here so buildProductCard() and all callers share one implementation. */
 const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
 
+/* Self-bootstrap the shared image render helper (sokoni-image.js) when the host page
+   didn't load it. This decouples the trending grid's renderProductImage() upgrade from
+   index.html carrying the <script> tag — which, in this multi-agent repo, is subject to
+   a deploy race on that shared file. Idempotent + fail-open: the grid render is already
+   guarded (falls back to an inline <img> with identical behaviour) if the helper isn't
+   ready yet, and the async data fetch that triggers the grid render gives this tiny
+   same-origin script ample time to load first. */
+(function ensureSokoniImage(){
+  try {
+    if (typeof document === 'undefined' || window.renderProductImage) return;
+    if (document.querySelector('script[data-sk-image-boot],script[src*="sokoni-image.js"]')) return;
+    var s = document.createElement('script');
+    s.src = 'sokoni-image.js';
+    s.async = false;                         // load ASAP, preserve order; non-blocking
+    s.setAttribute('data-sk-image-boot','1');
+    (document.head || document.documentElement).appendChild(s);
+  } catch (_) { /* fail open — inline fallback still renders */ }
+})();
+
 /* Block browser autofill/email injection on all search inputs sitewide */
 (function blockSearchAutofill(){
   function applyToEl(el){
@@ -146,6 +165,81 @@ let wishlist = JSON.parse(
 
 let products = [];
 
+/* ── Catalogue load state ──────────────────────────────────────────────────
+   "No products" and "could not load products" are different facts and must
+   never render as the same screen. Showing the cheerful "No products yet —
+   be the first to sell!" empty state during a failed read is a healthy-looking
+   failure: it tells the shopper the marketplace is empty when it actually has
+   129 active listings it simply could not reach.
+
+   __sokoniCatalogueRead is set when the Firestore listener delivers ANY result,
+   including an empty array — an empty snapshot is a successful read, and only
+   then is "no products yet" the truth. If nothing arrives before the watchdog
+   fires, the read failed and we say so, with a retry. */
+window.__sokoniCatalogueRead = false;
+let _catalogueWatchdog = null;
+
+function _catalogueTelemetry(phase, extra) {
+    const detail = Object.assign({ phase: phase, at: Date.now() }, extra || {});
+    try { window.dispatchEvent(new CustomEvent('sokoni:catalogue', { detail: detail })); } catch (e) {}
+    try {
+        if (window.SokoniObservability && typeof window.SokoniObservability.log === 'function') {
+            window.SokoniObservability.log('catalogue', detail);
+        }
+    } catch (e) {}
+    try { console.warn('[catalogue]', phase, JSON.stringify(detail)); } catch (e) {}
+}
+
+function _renderCatalogueLoading(container) {
+    if (!container) return;
+    if (typeof _p8ShowSkeletons === 'function') { _p8ShowSkeletons(container, 8); return; }
+    container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:rgba(255,255,255,0.45);">Loading products…</div>';
+}
+
+function _renderCatalogueEmpty(container) {
+    if (!container) return;
+    container.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
+            <div style="font-size:56px;margin-bottom:16px;">🛍️</div>
+            <h2 style="color:white;font-size:22px;margin-bottom:10px;">No products yet</h2>
+            <p style="color:rgba(255,255,255,0.4);margin-bottom:22px;">Be the first to sell on Sokoni!</p>
+            <a href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Start Selling →</a>
+        </div>`;
+}
+
+function _renderCatalogueError(container) {
+    if (!container) return;
+    container.innerHTML = `
+        <div style="grid-column:1/-1;text-align:center;padding:56px 20px;">
+            <div style="font-size:52px;margin-bottom:14px;">⚠️</div>
+            <h2 style="color:white;font-size:21px;margin-bottom:10px;">Unable to load products</h2>
+            <p style="color:rgba(255,255,255,0.45);margin-bottom:22px;max-width:340px;margin-left:auto;margin-right:auto;">
+                We couldn't reach the catalogue just now. This is a connection problem on our side, not an empty shop.
+            </p>
+            <button type="button" id="skCatalogueRetry"
+                style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;font-family:inherit;">
+                Try again
+            </button>
+        </div>`;
+    const btn = document.getElementById('skCatalogueRetry');
+    if (btn) btn.addEventListener('click', function () {
+        _catalogueTelemetry('retry-clicked');
+        location.reload();
+    });
+}
+
+/* Bounded, not indefinite: a spinner that never resolves is the loading-state
+   equivalent of a silent failure. */
+function _armCatalogueWatchdog(container, ms) {
+    if (_catalogueWatchdog) clearTimeout(_catalogueWatchdog);
+    _catalogueWatchdog = setTimeout(function () {
+        if (window.__sokoniCatalogueRead) return;              /* a read landed; nothing to do */
+        if (Array.isArray(products) && products.length > 0) return;
+        _catalogueTelemetry('load-failed', { timeoutMs: ms || 12000 });
+        _renderCatalogueError(container);
+    }, ms || 12000);
+}
+
 /* Hardcoded fallback — shown whenever localStorage has no products.
    Ensures the homepage always looks alive on first visit or cleared cache. */
 const FALLBACK_PRODUCTS = [
@@ -262,35 +356,41 @@ function loadProducts(){
        outright emptied the production homepage: real products exist in
        Firestore and are publicly readable, but the listener returned nothing
        within 14 seconds and SokoniDB swallows its onSnapshot error into a
-       console warning. Until that read is proven, an empty storefront is a
-       worse regression than demo data — so the fallback stays as a placeholder
-       and the Firestore listener replaces it the moment real products arrive.
+       console warning.
 
-       The flag is retained and inverted: set sokoniSuppressDemoData to opt OUT
-       once the Firestore path is verified. That makes the eventual removal a
-       one-line change rather than another deploy-and-hope. */
-    const _suppressDemo = (function () {
-        try { return localStorage.getItem('sokoniSuppressDemoData') === 'true'; }
-        catch (e) { return false; }
+       THE CAUSE OF THAT EMPTY PAGE IS NOW KNOWN AND FIXED. index.html was
+       missing the </script> that closed the script.js tag, so the module
+       holding the Firestore catalogue listener was parsed as that tag's text
+       content and never executed at all. The listener did not "return nothing"
+       — it never attached. That is why suppressing the fallback emptied the
+       page, and why re-enabling demo data appeared to be the only option.
+
+       With the listener actually running, demo data is no longer load-bearing,
+       so it is now OFF in production and available only behind an explicit
+       development flag. Fabricated inventory in production is its own defect:
+       it makes a total catalogue outage look like a healthy storefront, and it
+       let shoppers add products nobody sells to a real cart. */
+    const _demoAllowed = (function () {
+        try {
+            if (localStorage.getItem('sokoniDemoData') === 'true') return true;   /* explicit dev opt-in */
+        } catch (e) {}
+        return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
     })();
 
     products = savedProducts.length > 0
         ? savedProducts
-        : (_suppressDemo ? [] : FALLBACK_PRODUCTS);
+        : (_demoAllowed ? FALLBACK_PRODUCTS : []);
 
-    /* EMPTY */
-
+    /* Nothing to show yet. Two very different situations look identical here, and
+       conflating them is what hid this bug for so long:
+         - the catalogue genuinely has no listings, or
+         - the catalogue could not be read.
+       On first paint we cannot yet tell, so show a loading state and let the
+       watchdog below decide. Only once the Firestore listener has had its chance
+       do we commit to "empty" or "failed". */
     if(products.length === 0){
-
-        container.innerHTML = `
-        <div style="grid-column:1/-1;text-align:center;padding:60px 20px;">
-            <div style="font-size:56px;margin-bottom:16px;">🛍️</div>
-            <h2 style="color:white;font-size:22px;margin-bottom:10px;">No products yet</h2>
-            <p style="color:rgba(255,255,255,0.4);margin-bottom:22px;">Be the first to sell on Sokoni!</p>
-            <a href="seller.html" style="padding:13px 28px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border-radius:14px;text-decoration:none;font-weight:800;">Start Selling →</a>
-        </div>
-        `;
-
+        _renderCatalogueLoading(container);
+        _armCatalogueWatchdog(container);
         return;
     }
 
@@ -590,6 +690,17 @@ function kebsBadge(product){
     return "";
 }
 
+/* Card variant line — "Black • XL", "Black • 256GB", "500ml".
+   Renders nothing at all when the product declares no variants, so the ~all
+   existing products created before variants existed keep their exact current
+   layout. Summary logic lives in the shared schema, never duplicated here. */
+function _variantSummaryHtml(product){
+    const S = window.SokoniProductSchema;
+    if (!S || typeof S.variantSummary !== 'function') return "";
+    const s = S.variantSummary(product);
+    return s ? `<div class="pcard-variants">${_escHtml(s)}</div>` : "";
+}
+
 function buildProductCard(product, size = "normal"){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
@@ -728,8 +839,9 @@ function buildProductCard(product, size = "normal"){
             ${adultBadge}
             ${oosOverlay}
             <div class="product-img-wrap" data-emoji="${catEmoji[product.category]||'🛍️'}">
-                <img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async"
-                  onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">
+                ${window.renderProductImage
+                  ? renderProductImage({ src: img, alt: product.name, wrap: false, fallbackMode: 'css-hide', failClass: 'img-failed' })
+                  : `<img src="${img}" alt="${_escHtml(product.name)}" loading="lazy" decoding="async" onerror="this.style.display='none';this.parentNode.classList.add('img-failed')">`}
                 ${locTag}
                 ${nameOverlay}
                 ${shopRing}
@@ -737,6 +849,7 @@ function buildProductCard(product, size = "normal"){
             <div class="product-body">
                 ${badge || kebs ? `<div class="pcard-badge-row">${badge}${kebs}</div>` : ""}
                 <h3 class="product-name">${_escHtml(product.name)}</h3>
+                ${_variantSummaryHtml(product)}
                 ${getSellerBadgesHtml(product.sellerName,'sm')}
                 <div class="price-row">
                     <p class="price">KES ${price}</p>
@@ -843,16 +956,24 @@ function restoreHomeScroll(){
 ========================= */
 
 function openProduct(id){
+    if(!id) return;
     saveHomeScroll();
-    const p = products.find(x => x.id === id);
-    if(!p) return;
-    localStorage.setItem("selectedProduct", JSON.stringify(p));
-    if(typeof sokoniTrackProductView === "function") sokoniTrackProductView(p);
-    /* Include the canonical id in the URL, not just the localStorage cache. The
-       cache makes the first render instant; the ?id makes the page shareable,
-       refreshable and deep-linkable — on any of those the product.js Firestore
-       fallback resolves it even when selectedProduct is absent. */
-    window.location.href = "product.html?id=" + encodeURIComponent(id);
+    /* The card's data-pid is the SANITISED id (safeId, see the card template), so
+       match on the same transform — matching raw product.id here failed for any id
+       that safeId altered, which silently killed the whole-card tap. Fall back to a
+       raw match too. */
+    const _mkSafe = pid => String(pid||'').replace(/[^a-zA-Z0-9_-]/g,'');
+    const p = products.find(x => _mkSafe(x.id) === String(id))
+           || products.find(x => String(x.id) === String(id));
+    if(p){
+        localStorage.setItem("selectedProduct", JSON.stringify(p));
+        if(typeof sokoniTrackProductView === "function") sokoniTrackProductView(p);
+    }
+    /* ALWAYS navigate. The ?id makes the page shareable/refreshable and lets
+       product.js resolve from Firestore even when the product is not in the local
+       array (cross-grid taps, recommendations) — previously a missed local match
+       returned early and the tap did nothing. Use the real id when known. */
+    window.location.href = "product.html?id=" + encodeURIComponent(p ? p.id : id);
 }
 
 window.openProduct = openProduct;
@@ -1031,7 +1152,14 @@ function searchProducts(){
 async function buyProduct(productId, _trigBtn){
     if (_trigBtn) { _trigBtn.dataset.loading = '1'; _trigBtn.disabled = true; }
 
+    /* productId is the card's data-pid = safeId (sanitised). Match on the same
+       transform (as addToWishlist does) so the action finds the product; a raw
+       id === safeId comparison failed whenever safeId altered the id, so the
+       button did nothing. Raw match kept as a fallback. */
+    const _mkSafeAct = pid => String(pid||'').replace(/[^a-zA-Z0-9_-]/g,'');
     const selectedProduct = products.find(
+        product => _mkSafeAct(product.id) === String(productId)
+    ) || products.find(
         product => String(product.id) === String(productId)
     );
 
@@ -1077,7 +1205,14 @@ async function buyProduct(productId, _trigBtn){
 async function buyNow(productId, _trigBtn){
     if (_trigBtn) { _trigBtn.dataset.loading = '1'; _trigBtn.disabled = true; }
 
+    /* productId is the card's data-pid = safeId (sanitised). Match on the same
+       transform (as addToWishlist does) so the action finds the product; a raw
+       id === safeId comparison failed whenever safeId altered the id, so the
+       button did nothing. Raw match kept as a fallback. */
+    const _mkSafeAct = pid => String(pid||'').replace(/[^a-zA-Z0-9_-]/g,'');
     const selectedProduct = products.find(
+        product => _mkSafeAct(product.id) === String(productId)
+    ) || products.find(
         product => String(product.id) === String(productId)
     );
 
@@ -2742,6 +2877,15 @@ function showPromoToast(msg){
 }
 
 function showWelcomePopup(){
+    /* Never show the "Create Free Account" welcome to a signed-in user. It is
+       irrelevant to them AND, as a full-screen position:fixed overlay, it blocks
+       page scrolling until dismissed — the "home gets stuck at the Sokoni Hub and
+       won't scroll past" report (it fires on first scroll past the hero, so it
+       lands right as the user reaches the hubs section). Guests still get it. */
+    try {
+      var _wu = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+      if ((_wu && (_wu.uid || _wu.id)) || localStorage.getItem('loggedIn') === 'true') return;
+    } catch(e) {}
     /* LAYER PRIORITY: consent (legally required) -> welcome -> notifications.
        Measured on real Desktop Chrome: this modal fired at ~11s while the
        privacy/cookie consent banner was still on screen and rendered over it.
@@ -4067,7 +4211,26 @@ if(document.readyState === "complete" || document.readyState === "interactive"){
    Local-only products are preserved: a listing uploaded but not yet synced to
    Firestore must not vanish from its own seller's view. */
 window._homeMergeFirestore = function (fsProducts) {
-    if (!fsProducts || !fsProducts.length) return;
+    /* Record the read BEFORE the empty check. An empty snapshot is a SUCCESSFUL
+       read of an empty catalogue, and returning early without noting that left
+       the watchdog unable to tell "Firestore says there is nothing" from
+       "Firestore never answered" — the two states this whole path exists to
+       separate. */
+    if (Array.isArray(fsProducts)) {
+        window.__sokoniCatalogueRead = true;
+        if (_catalogueWatchdog) { clearTimeout(_catalogueWatchdog); _catalogueWatchdog = null; }
+        _catalogueTelemetry('read-ok', { count: fsProducts.length });
+    }
+
+    if (!fsProducts || !fsProducts.length) {
+        /* Genuinely empty catalogue — say so honestly, but only if we have
+           nothing else on screen (a cached list is still better than a wipe). */
+        if (!Array.isArray(products) || products.length === 0) {
+            const c = document.getElementById("productsContainer");
+            if (c) _renderCatalogueEmpty(c);
+        }
+        return;
+    }
 
     const fsIds = new Set(fsProducts.map(p => String(p.id)));
     const localOnly = (Array.isArray(products) ? products : []).filter(p =>

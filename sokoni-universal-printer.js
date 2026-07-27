@@ -26,7 +26,10 @@
      58mm (32) -> 'Bravilex International Co.' / 'Limited'
      80mm (48) -> a single line
    Source of truth: sokoni-company.js (legalName). */
-const SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
+/* `var`, NOT `const` — sokoni-bluetooth-printer.js declares the same name and
+   both load together on every POS printer page. Two top-level `const`s of one
+   identifier throw and abort the second script. See the matching note there. */
+var SOKONI_LEGAL_NAME = 'Bravilex International Co. Limited';
 function _legalNameLines(width) {
   const W = Number(width) || 32;
   const lines = []; let line = '';
