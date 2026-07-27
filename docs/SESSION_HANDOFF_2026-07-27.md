@@ -11,6 +11,50 @@ Clean starting point for the next session/agent. Live production = **`mysokoni.c
 
 ---
 
+## 0. Current state & deployment blocker (latest — read first)
+
+- ✅ **Production:** RANK-1 owner-isolation fix is **live (SW v131)** — a signed-in
+  account renders only its own listings; foreign cached listings cannot render,
+  survive, or sync. (Commits `bbf5410` and earlier; fixes the reported "another
+  seller's vapes on a service-provider account" leak.)
+- ⏸ **Ready but NOT deployed:** commit **`1c0f164`** — OwnerCache foundation
+  (`sokoni-owner-cache.js`, uid-namespaced storage) + removal of the fabricated
+  `Math.random()` seller stats. Code is complete and syntax-verified; OwnerCache is
+  unit-verified against the exact leak scenario.
+- 🚧 **Operational blocker (NOT product code):** deployment of `1c0f164` is blocked
+  by a **hanging predeploy gate** — `node scripts/gate-inventory.js` (wraps
+  `node scripts/test-inventory.js --gate`). The process **hangs without producing any
+  output** before deployment begins; it does not reach a check and does not implicate
+  the changed files. The application code is verified; deployment could not proceed
+  because of the pipeline. **Investigate and stabilize this predeploy gate before
+  attempting further hosting deployments.**
+- ▶️ **Next work, once the pipeline is fixed (in order):**
+  1. Deploy `1c0f164`.
+  2. Complete the **atomic OwnerCache migration** — move *every* `seller.js`
+     products read/write + the hydrator (`sokoni-seller-products.js`) to OwnerCache
+     together (partial migration causes stale-cache divergence), then retire the
+     global `sellerProducts` key.
+  3. Finish the **RANK-2 reader sweep** — `ministore.html`, `services.html`,
+     `seller-analytics.html`, `business-analytics.html`, `car-hub.html`.
+  4. Verify the **seven owner-isolation release gates**: (1) seller A never sees
+     seller B's cached listings; (2) a zero-product provider gets an empty state,
+     not prior-seller data; (3) the owner's own unsynced drafts survive; (4) another
+     owner's drafts are discarded; (5) account-switching cannot repopulate another
+     user's cache; (6) every RANK-2 page shows only owner-scoped data; (7) no
+     fabricated metrics remain on seller dashboards.
+  5. Resume **Booking Phase 1c/2** (the money spine).
+
+**Owner-isolation reference:** root cause = `sellerProducts` was a single global
+localStorage key, never uid-stamped; the fix is `sokoni-owner-cache.js` (uid-namespaced
+`sellerProducts:{uid}` behind one `OwnerCache` API). RANK-1 (render + hydrator filter,
+seller.js / sokoni-seller-products.js) is live; RANK-2 readers + the atomic migration
+remain. See the `project_startup_perf` sibling and the audit in this session.
+
+The current bottleneck is the deployment pipeline — not the implementation or
+uncertainty about what to do next.
+
+---
+
 ## 1. Production changes shipped (with commit IDs)
 
 | Commit | Change |
