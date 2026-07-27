@@ -102,3 +102,29 @@ and avoids solving virtualization separately per surface. Treat the `inspiq.js` 
 patch — the homepage cap (§2) is then retired by migrating it onto the same module
 (§4), not by raising the limit. Aligns with [[project_platform_constitution]]
 "extend don't rebuild / canonical engines".
+
+### 6b. Shared module acceptance criteria — performance guards (not just correctness)
+
+The module ships only when these hold, enforced by automated checks (not eyeballing):
+
+1. **Bounded rendered DOM (virtualization).** A hard ceiling on product cards in the
+   DOM at once regardless of scroll depth — assert `container.children.length <= N`
+   after scrolling far past N. Off-screen cards are recycled/removed, not just hidden.
+2. **No duplicate/leaked listeners.** After repeated navigation away-and-back and
+   filter changes, the count of active feed `onSnapshot` subscriptions returns to its
+   baseline (every listener has an `unsubscribe()` that actually runs on teardown).
+   Instrument a subscription counter and assert it does not grow across N cycles.
+3. **Bounded heap after prolonged scroll.** Where measurable in automated testing
+   (headless with `performance.memory` / CDP heap snapshots), used JS heap after a
+   long scroll session stays under a threshold and returns near baseline after GC —
+   i.e. no monotonic climb. Best-effort where the metric is available.
+4. **CI guard against new unbounded feed listeners (highest-leverage — do this even
+   before the module).** A repo scan (extend `scripts/perf-guard.js`, already in the
+   predeploy chain) that FAILS on any new `onSnapshot(collection(db,'<feed>'))` — or a
+   `query(...)` on a feed collection — that lacks a `limit(...)`, unless annotated with
+   an explicit justification comment (e.g. `// perf-guard:allow-unbounded <reason>`).
+   Feed collections at minimum: `products`, and the inspiq/feeds sources. This is what
+   stops this exact OOM class from quietly reappearing as the codebase evolves — the
+   original defect was one unbounded `onSnapshot(collection(db,'products'))` that no
+   check would have caught. Pattern precedent: the owner-isolation regression-guard
+   idea in `docs/SESSION_HANDOFF_2026-07-27.md` §0(3b).
