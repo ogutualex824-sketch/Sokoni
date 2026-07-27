@@ -84,10 +84,24 @@ The legacy service-booking create path — `SokoniPay.bookNow` (localStorage) + 
 
 ```
 legacy path → feature flag → authoritative backend → client cutover →
-observe production → zero legacy traffic → remove legacy code
+observe production → zero legacy traffic → remove legacy code → close rule to CF-only
 ```
 
 No silent caps, no permanent dual paths: the retirement is complete only when the metric is zero and the code is gone.
+
+### Exit criteria (all must hold before any legacy code is removed)
+
+Removal is gated on objective, instrumented measures — not a calendar date and not judgment. Every criterion is auditable from telemetry/logs, so the retirement decision leaves a clear trail for *why* it was safe to remove.
+
+| Criterion | Target |
+|---|---|
+| Legacy booking-create requests | **0** for a sustained observation window (not a single reading — see [[feedback_intermittent_state]]) |
+| Supported clients on `bookingCreateService` | **100%** (every shipped client build cut over) |
+| Post-cutover error rate | within normal operational baseline (no regression introduced by the cutover) |
+| Rollback period | fully elapsed with the flag defaulting to the new path and no rollback triggered |
+| Legacy instrumentation | confirms **no production callers** across the observation window |
+
+Only when **all** rows are green does the cleanup release land: delete the legacy create code, then close the top-level `bookings` create rule to `if false` (CF-only). If any row regresses mid-window, the window resets — the same async-observation discipline used elsewhere in the platform.
 
 ## 7. Open decisions for review
 - **SoT confirmation** — provider stack canonical + shared reservation core (recommended) vs single-engine on `booking.js`.
