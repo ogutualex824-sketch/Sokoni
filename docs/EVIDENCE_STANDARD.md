@@ -28,10 +28,65 @@ plausible answer ends the enquiry.
 | `education` index is stale | Registry vs the **source file** | The index was live in production; a deploy would have deleted it |
 | `test-inventory` hung (exit 124) | A meta-runner exceeding *my* timeout | Reported as a defect; it was running all 76 suites |
 | Search pipeline test failing | A contract the data does not honour | Satisfying the test would have **broken search** |
+| `git push origin main` — "Everything up-to-date" | The push succeeded; the commit was on a different branch | The fix never reached `main`; the report was true and useless |
+| ADR edit committed | The heredoc used `python`, absent here; the write never happened | `git commit` reported success with the documentation absent |
+| `processWholesalePayment` called but not deployed | The literal callable name against the deployed list | **False P0.** `callCF` is a page-local wrapper onto `servicesDispatch`; the feature works |
 
 Note the last two. A test can fail for a reason that is not a defect, and a test
 can demand something actively harmful. A passing suite is evidence about the
 suite as much as about the system.
+
+## Addressing assumptions
+
+The most dangerous assumption in an engineering system is not about behaviour. It
+is about **which object the operation addressed.**
+
+| Intended target | Assumed address | Actual address | Effect |
+|---|---|---|---|
+| Cloud Run service | `id.toLowerCase()` | `runServiceId` | False IAM diagnosis |
+| Git push | `origin/main` | the checked-out branch | Push succeeded, `main` unchanged |
+| ADR edit | file mutated | tool never wrote | Commit succeeded, documentation absent |
+| Callable `processWholesalePayment` | a function of that name | `servicesDispatch`, `op:` field | False P0 against a working feature |
+
+In every case the command **succeeded**, the output was **well-formed**, and it
+answered a question that had not been asked. No error surfaced, because no error
+occurred — the operation was performed faithfully against the wrong object.
+
+This defeats the usual defences. Exit codes, error handling and retries all assume
+failure announces itself. An addressing error announces success.
+
+Two properties make it especially hard to catch:
+
+- **Indirection hides the real target.** `callCF('X')` reads as "call X". It calls
+  `servicesDispatch`. Wrappers, dispatchers, aliases and env-derived names all
+  create a gap between the name at the call site and the object addressed. Eleven
+  files in this repository route callables through a dispatcher wrapper; any
+  name-matching audit that ignores them produces confident false positives.
+- **Success is indistinguishable from success.** A push to the wrong branch and a
+  push to the right one emit the same output.
+
+### The discipline
+
+**Verify the object, not the operation.** Not "did it succeed?" but "did the thing
+I meant to change, change?" Distinct evidence, usually from a different direction:
+
+| Instead of | Assert |
+|---|---|
+| push exit code | `git merge-base --is-ancestor HEAD origin/main`, then read the file back from the remote |
+| commit succeeded | grep the committed content for what should now be there |
+| a callable name is absent from the deployed list | resolve the wrapper at the call site first — find what URL is actually requested |
+| a resource query returned empty | confirm the resource **exists** before reading "empty" as "unconfigured" |
+
+**Read back through a different path than you wrote.** Writing and reading through
+the same abstraction confirms the abstraction is self-consistent, not that the
+world changed. The remote file was checked with `git show origin/main:<path>`, not
+by trusting the push.
+
+**Name resolution is evidence, not formatting.** Whenever a human-readable name is
+transformed to reach a real object — case-folded, prefixed, mapped, defaulted —
+that transformation is a claim requiring proof. Prefer the authoritative
+identifier the system itself reports (`runServiceId`) over one reconstructed
+locally.
 
 ## Review checklist
 

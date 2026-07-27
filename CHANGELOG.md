@@ -2521,6 +2521,8 @@ Files: `sokoni-drawers.css`, `wallet.html`, `scripts/scan-hidden-backdrop-blur.j
 
 ## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
 
+﻿## [2026-07-24] — fix(entitlements): paid STARTER merchant shown the FREE limit — SubscriptionAuthority
+
 Production incident. A merchant on an active paid STARTER plan saw a 10-product
 limit while the upload engine accepted 13. Both numbers were correct for the
 system that produced them; the systems never met.
