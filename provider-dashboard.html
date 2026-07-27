@@ -190,6 +190,7 @@ a{color:var(--acc);text-decoration:none}
     </div>
     <nav class="sb-nav">
       <div class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
+      <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Earnings</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
@@ -258,6 +259,58 @@ a{color:var(--acc);text-decoration:none}
             <button class="btn btn-s" onclick="P.show('earnings',null)" style="display:flex;align-items:center;gap:7px;justify-content:center">📊 View Earnings</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <style>
+      .cal-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:.74rem;color:var(--sub);margin-bottom:10px}
+      .cal-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+      .cal-avail{background:transparent;border:1px solid var(--acc)}
+      .cal-booked{background:var(--acc)}
+      .cal-blocked{background:#555}
+      .cal-off{background:var(--border)}
+      .cal-week{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:8px;overflow-x:auto}
+      .cal-day{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:8px;min-height:120px}
+      .cal-day.off{opacity:.5}
+      .cal-dhead{font-weight:700;font-size:.78rem;margin-bottom:2px}
+      .cal-dsub{font-size:.68rem;color:var(--sub);margin-bottom:6px}
+      .cal-slot{font-size:.7rem;padding:4px 6px;border-radius:6px;margin-bottom:4px;border:1px solid var(--border)}
+      .cal-slot.avail{border:1px dashed var(--acc);color:var(--sub)}
+      .cal-slot.booked{background:var(--acc);color:#04120a;cursor:pointer;font-weight:600;border:none}
+      .cal-slot.booked.st-pending{background:#ffb020;color:#231400}
+      .cal-slot.booked.st-cancelled,.cal-slot.booked.st-declined,.cal-slot.booked.st-no_show{background:#5a5a5a;color:#eee;text-decoration:line-through}
+      .cal-slot.brk{background:#444;color:#ccc}
+      .cal-month{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+      .cal-mcell{background:var(--surf);border:1px solid var(--border);border-radius:8px;min-height:64px;padding:5px;font-size:.72rem;cursor:pointer}
+      .cal-mcell.off{opacity:.45}
+      .cal-mcell.today{border-color:var(--acc)}
+      .cal-mcount{display:inline-block;background:var(--acc);color:#04120a;border-radius:99px;padding:0 6px;font-size:.66rem;font-weight:700;margin-top:3px}
+      @media(max-width:640px){.cal-week{grid-template-columns:repeat(7,150px)}}
+    </style>
+    <!-- ── Calendar (D4 — presentation-only, real-time) ───────────────── -->
+    <div class="panel" id="panel-calendar">
+      <div class="pg-header">
+        <div><div class="pg-title">Calendar</div><div class="pg-sub" id="calRange">—</div></div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn btn-g btn-sm" onclick="Cal.setView('week')" id="calBtnWeek">Week</button>
+          <button class="btn btn-g btn-sm" onclick="Cal.setView('month')" id="calBtnMonth">Month</button>
+        </div>
+      </div>
+      <div style="padding:12px 20px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <button class="btn btn-g btn-sm" onclick="Cal.nav(-1)">‹ Prev</button>
+          <button class="btn btn-s btn-sm" onclick="Cal.today()">Today</button>
+          <button class="btn btn-g btn-sm" onclick="Cal.nav(1)">Next ›</button>
+        </div>
+        <div class="cal-legend">
+          <span><i class="cal-dot cal-avail"></i>Available</span>
+          <span><i class="cal-dot cal-booked"></i>Booked</span>
+          <span><i class="cal-dot cal-blocked"></i>Break/Blocked</span>
+          <span><i class="cal-dot cal-off"></i>Closed/Unavailable</span>
+          <span id="calLive" style="margin-left:auto;color:var(--sub);font-size:.72rem">● live</span>
+        </div>
+        <div id="calBody"><div class="card-empty">Loading calendar…</div></div>
+        <div id="calDetail" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -469,9 +522,9 @@ a{color:var(--acc);text-decoration:none}
   <!-- Bottom nav (mobile) -->
   <div class="bn">
     <div class="bn-item active" onclick="P.show('overview',this)"><span class="bn-icon">🏠</span>Home</div>
+    <div class="bn-item" onclick="P.show('calendar',this)"><span class="bn-icon">📆</span>Calendar</div>
     <div class="bn-item" onclick="P.show('bookings',this)"><span class="bn-icon">📅</span>Bookings</div>
     <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Earnings</div>
-    <div class="bn-item" onclick="P.show('reviews',this)"><span class="bn-icon">⭐</span>Reviews</div>
     <div class="bn-item" onclick="P.show('settings',this)"><span class="bn-icon">⚙️</span>Settings</div>
   </div>
 </div><!-- .app -->
@@ -496,6 +549,8 @@ const P={
     document.querySelectorAll('.sb-item,.bn-item').forEach(i=>i.classList.remove('active'));
     if(el)el.classList.add('active');
     if(subTab)setTimeout(()=>S.tab(subTab,_q(`stab${subTab.charAt(0).toUpperCase()+subTab.slice(1)}`)||null),50);
+    if(typeof Cal!=='undefined')Cal.close();   // tear down the real-time listener when leaving
+    if(id==='calendar')Cal.open();
     if(id==='bookings'&&!_bkDocs.length)B.load();
     if(id==='earnings')E.load();
     if(id==='reviews')Rv.load();
@@ -543,6 +598,141 @@ const B={
   async contact(id){showLoad('…');try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerContactCustomer',bookingId:id});const c=(r.data||{}).customer||{};if(c.phone){if(confirm(`${c.name||'Customer'}\n${c.phone}\n\nCall now?`))window.location.href='tel:'+c.phone;}else{toast('No phone number on file for this customer.','err')}}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   loadMore(){},
 };
+
+/* ── Calendar (D4) — presentation-only, real-time. Reads the CANONICAL availability
+   (providerAvailability) + subscribes to the provider's own bookings via onSnapshot.
+   It NEVER writes bookings; a booking click reuses the D1 lifecycle actions (B.*).
+   Timezone-safe: all bucketing is done in Africa/Nairobi (UTC+3, no DST). ────────── */
+const Cal={
+  TZ:3*3600000, _view:'week', _anchorTs:0, _unsub:null, _bookings:[], _avail:null, _overrides:{},
+  DOW:['sunday','monday','tuesday','wednesday','thursday','friday','saturday'],
+  MON:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+  _parts(ts){const o=new Date(ts+this.TZ);return{y:o.getUTCFullYear(),mo:o.getUTCMonth(),d:o.getUTCDate(),hh:o.getUTCHours(),mi:o.getUTCMinutes(),dow:o.getUTCDay()}},
+  _midnight(y,mo,d){return Date.UTC(y,mo,d)-this.TZ},            // epoch ms of Nairobi 00:00
+  _ymd(y,mo,d){return `${y}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`},
+  _mins(t){const q=String(t||'0:0').split(':');return (parseInt(q[0])||0)*60+(parseInt(q[1])||0)},
+  _hm(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')},
+  _weekStartTs(ts){const p=this._parts(ts);const off=(p.dow===0?-6:1-p.dow);return this._midnight(p.y,p.mo,p.d+off)},
+  _esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))},
+
+  async open(){
+    _q('calDetail').innerHTML='';
+    this._anchorTs = this._view==='month' ? (()=>{const p=this._parts(Date.now());return this._midnight(p.y,p.mo,1)})() : this._weekStartTs(Date.now());
+    this._syncBtns();
+    await this._loadAvail();
+    this._subscribe();            // onSnapshot fires immediately → render
+    if(!this._unsub) this.render(); // fallback if listener didn't attach
+  },
+  close(){ if(this._unsub){try{this._unsub()}catch(e){} this._unsub=null;} },
+  _syncBtns(){_q('calBtnWeek').className='btn btn-sm '+(this._view==='week'?'btn-p':'btn-g');_q('calBtnMonth').className='btn btn-sm '+(this._view==='month'?'btn-p':'btn-g')},
+  setView(v){this._view=v;this._syncBtns();const p=this._parts(this._anchorTs);this._anchorTs=v==='month'?this._midnight(p.y,p.mo,1):this._weekStartTs(this._anchorTs);this.render()},
+  today(){const p=this._parts(Date.now());this._anchorTs=this._view==='month'?this._midnight(p.y,p.mo,1):this._weekStartTs(Date.now());this.render()},
+  nav(d){if(this._view==='month'){const p=this._parts(this._anchorTs);this._anchorTs=this._midnight(p.y,p.mo+d,1)}else{this._anchorTs+=d*7*86400000}this.render()},
+
+  async _loadAvail(){
+    const u=firebase.auth().currentUser; if(!u)return;
+    try{
+      const db=firebase.firestore();
+      const snap=await db.collection('providerAvailability').doc(u.uid).get();
+      this._avail=snap.exists?snap.data():{};
+      this._overrides={};
+      const ov=await db.collection('providerAvailability').doc(u.uid).collection('overrides').get();
+      ov.forEach(d=>{this._overrides[d.id]=d.data()});
+    }catch(e){ this._avail=this._avail||{}; }
+  },
+  _subscribe(){
+    this.close();
+    const u=firebase.auth().currentUser; if(!u)return;
+    try{
+      this._unsub=firebase.firestore().collection('providerBookings').where('providerId','==',u.uid)
+        .onSnapshot(s=>{ this._bookings=s.docs.map(d=>Object.assign({id:d.id},d.data())); _q('calLive').style.color='var(--acc)'; this.render(); },
+                    e=>{ _q('calLive').textContent='● offline'; this.render(); });
+    }catch(e){ this.render(); }
+  },
+
+  render(){ this._view==='month'?this._renderMonth():this._renderWeek(); },
+
+  _dayState(ts){
+    const p=this._parts(ts), ymd=this._ymd(p.y,p.mo,p.d), av=this._avail||{};
+    if(av.isOnVacation===true) return {off:true,label:'On leave'};
+    const ov=this._overrides[ymd]; if(ov&&ov.closed===true) return {off:true,label:'Holiday'+(ov.label?' · '+this._esc(ov.label):'')};
+    const cfg=(av.schedule||{})[this.DOW[p.dow]];
+    if(!cfg||cfg.closed||!(cfg.periods||[]).length) return {off:true,label:'Closed'};
+    const per=(cfg.periods||[]).map(x=>x.open+'–'+x.close).join(', ');
+    return {off:false,label:'Open '+per,cfg};
+  },
+  _dayBookings(ts){const lo=ts,hi=ts+86400000;return this._bookings.filter(b=>Number(b.startTs)>=lo&&Number(b.startTs)<hi&&!['cancelled','declined','no_show'].includes(b.status)).sort((a,b)=>a.startTs-b.startTs)},
+
+  _daySlots(ts,state){
+    const av=this._avail||{}, dur=Math.max(15,Number((av.appt||{}).durationMins)||60);
+    const cfg=state.cfg, breaks=(cfg.breaks||[]);
+    const dayBk=this._bookings.filter(b=>Number(b.startTs)>=ts&&Number(b.startTs)<ts+86400000&&!['cancelled','declined','no_show'].includes(b.status));
+    const used=new Set(), out=[];
+    (cfg.periods||[]).forEach(pd=>{
+      let m=this._mins(pd.open); const end=this._mins(pd.close);
+      while(m+dur<=end){
+        const s=m,e=m+dur,sTs=ts+s*60000,eTs=ts+e*60000;
+        const inBrk=breaks.some(bk=>bk.start&&bk.end&&s<this._mins(bk.end)&&e>this._mins(bk.start));
+        if(inBrk){ out.push({t:this._hm(s),kind:'brk',label:'break'}); }
+        else{
+          const bk=dayBk.find(b=>Number(b.startTs)<eTs&&Number(b.endTs)>sTs);
+          if(bk){ used.add(bk.id); out.push({t:this._hm(s),kind:'booked',bk}); }
+          else out.push({t:this._hm(s),kind:'avail'});
+        }
+        m+=dur;
+      }
+    });
+    /* Any booking (e.g. a reschedule to an off-grid time) not matched to a slot still shows. */
+    dayBk.filter(b=>!used.has(b.id)).forEach(b=>out.push({t:this._hm(this._parts(Number(b.startTs)).hh*60+this._parts(Number(b.startTs)).mi),kind:'booked',bk:b}));
+    return out;
+  },
+  _slotHtml(sl){
+    if(sl.kind==='avail') return `<div class="cal-slot avail">${sl.t} available</div>`;
+    if(sl.kind==='brk')   return `<div class="cal-slot brk">${sl.t} break</div>`;
+    const b=sl.bk;
+    return `<div class="cal-slot booked st-${this._esc(b.status)}" onclick="Cal.openBooking('${this._esc(b.id)}')">${sl.t} · ${this._esc(b.customerName||'Customer')}${b.service?' · '+this._esc(b.service):''}</div>`;
+  },
+  _renderWeek(){
+    const start=this._anchorTs, days=[]; for(let i=0;i<7;i++)days.push(start+i*86400000);
+    const a=this._parts(days[0]), b=this._parts(days[6]);
+    _q('calRange').textContent=`${a.d} ${this.MON[a.mo]} – ${b.d} ${this.MON[b.mo]} ${b.y}`;
+    const todayYmd=(()=>{const p=this._parts(Date.now());return this._ymd(p.y,p.mo,p.d)})();
+    const cols=days.map(ts=>{
+      const p=this._parts(ts), ymd=this._ymd(p.y,p.mo,p.d), st=this._dayState(ts);
+      const isToday=ymd===todayYmd;
+      let body;
+      if(st.off){ const bk=this._dayBookings(ts); body=bk.length?bk.map(b=>this._slotHtml({t:this._hm(this._parts(Number(b.startTs)).hh*60+this._parts(Number(b.startTs)).mi),kind:'booked',bk:b})).join(''):'<div style="font-size:.7rem;color:var(--sub)">—</div>'; }
+      else{ body=this._daySlots(ts,st).map(s=>this._slotHtml(s)).join('')||'<div style="font-size:.7rem;color:var(--sub)">—</div>'; }
+      return `<div class="cal-day${st.off?' off':''}"><div class="cal-dhead"${isToday?' style="color:var(--acc)"':''}>${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][p.dow]} ${p.d}</div><div class="cal-dsub">${st.label}</div>${body}</div>`;
+    }).join('');
+    _q('calBody').innerHTML=`<div class="cal-week">${cols}</div>`;
+  },
+  _renderMonth(){
+    const p0=this._parts(this._anchorTs);       // 1st of month
+    _q('calRange').textContent=`${this.MON[p0.mo]} ${p0.y}`;
+    const firstDow=this._parts(this._midnight(p0.y,p0.mo,1)).dow;
+    const lead=(firstDow===0?6:firstDow-1);     // days before the 1st (Mon-start grid)
+    const gridStart=this._midnight(p0.y,p0.mo,1-lead);
+    const todayYmd=(()=>{const p=this._parts(Date.now());return this._ymd(p.y,p.mo,p.d)})();
+    let cells='';
+    for(let i=0;i<42;i++){
+      const ts=gridStart+i*86400000, p=this._parts(ts), ymd=this._ymd(p.y,p.mo,p.d);
+      const inMonth=p.mo===p0.mo, st=this._dayState(ts), n=this._dayBookings(ts).length;
+      cells+=`<div class="cal-mcell${inMonth?'':' off'}${ymd===todayYmd?' today':''}" onclick="Cal._toWeek(${ts})">
+        <div style="font-weight:700">${p.d}</div>
+        <div><i class="cal-dot ${st.off?'cal-off':'cal-avail'}"></i></div>
+        ${n?`<span class="cal-mcount">${n}</span>`:''}</div>`;
+    }
+    _q('calBody').innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:.68rem;color:var(--sub);margin-bottom:4px">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div>${d}</div>`).join('')}</div><div class="cal-month">${cells}</div>`;
+  },
+  _toWeek(ts){this._view='week';this._syncBtns();this._anchorTs=this._weekStartTs(ts);this.render()},
+  openBooking(id){
+    const b=this._bookings.find(x=>x.id===id); if(!b)return;
+    _q('calDetail').innerHTML=`<div class="card" style="padding:12px"><div class="card-title" style="margin-bottom:8px">Booking</div>${B.card(b)}</div>`;
+    _q('calDetail').scrollIntoView({behavior:'smooth',block:'nearest'});
+  }
+};
+window.Cal=Cal;
 
 /* ── Earnings ────────────────────────────────────────────────────────────── */
 const E={
