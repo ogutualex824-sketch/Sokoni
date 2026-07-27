@@ -617,7 +617,7 @@ const S={
   tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail'&&_data)S.loadAvail();if(t==='services')Sv.load()},
   loadAvail(){
     const av=_data?.availability||{};
-    _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><a href="provider-onboarding.html#step6" class="btn btn-p btn-sm">Update Availability</a></div>`;
+    _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><a href="availability-manager.html" class="btn btn-p btn-sm">Manage Availability &amp; Breaks</a></div>`;
   },
   async saveProfile(){
     showLoad('Saving…');try{
@@ -629,7 +629,7 @@ const S={
   async savePricing(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerUpdatePricing',data:{hourly:parseInt(_q('pHour').value)||0,fixed:parseInt(_q('pFixed').value)||0,inspection:parseInt(_q('pInsp').value)||0,emergency:parseInt(_q('pEmrg').value)||0}});toast('Pricing saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async savePayment(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConnectPayment',method:'mpesa',details:{phone:(_q('pmMpesa')||{}).value}});toast('Payment method saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async saveNotif(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerUpdateNotifications',sms:_q('nSMS').checked,email:_q('nEmail').checked,push:_q('nPush').checked});toast('Preferences saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async saveAvail(){toast('Use the Availability tab in onboarding to update your schedule.','ok')},
+  async saveAvail(){window.location.href='availability-manager.html';},
   async loadSub(){
     const sub=_data?.subscription;if(!sub){_q('subDetails').innerHTML='<div class="card-empty">No active subscription found.</div>';return}
     const st={trialing:'sub-trial',active:'sub-active',expired:'sub-expired',cancelled:'sub-expired'};

@@ -343,18 +343,29 @@
 
   /* ══════════════════════════════════════════════════════════════════════
      Callable CF wrappers (provider admin & buyer actions)
+
+     D2 convergence: the availability handlers are deployed ONLY behind the
+     `bookingDispatch` Cloud Run service (booking-dispatch.js merges availability._h).
+     The old raw callable names (setProviderAvailability, setLiveStatus, reserveSlot,
+     releaseSlot, getAvailabilitySlots) were NEVER deployed standalone, so these
+     wrappers previously 404'd — the provider availability editor could not save.
+     All calls now route through the dispatcher: bookingDispatch({ op, ...payload }).
   ══════════════════════════════════════════════════════════════════════ */
 
-  /** Save full availability configuration. */
+  /** Route an availability op through the deployed bookingDispatch service. */
+  async function _bd(op, payload) {
+    const fn = firebase.functions().httpsCallable("bookingDispatch");
+    return (await fn({ op, ...(payload || {}) })).data;
+  }
+
+  /** Save full availability configuration (→ canonical normalizeAvailabilityConfig). */
   async function saveProviderAvailability(config) {
-    const fn = firebase.functions().httpsCallable("setProviderAvailability");
-    return (await fn(config)).data;
+    return _bd("setProviderAvailability", config);
   }
 
   /** Instantly change live status. status ∈ VALID_STATUSES. */
   async function setLiveStatus(status, untilISO = null) {
-    const fn = firebase.functions().httpsCallable("setLiveStatus");
-    return (await fn({ status, until: untilISO })).data;
+    return _bd("setLiveStatus", { status, until: untilISO });
   }
 
   /**
@@ -364,8 +375,7 @@
    * @param {number} [days]       Number of days to look ahead (1–30)
    */
   async function getAvailabilitySlots(providerId, startDate, days = 7) {
-    const fn = firebase.functions().httpsCallable("getAvailabilitySlots");
-    return (await fn({ providerId, startDate, days })).data;
+    return _bd("getAvailabilitySlots", { providerId, startDate, days });
   }
 
   /**
@@ -376,8 +386,7 @@
     if (!params.idempotencyKey) {
       params = { ...params, idempotencyKey: `${params.date}_${params.startTime}_${Date.now()}` };
     }
-    const fn = firebase.functions().httpsCallable("reserveSlot");
-    return (await fn(params)).data;
+    return _bd("reserveSlot", params);
   }
 
   /**
@@ -385,8 +394,7 @@
    * @param {object} params { providerId, bookingId, reason }
    */
   async function releaseAppointmentSlot(params) {
-    const fn = firebase.functions().httpsCallable("releaseSlot");
-    return (await fn(params)).data;
+    return _bd("releaseSlot", params);
   }
 
   /**
@@ -412,7 +420,6 @@
 
   /** Clear vacation mode and return to normal schedule. */
   async function clearVacationMode() {
-    const fn = firebase.functions().httpsCallable("setProviderAvailability");
     const db = global.db;
     const uid = firebase.auth().currentUser?.uid;
     let cfg = {};
@@ -420,7 +427,7 @@
       const snap = await db.collection("providerAvailability").doc(uid).get();
       if (snap.exists) cfg = snap.data();
     }
-    return (await fn({ ...cfg, vacation: { active: false } })).data;
+    return _bd("setProviderAvailability", { ...cfg, vacation: { active: false } });
   }
 
   /* ══════════════════════════════════════════════════════════════════════

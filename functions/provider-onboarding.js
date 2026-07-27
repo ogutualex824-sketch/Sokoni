@@ -515,13 +515,23 @@ exports._h.providerGetBookings = _h.providerGetBookings = async (req) => {
   return { bookings: snap.docs.map(d => ({ id: d.id, ...d.data() })), hasMore: snap.size === limit };
 };
 
-/* ── 10. providerUpdateAvailability ──────────────────────────────────────────── */
+/* ── 10. providerUpdateAvailability ──────────────────────────────────────────────
+   @deprecated D2 (2026-07-27). This is the BLIND-MERGE availability writer: it stores
+   raw client input WITHOUT the canonical normalization pipeline, so it can persist a
+   config the authoritative booking engine can't read (no schedule/appt/modes) and
+   drops `breaks`. It violates the D2 governance invariant ("every persisted
+   availability configuration reaches normalizeAvailabilityConfig before storage").
+   The rich editor now saves via bookingDispatch→setProviderAvailability (canonical);
+   the onboarding wizard converges via the same pipeline in D2b. This op has ZERO
+   known callers. RETAINED only for the standard retirement lifecycle — instrumented
+   below so telemetry can confirm zero usage before removal in a dedicated cleanup. */
 exports._h.providerUpdateAvailability = _h.providerUpdateAvailability = async (req) => {
   const uid  = _uid(req);
   const data = req.data?.data;
   if (!data) throw new HttpsError('invalid-argument', 'data required.');
+  logger.warn('[deprecated] providerUpdateAvailability called — bypasses canonical availability pipeline', { uid });
   await _db().collection('providerAvailability').doc(uid).set({ uid, ...data, updatedAt: _ts() }, { merge: true });
-  return { success: true };
+  return { success: true, deprecated: true };
 };
 
 /* ── 11. providerUpdatePricing ───────────────────────────────────────────────── */

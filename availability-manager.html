@@ -1119,6 +1119,27 @@ function _dayRow(day, cfg) {
   body.appendChild(periodsList);
   body.appendChild(addBtn);
 
+  /* Breaks (D2) — optional pauses inside the working day. The booking engine
+     refuses any appointment slot that overlaps a break. */
+  const breaksLabel = document.createElement("div");
+  breaksLabel.className = "breaks-label";
+  breaksLabel.style.cssText = "margin-top:10px;font-size:.8rem;opacity:.7";
+  breaksLabel.textContent = "Breaks (no bookings during these)";
+  const breaksList = document.createElement("div");
+  breaksList.className = "breaks-list";
+  breaksList.id = "breaks-" + day;
+  (cfg.breaks || []).forEach(b => breaksList.appendChild(_breakRow(day, b.start, b.end)));
+  const addBreakBtn = document.createElement("button");
+  addBreakBtn.type = "button";
+  addBreakBtn.className = "add-period-btn";
+  addBreakBtn.textContent = "+ Add break";
+  addBreakBtn.addEventListener("click", () => {
+    document.getElementById("breaks-" + day).appendChild(_breakRow(day, "13:00", "14:00"));
+  });
+  body.appendChild(breaksLabel);
+  body.appendChild(breaksList);
+  body.appendChild(addBreakBtn);
+
   /* Toggle handler */
   hdr.querySelector(".day-open-toggle").addEventListener("change", function() {
     const open = this.checked;
@@ -1153,6 +1174,22 @@ function _periodRow(day, openTime, closeTime) {
   return row;
 }
 
+function _breakRow(day, startTime, endTime) {
+  const row = document.createElement("div");
+  row.className = "break-row period-row";
+  const s = document.createElement("input");
+  s.type = "time"; s.value = startTime || "13:00"; s.className = "break-start";
+  const between = document.createElement("span");
+  between.className = "between"; between.textContent = "to";
+  const e = document.createElement("input");
+  e.type = "time"; e.value = endTime || "14:00"; e.className = "break-end";
+  const delBtn = document.createElement("button");
+  delBtn.type = "button"; delBtn.className = "del-btn"; delBtn.textContent = "×";
+  delBtn.addEventListener("click", () => row.remove());
+  row.appendChild(s); row.appendChild(between); row.appendChild(e); row.appendChild(delBtn);
+  return row;
+}
+
 /* ── Read schedule from DOM ─────────────────────────────────────────────── */
 function _readSchedule() {
   const out = {};
@@ -1166,7 +1203,14 @@ function _readSchedule() {
       const close = row.querySelector(".period-close")?.value;
       if (open && close && open < close) periods.push({ open, close });
     });
-    out[day] = { closed: periods.length === 0, periods, breaks: [] };
+    /* Breaks (D2) — read the per-day break rows the editor now renders. */
+    const breaks = [];
+    document.querySelectorAll(`#breaks-${day} .break-row`).forEach(row => {
+      const start = row.querySelector(".break-start")?.value;
+      const end   = row.querySelector(".break-end")?.value;
+      if (start && end && start < end) breaks.push({ start, end });
+    });
+    out[day] = { closed: periods.length === 0, periods, breaks };
   });
   return out;
 }

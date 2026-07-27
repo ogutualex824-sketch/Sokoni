@@ -67,6 +67,12 @@ async function _prepareSlot(db, { providerId, date, startTime, durationMins }) {
       p && p.open && p.close && _mins(p.open) <= startMins && endMins <= _mins(p.close)));
   if (!withinHours) throw new HttpsError('out-of-range', "That time is outside the provider's working hours.");
 
+  /* Breaks (D2): the slot must not overlap any of the day's breaks. Overlap iff
+     start < break.end && end > break.start. Applies to create AND reschedule (shared gate). */
+  const onBreak = day && (day.breaks || []).some(b =>
+    b && b.start && b.end && startMins < _mins(b.end) && endMins > _mins(b.start));
+  if (onBreak) throw new HttpsError('failed-precondition', "That time falls within the provider's break.");
+
   /* Minimum notice + same-day policy. */
   const minNoticeMs = Math.max(0, Number(appt.minNoticeHours || 0)) * 3600000;
   if (startTs < Date.now() + minNoticeMs) throw new HttpsError('failed-precondition', 'Too close to the start time to book.');

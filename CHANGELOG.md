@@ -1,3 +1,32 @@
+## [2026-07-27] — feat(booking): Phase D2 — availability convergence + broken-save fix
+
+One authoritative availability configuration path, and a fix for a live production defect.
+
+**Files:** `functions/availability.js`, `functions/booking-service.js`, `functions/provider-onboarding.js`,
+`sokoni-availability.js`, `availability-manager.html`, `provider-dashboard.html`, `docs/BOOKING_CONVERGENCE.md`.
+**Deploy:** `functions:bookingDispatch` + `functions:providerDispatch` + hosting. No rules/migration.
+
+- **Production defect fixed:** the rich availability editor called `setProviderAvailability`/`setLiveStatus`/
+  `reserveSlot`/`releaseSlot`/`getAvailabilitySlots` by **raw name** — none deployed standalone (they exist
+  only as `bookingDispatch` ops) — so the editor **could not save availability**. `sokoni-availability.js`
+  now routes all of them through `bookingDispatch({op,…})`.
+- **Canonical normalization pipeline:** extracted `normalizeAvailabilityConfig()` in availability.js as THE
+  single normalization/validation impl (exported for the D2b onboarding adapter). Governance invariant:
+  *every persisted availability configuration reaches this pipeline before storage.*
+- **maxSim round-trip fix:** the pipeline accepts `maxSimultaneous` or legacy `maxSim`, persists canonical
+  `maxSimultaneous` (the editor previously saved one key and read the other).
+- **Breaks:** enforced in the shared `_prepareSlot` gate (create AND reschedule reject a slot overlapping a
+  break — one place, thanks to the D1 extraction), plus a **breaks editor** in `availability-manager.html`
+  (the UI previously hard-coded `breaks:[]`).
+- **Dashboard:** Availability tab links to the now-working `availability-manager.html`; onboarding-stub
+  deep-link retired.
+- **Deprecation:** `providerUpdateAvailability` (blind-merge, bypasses the pipeline, zero callers) marked
+  `@deprecated` + instrumented (`logger.warn`) for the standard telemetry-gated retirement.
+- **Verification:** 10/10 D2 emulator (normalizer round-trip incl breaks + maxSim, breaks enforced on
+  create + reschedule) + 14/14 Phase B + 31/31 D1 regressions.
+- **Follow-up:** D2b (onboarding→engine adapter; an onboarding-only provider must be bookable via
+  `bookingCreateService`) required before Phase E.
+
 ## [2026-07-27] — feat(booking): Phase D1 — booking lifecycle operations
 
 Provider operational control over the canonical booking, implementing

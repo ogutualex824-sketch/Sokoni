@@ -222,32 +222,23 @@ function _clamp(v, min, max, def) {
   return Math.max(min, Math.min(max, n));
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   CF 1 — setProviderAvailability
-   Save the provider's complete availability configuration.
-   Writes to providerAvailability/{uid} and denormalises into availabilityStatus/{uid}.
-══════════════════════════════════════════════════════════════════════════ */
-exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvailability = async (request) => {
-  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
-  const uid = request.auth.uid;
-  const d = request.data;
-
-  // Allow admins to configure any provider
-  const targetUid = request.auth.token?.admin && d.providerId ? d.providerId : uid;
-
-  /* Validate modes */
+/* ── CANONICAL availability normalization pipeline ───────────────────────────
+   THE single normalization/validation implementation for provider availability.
+   Every persisted availability configuration passes through here before storage —
+   the rich editor (setProviderAvailability) directly, and the onboarding wizard
+   via an input adapter (D2b) — so there is ONE canonical schema and ONE validator
+   regardless of which UI produced the input. Governance invariant (D2):
+   "Every persisted availability configuration reaches this pipeline before storage."
+   Pure of I/O; the caller writes the returned config + status doc. */
+function normalizeAvailabilityConfig(d, targetUid) {
+  d = d || {};
   const modes = (Array.isArray(d.modes) ? d.modes : [d.mode]).filter((m) => VALID_MODES.has(m));
   if (modes.length === 0) {
     throw new HttpsError("invalid-argument", "At least one valid availability mode is required.");
   }
-
-  /* Validate hubType */
-  const hubType = VALID_HUB_TYPES.has(d.hubType) ? d.hubType : "general";
-
-  /* Parse & sanitise schedule */
+  const hubType  = VALID_HUB_TYPES.has(d.hubType) ? d.hubType : "general";
   const schedule = _sanitiseSchedule(d.schedule);
 
-  /* Appointment settings */
   const appt = {
     enabled:         Boolean(d.appt?.enabled),
     durationMins:    _clamp(d.appt?.durationMins,  5,  480, 30),
@@ -259,20 +250,20 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
     allowAfterHours: Boolean(d.appt?.allowAfterHours),
   };
 
-  /* Capacity */
+  /* Capacity — accept the canonical `maxSimultaneous` OR the legacy client key
+     `maxSim` (fixes the round-trip bug where the editor saved one and read the other). */
+  const _maxSim = d.cap?.maxSimultaneous != null ? d.cap.maxSimultaneous : d.cap?.maxSim;
   const cap = {
     maxPerDay:       d.cap?.maxPerDay  != null ? _clamp(d.cap.maxPerDay,  1, 9999, null) : null,
     maxPerWeek:      d.cap?.maxPerWeek != null ? _clamp(d.cap.maxPerWeek, 1, 9999, null) : null,
-    maxSimultaneous: d.cap?.maxSim     != null ? _clamp(d.cap.maxSim,     1,  100, null) : null,
+    maxSimultaneous: _maxSim != null ? _clamp(_maxSim, 1, 100, null) : null,
     todayCount:      0,
     todayDate:       _nairobiNow().date,
   };
 
-  /* Vacation */
   const vacationActive = Boolean(d.vacation?.active);
   const now = _nairobiNow();
-
-  const config = {
+  return {
     uid:                targetUid,
     hubType,
     businessName:       String(d.businessName || "").slice(0, 120),
@@ -300,6 +291,24 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   };
+}
+exports.normalizeAvailabilityConfig = normalizeAvailabilityConfig;
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CF 1 — setProviderAvailability
+   Save the provider's complete availability configuration.
+   Writes to providerAvailability/{uid} and denormalises into availabilityStatus/{uid}.
+══════════════════════════════════════════════════════════════════════════ */
+exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvailability = async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
+  const uid = request.auth.uid;
+  const d = request.data;
+
+  // Allow admins to configure any provider
+  const targetUid = request.auth.token?.admin && d.providerId ? d.providerId : uid;
+
+  /* ONE canonical normalization pipeline (shared with the onboarding adapter, D2b). */
+  const config = normalizeAvailabilityConfig(d, targetUid);
 
   const batch = db.batch();
   const configRef = db.collection("providerAvailability").doc(targetUid);

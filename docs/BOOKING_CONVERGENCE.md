@@ -93,6 +93,21 @@ booking/settlement backend already in production. Four shippable increments, bac
   **Follow-on convergence candidate:** blackout `overrides` are written **directly to Firestore from the
   client** today — bring them onto the same server-authoritative save path (or record as the next
   convergence step), aligning with the platform's trajectory toward server-owned business state.
+- **D2b — Onboarding→engine schema convergence (required fast-follow, before Phase E).** The audit found
+  the onboarding "availability" step captures a *simple* form (`{days, from, to, breakFrom, breakTo}`) that
+  publish writes **raw** — with no `schedule`/`appt`/`modes` the authoritative engine reads — so an
+  onboarding-only provider is currently **unbookable** via `bookingCreateService`. D2b adds an input
+  adapter mapping the onboarding form → `normalizeAvailabilityConfig` (the same canonical pipeline), so
+  onboarding output is engine-readable. Gate: **an onboarding-only provider can receive a booking through
+  `bookingCreateService`.**
+
+  > **Governance rule (D2, refined):** *Every persisted availability configuration reaches the canonical
+  > `normalizeAvailabilityConfig` pipeline before it is stored.* This — not "every UI calls the same
+  > endpoint" — is the invariant the architecture cares about: multiple UX surfaces (rich editor,
+  > onboarding wizard, future mobile) are fine as long as there is ONE canonical schema and ONE validator,
+  > reached via input adapters. Deprecated blind-merge writer `providerUpdateAvailability` is instrumented
+  > and awaits the standard retirement lifecycle (removal after telemetry confirms zero usage).
+
 - **D3 — Rate-card fields.** Extend the already-canonical `providerServices` CRUD with per-service
   **fee, deposit, images[]** (Storage upload). Deposit activates the deferred cancel/no-show refund policy
   in the lifecycle contract §6.
