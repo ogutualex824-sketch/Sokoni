@@ -2,6 +2,7 @@
   "totals": {
     "amplification": 7,
     "fanOut": 3,
+    "unboundedCollectionListeners": 5,
     "staleDelivery": 2,
     "receiptEngines": 2,
     "printerDriverGlobals": 2,

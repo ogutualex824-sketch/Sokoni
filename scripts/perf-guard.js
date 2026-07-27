@@ -68,6 +68,38 @@ function findFanOut(text) {
   return hits;
 }
 
+/* A real-time listener over an ENTIRE collection streams and RETAINS every
+   document in memory — the homepage-OOM class that crashed the mobile renderer
+   on a large catalogue (fixed by bounding the subscription to limit(200),
+   commit 552bca5). A listener over a bounded query (`limit`), an owner-scoped
+   query (`where`), or a single doc (`doc`) is fine and MUST NOT be flagged —
+   onSnapshot appears in 50+ files, almost all legitimately, and a guard that
+   cries wolf gets disabled. So we flag ONLY the whole-collection form:
+     modular:  onSnapshot(collection(...), cb)     — first arg a bare collection
+     compat:   x.collection('Y').onSnapshot(cb)     — no where/limit/doc in the chain
+   query(collection(...), limit(...)) and .collection(...).where(...).onSnapshot()
+   do not match, by construction.
+
+   DO NOT BROADEN THIS REGEX. This ratchet protects against the PROVEN homepage-OOM
+   regression class (whole-collection realtime listeners) and nothing else. Category-
+   scoped or otherwise-unbounded feed QUERIES are intentionally OUT OF SCOPE here —
+   they will be addressed by feed-specific guards during the shared-feed convergence,
+   informed by the real feed architecture. Widening this to "every onSnapshot without
+   limit()" would flag the 50+ legitimate doc/owner-scoped listeners, cry wolf, and get
+   the whole guard disabled — which is exactly the failure mode perf-guard warns about. */
+function findUnboundedListeners(text) {
+  const lines = text.split('\n');
+  const hits = [];
+  const MODULAR = /onSnapshot\s*\(\s*collection\s*\(/;              /* onSnapshot(collection(...)) */
+  const COMPAT  = /\.collection\s*\([^)]*\)\s*\.onSnapshot\s*\(/;   /* .collection('Y').onSnapshot( */
+  lines.forEach((ln, i) => {
+    /* A comment describing the anti-pattern is not the anti-pattern. */
+    if (/^\s*(\*|\/\/|\/\*)/.test(ln)) return;
+    if (MODULAR.test(ln) || COMPAT.test(ln)) hits.push({ line: i + 1, code: ln.trim().slice(0, 100) });
+  });
+  return hits;
+}
+
 /* Any script the service worker precaches AND that runs on the POS startup
    path must be network-first, or a fix to it cannot reach a terminal that
    crashes during startup — the failure mode blocks its own repair. */
@@ -134,7 +166,7 @@ function countBlockingScripts(htmlPath) {
 }
 
 const files = walk(ROOT);
-const report = { amplification: {}, fanOut: {}, staleDelivery: [], totals: {} };
+const report = { amplification: {}, fanOut: {}, unbounded: {}, staleDelivery: [], totals: {} };
 
 for (const f of files) {
   let t = '';
@@ -142,8 +174,10 @@ for (const f of files) {
   const rel = path.relative(ROOT, f).replace(/\\/g, '/');
   const amp = findAmplification(t);
   const fan = findFanOut(t);
+  const unb = findUnboundedListeners(t);
   if (amp.length) report.amplification[rel] = amp;
   if (fan.length) report.fanOut[rel] = fan;
+  if (unb.length) report.unbounded[rel] = unb;
 }
 report.staleDelivery = findStaleDelivery();
 
@@ -153,6 +187,9 @@ report.worstPrinterPage = printerPages.worst;
 report.totals = {
   amplification: Object.values(report.amplification).reduce((s, a) => s + a.length, 0),
   fanOut:        Object.values(report.fanOut).reduce((s, a) => s + a.length, 0),
+  /* Unbounded whole-collection real-time listeners (homepage-OOM class). Ratchet:
+     existing ones are baselined; a NEW one fails the build. See findUnboundedListeners. */
+  unboundedCollectionListeners: Object.values(report.unbounded).reduce((s, a) => s + a.length, 0),
   staleDelivery: report.staleDelivery.length,
   /* ADR-0002: receiptEngines baselines at 2 — a thermal byte builder and an
      on-screen receipt UI, complementary and both required. The metric blocks a
@@ -213,6 +250,7 @@ if (!AS_JSON) {
   console.log('  pos.html total scripts      : ' + report.totals.posStartupScripts + (baseline && baseline.posStartupScripts != null ? '   (baseline ' + baseline.posStartupScripts + ', warn-only)' : ''));
   console.log('  printer engines on one page : ' + report.totals.printerEnginesPerPage + (baseline && baseline.printerEnginesPerPage != null ? '   (baseline ' + baseline.printerEnginesPerPage + ', layered — blocks a 7th)' : '') + (report.worstPrinterPage ? '  [' + report.worstPrinterPage + ']' : ''));
   console.log('  forEach(async …) fan-out    : ' + report.totals.fanOut + (baseline ? '   (baseline ' + baseline.fanOut + ')' : ''));
+  console.log('  unbounded feed listeners    : ' + report.totals.unboundedCollectionListeners + (baseline && baseline.unboundedCollectionListeners != null ? '   (baseline ' + baseline.unboundedCollectionListeners + ', whole-collection onSnapshot — blocks a NEW one)' : ''));
   console.log('  precached but not fresh     : ' + report.totals.staleDelivery + (baseline ? '   (baseline ' + baseline.staleDelivery + ')' : ''));
 
   if (report.staleDelivery.length) {
@@ -226,8 +264,16 @@ if (!AS_JSON) {
   if (fails.length) {
     console.log('\n  FAIL — a regression was introduced:');
     fails.forEach((f) => console.log('    ' + f));
-    console.log('\n  A getAll() inside a loop is O(M x P): it re-reads the whole store per item.');
-    console.log('  Read once before the loop and index by key. See commit 54b3e63.');
+    if (fails.some((f) => f.startsWith('amplification'))) {
+      console.log('\n  A getAll() inside a loop is O(M x P): it re-reads the whole store per item.');
+      console.log('  Read once before the loop and index by key. See commit 54b3e63.');
+    }
+    if (fails.some((f) => f.startsWith('unboundedCollectionListeners'))) {
+      console.log('\n  A live onSnapshot over an ENTIRE collection streams and retains every document —');
+      console.log('  the homepage-OOM class that crashed the mobile renderer (commit 552bca5). Bound the');
+      console.log('  subscription with limit() (see sokoni-db.js, cap 200) or scope it with an owner');
+      console.log('  where(...). Single-doc, owner-scoped, and limited listeners are fine and not flagged.');
+    }
   } else if (baseline) {
     console.log('\n  PASS — no regression above baseline\n');
   } else {
