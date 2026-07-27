@@ -8,6 +8,7 @@ import { db, auth } from './firebase.js';
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
   onSnapshot, query, where, orderBy, serverTimestamp, increment, limit, documentId,
+  getCountFromServer,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
@@ -701,6 +702,21 @@ const SokoniDB = {
       );
     };
     return attach(1);
+  },
+
+  /* True catalogue size without loading the catalogue. Since the home listener
+     is now bounded to the newest 200, `products.length` no longer reflects the
+     real total; this server-side count aggregate (one lightweight RPC, no docs
+     read) gives the honest number for the "N+ products" labels. Fail-safe:
+     returns null so the caller falls back to the in-memory length. */
+  async countProducts() {
+    try {
+      const snap = await getCountFromServer(collection(db, 'products'));
+      return snap.data().count;
+    } catch (e) {
+      _log.warn('[SokoniDB] countProducts failed', e && e.message);
+      return null;
+    }
   },
 
   async updateProductStock(productId, delta) {

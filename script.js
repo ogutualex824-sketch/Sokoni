@@ -396,7 +396,7 @@ function loadProducts(){
 
     /* Update trending count badge */
     const trendCountEl = document.getElementById("pTrendCount");
-    if(trendCountEl) trendCountEl.textContent = products.length + "+ products";
+    if(trendCountEl) trendCountEl.textContent = (window.__sokoniProductCount || products.length) + "+ products";
 
     /* DISPLAY — home page shows up to 20 trending cards */
     displayProducts(products.slice(0, 20));
@@ -1617,7 +1617,7 @@ function displayRecommendedProducts(){
                   style="display:inline-flex;align-items:center;gap:7px;padding:11px 24px;
                          background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.22);
                          border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">
-                 ✨ See All ${products.length}+ Products →
+                 ✨ See All ${window.__sokoniProductCount || products.length}+ Products →
                </a>
              </div>` : "");
 
@@ -1625,7 +1625,7 @@ function displayRecommendedProducts(){
     const statsSection = document.getElementById("marketplaceStats");
     if(statsSection) statsSection.style.display = "flex";
     const countEl = document.getElementById("statProductCount");
-    if(countEl) countEl.textContent = Math.max(products.length, 500) + "+";
+    if(countEl) countEl.textContent = Math.max(window.__sokoniProductCount || products.length, 500) + "+";
     const sellerEl = document.getElementById("statSellerCount");
     if(sellerEl){
         const sellers = new Set(products.map(p=>p.sellerEmail||p.sellerName)).size;
@@ -4255,12 +4255,48 @@ window._homeMergeFirestore = function (fsProducts) {
        The first ~60 newest give an instant warm paint; the live listener refills
        the rest. Bounded query (sokoni-db.js) already caps `products`, this caps
        what we write. */
-    try { localStorage.setItem("sellerProducts", JSON.stringify(products.slice(0, 60))); } catch (e) {}
+    /* Strip base64 image blobs from the warm-cache slice: renderProductImage
+       rejects data: URIs to a placeholder anyway (sokoni-image.js), so keeping
+       them costs megabytes of localStorage (→ QuotaExceededError, warm cache
+       silently lost) for zero visual gain. Storage/HTTP URLs are small strings
+       and kept. This keeps the payload comfortably below quota. */
+    try {
+        var _isData = function (v) { return typeof v === 'string' && v.slice(0, 5) === 'data:'; };
+        var _warm = products.slice(0, 60).map(function (p) {
+            if (!p || typeof p !== 'object') return p;
+            var hasBlob = _isData(p.image) || (Array.isArray(p.images) && p.images.some(_isData));
+            if (!hasBlob) return p;
+            var c = Object.assign({}, p);
+            if (_isData(c.image)) delete c.image;
+            if (Array.isArray(c.images)) c.images = c.images.filter(function (u) { return !_isData(u); });
+            return c;
+        });
+        localStorage.setItem("sellerProducts", JSON.stringify(_warm));
+    } catch (e) {}
 
     const trendCountEl = document.getElementById("pTrendCount");
-    if (trendCountEl) trendCountEl.textContent = products.length + "+ products";
+    if (trendCountEl) trendCountEl.textContent = (window.__sokoniProductCount || products.length) + "+ products";
 
     displayProducts(products.slice(0, 20));
     if (typeof displayNewArrivals === "function") displayNewArrivals();
     if (typeof displayRecommendedProducts === "function") displayRecommendedProducts();
+
+    /* Home listener is bounded to 200, so products.length under-reports the real
+       catalogue. Fetch the true total ONCE (cheap server count aggregate, no docs
+       read), at idle so it never blocks paint, then correct the visible labels.
+       Fail-safe: on any error the labels keep the in-memory fallback. */
+    if (!window.__sokoniProductCountFetched && window.SokoniDB && typeof SokoniDB.countProducts === "function") {
+        window.__sokoniProductCountFetched = true;
+        var _schedule = window.requestIdleCallback || function (f) { return setTimeout(f, 1200); };
+        _schedule(function () {
+            SokoniDB.countProducts().then(function (n) {
+                if (!n || n < 1) return;
+                window.__sokoniProductCount = n;
+                var t1 = document.getElementById("pTrendCount");
+                if (t1) t1.textContent = n + "+ products";
+                var t2 = document.getElementById("statProductCount");
+                if (t2) t2.textContent = Math.max(n, 500) + "+";
+            }).catch(function () {});
+        });
+    }
 };
