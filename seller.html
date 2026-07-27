@@ -2725,7 +2725,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
           localStorage.setItem('sokoniStore',JSON.stringify(storeData));
         }catch(e){}
 
-        /* ── Firestore: persist seller store to sellers/{uid} ── */
+        /* ── Firestore: persist to sellers/{uid} (storefront fallback) AND
+           businesses/{uid} (the collection the business DIRECTORY reads).
+           The marketplace shop used to write ONLY sellers/, so a launched shop
+           never appeared in the business directory — the "buyers can find you"
+           message below was false. businesses/{uid} is owner-writable per the
+           rules (uid == auth.uid, no admin fields; status:'active' + createdAt
+           are allowed), and createdAt is set once so the directory's
+           orderBy('createdAt') can't silently drop it. ── */
         (function(){
           try{
             var FS='https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
@@ -2736,7 +2743,22 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
               var payload=Object.assign({},storeData,{uid:uid,updatedAt:m.serverTimestamp()});
               /* Strip blob images from Firestore document to stay under 1MB limit */
               delete payload.bannerSrc; delete payload.logoSrc;
-              m.setDoc(m.doc(db,'sellers',uid),payload,{merge:true}).catch(function(){});
+              m.setDoc(m.doc(db,'sellers',uid),payload,{merge:true}).catch(function(e){console.warn('[shop] sellers write:',e&&e.message);});
+              /* Business directory listing — complete + rules-compliant. getDoc first
+                 so createdAt is written once (on first launch) and preserved on edits. */
+              m.getDoc(m.doc(db,'businesses',uid)).then(function(snap){
+                var created=(snap.exists()&&snap.data().createdAt)?snap.data().createdAt:m.serverTimestamp();
+                var biz={
+                  uid:uid, ownerId:uid,
+                  name:storeData.name, businessName:storeData.name,
+                  category:storeData.category||'', description:storeData.about||'',
+                  tagline:storeData.tagline||'', city:storeData.city||'',
+                  address:storeData.address||'', phone:storeData.phone||'',
+                  email:storeData.email||'', shopType:storeData.shopType||'online',
+                  status:'active', createdAt:created, updatedAt:m.serverTimestamp()
+                };
+                return m.setDoc(m.doc(db,'businesses',uid),biz,{merge:true});
+              }).catch(function(e){console.warn('[shop] businesses write:',e&&e.message);});
               /* Also mark user as seller in their Firestore user doc */
               m.updateDoc(m.doc(db,'users',uid),{'registeredAs.seller':true,storeName:storeData.name}).catch(function(){});
             }).catch(function(){});
