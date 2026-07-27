@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1">
+<html lang="en" data-splash="1" style="background:#050505">
 
 <head>
   <!-- ── CANONICAL TEMPLATE IDENTIFIER ─────────────────────────────────────────
@@ -31,7 +31,10 @@
   <script src="security.js"></script>
   <!-- Image rendering abstraction — loaded early so window.renderProductImage exists
        before the deferred trending grid (script.js) and recommendations render. -->
-  <script src="sokoni-image.js"></script>
+  <!-- defer: still executes before script.js (deferred scripts run in document
+       order), so window.renderProductImage exists before the grid renders — but
+       it no longer blocks first paint. -->
+  <script src="sokoni-image.js" defer></script>
   <script src="splash.js"></script>
   <script>/* Capture ?ref=CODE from referral links — runs before any other JS */
   (function(){try{var p=new URLSearchParams(location.search),c=p.get('ref');if(c&&/^SKN[A-Z0-9]{7}$/.test(c)&&!localStorage.getItem('sokoniReferredBy')){var own=localStorage.getItem('sokoniReferralCode')||'';if(c!==own){localStorage.setItem('sokoniReferredBy',c);}}}catch(e){}})()</script>
@@ -54,6 +57,10 @@
   <link rel="stylesheet" href="style.css">
   <link rel="preload" href="assets/Sokoni%20Logo.png" as="image" type="image/png">
   <link rel="preload" href="script.js" as="script">
+  <!-- modulepreload: start fetching the Firebase module graph now instead of at
+       end-of-body (sokoni-init.js → firebase.js), so auth/firestore are ready sooner. -->
+  <link rel="modulepreload" href="sokoni-init.js">
+  <link rel="modulepreload" href="firebase.js">
 
   <!-- --- iOS Splash Screens --- -->
   <link rel="apple-touch-startup-image" href="assets/logosokoni.png">

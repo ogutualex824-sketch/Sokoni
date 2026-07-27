@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-splash="1" data-require-auth="true">
+<html lang="en" data-splash="1" data-require-auth="true" style="background:#050505">
 <head>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
@@ -864,9 +864,12 @@
      SRI pins the exact build: if unpkg ever serves different bytes the script is refused,
      window.IntaSend stays undefined, and the guard below fails closed with an honest
      "Payment unavailable" instead of running unverified third-party payment code. -->
+<!-- defer: keep the external CDN fetch off the critical render path. The SDK is
+     only used on pay-click (with a fail-closed "Payment unavailable" guard if it's
+     absent), never at parse time, so deferring it cannot break checkout. -->
 <script src="https://unpkg.com/intasend-inlinejs-sdk@3.0.3/build/intasend-inline.js"
         integrity="sha384-pCPVtxYA4nrrp9OU8Aaow61Mc7vLbjaVxxbUyfwHvpvItMottH1juZkJ+hTeimpo"
-        crossorigin="anonymous"></script>
+        crossorigin="anonymous" defer></script>
 <link rel="stylesheet" href="premium.css">
 <link rel="stylesheet" href="mobile.css">
   <link rel="stylesheet" href="sokoni-premium-v2.css">

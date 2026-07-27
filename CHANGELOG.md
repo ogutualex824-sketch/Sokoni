@@ -1,3 +1,40 @@
+## [2026-07-27] — perf(startup): kill the white flash before first paint (P0+P1)
+
+A 3-agent read-only audit of the startup pipeline found SOKONI already does most
+first-paint best practices (skeletons + local-first render, auth never blocks the
+UI, parallel/single Firestore reads, splash is dark not white, no hide-until-JS
+gate). The white screen has ONE structural cause: sync render-blocking `<head>`
+scripts run before first paint while **most pages lack an inline dark background**,
+so the exposed canvas is browser-default white until `style.css`/splash JS applies
+the dark theme. `store.html` already avoided this with an inline `<html>` bg;
+`earnings.html` avoids it with inline critical CSS.
+
+- **P0 — white flash killed (root cause):** added inline `style="background:#050505"`
+  to `<html>` on `index/category/product/search/checkout` (matching `store.html`).
+  The page paints dark instantly, independent of script/CSS/JS timing. Near-zero
+  risk; proven by the two pages that already did it.
+- **P1 — trim the critical path:**
+  - `checkout.html` — the external `unpkg.com` IntaSend SDK is now `defer` (it's
+    used only on pay-click behind a fail-closed guard, never at parse), removing a
+    third-party round-trip from first paint.
+  - `index.html` — `sokoni-image.js` is now `defer` (still runs before `script.js`
+    since deferred scripts execute in document order, so `renderProductImage` is
+    ready for the grid, but it no longer blocks paint).
+  - `index.html` + `category.html` — `modulepreload` for the Firebase module graph
+    (`sokoni-init.js`/`firebase.js`) + a `category.js` preload, so critical fetches
+    start in the head instead of at end-of-body.
+
+Deferred by scope (not done): deferring `security.js`/`root-guard`/`crash-sentinel`
+(security-ordering risk), lazy-loading the eager heavy modules via the existing
+`SokoniPerformance.importWhenVisible`/`importOnInteraction` primitives, and bounding
+the unbounded home products listener with `.limit()` (P2 — pending before/after
+Web Vitals measurement).
+
+Files: `index.html`, `category.html`, `product.html`, `search.html`, `checkout.html`.
+No JS logic, security, or payment behaviour changed — only load ordering + a paint bg.
+
+---
+
 ## [2026-07-27] — fix(commerce): stop overselling + propagate shop renames + Buy Now on category cards
 
 Scoped from a user real-time-sync design proposal. A 3-agent read-only audit mapped the 7-point
