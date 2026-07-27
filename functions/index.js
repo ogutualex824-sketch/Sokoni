@@ -9945,6 +9945,12 @@ exports.adminGetDataDeletionRequest    = fbDeletion.adminGetDataDeletionRequest;
 exports.adminUpdateDataDeletionStatus  = fbDeletion.adminUpdateDataDeletionStatus;
 exports.deleteMyAccount                = fbDeletion.deleteMyAccount;
 
+/* Account status — server-enforced deactivation / reactivation */
+const accountStatus = require('./account-status');
+exports.accountDeactivate              = accountStatus.accountDeactivate;
+exports.accountReactivate              = accountStatus.accountReactivate;
+exports.adminSetAccountActive          = accountStatus.adminSetAccountActive;
+
 /* ── Payment Trust — receipts, verification, security monitoring ─── */
 const payTrust = require('./payment-trust');
 exports.generateTrustReceipt      = payTrust.generateTrustReceipt;

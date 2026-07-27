@@ -4030,29 +4030,61 @@ function saveSettings(){
 }
 
 async function deactivateAccount(_c){
-  if(!_c){_skConfirm('Deactivate your account and sign out? You can reactivate anytime by logging back in and opening your profile.',()=>deactivateAccount(true));return;}
+  if(!_c){_skConfirm('Deactivate your account? Your profile, shop and listings will be hidden from SOKONI, and you won\'t be able to post, order or message until you reactivate. You can reactivate anytime by signing back in.',()=>deactivateAccount(true));return;}
   var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
   try{
     toast('Deactivating…','info');
-    /* AWAIT the write — the old code fired it and immediately logged out, so the
-       navigation usually aborted the request and the flag never persisted. */
-    await saveToFirestore({ deactivated:true, deactivatedAt: new Date().toISOString() });
+    /* Server-authoritative: the CF sets a custom claim + hides merchant surfaces +
+       revokes tokens. Client no longer writes the flag directly. */
+    var mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var fns = mod.getFunctions(undefined, 'us-central1');
+    await mod.httpsCallable(fns, 'accountDeactivate')({ confirm:true });
     toast('Account deactivated. Signing you out…','success');
-    setTimeout(function(){ logoutUser(true); }, 700);
+    setTimeout(function(){ logoutUser(true); }, 800);
   }catch(e){
     toast('Could not deactivate: ' + ((e&&e.message)||'please try again.'),'error');
   }
 }
 window.deactivateAccount = deactivateAccount;
 
-/* Reactivate on return: when a signed-in user opens their profile, clear any
-   deactivated flag so "log back in to reactivate" actually holds. */
-function _reactivateIfNeeded(data){
+/* Explicit reactivation gate (never auto): when a signed-in but DEACTIVATED user
+   opens their profile, block it behind a prompt to reactivate. Rules already stop
+   their writes everywhere; this is the recovery path. */
+function _maybeReactivateGate(data){
   try{
-    if(data && data.deactivated === true && _user && _user.uid){
-      saveToFirestore({ deactivated:false, reactivatedAt: new Date().toISOString() }).catch(function(){});
-    }
+    if(!(data && data.deactivated === true)) return;
+    if(document.getElementById('pv-react-gate')) return;
+    var ov = document.createElement('div'); ov.id='pv-react-gate'; ov.className='pv-modal';
+    ov.innerHTML =
+      '<div class="pv-box" role="dialog" aria-modal="true" aria-label="Account deactivated">' +
+        '<div class="pv-title">Your account is deactivated</div>' +
+        '<div class="pv-hint">Your profile, shop and listings are hidden, and posting, ordering and messaging are disabled. Reactivate to restore everything.</div>' +
+        '<button id="pv-react-yes" type="button" class="pv-cta">Reactivate my account</button>' +
+        '<button id="pv-react-no" type="button" class="pv-link">Sign out</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    try{ document.body.style.overflow='hidden'; }catch(_){}
+    document.getElementById('pv-react-yes').onclick = _doReactivate;
+    document.getElementById('pv-react-no').onclick  = function(){ (window.sokoniSignOut?window.sokoniSignOut():Promise.resolve()).finally(function(){ location.href='login.html'; }); };
   }catch(_){}
+}
+async function _doReactivate(){
+  var btn = document.getElementById('pv-react-yes');
+  var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
+  if(btn){ btn.disabled=true; btn.textContent='Reactivating…'; }
+  try{
+    var mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+    var fns = mod.getFunctions(undefined, 'us-central1');
+    await mod.httpsCallable(fns, 'accountReactivate')({});
+    /* Refresh the ID token so Firestore rules immediately see the cleared claim. */
+    try{ if(window.firebaseAuth && window.firebaseAuth.currentUser) await window.firebaseAuth.currentUser.getIdToken(true); }catch(_){}
+    toast('Welcome back! Your account is active again.','success');
+    try{ document.body.style.overflow=''; }catch(_){}
+    setTimeout(function(){ location.reload(); }, 800);
+  }catch(e){
+    toast('Could not reactivate: ' + ((e&&e.message)||'please try again.'),'error');
+    if(btn){ btn.disabled=false; btn.textContent='Reactivate my account'; }
+  }
 }
 
 /* In-page typed confirmation (mobile-reliable — native prompt() is often
@@ -4216,7 +4248,7 @@ function listenFirestoreProfile(uid){
     _profUserDataUnsub = m.onSnapshot(m.doc(db,'users',uid), function(snap){
       if(!snap.exists()) return;
       var data = snap.data();
-      _reactivateIfNeeded(data);
+      _maybeReactivateGate(data);
       /* merge non-sensitive fields into localStorage user */
       _user = getUser() || {};
       if(data.name) _user.name = data.name;
