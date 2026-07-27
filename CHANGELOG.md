@@ -1,3 +1,22 @@
+## [2026-07-27] — feat(booking): Phase D2b — onboarding→canonical availability adapter
+
+Closes the last availability correctness gap before Phase E: onboarding-only providers are now bookable.
+
+**Files:** `functions/provider-onboarding.js`. **Deploy:** `functions:providerDispatch` only. No client/rules/migration.
+
+- **Problem:** the onboarding "availability" step captures a simple form; publish wrote it **raw**, with no
+  `schedule`/`appt`/`modes` the authoritative engine reads → an onboarding-only provider was **unbookable**
+  via `bookingCreateService` (every slot rejected "outside working hours").
+- **Fix (adapter, not a new model):** `_onboardingAvailabilityToConfig(draft)` translates the onboarding
+  form (day chips → schedule, from/to → periods, break → breaks, lead-time code → minNoticeHours, emergency
+  → modes; the `bookings` step → appt/cap) into the input shape of the ONE canonical pipeline. Publish now
+  writes `normalizeAvailabilityConfig(_onboardingAvailabilityToConfig(draft), uid)` — the **same** normalizer
+  the rich editor uses. Governance invariant now holds across BOTH UX surfaces.
+- **Gate met:** 9/9 emulator — an onboarding-only provider receives a booking with zero manual edits, and the
+  mapped schedule/break/closed-days are actually enforced by `_prepareSlot`. D2 regression 10/10.
+- **Historical:** onboarding-only providers created before D2b still carry the old raw doc; recorded as a
+  dry-run, approval-gated backfill candidate (report only) — not executed here.
+
 ## [2026-07-27] — feat(booking): Phase D2 — availability convergence + broken-save fix
 
 One authoritative availability configuration path, and a fix for a live production defect.

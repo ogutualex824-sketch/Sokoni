@@ -21,6 +21,48 @@ const _auth = () => getAuth();
 const _ts  = () => FieldValue.serverTimestamp();
 const _san = (v, n = 200) => String(v || '').slice(0, n).replace(/[<>"']/g, '');
 
+/* ── D2b — Onboarding → canonical availability adapter ──────────────────────────
+   The onboarding wizard captures a SIMPLE availability form (day chips + one
+   from/to + one break + a lead-time code) and a separate "bookings" step
+   (duration/buffer/caps). The authoritative engine (booking-service `_prepareSlot`)
+   reads `schedule.{day}.periods`/`breaks`, `appt`, `modes` — which the raw form does
+   NOT contain, so an onboarding-only provider was unbookable. This adapter maps the
+   onboarding model into the input shape of the ONE canonical pipeline
+   (availability.js `normalizeAvailabilityConfig`); it introduces NO new availability
+   logic — it only translates. Governance invariant holds: onboarding output reaches
+   the same normalizer before storage. */
+const _DOW3 = { mon: 'monday', tue: 'tuesday', wed: 'wednesday', thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday' };
+const _LEAD_HOURS = { '1h': 1, '2h': 2, '4h': 4, 'same': 0, '1d': 24, '2d': 48, '1w': 168 };
+function _onboardingAvailabilityToConfig(draft) {
+  const av = (draft && draft.availability) || {};
+  const bk = (draft && draft.bookings) || {};
+  const selected = new Set((av.days || []).map(x => _DOW3[String(x).toLowerCase().slice(0, 3)]).filter(Boolean));
+  const open = av.from || '08:00', close = av.to || '17:00';
+  const breaks = (av.breakFrom && av.breakTo) ? [{ start: av.breakFrom, end: av.breakTo }] : [];
+  const schedule = {};
+  for (const day of Object.values(_DOW3)) {
+    schedule[day] = selected.has(day)
+      ? { closed: false, periods: [{ open, close }], breaks }
+      : { closed: true, periods: [], breaks: [] };
+  }
+  const leadHours = _LEAD_HOURS[av.leadTime] != null ? _LEAD_HOURS[av.leadTime] : 2;
+  return {
+    modes:   av.emergency ? ['open_24_7'] : ['fixed_hours'],
+    hubType: 'general',
+    schedule,
+    appt: {
+      enabled:        true,
+      durationMins:   Number(bk.duration) || 60,
+      bufferMins:     Number(bk.buffer) || 0,
+      maxDaysAhead:   Number(bk.maxAdvanceDays) || 30,
+      minNoticeHours: leadHours,
+      allowSameDay:   leadHours < 24,
+    },
+    cap: { maxPerDay: bk.maxPerDay != null ? Number(bk.maxPerDay) : null, maxSimultaneous: 1 },
+  };
+}
+exports._onboardingAvailabilityToConfig = _onboardingAvailabilityToConfig;
+
 /* ── Subscription plan catalogue ────────────────────────────────────────────── */
 const PLANS = {
   free_trial: {
@@ -358,11 +400,12 @@ exports._h.providerPublish = _h.providerPublish = async (req) => {
     publishedAt: _ts(), updatedAt: _ts(),
   }, { merge: true });
 
-  // Create availability doc
+  // Create availability doc — via the CANONICAL normalization pipeline (D2b adapter),
+  // so the authoritative booking engine can read the onboarding provider's schedule.
   if (draft.availability) {
-    batch.set(_db().collection('providerAvailability').doc(uid), {
-      uid, ...draft.availability, updatedAt: _ts(),
-    }, { merge: true });
+    const { normalizeAvailabilityConfig } = require('./availability');
+    const config = normalizeAvailabilityConfig(_onboardingAvailabilityToConfig(draft), uid);
+    batch.set(_db().collection('providerAvailability').doc(uid), config, { merge: true });
   }
 
   // Create settings doc
