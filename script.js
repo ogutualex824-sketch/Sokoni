@@ -4248,7 +4248,14 @@ window._homeMergeFirestore = function (fsProducts) {
     );
     products = [...fsProducts, ...localOnly];
 
-    try { localStorage.setItem("sellerProducts", JSON.stringify(products)); } catch (e) {}
+    /* Warm-start cache only — persist a bounded slice, never the whole catalogue.
+       This ran on EVERY snapshot and serialized the entire products array (some
+       docs still hold base64 image blobs), a repeated multi-MB main-thread
+       allocation and a localStorage-quota bomb that fed the mobile renderer OOM.
+       The first ~60 newest give an instant warm paint; the live listener refills
+       the rest. Bounded query (sokoni-db.js) already caps `products`, this caps
+       what we write. */
+    try { localStorage.setItem("sellerProducts", JSON.stringify(products.slice(0, 60))); } catch (e) {}
 
     const trendCountEl = document.getElementById("pTrendCount");
     if (trendCountEl) trendCountEl.textContent = products.length + "+ products";

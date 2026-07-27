@@ -7,7 +7,7 @@
 import { db, auth } from './firebase.js';
 import {
   collection, doc, addDoc, setDoc, updateDoc, deleteDoc, getDoc, getDocs,
-  onSnapshot, query, where, orderBy, serverTimestamp, increment, limit,
+  onSnapshot, query, where, orderBy, serverTimestamp, increment, limit, documentId,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const _log = window.SokoniLogger || { log:()=>{}, warn:()=>{}, error:()=>{} };
@@ -619,6 +619,28 @@ const SokoniDB = {
       let q = collection(db, 'products');
       if (opts.category)  q = query(q, where('category', '==', opts.category));
       if (opts.sellerUid) q = query(q, where('sellerUid', '==', opts.sellerUid));
+
+      /* BOUND the live subscription. Unbounded, this was `onSnapshot` over the
+         ENTIRE products collection: the SDK retained every doc (many still
+         carrying heavy base64 image blobs) in the mobile renderer's heap, the
+         home merge re-serialized the whole array to localStorage on every
+         snapshot, and as the catalogue grows the heap saturated on load —
+         scrolling then forced layout/paint/decode and tipped the renderer into
+         OOM (the reported "Chrome crashes when I scroll the homepage", same
+         class as the Android Aw-Snap sentinel). Product ids are Date.now()
+         timestamps, so `orderBy(documentId(),'desc')` returns the NEWEST N with
+         the built-in __name__ index (no composite index needed) — active
+         inventory, which is also where client-side boosts (sokoniAds) live, so
+         boosted cards still float. Filtered paths already narrow the set, so a
+         plain bounded limit keeps them index-safe (no orderBy → no composite
+         index). Override with opts.limit where a caller needs a different cap. */
+      const cap = Number(opts.limit) > 0 ? Number(opts.limit) : 200;
+      if (opts.category || opts.sellerUid) {
+        q = query(q, limit(cap));
+      } else {
+        q = query(q, orderBy(documentId(), 'desc'), limit(cap));
+      }
+
       emit('listener-attached', { attempt });
       return onSnapshot(q,
         snap => {
