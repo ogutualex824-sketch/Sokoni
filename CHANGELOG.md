@@ -1,3 +1,31 @@
+## [2026-07-27] — fix(perf): homepage scroll-crash (renderer OOM) — bound catalogue feed
+
+The homepage subscribed to the **entire `products` collection** with no cap. The Firestore
+SDK retained every doc (many with base64 image blobs) in the mobile renderer heap, and the
+home merge re-serialized the whole array to `localStorage` on every snapshot — scrolling
+tipped the saturated renderer into OOM ("Chrome crashes when I scroll", "Can't open this
+page"). Same class as the Android Aw-Snap sentinel.
+
+**Files:** `sokoni-db.js`, `script.js`. **Deploy:** hosting only. No CF/rules/migration.
+**Docs:** `docs/HOMEPAGE_FEED_SCALING.md` (release note + tracked technical debt).
+
+- **Bounded listener** — `listenProducts` home path now `orderBy(documentId(),'desc'), limit(200)`
+  (ids are `Date.now()` timestamps → newest-first, built-in `__name__` index, no composite
+  index). Filtered category/seller paths use a plain index-safe `limit(200)`. Boosting is
+  client-side (`sokoniAds`) and lives on active inventory, so boosted cards still float.
+- **Warm cache** — persist a 60-item slice with base64 image blobs stripped (rejected on
+  render anyway): measured **15.5 MB → 39 KB** (0.76% of quota), no `QuotaExceededError`.
+- **Honest count** — new `SokoniDB.countProducts()` server count aggregate (1 RPC, no docs
+  read), fetched once at idle, corrects the "N+ products" labels the 200-cap would under-report.
+- **No storefront regression** (verified): search → `search.html` (Algolia/Typesense/Firestore),
+  category → per-category listener, product detail → `getDoc` by id — all bypass the capped array.
+- **Documented behavioral change:** very old boosted products (outside newest 200) no longer
+  float; per-category >200 returns oldest-200. Edge cases; tracked toward a server-ranked,
+  paginated feed that removes the age↔visibility dependency.
+- **Tracked separately:** `inspiq.js`/`feeds.html` unbounded infinite-scroll (same OOM class,
+  different page). **Close criteria:** on-device iPhone Chrome + Safari scroll/navigate/reload
+  stability — engineering-complete ≠ production-proven.
+
 ## [2026-07-27] — feat(booking): Phase D4 — provider calendar (presentation-only, real-time)
 
 A week/month calendar in the provider dashboard that **visualizes** authoritative booking data.
