@@ -4055,17 +4055,30 @@ document.addEventListener('DOMContentLoaded', function() {
   }, 400);
 });
 </script>
-<script defer src="kass-widget.js"></script>
-  <script defer src="hub-register.js"></script>
-  <!-- Enterprise v2.0 modules — event bus and observability must load first -->
-  <script defer src="sokoni-event-bus.js"></script>
-  <script defer src="sokoni-observability.js"></script>
-  <script defer src="sokoni-service-mesh.js"></script>
-  <script defer src="sokoni-gateway.js"></script>
-  <script defer src="sokoni-payment-engine.js"></script>
-  <script defer src="sokoni-fraud-engine.js"></script>
-  <script defer src="sokoni-webhook-engine.js"></script>
-  <script defer src="sokoni-search-pro.js"></script>
+<!-- P2A: these are post-paint modules (KASS widget, hub registry, and the
+     Enterprise v2.0 engines) — none is needed to render the shell, nav, or the
+     product grid. Loaded eagerly they added ~230 KB to startup parse/execute and
+     inflated TBT. Inject them AFTER the load event, on main-thread idle, in order
+     (event-bus/observability before the engines). async=false preserves execution
+     order while allowing parallel download. -->
+  <script>
+  (function _sokoniLazyEngines() {
+    var LAZY = ["kass-widget.js","hub-register.js","sokoni-event-bus.js",
+                "sokoni-observability.js","sokoni-service-mesh.js","sokoni-gateway.js",
+                "sokoni-payment-engine.js","sokoni-fraud-engine.js",
+                "sokoni-webhook-engine.js","sokoni-search-pro.js"];
+    function flush() {
+      LAZY.forEach(function (src) {
+        var s = document.createElement('script');
+        s.src = src; s.async = false;   /* ordered execution, parallel download */
+        document.body.appendChild(s);
+      });
+    }
+    function start() { (window.requestIdleCallback || function (f) { setTimeout(f, 200); })(flush, { timeout: 3000 }); }
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
+  }());
+  </script>
   <script>
   /* Hidden admin access: tap the home logo 9× → super admin (which still enforces the
      admin claim). Robustness fixes for "9-tap not working": (1) also handle touchend —

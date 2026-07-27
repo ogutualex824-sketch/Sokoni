@@ -271,31 +271,45 @@
      loaded here would silently wipe the restored footer. Rolled back to 911a042. */
   /* Layout manager — resolves floating element overlaps, sets CSS vars */
   _injectAsset('script', { src: 'sokoni-layout.js', defer: true }, 'sk-layout-script');
-  /* Notification engine — real-time engine, preferences, grouping */
-  _injectAsset('script', { src: 'sokoni-notif-engine.js', defer: true }, 'sk-notif-engine-script');
-  /* Notification center — bell UI, slide-in panel, inline actions */
-  /* Canonical full-screen sheet: header, 44px close, safe-area, five ways out.
-     Loaded BEFORE the notification centre so any overlay can adopt it. Every future
-     hub/overlay (Messages, Wishlist, Orders, Settings…) should use SokoniSheet rather
-     than hand-rolling a panel and picking the wrong z-index tier, which is exactly how
-     Notifications became impossible to close. */
-  _injectAsset('script', { src: 'sokoni-sheet.js', defer: true }, 'sk-sheet-script');
-  /* Production Validation Mode — OFF unless ?validate=1. When off it defines a handful of
-     no-ops and returns: it patches nothing, listens to nothing, writes nothing, and cannot
-     affect a real customer. When on, it traces every Cloud Function call, the auth chain,
-     push/email/PO delivery, performance and mobile diagnostics for ONE real-device session. */
-  _injectAsset('script', { src: 'sokoni-validate.js', defer: true }, 'sk-validate-script');
-  _injectAsset('script', { src: 'sokoni-notif-center.js', defer: true }, 'sk-notif-center-script');
+  /* Zero Trust, Performance and Observability stay EAGER: their init hooks below run
+     one-shot on `load` and expect the global to already exist, so deferring the script
+     past `load` would silently skip initialisation. */
   /* Zero Trust client SDK — device fingerprint, risk cache, step-up auth guard */
   _injectAsset('script', { src: 'sokoni-zero-trust.js', defer: true }, 'sk-zero-trust-script');
-  /* Phase 3 — Performance SDK: lazy loading, WebP, prefetch, optimistic UI */
+  /* Phase 3 — Performance SDK: lazy loading, WebP, prefetch, optimistic UI (also
+     optimises first-paint images, so it earns its eager slot). */
   _injectAsset('script', { src: 'sokoni-performance.js', defer: true }, 'sk-performance-script');
-  /* Phase 3 — Resilience SDK: circuit breakers, retry, offline queue */
-  _injectAsset('script', { src: 'sokoni-resilience.js', defer: true }, 'sk-resilience-script');
   /* Phase 3 — Observability SDK: error tracking, Core Web Vitals, user journey */
   _injectAsset('script', { src: 'sokoni-observability.js', defer: true }, 'sk-observability-script');
-  /* Command palette — Ctrl+K / Cmd+K global launcher */
-  _injectAsset('script', { src: 'sokoni-command-palette.js', defer: true }, 'sk-command-palette-script');
+
+  /* P2A — NOT needed for first paint: notifications (bell UI + engine), the shared
+     full-screen sheet, validation mode (off unless ?validate=1), resilience, and the
+     Ctrl+K command palette. Loaded eagerly these cost ~160 KB of startup parse/execute
+     on EVERY page. Inject them after `load`, on main-thread idle, in order (sheet before
+     notif-center, which adopts it). async=false keeps execution ordered while allowing
+     parallel download. Each self-initialises when it lands, so the bell/palette simply
+     appear a beat later instead of blocking the product grid. */
+  (function _sokoniIdleModules() {
+    var LAZY = [
+      ['sokoni-sheet.js',           'sk-sheet-script'],
+      ['sokoni-notif-engine.js',    'sk-notif-engine-script'],
+      ['sokoni-notif-center.js',    'sk-notif-center-script'],
+      ['sokoni-resilience.js',      'sk-resilience-script'],
+      ['sokoni-validate.js',        'sk-validate-script'],
+      ['sokoni-command-palette.js', 'sk-command-palette-script'],
+    ];
+    function flush() {
+      LAZY.forEach(function (m) {
+        if (document.getElementById(m[1])) return;
+        var s = document.createElement('script');
+        s.src = m[0]; s.async = false; s.id = m[1];   /* ordered exec, parallel download */
+        document.head.appendChild(s);
+      });
+    }
+    function start() { (window.requestIdleCallback || function (f) { setTimeout(f, 200); })(flush, { timeout: 3000 }); }
+    if (document.readyState === 'complete') start();
+    else window.addEventListener('load', start, { once: true });
+  }());
 
   /* Initialize Observability after page load */
   (function () {
