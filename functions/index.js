@@ -7988,6 +7988,27 @@ exports.indexProviderCreate = onDocumentCreated("providers/{providerId}", async 
   }).catch(() => {});
 });
 
+/* Mirror of indexProductUpdate for providers — regenerates searchableTerms/
+   nameLower whenever a provider edits their doc (rename, recategorise, new skills),
+   which the create-only indexProviderCreate never covered. Same output-comparison
+   idempotency guard, so it terminates after one hop and no-ops when the CF already
+   wrote matching terms (both use the shared _buildSearchTerms). */
+exports.indexProviderUpdate = onDocumentUpdated("providers/{providerId}", async (event) => {
+  if (!event.data || !event.data.after) return;
+  const after = event.data.after.data() || {};
+  const nextTerms = _buildSearchTerms(after);
+  const nextName  = (after.name || after.businessName || "").toLowerCase();
+  const prevTerms = Array.isArray(after.searchableTerms) ? after.searchableTerms : null;
+  const sameTerms = prevTerms
+    && prevTerms.length === nextTerms.length
+    && prevTerms.every((t, i) => t === nextTerms[i]);
+  if (sameTerms && after.nameLower === nextName) return;
+  await event.data.after.ref.update({
+    searchableTerms: nextTerms,
+    nameLower: nextName,
+  }).catch(() => {});
+});
+
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    OBSERVABILITY & HEALTH ENDPOINTS
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */

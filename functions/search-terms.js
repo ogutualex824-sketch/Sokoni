@@ -42,7 +42,12 @@ function buildSearchTerms(doc) {
     for (let i = 2; i <= Math.min(word.length, 6); i++) terms.add(word.slice(0, i));
   }
 
-  const fields = ['name', 'title', 'category', 'description', 'tags', 'brand', 'location', 'county'];
+  /* `businessName`, `categories`, `skills`, `serviceType`, `city` are PROVIDER
+     fields — added so this one generator also indexes providers/{uid} (the CF and
+     the indexProvider* triggers share it). Products never carry these, so product
+     terms stay byte-identical (the parity contract above is preserved). */
+  const fields = ['name', 'businessName', 'title', 'category', 'categories', 'serviceType',
+                  'skills', 'description', 'tags', 'brand', 'location', 'city', 'county'];
   fields.forEach(function (f) {
     const val = doc[f];
     if (!val) return;

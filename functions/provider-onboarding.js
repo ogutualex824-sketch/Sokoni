@@ -116,17 +116,15 @@ function _isAdmin(token) {
    (or, worse, self-invisibles the provider). These helpers are the single place
    that projection happens. They NEVER set status/verified/featured (merge:true
    leaves admin/publish values intact); the client rules also block those. */
+/* One term generator for the whole platform (functions/search-terms.js). Using it
+   here — and in the indexProviderCreate/Update triggers — means the CF's inline
+   write and the trigger's safety-net write produce IDENTICAL terms, so the trigger
+   idempotency guard no-ops instead of thrashing. */
 function _providerSearchTerms(p) {
-  const src = [p.name, p.businessName, p.category, ...(p.categories || []), ...(p.skills || []),
-               p.serviceType, p.location, p.city, p.description]
-    .filter(Boolean).join(' ').toLowerCase();
-  const words = Array.from(new Set(src.split(/[^a-z0-9]+/).filter(w => w.length >= 2)));
-  const terms = new Set();
-  for (const w of words) {
-    terms.add(w);
-    for (let i = 2; i <= Math.min(w.length, 6); i++) terms.add(w.slice(0, i));
-  }
-  return Array.from(terms).slice(0, 300);
+  /* No extra slice — buildSearchTerms is already bounded (prefixes ≤ 6). Matching
+     the trigger's output exactly is what lets the indexProviderUpdate idempotency
+     guard no-op instead of the CF and trigger overwriting each other. */
+  return require('./search-terms').buildSearchTerms(p);
 }
 /* Project the private pricing record onto the flat rate/rateType the directory
    card reads (sokoni-providers.js reads `rate`/`rateType`). */
@@ -412,6 +410,9 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
     if (data.experience)     updates.experience    = data.experience;
     if (data.qualifications) updates.qualifications = data.qualifications.slice(0, 10).map(q => _san(q, 200));
     if (data.languages)      updates.languages     = data.languages.slice(0, 10).map(l => _san(l, 50));
+    /* Contact fields the dashboard sends but the CF used to silently drop. */
+    if (data.phone)          updates.phone         = _san(data.phone, 30);
+    if (data.email)          updates.email         = _san(data.email, 200);
   } else if (section === 'availability') {
     await _db().collection('providerAvailability').doc(uid).set({ uid, ...data, updatedAt: _ts() }, { merge: true });
   } else if (section === 'notifications') {
@@ -434,6 +435,7 @@ exports._h.providerUpdateProfile = _h.providerUpdateProfile = async (req) => {
     if (updates.name)           mirror.name        = updates.name;
     if (updates.bio)            mirror.description  = updates.bio;
     if (updates.qualifications) mirror.skills       = updates.qualifications;
+    if (updates.phone)          mirror.phone        = updates.phone;
     if (updates.category) {
       mirror.category   = updates.category;
       mirror.categories = [updates.category, updates.subcategory].filter(Boolean);
@@ -527,15 +529,26 @@ exports._h.providerUpdatePricing = _h.providerUpdatePricing = async (req) => {
   const uid  = _uid(req);
   const data = req.data?.data;
   if (!data) throw new HttpsError('invalid-argument', 'data required.');
+  /* Tolerant of BOTH shapes: the dashboard sends scalars ({hourly: 1500}) while
+     onboarding sends {hourly:{amount:1500}}; also accepts inspection/inspectionFee
+     and emergency/emergencyFee. Clamped non-negative with a sane ceiling so a fee
+     can't be set to a negative or absurd value. A value of 0 clears that fee. */
+  const _CEIL = 10_000_000;
+  const _amt = (x) => {
+    if (x === null || x === undefined) return 0;
+    const n = Number(typeof x === 'object' ? x.amount : x);
+    return Number.isFinite(n) ? Math.max(0, Math.min(_CEIL, n)) : 0;
+  };
+  const _fee = (x) => { const a = _amt(x); return a > 0 ? { enabled: true, amount: a } : null; };
   const pricing = {
-    hourly:        data.hourly        ? { enabled: true, amount: Number(data.hourly.amount) || 0 }        : null,
-    fixed:         data.fixed         ? { enabled: true, amount: Number(data.fixed.amount) || 0 }         : null,
+    hourly:        _fee(data.hourly),
+    fixed:         _fee(data.fixed),
     quotation:     !!data.quotation,
-    inspectionFee: data.inspectionFee ? { enabled: true, amount: Number(data.inspectionFee.amount) || 0 } : null,
-    emergencyFee:  data.emergencyFee  ? { enabled: true, amount: Number(data.emergencyFee.amount) || 0 }  : null,
-    travelFee:     data.travelFee     ? { enabled: true, amount: Number(data.travelFee.amount) || 0 }     : null,
+    inspectionFee: _fee(data.inspectionFee ?? data.inspection),
+    emergencyFee:  _fee(data.emergencyFee ?? data.emergency),
+    travelFee:     _fee(data.travelFee ?? data.travel),
     packages:      (data.packages || []).slice(0, 10).map(pkg => ({
-      name: _san(pkg.name, 100), price: Number(pkg.price) || 0, description: _san(pkg.description, 500),
+      name: _san(pkg.name, 100), price: _amt(pkg.price), description: _san(pkg.description, 500),
     })),
     currency: 'KES',
   };
