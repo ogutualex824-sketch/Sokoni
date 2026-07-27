@@ -531,6 +531,12 @@ exports._h.providerUpdateAvailability = _h.providerUpdateAvailability = async (r
   if (!data) throw new HttpsError('invalid-argument', 'data required.');
   logger.warn('[deprecated] providerUpdateAvailability called — bypasses canonical availability pipeline', { uid });
   await _db().collection('providerAvailability').doc(uid).set({ uid, ...data, updatedAt: _ts() }, { merge: true });
+  /* Retirement telemetry (D2): count deprecated-path usage. When this stops rising over
+     an observation window, the blind-merge writer follows the standard removal lifecycle. */
+  try {
+    await _db().collection('systemHealth').doc('availabilityConvergence').set(
+      { deprecatedWrites: FieldValue.increment(1), lastDeprecatedAt: _ts() }, { merge: true });
+  } catch (_) { /* best-effort */ }
   return { success: true, deprecated: true };
 };
 

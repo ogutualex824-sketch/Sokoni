@@ -320,6 +320,16 @@ exports.setProviderAvailability = onCall(CF_OPTIONS, exports._h.setProviderAvail
   );
   await batch.commit();
 
+  /* Availability-convergence telemetry (D2): count canonical-pipeline saves so the
+     deprecated blind-merge writer's retirement can be gated on observed usage
+     (mirrors the settlement monitor's approach). Best-effort — never fails a save. */
+  try {
+    await db.collection("systemHealth").doc("availabilityConvergence").set(
+      { canonicalWrites: admin.firestore.FieldValue.increment(1),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+      { merge: true });
+  } catch (_) { /* metric must not break the save */ }
+
   return { success: true, isOpen: _computeIsOpen(config) };
 });
 
