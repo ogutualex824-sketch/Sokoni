@@ -25,6 +25,11 @@ const _mins = (t) => { const p = String(t || '0:0').split(':'); return (Number(p
 const _minsToTime = (m) => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
 const DOW = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
+/* Provenance versions — bump when the create semantics or the price source change.
+   Stamped on every booking so records stay reproducible without migration. */
+const ENGINE_VERSION  = '1.0.0';   /* this create engine */
+const PRICING_VERSION = '1.0.0';   /* service price sourced from providerServices.price (rate card) */
+
 const _h = {};
 
 _h.bookingCreateService = async (req) => {
@@ -144,6 +149,13 @@ _h.bookingCreateService = async (req) => {
       note: _san(d.note, 300),
       hubType: _san(d.hubType, 40) || 'services',
       idempotencyKey,
+      /* Provenance — which path/engine/rev priced & reserved this booking, so a
+         record is reproducible and future engine/pricing revisions need no
+         migration (investigating a booking months later reads these). */
+      bookingSource:      'service-appointment',
+      engineVersion:      'booking-service@' + ENGINE_VERSION,
+      reservationVersion: 'reservation-core@' + rc.VERSION,
+      pricingVersion:     'rate-card@' + PRICING_VERSION,
       createdAt: _ts(), updatedAt: _ts(),
     });
     txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts() });

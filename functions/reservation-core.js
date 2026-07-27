@@ -16,6 +16,11 @@
    ============================================================================ */
 'use strict';
 
+/* Bumped when the reservation semantics change (overlap/capacity math, slot-key
+   format). Stamped onto every booking as `reservationVersion` so a record's
+   guarantees are reproducible and future revisions need no migration. */
+const VERSION = '1.0.0';
+
 /* Bookings in these statuses hold a slot; terminal ones (completed/cancelled/
    declined/no_show) free it. Shared so every engine counts the same set. */
 const ACTIVE_STATUSES = ['pending', 'confirmed', 'active'];
@@ -63,6 +68,7 @@ function minsToMs(mins) {
 }
 
 module.exports = {
+  VERSION,
   ACTIVE_STATUSES,
   slotKey,
   bufferedOverlaps,
