@@ -11,6 +11,13 @@
 (function () {
   "use strict";
 
+  /* ── Idempotency: shared-header.js now injects this script on pages that do
+     not include it directly, so a page could load it twice. Running the whole
+     registration/listener setup twice would double-bind controllerchange and
+     re-run update checks. Bail if we've already initialised. ── */
+  if (window.__sokoniSwRegisterInit) return;
+  window.__sokoniSwRegisterInit = true;
+
   /* ── HTTPS check — service workers need a secure context ── */
   const _isSecure = location.protocol === "https:" ||
                     location.hostname === "localhost" ||

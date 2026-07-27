@@ -21,6 +21,28 @@
     h.style.color = 'var(--txt,#e8e8e8)';
   }());
 
+  /* ── SERVICE-WORKER SELF-UPDATE (every shared-header page) ────────────
+     195 pages load this header but never included sw-register.js, so they
+     never checked for a new worker and never auto-reloaded when one took
+     control — they rendered whatever the active (possibly stale) worker
+     held. That is the "page loads old version / must clear browsing data"
+     class of bug (earnings/plans were two of them). Inject sw-register.js
+     here, once, so EVERY page carrying the shared header self-updates.
+     Pages that already include it directly are skipped by the src check,
+     and sw-register.js itself is idempotent, so double-loading is safe. */
+  (function _ensureSwRegister() {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+      if (window.__sokoniSwRegisterInjected) return;
+      if (document.querySelector('script[src*="sw-register"]')) return;
+      window.__sokoniSwRegisterInjected = true;
+      var s = document.createElement('script');
+      s.src = '/sw-register.js';
+      s.defer = true;
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) { /* SW wiring must never break header rendering */ }
+  }());
+
   /* ── SPLASH SCREEN — unique per page, runs on every page load ────────
      Injects a full-screen branded splash overlay immediately, before any
      content paints, then fades out once the page is ready (min 1.8 s).
