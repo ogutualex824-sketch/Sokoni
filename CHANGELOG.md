@@ -35,6 +35,38 @@ Deploy: functions (new `shopNameSync_shops`/`shopNameSync_sellers` + checkout ch
 
 ---
 
+## [2026-07-27] — fix(provider): providers visible + self-edit everything incl. booking fee — DEPLOYED
+
+Investigation (3 read-only agents + a live prod audit) found "some service providers not visible" was
+NOT a search-index problem (Algolia/Typesense aren't wired to the live directory) and NOT broken fields
+on the 4 existing docs — it was that provider docs were **created incomplete or not at all**, and
+**self-edits never reached the public `providers/{uid}` doc** the directory reads. Root mechanism: the
+directory `orderBy('updatedAt')` silently drops any doc missing `updatedAt`; the registry write paths
+were broken/partial. Chose "fix the flow, no backfill" + "audit edit surface first"; then "do all".
+
+- **`provider.html`** — removed a client write to `providers/{PRV…}` (`status:'available'`, not uid-keyed,
+  no merge) that the security rules always rejected — it silently failed and never produced a listing.
+- **`functions/provider-onboarding.js`** — one place now projects onto the public registry:
+  `providerUpdateProfile` + `providerUpdatePricing` MIRROR name/category/description/skills/phone and the
+  **booking fee → `rate`/`rateType`** onto `providers/{uid}`, re-stamping `updatedAt` and regenerating
+  `searchableTerms`/`nameLower` — so a rename / recategorise / **fee change shows immediately** and an
+  edit can never self-invisible the provider (`status`/`verified` never touched; rules block them).
+  `providerPublish` writes terms/rate inline (not via the create-only trigger). Unpublished provider =
+  safe no-op. Pricing CF made tolerant of the dashboard's scalar shape (`{hourly:1500}`) — fixed fees
+  silently stored as `0` and inspection/emergency dropped — with non-negative clamping; `phone`/`email`
+  whitelisted (were dropped).
+- **`functions/index.js`** — new `indexProviderUpdate` trigger (mirror of `indexProductUpdate`)
+  regenerates provider search terms on every edit. **`search-terms.js`** `buildSearchTerms` extended to
+  read provider fields (businessName/categories/serviceType/skills/city) — additive, product terms
+  byte-identical. CF + triggers share it, so outputs match and the idempotency guard no-ops (no thrash).
+
+Verified: Firestore-emulator projection test 14/14 (edit→registry, fee→rate, scalar pricing stored not 0,
+negative clamped, unpublished no-op). Deployed: functions:providerDispatch + indexProviderCreate +
+indexProviderUpdate (created) + hosting; provider.html fix live. NOT backfilled — the ~11 provider-signal
+users with no doc still re-onboard through the (now-correct) publish flow, per the "no backfill" choice.
+
+---
+
 ## [2026-07-27] — fix(sw): eliminate the "old version flashes, then reloads to new" update flash — DEPLOYED
 
 Diagnosis (verified, not the usual advice): the caching strategy was NOT the cause — the SW is
