@@ -533,6 +533,7 @@
     ],
     "predeploy": [
       "node scripts/deploy/guard-no-rollback.js",
+      "node scripts/deploy/guard-deploy-cooldown.js",
       "node scripts/deploy/bump-sw-version.js",
       "node scripts/generate-version.js",
       "node scripts/predeploy-syntax-gate.js",
