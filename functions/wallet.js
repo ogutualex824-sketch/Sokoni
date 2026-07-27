@@ -1580,8 +1580,11 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
  * source is 0, so re-runs are no-ops) and doubles as the one-off migration for existing
  * stranded funds. Sub-shilling remainders stay in FinOS until they accrue to a shilling.
  *
- * Note: booking + provider-service earnings are already credited DIRECTLY to `balance`
- * at the webhook, so they are instant; this covers the FinOS-ledger flows.
+ * Note: provider-service booking earnings are credited to `balance` transactionally at
+ * booking completion (provider-ops.js `providerCompleteBooking` → providerPayouts marked
+ * `settled` + a `walletTransactions` row), so they do NOT flow through this FinOS sweep and
+ * are never `pending` for the mechanism-1 payout scheduler. This job covers only the
+ * FinOS-ledger flows (marketplace / food / rider) credited via `creditWalletTxn`.
  */
 exports.sweepEarningsToWallet = onSchedule(
   { schedule: 'every 5 minutes', region: 'us-central1', timeoutSeconds: 300, memory: '256MiB' },

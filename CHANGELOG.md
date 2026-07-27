@@ -1,3 +1,33 @@
+## [2026-07-27] — feat(booking): convergence Phase C — settlement → wallet (exactly-once)
+
+Provider service earnings now reach the withdrawable wallet at booking completion, instead of sitting
+forever as a `pending` providerPayouts row. Closes the financial half of the booking loop.
+
+**Files:** `functions/provider-ops.js` (`providerCompleteBooking`, `providerGetEarnings`), `functions/wallet.js` (comment fix).
+**Deployed:** `functions:providerDispatch` only. No client, rules, or migration changes.
+
+- **Exactly-once settlement:** `providerCompleteBooking` converted from a batch to a `runTransaction`
+  that re-reads booking status inside the txn. Two concurrent completions can no longer both credit —
+  the loser retries, sees `completed`, and exits. Credits `wallets.balance += floor(net/100)` shillings
+  (`balance` is whole-shilling / withdrawable; `net` is cents) and writes one `walletTransactions` row
+  (deterministic id `${uid}_${bookingId}_bookingsettle`), atomically with the status flip + payout write.
+- **Single money path (double-pay fix):** the payout row is written `status:'settled'` (was `'pending'`),
+  which removes it from `providerRequestPayout`'s `status==='pending'` sweep. An earning is now
+  withdrawable through exactly ONE channel (the wallet) — not the wallet AND the mechanism-1 scheduler.
+  Does not touch FinOS availableBalance/withdrawableBalance, so `sweepEarningsToWallet` never sees it
+  either (two disjoint paths → no double credit).
+- **Money integrity:** credits floor (never rounds up); sub-shilling `remainderCents` recorded on the
+  payout for exact reconciliation. Settlement evidence stored: `walletCredited`, `netShillingsCredited`,
+  `remainderCents`, `walletTxnId`, `settledAt`, plus explicit FKs `sourceType:'booking'` + `sourceId`
+  on both the payout and the wallet transaction.
+- **`providerGetEarnings`** gains a `settled` bucket (in-wallet) distinct from `pending` (legacy,
+  pre-Phase-C) and `paid` (withdrawn to M-Pesa).
+- **Verification:** 22/22 emulator acceptance (exactly-once, one payout/one credit/one txn, idempotent
+  retry, failed settlement leaves balances unchanged, withdrawal balance == settled balance, settled row
+  not re-payable, sub-shilling floored + recorded, explicit FKs present).
+- **Scoped OUT (separate, sign-off required):** reconciling legacy `pending` payouts from pre-Phase-C
+  completions (a dry-run report, zero writes); retiring the now-vestigial `providerRequestPayout`.
+
 ## [2026-07-27] — feat(booking): service-booking convergence Phases A+B backend — DEPLOYED
 
 Provider-driven booking convergence (design: docs/BOOKING_CONVERGENCE.md). 4 read-only audits found

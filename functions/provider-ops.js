@@ -139,53 +139,111 @@ _h.providerCompleteBooking = async (req) => {
   const rate       = comm.effectiveRate / 100;   /* fraction — the shape every reader expects */
   const dayKey     = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
 
-  const batch = _db().batch();
-  batch.update(ref, { status: 'completed', completedAt: _ts(), updatedAt: _ts() });
+  /* ── SETTLEMENT → WALLET (Phase C, docs/BOOKING_CONVERGENCE.md) ────────────────────────
+   * The earning must reach the provider's WITHDRAWABLE balance, not sit forever as a
+   * `pending` providerPayouts row. `wallets.balance` is the canonical withdrawable field
+   * and is denominated in whole SHILLINGS (requestSellerPayout / the FinOS sweep both treat
+   * it that way); `net` here is CENTS. Credit floor(net/100) shillings and record the
+   * sub-shilling remainder for exact reconciliation — never round up (money integrity).
+   *
+   * DOUBLE-PAY GUARD: crediting the wallet AND marking the payout `settled` (not `pending`)
+   * removes it from providerRequestPayout's `status==='pending'` sweep, so an earning can be
+   * withdrawn through exactly ONE path (the wallet). providerPayouts stays as the audit
+   * ledger; the wallet is the money. This does NOT touch FinOS availableBalance/
+   * withdrawableBalance, so sweepEarningsToWallet never sees it either — two disjoint paths.
+   *
+   * EXACTLY-ONCE: the whole thing runs in a runTransaction that re-reads the booking status
+   * inside the txn. Two concurrent completions cannot both credit — the loser retries, sees
+   * `completed`, and returns without a second increment. */
+  const netShillings   = Math.floor(net / 100);
+  const remainderCents = net - netShillings * 100;
+  const willCredit      = netShillings >= 1;
 
-  // Earnings ledger entry (deterministic id = booking id → idempotent, no double pay)
-  batch.set(_db().collection('providerPayouts').doc(ref.id), {
-    providerId: uid, bookingId: ref.id, gross, commission, commissionRate: rate,
-    net, amount: net, currency: 'KES', method: null, reference: null,
-    status: 'pending', createdAt: _ts(),
+  const payoutRef   = _db().collection('providerPayouts').doc(ref.id);
+  const profileRef  = _db().collection('providerProfiles').doc(uid);
+  const analyticsRef = _db().collection('providerAnalytics').doc(`${uid}_${dayKey}`);
+  const walletRef   = _db().collection('wallets').doc(uid);
+  const walletTxId  = `${uid}_${ref.id}_bookingsettle`;   /* deterministic → no duplicate txn */
+  const walletTxRef = _db().collection('walletTransactions').doc(walletTxId);
 
-    /* ── AUDIT TRAIL ──────────────────────────────────────────────────────────────────────
-     * A provider booking now carries the same evidence as every other payment on the
-     * platform, so a settlement is reproducible years later: which authority priced it,
-     * which rule, which plan, what adjustment, and under which engine version.
-     * `commissionRate` above is retained unchanged so existing analytics, receipts,
-     * exports, dashboards and payout reports keep working untouched. */
-    commissionPct:   comm.effectiveRate,
-    baseRate:        comm.baseRate,
-    pricingSource:   comm.pricingSource,
-    ruleId:          comm.ruleId,
-    ruleSource:      comm.ruleSource,
-    planId:          comm.planId,
-    planName:        comm.planName,
-    planAdjustment:  comm.planAdjustment,
-    adjustmentType:  comm.adjustmentType,
-    planApplied:     comm.planApplied,
-    reason:          comm.reason,
-    hubType:         'provider',
-    category:        comm.category,
-    idempotencyKey:  ref.id,        /* the booking id IS the key — one payout per booking */
-    calculatedAt:    comm.calculatedAt,
-    engineVersion:   comm.engineVersion,
-  }, { merge: true });
+  let result = null;
+  await _db().runTransaction(async (t) => {
+    const bSnap = await t.get(ref);   /* re-read inside the txn — the exactly-once guard */
+    if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
+    const cur = bSnap.data();
+    if (cur.status === 'completed') { result = { alreadyDone: true }; return; }
+    if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
 
-  // Profile counters
-  batch.set(_db().collection('providerProfiles').doc(uid),
-    { bookingCount: _inc(1), lifetimeGrossKes: _inc(gross), updatedAt: _ts() }, { merge: true });
+    t.update(ref, { status: 'completed', completedAt: _ts(), updatedAt: _ts() });
 
-  // providerAnalytics — daily rollup (id = uid_YYYY-MM-DD)
-  batch.set(_db().collection('providerAnalytics').doc(`${uid}_${dayKey}`), {
-    providerId: uid, date: dayKey, bookingsCompleted: _inc(1),
-    grossCents: _inc(gross), commissionCents: _inc(commission), netCents: _inc(net),
-    updatedAt: _ts(),
-  }, { merge: true });
+    /* Earnings ledger entry (deterministic id = booking id → one payout per booking).
+       status:'settled' — credited to the withdrawable wallet, NOT awaiting a separate payout. */
+    t.set(payoutRef, {
+      providerId: uid, bookingId: ref.id,
+      sourceType: 'booking', sourceId: ref.id,   /* explicit FK — reconciliation/reporting/exports */
+      gross, commission, commissionRate: rate,
+      net, amount: net, currency: 'KES', method: null, reference: null,
+      status: 'settled', createdAt: _ts(),
+      /* settlement evidence — how the earning reached the wallet */
+      walletCredited:      willCredit,
+      netShillingsCredited: willCredit ? netShillings : 0,
+      remainderCents,                       /* sub-shilling not withdrawable; recorded for reconciliation */
+      walletTxnId:         willCredit ? walletTxId : null,
+      settledAt:           _ts(),
 
-  await batch.commit();
-  logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net });
-  return { success: true, status: 'completed', gross, commission, net };
+      /* ── AUDIT TRAIL ──────────────────────────────────────────────────────────────────────
+       * A provider booking now carries the same evidence as every other payment on the
+       * platform, so a settlement is reproducible years later: which authority priced it,
+       * which rule, which plan, what adjustment, and under which engine version.
+       * `commissionRate` above is retained unchanged so existing analytics, receipts,
+       * exports, dashboards and payout reports keep working untouched. */
+      commissionPct:   comm.effectiveRate,
+      baseRate:        comm.baseRate,
+      pricingSource:   comm.pricingSource,
+      ruleId:          comm.ruleId,
+      ruleSource:      comm.ruleSource,
+      planId:          comm.planId,
+      planName:        comm.planName,
+      planAdjustment:  comm.planAdjustment,
+      adjustmentType:  comm.adjustmentType,
+      planApplied:     comm.planApplied,
+      reason:          comm.reason,
+      hubType:         'provider',
+      category:        comm.category,
+      idempotencyKey:  ref.id,        /* the booking id IS the key — one payout per booking */
+      calculatedAt:    comm.calculatedAt,
+      engineVersion:   comm.engineVersion,
+    }, { merge: true });
+
+    /* Credit the withdrawable wallet + a matching ledger row (set-merge creates the wallet
+       doc if the provider never had one; increment starts an absent field at 0). */
+    if (willCredit) {
+      t.set(walletRef, { balance: _inc(netShillings), updatedAt: _ts() }, { merge: true });
+      t.set(walletTxRef, {
+        uid, type: 'booking_earning', amount: netShillings,
+        description: `Earnings — ${_san(cur.service || 'service booking', 120)}`,
+        bookingId: ref.id,
+        sourceType: 'booking', sourceId: ref.id,   /* explicit FK — don't rely on the encoded doc id */
+        status: 'completed', createdAt: _ts(),
+      });
+    }
+
+    // Profile counters
+    t.set(profileRef, { bookingCount: _inc(1), lifetimeGrossKes: _inc(gross), updatedAt: _ts() }, { merge: true });
+
+    // providerAnalytics — daily rollup (id = uid_YYYY-MM-DD)
+    t.set(analyticsRef, {
+      providerId: uid, date: dayKey, bookingsCompleted: _inc(1),
+      grossCents: _inc(gross), commissionCents: _inc(commission), netCents: _inc(net),
+      updatedAt: _ts(),
+    }, { merge: true });
+
+    result = { credited: willCredit ? netShillings : 0, remainderCents };
+  });
+
+  if (result && result.alreadyDone) return { success: true, status: 'completed', alreadyDone: true };
+  logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, creditedShillings: result.credited, remainderCents });
+  return { success: true, status: 'completed', gross, commission, net, creditedShillings: result.credited, remainderCents };
 };
 
 /* ── 4. providerGetEarnings ──────────────────────────────────────────────────
@@ -199,7 +257,7 @@ _h.providerGetEarnings = async (req) => {
   const snap = await _db().collection('providerPayouts')
     .where('providerId', '==', uid).limit(2000).get();
 
-  let gross = 0, commission = 0, net = 0, pending = 0, paid = 0;
+  let gross = 0, commission = 0, net = 0, pending = 0, settled = 0, paid = 0;
   const byDay = {};
   const payouts = [];
   for (const doc of snap.docs) {
@@ -207,7 +265,11 @@ _h.providerGetEarnings = async (req) => {
     const created = p.createdAt?.toDate ? p.createdAt.toDate() : null;
     if (created && created < since) continue;
     gross += p.gross || 0; commission += p.commission || 0; net += p.net || 0;
-    if (p.status === 'paid') paid += p.net || 0; else pending += p.net || 0;
+    /* paid = withdrawn to M-Pesa; settled = credited to the withdrawable wallet (Phase C);
+       pending = legacy earnings not yet settled (pre-Phase-C completions). */
+    if (p.status === 'paid') paid += p.net || 0;
+    else if (p.status === 'settled') settled += p.net || 0;
+    else pending += p.net || 0;
     const d = p.createdAt?.toDate ? p.createdAt.toDate() : new Date();
     const k = d.toISOString().slice(5, 10); // MM-DD
     byDay[k] = (byDay[k] || 0) + (p.net || 0);
@@ -217,7 +279,7 @@ _h.providerGetEarnings = async (req) => {
     }
   }
   const dailyRevenue = Object.keys(byDay).sort().map((date) => ({ date, net: byDay[date] }));
-  return { gross, commission, net, pending, paid, dailyRevenue,
+  return { gross, commission, net, pending, settled, paid, dailyRevenue,
     payouts: payouts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).slice(0, 20),
     currency: 'KES', days };
 };
