@@ -52,6 +52,12 @@ const ROUTES = [
   'providerConfirmBooking',
   'providerDeclineBooking',
   'providerCompleteBooking',
+  // D1 — booking lifecycle (docs/BOOKING_LIFECYCLE_CONTRACT.md v1.0)
+  'providerStartBooking',
+  'providerCancelBooking',
+  'providerMarkNoShow',
+  'providerRescheduleBooking',
+  'providerContactCustomer',
   'providerGetEarnings',
   'providerRequestPayout',
   'providerGetReviews',

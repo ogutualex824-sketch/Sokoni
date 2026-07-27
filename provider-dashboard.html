@@ -510,14 +510,17 @@ const B={
     _q('bkList').innerHTML=_bkDocs.map(b=>B.card(b)).join('');
   },
   card(b){
-    const sc={pending:'cs-pending',confirmed:'cs-confirmed',in_progress:'cs-inprog',completed:'cs-completed',cancelled:'cs-cancelled'};
-    const sl={pending:'Pending',confirmed:'Confirmed',in_progress:'In Progress',completed:'Completed',cancelled:'Cancelled'};
+    const sc={pending:'cs-pending',confirmed:'cs-confirmed',in_progress:'cs-inprog',completed:'cs-completed',cancelled:'cs-cancelled',declined:'cs-cancelled',no_show:'cs-cancelled'};
+    const sl={pending:'Pending',confirmed:'Confirmed',in_progress:'In Progress',completed:'Completed',cancelled:'Cancelled',declined:'Declined',no_show:'No Show'};
     const ini=(b.customerName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-    const acts=b.status==='pending'
-      ?`<button class="btn btn-ok btn-sm" onclick="B.confirm('${b.id}')">Confirm</button><button class="btn btn-err btn-sm" onclick="B.decline('${b.id}')">Decline</button>`
-      :b.status==='confirmed'
-      ?`<button class="btn btn-p btn-sm" onclick="B.complete('${b.id}')">Mark Complete</button>`
-      :'';
+    /* Actions gated on the Booking Lifecycle Contract v1.0 quick-reference matrix. */
+    const A=[];
+    if(b.status==='pending'){A.push(`<button class="btn btn-ok btn-sm" onclick="B.confirm('${b.id}')">Confirm</button>`);A.push(`<button class="btn btn-err btn-sm" onclick="B.decline('${b.id}')">Decline</button>`);}
+    if(b.status==='confirmed'){A.push(`<button class="btn btn-p btn-sm" onclick="B.start('${b.id}')">Start</button>`);A.push(`<button class="btn btn-ok btn-sm" onclick="B.complete('${b.id}')">Complete</button>`);A.push(`<button class="btn btn-sm" onclick="B.noShow('${b.id}')">No-show</button>`);}
+    if(b.status==='in_progress'){A.push(`<button class="btn btn-ok btn-sm" onclick="B.complete('${b.id}')">Complete</button>`);}
+    if(b.status==='pending'||b.status==='confirmed')A.push(`<button class="btn btn-sm" onclick="B.reschedule('${b.id}')">Reschedule</button>`);
+    if(b.status==='pending'||b.status==='confirmed'||b.status==='in_progress'){A.push(`<button class="btn btn-sm" onclick="B.cancel('${b.id}')">Cancel</button>`);A.push(`<button class="btn btn-sm" onclick="B.contact('${b.id}')">Contact</button>`);}
+    const acts=A.join('');
     const dt=b.scheduledAt?.toDate?new Date(b.scheduledAt.toDate()):b.scheduledAt?new Date(b.scheduledAt):null;
     const dtStr=dt?dt.toLocaleString('en-KE',{dateStyle:'medium',timeStyle:'short'}):'—';
     return`<div class="booking-item"><div class="b-ava">${_esc(ini)}</div><div class="b-info"><div class="b-name">${_esc(b.customerName||'Customer')} <span class="chip-status ${sc[b.status]||''}">${sl[b.status]||b.status}</span></div><div class="b-meta">${_esc(b.service||'')} • ${dtStr}</div>${b.price?`<div class="b-meta" style="color:var(--acc);margin-top:2px">KSh ${_fmt(b.price/100)}</div>`:''}</div><div class="b-acts">${acts}</div></div>`;
@@ -525,6 +528,11 @@ const B={
   async confirm(id){showLoad('Confirming…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConfirmBooking',bookingId:id});toast('Booking confirmed!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async decline(id){showLoad('Declining…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerDeclineBooking',bookingId:id});toast('Booking declined.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async complete(id){showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCompleteBooking',bookingId:id});toast('Marked as complete!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async start(id){showLoad('Starting…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerStartBooking',bookingId:id});toast('Booking started.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async noShow(id){if(!confirm('Mark this booking as a no-show? This cannot be undone.'))return;showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerMarkNoShow',bookingId:id});toast('Marked as no-show.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async cancel(id){if(!confirm('Cancel this booking? The slot will be freed.'))return;showLoad('Cancelling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCancelBooking',bookingId:id});toast('Booking cancelled.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async reschedule(id){const date=prompt('Reschedule — new date (YYYY-MM-DD)\n\nNote: a full calendar/slot picker is coming soon; this quick entry is temporary.');if(!date)return;const startTime=prompt('New start time (24-hour HH:MM):');if(!startTime)return;showLoad('Rescheduling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerRescheduleBooking',bookingId:id,date:date.trim(),startTime:startTime.trim()});toast('Booking rescheduled!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async contact(id){showLoad('…');try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerContactCustomer',bookingId:id});const c=(r.data||{}).customer||{};if(c.phone){if(confirm(`${c.name||'Customer'}\n${c.phone}\n\nCall now?`))window.location.href='tel:'+c.phone;}else{toast('No phone number on file for this customer.','err')}}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   loadMore(){},
 };
 

@@ -30,6 +30,54 @@ const DOW = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', '
 const ENGINE_VERSION  = '1.0.0';   /* this create engine */
 const PRICING_VERSION = '1.0.0';   /* service price sourced from providerServices.price (rate card) */
 
+/* ── Shared availability gate ────────────────────────────────────────────────
+   Validates a candidate slot against the provider's config (working hours,
+   blackout override, vacation, min-notice, same-day) and returns the computed
+   slot. Used by BOTH the create path and providerRescheduleBooking so there is
+   ONE authoritative availability validation (D2 adds the breaks check here, once).
+   Pure of any write; the caller runs the slot-lock CAS + capacity in its txn. */
+async function _prepareSlot(db, { providerId, date, startTime, durationMins }) {
+  const startMins = _mins(startTime);
+  const endMins   = startMins + durationMins;
+  const endTime   = _minsToTime(endMins);
+  const dayStart  = new Date(date + 'T00:00:00+03:00').getTime();
+  const startTs   = dayStart + startMins * 60000;
+  const endTs     = dayStart + endMins * 60000;
+
+  const cfgRef = db.collection('providerAvailability').doc(providerId);
+  const [cfgSnap, overrideSnap] = await Promise.all([
+    cfgRef.get(),
+    cfgRef.collection('overrides').doc(date).get(),
+  ]);
+  const cfg  = cfgSnap.data() || {};
+  const appt = cfg.appt || {};
+  const bufMs = rc.minsToMs(appt.bufferMins);
+
+  /* Blackout (the reserveSlot gap): an override marking the date closed blocks it. */
+  if (overrideSnap.exists && overrideSnap.data().closed === true) {
+    throw new HttpsError('failed-precondition', 'The provider is closed on this date.');
+  }
+  if (cfg.isOnVacation === true) throw new HttpsError('failed-precondition', 'The provider is currently unavailable.');
+
+  /* Working-hours validation (mirrors reserveSlot). */
+  const dow = DOW[new Date(date + 'T00:00:00+03:00').getDay()];
+  const day = cfg.schedule && cfg.schedule[dow];
+  const withinHours = (cfg.modes && cfg.modes.includes('open_24_7')) || appt.allowAfterHours ||
+    (day && !day.closed && (day.periods || []).some(p =>
+      p && p.open && p.close && _mins(p.open) <= startMins && endMins <= _mins(p.close)));
+  if (!withinHours) throw new HttpsError('out-of-range', "That time is outside the provider's working hours.");
+
+  /* Minimum notice + same-day policy. */
+  const minNoticeMs = Math.max(0, Number(appt.minNoticeHours || 0)) * 3600000;
+  if (startTs < Date.now() + minNoticeMs) throw new HttpsError('failed-precondition', 'Too close to the start time to book.');
+  if (appt.allowSameDay === false && new Date(date + 'T00:00:00+03:00').toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) {
+    throw new HttpsError('failed-precondition', 'Same-day booking is not available for this provider.');
+  }
+
+  const slotKey = rc.slotKey(date, startTs, endTs);
+  return { startMins, endMins, endTime, startTs, endTs, slotKey, cfg, appt, bufMs, cfgRef };
+}
+
 const _h = {};
 
 _h.bookingCreateService = async (req) => {
@@ -56,48 +104,14 @@ _h.bookingCreateService = async (req) => {
   const price       = Math.max(0, Math.round(Number(svc.price) || 0)); /* cents, server-owned */
   const serviceName = _san(svc.name, 200);
 
-  const startMins = _mins(startTime);
-  const endMins   = startMins + durationMins;
-  const endTime   = _minsToTime(endMins);
-  const dayStart  = new Date(date + 'T00:00:00+03:00').getTime();
-  const startTs   = dayStart + startMins * 60000;
-  const endTs     = dayStart + endMins * 60000;
-
-  /* Provider config: working hours, buffers, caps, blackout override, vacation. */
-  const cfgRef = db.collection('providerAvailability').doc(providerId);
-  const [cfgSnap, overrideSnap, userSnap] = await Promise.all([
-    cfgRef.get(),
-    cfgRef.collection('overrides').doc(date).get(),
-    db.collection('users').doc(customerUid).get(),
-  ]);
-  const cfg = cfgSnap.data() || {};
-  const appt = cfg.appt || {};
-  const bufMs = rc.minsToMs(appt.bufferMins);
+  /* Validate the slot through the shared availability gate (same path reschedule uses). */
+  const slot = await _prepareSlot(db, { providerId, date, startTime, durationMins });
+  const { endTime, startTs, endTs, slotKey, cfg, appt, bufMs, cfgRef } = slot;
   const maxPerCustomer = Number(appt.maxPerCustomer || 0);
+
+  const userSnap = await db.collection('users').doc(customerUid).get();
   const customerName = _san((userSnap.data() || {}).name || (userSnap.data() || {}).displayName || '', 200);
 
-  /* Blackout (the reserveSlot gap): an override marking the date closed blocks it. */
-  if (overrideSnap.exists && overrideSnap.data().closed === true) {
-    throw new HttpsError('failed-precondition', 'The provider is closed on this date.');
-  }
-  if (cfg.isOnVacation === true) throw new HttpsError('failed-precondition', 'The provider is currently unavailable.');
-
-  /* Working-hours validation (mirrors reserveSlot). */
-  const dow = DOW[new Date(date + 'T00:00:00+03:00').getDay()];
-  const day = cfg.schedule && cfg.schedule[dow];
-  const withinHours = (cfg.modes && cfg.modes.includes('open_24_7')) || appt.allowAfterHours ||
-    (day && !day.closed && (day.periods || []).some(p =>
-      p && p.open && p.close && _mins(p.open) <= startMins && endMins <= _mins(p.close)));
-  if (!withinHours) throw new HttpsError('out-of-range', "That time is outside the provider's working hours.");
-
-  /* Minimum notice + same-day policy. */
-  const minNoticeMs = Math.max(0, Number(appt.minNoticeHours || 0)) * 3600000;
-  if (startTs < Date.now() + minNoticeMs) throw new HttpsError('failed-precondition', 'Too close to the start time to book.');
-  if (appt.allowSameDay === false && new Date(date + 'T00:00:00+03:00').toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) {
-    throw new HttpsError('failed-precondition', 'Same-day booking is not available for this provider.');
-  }
-
-  const slotKey     = rc.slotKey(date, startTs, endTs);
   const bookingId   = `${providerId}_${slotKey}`;   /* deterministic → natural lock + idempotency */
   const slotLockRef = cfgRef.collection('slotLocks').doc(slotKey);
   const bookingRef  = db.collection('providerBookings').doc(bookingId);
@@ -141,7 +155,7 @@ _h.bookingCreateService = async (req) => {
     txn.set(bookingRef, {
       providerId, customerUid, customerName,
       serviceId, service: serviceName,
-      date, startTime, endTime, startTs, endTs, durationMins,
+      date, startTime, endTime, startTs, endTs, durationMins, slotKey,
       scheduledAt: admin.firestore.Timestamp.fromMillis(startTs),
       price, currency: 'KES',        /* server-authoritative from the rate card */
       paymentStatus: 'pending',
@@ -182,4 +196,4 @@ _h.bookingCreateService = async (req) => {
   return { success: true, bookingId: outcome.bookingId, status: outcome.status, price };
 };
 
-module.exports = { _h };
+module.exports = { _h, _prepareSlot };

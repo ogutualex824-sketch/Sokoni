@@ -1,3 +1,32 @@
+## [2026-07-27] — feat(booking): Phase D1 — booking lifecycle operations
+
+Provider operational control over the canonical booking, implementing
+`docs/BOOKING_LIFECYCLE_CONTRACT.md` v1.0.
+
+**Files:** `functions/provider-ops.js`, `functions/booking-service.js`,
+`functions/provider-dispatch.js`, `provider-dashboard.html`.
+**Deploy:** `functions:providerDispatch` + hosting (`provider-dashboard.html`). No rules/migration.
+
+- **New ops** (via providerDispatch): `providerStartBooking` (confirmed→in_progress),
+  `providerCancelBooking` (active→cancelled, provider **or** customer), `providerMarkNoShow`
+  (confirmed→no_show), `providerRescheduleBooking` (in-place slot move), `providerContactCustomer`
+  (non-transition — returns customer phone).
+- **Reschedule = in-place, identity-preserving** (§4): same booking id/provider/customer; moves the
+  reservation in ONE transaction that acquires the new slot lock **before** releasing the old, so the
+  booking never holds two locks or zero; reuses the shared `_prepareSlot` availability gate + reservation-
+  core CAS; records `rescheduleCount` + `rescheduleHistory[]`.
+- **Shared availability gate:** extracted `_prepareSlot()` from the create path so create AND reschedule
+  validate identically (one place for D2 to add breaks). `slotKey` now stamped on the booking for exact
+  lock release. Phase B create is behavior-preserving (14/14 regression).
+- **Contract §3.2 fix:** `providerDeclineBooking` and `providerCompleteBooking` now **release the slot
+  lock** (decline previously stranded the slot forever). Every terminal transition now frees its slot.
+- **Dashboard:** per-status action buttons gated on the lifecycle matrix (Start/Complete/No-show/
+  Reschedule/Cancel/Contact); `declined`/`no_show` labels. Reschedule uses a temporary prompt entry
+  (clearly labelled) pending the Phase E slot picker.
+- **Verification:** 31/31 D1 emulator acceptance (transitions, guards, slot-lock release on all terminals,
+  atomic reschedule keeps exactly one lock, identity immutable, contact non-transition) + 14/14 Phase B
+  regression.
+
 ## [2026-07-27] — feat(observability): settlement convergence monitor (Phase C)
 
 Operational confidence for the Phase C money path: booking completion must stay convergent with

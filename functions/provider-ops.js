@@ -16,10 +16,11 @@
  */
 
 const { HttpsError }               = require('firebase-functions/v2/https');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const logger                       = require('firebase-functions/logger');
 const subCore                      = require('./subscription-core');
 const legal                        = require('./legal-agreements');
+const rc                           = require('./reservation-core');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -49,6 +50,16 @@ async function _ownBooking(uid, bookingId) {
   const data = snap.data();
   if (data.providerId !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
   return { ref, data };
+}
+
+/* The slot lock a booking holds (providerAvailability/{providerId}/slotLocks/{slotKey}).
+   Booking Lifecycle Contract §3.2: an active booking holds exactly one lock; every
+   terminal transition must release it. Prefer the stored slotKey; fall back to
+   recomputing it from the booking's times (older docs pre-date the stored field). */
+function _slotLockRef(providerId, b) {
+  const key = b.slotKey || ((b.date && b.startTs && b.endTs) ? rc.slotKey(b.date, b.startTs, b.endTs) : null);
+  if (!key) return null;
+  return _db().collection('providerAvailability').doc(providerId).collection('slotLocks').doc(String(key));
 }
 
 const _h = {};
@@ -87,6 +98,8 @@ _h.providerDeclineBooking = async (req) => {
   batch.update(ref, { status: 'declined', declinedAt: _ts(), updatedAt: _ts(),
     declineReason: _san(req.data?.reason, 300) || null });
   batch.delete(_db().collection('providerCalendar').doc(ref.id));
+  const lockRef = _slotLockRef(uid, data);   /* §3.2 — release the slot lock on decline */
+  if (lockRef) batch.delete(lockRef);
   await batch.commit();
   return { success: true, status: 'declined' };
 };
@@ -176,6 +189,10 @@ _h.providerCompleteBooking = async (req) => {
 
     t.update(ref, { status: 'completed', completedAt: _ts(), updatedAt: _ts() });
 
+    /* §3.2 — completed is terminal; release the slot lock (harmless no-op if absent). */
+    const lockRef = _slotLockRef(uid, cur);
+    if (lockRef) t.delete(lockRef);
+
     /* Earnings ledger entry (deterministic id = booking id → one payout per booking).
        status:'settled' — credited to the withdrawable wallet, NOT awaiting a separate payout. */
     t.set(payoutRef, {
@@ -244,6 +261,199 @@ _h.providerCompleteBooking = async (req) => {
   if (result && result.alreadyDone) return { success: true, status: 'completed', alreadyDone: true };
   logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, creditedShillings: result.credited, remainderCents });
   return { success: true, status: 'completed', gross, commission, net, creditedShillings: result.credited, remainderCents };
+};
+
+/* ============================================================================
+   D1 — Booking lifecycle ops. Implements docs/BOOKING_LIFECYCLE_CONTRACT.md v1.0.
+   Every terminal transition releases the slot lock (§3.2); only completion settles
+   (§3.1, provider-ops.js above); booking identity is immutable (§3.5).
+   ========================================================================== */
+
+/* ── 3a. providerStartBooking — confirmed → in_progress ──────────────────────── */
+_h.providerStartBooking = async (req) => {
+  const uid = _uid(req);
+  const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
+  if (data.status === 'in_progress') return { success: true, status: 'in_progress', alreadyDone: true };
+  if (data.status !== 'confirmed') {
+    throw new HttpsError('failed-precondition', `Only a confirmed booking can be started (is "${data.status}").`);
+  }
+  /* Guard: don't start a far-future booking (generous 2h grace for early arrivals). */
+  if (data.startTs && Date.now() < data.startTs - 2 * 3600000) {
+    throw new HttpsError('failed-precondition', 'Too early to start this booking.');
+  }
+  await ref.update({ status: 'in_progress', startedAt: _ts(), updatedAt: _ts() });
+  return { success: true, status: 'in_progress' };
+};
+
+/* ── 3b. providerCancelBooking — active → cancelled (provider OR customer) ────── */
+_h.providerCancelBooking = async (req) => {
+  const uid = _uid(req);
+  const id  = _san(req.data?.bookingId, 128);
+  if (!id) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  const ref  = _db().collection('providerBookings').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const data = snap.data();
+  const isProvider = data.providerId === uid;
+  const isCustomer = data.customerUid === uid;
+  if (!isProvider && !isCustomer) throw new HttpsError('permission-denied', 'Not your booking.');
+  if (['cancelled', 'declined', 'no_show'].includes(data.status)) {
+    return { success: true, status: data.status, alreadyDone: true };
+  }
+  if (data.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be cancelled.');
+
+  const batch = _db().batch();
+  batch.update(ref, {
+    status: 'cancelled', cancelledAt: _ts(), updatedAt: _ts(),
+    cancelledBy: isProvider ? 'provider' : 'customer',
+    cancelReason: _san(req.data?.reason, 300) || null,
+  });
+  const lockRef = _slotLockRef(data.providerId, data);   /* §3.2 release */
+  if (lockRef) batch.delete(lockRef);
+  batch.delete(_db().collection('providerCalendar').doc(id));
+  await batch.commit();
+
+  /* Notify the counterparty (best-effort). */
+  try {
+    const targetUid = isProvider ? data.customerUid : data.providerId;
+    if (targetUid) await _db().collection('notifications').add({
+      targetUid, type: 'booking', heading: 'Booking cancelled',
+      sub: `${_san(data.service, 120)} · ${data.date || ''} ${data.startTime || ''}`,
+      link: isProvider ? 'my-bookings.html' : 'provider-dashboard.html',
+      createdAt: _ts(), read: false,
+    });
+  } catch (e) { /* ignore */ }
+
+  return { success: true, status: 'cancelled', cancelledBy: isProvider ? 'provider' : 'customer' };
+};
+
+/* ── 3c. providerMarkNoShow — confirmed → no_show (provider only) ─────────────── */
+_h.providerMarkNoShow = async (req) => {
+  const uid = _uid(req);
+  const { ref, data } = await _ownBooking(uid, req.data?.bookingId);
+  if (data.status === 'no_show') return { success: true, status: 'no_show', alreadyDone: true };
+  if (data.status !== 'confirmed') {
+    throw new HttpsError('failed-precondition', `Only a confirmed booking can be marked no-show (is "${data.status}").`);
+  }
+  /* Guard: cannot mark no-show before the scheduled start (§2). */
+  if (data.startTs && Date.now() < data.startTs) {
+    throw new HttpsError('failed-precondition', 'Cannot mark no-show before the scheduled time.');
+  }
+  const batch = _db().batch();
+  batch.update(ref, { status: 'no_show', noShowAt: _ts(), updatedAt: _ts() });
+  const lockRef = _slotLockRef(uid, data);   /* §3.2 release — no settlement (§3.1) */
+  if (lockRef) batch.delete(lockRef);
+  batch.delete(_db().collection('providerCalendar').doc(ref.id));
+  await batch.commit();
+  return { success: true, status: 'no_show' };
+};
+
+/* ── 3d. providerRescheduleBooking — in-place, identity-preserving slot move ────
+   §4: keeps the SAME booking (id/provider/customer immutable), moves the reservation
+   to a new slot. ATOMIC single transaction — acquire the new lock BEFORE releasing
+   the old, so the booking never holds two locks or zero (§3.2). Reuses the shared
+   availability gate (_prepareSlot) + reservation-core CAS, exactly like create. */
+_h.providerRescheduleBooking = async (req) => {
+  const uid      = _uid(req);
+  const id       = _san(req.data?.bookingId, 128);
+  const newDate  = _san(req.data?.date, 10);
+  const newStart = _san(req.data?.startTime, 5);
+  if (!id || !newDate || !newStart) throw new HttpsError('invalid-argument', 'bookingId, date, startTime required.');
+  const ref  = _db().collection('providerBookings').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const data = snap.data();
+  const isProvider = data.providerId === uid;
+  const isCustomer = data.customerUid === uid;
+  if (!isProvider && !isCustomer) throw new HttpsError('permission-denied', 'Not your booking.');
+  if (!['pending', 'confirmed'].includes(data.status)) {
+    throw new HttpsError('failed-precondition', `Cannot reschedule a "${data.status}" booking.`);
+  }
+  const providerId   = data.providerId;
+  const durationMins = Math.max(15, Number(data.durationMins) || 30);
+
+  /* Shared availability gate — same validation the create path runs (D2 adds breaks here). */
+  const { _prepareSlot } = require('./booking-service');
+  const slot = await _prepareSlot(_db(), { providerId, date: newDate, startTime: newStart, durationMins });
+  const { endTime, startTs, endTs, slotKey, cfg, bufMs, cfgRef } = slot;
+
+  const oldLockRef = _slotLockRef(providerId, data);
+  const newLockRef = cfgRef.collection('slotLocks').doc(String(slotKey));
+  const sameSlot   = oldLockRef && oldLockRef.path === newLockRef.path;
+
+  /* Prefetch same-day active bookings EXCLUDING this one (it's moving). */
+  const activeSnap = await _db().collection('providerBookings')
+    .where('providerId', '==', providerId).where('date', '==', newDate)
+    .where('status', 'in', rc.ACTIVE_STATUSES).get();
+  const existing = activeSnap.docs.filter(d => d.id !== id).map(d => d.data());
+
+  await _db().runTransaction(async (txn) => {
+    if (!sameSlot) {
+      const newLock = await txn.get(newLockRef);
+      if (newLock.exists) throw new HttpsError('already-exists', 'That slot was just taken. Choose another time.');
+    }
+    const maxConcurrent = Math.max(1, Number(cfg.cap && cfg.cap.maxSimultaneous || 1));
+    const overlap = existing.filter(b => rc.pairOverlaps(startTs, endTs, b.startTs, b.endTs, bufMs, bufMs)).length;
+    if (overlap >= maxConcurrent) throw new HttpsError('already-exists', 'That time overlaps another booking.');
+    const maxPerDay = Number(cfg.cap && cfg.cap.maxPerDay || 0);
+    if (maxPerDay > 0 && existing.length >= maxPerDay) throw new HttpsError('resource-exhausted', 'The provider is fully booked that day.');
+
+    /* Acquire new BEFORE releasing old — never zero locks (§3.2). */
+    txn.set(newLockRef, {
+      bookingId: id, providerId, customerUid: data.customerUid || null,
+      date: newDate, startTime: newStart, endTime, startTs, endTs, createdAt: _ts(),
+    });
+    if (oldLockRef && !sameSlot) txn.delete(oldLockRef);
+
+    /* Identity immutable (§3.5): only scheduling fields change. */
+    txn.update(ref, {
+      date: newDate, startTime: newStart, endTime, startTs, endTs, slotKey,
+      scheduledAt: Timestamp.fromMillis(startTs),
+      rescheduleCount: _inc(1),
+      rescheduleHistory: FieldValue.arrayUnion({
+        from: { date: data.date || null, startTime: data.startTime || null },
+        to:   { date: newDate, startTime: newStart },
+        by:   isProvider ? 'provider' : 'customer',
+        at:   new Date().toISOString(),
+      }),
+      updatedAt: _ts(),
+    });
+    /* Keep the calendar mirror in sync if it exists. */
+    txn.set(_db().collection('providerCalendar').doc(id),
+      { scheduledAt: Timestamp.fromMillis(startTs), updatedAt: _ts() }, { merge: true });
+  });
+
+  /* Notify the counterparty (best-effort). */
+  try {
+    const targetUid = isProvider ? data.customerUid : data.providerId;
+    if (targetUid) await _db().collection('notifications').add({
+      targetUid, type: 'booking', heading: 'Booking rescheduled',
+      sub: `${_san(data.service, 120)} → ${newDate} ${newStart}`,
+      link: isProvider ? 'my-bookings.html' : 'provider-dashboard.html',
+      createdAt: _ts(), read: false,
+    });
+  } catch (e) { /* ignore */ }
+
+  return { success: true, status: data.status, date: newDate, startTime: newStart, endTime };
+};
+
+/* ── 3e. providerContactCustomer — NON-transition (§6). Returns the customer's
+   contact channel for the provider's own active booking; never changes status. */
+_h.providerContactCustomer = async (req) => {
+  const uid = _uid(req);
+  const { data } = await _ownBooking(uid, req.data?.bookingId);
+  const custUid = data.customerUid;
+  if (!custUid) throw new HttpsError('failed-precondition', 'This booking has no linked customer account.');
+  const uSnap = await _db().collection('users').doc(custUid).get();
+  const u = uSnap.exists ? uSnap.data() : {};
+  /* Phone lives in `phoneNumber` ("+254…"), not `phone`. */
+  return {
+    success: true,
+    customer: {
+      name:  data.customerName || u.name || u.displayName || null,
+      phone: u.phoneNumber || null,
+    },
+  };
 };
 
 /* ── 4. providerGetEarnings ──────────────────────────────────────────────────
