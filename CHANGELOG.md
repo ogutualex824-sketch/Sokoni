@@ -1,3 +1,26 @@
+## [2026-07-27] — feat(booking): Phase D3 — provider service model (fee/deposit/images)
+
+Enriches the canonical `providerServices` model + establishes the platform money-representation invariant.
+
+**Files:** `functions/provider-ops.js`, `functions/booking-service.js`, `storage.rules`,
+`provider-dashboard.html`, `docs/BOOKING_CONVERGENCE.md`.
+**Deploy:** `functions:providerDispatch` + `storage` rules + hosting. No Firestore rules/migration.
+
+- **Schema:** `providerAddService`/`providerUpdateService` gain `fee`, `deposit` (integer **cents**, clamped
+  ≥0) and `images[]` (https-only, capped at 8; http/non-URL/js dropped). Backend is the authoritative validator.
+- **Money Representation (platform invariant):** ALL persisted monetary amounts are integer **cents**; the UI
+  converts KSh↔cents at the form boundary only (×100 save / ÷100 display). Applied to price, fee, deposit.
+  This corrects a latent 100× bug (rate-card form stored raw KSh while the engine reads cents) — safe because
+  0 `providerServices` existed in prod. Codified in `docs/BOOKING_CONVERGENCE.md`.
+- **Booking snapshot:** `bookingCreateService` stamps declared `fee`/`deposit`; `pricingVersion` bumped to
+  `rate-card@1.1.0`. The stamped price/fee/deposit are an **immutable snapshot** — later service edits never
+  retroactively change an existing booking.
+- **Storage:** new `provider-service-images/{uid}/**` rule (owner-only writes, safe-image types, 15 MB cap,
+  public read); rate-card form gains fee/deposit inputs + service-photo upload with thumbnails.
+- **Deposit boundary:** D3 defines/stamps amounts only — collection + refund/forfeit (lifecycle §6) is Phase E.
+- **Verification:** 11/11 D3 (cents storage, image filtering, negative clamp, booking stamp + pricingVersion,
+  legacy-shape service graceful, KSh↔cents round-trip) + regressions (D1 31, D2 10, D2b 9).
+
 ## [2026-07-27] — feat(booking): Phase D2b — onboarding→canonical availability adapter
 
 Closes the last availability correctness gap before Phase E: onboarding-only providers are now bookable.

@@ -109,8 +109,22 @@ booking/settlement backend already in production. Four shippable increments, bac
   > and awaits the standard retirement lifecycle (removal after telemetry confirms zero usage).
 
 - **D3 — Rate-card fields.** Extend the already-canonical `providerServices` CRUD with per-service
-  **fee, deposit, images[]** (Storage upload). Deposit activates the deferred cancel/no-show refund policy
-  in the lifecycle contract §6.
+  **fee, deposit, images[]** (Storage upload). `bookingCreateService` stamps the declared `fee`/`deposit`
+  onto the booking (`pricingVersion: rate-card@1.1.0`). Deposit **collection** and the cancel/no-show
+  refund/forfeit side effects (lifecycle contract §6) are **Phase E**, not D3 — D3 defines the amounts only.
+
+  > **Pricing-snapshot immutability (guarantee).** The `price`/`fee`/`deposit` (and `pricingVersion`)
+  > stamped on a booking at creation are an **immutable snapshot** of the rate card at that moment. Later
+  > edits to the provider's `providerServices` doc (price, fee, deposit, images) **never** retroactively
+  > change an existing booking — the booking settles and displays on the terms declared when it was made.
+  > `pricingVersion` marks which pricing shape produced the snapshot, so evolution stays reconcilable.
+
+  > **Money Representation (platform invariant, established D3).** ALL persisted monetary amounts are
+  > stored as **integer cents**. UI components convert between KSh and cents at the form boundary only
+  > (KSh × 100 on save, cents ÷ 100 on display). Business logic — settlement, commissions, wallets, the
+  > booking engine — operates **exclusively on persisted cent values**. No UI or integration may store raw
+  > KSh. (This corrected a latent 100× mismatch where the rate-card form stored raw KSh while the engine
+  > read cents; safe to fix because 0 `providerServices` existed in production at the time.)
 - **D4 — Provider calendar.** First day/week UI over the already-populated `providerCalendar` /
   `providerGetBookings` (zero UI consumers today). Presentation over an existing backend.
 | **E. Service page + reviews + client cutover** | rate cards, slots, reviews list, response time, Book Now wired to `bookingCreateService`; `providerReviews` creation CF gated on a completed booking; multi-dimension ratings | reviews gated on completion; publicationContract-style check |

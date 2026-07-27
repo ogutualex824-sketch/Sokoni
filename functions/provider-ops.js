@@ -26,6 +26,10 @@ const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
 const _inc = (n) => FieldValue.increment(n);
 const _san = (v, n = 500) => String(v == null ? '' : v).slice(0, n).replace(/[<>]/g, '');
+/* Service images — https URLs only, capped. Money fields (price/fee/deposit) are
+   integer CENTS in storage; the UI converts to/from KSh (platform money invariant). */
+const _cents  = (v) => Math.max(0, Math.round(Number(v) || 0));
+const _images = (a) => (Array.isArray(a) ? a : []).filter(u => typeof u === 'string' && /^https:\/\//i.test(u)).slice(0, 8);
 
 function _uid(req) {
   const uid = req.auth?.uid;
@@ -613,7 +617,10 @@ _h.providerAddService = async (req) => {
   const ref = await _db().collection('providerServices').add({
     providerId: uid, name, category: _san(d.category, 120), subcategory: _san(d.subcategory, 120),
     description: _san(d.description, 1000), priceType: _san(d.priceType, 40) || 'quotation',
-    price: Math.max(0, Math.round(Number(d.price) || 0)),
+    price:   _cents(d.price),                    /* cents */
+    fee:     _cents(d.fee),                      /* cents — per-service booking fee */
+    deposit: _cents(d.deposit),                  /* cents — upfront hold (collected in Phase E) */
+    images:  _images(d.images),                  /* https URLs */
     durationMins: Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0)),
     active: true,
     createdAt: _ts(), updatedAt: _ts(),
@@ -665,7 +672,10 @@ _h.providerUpdateService = async (req) => {
   if (d.subcategory !== undefined) patch.subcategory = _san(d.subcategory, 120);
   if (d.description !== undefined) patch.description = _san(d.description, 1000);
   if (d.priceType !== undefined)   patch.priceType   = _san(d.priceType, 40) || 'quotation';
-  if (d.price !== undefined)       patch.price       = Math.max(0, Math.round(Number(d.price) || 0));
+  if (d.price !== undefined)       patch.price       = _cents(d.price);
+  if (d.fee !== undefined)         patch.fee         = _cents(d.fee);      /* cents */
+  if (d.deposit !== undefined)     patch.deposit     = _cents(d.deposit);  /* cents */
+  if (d.images !== undefined)      patch.images      = _images(d.images);
   if (d.durationMins !== undefined || d.duration !== undefined) {
     patch.durationMins = Math.max(0, Math.round(Number(d.durationMins ?? d.duration) || 0));
   }

@@ -395,8 +395,16 @@ a{color:var(--acc);text-decoration:none}
                 <div class="fg"><label class="sk-lbl">Price (KSh)</label><input class="sk-in" id="svPrice" type="number" min="0"></div>
                 <div class="fg"><label class="sk-lbl">Price type</label><select class="sk-in" id="svType"><option value="fixed">Fixed</option><option value="hourly">Per hour</option><option value="quotation">Quotation</option></select></div>
                 <div class="fg"><label class="sk-lbl">Duration (minutes)</label><input class="sk-in" id="svDur" type="number" min="0" placeholder="e.g. 240"></div>
+                <div class="fg"><label class="sk-lbl">Booking fee (KSh)</label><input class="sk-in" id="svFee" type="number" min="0" placeholder="optional"></div>
+                <div class="fg"><label class="sk-lbl">Deposit (KSh)</label><input class="sk-in" id="svDeposit" type="number" min="0" placeholder="optional"></div>
               </div>
               <div class="fg" style="margin-top:8px"><label class="sk-lbl">Description</label><textarea class="sk-in" id="svDesc" rows="2" placeholder="What's included"></textarea></div>
+              <div class="fg" style="margin-top:8px">
+                <label class="sk-lbl">Service photos</label>
+                <div id="svImgs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px"></div>
+                <input type="file" id="svImgFile" accept="image/*" style="font-size:.8rem" onchange="Sv.uploadImage(this)">
+                <div style="font-size:.72rem;color:var(--sub);margin-top:2px">JPG/PNG/WebP, up to 15 MB each.</div>
+              </div>
               <div style="display:flex;gap:8px;margin-top:10px">
                 <button class="btn btn-p btn-sm" onclick="Sv.save()">Save</button>
                 <button class="btn btn-g btn-sm" onclick="Sv.closeForm()">Cancel</button>
@@ -663,11 +671,16 @@ const Sv={
     if(!this._svc.length){_q('svList').innerHTML='<div class="card-empty">No rate cards yet. Add your first service so customers can book it.</div>';return}
     _q('svList').innerHTML=this._svc.map(s=>{
       const on=s.active!==false;
-      const price=s.priceType==='quotation'?'On quote':('KSh '+(Number(s.price)||0).toLocaleString()+(s.priceType==='hourly'?'/hr':''));
+      /* price/fee/deposit are stored in CENTS → display KSh (÷100). */
+      const price=s.priceType==='quotation'?'On quote':('KSh '+this._c2k(s.price).toLocaleString()+(s.priceType==='hourly'?'/hr':''));
       const dur=s.durationMins?(' · '+s.durationMins+' min'):'';
+      const extras=[s.fee?('Fee KSh '+this._c2k(s.fee).toLocaleString()):'',s.deposit?('Deposit KSh '+this._c2k(s.deposit).toLocaleString()):''].filter(Boolean).join(' · ');
+      const thumb=(Array.isArray(s.images)&&s.images[0])?`<img src="${this._esc(s.images[0])}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;float:right;margin-left:8px">`:'';
       return `<div class="card" style="padding:12px;margin-bottom:8px;opacity:${on?1:.55}">
+        ${thumb}
         <div style="font-weight:700;font-size:.9rem">${this._esc(s.name)}${on?'':' <span style="font-size:.7rem;color:var(--sub)">(hidden)</span>'}</div>
         <div style="font-size:.78rem;color:var(--sub);margin-top:2px">${this._esc(s.category||'')} · <strong style="color:var(--text)">${price}</strong>${dur}</div>
+        ${extras?`<div style="font-size:.72rem;color:var(--sub);margin-top:2px">${extras}</div>`:''}
         ${s.description?`<div style="font-size:.76rem;color:var(--sub);margin-top:4px">${this._esc(s.description)}</div>`:''}
         <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
           <button class="btn btn-g btn-sm" onclick="Sv.openEdit('${s.id}')">Edit</button>
@@ -677,15 +690,33 @@ const Sv={
       </div>`;
     }).join('');
   },
-  _set(id,cat,price,type,dur,desc,sid){_q('svId').value=sid||'';_q('svName').value=id||'';_q('svCat').value=cat||'';_q('svPrice').value=price||'';_q('svType').value=type||'fixed';_q('svDur').value=dur||'';_q('svDesc').value=desc||'';_q('svForm').style.display='block';_q('svName').focus()},
-  openAdd(){this._set('','','','fixed','','','')},
-  openEdit(id){const s=this._svc.find(x=>x.id===id);if(s)this._set(s.name,s.category,s.price,s.priceType,s.durationMins,s.description,s.id)},
+  _imgs:[],
+  /* Money invariant: storage is integer CENTS; the form shows/accepts KSh. */
+  _k2c(v){return Math.max(0,Math.round((parseFloat(v)||0)*100))},   // KSh → cents
+  _c2k(v){return (Number(v)||0)/100},                               // cents → KSh
+  _set(s){s=s||{};_q('svId').value=s.id||'';_q('svName').value=s.name||'';_q('svCat').value=s.category||'';_q('svPrice').value=s.price?this._c2k(s.price):'';_q('svType').value=s.priceType||'fixed';_q('svDur').value=s.durationMins||'';_q('svFee').value=s.fee?this._c2k(s.fee):'';_q('svDeposit').value=s.deposit?this._c2k(s.deposit):'';_q('svDesc').value=s.description||'';this._imgs=Array.isArray(s.images)?s.images.slice():[];this._renderImgs();_q('svImgFile').value='';_q('svForm').style.display='block';_q('svName').focus()},
+  openAdd(){this._set({})},
+  openEdit(id){const s=this._svc.find(x=>x.id===id);if(s)this._set(s)},
   closeForm(){_q('svForm').style.display='none'},
+  _renderImgs(){_q('svImgs').innerHTML=this._imgs.map(u=>`<div style="position:relative"><img src="${this._esc(u)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px"><button type="button" onclick="Sv.removeImage('${this._esc(u)}')" style="position:absolute;top:-6px;right:-6px;background:var(--warn);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:.7rem;cursor:pointer">×</button></div>`).join('')},
+  removeImage(u){this._imgs=this._imgs.filter(x=>x!==u);this._renderImgs()},
+  async uploadImage(input){
+    const file=input.files&&input.files[0];if(!file)return;
+    if(file.size>15*1024*1024){toast('Image too large (max 15 MB).','err');input.value='';return}
+    const uid=firebase.auth().currentUser&&firebase.auth().currentUser.uid;if(!uid){toast('Sign in required.','err');return}
+    showLoad('Uploading…');
+    try{
+      const path=`provider-service-images/${uid}/${Date.now()}_${(file.name||'photo').replace(/[^a-zA-Z0-9._-]/g,'')}`;
+      const ref=firebase.storage().ref(path);
+      await ref.put(file);
+      this._imgs.push(await ref.getDownloadURL());this._renderImgs();
+    }catch(e){toast(e.message||'Upload failed','err')}finally{hideLoad();input.value=''}
+  },
   async save(){
     const name=(_q('svName').value||'').trim();
     if(!name){toast('Service name is required.','err');return}
     const id=_q('svId').value;
-    const data={name,category:_q('svCat').value||'',description:_q('svDesc').value||'',priceType:_q('svType').value||'fixed',price:parseInt(_q('svPrice').value)||0,durationMins:parseInt(_q('svDur').value)||0};
+    const data={name,category:_q('svCat').value||'',description:_q('svDesc').value||'',priceType:_q('svType').value||'fixed',price:this._k2c(_q('svPrice').value),fee:this._k2c(_q('svFee').value),deposit:this._k2c(_q('svDeposit').value),images:this._imgs,durationMins:parseInt(_q('svDur').value)||0};
     showLoad('Saving…');
     try{
       if(id){await this._fn()({op:'providerUpdateService',serviceId:id,...data})}

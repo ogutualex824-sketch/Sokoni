@@ -102,6 +102,17 @@ service firebase.storage {
       allow delete:        if request.auth != null && request.auth.uid == uid;
     }
 
+    /* ── Provider service (rate-card) images — D3. Owner-only writes, safe images,
+       15 MB cap; public read (directory/service pages display them). ── */
+    match /provider-service-images/{uid}/{allPaths=**} {
+      allow read:          if true;
+      allow create, update: if request.auth != null
+                           && request.auth.uid == uid
+                           && safeImageOnly()
+                           && request.resource.size < 15 * 1024 * 1024;
+      allow delete:        if request.auth != null && request.auth.uid == uid;
+    }
+
     /* ── Profile avatars — 5 MB max, safe image types only ── */
     match /profile-avatars/{uid}/{filename} {
       allow read:          if true;

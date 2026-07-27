@@ -28,7 +28,7 @@ const DOW = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', '
 /* Provenance versions — bump when the create semantics or the price source change.
    Stamped on every booking so records stay reproducible without migration. */
 const ENGINE_VERSION  = '1.0.0';   /* this create engine */
-const PRICING_VERSION = '1.0.0';   /* service price sourced from providerServices.price (rate card) */
+const PRICING_VERSION = '1.1.0';   /* v1.1 (D3): booking now carries declared fee + deposit alongside price (all cents) */
 
 /* ── Shared availability gate ────────────────────────────────────────────────
    Validates a candidate slot against the provider's config (working hours,
@@ -108,6 +108,8 @@ _h.bookingCreateService = async (req) => {
   if (svc.active === false) throw new HttpsError('failed-precondition', 'This service is not available.');
   const durationMins = Math.max(15, Number(svc.durationMins) || 30);
   const price       = Math.max(0, Math.round(Number(svc.price) || 0)); /* cents, server-owned */
+  const fee         = Math.max(0, Math.round(Number(svc.fee) || 0));     /* cents — declared per-service fee (D3) */
+  const deposit     = Math.max(0, Math.round(Number(svc.deposit) || 0)); /* cents — declared upfront hold (collected in Phase E) */
   const serviceName = _san(svc.name, 200);
 
   /* Validate the slot through the shared availability gate (same path reschedule uses). */
@@ -163,7 +165,8 @@ _h.bookingCreateService = async (req) => {
       serviceId, service: serviceName,
       date, startTime, endTime, startTs, endTs, durationMins, slotKey,
       scheduledAt: admin.firestore.Timestamp.fromMillis(startTs),
-      price, currency: 'KES',        /* server-authoritative from the rate card */
+      price, fee, deposit, currency: 'KES',   /* all cents; server-authoritative from the rate card.
+                                                 fee/deposit are DECLARED amounts — Phase E collects them. */
       paymentStatus: 'pending',
       status,                        /* server-authoritative */
       note: _san(d.note, 300),
