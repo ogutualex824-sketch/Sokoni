@@ -139,8 +139,10 @@ let allProducts = [];
 try { allProducts = JSON.parse(localStorage.getItem("sellerProducts")) || []; }
 catch(e) { allProducts = []; }
 
-/* If sellers haven't added products yet, show the demo catalogue */
-if(allProducts.length === 0) allProducts = DEMO_PRODUCTS;
+/* Demo catalogue is dev-only — real users must see an honest empty state, not
+   25 fabricated products. (Firestore merge later fills real listings.) */
+var _catDemoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+if(allProducts.length === 0 && _catDemoAllowed) allProducts = DEMO_PRODUCTS;
 
 let filtered = category === "all"
     ? allProducts

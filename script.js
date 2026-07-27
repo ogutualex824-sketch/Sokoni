@@ -3062,12 +3062,22 @@ function loadStoriesSection(){
     try { saved = JSON.parse(localStorage.getItem("sokoniStories")) || []; } catch(e){}
     const realActive = saved.filter(s => s.expiresAt > now);
 
-    /* Merge: real stories first, then demo premium ones (no duplicates by id) */
+    /* Demo premium stories are dev-only — real users must never be shown
+       fabricated "premium seller" promos (Kaspa Prints, TechNairobi, …). Gate
+       behind the same _demoAllowed opt-in used for FALLBACK_PRODUCTS. */
+    const _demoAllowed = (function () {
+        try { if (localStorage.getItem('sokoniDemoData') === 'true') return true; } catch (e) {}
+        return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+    })();
+
+    /* Merge: real stories first, then demo premium ones ONLY in dev (no dup ids) */
     const realIds = new Set(realActive.map(s=>s.id));
-    const combined = [...realActive, ...DEMO_PREMIUM_STORIES.filter(d => !realIds.has(d.id))];
+    const combined = [...realActive, ...(_demoAllowed ? DEMO_PREMIUM_STORIES.filter(d => !realIds.has(d.id)) : [])];
     _activeStories = combined;
 
-    /* Always show the stories section */
+    /* Honest empty state: with no real stories (and no dev demo), hide the ring
+       entirely rather than showing fabricated promos. */
+    if(!combined.length){ if(section) section.style.display = "none"; return; }
     if(section) section.style.display = "block";
 
     /* Logged-in user check */

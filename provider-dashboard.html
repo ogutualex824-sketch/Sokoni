@@ -11,6 +11,9 @@
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="premium.css">
 <script src="security.js"></script>
+<!-- data-require-auth was inert without a guard script — auth-guard.js makes it
+     enforce synchronously so a guest is redirected before the dashboard shell paints. -->
+<script src="auth-guard.js"></script>
 <script type="module" src="firebase.js"></script>
 <script src="sokoni-auth-state.js"></script>
 <script src="sokoni-user-bootstrap.js" defer></script>

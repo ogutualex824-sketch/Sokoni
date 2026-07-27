@@ -423,10 +423,14 @@ let _urgency = "low";
 
 function loadRequests(){
   try{ allReqs = JSON.parse(localStorage.getItem("sokoniRequests"))||[]; }catch(e){ allReqs=[]; }
-  if(!allReqs.length){
-    allReqs = DEMO_REQS;
-    localStorage.setItem("sokoniRequests", JSON.stringify(allReqs));
-  }
+  /* Never seed fabricated buy-requests into a real user's storage. Demo content
+     is dev-only (localhost or explicit opt-in); real users get an honest empty
+     state handled by applyFilters()/the empty-state markup. */
+  var _demoAllowed = (function(){
+    try{ if(localStorage.getItem('sokoniDemoData')==='true') return true; }catch(e){}
+    return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  })();
+  if(!allReqs.length && _demoAllowed){ allReqs = DEMO_REQS; }
   updateHeroStats();
   applyFilters();
 }

@@ -287,7 +287,9 @@ const realFlash=flashSales.map(f=>{
   return{...p,discount:f.discount,salePrice:Math.round(p.price*(1-f.discount/100)),endsAt:f.endsAt,rating:4.7,reviews:0,remaining:10,totalStock:50,seller:p.sellerName||'Seller'};
 }).filter(Boolean);
 
-const flashProducts=[...realFlash,...DEMO_FLASH.map(p=>({...p,salePrice:Math.round(p.price*(1-p.discount/100))}))];
+/* Demo flash deals are dev-only — never pad a real user's flash sale with fabricated products. */
+const _fsDemoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+const flashProducts=[...realFlash,...(_fsDemoAllowed?DEMO_FLASH.map(p=>({...p,salePrice:Math.round(p.price*(1-p.discount/100))})):[])];
 
 /* ── STATE ── */
 let _fsCat='';

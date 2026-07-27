@@ -392,7 +392,9 @@ function markHelpful(id){
 
 function updatePlatformStats(){
   const userRevs = getReviews().filter(r => r.type === "platform");
-  const all      = [...userRevs, ...DEMO_REVIEWS.filter(r => r.type === "platform")];
+  /* Demo reviews are dev-only — never inflate real platform stats with fabricated reviews. */
+  const _revDemoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+  const all      = [...userRevs, ...(_revDemoAllowed?DEMO_REVIEWS.filter(r => r.type === "platform"):[])];
   const total    = all.length;
   const avg      = total > 0 ? (all.reduce((s,r)=>s+r.rating,0)/total).toFixed(1) : "—";
   const pct      = total > 0 ? Math.round((all.filter(r=>r.rating>=4).length/total)*100)+"%" : "—";

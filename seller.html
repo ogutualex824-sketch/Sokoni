@@ -10,6 +10,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script src="sokoni-auth-state.js"></script>
+  <script src="sokoni-identity-guard.js"></script>
   <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-permissions.js"></script>
 
@@ -5500,7 +5501,9 @@ window.deleteSellerAccount=deleteSellerAccount;
 
   function loadCustomers(){
     var orders = getOrders();
-    var custs = orders.length ? buildCustomers(orders) : DEMO_CUSTOMERS;
+    /* A seller must see only their OWN real customers — never fabricated ones.
+       No real orders → honest empty state (handled by the render below). */
+    var custs = orders.length ? buildCustomers(orders) : [];
 
     var thisMonth = new Date().toISOString().slice(0,7);
     var repeat = custs.filter(function(c){ return c.orders>=2; }).length;
@@ -5549,7 +5552,8 @@ window.deleteSellerAccount=deleteSellerAccount;
 
   function loadReceipts(){
     var orders = getOrders();
-    var list = orders.length ? orders.slice(0,20) : DEMO_ORDERS;
+    /* Real receipts only — never show fabricated DEMO_ORDERS to a seller. */
+    var list = orders.length ? orders.slice(0,20) : [];
     window._receiptOrders = list;
     renderReceiptTable(list);
   }

@@ -2828,6 +2828,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
      in". Loads before permissions/guards so they consume it and never conclude
      "logged out" while Firebase Auth is still resolving. -->
 <script src="sokoni-auth-state.js"></script>
+<script src="sokoni-identity-guard.js"></script>
 <script src="sokoni-permissions.js"></script>
 <script src="profile.js"></script>
 <script src="sokoni-invoice.js"></script>
@@ -2981,11 +2982,31 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
   var AS = window.SokoniAuthState;
   if (AS && AS.ready && typeof AS.ready.then === 'function'){
     AS.ready.then(function(session){
-      /* Reveal if EITHER the resolution-aware state OR the live SDK sees a user.
-         Redirect only when BOTH agree there is none — this is what stops a
-         genuinely signed-in user being bounced (→ login → home) on a slow mobile
-         session restore, the "Profile jumps to home / can't sign in" report. */
-      if ((session && session.uid) || liveUser()) reveal(); else toLogin();
+      var lu = liveUser();
+      var luid = (session && session.uid) || (lu && lu.uid) || null;
+      /* Redirect only when BOTH the resolution-aware state AND the live SDK agree
+         there is no user — stops a signed-in user being bounced on a slow restore. */
+      if (!luid){ toLogin(); return; }
+      /* IDENTITY ISOLATION: never reveal another account's cached data. If the
+         cached profile belongs to a DIFFERENT uid than the live user, purge every
+         user cache and reload so all loads rebind to the correct uid — before the
+         splash lifts, so no cross-account data is ever shown. */
+      var cached = getUser();
+      if (cached && cached.uid && cached.uid !== luid){
+        try {
+          var mk = '_sokIdReloaded_' + luid;
+          if (!sessionStorage.getItem(mk)){
+            sessionStorage.setItem(mk, '1');
+            if (window.SokoniIdentity) SokoniIdentity.purgeUserCaches();
+            else { localStorage.removeItem('sokoniUser'); }
+            /* Live session is valid (we have luid) — keep the flag so the reload
+               doesn't bounce us through login; only the DATA caches are stale. */
+            try { localStorage.setItem('loggedIn','true'); } catch(_){}
+            location.reload(); return;
+          }
+        } catch(_){}
+      }
+      reveal();
     }).catch(function(){ reveal(); });
   } else {
     /* SokoniAuthState unavailable — we only reached here because the loggedIn flag
