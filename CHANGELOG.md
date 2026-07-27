@@ -35,6 +35,31 @@ Deploy: functions (new `shopNameSync_shops`/`shopNameSync_sellers` + checkout ch
 
 ---
 
+## [2026-07-27] — fix(shop): marketplace shops appear in the business directory — DEPLOYED
+
+Audited the shop/product publish pipeline with the same methodology as providers (create→edit→project→
+index→visibility). **Products: HEALTHY** (create/edit write the same `products` collection the feed reads,
+both index triggers exist, absent status = visible, no orderBy silent-drop). **Shops: provider-class bug**
+— a 3-way collection split: the marketplace wizard writes `sellers/{uid}`, but the directory
+(`businesses.html`) reads `businesses`, so a launched marketplace shop never appeared there (only SmartPOS
+`createBusiness` merchants did).
+
+Scope chosen: DIRECTORY VISIBILITY FIRST (defer search indexer + product businessId stamping):
+- `seller.html swSaveStore` now also writes a COMPLETE `businesses/{uid}` doc (name/businessName/category/
+  description/city/phone/status:'active'/createdAt-once/updatedAt) — the collection the directory reads.
+  Rules-compliant (uid==auth.uid, no admin fields); createdAt set once via a getDoc guard so the
+  directory's orderBy('createdAt') can't silently drop it. `sellers/{uid}` write kept for the store.html
+  fallback.
+- `business.html loadProducts` falls back to `where('sellerUid','==',BIZ_ID)` when the businessId query is
+  empty — marketplace products link by sellerUid, so a uid-keyed shop's storefront renders instead of empty.
+
+Verified: both pages parse; `@firebase/rules-unit-testing` 5/5 (owner create/update + public read allowed;
+non-owner uid-mismatch and admin-field `verified` writes rejected). Deployed: hosting only; live-verified.
+Deferred follow-ups: indexBusiness searchableTerms trigger, product `businessId` stamping, search spec
+`sellers`→`businesses`, optional dry-run backfill of existing sellers→businesses.
+
+---
+
 ## [2026-07-27] — fix(provider): providers visible + self-edit everything incl. booking fee — DEPLOYED
 
 Investigation (3 read-only agents + a live prod audit) found "some service providers not visible" was
