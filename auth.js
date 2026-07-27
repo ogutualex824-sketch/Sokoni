@@ -6,6 +6,26 @@
    signup.html can call them directly.
 ================================================================ */
 
+/* Cross-account safety: when a DIFFERENT account signs in on this device, purge the
+   previous owner's cached listings / orders / store / provider profile so they can
+   never surface on the new account (the seller-products cross-account leak). Same-user
+   re-login keeps the cache. The new user's own data re-hydrates from Firestore. Called
+   at every login site BEFORE the new sokoniUser is written. */
+function _sokoniPurgeOwnerCachesOnSwitch(newUid) {
+  try {
+    var prev = JSON.parse(localStorage.getItem("sokoniUser") || "null");
+    if (!prev || !prev.uid || !newUid || prev.uid === newUid) return;
+    ["sellerProducts", "sellerOrders", "sellerDrafts", "sokoniProducts", "sokoniOrders",
+     "sokoniProviderProfile", "msStoreSettings", "sokoniAds"].forEach(function (k) {
+      try { localStorage.removeItem(k); } catch (e) {}
+    });
+    /* uid-namespaced OwnerCache keys belonging to the previous owner */
+    Object.keys(localStorage).forEach(function (k) {
+      if (/^(products|orders|drafts):/.test(k)) { try { localStorage.removeItem(k); } catch (e) {} }
+    });
+  } catch (e) {}
+}
+
 /* ── Global diagnostic net — captures any uncaught exception / rejected promise
    that escapes a catch block so the root cause is never silently swallowed ── */
 window.onerror = function(msg, src, line, col, err) {
@@ -309,6 +329,7 @@ async function loginUser(){
 
         /* ── Sync to localStorage for backward-compat with all other pages ── */
         console.log('[AUTH STEP 5] Writing session to localStorage — sokoniAuthReady will fire from firebase.js');
+        _sokoniPurgeOwnerCachesOnSwitch(profile && profile.uid);
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
         localStorage.setItem("loggedIn", "true");
         localStorage.removeItem("sokoniCreds"); /* clear legacy SHA-256 creds */
@@ -564,6 +585,7 @@ async function _doSignup(name, email, password){
         });
 
         /* Sync to localStorage for backward-compat */
+        _sokoniPurgeOwnerCachesOnSwitch(profile && profile.uid);
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
         localStorage.setItem("loggedIn", "true");
         localStorage.removeItem("sokoniCreds");
@@ -671,6 +693,7 @@ async function completeRoleSelection(){
     if(cb("roleLandlordCb"))   user.registeredAs.landlord     = true;
     if(cb("roleLegalCb"))      user.registeredAs.legal        = true;
 
+    _sokoniPurgeOwnerCachesOnSwitch(user && user.uid);
     localStorage.setItem("sokoniUser", JSON.stringify(user));
 
     /* Also persist roles to Firestore when a Firebase session is active */
