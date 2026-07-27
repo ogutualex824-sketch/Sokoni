@@ -36,6 +36,12 @@ Clean starting point for the next session/agent. Live production = **`mysokoni.c
      global `sellerProducts` key.
   3. Finish the **RANK-2 reader sweep** — `ministore.html`, `services.html`,
      `seller-analytics.html`, `business-analytics.html`, `car-hub.html`.
+  3b. **Add a regression guard** (AFTER the migration, so it doesn't flag in-progress
+     code): a CI/repo scan that FAILS on any direct `localStorage` read/write of a
+     global owner key (`sellerProducts`, `sellerOrders`, `sellerDrafts`) outside
+     `sokoni-owner-cache.js` — making `OwnerCache` the ONLY supported API for
+     owner-scoped local data so this class of leak cannot quietly return. Start
+     warning-only if legitimate stragglers remain.
   4. Verify the **seven owner-isolation release gates**: (1) seller A never sees
      seller B's cached listings; (2) a zero-product provider gets an empty state,
      not prior-seller data; (3) the owner's own unsynced drafts survive; (4) another
