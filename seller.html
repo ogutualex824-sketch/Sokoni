@@ -11,6 +11,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <script src="sokoni-auth-state.js"></script>
   <script src="sokoni-identity-guard.js"></script>
+  <script src="sokoni-owner-cache.js"></script>
   <script src="sokoni-user-bootstrap.js" defer></script>
   <script src="sokoni-permissions.js"></script>
 
@@ -3764,18 +3765,30 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
   updateClock();
   setInterval(updateClock, 1000);
 
-  /* ── Today stats (from localStorage) ── */
+  /* ── Today stats — HONEST + owner-scoped ──────────────────────────────────
+     Was: read the global sellerProducts/sellerOrders cache (cross-account leak)
+     and, when empty, FABRICATE views/orders/revenue/rating with Math.random().
+     Invented business metrics erode trust — a merchant could act on numbers that
+     were never real. Now: read this uid's OWN cache via OwnerCache, and show real
+     zeros / "—" when there is no data. */
   function updateStats() {
-    var products = [];
-    try { products = JSON.parse(localStorage.getItem('sellerProducts'))||[]; } catch(e){}
-    var orders = [];
-    try { orders = JSON.parse(localStorage.getItem('sellerOrders'))||[]; } catch(e){}
+    /* Owner-safe read of the (still-global) cache: filter to the live uid so
+       another account's products/orders never feed these numbers. Switches to
+       OwnerCache namespaces in the atomic migration pass. */
+    var uid = (window.firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.uid) || null;
+    var _own = function(key){
+      var arr = []; try { arr = JSON.parse(localStorage.getItem(key)) || []; } catch(e){}
+      return uid ? arr.filter(function(p){ return String((p&&(p.sellerUid||p.uid))||'') === String(uid); }) : [];
+    };
+    var products = _own('sellerProducts');
+    var orders   = _own('sellerOrders');
 
-    var totalViews = products.reduce(function(s,p){ return s+(p.views||0); },0) || Math.floor(Math.random()*120+40);
-    var todayOrders = orders.length || Math.floor(Math.random()*8+1);
-    var revenue = orders.reduce(function(s,o){ return s+(o.total||o.price||0); },0);
-    if(!revenue) revenue = Math.floor(Math.random()*12000+3000);
-    var rating = 4.7 + (Math.random()*0.2).toFixed(1)*1;
+    var totalViews  = products.reduce(function(s,p){ return s+(Number(p.views)||0); },0);
+    var todayOrders = orders.length;
+    var revenue     = orders.reduce(function(s,o){ return s+(Number(o.total||o.price)||0); },0);
+    /* Rating has no source in this widget — show a neutral placeholder, not a fake. */
+    var ratings     = products.map(function(p){ return Number(p.rating)||0; }).filter(function(r){ return r>0; });
+    var rating      = ratings.length ? (ratings.reduce(function(a,b){return a+b;},0)/ratings.length) : null;
 
     var ve = document.getElementById('slpViews');
     var oe = document.getElementById('slpOrders');
@@ -3784,7 +3797,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     if(ve) ve.textContent = totalViews.toLocaleString();
     if(oe) oe.textContent = todayOrders;
     if(re) re.textContent = 'KES '+(revenue/1000).toFixed(1)+'K';
-    if(ra) ra.textContent = rating.toFixed(1)+'★';
+    if(ra) ra.textContent = rating!=null ? rating.toFixed(1)+'★' : '—';
   }
   setTimeout(updateStats, 300);
 
