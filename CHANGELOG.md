@@ -1,3 +1,27 @@
+## [2026-07-27] — feat(search): business search indexing + Publication Contract enforcement (Release 1) — DEPLOYED
+
+Completes the businesses publication pipeline (last user-facing gap) and turns the Publication Contract
+into an enforced gate. All three entities now certified under Contract v1.0.
+
+- `functions/index.js`: `indexBusinessCreate`/`indexBusinessUpdate` — give `businesses/{uid}` the
+  searchableTerms/nameLower the store search reads (mirror the product/provider indexers; shared
+  `_buildSearchTerms`; output-comparison idempotency guard). Deployed + ACTIVE.
+- `sokoni-firestore-search.js`: "businesses" search spec now reads the canonical `businesses` collection
+  (was the empty `sellers`), `indexed:true`, links `business.html`. Archive/hide honoured by the existing
+  `isVisibleDoc` contract. Live.
+- `scripts/test-publication-contract.js` (NEW): the parameterized `publicationContract(entityType)`
+  acceptance suite — create→index→discover→rename(new-in/stale-out)→archive-removed, over products/
+  providers/businesses on the SHARED `buildSearchTerms` + visibility contract. 36/36. New content type =
+  one `ENTITIES` entry.
+- Enforcement LIVE: CI (`.github/workflows/ci.yml` static-analysis) + hosting predeploy (auto-run by
+  `gate-inventory.js` suite discovery). A regression fails the deploy — proven: the deploy BLOCKED on
+  `test-firestore-search` (20/23) until its fixtures were updated to the canonical `businesses` collection.
+- `docs/PUBLICATION_CONTRACT.md`: certification matrix → Products/Providers/Businesses **Certified under v1.0**.
+
+Roadmap remaining is capability-only: product `businessId` stamping → dry-run backfill.
+
+---
+
 ## [2026-07-27] — perf(startup): kill the white flash before first paint (P0+P1)
 
 A 3-agent read-only audit of the startup pipeline found SOKONI already does most
