@@ -1,3 +1,33 @@
+## [2026-07-27] — feat(booking): service-booking convergence Phases A+B backend — DEPLOYED
+
+Provider-driven booking convergence (design: docs/BOOKING_CONVERGENCE.md). 4 read-only audits found
+the service-booking loop OPEN: customer "Book Now" wrote top-level `bookings` (raw client addDoc, no
+server logic), the provider dashboard read `providerBookings` (nothing wrote it), the authoritative
+engines were bypassed, and firestore.rules let clients self-declare booking price/status. SoT decided:
+provider stack canonical for service appointments + a shared reservation core.
+
+- **Phase A — `functions/reservation-core.js`**: the ONE definition of the reservation primitives
+  (slot-key, buffered overlap, capacity + per-customer caps). `booking.js` rewired to call it —
+  behavior-identical (emulator concurrency harness still 44/44). Both engines now share one definition.
+- **Phase B backend (DEPLOYED, clients unchanged):**
+  - `functions/booking-service.js` `bookingCreateService` (via providerDispatch): the authoritative
+    service-appointment create. Runs reservation-core against `providerAvailability` (working hours,
+    buffers, **blackout overrides** — the reserveSlot gap, capacity, min-notice, same-day); writes
+    canonical `providerBookings`; SERVER owns price (from the rate card), status, payment state,
+    timestamps; deterministic slot-lock CAS + idempotency; provenance stamped (bookingSource/engine/
+    reservation/pricing versions) for migration-free evolution. Fixed a real maxSimultaneous bug
+    (concurrent = overlapping, not whole-day). Acceptance 14/14.
+  - `firestore.rules`: TIGHTENED `bookings` create — status must be absent/'pending', financial fields
+    (price/pricingBreakdown/paymentStatus/paymentId/commission/net/amountPaid/settlement) FORBIDDEN.
+    Closes the client money/status manipulation vector; still allows a pending request. Rules-unit 5/5.
+
+Deployed: functions:providerDispatch + firestore:rules (both safe standalone). **Client "Book Now"
+repoint DEFERRED to Phase E** (the service page needs rate-card + slot pickers to supply serviceId +
+a real slot; repointing an under-equipped client would weaken the authoritative API). Server capability
+first, cut clients over when they can consume it correctly.
+
+---
+
 ## [2026-07-27] — feat(search): business search indexing + Publication Contract enforcement (Release 1) — DEPLOYED
 
 Completes the businesses publication pipeline (last user-facing gap) and turns the Publication Contract
