@@ -112,17 +112,20 @@ const SPECS = [
     link: (d, id) => 'product.html?id=' + encodeURIComponent(id),
   },
   {
-    /* Stores. `shops/{uid}` has no rule in firestore.rules, so a list query
-       there is denied — sellers/{uid} is the readable copy store.html falls
-       back to, and the one that carries the shop name buyers type. */
-    col: 'sellers', tab: 'businesses', icon: '🏪', scan: 300,
-    fields: ['name', 'storeName', 'shopName', 'businessName', 'category', 'tagline', 'bio', 'about', 'description', 'address', 'location', 'sellerType', 'handle'],
-    title: d => d.name || d.storeName || d.shopName || d.businessName || '',
+    /* Stores. Canonical directory collection is `businesses` (businesses.html +
+       business.html read it; owner-writable per rules, public read). Was `sellers`,
+       which is empty in production, so store search returned nothing except via the
+       product `sellerName` fallback. `indexed:true` — searchableTerms/nameLower are
+       written by the indexBusinessCreate / indexBusinessUpdate triggers; archive/
+       hide is honoured by isVisibleDoc (status ∈ archived/hidden/… → excluded). */
+    col: 'businesses', tab: 'businesses', icon: '🏪', indexed: true, scan: 300,
+    fields: ['name', 'businessName', 'storeName', 'shopName', 'category', 'tagline', 'bio', 'about', 'description', 'address', 'location', 'city', 'sellerType', 'handle'],
+    title: d => d.name || d.businessName || d.storeName || d.shopName || '',
     subtitle: d => d.category || d.sellerType || 'Store',
     location: d => d.address || d.location || d.city || '',
     price: () => null,
     thumb: d => d.logo || d.logoUrl || d.banner || d.bannerUrl || null,
-    link: (d, id) => 'store.html?id=' + encodeURIComponent(id),
+    link: (d, id) => 'business.html?id=' + encodeURIComponent(id),
   },
   {
     col: 'services', tab: 'services', icon: '🔧', scan: 200,

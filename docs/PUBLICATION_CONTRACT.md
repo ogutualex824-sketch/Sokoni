@@ -76,11 +76,11 @@ publicationContract("events")
 
 | Entity | Create→Project | Edit propagates | Index (create+update) | Directory | Search | Contract | Certified under |
 |---|---|---|---|---|---|---|---|
-| **Products** | ✅ | ✅ | ✅ `indexProductCreate`/`Update` | ✅ | ✅ | **PASS** | v1.0 (on suite build) |
-| **Providers** | ✅ (providerPublish + `_mirrorToRegistry`) | ✅ (edits mirror to `providers/{uid}`, fee→rate) | ✅ `indexProviderCreate`/`Update` | ✅ | ✅ | **PASS** | v1.0 (on suite build) |
-| **Businesses** | ✅ (seller.html → `businesses/{uid}`) | ⚠️ (write path fixed; no reindex on edit yet) | ❌ **no `indexBusiness` trigger** | ✅ | ❌ **rides on product `sellerName` only** | **PARTIAL** | — |
+| **Products** | ✅ | ✅ | ✅ `indexProductCreate`/`Update` | ✅ | ✅ | **PASS** | **v1.0** |
+| **Providers** | ✅ (providerPublish + `_mirrorToRegistry`) | ✅ (edits mirror to `providers/{uid}`, fee→rate) | ✅ `indexProviderCreate`/`Update` | ✅ | ✅ | **PASS** | **v1.0** |
+| **Businesses** | ✅ (seller.html → `businesses/{uid}`) | ✅ (reindexed on edit) | ✅ `indexBusinessCreate`/`Update` | ✅ | ✅ (search spec → `businesses`) | **PASS** | **v1.0** |
 
-**Certified under** records the contract version an entity last passed `publicationContract(entityType)` against — the audit trail of which standard certified it. (Products/Providers pass every clause today; they're formally certified once the parameterized suite is built alongside the next release.) See [[reference_provider_visibility]] for the provider/shop specifics and the collection maps.
+**Certified under** records the contract version an entity last passed `publicationContract(entityType)` against — the audit trail of which standard certified it. All three are certified under **v1.0** by `scripts/test-publication-contract.js` (36/36), which runs in CI (`static-analysis` job) and as a hosting predeploy gate. See [[reference_provider_visibility]] for the provider/shop specifics and the collection maps.
 
 ## Roadmap to full compliance (independent releases)
 
@@ -116,7 +116,7 @@ A contract is only a standard if it is enforced, not merely documented. Enforcem
 
 **Certification rule:** an entity is "**Certified under vX**" only when the vX `publicationContract()` suite passes green in CI — never by assertion. A version's spec clause and its test assertions land in the same change, so the gate always tests exactly what the current contract requires (spec and tests can never drift).
 
-**Status:** activates with **release 1 (business search indexing)**, which delivers the first `publicationContract()` suite. Until then, releases are gated by the per-release Firestore-emulator + `@firebase/rules-unit-testing` runs this work established — the manual precursor to the automated gate.
+**Status:** ✅ **ACTIVE** (release 1, 2026-07-27). `scripts/test-publication-contract.js` (36/36) runs in CI (`static-analysis` job) and as a hosting predeploy gate. Products, providers and businesses are certified under v1.0. Per-collection security remains certified by the `@firebase/rules-unit-testing` runs (businesses 5/5).
 
 ## Governing principle
 

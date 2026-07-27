@@ -8009,6 +8009,39 @@ exports.indexProviderUpdate = onDocumentUpdated("providers/{providerId}", async 
   }).catch(() => {});
 });
 
+/* ── BUSINESSES (Publication Contract v1.0, release 1) ────────────────────────
+   Businesses/{uid} is the canonical shop directory doc. These give it the same
+   searchableTerms/nameLower the store search now reads (sokoni-firestore-search.js
+   points its 'businesses' spec here). _buildSearchTerms already reads name/
+   businessName/category/city/description (provider fields it shares). Same shape +
+   idempotency guard as the product/provider indexers. */
+exports.indexBusinessCreate = onDocumentCreated("businesses/{bizId}", async (event) => {
+  if (!event.data) return;
+  const doc = event.data.data();
+  if (!doc) return;
+  if (doc.searchableTerms && doc.searchableTerms.length) return;
+  await event.data.ref.update({
+    searchableTerms: _buildSearchTerms(doc),
+    nameLower: (doc.name || doc.businessName || "").toLowerCase(),
+  }).catch(() => {});
+});
+
+exports.indexBusinessUpdate = onDocumentUpdated("businesses/{bizId}", async (event) => {
+  if (!event.data || !event.data.after) return;
+  const after = event.data.after.data() || {};
+  const nextTerms = _buildSearchTerms(after);
+  const nextName  = (after.name || after.businessName || "").toLowerCase();
+  const prevTerms = Array.isArray(after.searchableTerms) ? after.searchableTerms : null;
+  const sameTerms = prevTerms
+    && prevTerms.length === nextTerms.length
+    && prevTerms.every((t, i) => t === nextTerms[i]);
+  if (sameTerms && after.nameLower === nextName) return;
+  await event.data.after.ref.update({
+    searchableTerms: nextTerms,
+    nameLower: nextName,
+  }).catch(() => {});
+});
+
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    OBSERVABILITY & HEALTH ENDPOINTS
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */

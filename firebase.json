@@ -537,6 +537,7 @@
       "node scripts/generate-version.js",
       "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js",
+      "node scripts/test-publication-contract.js",
       "node scripts/perf-guard.js",
       "node scripts/gate-inventory.js"
     ]
