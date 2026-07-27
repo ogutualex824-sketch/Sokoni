@@ -1,3 +1,25 @@
+## [2026-07-27] — feat(observability): settlement convergence monitor (Phase C)
+
+Operational confidence for the Phase C money path: booking completion must stay convergent with
+settled payouts and booking wallet credits, and any divergence must ALERT, not be discovered days later.
+
+**Files:** `functions/settlement-monitor.js` (new), `functions/index.js` (`aggregatePlatformMetrics` wired),
+`scripts/settlement-convergence-report.js` (new, read-only CLI).
+**Deployed:** `functions:aggregatePlatformMetrics` (existing scheduled fn — no new Cloud Run service,
+no new scheduler, no quota risk). Prod baseline: all-zero, HEALTHY (legacy pending = 0 → nothing to reconcile).
+
+- **`computeSettlementConvergence(db)`** — five single-field-equality `.count()` aggregations (auto-indexed,
+  no composite index to manage): completed bookings, settled/pending/paid payouts, booking_earning wallet txns.
+- **Invariants designed to survive legacy data** (no false alarms): `completedWithoutPayout = completed −
+  (settled + pending + paid)` must be 0 (legacy `pending` is *accounted for*); `walletTxExceedsSettled =
+  max(0, walletTx − settled)` must be 0 (no duplicate/orphan credit). `settledUncredited` (zero/sub-shilling
+  settlements) and `legacyPendingPayouts` (backlog → 0) are informational, not alerts.
+- **Delivery:** the 6-hourly `aggregatePlatformMetrics` computes it, writes `systemHealth/settlementConvergence`
+  (dashboard-readable) + folds it into `platformMetrics/{date}`, and `console.warn`s on any anomaly. Best-effort
+  — wrapped so it can never fail the platform-metrics run. On-demand/CI check via the CLI script (exit 2 on anomaly).
+- **Verification:** 9/9 emulator (healthy state absorbs legacy pending + sub-shilling without alarm; both
+  anomaly classes flagged). Read-only report verified against production.
+
 ## [2026-07-27] — feat(booking): convergence Phase C — settlement → wallet (exactly-once)
 
 Provider service earnings now reach the withdrawable wallet at booking completion, instead of sitting

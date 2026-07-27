@@ -4763,6 +4763,25 @@ exports.aggregatePlatformMetrics = onSchedule(
       openDisputes:     openDisputesSnap.data().count,
     };
 
+    /* Settlement convergence (Phase C observability) — completed bookings must
+       converge with settled payouts and booking wallet credits. Best-effort:
+       must never fail the platform-metrics run. Writes a dedicated health doc a
+       dashboard can read, and WARN-logs any anomaly so it surfaces immediately. */
+    try {
+      const { computeSettlementConvergence } = require('./settlement-monitor');
+      const settlement = await computeSettlementConvergence(db);
+      metrics.settlementConvergence = settlement;
+      await db.collection('systemHealth').doc('settlementConvergence').set(
+        { ...settlement, updatedAt: now }, { merge: true });
+      if (!settlement.healthy) {
+        console.warn('[settlement-monitor] SETTLEMENT CONVERGENCE ANOMALY:', settlement.anomalies.join(' | '), settlement);
+      } else {
+        console.log('[settlement-monitor] convergent', {
+          completed: settlement.completedBookings, settled: settlement.settledPayouts,
+          walletTx: settlement.bookingWalletTransactions, legacyPending: settlement.legacyPendingPayouts });
+      }
+    } catch (e) { console.error('[settlement-monitor] failed (non-fatal):', e && e.message); }
+
     await db.collection("platformMetrics").doc(date).set(metrics, { merge: true });
     console.log("[metrics] Aggregated platform metrics for", date, metrics);
   }
