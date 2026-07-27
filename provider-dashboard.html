@@ -342,6 +342,7 @@ a{color:var(--acc);text-decoration:none}
           <button class="stab on" onclick="S.tab('profile',this)">Profile</button>
           <button class="stab" id="stabAvail" onclick="S.tab('avail',this)">Availability</button>
           <button class="stab" id="stabPricing" onclick="S.tab('pricing',this)">Pricing</button>
+          <button class="stab" id="stabServices" onclick="S.tab('services',this)">Rate Cards</button>
           <button class="stab" id="stabPayment" onclick="S.tab('payment',this)">Payment</button>
           <button class="stab" onclick="S.tab('notif',this)">Notifications</button>
           <button class="stab" id="stabSub" onclick="S.tab('sub',this)">Subscription</button>
@@ -379,6 +380,29 @@ a{color:var(--acc);text-decoration:none}
               <div class="fg"><label class="sk-lbl">Inspection Fee (KSh)</label><input class="sk-in" id="pInsp" type="number"></div>
               <div class="fg"><label class="sk-lbl">Emergency Fee (KSh)</label><input class="sk-in" id="pEmrg" type="number"></div>
             </div>
+          </div>
+        </div>
+        <!-- Rate Cards (services) tab -->
+        <div class="stpanel" id="st-services">
+          <div class="card">
+            <div class="card-title">Rate Cards <button class="btn btn-p btn-sm" onclick="Sv.openAdd()">+ Add service</button></div>
+            <div style="font-size:.78rem;color:var(--sub);margin-bottom:10px">Each rate card is a service a customer can book. Your <strong>active</strong> cards and their prices are what the booking page shows.</div>
+            <div id="svForm" style="display:none;background:var(--surf2);border-radius:12px;padding:14px;margin-bottom:14px">
+              <input type="hidden" id="svId">
+              <div class="fgrid">
+                <div class="fg"><label class="sk-lbl">Service name</label><input class="sk-in" id="svName" placeholder="e.g. Club Night DJ Set"></div>
+                <div class="fg"><label class="sk-lbl">Category</label><input class="sk-in" id="svCat" placeholder="e.g. DJ / Entertainment"></div>
+                <div class="fg"><label class="sk-lbl">Price (KSh)</label><input class="sk-in" id="svPrice" type="number" min="0"></div>
+                <div class="fg"><label class="sk-lbl">Price type</label><select class="sk-in" id="svType"><option value="fixed">Fixed</option><option value="hourly">Per hour</option><option value="quotation">Quotation</option></select></div>
+                <div class="fg"><label class="sk-lbl">Duration (minutes)</label><input class="sk-in" id="svDur" type="number" min="0" placeholder="e.g. 240"></div>
+              </div>
+              <div class="fg" style="margin-top:8px"><label class="sk-lbl">Description</label><textarea class="sk-in" id="svDesc" rows="2" placeholder="What's included"></textarea></div>
+              <div style="display:flex;gap:8px;margin-top:10px">
+                <button class="btn btn-p btn-sm" onclick="Sv.save()">Save</button>
+                <button class="btn btn-g btn-sm" onclick="Sv.closeForm()">Cancel</button>
+              </div>
+            </div>
+            <div id="svList"><div class="card-empty">Loading…</div></div>
           </div>
         </div>
         <!-- Payment tab -->
@@ -582,7 +606,7 @@ const Rv={
 
 /* ── Settings ────────────────────────────────────────────────────────────── */
 const S={
-  tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail'&&_data)S.loadAvail()},
+  tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail'&&_data)S.loadAvail();if(t==='services')Sv.load()},
   loadAvail(){
     const av=_data?.availability||{};
     _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><a href="provider-onboarding.html#step6" class="btn btn-p btn-sm">Update Availability</a></div>`;
@@ -616,6 +640,55 @@ const S={
   },
   cancelSub(){if(confirm('Cancel your subscription? You will keep access until the renewal date.'))toast('Cancellation scheduled. Contact support@mysokoni.co.ke for assistance.','ok')}
 };
+
+/* ── Rate cards (services) — owner-scoped CRUD via providerDispatch ─────────── */
+const Sv={
+  _svc:[],
+  _esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))},
+  _fn(){return firebase.functions().httpsCallable('providerDispatch')},
+  async load(){
+    _q('svList').innerHTML='<div class="card-empty">Loading…</div>';
+    try{const r=await this._fn()({op:'providerListServices'});this._svc=(r.data?.services||[]).filter(s=>!s.removedAt);this.render()}
+    catch(e){_q('svList').innerHTML='<div class="card-empty">Could not load your services.</div>'}
+  },
+  render(){
+    if(!this._svc.length){_q('svList').innerHTML='<div class="card-empty">No rate cards yet. Add your first service so customers can book it.</div>';return}
+    _q('svList').innerHTML=this._svc.map(s=>{
+      const on=s.active!==false;
+      const price=s.priceType==='quotation'?'On quote':('KSh '+(Number(s.price)||0).toLocaleString()+(s.priceType==='hourly'?'/hr':''));
+      const dur=s.durationMins?(' · '+s.durationMins+' min'):'';
+      return `<div class="card" style="padding:12px;margin-bottom:8px;opacity:${on?1:.55}">
+        <div style="font-weight:700;font-size:.9rem">${this._esc(s.name)}${on?'':' <span style="font-size:.7rem;color:var(--sub)">(hidden)</span>'}</div>
+        <div style="font-size:.78rem;color:var(--sub);margin-top:2px">${this._esc(s.category||'')} · <strong style="color:var(--text)">${price}</strong>${dur}</div>
+        ${s.description?`<div style="font-size:.76rem;color:var(--sub);margin-top:4px">${this._esc(s.description)}</div>`:''}
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+          <button class="btn btn-g btn-sm" onclick="Sv.openEdit('${s.id}')">Edit</button>
+          <button class="btn btn-g btn-sm" onclick="Sv.toggle('${s.id}',${on?'false':'true'})">${on?'Hide':'Show'}</button>
+          <button class="btn btn-g btn-sm" style="color:var(--warn)" onclick="Sv.remove('${s.id}')">Delete</button>
+        </div>
+      </div>`;
+    }).join('');
+  },
+  _set(id,cat,price,type,dur,desc,sid){_q('svId').value=sid||'';_q('svName').value=id||'';_q('svCat').value=cat||'';_q('svPrice').value=price||'';_q('svType').value=type||'fixed';_q('svDur').value=dur||'';_q('svDesc').value=desc||'';_q('svForm').style.display='block';_q('svName').focus()},
+  openAdd(){this._set('','','','fixed','','','')},
+  openEdit(id){const s=this._svc.find(x=>x.id===id);if(s)this._set(s.name,s.category,s.price,s.priceType,s.durationMins,s.description,s.id)},
+  closeForm(){_q('svForm').style.display='none'},
+  async save(){
+    const name=(_q('svName').value||'').trim();
+    if(!name){toast('Service name is required.','err');return}
+    const id=_q('svId').value;
+    const data={name,category:_q('svCat').value||'',description:_q('svDesc').value||'',priceType:_q('svType').value||'fixed',price:parseInt(_q('svPrice').value)||0,durationMins:parseInt(_q('svDur').value)||0};
+    showLoad('Saving…');
+    try{
+      if(id){await this._fn()({op:'providerUpdateService',serviceId:id,...data})}
+      else{await this._fn()({op:'providerAddService',...data})}
+      toast('Rate card saved!');this.closeForm();await this.load();
+    }catch(e){toast(e.message,'err')}finally{hideLoad()}
+  },
+  async toggle(id,active){showLoad('Updating…');try{await this._fn()({op:'providerToggleService',serviceId:id,active});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async remove(id){if(!confirm('Delete this rate card? Customers will no longer see it.'))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}}
+};
+window.Sv=Sv;
 
 /* ── Bootstrap ───────────────────────────────────────────────────────────── */
 async function loadDashboard(user){
