@@ -112,11 +112,11 @@ Adopt each by adding its clause to the relevant stage above, bumping the version
 A contract is only a standard if it is enforced, not merely documented. Enforcement uses two layers this repo already runs for other checks:
 
 1. **CI (`.github/workflows/ci.yml`)** — a PR that touches publication logic (any create/edit/projection/index path, `functions/search-terms.js`, or a directory/search read) MUST run `publicationContract(entityType)` for the affected entities and fails the PR on any regressed clause. This mirrors the existing `auth-certification.yml` precedent — a certification workflow gating a subsystem.
-2. **Predeploy gate (`firebase.json`)** — the suite joins the existing predeploy scripts (hosting runs 7, functions 2) so a deploy cannot ship a publication regression even outside the PR flow.
+2. **Predeploy gate (`firebase.json`)** — `scripts/gate-inventory.js` (already a predeploy script) auto-discovers and runs every `scripts/test-*.js`, including `test-publication-contract.js`, so a publication regression fails the deploy with no separate entry to maintain.
 
 **Certification rule:** an entity is "**Certified under vX**" only when the vX `publicationContract()` suite passes green in CI — never by assertion. A version's spec clause and its test assertions land in the same change, so the gate always tests exactly what the current contract requires (spec and tests can never drift).
 
-**Status:** ✅ **ACTIVE** (release 1, 2026-07-27). `scripts/test-publication-contract.js` (36/36) runs in CI (`static-analysis` job) and as a hosting predeploy gate. Products, providers and businesses are certified under v1.0. Per-collection security remains certified by the `@firebase/rules-unit-testing` runs (businesses 5/5).
+**Status:** ✅ **ACTIVE** (release 1, 2026-07-27). `scripts/test-publication-contract.js` (36/36) runs in CI (`static-analysis` job) explicitly and in the hosting predeploy via `gate-inventory.js` suite discovery. Products, providers and businesses are certified under v1.0. Per-collection security remains certified by the `@firebase/rules-unit-testing` runs (businesses 5/5).
 
 ## Governing principle
 
