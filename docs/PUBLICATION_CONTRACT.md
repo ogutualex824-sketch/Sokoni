@@ -107,6 +107,17 @@ Adopt each by adding its clause to the relevant stage above, bumping the version
 ### Version history
 - **v1.0** (2026-07-27) — initial standard: create → project → index → directory/search → public → archive, plus the owner/admin security matrix and observability. Emerged from the provider and shop publication fixes.
 
+## Enforcement (CI + predeploy gate)
+
+A contract is only a standard if it is enforced, not merely documented. Enforcement uses two layers this repo already runs for other checks:
+
+1. **CI (`.github/workflows/ci.yml`)** — a PR that touches publication logic (any create/edit/projection/index path, `functions/search-terms.js`, or a directory/search read) MUST run `publicationContract(entityType)` for the affected entities and fails the PR on any regressed clause. This mirrors the existing `auth-certification.yml` precedent — a certification workflow gating a subsystem.
+2. **Predeploy gate (`firebase.json`)** — the suite joins the existing predeploy scripts (hosting runs 7, functions 2) so a deploy cannot ship a publication regression even outside the PR flow.
+
+**Certification rule:** an entity is "**Certified under vX**" only when the vX `publicationContract()` suite passes green in CI — never by assertion. A version's spec clause and its test assertions land in the same change, so the gate always tests exactly what the current contract requires (spec and tests can never drift).
+
+**Status:** activates with **release 1 (business search indexing)**, which delivers the first `publicationContract()` suite. Until then, releases are gated by the per-release Firestore-emulator + `@firebase/rules-unit-testing` runs this work established — the manual precursor to the automated gate.
+
 ## Governing principle
 
-Fix the **write path**, not the read path. Backfills are optional consistency passes run *after* the pipeline is correct — never a substitute for it. Every new marketplace entity is held to this contract before release, and every contract change is versioned so certifications remain auditable over time.
+Fix the **write path**, not the read path. Backfills are optional consistency passes run *after* the pipeline is correct — never a substitute for it. Every new marketplace entity is held to this contract before release; every contract change is versioned so certifications remain auditable; and the `publicationContract()` suite is the enforceable gate, not just a guideline.
