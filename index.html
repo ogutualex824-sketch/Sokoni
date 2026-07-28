@@ -4018,7 +4018,7 @@ document.addEventListener('DOMContentLoaded', function(){
         .map(function (w) { return w[0]; }).join('').slice(0, 2).toUpperCase();
       return '<a class="sk-featprov-card" role="listitem" href="' + esc(p.profileUrl) + '">'
         + (p.photo
-            ? '<img class="sk-featprov-av" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '">'
+            ? '<img class="sk-featprov-av" src="' + esc(p.photo) + '" alt="' + esc(p.name) + '" loading="lazy" decoding="async" data-initials="' + esc(initials) + '" onerror="this.onerror=null;var d=document.createElement(\'div\');d.className=this.className;d.textContent=this.dataset.initials;this.replaceWith(d);">'
             : '<div class="sk-featprov-av">' + esc(initials) + '</div>')
         + '<div class="sk-featprov-name">' + esc(p.name) + '</div>'
         + '<div class="sk-featprov-cat">' + esc(p.emoji) + ' ' + esc(p.categoryLabel)

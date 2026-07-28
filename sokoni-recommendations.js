@@ -239,7 +239,7 @@
           location: d => d.location || d.city || '',
           price: d => d.price,
           sellerId: d => d.sellerId || d.uid || '',
-          image: d => d.imageUrl || d.image || (Array.isArray(d.images) && d.images[0] && (d.images[0].url || d.images[0])) || d.thumbnail || d.photo || d.coverImage || '',
+          image: d => (Array.isArray(d.imageStorageUrls) && d.imageStorageUrls[0]) || d.imageUrl || d.image || (Array.isArray(d.images) && d.images[0] && (d.images[0].url || d.images[0])) || d.thumbnail || d.photo || d.coverImage || '',
         },
         {
           col: 'services', type: 'service', _skip: true,   /* phantom collection — no rule, no server-side use */

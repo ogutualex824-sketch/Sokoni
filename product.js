@@ -1586,7 +1586,7 @@ window.downloadProductVideo=downloadProductVideo;
     window._rvTrackProduct = function(p) {
         if (!p || !p.id) return;
         var list = _getList().filter(function(x) { return x.id !== p.id; });
-        list.unshift({ id: p.id, name: p.name || '', price: p.price || 0, image: p.image || '' });
+        list.unshift({ id: p.id, name: p.name || '', price: p.price || 0, image: (window.pickProductImage ? pickProductImage(p) : (p.image || '')) });
         _saveList(list);
     };
 
