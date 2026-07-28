@@ -50,7 +50,9 @@
   position: fixed;
   inset: 0;
   z-index: var(--sk-d-bkdp-z);
-  background: rgba(0, 0, 0, 0.6);
+  /* Solid dim, NO backdrop-filter (see .is-active). Slightly darker than before
+     to keep good separation now that the blur is gone. */
+  background: rgba(0, 0, 0, 0.72);
   /* NO backdrop-filter here — see .is-active below.
      WebKit composites backdrop-filter EVEN AT OPACITY 0. This element is
      injected on EVERY page (shared-header.js loads this file), is
@@ -70,11 +72,14 @@
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
-  /* Blur applied ONLY while the drawer is open. A filter that is never applied
-     cannot be composited, which is the only reliable guard against the WebKit
-     behaviour above. */
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  /* NO backdrop-filter at all — not even while active. A full-viewport
+     (position:fixed inset:0) backdrop-filter forces the GPU to blur the ENTIRE
+     page composite the instant the menu opens; on a heavy page (home feed with
+     many images) that can crash the mobile renderer → the reported "menu button
+     crashes and leaves a black screen". The solid rgba(0,0,0,0.72) dim gives the
+     same modal separation with zero compositing cost. This file already documents
+     backdrop-filter as an iOS WebKit hazard (see the base rule) — this removes the
+     last instance of it. */
   transition: opacity var(--sk-d-dur) ease, visibility 0s;
 }
 
