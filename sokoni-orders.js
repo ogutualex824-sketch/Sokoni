@@ -392,25 +392,11 @@ const SokoniOrders = {
     const updatedOrder = { ...order, ...patch, id: orderId };
     await _dispatchNotifications(toStatus, updatedOrder);
 
-    /* SokoniPay commission on completion */
-    if (toStatus === ORDER_STATUS.COMPLETED && window.SokoniPay?.saveCommission) {
-      SokoniPay.saveCommission({
-        ref:          orderId,
-        orderId,
-        providerName:  order.sellerName  || 'Seller',
-        sellerName:    order.sellerName  || 'Seller',
-        category:     'marketplace_' + (order.category || 'general'),
-        commissionPct: order.commissionPct || 12,
-        sokoniCut:     order.commissionAmt || 0,
-        deliveryComm:  order.deliveryComm  || 0,
-        orderTotal:    order.orderTotal    || 0,
-        sellerNet:     order.sellerNet     || 0,
-        driverNet:     order.driverNet     || 0,
-        status:        'completed',
-        note:          `Marketplace order delivered: ${orderId}`,
-        createdAt:     Date.now(),
-      }).catch(() => {});
-    }
+    /* Gap 5 — commission is recorded EXACTLY ONCE by the canonical server settlement
+       (order-settlement.js settleOrder, fired by onOrderStatusChange on 'completed', using the
+       real calculateCommission engine). The old client-side SokoniPay.saveCommission here
+       double-logged it — and with a HARDCODED 12% that ignored the engine — so it is removed.
+       settleOrder is the single commission authority. */
 
     return { ok: true, fromStatus, toStatus };
   },

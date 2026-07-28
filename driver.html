@@ -1868,9 +1868,16 @@ window._drvCompleteDelivery = async function(dRef) {
       proofNote:'Delivered — PIN verified', payoutDue:true,
     }).catch(e => console.warn(e.message));
 
-    /* Update linked order */
+    /* Update linked order — Gap 4: go through the CANONICAL transition (validated, timeline-
+       projected, audited) instead of a raw status write. Falls back to the raw update only if
+       SokoniOrders isn't loaded, so the legacy card never regresses. */
     if (data.orderId) {
-      await SokoniDB.updateOrder(data.orderId, {
+      var _rDrvUid = (typeof _drvUid === 'function' ? _drvUid() : null);
+      var _routed = false;
+      if (window.SokoniOrders && window.SokoniOrders.riderDelivered) {
+        try { var _r = await window.SokoniOrders.riderDelivered(data.orderId, _rDrvUid, { note: 'Delivered — PIN verified' }); _routed = !!(_r && _r.ok); } catch(_) { _routed = false; }
+      }
+      if (!_routed) await SokoniDB.updateOrder(data.orderId, {
         status:'delivered', deliveryStatus:'delivered', deliveredAt:now,
       }).catch(()=>{});
     }
