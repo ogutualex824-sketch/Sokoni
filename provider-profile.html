@@ -171,6 +171,7 @@
      this page did not, so booking payments could never be initiated here. -->
 <script src="sokoni-intasend.js" defer></script>
 <script src="sokoni-pay.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
 <script src="sokoni-inbox.js" defer></script>
 <script src="nav-active.js" defer></script>
 <script src="sw-register.js" defer></script>
@@ -326,6 +327,10 @@
       location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search);
       return;
     }
+    /* Phase E WS2 — the CANONICAL held-payment booking flow (server-authoritative:
+       pick service + slot → bookingCreateService → payment intent → STK → paid_held).
+       The legacy SokoniPay.bookNow path below stays as a fallback until WS4 retires it. */
+    if (window.SokoniBookService) { SokoniBookService.open({ providerId: uid, providerName: _p.name }); return; }
     if (typeof window.SokoniPay !== 'undefined' && SokoniPay.bookNow) {
       /* bookNow runs its own gateway modal and confirmation, then fires this
          callback with a reference. It does NOT navigate — the previous

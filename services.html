@@ -396,6 +396,7 @@
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js" defer></script>
 <script src="sokoni-intasend.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
 <script type="application/ld+json">{"@context":"https://schema.org","@type":"Service","name":"SOKONI Services — Book Local Professionals in Kenya","description":"Find and hire verified plumbers, electricians, cleaners, mechanics, barbers, tutors and 30+ service providers in Nairobi, Mombasa, Kisumu. Pay via M-Pesa.","url":"https://mysokoni.co.ke/services.html","provider":{"@type":"Organization","name":"SOKONI","legalName":"Bravilex International Co. Limited"},"areaServed":{"@type":"Country","name":"Kenya"},"serviceType":["Plumbing","Electrical","Cleaning","Photography","Graphic Design","Tutoring","Catering","Event Planning","Hair & Beauty","IT Repair","Fitness Training","Accounting","Legal Services","Healthcare"]}</script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
@@ -1141,6 +1142,9 @@ let _svcBkgId = null;
 function openBookingModal(providerId){
   const p = getProviders().find(x=>String(x.uid)===String(providerId));
   if(!p) return;
+  /* Phase E WS2 — canonical held-payment booking flow (server-authoritative). The
+     legacy SokoniPay.bookNow path below stays as a fallback until WS4 retires it. */
+  if(window.SokoniBookService){ SokoniBookService.open({ providerId: providerId, providerName: p.name }); return; }
   if(typeof SokoniPay !== "undefined"){
     SokoniPay.bookNow({
       providerName:  p.name,

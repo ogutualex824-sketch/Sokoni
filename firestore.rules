@@ -4785,8 +4785,13 @@ service cloud.firestore {
     }
 
     match /providerBookings/{bookingId} {
+      /* Read: the provider (providerId) or the customer who owns it. The canonical
+         customer field is `customerUid` (what bookingCreateService writes); `customerId`
+         is kept for any legacy docs. Needed so a customer can OBSERVE their own booking
+         (pending → paid_held → settled) in real time. Writes stay CF-only. */
       allow read:  if isAdmin()
                    || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                      || resource.data.customerUid == request.auth.uid
                                       || resource.data.customerId == request.auth.uid));
       allow write: if false;
     }

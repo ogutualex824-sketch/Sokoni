@@ -26,6 +26,25 @@ page"). Same class as the Android Aw-Snap sentinel.
   different page). **Close criteria:** on-device iPhone Chrome + Safari scroll/navigate/reload
   stability — engineering-complete ≠ production-proven.
 
+## [2026-07-28] — feat(booking): Phase E WS2 — customer booking UI (canonical held-payment flow)
+
+Repoints the customer "Book Now" onto the WS1 authoritative backend. Thin orchestration — no client business logic.
+
+**Files:** `firestore.rules`, `sokoni-book-service.js` (new), `services.html`, `provider-profile.html`.
+**Deploy:** `firestore:rules` + hosting. No functions.
+
+- **Rules fix:** `providerBookings` read now authorizes the customer via `customerUid` (the canonical field the
+  engine writes; `customerId` kept for legacy) so a customer can OBSERVE their own booking in real time. Writes
+  stay CF-only. Verified 4/4 (customer/provider read own; stranger denied; write denied).
+- **`sokoni-book-service.js`:** one shared flow both pages use — service picker (public providerServices) → slot
+  picker (canonical `getAvailabilitySlots`, no client slot math) → `bookingCreateService` (booking created FIRST)
+  → `createPaymentIntent(service_booking)` (amount from the server snapshot) → `initiateSTKPush` → `onSnapshot`
+  the booking → "Paid • Held". Every visible state derives from the booking doc (single source of truth); resume-
+  after-refresh via sessionStorage + re-observe; dup-click locks; states Pending/Paid•Held/Cancelled/Expired/Completed.
+- **Repointed** the primary Book Now in `services.html` (`openBookingModal`) and `provider-profile.html` (`book()`);
+  legacy `SokoniPay.bookNow` kept as a fallback until WS4 retirement (isolation preserved).
+- No client-side amount calculation; no booking without a canonical slot; legacy flows unaffected.
+
 ## [2026-07-28] — feat(booking): Phase E WS1 — Payments & Deposit Engine
 
 Customer payments for service bookings — held until completion, provider credited exactly once at settlement.
