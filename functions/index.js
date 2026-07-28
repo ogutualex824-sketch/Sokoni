@@ -7684,7 +7684,7 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
      it REFUNDED so a pending settlement becomes a no-op. Best-effort + exactly-once; the refund
      record above stands regardless. */
   if (orderId) {
-    try { await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason }); }
+    try { await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason, refundRef }); }
     catch (e) { console.error("[initiateRefund] settlement-state update failed (recoverable):", e.message); }
   }
 

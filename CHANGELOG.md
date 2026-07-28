@@ -30,13 +30,18 @@ now snapshots `ledgerPlan`), `functions/index.js` (`initiateRefund` calls the ro
   a deterministic reversing wallet transaction. **Exactly-once** (state guard + deterministic ids).
 - **`handleOrderRefund` router** wired into `initiateRefund`: order already `SETTLED` → reverse; otherwise
   mark `REFUNDED` (blocks a pending settlement). One entry point; the refund record stands regardless.
-- **Negative-balance policy (surfaced for ratification):** if the seller already withdrew, the debit takes
-  `wallets.balance` negative — a **recoverable debt** that self-corrects against future earnings (the
-  withdrawal flow already blocks a payout while balance < amount), and the order stamps
-  `settlementReversalShortfall` so ops can see the un-recovered amount. Nothing is silently absorbed.
+- **Explicit recoverable-debt policy (ratified).** `wallets.balance` is **floored at 0 — never a raw
+  negative.** If the seller already withdrew, the un-recovered amount becomes an explicit
+  `refundRecoveryDebt` field (surfaceable as "Available 0 / Outstanding Refund Recovery X"). **Future
+  settlements auto-recover the debt FIRST** (`appliedToDebt`), and only the remainder becomes withdrawable
+  balance — automatic and transparent, no silent write-off. An immutable **`settlementReversals/{orderId}`**
+  record links Settlement → Reversal → Refund (settlementId, refundId, reversalId, netReversed,
+  recoveredFromBalance, debtAdded, recoveryStatus) for audit/support.
 - Scope: **full** reversal (full refund/cancel/dispute). Partial-refund-after-settlement is a documented follow-up.
-- Proof: **16/16** emulator — debit = credited net, ledger swapped & balanced, exactly-once (no double-debit),
-  shortfall recorded on prior-withdrawal, router settled→reverse / unsettled→REFUNDED.
+  Seller/admin UI surfacing of the debt (the data is now emitted) is a hosting follow-on.
+- Proof: **18/18** emulator — debit floors balance at 0 + explicit debt, auto-recovery pays debt before
+  withdrawable (full + partial), immutable link recorded, exactly-once (no double-debit), router settled→reverse
+  / unsettled→REFUNDED.
 
 ## [2026-07-28] — feat(commerce): Product Settlement Convergence — wire the dormant engine to fulfillment
 

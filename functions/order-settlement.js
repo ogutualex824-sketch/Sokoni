@@ -78,13 +78,25 @@ async function settleOrder(db, adminSdk, orderId) {
     const commissionCents = Number(breakdown.commission && breakdown.commission.cents) || 0;
     const netShillings = Math.floor(netCents / 100);
 
-    /* 1 — credit the ONE canonical withdrawable wallet (shillings). set-merge auto-creates. */
+    /* 1 — credit the ONE canonical withdrawable wallet (shillings). set-merge auto-creates.
+       AUTO-RECOVERY (ratified policy): pay down any outstanding refundRecoveryDebt FIRST; only the
+       remainder becomes withdrawable balance. (wallet read is before any write in this txn.) */
+    let appliedToDebt = 0, withdrawable = netShillings;
     if (netShillings >= 1) {
-      t.set(db.collection('wallets').doc(sellerId), { balance: FV.increment(netShillings), updatedAt: FV.serverTimestamp() }, { merge: true });
+      const wRef = db.collection('wallets').doc(sellerId);
+      const wSnap = await t.get(wRef);
+      const debt = wSnap.exists ? Math.max(0, Number(wSnap.data().refundRecoveryDebt) || 0) : 0;
+      appliedToDebt = Math.min(debt, netShillings);
+      withdrawable = netShillings - appliedToDebt;
+      t.set(wRef, {
+        balance: FV.increment(withdrawable),
+        refundRecoveryDebt: FV.increment(-appliedToDebt),
+        updatedAt: FV.serverTimestamp(),
+      }, { merge: true });
       /* 2 — wallet transaction (deterministic id → no double-credit). */
       t.set(db.collection('walletTransactions').doc(`${sellerId}_${orderId}_ordersettle`), {
-        uid: sellerId, type: 'order_settlement', amount: netShillings, currency: 'KES',
-        orderId, sourceType: 'order', sourceId: orderId,
+        uid: sellerId, type: 'order_settlement', amount: withdrawable, appliedToDebt, grossCredit: netShillings,
+        currency: 'KES', orderId, sourceType: 'order', sourceId: orderId,
         grossCents, commissionCents, netCents, createdAt: FV.serverTimestamp(),
       });
     }
@@ -169,21 +181,35 @@ async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
     const netCents = Number(s.sellerNetCents) || 0;
     const sellerId = o.sellerUid || o.sellerId || s.sellerId || null;
 
-    let shortfall = 0;
+    let shortfall = 0, recoveredFromBalance = 0;
     if (sellerId && netShillings > 0) {
       const wRef = db.collection('wallets').doc(sellerId);
       const wSnap = await t.get(wRef);
       const bal = wSnap.exists ? (Number(wSnap.data().balance) || 0) : 0;
-      shortfall = Math.max(0, netShillings - bal);   /* how much the seller already withdrew */
-      /* debit the credited net (may go negative = recoverable debt). */
-      t.set(wRef, { balance: FV.increment(-netShillings), updatedAt: FV.serverTimestamp() }, { merge: true });
+      /* EXPLICIT DEBT (ratified policy): balance is floored at 0 — never a raw negative. Whatever
+         the seller already withdrew becomes `refundRecoveryDebt`, recovered from future settlements. */
+      recoveredFromBalance = Math.min(bal, netShillings);
+      shortfall = netShillings - recoveredFromBalance;
+      t.set(wRef, {
+        balance: FV.increment(-recoveredFromBalance),                 /* floored at 0 */
+        refundRecoveryDebt: FV.increment(shortfall),                  /* explicit recoverable debt */
+        updatedAt: FV.serverTimestamp(),
+      }, { merge: true });
       /* reversing wallet transaction (deterministic id). */
       t.set(db.collection('walletTransactions').doc(`${sellerId}_${orderId}_ordersettle_reversal`), {
-        uid: sellerId, type: 'order_settlement_reversal', amount: -netShillings, currency: 'KES',
+        uid: sellerId, type: 'order_settlement_reversal', amount: -netShillings,
+        recoveredFromBalance, debtAdded: shortfall, currency: 'KES',
         orderId, sourceType: 'order', sourceId: orderId, reason: opts.reason || 'post-settlement-refund',
         createdAt: FV.serverTimestamp(),
       });
     }
+    /* Immutable Settlement → Reversal → Refund link (audit/support). */
+    t.set(db.collection('settlementReversals').doc(orderId), {
+      orderId, settlementId: orderId, refundId: opts.refundRef || null, reversalId: `${orderId}_reversal`,
+      sellerId, netReversedShillings: netShillings, recoveredFromBalance, debtAdded: shortfall,
+      reason: opts.reason || 'post-settlement-refund',
+      recoveryStatus: shortfall > 0 ? 'recovering' : 'complete', createdAt: FV.serverTimestamp(),
+    });
     /* reverse the balanced ledger: swap debit/credit of each original plan entry → nets to zero. */
     (Array.isArray(s.ledgerPlan) ? s.ledgerPlan : []).forEach((e, i) => {
       t.set(db.collection('ledger').doc(`${orderId}_${e.type || i}_reversal`), {
