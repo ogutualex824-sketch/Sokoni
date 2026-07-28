@@ -66,8 +66,11 @@ refunds/forfeits possible (the money is still held, not already paid out) and re
    `paymentIntent`. The STK amount is computed **only** from that snapshot — never from the current
    `providerServices` record, the client payload, or a UI-recalculated value. This closes the audit's
    Stage-1a `STK_NO_AUTHORITY` amount-authority gap for bookings.
-3. **Funds held from payment to completion.** `paymentStatus:paid` means *held*, not *paid out*; the money is
-   not the provider's until completion settles it.
+3. **Funds held from payment to completion.** `paymentStatus:paid_held` means *held*, not *paid out*; the money
+   is not the provider's until completion settles it. **`paid_held` is the ONLY valid predecessor of
+   `settled`** — no path (`pending → settled`, `paid → settled`, or any alternate) may credit the provider
+   without the funds first being held. Settlement re-reads the live `paymentStatus` inside its transaction and
+   credits only when it reads `paid_held`, transitioning it to `settled`.
 4. **Payment-expiry is terminal and self-cleaning.** When the 15-min TTL on an unpaid pending booking
    expires: **release the slot lock, mark the booking `cancelled` (reason: payment-expired), invalidate the
    payment intent** (unusable), and the customer must **restart** the booking. No stale pending bookings linger.

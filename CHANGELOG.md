@@ -26,6 +26,36 @@ page"). Same class as the Android Aw-Snap sentinel.
   different page). **Close criteria:** on-device iPhone Chrome + Safari scroll/navigate/reload
   stability — engineering-complete ≠ production-proven.
 
+## [2026-07-28] — feat(booking): Phase E WS1 — Payments & Deposit Engine
+
+Customer payments for service bookings — held until completion, provider credited exactly once at settlement.
+Implements `docs/BOOKING_PAYMENT_CONTRACT.md` v1.0. Backend-only (no UI — that is WS2). No parallel payment path.
+
+**Files:** `functions/payment-purposes.js`, `functions/index.js`, `functions/provider-ops.js`,
+`functions/booking.js`, `functions/booking-payment-sweep.js` (new), `docs/BOOKING_PAYMENT_CONTRACT.md`.
+**Deploy:** `functions:createPaymentIntent,webhookIntasend,intasendWebhook,providerDispatch,bookingCleanupHolds`.
+No new function, no rules, no migration.
+
+- **Amount authority:** new `service_booking` payment purpose prices from the booking's IMMUTABLE snapshot
+  (`price + fee`, cents); binds `resourceType:providerBooking` + `resourceId:bookingId`. Client cannot name the amount.
+- **Held, not credited:** both IntaSend COMPLETE handlers call a shared `holdServiceBookingPayment` first —
+  marks the booking `paid_held`, credits NO wallet, returns early (skips commission/credit/legacy-bookings-create).
+  bookingId resolved from the server-minted intent (anti-tamper). Replay-safe: a duplicate or post-settlement
+  webhook is a no-op. Legacy `type:'booking'` flow is untouched and isolated by construction.
+- **Single credit point:** Phase C completion is the ONLY provider credit — gated on `paid_held`, transitions
+  `paid_held → settled`, credits `(price − commission) + fee` (commission on price only; fee passes through),
+  snapshot-only, replay-safe. Unpaid completion moves no money (payout `unpaid`). Invariant: **`paid_held` is the
+  only valid predecessor of `settled`**.
+- **Refund/forfeit:** cancel/no-show move held money per contract §3 — refund → customer `users.walletBalance`
+  (+`ledger`); forfeited deposit → provider earnings via the SAME commission engine. Idempotent on `paid_held`.
+- **Payment-expiry:** an unpaid pending booking past the 15-min TTL is reaped (slot lock released, cancelled
+  `payment-expired`, intent invalidated) — hosted inside the EXISTING every-5-min `bookingCleanupHolds` (no new
+  Cloud Run service, per prior quota discipline).
+- **Payment states:** pending → paid_held → settled (happy) · → refunded (cancel/no-show) · pending → cancelled (expiry).
+- **Verification:** 33/33 WS1 emulator (intent authority, held-not-credited, exactly-once payment + replay,
+  exactly-once settlement +fee, legacy isolation, refund/forfeit, cancel windows, expiry) + regressions green
+  (readiness 33, D1 31, D2 10, D2b 9, D3 11, Phase B 14).
+
 ## [2026-07-27] — feat(booking): Phase D4 — provider calendar (presentation-only, real-time)
 
 A week/month calendar in the provider dashboard that **visualizes** authoritative booking data.

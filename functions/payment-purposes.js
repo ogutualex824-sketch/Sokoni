@@ -117,6 +117,51 @@ const PURPOSES = {
     },
   },
 
+  /* ── Service booking (Phase E) ────────────────────────────────────────
+     The amount is the IMMUTABLE snapshot D3 stamped on the booking at creation
+     (price + fee, both cents) — never the current providerServices record and
+     never the client. `deposit` is the forfeitable PORTION of that price, not an
+     extra charge. The intent's resourceId (bookingId) becomes the authoritative
+     link the webhook trusts instead of client metadata. */
+  service_booking: {
+    resourceType: 'providerBooking',
+    async price(uid, data) {
+      const bookingId = String(data.bookingId || '').trim();
+      if (!bookingId) fail('invalid-argument', 'bookingId is required.');
+
+      const bSnap = await db().collection('providerBookings').doc(bookingId).get();
+      if (!bSnap.exists) fail('not-found', 'Booking not found.');
+      const b = bSnap.data();
+
+      if (b.customerUid !== uid) fail('permission-denied', 'Not your booking.');
+      if (b.paymentStatus && b.paymentStatus !== 'pending') {
+        fail('already-exists', 'This booking is already paid or closed.');
+      }
+      if (!['pending', 'confirmed'].includes(b.status)) {
+        fail('failed-precondition', 'This booking can no longer be paid.');
+      }
+
+      /* price + fee from the booking's own snapshot (cents). Commission is applied
+         only to `price` at settlement; `fee` passes through to the provider. */
+      const cents = Math.max(0, Math.round(Number(b.price) || 0)) + Math.max(0, Math.round(Number(b.fee) || 0));
+      if (cents <= 0) fail('failed-precondition', 'Booking has no payable amount.');
+
+      return {
+        amountCents: cents,
+        currency: b.currency || 'KES',
+        resourceType: 'providerBooking',
+        resourceId: bookingId,
+        metadata: {
+          type: 'service-booking',
+          bookingId,
+          providerId: b.providerId || null,
+          deposit: Math.max(0, Math.round(Number(b.deposit) || 0)),   /* cents, forfeitable portion */
+          pricingVersion: b.pricingVersion || null,
+        },
+      };
+    },
+  },
+
   /* ── Hub registration ─────────────────────────────────────────────────
      Replaces the localStorage grant. The tier price is read from the hub
      catalogue so a merchant cannot register for an Enterprise hub at the

@@ -66,6 +66,71 @@ function _slotLockRef(providerId, b) {
   return _db().collection('providerAvailability').doc(providerId).collection('slotLocks').doc(String(key));
 }
 
+/* Phase E WS1 — move HELD money when a PAID booking reaches a terminal state.
+   Refund → the customer's existing wallet (users.walletBalance, whole KES + a `ledger`
+   row — the platform's established refund destination, decision c). Forfeit → the
+   deposit becomes provider earnings through the SAME commission engine as any other
+   provider revenue (decision d). All amounts from the booking's own immutable snapshot.
+   Idempotent: only `paid_held` disburses (re-checked in the txn); a repeat is a no-op.
+   Policy (contract §3): provider-cancel → full refund; customer <24h or no-show →
+   deposit forfeited + remainder refunded; customer ≥24h → full refund. */
+async function _disburseHeldFunds(data, ref, opts) {
+  if (data.paymentStatus !== 'paid_held') return null;      /* unpaid → no money to move */
+  const priceC   = Math.max(0, Math.round(Number(data.price) || 0));
+  const feeC     = Math.max(0, Math.round(Number(data.fee) || 0));
+  const depositC = Math.min(priceC, Math.max(0, Math.round(Number(data.deposit) || 0)));
+  const heldC    = priceC + feeC;
+
+  let refundC = 0, forfeitC = 0;
+  if (opts.isNoShow) { forfeitC = depositC; refundC = heldC - depositC; }  /* no-show → deposit forfeited (checked FIRST) */
+  else if (opts.by === 'provider') { refundC = heldC; }                    /* provider cancel → full refund */
+  else {                                                                   /* customer cancel */
+    const within24h = data.startTs && (Date.now() >= (Number(data.startTs) - 24 * 3600000));
+    if (within24h) { forfeitC = depositC; refundC = heldC - depositC; }    /* late cancel → forfeit deposit */
+    else { refundC = heldC; }                                              /* early cancel → full refund */
+  }
+
+  /* Commission on a forfeited deposit — computed BEFORE the txn (config reads). */
+  let forfeitCommissionC = 0;
+  if (forfeitC > 0) {
+    const { calculateCommission } = require('./finos-utils');
+    const fc = await calculateCommission(_db(), { orderAmountCents: forfeitC, category: 'services',
+      sellerId: data.providerId, hubId: 'provider', subscriptionRole: 'provider' });
+    forfeitCommissionC = fc.commissionCents || 0;
+  }
+  const providerNetC     = Math.max(0, forfeitC - forfeitCommissionC);
+  const refundShillings  = Math.floor(refundC / 100);
+  const forfeitShillings = Math.floor(providerNetC / 100);
+
+  const custRef    = data.customerUid ? _db().collection('users').doc(data.customerUid) : null;
+  const provWalRef = _db().collection('wallets').doc(data.providerId);
+  const payoutRef  = _db().collection('providerPayouts').doc(ref.id);
+  const wTxRef     = _db().collection('walletTransactions').doc(`${data.providerId}_${ref.id}_forfeit`);
+
+  await _db().runTransaction(async (t) => {
+    const bSnap = await t.get(ref);
+    if (!bSnap.exists || bSnap.data().paymentStatus !== 'paid_held') return;   /* idempotent guard */
+    if (refundShillings >= 1 && custRef) {
+      t.set(custRef, { walletBalance: _inc(refundShillings) }, { merge: true });
+      t.set(_db().collection('ledger').doc(), { uid: data.customerUid, type: 'booking_refund',
+        credit: refundShillings, bookingId: ref.id, createdAt: _ts() });
+    }
+    if (forfeitShillings >= 1) {
+      t.set(provWalRef, { balance: _inc(forfeitShillings), updatedAt: _ts() }, { merge: true });
+      t.set(wTxRef, { uid: data.providerId, type: 'booking_forfeit', amount: forfeitShillings,
+        description: `Forfeited deposit — ${_san(data.service || 'service', 120)}`, bookingId: ref.id,
+        sourceType: 'booking', sourceId: ref.id, status: 'completed', createdAt: _ts() });
+      t.set(payoutRef, { providerId: data.providerId, bookingId: ref.id, sourceType: 'booking', sourceId: ref.id,
+        gross: forfeitC, commission: forfeitCommissionC, net: providerNetC, kind: 'deposit_forfeit',
+        status: 'settled', walletCredited: true, netShillingsCredited: forfeitShillings,
+        settledAt: _ts(), createdAt: _ts() }, { merge: true });
+    }
+    t.update(ref, { paymentStatus: 'refunded', refundedCents: refundC, forfeitedCents: forfeitC,
+      forfeitCommissionCents: forfeitCommissionC, disbursedAt: _ts(), updatedAt: _ts() });
+  });
+  return { refundC, forfeitC, providerNetC, refundShillings, forfeitShillings };
+}
+
 const _h = {};
 exports._h = _h;
 
@@ -172,9 +237,16 @@ _h.providerCompleteBooking = async (req) => {
    * EXACTLY-ONCE: the whole thing runs in a runTransaction that re-reads the booking status
    * inside the txn. Two concurrent completions cannot both credit — the loser retries, sees
    * `completed`, and returns without a second increment. */
-  const netShillings   = Math.floor(net / 100);
-  const remainderCents = net - netShillings * 100;
-  const willCredit      = netShillings >= 1;
+  /* Provider earnings = (price − commission) + fee. Commission applies to the service
+     PRICE only; the booking fee passes through to the provider (decision a). Both come
+     from the booking's OWN immutable snapshot (data.price / data.fee) — settlement never
+     re-reads the current providerServices record (contract: snapshot-only settlement). */
+  const feeCents        = Math.max(0, Math.round(Number(data.fee) || 0));
+  const settleCents     = net + feeCents;
+  const settleShillings = Math.floor(settleCents / 100);
+  const remainderCents  = settleCents - settleShillings * 100;
+  /* willCredit is decided INSIDE the txn from the live paymentStatus (paid_held) — the
+     single provider credit point; an unpaid completion moves no money. */
 
   const payoutRef   = _db().collection('providerPayouts').doc(ref.id);
   const profileRef  = _db().collection('providerProfiles').doc(uid);
@@ -191,7 +263,15 @@ _h.providerCompleteBooking = async (req) => {
     if (cur.status === 'completed') { result = { alreadyDone: true }; return; }
     if (cur.providerId !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
 
-    t.update(ref, { status: 'completed', completedAt: _ts(), updatedAt: _ts() });
+    /* Credit only when the funds are HELD (paid_held) — the SINGLE provider credit point.
+       Re-read inside the txn so two concurrent completions can't both credit, and a
+       post-settlement retry is a no-op (status==='completed' already returned above). */
+    const isHeld     = cur.paymentStatus === 'paid_held';
+    const willCredit = isHeld && settleShillings >= 1;
+
+    t.update(ref, Object.assign(
+      { status: 'completed', completedAt: _ts(), updatedAt: _ts() },
+      isHeld ? { paymentStatus: 'settled', settledAt: _ts() } : {}));   /* paid_held → settled */
 
     /* §3.2 — completed is terminal; release the slot lock (harmless no-op if absent). */
     const lockRef = _slotLockRef(uid, cur);
@@ -203,14 +283,16 @@ _h.providerCompleteBooking = async (req) => {
       providerId: uid, bookingId: ref.id,
       sourceType: 'booking', sourceId: ref.id,   /* explicit FK — reconciliation/reporting/exports */
       gross, commission, commissionRate: rate,
-      net, amount: net, currency: 'KES', method: null, reference: null,
-      status: 'settled', createdAt: _ts(),
+      fee: feeCents, net, settlementCents: settleCents,   /* provider earns (price−commission)+fee */
+      amount: net, currency: 'KES', method: null, reference: null,
+      status: isHeld ? 'settled' : 'unpaid',   /* 'unpaid' = completed with no held funds → no credit */
+      createdAt: _ts(),
       /* settlement evidence — how the earning reached the wallet */
       walletCredited:      willCredit,
-      netShillingsCredited: willCredit ? netShillings : 0,
+      netShillingsCredited: willCredit ? settleShillings : 0,
       remainderCents,                       /* sub-shilling not withdrawable; recorded for reconciliation */
       walletTxnId:         willCredit ? walletTxId : null,
-      settledAt:           _ts(),
+      settledAt:           isHeld ? _ts() : null,
 
       /* ── AUDIT TRAIL ──────────────────────────────────────────────────────────────────────
        * A provider booking now carries the same evidence as every other payment on the
@@ -239,9 +321,9 @@ _h.providerCompleteBooking = async (req) => {
     /* Credit the withdrawable wallet + a matching ledger row (set-merge creates the wallet
        doc if the provider never had one; increment starts an absent field at 0). */
     if (willCredit) {
-      t.set(walletRef, { balance: _inc(netShillings), updatedAt: _ts() }, { merge: true });
+      t.set(walletRef, { balance: _inc(settleShillings), updatedAt: _ts() }, { merge: true });
       t.set(walletTxRef, {
-        uid, type: 'booking_earning', amount: netShillings,
+        uid, type: 'booking_earning', amount: settleShillings,
         description: `Earnings — ${_san(cur.service || 'service booking', 120)}`,
         bookingId: ref.id,
         sourceType: 'booking', sourceId: ref.id,   /* explicit FK — don't rely on the encoded doc id */
@@ -259,12 +341,12 @@ _h.providerCompleteBooking = async (req) => {
       updatedAt: _ts(),
     }, { merge: true });
 
-    result = { credited: willCredit ? netShillings : 0, remainderCents };
+    result = { credited: willCredit ? settleShillings : 0, remainderCents, held: isHeld };
   });
 
   if (result && result.alreadyDone) return { success: true, status: 'completed', alreadyDone: true };
-  logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, creditedShillings: result.credited, remainderCents });
-  return { success: true, status: 'completed', gross, commission, net, creditedShillings: result.credited, remainderCents };
+  logger.info('providerCompleteBooking', { uid, bookingId: ref.id, gross, commission, net, fee: feeCents, creditedShillings: result.credited, held: result.held, remainderCents });
+  return { success: true, status: 'completed', gross, commission, net, fee: feeCents, settlementCents: settleCents, held: result.held, creditedShillings: result.credited, remainderCents };
 };
 
 /* ============================================================================
@@ -317,6 +399,10 @@ _h.providerCancelBooking = async (req) => {
   batch.delete(_db().collection('providerCalendar').doc(id));
   await batch.commit();
 
+  /* Move held money per the refund policy (no-op if the booking was never paid). */
+  try { await _disburseHeldFunds(data, ref, { by: isProvider ? 'provider' : 'customer', isNoShow: false }); }
+  catch (e) { logger.error('disburse-on-cancel failed (recoverable)', { bookingId: id, err: e.message }); }
+
   /* Notify the counterparty (best-effort). */
   try {
     const targetUid = isProvider ? data.customerUid : data.providerId;
@@ -345,10 +431,16 @@ _h.providerMarkNoShow = async (req) => {
   }
   const batch = _db().batch();
   batch.update(ref, { status: 'no_show', noShowAt: _ts(), updatedAt: _ts() });
-  const lockRef = _slotLockRef(uid, data);   /* §3.2 release — no settlement (§3.1) */
+  const lockRef = _slotLockRef(uid, data);   /* §3.2 release — provider not credited via settlement (§3.1) */
   if (lockRef) batch.delete(lockRef);
   batch.delete(_db().collection('providerCalendar').doc(ref.id));
   await batch.commit();
+
+  /* No-show: deposit forfeited to the provider (commissioned), remainder refunded to
+     the customer. No-op if the booking was never paid. */
+  try { await _disburseHeldFunds(data, ref, { by: 'provider', isNoShow: true }); }
+  catch (e) { logger.error('disburse-on-no-show failed (recoverable)', { bookingId: ref.id, err: e.message }); }
+
   return { success: true, status: 'no_show' };
 };
 

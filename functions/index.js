@@ -5923,6 +5923,12 @@ async function _finalizeWalletTopUp(apiRef, state, amount, tag) {
   return true;
 }
 
+/* Phase E: service-booking payments are HELD, not credited — the provider is credited
+   only by Phase C settlement at completion (contract invariant 1). Shared helper lives
+   in booking-payment-sweep.js (unit-tested); called at the top of BOTH IntaSend
+   COMPLETE handlers, returning true when it handled the payment so the caller returns. */
+const { holdServiceBookingPayment: _holdServiceBookingPayment } = require('./booking-payment-sweep');
+
 /* IntaSend Webhook — called by IntaSend servers on payment state change */
 exports.intasendWebhook = onRequest(
   { timeoutSeconds: 30, secrets: [INTASEND_WEBHOOK_CHALLENGE], invoker: "public", minInstances: 1 },
@@ -6018,6 +6024,10 @@ exports.intasendWebhook = onRequest(
 
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
+      /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
+         the provider is credited only by Phase C settlement at completion. Handled in
+         isolation via the server-minted intent; skips all commission/credit/creation. */
+      if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
       const category = payData.meta?.category || "default";
       /* Commission MUST be calculated by finos-utils — single source of truth for all rates */
       let sokoniCut = 0, commissionPct = 0;
@@ -6915,6 +6925,10 @@ exports.webhookIntasend = onRequest(
 
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
+      /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
+         the provider is credited only by Phase C settlement at completion. Handled in
+         isolation via the server-minted intent; skips all commission/credit/creation. */
+      if (await _holdServiceBookingPayment(db, admin, apiRef, existing.intentRef, amount)) { res.status(200).send("OK"); return; }
       const category = payData.meta?.category || "default";
       let sokoniCut = 0, commissionPct = 0;
       try {

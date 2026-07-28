@@ -1158,6 +1158,11 @@ exports.bookingCleanupHolds = functions.scheduler.onSchedule(
     const batch = db.batch();
     snap.docs.forEach(d => batch.delete(d.ref));
     if (!snap.empty) await batch.commit();
+
+    /* Phase E WS1 — reuse this every-5-min maintenance job (no new Cloud Run service) to
+       expire unpaid service bookings: release the slot lock, cancel, invalidate the intent. */
+    try { await require('./booking-payment-sweep').expireUnpaidServiceBookings(db); }
+    catch (e) { console.warn('[booking] service-booking payment expiry:', e.message); }
     return null;
   }
 );
