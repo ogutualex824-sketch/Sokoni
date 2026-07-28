@@ -1,3 +1,58 @@
+## [2026-07-28] — fix(ui): Messages page — duplicate search bar, title overlap, mojibake placeholders (P1)
+
+Reported from iPhone Safari during public testing: the "Messages" heading overlapped the search bar,
+the conversation search placeholder read `Search conversationsâ€¦`, and two search inputs stacked.
+Three independent defects, all confirmed by measurement (not inspection) before and after.
+
+**1 — Duplicate search bar (root cause: `cleanUrls` vs a hardcoded `.html` list).**
+`firebase.json` sets `cleanUrls: true`, so production serves `/messages`; `/messages.html` 301-redirects.
+`shared-header.js` derived its page key from `location.pathname`, so the key is always `messages` — but
+`NO_SEARCH` listed only `'messages.html'`, so the lookup never matched and the shared header injected its
+own "Search products, services…" bar onto a page that already had one. The neighbouring `EXCLUDED` array
+survived this only because someone hand-wrote both spellings of all 17 entries. **All 12 `NO_SEARCH`
+pages were affected** (checkout, cart, track, messages, dispute, invoice, notifications, profile, reviews,
+referral, subscriptions, loyalty) — Messages was simply the one where a second search bar was visible.
+
+- **`shared-header.js`** — normalise both sides of the lookup once (`_match()` strips a trailing `.html`
+  from list entries and the page key) instead of asking every future list to remember the two spellings.
+  Proven no-op for `EXCLUDED` (exhaustive diff over the union of both lists: zero behaviour changes).
+
+**2 — "Messages" title overlapping the search bar.**
+`.topbar` was `position:sticky; top:0; z-index:100`. The injected header is `position:fixed; z-index:100001`.
+Body padding clears it only at scroll offset 0; once scrolled, the topbar pinned to viewport top *underneath*
+the header — measured **111px of overlap**, with the `<h1>` completely covered.
+
+- **`messages.html`** — `.topbar` now sticks at `top: var(--sk-header-h, 58px)`, the measured header height
+  shared-header.js publishes on `<html>` and re-measures on resize/rotate. Same contract `.sk-sub-nav`
+  already uses (shared-header.js:629-634). Scrolled overlap: **111px → 1px**; `elementFromPoint` over the
+  heading returns `H1` instead of the header. No visual redesign — one CSS value.
+
+**3 — Mojibake (`â€¦`, `â€”`) in placeholders and titles.**
+Not a configuration fault: `<meta charset="UTF-8">` was present, `Content-Type: text/html; charset=utf-8`
+was correct, and `document.characterSet` reported `UTF-8`. The *source bytes* were double-encoded — UTF-8
+read as CP1252 and re-saved (`…` U+2026 → `C3A2 E282AC C2A6`). The browser was faithfully rendering corrupt
+input, so no header or meta change could have fixed it.
+
+- **`messages.html` / `chat.html` / `messages-admin.html`** — byte-level repair of 7 distinct sequences
+  (`—  ─  …  ═  →  ✓  ·`), 7,008 replacements. Buffer-level substitution, so the UTF-8 BOM, line endings and
+  every other byte are untouched: 147 insertions / 147 deletions, identical line counts, and the byte-size
+  delta (22,846) equals the sum of per-sequence savings exactly. User-visible strings restored include
+  `Search conversations…`, `Type a message…`, `Loading…`, `typing…` and the `— SOKONI` title separators.
+
+**Verification** (Playwright, `cleanUrls` emulated, iPhone 390×844 / Android 412×915 / desktop 1280×900):
+visible search inputs on Messages 2 → 1; header 110px → 57px; `sk-has-search` correctly off; scrolled
+overlap 111px → 1px; mojibake scan of every rendered text node, title and placeholder returns `[]`; exactly
+one `#sk-top-nav`, one `.topbar`, one bottom nav. Regression sweep over all 11 other `NO_SEARCH` pages plus
+6 control pages: no page has content clipped by the header, and control pages retain search (`navBottom`
+110px, `bodyPad` 106px) unchanged. `scripts/predeploy-syntax-gate.js` passes (1142 files).
+
+Database changes: none. API changes: none. Security changes: none. Breaking changes: none.
+Known follow-up (NOT in this change): the same mojibake corruption exists in ~20 other files
+(`functions/index.js`, `style.css`, `chat.html`'s siblings, several hub pages) — mostly inside comments and
+box-drawing separators. Tracked separately; a repo-wide sweep should not ride on a P1 UI hotfix.
+
+---
+
 ## [2026-07-28] — refactor(privacy): single-source requestDataExport (KDPA/ODPC SHOULD-FIX #8)
 
 Removed the duplicate, shadowed `requestDataExport` definition from `functions/account-manager.js`.

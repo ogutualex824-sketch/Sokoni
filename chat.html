@@ -9,13 +9,13 @@
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Chat â€” SOKONI</title>
+<title>Chat — SOKONI</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
 <link rel="stylesheet" href="sokoni-tokens.css">
 <style>
-/* â”€â”€ CSS Variables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── CSS Variables ─────────────────────────────────────────────── */
 :root{
   --c-bg:#050505;--c-surface:#0d0d0d;--c-border:#1a1a1a;
   --c-primary:#71ff00;--c-pl:rgba(113,255,0,0.08);
@@ -46,7 +46,7 @@
   --c-sys-bg:rgba(255,255,255,0.04);--c-sys-txt:rgba(255,255,255,0.45);
 }
 
-/* â”€â”€ Reset & Base â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Reset & Base ───────────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{font-family:'Inter',system-ui,sans-serif;background:var(--c-bg);color:var(--c-text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
@@ -56,10 +56,10 @@ input,textarea,select{font-family:inherit}
 /* Emoji glyphs on action buttons — no icon-font dependency, always render */
 .emo{font-style:normal;font-size:20px;line-height:1;display:inline-block;vertical-align:middle}
 
-/* â”€â”€ Page layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Page layout ────────────────────────────────────────────────── */
 #page{display:flex;flex-direction:column;height:100%;overflow:hidden}
 
-/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Header ─────────────────────────────────────────────────────── */
 #chat-hdr{
   position:sticky;top:0;z-index:100;flex-shrink:0;
   background:var(--c-surface);border-bottom:1px solid var(--c-border);
@@ -85,7 +85,7 @@ input,textarea,select{font-family:inherit}
 #hdr-sub{color:var(--c-sub)}
 #hdr-typing{color:var(--c-primary);display:none}
 
-/* â”€â”€ Context banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Context banner ─────────────────────────────────────────────── */
 #ctx-banner{
   flex-shrink:0;background:var(--c-surface);border-bottom:1px solid var(--c-border);
   overflow:hidden;transition:max-height .3s ease;max-height:52px;
@@ -128,7 +128,7 @@ input,textarea,select{font-family:inherit}
 .ctx-chip:hover{opacity:.8}
 .ctx-chip .mir{font-size:14px}
 
-/* â”€â”€ Read-only banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Read-only banner ───────────────────────────────────────────── */
 #ro-banner{
   flex-shrink:0;background:#422006;color:#fcd34d;
   font-size:13px;font-weight:500;text-align:center;
@@ -136,7 +136,7 @@ input,textarea,select{font-family:inherit}
 }
 #ro-banner.show{display:block}
 
-/* â”€â”€ Messages scroll area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Messages scroll area ───────────────────────────────────────── */
 #msgs-wrap{
   flex:1;overflow-y:auto;overflow-x:hidden;
   -webkit-overflow-scrolling:touch;padding:6px 0 2px;
@@ -243,14 +243,14 @@ input,textarea,select{font-family:inherit}
 .t-dot:nth-child(1){animation-delay:0s}.t-dot:nth-child(2){animation-delay:.2s}.t-dot:nth-child(3){animation-delay:.4s}
 @keyframes tbounce{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-5px);opacity:1}}
 
-/* â”€â”€ Reply preview bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Reply preview bar ──────────────────────────────────────────── */
 #reply-bar{flex-shrink:0;background:var(--c-surface);border-top:1px solid var(--c-border);padding:8px 12px;display:none;align-items:center;gap:8px}
 #reply-bar.show{display:flex}
 #rp-inner{flex:1;border-left:3px solid var(--c-primary);padding:2px 8px;min-width:0}
 #rp-sndr{font-size:12px;font-weight:600;color:var(--c-primary)}
 #rp-txt{font-size:13px;color:var(--c-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* â”€â”€ Input area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Input area ─────────────────────────────────────────────────── */
 #input-area{
   flex-shrink:0;background:var(--c-surface);border-top:1px solid var(--c-border);
   padding:8px;display:flex;align-items:flex-end;gap:4px;
@@ -272,12 +272,12 @@ input,textarea,select{font-family:inherit}
 #btn-mic.rec{background:var(--c-danger);color:#fff;animation:recpulse 1s infinite}
 @keyframes recpulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.4)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
 
-/* â”€â”€ Overlay backdrop â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Overlay backdrop ───────────────────────────────────────────── */
 #backdrop{position:fixed;inset:0;background:rgba(0,0,0,.48);z-index:200;display:none}
 #backdrop.show{display:block;animation:fadein .2s ease}
 @keyframes fadein{from{opacity:0}to{opacity:1}}
 
-/* â”€â”€ Slide-up sheet â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Slide-up sheet ─────────────────────────────────────────────── */
 .sheet{
   position:fixed;bottom:0;left:0;right:0;
   background:var(--c-surface);border-radius:20px 20px 0 0;
@@ -301,7 +301,7 @@ input,textarea,select{font-family:inherit}
 .shic-money{background:rgba(113,255,0,.15)}
 .sh-ic .emo{font-size:22px}
 
-/* â”€â”€ Context menu â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Context menu ───────────────────────────────────────────────── */
 #ctx-menu{
   position:fixed;z-index:400;min-width:160px;
   background:var(--c-surface);border:1px solid var(--c-border);
@@ -315,7 +315,7 @@ input,textarea,select{font-family:inherit}
 .cm-item .mir{font-size:18px;color:var(--c-sub)}
 .cm-item.danger{color:var(--c-danger)}.cm-item.danger .mir{color:var(--c-danger)}
 
-/* â”€â”€ Image lightbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Image lightbox ─────────────────────────────────────────────── */
 #lightbox{position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:500;display:none;flex-direction:column}
 #lightbox.open{display:flex}
 #lb-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;gap:8px}
@@ -324,7 +324,7 @@ input,textarea,select{font-family:inherit}
 #lb-body{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:0 8px 16px;cursor:zoom-out}
 #lb-img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
 
-/* â”€â”€ Report dialog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Report dialog ──────────────────────────────────────────────── */
 #report-dlg{position:fixed;inset:0;z-index:600;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.5)}
 #report-dlg.open{display:flex}
 #report-box{background:var(--c-surface);border-radius:var(--radius-lg);padding:24px;width:100%;max-width:420px;box-shadow:var(--shadow-md)}
@@ -339,12 +339,12 @@ input,textarea,select{font-family:inherit}
 .btn-outline{padding:9px 16px;border:1px solid var(--c-border);border-radius:var(--radius-sm);font-size:14px;font-weight:500;color:var(--c-text);background:var(--c-surface);cursor:pointer}
 .btn-danger{padding:9px 16px;background:var(--c-danger);color:#fff;border-radius:var(--radius-sm);font-size:14px;font-weight:600;cursor:pointer}
 
-/* â”€â”€ Upload progress â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Upload progress ────────────────────────────────────────────── */
 #upload-prog{position:fixed;top:var(--hdr-h);left:0;right:0;height:3px;background:var(--c-border);z-index:150;display:none}
 #upload-prog.show{display:block}
 #upload-bar{height:100%;background:var(--c-primary);transition:width .2s;width:0%}
 
-/* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Toast ──────────────────────────────────────────────────────── */
 #toast{
   position:fixed;bottom:76px;left:50%;
   transform:translateX(-50%) translateY(16px);
@@ -355,17 +355,17 @@ input,textarea,select{font-family:inherit}
 }
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-/* â”€â”€ Loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Loading ────────────────────────────────────────────────────── */
 #loading-state{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;gap:14px;color:var(--c-sub)}
 .spin{border:3px solid var(--c-border);border-top-color:var(--c-primary);border-radius:50%;animation:spinning .7s linear infinite}
 .spin-lg{width:32px;height:32px}.spin-sm{width:18px;height:18px;border-width:2px}
 @keyframes spinning{to{transform:rotate(360deg)}}
 
-/* â”€â”€ Reply-scroll highlight â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Reply-scroll highlight ─────────────────────────────────────── */
 @keyframes highlight{0%,100%{background:transparent}40%,60%{background:rgba(59,130,246,.12)}}
 .msg-highlight{animation:highlight .9s ease}
 
-/* â”€â”€ Search panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Search panel ───────────────────────────────────────────────── */
 #search-panel{
   flex-shrink:0;background:var(--c-surface);border-bottom:1px solid var(--c-border);
   padding:8px 10px;display:none;align-items:center;gap:6px;
@@ -380,18 +380,18 @@ input,textarea,select{font-family:inherit}
 #search-msg-input:focus{border-color:var(--c-primary)}
 #search-count{font-size:12px;color:var(--c-sub);white-space:nowrap;min-width:28px;text-align:right}
 
-/* â”€â”€ Inline message edit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Inline message edit ────────────────────────────────────────── */
 .edit-ta{
   width:100%;background:none;border:none;outline:none;resize:none;
   font-size:15px;line-height:1.45;color:inherit;font-family:inherit;
   border-bottom:1px solid currentColor;padding-bottom:2px;
 }
 
-/* â”€â”€ Search match dim â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Search match dim ───────────────────────────────────────────── */
 .msg-row.dim{opacity:.25;transition:opacity .2s}
 .msg-row.match-highlight{opacity:1}
 
-/* â”€â”€ Misc â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Misc ───────────────────────────────────────────────────────── */
 input[type=file]{display:none}
 
 @media(min-width:769px){
@@ -404,16 +404,16 @@ input[type=file]{display:none}
 <body>
 <div id="page">
 
-  <!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Header ──────────────────────────────────────────────────── -->
   <header id="chat-hdr">
     <button class="hdr-btn" onclick="history.back()" aria-label="Back">
       <span class="mir">arrow_back</span>
     </button>
     <div id="hdr-av"><span id="hdr-init">?</span></div>
     <div id="hdr-info">
-      <div id="hdr-name">Loadingâ€¦</div>
+      <div id="hdr-name">Loading…</div>
       <div id="hdr-sub"></div>
-      <div id="hdr-typing">typingâ€¦</div>
+      <div id="hdr-typing">typing…</div>
     </div>
     <button class="hdr-btn" id="btn-search-toggle" onclick="toggleSearch()" aria-label="Search messages">
       <span class="mir">search</span>
@@ -423,22 +423,22 @@ input[type=file]{display:none}
     </button>
   </header>
 
-  <!-- â”€â”€ In-conversation search â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── In-conversation search ──────────────────────────────────── -->
   <div id="search-panel" role="search" aria-label="Search messages">
     <span class="mir">search</span>
-    <input type="search" id="search-msg-input" placeholder="Search messagesâ€¦" autocomplete="off" aria-label="Search messages">
+    <input type="search" id="search-msg-input" placeholder="Search messages…" autocomplete="off" aria-label="Search messages">
     <span id="search-count"></span>
     <button class="hdr-btn" onclick="clearSearch()" aria-label="Close search">
       <span class="mir" style="font-size:18px">close</span>
     </button>
   </div>
 
-  <!-- â”€â”€ Context banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Context banner ──────────────────────────────────────────── -->
   <div id="ctx-banner" role="region" aria-label="Transaction details">
     <div id="ctx-sum" onclick="toggleCtx()">
       <div id="ctx-sum-ic"><span class="mir" id="ctx-ic">receipt_long</span></div>
       <div id="ctx-sum-info">
-        <div id="ctx-tx-title">Loading transactionâ€¦</div>
+        <div id="ctx-tx-title">Loading transaction…</div>
         <div id="ctx-tx-id"></div>
       </div>
       <span class="ctx-badge cb-pending" id="ctx-badge">Pending</span>
@@ -450,17 +450,17 @@ input[type=file]{display:none}
     </div>
   </div>
 
-  <!-- â”€â”€ Read-only banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Read-only banner ────────────────────────────────────────── -->
   <div id="ro-banner" role="alert">
     <span class="mir" style="font-size:14px;vertical-align:middle;margin-right:4px">lock</span>
     This conversation is now read-only
   </div>
 
-  <!-- â”€â”€ Messages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Messages ────────────────────────────────────────────────── -->
   <div id="msgs-wrap" role="log" aria-label="Messages" aria-live="polite">
     <div id="loading-state">
       <div class="spin spin-lg"></div>
-      <span>Loading messagesâ€¦</span>
+      <span>Loading messages…</span>
     </div>
     <div id="load-older-wrap" style="display:none">
       <button id="btn-load-older" onclick="loadOlder()">Load older messages</button>
@@ -473,7 +473,7 @@ input[type=file]{display:none}
     </div>
   </div>
 
-  <!-- â”€â”€ Reply preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Reply preview ───────────────────────────────────────────── -->
   <div id="reply-bar">
     <div id="rp-inner">
       <div id="rp-sndr"></div>
@@ -484,7 +484,7 @@ input[type=file]{display:none}
     </button>
   </div>
 
-  <!-- â”€â”€ Input area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Input area ──────────────────────────────────────────────── -->
   <div id="input-area">
     <button class="ia-btn" onclick="openAttachSheet()" aria-label="Attach file">
       <span class="emo" aria-hidden="true">📎</span>
@@ -496,7 +496,7 @@ input[type=file]{display:none}
         <span id="rec-hint">Release mic to send</span>
         <button id="btn-cancel-rec" onclick="cancelVoice()">Cancel</button>
       </div>
-      <textarea id="msgInput" rows="1" placeholder="Type a messageâ€¦" aria-label="Type a message"></textarea>
+      <textarea id="msgInput" rows="1" placeholder="Type a message…" aria-label="Type a message"></textarea>
     </div>
     <button class="ia-btn" id="btn-mic"
       onmousedown="startVoice(event)" onmouseup="stopVoice(event)"
@@ -510,7 +510,7 @@ input[type=file]{display:none}
   </div>
 </div>
 
-<!-- â”€â”€ Overlays â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── Overlays ─────────────────────────────────────────────────── -->
 <div id="backdrop" onclick="closeAllOverlays()"></div>
 
 <!-- Attach sheet -->
@@ -566,14 +566,14 @@ input[type=file]{display:none}
   <div id="report-box">
     <h3>Report Conversation</h3>
     <select class="rpt-sel" id="rpt-reason" aria-label="Reason for report">
-      <option value="">Select a reasonâ€¦</option>
+      <option value="">Select a reason…</option>
       <option value="spam">Spam or unsolicited messages</option>
       <option value="scam">Scam or fraud attempt</option>
       <option value="payment_redirect">Attempting to redirect payment outside SOKONI</option>
       <option value="inappropriate">Inappropriate content</option>
       <option value="harassment">Harassment or threats</option>
     </select>
-    <textarea id="rpt-details" placeholder="Additional details (optional)â€¦" rows="3"
+    <textarea id="rpt-details" placeholder="Additional details (optional)…" rows="3"
       aria-label="Additional details"></textarea>
     <div class="rpt-actions">
       <button class="btn-outline" onclick="closeReportDlg()">Cancel</button>
@@ -592,7 +592,7 @@ input[type=file]{display:none}
 <input type="file" id="fi-gal" accept="image/*" multiple>
 <input type="file" id="fi-doc" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
 
-<!-- â”€â”€ Scripts â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+<!-- ── Scripts ──────────────────────────────────────────────────── -->
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
@@ -607,9 +607,9 @@ input[type=file]{display:none}
 (function () {
 'use strict';
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    GLOBALS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 var CONV_ID   = new URLSearchParams(location.search).get('id');
 var UID       = null;
 var UID_NAME  = '';
@@ -649,14 +649,14 @@ var FIELD_LABELS = {
   hotelName:'Hotel',checkIn:'Check-in',checkOut:'Check-out',guests:'Guests',
 };
 
-/* Status â†’ badge class */
+/* Status → badge class */
 var BADGE_CLASS = {
   active:'cb-active',in_progress:'cb-active',confirmed:'cb-active',open:'cb-active',
   completed:'cb-done',delivered:'cb-done',closed:'cb-done',resolved:'cb-done',
   cancelled:'cb-cancel',rejected:'cb-cancel',
 };
 
-/* Transaction type â†’ page route */
+/* Transaction type → page route */
 var TX_PAGES = {
   order:'order-detail',food_order:'food-hub',service_booking:'service',
   property_inquiry:'property',vehicle_inquiry:'car-hub',job_application:'jobs',
@@ -667,9 +667,9 @@ var TX_PAGES = {
 
 if (!CONV_ID) { location.href = 'messages.html'; }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    AUTH GATE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 firebase.auth().onAuthStateChanged(function (user) {
   if (!user) {
     location.href = 'login.html?redirect=' + encodeURIComponent(location.href);
@@ -680,9 +680,9 @@ firebase.auth().onAuthStateChanged(function (user) {
   _loadConversation();
 });
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    LOAD CONVERSATION
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _loadConversation() {
   SokoniChat.getConversation(CONV_ID).then(function (conv) {
     if (!conv) { location.href = 'messages.html'; return; }
@@ -702,16 +702,16 @@ function _loadConversation() {
   });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    HEADER
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _renderHeader(conv) {
   var p    = _getPeer(conv);
   var name = p.name || 'Contact';
   document.getElementById('hdr-name').textContent    = name;
   document.getElementById('hdr-sub').textContent     = conv.transactionTitle || conv.transactionType || '';
   document.getElementById('hdr-init').textContent    = _initials(name);
-  document.title = name + ' â€” SOKONI Chat';
+  document.title = name + ' — SOKONI Chat';
 
   if (p.photoURL) {
     var img = document.createElement('img');
@@ -749,9 +749,9 @@ function _initials(n) {
   return p.length >= 2 ? (p[0][0] + p[1][0]).toUpperCase() : n.slice(0, 2).toUpperCase();
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    CONTEXT BANNER
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 var _ctxOpen = false;
 
 function _renderCtxBanner(conv) {
@@ -807,9 +807,9 @@ function toggleCtx() {
   document.getElementById('ctx-banner').classList.toggle('open', _ctxOpen);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    REAL-TIME LISTENERS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _startListeners() {
   _unsub = SokoniChat.onMessagesChanged(CONV_ID, function (err, msgs) {
     if (err) { console.error('[chat] messages:', err); return; }
@@ -831,9 +831,9 @@ function _startListeners() {
   });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    RENDER MESSAGES
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _renderMessages(msgs) {
   var list = document.getElementById('msgs-list');
   list.innerHTML = '';
@@ -926,7 +926,7 @@ function _buildMsgEl(msg, msgs, idx) {
     var stHtml = '';
     if (isSent) {
       var stCls  = msg.status === 'read' ? ' st-read' : '';
-      var stIcon = msg.status === 'read' ? 'âœ“âœ“' : (msg.status === 'delivered' ? 'âœ“âœ“' : 'âœ“');
+      var stIcon = msg.status === 'read' ? '✓✓' : (msg.status === 'delivered' ? '✓✓' : '✓');
       stHtml = '<span class="st-ic' + stCls + '" title="' + _esc(msg.status || '') + '">' + stIcon + '</span>';
     }
     meta.innerHTML = '<span>' + _esc(tStr) + '</span>' + stHtml;
@@ -942,7 +942,7 @@ function _buildMsgEl(msg, msgs, idx) {
   return row;
 }
 
-/* â”€â”€ Image element â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Image element ─────────────────────────────────────────────── */
 function _buildImgEl(msg) {
   var wrap = document.createElement('div'); wrap.className = 'msg-img-wrap';
   var sp   = document.createElement('div'); sp.className = 'img-sp';
@@ -994,7 +994,7 @@ function _buildImgEl(msg) {
   return wrap;
 }
 
-/* â”€â”€ File (PDF/doc) element â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── File (PDF/doc) element ────────────────────────────────────── */
 function _buildFileEl(msg) {
   var wrap = document.createElement('div'); wrap.className = 'msg-file';
   var a    = document.createElement('a'); a.className = 'file-dl'; a.target = '_blank';
@@ -1018,7 +1018,7 @@ function _buildFileEl(msg) {
   return wrap;
 }
 
-/* â”€â”€ Voice element â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Voice element ─────────────────────────────────────────────── */
 function _buildVoiceEl(msg) {
   var wrap = document.createElement('div'); wrap.className = 'msg-voice';
   var audio = document.createElement('audio'); audio.preload = 'none';
@@ -1067,9 +1067,9 @@ function _buildVoiceEl(msg) {
   return wrap;
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    TYPING INDICATOR
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _showTyping(uids) {
   var others = (uids || []).filter(function (u) { return u !== UID; });
   var wrap   = document.getElementById('typing-wrap');
@@ -1085,9 +1085,9 @@ function _showTyping(uids) {
   }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    SEND TEXT
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function sendText() {
   var input = document.getElementById('msgInput');
   var text  = input.value.trim();
@@ -1108,9 +1108,9 @@ function sendText() {
   });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    FILE UPLOAD
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function sendFile(file, type, duration) {
   closeAllOverlays();
   _showProg(0);
@@ -1143,9 +1143,9 @@ document.getElementById('fi-doc').onchange = function () {
   sendFile(f, f.type === 'application/pdf' ? 'pdf' : 'document'); this.value = '';
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    VOICE RECORDING
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function startVoice(e) {
   if (IS_RO || _recording) return;
   e.preventDefault();
@@ -1191,14 +1191,14 @@ function _cleanVoice() {
   document.getElementById('rec-timer').textContent = '0:00';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    PAGINATION (LOAD OLDER)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function loadOlder() {
   if (!_hasMore || _loadingOld || !_oldestTs) return;
   _loadingOld = true;
   var btn = document.getElementById('btn-load-older');
-  btn.textContent = 'Loadingâ€¦'; btn.disabled = true;
+  btn.textContent = 'Loading…'; btn.disabled = true;
 
   var wrap  = document.getElementById('msgs-wrap');
   var prevH = wrap.scrollHeight;
@@ -1229,9 +1229,9 @@ function _prependMessages(msgs) {
   list.insertBefore(frag, list.firstChild);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    REPLY
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function setReply(msg) {
   REPLY_TO = msg;
   document.getElementById('reply-bar').classList.add('show');
@@ -1247,9 +1247,9 @@ function clearReply() {
   document.getElementById('reply-bar').classList.remove('show');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    CONTEXT MENU (LONG PRESS / RIGHT-CLICK)
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _bindCtxMenu(row, msg, isSent) {
   row.addEventListener('touchstart', function (e) {
     _lpTimer = setTimeout(function () {
@@ -1320,9 +1320,9 @@ function _deleteMsg(msgId) {
     .catch(function (e) { _toast('Could not delete: ' + (e.message || 'Error')); });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    SMART ACTIONS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function handleAction(action) {
   if (IS_RO || !CONV) return;
   if (action.confirm && !confirm(action.label + '?')) return;
@@ -1339,9 +1339,9 @@ function handleAction(action) {
   }).catch(function (e) { console.warn('[chat] action msg:', e.message); });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    OVERLAYS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function openAttachSheet() { _openSheet('attach-sheet'); }
 function openMoreMenu()    { _openSheet('more-sheet'); }
 
@@ -1357,7 +1357,7 @@ function closeAllOverlays() {
   closeCtxMenu();
 }
 
-/* â”€â”€ More menu actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── More menu actions ─────────────────────────────────────────── */
 /* ── Wallet ↔ chat: pay the person you're talking to ─────────────────────────
    Resolve the other participant's uid (same rule as the header) and deep-link to
    the wallet, which opens a "send to this contact" flow via the toUid path. */
@@ -1388,7 +1388,7 @@ function viewTransaction() {
   window.open(page + '?id=' + encodeURIComponent(CONV.transactionId), '_blank');
 }
 
-/* â”€â”€ Report â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Report ────────────────────────────────────────────────────── */
 function openReportDlg() {
   closeAllOverlays();
   document.getElementById('report-dlg').classList.add('open');
@@ -1408,7 +1408,7 @@ function submitReport() {
     .catch(function () { _toast('Could not submit report. Please try again.'); });
 }
 
-/* â”€â”€ Image lightbox â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Image lightbox ────────────────────────────────────────────── */
 function openLightbox(url, name) {
   document.getElementById('lb-img').src       = url || '';
   document.getElementById('lb-title').textContent = name || 'Image';
@@ -1421,15 +1421,15 @@ function closeLightbox() {
   document.getElementById('lb-img').src = '';
 }
 
-/* â”€â”€ Escape key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Escape key ────────────────────────────────────────────────── */
 document.addEventListener('keydown', function (e) {
   if (e.key !== 'Escape') return;
   closeLightbox(); closeAllOverlays();
 });
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    INPUT HANDLING
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 var _msgInput = document.getElementById('msgInput');
 _msgInput.addEventListener('input', function () {
   _autoResize();
@@ -1444,9 +1444,9 @@ function _autoResize() {
   _msgInput.style.height = Math.min(_msgInput.scrollHeight, 96) + 'px';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    SCROLL HELPERS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _isAtBottom() {
   var w = document.getElementById('msgs-wrap');
   return w.scrollHeight - w.scrollTop - w.clientHeight < 90;
@@ -1463,9 +1463,9 @@ function _scrollToMsg(msgId) {
   setTimeout(function () { el.classList.remove('msg-highlight'); }, 1000);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    UPLOAD PROGRESS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _showProg(pct) {
   document.getElementById('upload-prog').classList.add('show');
   document.getElementById('upload-bar').style.width = pct + '%';
@@ -1477,9 +1477,9 @@ function _hideProg() {
   }, 500);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    TOAST
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _toast(msg) {
   var el = document.getElementById('toast');
   el.textContent = msg;
@@ -1488,9 +1488,9 @@ function _toast(msg) {
   _toastTmr = setTimeout(function () { el.classList.remove('show'); }, 3200);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    UTILITY FUNCTIONS
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _dateLabel(d) {
   var now   = new Date();
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -1517,9 +1517,9 @@ function _esc(s) {
     .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    IN-CONVERSATION SEARCH
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 var _searchActive = false;
 
 function toggleSearch() {
@@ -1569,9 +1569,9 @@ function _applySearch(query) {
   document.getElementById('search-count').textContent = q ? (count + ' found') : '';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    FORWARD MESSAGE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _forwardMsg(msg) {
   if (IS_RO) return;
   SokoniChat.forwardMessage(CONV_ID, msg)
@@ -1579,9 +1579,9 @@ function _forwardMsg(msg) {
     .catch(function (e) { _toast('Could not forward: ' + (e.message || 'Error')); });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    INLINE EDIT MESSAGE
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 function _startEdit(msg) {
   var row = document.querySelector('[data-id="' + CSS.escape(msg.id) + '"]');
   if (!row) return;
@@ -1620,9 +1620,9 @@ function _startEdit(msg) {
   ta.addEventListener('blur', function () { _commitEdit(); });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+/* ═══════════════════════════════════════════════════════════════════
    CLEANUP
-â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+═══════════════════════════════════════════════════════════════════ */
 window.addEventListener('beforeunload', function () {
   if (_unsub)    _unsub();
   if (_unsubTyp) _unsubTyp();

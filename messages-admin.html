@@ -9,12 +9,12 @@
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Communications Admin â€” SOKONI</title>
+<title>Communications Admin — SOKONI</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Round">
 <link rel="stylesheet" href="sokoni-tokens.css">
 <style>
-/* â”€â”€ SOKONI Design Tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── SOKONI Design Tokens ─────────────────────────────────────────── */
 :root {
   --bg:      #050505;
   --surf:    #111115;
@@ -42,10 +42,10 @@ a { color: inherit; text-decoration: none; }
        font-size: 20px; line-height: 1; display: inline-block; white-space: nowrap;
        -webkit-font-feature-settings: 'liga'; font-feature-settings: 'liga'; vertical-align: middle; }
 
-/* â”€â”€ App Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── App Layout ───────────────────────────────────────────────────── */
 #app { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
 
-/* â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Header ───────────────────────────────────────────────────────── */
 #hdr {
   flex-shrink: 0; height: 60px;
   background: var(--surf); border-bottom: 1px solid var(--border);
@@ -56,7 +56,7 @@ a { color: inherit; text-decoration: none; }
 .hdr-btn { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text2); transition: background .15s; }
 .hdr-btn:hover { background: var(--surf2); }
 
-/* â”€â”€ Tab Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Tab Bar ──────────────────────────────────────────────────────── */
 #tabs {
   flex-shrink: 0; display: flex; background: var(--surf);
   border-bottom: 1px solid var(--border);
@@ -72,7 +72,7 @@ a { color: inherit; text-decoration: none; }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .tab .mir { font-size: 18px; }
 
-/* â”€â”€ Content Area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Content Area ─────────────────────────────────────────────────── */
 #content { flex: 1; overflow-y: auto; }
 #content::-webkit-scrollbar { width: 4px; }
 #content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -80,11 +80,11 @@ a { color: inherit; text-decoration: none; }
 .panel { display: none; padding: 20px 16px 40px; max-width: 960px; margin: 0 auto; }
 .panel.active { display: block; }
 
-/* â”€â”€ Section Label â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Section Label ────────────────────────────────────────────────── */
 .sec-label { font-size: 11px; font-weight: 700; text-transform: uppercase;
              letter-spacing: .6px; color: var(--text3); margin-bottom: 12px; }
 
-/* â”€â”€ Stats Grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Stats Grid ───────────────────────────────────────────────────── */
 .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 28px; }
 @media(max-width: 600px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
 .stat-card { background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 18px 16px; }
@@ -94,7 +94,7 @@ a { color: inherit; text-decoration: none; }
 .sv-warn   { color: var(--warn); }
 .sv-red    { color: var(--danger); }
 
-/* â”€â”€ Report Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Report Card ──────────────────────────────────────────────────── */
 .report-card { background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 16px; margin-bottom: 10px; }
 .rc-top    { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .rc-icon   { width: 38px; height: 38px; border-radius: var(--r-sm); flex-shrink: 0;
@@ -118,7 +118,7 @@ a { color: inherit; text-decoration: none; }
 .rc-suspend { color: var(--danger); border-color: rgba(255,68,68,.25); }
 .rc-suspend:hover { background: rgba(255,68,68,.08); border-color: var(--danger); }
 
-/* â”€â”€ Policy Section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Policy Section ───────────────────────────────────────────────── */
 .policy-box { background: var(--surf); border: 1px solid var(--border); border-radius: var(--r); padding: 20px; margin-bottom: 16px; }
 .policy-box h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
 .policy-box h3 .mir { color: var(--accent); font-size: 18px; }
@@ -135,7 +135,7 @@ a { color: inherit; text-decoration: none; }
 .field-unit { font-size: 11px; color: var(--text3); }
 .save-row { text-align: right; margin-top: 4px; }
 
-/* â”€â”€ Search Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Search Bar ───────────────────────────────────────────────────── */
 .search-bar { display: flex; gap: 10px; margin-bottom: 16px; }
 .search-bar input {
   flex: 1; background: var(--surf); border: 1px solid var(--border);
@@ -150,7 +150,7 @@ a { color: inherit; text-decoration: none; }
 }
 .type-sel:focus { border-color: var(--accent); }
 
-/* â”€â”€ Conversation Result Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Conversation Result Card ─────────────────────────────────────── */
 .conv-card {
   background: var(--surf); border: 1px solid var(--border);
   border-radius: var(--r); padding: 14px 16px; margin-bottom: 8px;
@@ -168,7 +168,7 @@ a { color: inherit; text-decoration: none; }
 .cb-suspended{ background: rgba(255,68,68,.10); color: var(--danger); }
 .cb-other    { background: var(--surf2); color: var(--text3); }
 
-/* â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Buttons ──────────────────────────────────────────────────────── */
 .btn-primary {
   display: inline-flex; align-items: center; gap: 6px;
   background: var(--accent); color: #000; font-weight: 700;
@@ -178,7 +178,7 @@ a { color: inherit; text-decoration: none; }
 .btn-primary:hover { opacity: .88; }
 .btn-primary:disabled { opacity: .4; cursor: default; }
 
-/* â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Helpers ──────────────────────────────────────────────────────── */
 .empty-state { text-align: center; padding: 60px 24px; color: var(--text2); }
 .empty-state .mir { font-size: 48px; color: var(--text3); display: block; margin-bottom: 14px; }
 .empty-state h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
@@ -189,7 +189,7 @@ a { color: inherit; text-decoration: none; }
 @keyframes spinning { to { transform: rotate(360deg); } }
 .divider { height: 1px; background: var(--border); margin: 20px 0; }
 
-/* â”€â”€ Toast â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Toast ────────────────────────────────────────────────────────── */
 #toast {
   position: fixed; bottom: 24px; left: 50%;
   transform: translateX(-50%) translateY(16px);
@@ -202,10 +202,10 @@ a { color: inherit; text-decoration: none; }
 #toast.success { border-color: var(--accent); color: var(--accent); }
 #toast.error   { border-color: var(--danger); color: var(--danger); }
 
-/* â”€â”€ Load-more â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Load-more ────────────────────────────────────────────────────── */
 .load-more-row { text-align: center; padding: 16px 0; }
 
-/* â”€â”€ Auth guard overlay â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Auth guard overlay ───────────────────────────────────────────── */
 #auth-guard { position: fixed; inset: 0; background: var(--bg); z-index: 999; display: flex; align-items: center; justify-content: center; }
 #auth-guard.hidden { display: none; }
 </style>
@@ -218,7 +218,7 @@ a { color: inherit; text-decoration: none; }
 
 <div id="app">
 
-  <!-- â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Header ────────────────────────────────────────────────────── -->
   <header id="hdr">
     <button class="hdr-btn" onclick="history.back()" aria-label="Back">
       <span class="mir">arrow_back</span>
@@ -229,7 +229,7 @@ a { color: inherit; text-decoration: none; }
     </button>
   </header>
 
-  <!-- â”€â”€ Tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Tabs ──────────────────────────────────────────────────────── -->
   <nav id="tabs" role="tablist" aria-label="Admin sections">
     <button class="tab active" data-tab="overview"  onclick="switchTab('overview')"  role="tab" aria-selected="true">
       <span class="mir">dashboard</span>Overview
@@ -245,23 +245,23 @@ a { color: inherit; text-decoration: none; }
     </button>
   </nav>
 
-  <!-- â”€â”€ Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+  <!-- ── Content ───────────────────────────────────────────────────── -->
   <div id="content" role="main">
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• OVERVIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ════════════════════ OVERVIEW ════════════════════════════════ -->
     <div class="panel active" id="panel-overview" role="tabpanel">
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-lbl">Active Conversations</div>
-          <div class="stat-val sv-green" id="stat-active">â€”</div>
+          <div class="stat-val sv-green" id="stat-active">—</div>
         </div>
         <div class="stat-card">
           <div class="stat-lbl">Pending Reports</div>
-          <div class="stat-val sv-warn" id="stat-pending">â€”</div>
+          <div class="stat-val sv-warn" id="stat-pending">—</div>
         </div>
         <div class="stat-card">
           <div class="stat-lbl">Flagged</div>
-          <div class="stat-val sv-red" id="stat-flagged">â€”</div>
+          <div class="stat-val sv-red" id="stat-flagged">—</div>
         </div>
       </div>
 
@@ -269,7 +269,7 @@ a { color: inherit; text-decoration: none; }
       <div id="overview-reports"><div class="loading-row"><div class="spin spin-md"></div></div></div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• REPORTS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ════════════════════ REPORTS ════════════════════════════════ -->
     <div class="panel" id="panel-reports" role="tabpanel">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
         <div class="sec-label" style="margin:0">Moderation Queue</div>
@@ -286,7 +286,7 @@ a { color: inherit; text-decoration: none; }
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• POLICIES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ════════════════════ POLICIES ════════════════════════════════ -->
     <div class="panel" id="panel-policies" role="tabpanel">
 
       <div class="policy-box">
@@ -346,10 +346,10 @@ a { color: inherit; text-decoration: none; }
       </div>
     </div>
 
-    <!-- â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SEARCH â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• -->
+    <!-- ════════════════════ SEARCH ══════════════════════════════════ -->
     <div class="panel" id="panel-search" role="tabpanel">
       <div class="search-bar">
-        <input type="search" id="s-query" placeholder="Search by name, booking ID, transactionâ€¦" autocomplete="off" aria-label="Search conversations">
+        <input type="search" id="s-query" placeholder="Search by name, booking ID, transaction…" autocomplete="off" aria-label="Search conversations">
         <select class="type-sel" id="s-type" aria-label="Transaction type filter">
           <option value="">All types</option>
           <option value="order">Orders</option>
@@ -398,11 +398,11 @@ a { color: inherit; text-decoration: none; }
 (function () {
 'use strict';
 
-/* â”€â”€ State â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── State ───────────────────────────────────────────────────────── */
 var db = null, fns = null, _toastTmr = null;
 var _reports = [], _rptCursor = null;
 
-/* â”€â”€ TX type â†’ icon â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── TX type → icon ─────────────────────────────────────────────── */
 var TX_ICON = {
   order:'shopping_bag', service_booking:'home_repair_service', food_order:'restaurant',
   pharmacy_order:'medication', property_inquiry:'home', vehicle_inquiry:'directions_car',
@@ -413,7 +413,7 @@ var TX_ICON = {
   support_ticket:'headset_mic', rfq:'request_quote',
 };
 
-/* â”€â”€ Auth gate (admin/superAdmin claim required) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Auth gate (admin/superAdmin claim required) ─────────────────── */
 firebase.auth().onAuthStateChanged(function (user) {
   if (!user) { location.href = 'login.html?redirect=messages-admin.html'; return; }
   user.getIdTokenResult(true).then(function (result) {
@@ -429,13 +429,13 @@ firebase.auth().onAuthStateChanged(function (user) {
   }).catch(function () { location.href = 'login.html?redirect=messages-admin.html'; });
 });
 
-/* â”€â”€ Refresh (overview + reports) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* ── Refresh (overview + reports) ───────────────────────────────── */
 function refresh() {
   loadStats();
   loadReports(true);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• OVERVIEW â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════ OVERVIEW ══════════════════════════════════════ */
 function loadStats() {
   fns.httpsCallable('adminGetChatStats')({})
     .then(function (r) {
@@ -447,7 +447,7 @@ function loadStats() {
     .catch(function (e) { toast('Stats error: ' + e.message, 'error'); });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• REPORTS â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════ REPORTS ═══════════════════════════════════════ */
 function loadReports(reset) {
   if (reset) { _reports = []; _rptCursor = null; }
   var status = document.getElementById('rpt-status-filter').value;
@@ -509,14 +509,14 @@ function reportCardHtml(r) {
     '<div class="rc-top">' +
       '<div class="rc-icon ' + cls + '"><span class="mir">' + icon + '</span></div>' +
       '<div class="rc-body">' +
-        '<div class="rc-conv">' + esc(r.conversationId || 'â€”') + '</div>' +
+        '<div class="rc-conv">' + esc(r.conversationId || '—') + '</div>' +
         '<div class="rc-reason">' + esc(label) + ' &middot; ' + (isAuto ? 'Auto-detected' : 'User report') + '</div>' +
       '</div>' +
       '<div class="rc-time">' + esc(timeStr) + '</div>' +
     '</div>' +
     (r.details ? '<div class="rc-details">' + esc(r.details) + '</div>' : '') +
     (reviewed
-      ? '<div class="rc-done"><span class="mir" style="font-size:16px;color:var(--accent)">check_circle</span>Reviewed â€” Action: ' + esc(r.action || 'â€”') + (r.reviewNote ? ' â€” ' + esc(r.reviewNote) : '') + '</div>'
+      ? '<div class="rc-done"><span class="mir" style="font-size:16px;color:var(--accent)">check_circle</span>Reviewed — Action: ' + esc(r.action || '—') + (r.reviewNote ? ' — ' + esc(r.reviewNote) : '') + '</div>'
       : '<div class="rc-actions">' +
           '<button class="rc-btn rc-dismiss" onclick="reviewReport(\'' + r.id + '\',\'dismiss\')">Dismiss</button>' +
           '<button class="rc-btn rc-warn"    onclick="reviewReport(\'' + r.id + '\',\'warn\')">Warn user</button>' +
@@ -544,7 +544,7 @@ function reviewReport(reportId, action) {
     });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• POLICIES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════ POLICIES ══════════════════════════════════════ */
 function loadPolicy() {
   if (!db) return;
   db.collection('chatPolicies').doc('default').get()
@@ -571,7 +571,7 @@ function bindPolicyEnter() {
 function savePolicies() {
   var btn = document.getElementById('save-btn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="mir" style="font-size:16px;animation:spinning .65s linear infinite">refresh</span>Savingâ€¦';
+  btn.innerHTML = '<span class="mir" style="font-size:16px;animation:spinning .65s linear infinite">refresh</span>Saving…';
 
   var payload = {
     maxImageSizeMB:     parseInt(getVal('p-img'),       10) || 10,
@@ -596,7 +596,7 @@ function savePolicies() {
     });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• SEARCH â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════ SEARCH ═════════════════════════════════════════ */
 function doSearch() {
   var query = document.getElementById('s-query').value.trim();
   var type  = document.getElementById('s-type').value;
@@ -626,7 +626,7 @@ function convCardHtml(c) {
   var icon   = TX_ICON[c.transactionType] || 'chat';
   var status = c.status || 'active';
   var stsCls = status === 'active' ? 'cb-active' : status === 'read_only' ? 'cb-read_only' : status === 'suspended' ? 'cb-suspended' : 'cb-other';
-  var sub    = [c.transactionType ? cap(c.transactionType) : null, c.participantName].filter(Boolean).join(' Â· ');
+  var sub    = [c.transactionType ? cap(c.transactionType) : null, c.participantName].filter(Boolean).join(' · ');
   var convId = c.conversationId || c.id || '';
 
   return '<a class="conv-card" href="chat.html?id=' + encodeURIComponent(convId) + '" target="_blank">' +
@@ -639,7 +639,7 @@ function convCardHtml(c) {
   '</a>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TAB NAV â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════ TAB NAV ════════════════════════════════════════ */
 function switchTab(id) {
   document.querySelectorAll('.tab').forEach(function (t) {
     t.classList.toggle('active', t.dataset.tab === id);
@@ -650,7 +650,7 @@ function switchTab(id) {
   });
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• UTILITIES â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ═══════════════════ UTILITIES ══════════════════════════════════════ */
 function setText(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
 function setVal(id, v)  { if (v !== undefined && v !== null) { var el = document.getElementById(id); if (el) el.value = v; } }
 function getVal(id)     { var el = document.getElementById(id); return el ? el.value : ''; }

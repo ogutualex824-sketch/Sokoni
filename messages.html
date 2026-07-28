@@ -9,7 +9,7 @@
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Messages â€” SOKONI</title>
+<title>Messages — SOKONI</title>
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
@@ -19,7 +19,11 @@
 :root{--c-bg:#f7f8fa;--c-surface:#fff;--c-border:#e5e7eb;--c-primary:#1a56db;--c-primary-light:#eff6ff;--c-text:#111827;--c-sub:#6b7280;--c-red:#dc2626;--radius:12px}
 body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);min-height:100vh;padding-bottom:80px}
 
-.topbar{position:sticky;top:0;z-index:100;background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 16px;height:60px;display:flex;align-items:center;gap:12px}
+/* Sticks BELOW the shared header, not at viewport top. shared-header.js injects a
+   position:fixed nav and publishes its measured height as --sk-header-h; a sticky bar
+   pinned at top:0 scrolls straight underneath it (z-index 100 vs 100001) and the
+   "Messages" title disappears behind the header. Same contract .sk-sub-nav uses. */
+.topbar{position:sticky;top:var(--sk-header-h,58px);z-index:100;background:var(--c-surface);border-bottom:1px solid var(--c-border);padding:0 16px;height:60px;display:flex;align-items:center;gap:12px}
 .topbar h1{font-size:20px;font-weight:700;flex:1}
 .icon-btn{width:40px;height:40px;border:none;background:none;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--c-sub)}
 .icon-btn:hover{background:var(--c-bg)}
@@ -72,7 +76,7 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
   body{padding-bottom:0;max-width:640px;margin:0 auto}
 }
 
-/* â”€â”€ Dark mode â”€â”€ */
+/* ── Dark mode ── */
 @media(prefers-color-scheme:dark){
   :root{
     --c-bg:#050505;
@@ -103,7 +107,7 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 <div class="search-wrap">
   <div class="search-box">
     <span class="material-icons" aria-hidden="true">&#xe8b6;</span>
-    <input type="text" id="searchInput" placeholder="Search conversationsâ€¦" autocomplete="off">
+    <input type="text" id="searchInput" placeholder="Search conversations…" autocomplete="off">
   </div>
 </div>
 

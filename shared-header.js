@@ -544,7 +544,16 @@
     'superadmin', 'monitor', 'moderation', 'verification-admin',
   ];
   const page = location.pathname.split('/').pop().split('?')[0] || 'index.html';
-  if (EXCLUDED.includes(page)) return;
+  /* firebase.json sets cleanUrls:true, so production serves /messages — never
+     /messages.html (that 301-redirects). The page key is therefore ALWAYS extension-free,
+     while the lists below are written with .html. Strip it from both sides before
+     comparing. EXCLUDED survived this only because somebody hand-wrote both spellings of
+     all 17 entries; NO_SEARCH did not, so all 12 of its pages silently never matched in
+     production and kept the header's search bar. Normalise once, here, rather than asking
+     every future list to remember the two spellings. */
+  const pageKey = page.replace(/\.html$/, '');
+  const _match = (list) => list.some((e) => e.replace(/\.html$/, '') === pageKey);
+  if (_match(EXCLUDED)) return;
   if (document.documentElement.dataset.noHeader === 'true') return;
   /* NOTE: pages that bake #sk-top-nav as static HTML (e.g. index.html) still need
      the CSS injection and event wiring below — _inject() handles that gracefully
@@ -557,7 +566,7 @@
     'profile.html', 'reviews.html', 'referral.html',
     'subscriptions.html', 'loyalty.html',
   ];
-  const showSearch = !NO_SEARCH.includes(page);
+  const showSearch = !_match(NO_SEARCH);
 
   /* ── CSS (injected into <head> immediately to prevent flash) ── */
   const CSS = `
