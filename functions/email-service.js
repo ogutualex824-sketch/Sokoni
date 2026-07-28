@@ -670,7 +670,10 @@ async function markBounced(email, messageId) {
  * Get user email preferences (or defaults).
  */
 async function getPreferences(uid) {
-  const defaults = { orders: true, payments: true, security: true, marketing: true, account: true, newsletter: false };
+  /* Marketing/newsletter default to FALSE (opt-in, KDPA/ODPC): a user who has never set a
+     preference must NOT receive marketing email. Transactional categories (orders/payments/
+     security/account) stay true — they are service messages, not marketing consent. */
+  const defaults = { orders: true, payments: true, security: true, marketing: false, account: true, newsletter: false };
   if (!uid) return defaults;
   const snap = await db().collection("emailPreferences").doc(uid).get().catch(() => null);
   return snap && snap.exists ? { ...defaults, ...snap.data() } : defaults;

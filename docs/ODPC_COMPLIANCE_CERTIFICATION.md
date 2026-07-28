@@ -50,7 +50,7 @@ However, **it is not yet certifiable as fully KDPA-compliant** because of four m
 
 ## 4. Purpose Limitation — **DOCUMENTED**
 - **Documented:** purposes enumerated `privacy.html:248-256`; "we do not sell/rent/trade personal data … for marketing" `:316`; marketing consent-gated `:251`.
-- **Recommendation:** `pos-customers.js:103` `marketingOptIn` **defaults to true** — should be opt-out-by-default for KDPA consent-based marketing.
+- **Recommendation (RESOLVED 2026-07-28):** `pos-customers.js:103` `marketingOptIn` previously **defaulted to true**; now defaults to **opt-in** (`data.marketingOptIn === true`, consent only when explicitly captured). Also fixed the related opt-out default in `functions/email-service.js` `getPreferences` (`marketing: false` by default; transactional categories orders/payments/security/account unchanged).
 
 ## 5. Transparency & Privacy Notices — **VERIFIED**
 - **Verified:** `privacy.html` (429 lines; controller, data table, retention schedule `:322-335`, rights + 30-day response `:343-353`, ODPC complaint `:354`); `terms.html` (binds to Bravilex `:151`, Kenyan law); `cookie-policy.html` (categories + legal-basis badges, Bravilex named `:221`). `/privacy` linked in ~22 footers.
@@ -108,7 +108,7 @@ Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Fire
 ## SHOULD-FIX / Recommendations
 5. Add an explicit **cross-border transfer clause** (KDPA Part VI) to the privacy notice (§11).
 6. Restore **Redis rate limiting** (VPC connector) or add a TTL on `rateLimitsFallback` (§8).
-7. **Marketing opt-in defaults to true** — change to opt-out-by-default (§4).
+7. ~~**Marketing opt-in defaults to true** — change to opt-out-by-default (§4).~~ **RESOLVED 2026-07-28** — marketing now opt-in by default in `pos-customers.js` + `email-service.js`.
 8. Reconcile the **duplicate `requestDataExport`** definitions so the signed-URL implementation is exported (§6).
 9. Appoint a **named DPO** rather than a role mailbox (§1).
 10. Unify the **consent/privacy entry point** (canonical `privacy.html`/`terms.html`, not `legal.html#…`) (§5).

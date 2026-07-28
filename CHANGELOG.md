@@ -1,3 +1,22 @@
+## [2026-07-28] — fix(privacy): marketing defaults to opt-in (KDPA/ODPC SHOULD-FIX #7)
+
+Post-release backlog item — marketing consent must be opt-in, not opt-out.
+
+- **`pos-customers.js`** — a POS-created customer's `marketingOptIn` previously defaulted to `true`
+  (`data.marketingOptIn !== false`); now `data.marketingOptIn === true` (consent only when the merchant
+  explicitly captures it).
+- **`functions/email-service.js`** — `getPreferences` default `marketing` flipped `true → false`; a user
+  who has never set a preference no longer receives marketing email. Transactional categories
+  (orders/payments/security/account) stay `true` — service messages, not marketing consent. `newsletter`
+  already defaulted false.
+- **`docs/ODPC_COMPLIANCE_CERTIFICATION.md`** — §4 recommendation + gap-summary #7 marked RESOLVED.
+
+Behavioural note: existing users with an explicit `emailPreferences` doc are unaffected (their stored
+choice still wins via `{...defaults, ...snap.data()}`); only users with no preference set change from
+implicitly-in to opt-in. Security changes: none. Breaking changes: none.
+
+---
+
 ## [2026-07-28] — test(qa): on-demand E2E harness certifies both dispatch branches + exactly-once settlement
 
 Repeatable emulator integration harness for the delivery-pipeline QA gate — proves the
