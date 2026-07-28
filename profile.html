@@ -1700,7 +1700,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
              single icon source; the previous default (sokoni-logo-dark.png) is the HEADER
              brand mark, so the avatar and the app icon disagreed. onerror keeps the old
              file as a last-resort fallback rather than rendering a broken image. -->
-        <img id="upAvatar" class="up-avatar" src="/assets/logosokoni.png" alt="Avatar" onerror="this.src='assets/sokoni-logo-dark.png'">
+        <img id="upAvatar" class="up-avatar" src="/assets/logosokoni.png" alt="Avatar" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/assets/logosokoni.png';}">
         <div class="up-verified-badge" id="upVerifiedBadge" style="display:none;" title="Verified">&#10003;</div>
         <input type="file" id="avatarUpload" class="up-avatar-upload" accept="image/*" onchange="handleAvatarUpload(event)">
       </div>

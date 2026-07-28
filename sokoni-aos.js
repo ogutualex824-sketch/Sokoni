@@ -216,7 +216,7 @@ window.SokoniAOS = (() => {
       if (!users.length) { tbody.innerHTML = _emptyRow(7, "No users found"); return; }
       tbody.innerHTML = users.map(u => `
         <tr>
-          <td><img class="avatar" src="${_esc(u.photoURL||"")||"https://ui-avatars.com/api/?name="+encodeURIComponent(u.name||u.email||"?")}"> ${_esc(u.name || "—")}</td>
+          <td><img class="avatar" src="${_esc(u.photoURL||"")||"/assets/logosokoni.png"}" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='/assets/logosokoni.png';}"> ${_esc(u.name || "—")}</td>
           <td class="aos-muted">${_esc(u.email||"")}</td>
           <td><span class="role-badge role-${u.role||"buyer"}">${_esc(u.role||"buyer")}</span></td>
           <td><span class="status-badge st-${u.status||"active"}">${_esc(u.status||"active")}</span></td>
