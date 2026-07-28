@@ -19,7 +19,6 @@ import {
   updateProfile,
   sendEmailVerification,
   GoogleAuthProvider,
-  FacebookAuthProvider,
   getRedirectResult,
   linkWithCredential,
   linkWithPhoneNumber,
@@ -294,7 +293,6 @@ window.firebaseSDK = {
   updateProfile,
   sendEmailVerification: () => auth.currentUser ? sendEmailVerification(auth.currentUser) : Promise.reject(new Error('No user')),
   GoogleAuthProvider,
-  FacebookAuthProvider,
   RecaptchaVerifier,
 };
 
@@ -399,7 +397,7 @@ if (!window.firebase) {
         sendEmailVerification:            (u)      => sendEmailVerification(u||auth.currentUser),
       };
     },
-    { GoogleAuthProvider, FacebookAuthProvider, RecaptchaVerifier }
+    { GoogleAuthProvider, RecaptchaVerifier }
   );
 
   /* ── Firestore function: callable + direct-access + static helpers ─── */
@@ -544,7 +542,6 @@ const _sokoniUserSeen = new Promise((resolve) => { _sokoniUserSeenResolve = reso
         const pid = err.customData?._tokenResponse?.providerId || "";
         try {
           if (pid === "google.com")         err._pendingCred = GoogleAuthProvider.credentialFromError(err);
-          else if (pid === "facebook.com")  err._pendingCred = FacebookAuthProvider.credentialFromError(err);
         } catch (_) {}
       }
       window.dispatchEvent(new CustomEvent("sokoniGoogleRedirectError", { detail: err }));
