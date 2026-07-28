@@ -158,6 +158,32 @@ canonical terminal state `status:'completed'` (the same state `providerCompleteB
 > `reviews` path is **deprecated for provider bookings** and is retired with the rest of the legacy
 > booking surface in Phase F. No new work routes provider reviews through it.
 
+### WS4a — Convergence telemetry (DONE)
+
+The evidence base for the Phase F exit criteria. Stood up **before** the customer cutover so the
+observation window starts as early as possible. `systemHealth/bookingConvergence` mirrors the
+`availabilityConvergence` pattern (best-effort `FieldValue.increment`, **no new scheduler / Cloud
+Run service**):
+
+- **Cumulative** `canonicalTotal` / `legacyTotal` + **per-day buckets** `daily[YYYY-MM-DD].{canonical,legacy}`
+  (Africa/Nairobi) — so adoption is a computable trend, not a cumulative total needing interpretation.
+- Canonical counter fires in `bookingCreateService` (new creates only — idempotent replays don't
+  double-count); legacy counter fires in the `webhookIntasend` top-level-`bookings` create branch.
+- `computeBookingConvergence` folds a read-only summary (canonical share %) into
+  `aggregatePlatformMetrics` → `platformMetrics/{date}.bookingConvergence`, surfaced like
+  `settlementConvergence`. `canonicalShare` is `null` until the first booking.
+- **Known gap (documented):** the client-direct free-request path (`SokoniDB.saveBooking`,
+  fallback-only) is not in the live counter — a client can't write `systemHealth`. Tagged + counted
+  in WS4b. The two material server paths are instrumented.
+- These counters are the inputs to the §Exit criteria "zero legacy traffic for a sustained window,
+  reset on regression" gate. Proof: 17/17 (WS3) + 14/14 (WS4a) emulator assertions, incl. the
+  counter firing from the real handler (not silently swallowed by the best-effort catch).
+
+**WS4b (next):** persistent "My Bookings" (canonical `providerBookings where customerUid == me`) with
+lifecycle status + a per-completed-booking review entry wired to `bookingSubmitReview` — the deferred
+WS3 persistent review surface. Provider-domain only; other hubs (healthcare/legal/property/…) remain a
+separate future convergence.
+
 ## Legacy retirement lifecycle (Phase F)
 
 The legacy service-booking create path — `SokoniPay.bookNow` (localStorage) + `SokoniDB.saveBooking` raw `addDoc` to top-level `bookings`, plus `hub-wiring.js saveBooking` — must NOT become a permanent dual implementation. After the Phase E client cutover, retire it the same way the publication subsystem was converged:

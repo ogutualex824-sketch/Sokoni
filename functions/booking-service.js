@@ -193,6 +193,10 @@ _h.bookingCreateService = async (req) => {
       : outcome.conflict === 'failed-precondition' ? 'You have reached your booking limit with this provider.'
         : 'That slot was just taken. Please choose another time.');
 
+  /* Convergence telemetry (WS4a) — a genuinely NEW canonical booking (idempotent
+     replays returned above). Best-effort: never affects the booking. */
+  try { require('./booking-convergence').bumpBookingConvergence(db, 'canonical'); } catch (e) { /* ignore */ }
+
   /* Notify the provider (best-effort — must not fail the booking). */
   try {
     await db.collection('notifications').add({

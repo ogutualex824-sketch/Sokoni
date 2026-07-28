@@ -1,3 +1,31 @@
+## [2026-07-28] — feat(booking): WS4a — service-booking convergence telemetry
+
+The Phase F retirement decision must be evidence-based ("zero legacy traffic for a sustained
+window"), so WS4a stands up the meter first — before the customer cutover — to start the
+observation window immediately. Measures what share of provider-service bookings flow through
+the canonical path vs the legacy path.
+
+**Files:** `functions/booking-convergence.js` (new), `functions/booking-service.js`, `functions/index.js`.
+**Deploy:** functions only (`providerDispatch`, `webhookIntasend`, `aggregatePlatformMetrics`). **Rules/DB/hosting:** none.
+
+- **`systemHealth/bookingConvergence`** — mirrors the proven `availabilityConvergence` pattern
+  (best-effort `FieldValue.increment`, no new scheduler/Cloud Run). Two layers so adoption is a
+  computable **trend**, not a cumulative total needing interpretation: cumulative
+  `canonicalTotal`/`legacyTotal` **and** per-day buckets `daily[YYYY-MM-DD].{canonical,legacy}`
+  (Africa/Nairobi, matching the platform calendar TZ).
+- **Canonical counter** increments in `bookingCreateService` on a genuinely new create (idempotent
+  replays return earlier — proven not to double-count). **Legacy counter** increments in the
+  `webhookIntasend` top-level `bookings`-create branch on a new create. Every increment is
+  best-effort: a telemetry failure can never affect a booking.
+- **Read-only fold** into the existing `aggregatePlatformMetrics` (`computeBookingConvergence` →
+  `platformMetrics/{date}.bookingConvergence`, canonical-share %), surfaced like `settlementConvergence`.
+  `canonicalShare` is `null` until the first booking (a zero-data platform never reports a misleading 0%).
+- **Known gap (documented, not silent):** the client-direct free-request path (`SokoniDB.saveBooking`,
+  fallback-only) is not in the live counter — a client can't write `systemHealth`. It will be tagged +
+  counted in **WS4b** (which touches hosting). The two material server paths are fully instrumented.
+- Proof: **14/14** emulator assertions, including that the counter **fires from the real handler**
+  (guards against the lazy-`require`-in-`try/catch` silently swallowing a wrong path → dead telemetry).
+
 ## [2026-07-28] — feat(booking): WS3 — reviews gated on a completed booking
 
 Provider/service reviews had two disconnected halves: `providerReviews` (what the provider

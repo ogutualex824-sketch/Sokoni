@@ -4782,6 +4782,16 @@ exports.aggregatePlatformMetrics = onSchedule(
       }
     } catch (e) { console.error('[settlement-monitor] failed (non-fatal):', e && e.message); }
 
+    /* Booking convergence (WS4a — Phase F evidence). Cumulative + today's per-day
+       adoption of canonical vs legacy service-booking creation. Best-effort. */
+    try {
+      const { computeBookingConvergence } = require('./booking-convergence');
+      const booking = await computeBookingConvergence(db);
+      metrics.bookingConvergence = booking;
+      const pct = booking.canonicalShare == null ? 'n/a' : (booking.canonicalShare * 100).toFixed(1) + '%';
+      console.log('[booking-convergence]', { canonicalShare: pct, canonicalTotal: booking.canonicalTotal, legacyTotal: booking.legacyTotal, today: booking.today });
+    } catch (e) { console.error('[booking-convergence] failed (non-fatal):', e && e.message); }
+
     await db.collection("platformMetrics").doc(date).set(metrics, { merge: true });
     console.log("[metrics] Aggregated platform metrics for", date, metrics);
   }
@@ -7124,6 +7134,9 @@ exports.webhookIntasend = onRequest(
               data: { ref: apiRef, customerUid: payData.uid || "" },
             }).catch(() => {});
             console.log(`[webhookIntasend] booking created + notified: ${apiRef}`);
+            /* Convergence telemetry (WS4a) — a NEW legacy top-level `bookings`
+               create. Best-effort: never affects the webhook/payment. */
+            try { require("./booking-convergence").bumpBookingConvergence(db, "legacy"); } catch (e) { /* ignore */ }
           }
         }
       } catch (bErr) {
