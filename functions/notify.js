@@ -651,12 +651,17 @@ async function advanceOrder({ orderId, stage, uid, phone, title, body, image, de
   const st  = ORDER_TIMELINE[idx];
   const who = uid || order.uid || order.buyerId;
 
-  await ref.update({
+  /* Blocker A fix — the 'accepted' milestone (Seller Accepted) also sets order.status to
+     'confirmed', which is what onOrderStatusChange watches to fire rider auto-assignment.
+     Previously advanceOrder moved only the timeline, so a paid order never became 'confirmed'
+     and dispatch never triggered. Guarded on status==='paid' so we never regress a later status. */
+  const _statusPatch = (st.key === 'accepted' && order.status === 'paid') ? { status: 'confirmed', confirmedAt: admin.firestore.FieldValue.serverTimestamp() } : {};
+  await ref.update(Object.assign({
     timelineStage: st.key,
     timelineIndex: idx,
     timeline: admin.firestore.FieldValue.arrayUnion({ key: st.key, label: st.label, at: Date.now() }),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  }, _statusPatch));
 
   let notified = null;
   if (st.type && who) {
