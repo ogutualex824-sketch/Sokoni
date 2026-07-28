@@ -276,6 +276,26 @@ exports.finaliseExpiredDeletions = onSchedule(
           photoURL:  '[redacted]',
         }, { merge: true });
 
+        /* 3b. Cross-collection erasure driven by the explicit purge spec — DELETE personal
+              collections, ANONYMIZE records under statutory retention (orders/wallet/tax kept,
+              PII stripped), purge Storage. Then write an IMMUTABLE erasure audit event BEFORE
+              the irreversible auth delete, so completion is evidenced even if a later step fails. */
+        const _purge   = require('./account-purge-spec');
+        let _summary   = { deleted: [], anonymized: [], retained: [], storage: [] };
+        try { _summary = await _purge.purgeUserData(db, admin, uid); }
+        catch (pe) { console.error('[AccountManager] cross-collection purge failed:', uid, pe.message); }
+        await db.collection('erasureLog').add({
+          uid,
+          requestedAt:           data.deletionScheduledAt || null,
+          executedAt:            admin.firestore.FieldValue.serverTimestamp(),
+          workerVersion:         _purge.PURGE_WORKER_VERSION,
+          collectionsDeleted:    _summary.deleted,
+          collectionsAnonymized: _summary.anonymized,
+          collectionsRetained:   _summary.retained,
+          storagePurged:         _summary.storage,
+          outcome:               'success',
+        }).catch(() => {});
+
         /* 4. Delete the Firebase Auth account — the irreversible step, last.
               Tolerate an already-deleted account so a retry can still complete. */
         try {
