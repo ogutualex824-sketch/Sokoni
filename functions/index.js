@@ -2643,6 +2643,11 @@ exports.verifyIntasendPayment = onRequest(
         buyerPhone:      phone,
         buyerName:       deliveryName || "Customer",
         deliveryAddress: deliveryAddress || "",
+        /* Carry the server-clamped delivery fee from the session onto the order (was dropped).
+           Fixes TWO things: the `delivered` fee-split (onOrderStatusChange read `after.deliveryFee`
+           → previously 0), AND settlement gross (order-settlement `_grossCents` = total − deliveryFee,
+           previously over-settled the seller by the delivery amount). Server-authoritative. */
+        deliveryFee:     Number((sessionDoc && sessionDoc.deliveryFee) || 0),
         orderTotal:      confirmedAmount,
         total:           confirmedAmount,
         items:           resolvedItems,
