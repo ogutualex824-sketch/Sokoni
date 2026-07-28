@@ -130,6 +130,34 @@ booking/settlement backend already in production. Four shippable increments, bac
 | **E. Service page + reviews + client cutover** | rate cards, slots, reviews list, response time, Book Now wired to `bookingCreateService`; `providerReviews` creation CF gated on a completed booking; multi-dimension ratings | reviews gated on completion; publicationContract-style check |
 | **F. Legacy retirement** | after cutover: deprecate + instrument the legacy client create path, measure usage, remove at zero traffic | zero legacy booking-create traffic before removal |
 
+### WS3 — Reviews gated on a completed booking (DONE)
+
+The authoritative customer review path. `bookingSubmitReview` (a new op on the existing
+`providerDispatch` route — **zero new Cloud Run services, zero rules changes**) creates a
+review **only** when the caller is the booking's customer **and** the booking has reached the
+canonical terminal state `status:'completed'` (the same state `providerCompleteBooking` sets).
+
+- **Authoritative store = `providerReviews`** — the collection the provider dashboard
+  (`providerGetReviews`) already reads. In the *same transaction* it updates the denormalized
+  `providerProfiles` aggregate (`rating`/`reviewCount`/drift-free `ratingSum`) the **public
+  profile** reads, resolving the audit's "writes and reads don't line up" gap. This connects the
+  two previously-disconnected provider surfaces onto one write.
+- **Deterministic identity** `providerReviews/{bookingId}` → one review per completed booking,
+  replay-safe, no uniqueness index. A repeat submission is an **idempotent no-op**
+  (`{ alreadyReviewed:true }`), never a partial write; the aggregate never double-counts.
+- **Immutable `bookingStatusAtReview:'completed'`** is stamped on the review so eligibility state
+  is preserved for later audit/analytics independent of the booking's future mutations.
+- The booking is stamped `reviewedAt`; the client (`sokoni-book-service.js`) shows a live review
+  prompt on a completed booking and flips to a thank-you off that server stamp (single source of
+  truth). A persistent "My Bookings" review entry point is deferred to **WS4** (customer cutover).
+- Proof: 17/17 emulator assertions (created / aggregate updated / booking stamped / duplicate
+  no-op / non-owner denied / non-completed denied / provider-cannot-review / not-found).
+
+> **Architectural direction (holds through Phase F):** *all future provider/service reviews MUST
+> originate from a completed `providerBooking`.* The legacy `submitReview(targetType:'service')` →
+> `reviews` path is **deprecated for provider bookings** and is retired with the rest of the legacy
+> booking surface in Phase F. No new work routes provider reviews through it.
+
 ## Legacy retirement lifecycle (Phase F)
 
 The legacy service-booking create path — `SokoniPay.bookNow` (localStorage) + `SokoniDB.saveBooking` raw `addDoc` to top-level `bookings`, plus `hub-wiring.js saveBooking` — must NOT become a permanent dual implementation. After the Phase E client cutover, retire it the same way the publication subsystem was converged:

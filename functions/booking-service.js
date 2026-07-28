@@ -205,4 +205,89 @@ _h.bookingCreateService = async (req) => {
   return { success: true, bookingId: outcome.bookingId, status: outcome.status, price };
 };
 
+/* ── WS3 · bookingSubmitReview ────────────────────────────────────────────────
+   The AUTHORITATIVE customer review path (docs/BOOKING_CONVERGENCE.md, row E).
+   Gate: a review may be created ONLY by the booking's customer, and ONLY once the
+   booking has reached the canonical terminal state status:'completed' (the same
+   state providerCompleteBooking sets). Writes the `providerReviews` collection —
+   the one the provider dashboard (providerGetReviews) already reads — and updates
+   the denormalized providerProfiles aggregate (rating/reviewCount) the PUBLIC
+   profile reads, in the SAME transaction, so both surfaces converge on one write.
+
+   Identity: providerReviews/{bookingId} → deterministic → replay-safe, one review
+   per completed booking, no separate uniqueness index. A repeat submission is an
+   idempotent no-op ({ alreadyReviewed:true }), never a partial write.
+   Rules: providerReviews is CF-only (write:false) + public read — no rule change. */
+_h.bookingSubmitReview = async (req) => {
+  const customerUid = _uid(req);
+  const d = req.data || {};
+  const bookingId = _san(d.bookingId, 200);
+  const rating    = Math.round(Number(d.rating));
+  const text      = _san(d.text, 1000).trim();
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId is required.');
+  if (!(rating >= 1 && rating <= 5)) throw new HttpsError('invalid-argument', 'rating must be an integer 1–5.');
+
+  const bookingRef = db.collection('providerBookings').doc(bookingId);
+  const reviewRef  = db.collection('providerReviews').doc(bookingId);   /* deterministic: one review / booking */
+
+  let outcome = null;
+  await db.runTransaction(async (txn) => {
+    outcome = null;
+    /* ── all reads before any write ── */
+    const bSnap = await txn.get(bookingRef);
+    if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
+    const b = bSnap.data();
+    /* Ownership + eligibility gate — server is authoritative, not the client. */
+    if (b.customerUid !== customerUid) throw new HttpsError('permission-denied', 'Not your booking.');
+    if (b.status !== 'completed')      throw new HttpsError('failed-precondition', 'You can review a booking only after it is completed.');
+
+    const rSnap = await txn.get(reviewRef);
+    if (rSnap.exists) { outcome = { alreadyReviewed: true }; return; }   /* idempotent no-op — replay safe */
+
+    const providerId = b.providerId;
+    const profileRef = db.collection('providerProfiles').doc(providerId);
+    const pSnap = await txn.get(profileRef);
+    const p = pSnap.exists ? pSnap.data() : {};
+    const prevCount = Math.max(0, Number(p.reviewCount) || 0);
+    /* ratingSum is drift-free; derive it from the stored avg when the field is absent (back-compat). */
+    const prevSum   = Number.isFinite(Number(p.ratingSum)) ? Number(p.ratingSum)
+                       : Math.round((Number(p.rating) || 0) * prevCount);
+    const newCount  = prevCount + 1;
+    const newSum    = prevSum + rating;
+    const newAvg    = newSum / newCount;
+
+    /* 1 — the review (schema providerGetReviews reads: providerId/customerName/rating/text). */
+    txn.set(reviewRef, {
+      providerId, customerUid,
+      customerName: _san(b.customerName, 120) || 'Customer',   /* from the booking snapshot, never client input */
+      bookingId,
+      serviceId: b.serviceId || null, service: b.service || null,
+      rating, text,
+      bookingStatusAtReview: 'completed',   /* immutable eligibility state at review time (audit/analytics) */
+      reply: null,
+      status: 'published',
+      createdAt: _ts(), updatedAt: _ts(),
+    });
+    /* 2 — converge the provider aggregate the PUBLIC profile reads. */
+    txn.set(profileRef, { rating: newAvg, reviewCount: newCount, ratingSum: newSum, updatedAt: _ts() }, { merge: true });
+    /* 3 — stamp the booking so the UI knows it's reviewed (idempotency signal for the client too). */
+    txn.update(bookingRef, { reviewedAt: _ts(), reviewRating: rating, updatedAt: _ts() });
+
+    outcome = { created: true, providerId };
+  });
+
+  if (outcome && outcome.alreadyReviewed) return { success: true, alreadyReviewed: true };
+
+  /* Notify the provider of the new review (best-effort — must not fail the review). */
+  try {
+    await db.collection('notifications').add({
+      targetUid: outcome.providerId, type: 'review', heading: 'New review',
+      sub: `${rating}★ from a customer`, link: 'provider-dashboard.html',
+      createdAt: _ts(), read: false,
+    });
+  } catch (e) { /* ignore */ }
+
+  return { success: true, created: true, rating };
+};
+
 module.exports = { _h, _prepareSlot };

@@ -157,13 +157,61 @@
     } catch (e) { btn.disabled = false; btn.textContent = 'Pay with M-Pesa'; note.textContent = e.message || 'Could not send the M-Pesa request.'; }
   }
 
+  /* ── Review surface (WS3) — a completed booking may be reviewed exactly once.
+     Gated on b.status==='completed' (mirrors the server gate); b.reviewedAt (a
+     server stamp) is the single source of truth for "already reviewed", so the
+     snapshot re-fire after submit flips this to the thank-you state on its own. ── */
+  function reviewPrompt(b) {
+    const name = esc(_ctx.serviceName || b.service || 'your service');
+    return `<div class="sbs-state" style="padding:8px 0">✅ Completed</div>
+      <div class="sbs-note" style="text-align:center;margin-bottom:2px">How was ${name}? Your review helps other customers.</div>
+      <div id="sbsStars" style="display:flex;justify-content:center;gap:6px;margin:12px 0">
+        ${[1, 2, 3, 4, 5].map(n => `<button type="button" data-n="${n}" onclick="SokoniBookService._star(${n})" style="background:none;border:none;font-size:30px;line-height:1;cursor:pointer;filter:grayscale(1);opacity:.5" aria-label="${n} star${n === 1 ? '' : 's'}">⭐</button>`).join('')}
+      </div>
+      <textarea class="sbs-in" id="sbsReviewText" rows="3" placeholder="Add a comment (optional)"></textarea>
+      <button class="sbs-btn" id="sbsReviewGo" disabled onclick="SokoniBookService._review()">Submit review</button>
+      <button class="sbs-btn" style="background:#141414;color:#9a9a9a;margin-top:8px" onclick="SokoniBookService.close()">Maybe later</button>
+      <div class="sbs-note" id="sbsReviewNote"></div>`;
+  }
+  function reviewDone(b) {
+    return `<div class="sbs-state">✅ Completed</div>
+      <div class="sbs-note" style="text-align:center">Thanks for your review${b.reviewRating ? ' · ' + b.reviewRating + '★' : ''}.</div>
+      <button class="sbs-btn" onclick="SokoniBookService.close()">Done</button>`;
+  }
+  function star(n) {
+    _ctx.reviewRating = n;
+    document.querySelectorAll('#sbsStars button').forEach(b => { const on = Number(b.dataset.n) <= n; b.style.filter = on ? 'none' : 'grayscale(1)'; b.style.opacity = on ? '1' : '.5'; });
+    const go = document.getElementById('sbsReviewGo'); if (go) go.disabled = false;
+  }
+  async function submitReview() {
+    const go = document.getElementById('sbsReviewGo'); const note = document.getElementById('sbsReviewNote');
+    const rating = Number(_ctx.reviewRating || 0);
+    if (!(rating >= 1 && rating <= 5)) { if (note) note.textContent = 'Please choose a star rating.'; return; }
+    const text = (document.getElementById('sbsReviewText') || {}).value || '';
+    go.disabled = true; go.textContent = 'Submitting…';                 /* dup-click lock */
+    try {
+      await call('providerDispatch', { op: 'bookingSubmitReview', bookingId: _ctx.bookingId, rating, text });
+      /* The server stamps reviewedAt → observe() re-fires and renders reviewDone().
+         Fallback text in case the listener is momentarily detached: */
+      if (note) note.textContent = 'Thank you for your review!';
+    } catch (e) { go.disabled = false; go.textContent = 'Submit review'; if (note) note.textContent = e.message || 'Could not submit your review.'; }
+  }
+
   /* ── 5. Observe the booking doc — every state comes from Firestore. ── */
   function observe(bookingId) {
+    _ctx.bookingId = bookingId;
     if (_unsub) { _unsub(); _unsub = null; }
     _unsub = firebase.firestore().collection('providerBookings').doc(bookingId).onSnapshot(snap => {
       if (!snap.exists) return;
       const b = snap.data(); const st = stateOf(b);
       if (b.paymentStatus === 'paid_held' || st.done) {
+        /* A completed booking becomes reviewable (or shows the thank-you once reviewed). */
+        if (b.status === 'completed') {
+          title('Booking completed');
+          body(b.reviewedAt ? reviewDone(b) : reviewPrompt(b));
+          sessionStorage.removeItem(K);
+          return;
+        }
         title(st.tone === 'warn' ? 'Booking update' : 'Booking confirmed');
         body(`<div class="sbs-state">${st.label}</div>
           <div class="sbs-note" style="text-align:center">${esc(_ctx.serviceName || '')}${b.date ? ' · ' + esc(b.date) + ' ' + esc(b.startTime || '') : ''}</div>
@@ -190,7 +238,7 @@
       return true;
     },
     close() { if (_unsub) { _unsub(); _unsub = null; } const el = document.getElementById('sbsModal'); if (el) el.style.display = 'none'; document.body.style.overflow = ''; },
-    _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay,
+    _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _star: star, _review: submitReview,
   };
   global.SokoniBookService = Api;
   /* Auto-resume if the customer refreshed mid-booking. */

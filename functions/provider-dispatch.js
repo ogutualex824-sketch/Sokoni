@@ -71,6 +71,8 @@ const ROUTES = [
   'providerToggleService',
   // booking-service (Phase B) — authoritative service-appointment create
   'bookingCreateService',
+  // booking-service (WS3) — authoritative customer review, gated on a completed booking
+  'bookingSubmitReview',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');

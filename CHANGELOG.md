@@ -1,3 +1,34 @@
+## [2026-07-28] — feat(booking): WS3 — reviews gated on a completed booking
+
+Provider/service reviews had two disconnected halves: `providerReviews` (what the provider
+dashboard reads) had rule `write:false` and **nothing wrote it**, while `submitReview`→`reviews`
+was writable but invisible to provider surfaces and gated only optionally on `orders` — never on
+a booking. There was **no completed-booking gate anywhere**. WS3 adds the authoritative path.
+
+**Files:** `functions/booking-service.js` (new `bookingSubmitReview` handler), `functions/provider-dispatch.js`
+(route registration), `sokoni-book-service.js` (live review prompt). **Deploy:** functions + hosting.
+**Rules/DB:** none — `providerReviews` is already CF-only (`write:false`) + public read. **Docs:** `docs/BOOKING_CONVERGENCE.md`.
+
+- **`bookingSubmitReview`** — a customer-authed op on the existing `providerDispatch` route
+  (**zero new Cloud Run services**). Creates a review only when the caller is the booking's
+  `customerUid` **and** `status === 'completed'` (the canonical terminal state). Otherwise
+  `permission-denied` / `failed-precondition`.
+- **Converges the two surfaces** — writes `providerReviews` (dashboard read) and, in the *same
+  transaction*, updates the denormalized `providerProfiles` aggregate (`rating`/`reviewCount`/
+  drift-free `ratingSum`) the public profile reads. Review + aggregate + booking-stamp all commit
+  together or none do.
+- **Deterministic id `providerReviews/{bookingId}`** — one review per completed booking, replay-safe,
+  no uniqueness index. Repeat submission = idempotent no-op (`{ alreadyReviewed:true }`); aggregate
+  never double-counts.
+- **Immutable `bookingStatusAtReview:'completed'`** preserved on the review for audit/analytics;
+  booking stamped `reviewedAt`. Client shows a live review prompt on completion, flipping to a
+  thank-you off the `reviewedAt` server stamp (single source of truth).
+- **Architectural direction (through Phase F):** all future provider/service reviews must originate
+  from a completed `providerBooking`; the legacy `submitReview(targetType:'service')` path is
+  deprecated for provider bookings, retired in Phase F. Persistent "My Bookings" review entry = WS4.
+- Proof: **17/17** emulator assertions (created / aggregate updated / booking stamped / duplicate
+  no-op / non-owner denied / non-completed denied / provider-cannot-review / not-found).
+
 ## [2026-07-27] — fix(perf): homepage scroll-crash (renderer OOM) — bound catalogue feed
 
 The homepage subscribed to the **entire `products` collection** with no cap. The Firestore
