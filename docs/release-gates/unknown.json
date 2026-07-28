@@ -1,0 +1,74 @@
+{
+  "commit": "unknown",
+  "timestamp": "2026-07-28T09:49:01.639Z",
+  "gate": {
+    "pass": 37,
+    "fail": 25,
+    "quarantine": 4,
+    "stale": 0,
+    "env": 8,
+    "timeout": 1
+  },
+  "blocking": [
+    "test-age-enforcement",
+    "test-algolia-batch-isolation",
+    "test-auth-state",
+    "test-banking-hub",
+    "test-beta-gate",
+    "test-booking-buffer",
+    "test-booking-payment-auth",
+    "test-booking-waitlist",
+    "test-brands",
+    "test-counter-blocks",
+    "test-csp",
+    "test-entitlement-digital",
+    "test-entitlement-engine",
+    "test-entitlement-subscription",
+    "test-financial-engine",
+    "test-financial-idempotency",
+    "test-firestore-search",
+    "test-fulfilment-scan",
+    "test-hub-nav",
+    "test-integrity-audit",
+    "test-kass-catalog",
+    "test-kass-modes-memory",
+    "test-kass-retrieval",
+    "test-kass-widget",
+    "test-lifecycle-parity",
+    "test-merchant-diag",
+    "test-migrate-baselines",
+    "test-minishop-config-schema",
+    "test-mobile-forms",
+    "test-nav-routes",
+    "test-navigation",
+    "test-notify",
+    "test-otp",
+    "test-payment-authority",
+    "test-payment-integrity",
+    "test-payment-intents",
+    "test-permissions-escalation"
+  ],
+  "notBlocking": {
+    "quarantine": [
+      "test-auth-email",
+      "test-icons",
+      "test-overlays",
+      "test-search-pipeline"
+    ],
+    "stale": [],
+    "env": [
+      "test-admin-claim",
+      "test-async-states",
+      "test-branch-resolution",
+      "test-legal-compliance",
+      "test-offline-detection",
+      "test-pos-provision-diag",
+      "test-pos-seller-authz",
+      "test-workspace-rules"
+    ],
+    "timeout": [
+      "test-pos-till-adapters"
+    ]
+  },
+  "verdict": "BLOCKED"
+}
