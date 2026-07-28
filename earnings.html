@@ -15,6 +15,8 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-check-compat.js"></script>
 <script src="/sokoni-appcheck.js"></script>
 <script src="sokoni-config.js"></script>
+<!-- Home header (injects #sk-top-nav) so the earnings page matches the home page. -->
+<script src="shared-header.js" defer></script>
 <style>
   :root{
     --bg:#050505; --surface:#0f0f0f; --surface2:#161616; --border:rgba(255,255,255,.09);
@@ -30,7 +32,7 @@
   .wrap{max-width:900px;margin:0 auto;padding:0 16px}
 
   /* ── Hero ── */
-  .hero{padding:34px 0 22px;text-align:center}
+  .hero{padding:calc(var(--sk-header-h,64px) + 20px) 0 22px;text-align:center}
   .hero h1{font-size:30px;font-weight:900;letter-spacing:-.5px;margin-bottom:10px}
   .hero h1 .g{color:var(--accent)}
   .hero p{color:var(--sub);font-size:15px;max-width:560px;margin:0 auto 16px}
@@ -39,8 +41,24 @@
     padding:7px 14px;border-radius:999px}
 
   /* ── Sticky section nav ── */
-  .secnav{position:sticky;top:0;z-index:20;background:rgba(5,5,5,.92);backdrop-filter:blur(10px);
+  /* sk-sub-nav = exempt from shared-header's "hide stray body>nav" rule; sticks
+     just below the injected #sk-top-nav home header instead of under it. */
+  .secnav{position:sticky;top:var(--sk-header-h,64px);z-index:20;background:rgba(5,5,5,.92);backdrop-filter:blur(10px);
     -webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--border);margin-bottom:8px}
+  /* Bottom-nav clearance so the last content isn't hidden. */
+  body{padding-bottom:calc(66px + env(safe-area-inset-bottom,0px))}
+  /* Home bottom-nav styles (earnings links no external CSS, so copied inline). */
+  .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:9996;display:flex;align-items:stretch;
+    background:rgba(5,5,5,0.98);backdrop-filter:blur(40px) saturate(160%);-webkit-backdrop-filter:blur(40px) saturate(160%);
+    border-top:1px solid rgba(255,255,255,0.06);box-shadow:0 -12px 40px rgba(0,0,0,0.5);
+    padding-bottom:env(safe-area-inset-bottom,0px);min-height:66px}
+  .bnav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    color:rgba(255,255,255,0.34);text-decoration:none;font-size:10px;font-weight:700;letter-spacing:.3px;
+    min-height:66px;padding:8px 4px 10px;-webkit-tap-highlight-color:transparent;transition:color .2s ease}
+  .bnav-item:hover{color:#71ff00}
+  .bnav-item:active{transform:scale(.9)}
+  .bnav-emoji{font-size:22px;line-height:1;display:block}
+  .bnav-item span{color:inherit}
   .secnav-inner{display:flex;gap:6px;overflow-x:auto;padding:11px 16px;max-width:900px;margin:0 auto;
     scrollbar-width:none}
   .secnav-inner::-webkit-scrollbar{display:none}
@@ -153,7 +171,7 @@
   <p>One honest place for everything it costs to earn on SOKONI — subscriptions, sales commission, withdrawals, delivery and advertising. Work out exactly what you keep before you sell.</p>
 </div>
 
-<nav class="secnav">
+<nav class="secnav sk-sub-nav">
   <div class="secnav-inner">
     <a href="#subscriptions">Subscriptions</a>
     <a href="#commissions">Commissions</a>
@@ -535,6 +553,15 @@
      worker takes control. Without this, the page renders whatever the active (and
      possibly stale) worker holds and never triggers an update — the cause of
      "earn page still loading old version". Matches index.html. -->
+<!-- Home bottom navigation (identical to index.html) -->
+<nav class="bottom-nav" role="navigation" aria-label="Main navigation">
+  <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item"><span class="bnav-emoji">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item"><span class="bnav-emoji">🛠️</span><span>Services</span></a>
+  <a href="my-orders.html" class="bnav-item"><span class="bnav-emoji">📦</span><span>Orders</span></a>
+  <a href="profile.html" class="bnav-item"><span class="bnav-emoji">👤</span><span>Profile</span></a>
+</nav>
+
 <script src="sw-register.js" defer></script>
 </body>
 </html>
