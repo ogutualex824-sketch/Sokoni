@@ -1734,6 +1734,14 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
           <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#127978; My Shops &amp; Branches</div>
           <div id="upBranchesList" style="display:flex;flex-direction:column;gap:8px;"></div>
         </div>
+        <!-- My Services — the provider's bookable services, the service equivalent of "My Shops".
+             ADDITIVE-role-aware: renders independently of My Shops (a user can be seller AND
+             provider). Populated by _renderMyServices() from providerServices where providerId==uid;
+             "Manage" opens the existing service management surface (provider-dashboard.html). -->
+        <div id="upServicesWrap" style="display:none;width:100%;margin-top:12px;">
+          <div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.07em;color:rgba(255,255,255,0.4);margin:0 0 8px;">&#128296; My Services</div>
+          <div id="upServicesList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        </div>
       </div>
 
       <!-- Meta info -->
@@ -3160,12 +3168,57 @@ async function _renderMyBranches(u){
   } catch(e){ wrap.style.display = 'none'; }
 }
 
+/* Is the user a service provider? (additive roles — independent of seller/vendor). */
+function _isProviderUser(u){
+  var roles = (u && Array.isArray(u.roles)) ? u.roles : [];
+  return roles.indexOf('provider') > -1 || roles.indexOf('freelancer') > -1 ||
+         !!(u && u.isProvider) || !!(u && u.registeredAs && u.registeredAs.provider);
+}
+/* List the provider's bookable services — the service equivalent of "My Shops & Branches".
+   Additive: shows for a provider (or anyone who has services) INDEPENDENTLY of the shops section.
+   "Manage" reuses the existing provider-dashboard service management (extend, don't rebuild). */
+async function _renderMyServices(u){
+  var wrap = document.getElementById('upServicesWrap');
+  var list = document.getElementById('upServicesList');
+  if(!wrap || !list) return;
+  var uid = u && (u.uid || u.id);
+  if(!uid){ wrap.style.display = 'none'; return; }
+  for(var i=0;i<40 && !window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
+  var db = window.firebaseDB;
+  if(!db){ wrap.style.display = 'none'; return; }
+  try {
+    var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap = await m.getDocs(m.query(m.collection(db, 'providerServices'), m.where('providerId','==',String(uid)), m.limit(20)));
+    var svcs = snap.docs.map(function(d){ return Object.assign({ id:d.id }, d.data()); })
+                        .filter(function(s){ return !s.removedAt && s.active !== false; });
+    /* Show the section for a provider OR anyone who already has services; hide for pure buyers. */
+    if(!svcs.length && !_isProviderUser(u)){ wrap.style.display = 'none'; return; }
+    var rows = svcs.map(function(s){
+      var name  = escHtml(s.name || 'Service');
+      var price = (typeof s.price === 'number') ? ('KSh ' + Math.round(s.price/100).toLocaleString()) : '';
+      var vurl  = 'provider-profile.html?id=' + encodeURIComponent(uid);
+      return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;">'
+        + '<div style="min-width:0;"><div style="font-size:13px;font-weight:800;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + name + '</div>'
+        + (price ? '<div style="font-size:11px;color:rgba(255,255,255,0.45);">' + price + '</div>' : '')
+        + '</div><div style="display:flex;gap:6px;flex-shrink:0;">'
+        + '<a href="' + vurl + '" style="padding:7px 12px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);border-radius:9px;color:#71ff00;font-size:11px;font-weight:800;text-decoration:none;">View</a>'
+        + '<a href="provider-dashboard.html" style="padding:7px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:9px;color:rgba(255,255,255,0.7);font-size:11px;font-weight:800;text-decoration:none;">Manage</a>'
+        + '</div></div>';
+    }).join('');
+    /* + Add Service (opens the provider service-management surface / onboarding). */
+    rows += '<a href="' + (svcs.length ? 'provider-dashboard.html' : 'provider-onboarding.html') + '" style="display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 12px;background:rgba(113,255,0,0.08);border:1px dashed rgba(113,255,0,0.35);border-radius:12px;color:#71ff00;font-size:12px;font-weight:800;text-decoration:none;">&#43; Add Service</a>';
+    list.innerHTML = rows;
+    wrap.style.display = 'block';
+  } catch(e){ wrap.style.display = 'none'; }
+}
+
 function renderHeaderCard(){
   _user = getUser();
   if(!_user) return;
 
   _syncMyStoreBtn(_user);
-  _renderMyBranches(_user);   /* seller's shop + branches, each its own storefront */
+  _renderMyBranches(_user);   /* seller's shop + branches (Marketplace module) */
+  _renderMyServices(_user);   /* provider's services (Services module) — additive, independent of shops */
 
   /* Name — the PERSON's name (personal identity), independent of the shop name
      which lives on the seller doc and is shown in "My Shops & Branches" below. */
