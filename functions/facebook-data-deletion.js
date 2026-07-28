@@ -195,10 +195,22 @@ exports.submitDataRightsRequest = onCall(
   async (request) => {
     const { name, email, phone, type, details } = request.data;
 
-    const VALID_TYPES = [
-      'delete_account', 'export_data', 'rectify_data',
-      'restrict_processing', 'withdraw_consent', 'facebook_deletion',
-    ];
+    /* Must-fix #3 — the data-deletion.html form sends KDPA-standard right names
+       (deletion/access/rectification/restriction/portability/objection) that did NOT
+       match the backend enum, so EVERY request failed invalid-argument. Normalize both
+       the UI names AND the pre-existing backend values to one canonical set; unknown → reject.
+       We store the canonical `type` AND the caller's original `requestedRight` for the record. */
+    const TYPE_ALIASES = {
+      deletion:            'delete_account',     delete_account:      'delete_account',
+      facebook_deletion:   'facebook_deletion',
+      access:              'export_data',        export_data:         'export_data',
+      portability:         'export_data',
+      rectification:       'rectify_data',       rectify_data:        'rectify_data',
+      restriction:         'restrict_processing', restrict_processing: 'restrict_processing',
+      objection:           'object_processing',  object_processing:   'object_processing',
+      withdraw_consent:    'withdraw_consent',
+    };
+    const canonicalType = TYPE_ALIASES[type];
 
     if (!name || typeof name !== 'string' || name.length > 120) {
       throw new HttpsError('invalid-argument', 'Valid name required');
@@ -206,7 +218,7 @@ exports.submitDataRightsRequest = onCall(
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       throw new HttpsError('invalid-argument', 'Valid email required');
     }
-    if (!VALID_TYPES.includes(type)) {
+    if (!canonicalType) {
       throw new HttpsError('invalid-argument', 'Invalid request type');
     }
 
@@ -214,7 +226,8 @@ exports.submitDataRightsRequest = onCall(
       name:       name.trim(),
       email:      email.trim().toLowerCase(),
       phone:      phone ? phone.trim().slice(0, 20) : null,
-      type,
+      type:           canonicalType,   /* normalized */
+      requestedRight: type,            /* the exact right the user selected in the UI */
       details:    details ? details.trim().slice(0, 1000) : null,
       status:     'received',
       uid:        request.auth?.uid || null,
