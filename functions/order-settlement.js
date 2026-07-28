@@ -21,7 +21,7 @@
 const admin = require('firebase-admin');
 const SE = require('./settlement-engine');
 
-const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED' };
+const STATES = { UNSETTLED: 'UNSETTLED', HELD: 'HELD', ELIGIBLE: 'ELIGIBLE_FOR_SETTLEMENT', SETTLING: 'SETTLING', SETTLED: 'SETTLED', REFUNDED: 'REFUNDED', REVERSED: 'REVERSED' };
 const DEFAULT_AUTOCONFIRM_DAYS = 3;
 
 /* Auto-confirm window is CONFIG, not a constant (D2): _systemConfig/settlement.autoConfirmDays. */
@@ -92,6 +92,7 @@ async function settleOrder(db, adminSdk, orderId) {
     t.set(settleRef, {
       orderId, sellerId, grossCents, commissionCents, sellerNetCents: netCents,
       netShillingsCredited: netShillings, category: 'marketplace',
+      ledgerPlan: breakdown.ledgerPlan || [],   /* immutable snapshot → post-settlement reversal swaps it */
       engineVersion: 'settlement-engine', status: 'settled', createdAt: FV.serverTimestamp(),
     });
     /* 4 — balanced double-entry ledger (from the engine's ledgerPlan), orderId-correlated. */
@@ -140,6 +141,78 @@ async function markRefundedIfUnsettled(db, adminSdk, orderId) {
   });
 }
 
+/* Reverse an ALREADY-SETTLED order when a refund lands after settlement (post-settlement
+   reversal). Debits the seller's wallet by the net that was credited, posts a reversing
+   double-entry (original ledgerPlan with debit/credit SWAPPED so the ledger nets to zero),
+   flips the state SETTLED → REVERSED. Exactly-once (deterministic reversal ids + state guard).
+
+   Negative-balance policy: the debit MAY take wallets.balance negative if the seller already
+   withdrew — that negative is a recoverable debt that self-corrects against future earnings, and
+   the withdrawal flow already blocks a payout while balance < amount. When it goes negative we
+   ALSO stamp a `settlementReversalShortfall` marker so ops can see the un-recovered amount.
+   Full reversal only (partial-refund-after-settlement is a documented follow-up). */
+async function reverseSettledOrder(db, adminSdk, orderId, opts = {}) {
+  const FV = adminSdk.firestore.FieldValue;
+  const orderRef = db.collection('orders').doc(orderId);
+  const settleRef = db.collection('settlements').doc(orderId);
+
+  return db.runTransaction(async (t) => {
+    const oSnap = await t.get(orderRef);
+    if (!oSnap.exists) return { outcome: 'no-order' };
+    const o = oSnap.data();
+    if (o.settlementStatus === STATES.REVERSED) return { outcome: 'already-reversed' };   /* replay no-op */
+    if (o.settlementStatus !== STATES.SETTLED) return { outcome: 'not-settled' };          /* caller uses markRefundedIfUnsettled */
+
+    const sSnap = await t.get(settleRef);
+    const s = sSnap.exists ? sSnap.data() : {};
+    const netShillings = Number(s.netShillingsCredited) || 0;
+    const netCents = Number(s.sellerNetCents) || 0;
+    const sellerId = o.sellerUid || o.sellerId || s.sellerId || null;
+
+    let shortfall = 0;
+    if (sellerId && netShillings > 0) {
+      const wRef = db.collection('wallets').doc(sellerId);
+      const wSnap = await t.get(wRef);
+      const bal = wSnap.exists ? (Number(wSnap.data().balance) || 0) : 0;
+      shortfall = Math.max(0, netShillings - bal);   /* how much the seller already withdrew */
+      /* debit the credited net (may go negative = recoverable debt). */
+      t.set(wRef, { balance: FV.increment(-netShillings), updatedAt: FV.serverTimestamp() }, { merge: true });
+      /* reversing wallet transaction (deterministic id). */
+      t.set(db.collection('walletTransactions').doc(`${sellerId}_${orderId}_ordersettle_reversal`), {
+        uid: sellerId, type: 'order_settlement_reversal', amount: -netShillings, currency: 'KES',
+        orderId, sourceType: 'order', sourceId: orderId, reason: opts.reason || 'post-settlement-refund',
+        createdAt: FV.serverTimestamp(),
+      });
+    }
+    /* reverse the balanced ledger: swap debit/credit of each original plan entry → nets to zero. */
+    (Array.isArray(s.ledgerPlan) ? s.ledgerPlan : []).forEach((e, i) => {
+      t.set(db.collection('ledger').doc(`${orderId}_${e.type || i}_reversal`), {
+        orderId, entryType: (e.type || String(i)) + '_reversal', reversalOf: e.type || String(i),
+        debitAccount: e.creditAccount, creditAccount: e.debitAccount,   /* SWAPPED */
+        amountCents: e.amountCents, sourceType: 'order', sourceId: orderId, createdAt: FV.serverTimestamp(),
+      });
+    });
+    /* settlement record + order state. */
+    t.set(settleRef, { status: 'reversed', reversedAt: FV.serverTimestamp(), reversalReason: opts.reason || 'post-settlement-refund' }, { merge: true });
+    t.update(orderRef, {
+      settlementStatus: STATES.REVERSED,
+      escrow: Object.assign({}, o.escrow || {}, { refunded: netCents, reversedAt: Date.now() }),
+      settlementReversalShortfall: shortfall,    /* 0 unless the seller already withdrew */
+      reversedAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
+    });
+    return { outcome: 'reversed', sellerId, netShillings, shortfall };
+  });
+}
+
+/* Route a refund to the correct settlement-state action: reverse if already settled, else mark
+   REFUNDED (blocking settlement). One entry point so initiateRefund never has to branch. */
+async function handleOrderRefund(db, adminSdk, orderId, opts = {}) {
+  const snap = await db.collection('orders').doc(orderId).get().catch(() => null);
+  if (!snap || !snap.exists) return { outcome: 'no-order' };
+  if (snap.data().settlementStatus === STATES.SETTLED) return reverseSettledOrder(db, adminSdk, orderId, opts);
+  return markRefundedIfUnsettled(db, adminSdk, orderId);
+}
+
 /* Auto-confirm sweep: delivered orders past the config window with no open dispute become
    `completed` — which fires onOrderStatusChange → settleOrder. One settlement path.
    A PLAIN function invoked from an EXISTING scheduler (no new Cloud Run). */
@@ -167,4 +240,4 @@ async function autoConfirmDeliveredOrders(db, adminSdk) {
   return confirmed;
 }
 
-module.exports = { STATES, settleOrder, markEligible, markRefundedIfUnsettled, autoConfirmDeliveredOrders, _grossCents };
+module.exports = { STATES, settleOrder, markEligible, markRefundedIfUnsettled, reverseSettledOrder, handleOrderRefund, autoConfirmDeliveredOrders, _grossCents };

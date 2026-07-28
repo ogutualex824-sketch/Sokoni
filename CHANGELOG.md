@@ -14,6 +14,30 @@ use `auth-guard.js` before the app renders.
 
 **Files:** `auth-guard.js`, `firebase.js`, `dispute-portal.html`, `fleet-monitor.html`.
 
+## [2026-07-28] — fix(commerce): post-settlement refund reversal (the deferred settlement follow-up)
+
+Product Settlement Convergence guarded only PRE-settlement refunds (mark REFUNDED, block settlement).
+A refund landing AFTER an order settled — seller wallet already credited — had no reversal: the seller
+kept funds for a refunded order. This closes it, exactly-once, through the EXISTING `initiateRefund`.
+
+**Files:** `functions/order-settlement.js` (`reverseSettledOrder` + `handleOrderRefund` router + `settleOrder`
+now snapshots `ledgerPlan`), `functions/index.js` (`initiateRefund` calls the router). **Deploy:** functions
+(`initiateRefund`, `onOrderStatusChange`, `expireOldEscrows`). **Rules/DB/hosting:** none.
+
+- **`reverseSettledOrder`** — debits the seller's `wallets.balance` by the exact net that was credited,
+  posts a reversing double-entry (the settlement's `ledgerPlan` with debit/credit **swapped** → nets to
+  zero), sets the order `settlementStatus: 'REVERSED'` (new terminal state) + `escrow.refunded`, and writes
+  a deterministic reversing wallet transaction. **Exactly-once** (state guard + deterministic ids).
+- **`handleOrderRefund` router** wired into `initiateRefund`: order already `SETTLED` → reverse; otherwise
+  mark `REFUNDED` (blocks a pending settlement). One entry point; the refund record stands regardless.
+- **Negative-balance policy (surfaced for ratification):** if the seller already withdrew, the debit takes
+  `wallets.balance` negative — a **recoverable debt** that self-corrects against future earnings (the
+  withdrawal flow already blocks a payout while balance < amount), and the order stamps
+  `settlementReversalShortfall` so ops can see the un-recovered amount. Nothing is silently absorbed.
+- Scope: **full** reversal (full refund/cancel/dispute). Partial-refund-after-settlement is a documented follow-up.
+- Proof: **16/16** emulator — debit = credited net, ledger swapped & balanced, exactly-once (no double-debit),
+  shortfall recorded on prior-withdrawal, router settled→reverse / unsettled→REFUNDED.
+
 ## [2026-07-28] — feat(commerce): Product Settlement Convergence — wire the dormant engine to fulfillment
 
 The audit found that a checkout product order was created `paid` with `escrow.held = full, released:0`,

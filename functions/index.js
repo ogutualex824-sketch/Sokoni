@@ -7679,6 +7679,15 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
     serverTs: ts,
   });
 
+  /* Product Settlement Convergence — keep the order's settlement state honest on refund:
+     if the order was ALREADY SETTLED, reverse it (debit seller, reverse ledger); otherwise mark
+     it REFUNDED so a pending settlement becomes a no-op. Best-effort + exactly-once; the refund
+     record above stands regardless. */
+  if (orderId) {
+    try { await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason }); }
+    catch (e) { console.error("[initiateRefund] settlement-state update failed (recoverable):", e.message); }
+  }
+
   if (escrowRef && escrow) {
     /* Transactional: assert the escrow has not already been refunded, so two
        concurrent calls cannot both pass the ceiling check above and both write a
