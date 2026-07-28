@@ -129,7 +129,7 @@
 
 - [ ] **EXT-1** — Africa's Talking: SOKONI alphanumeric Sender ID approved
   - On approval: set `AT_SENDER_ID=SOKONI` in `functions/.env` and deploy
-- [ ] **EXT-2** — ODPC: Data Controller/Data Processor registration submitted
+- [x] **EXT-2** — ODPC: Data Processor registration **ISSUED** — Reg. No. 630-8669-F056 (cert. serial 24670), valid 28 Jul 2026 – 28 Jul 2028
 - [ ] **EXT-3** — KIPI: Trademark application for SOKONI filed and monitored
 
 ---
@@ -148,7 +148,7 @@
 | Redis VPC | ⚠️ Pending | No (Firestore fallback active) |
 | AT Sender ID | ⏳ Awaiting approval | No (shared shortcode works) |
 | End-to-end tests | ⬜ Not run | Yes |
-| ODPC registration | ⬜ Pending | No (recommended before public launch) |
+| ODPC registration | ✅ Registered (No. 630-8669-F056, valid to 28 Jul 2028) | — |
 
 ### Definition of GO:
 All **Yes** blockers resolved + all **TEST-** items passed.

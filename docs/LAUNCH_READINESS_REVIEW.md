@@ -122,7 +122,7 @@ confidence this review exists to prevent.
 | Performance | *not measured* | No load test at any scale has been run |
 | UX | 65 / 100 | Mobile layouts verified on 3 devices; navigation has 125 unreachable pages |
 | Accessibility | *not measured* | No WCAG audit performed |
-| Compliance | 55 / 100 | ODPC registration paid, certificate not yet issued |
+| Compliance | 55 / 100 | ODPC Data Processor registration ISSUED (No. 630-8669-F056, valid to 28 Jul 2028); platform compliance assessment tracked separately in docs/ODPC_COMPLIANCE_CERTIFICATION.md |
 | Maintainability | 70 / 100 | Strong test coverage added; registry and audit tooling now exist |
 
 **Overall launch score: 40 / 100.**

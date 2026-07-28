@@ -1,3 +1,24 @@
+## [2026-07-28] — docs(compliance): ODPC Data Processor registration ISSUED — must-fix #4 RESOLVED (all 4 closed)
+
+The Office of the Data Protection Commissioner (ODPC) issued Bravilex International Co. Limited's
+**Data Processor** Certificate of Registration: **Registration No. 630-8669-F056** (certificate serial 24670),
+valid **28 Jul 2026 – 28 Jul 2028**. This closes the last of the four compliance must-fixes.
+
+- **`functions/company-identity.js`** — added a canonical, frozen `COMPANY.dataProtection` block (authority,
+  registration number, serial, category, registered entity, validity window, `status:'registered'`, and a
+  ready-to-render `statementLine`). Documented in-file that this is the **registration** status only and does
+  **not** by itself attest to ongoing technical compliance (tracked separately).
+- **Docs reconciled** from "pending"/"paid" to "registered": `docs/GO_LIVE_CHECKLIST.md` (EXT-2 + go/no-go table),
+  `docs/LAUNCH_READINESS_REVIEW.md`, `docs/PRODUCTION_OPERATIONS_MANUAL.md`, `security-compliance.html`.
+- **`docs/ODPC_COMPLIANCE_CERTIFICATION.md`** — §14 flipped PARTIAL→VERIFIED; overall banner updated; **Addendum A**
+  appended with the full must-fix remediation record and a targeted re-audit of the four remediated areas
+  (erasure, consent records, data-rights intake, registration) with `file:line` evidence. The report keeps ODPC
+  **registration** and the internal **platform compliance assessment** as explicitly separate concepts.
+
+No functional/runtime change; registration metadata + documentation only. Security changes: none. Breaking changes: none.
+
+---
+
 ## [2026-07-28] — fix(auth): avoid auth-guard redirect loop when Firebase session restoration is delayed
 
 Platform availability hardening for authenticated pages. `auth-guard.js` could redirect a still-signed-in

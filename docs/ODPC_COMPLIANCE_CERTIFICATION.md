@@ -17,7 +17,9 @@
 
 ---
 
-## Overall compliance status: **CONDITIONAL — 1 must-fix remaining (3 of 4 REMEDIATED 2026-07-28)**
+## Overall compliance status: **ALL 4 MUST-FIXES REMEDIATED (2026-07-28) — see Addendum A**
+
+> **Status update — 2026-07-28 (final):** MUST-FIX **#4 (ODPC registration reference)** is now **RESOLVED.** The business supplied the official ODPC Certificate of Registration; the reference is embedded in `functions/company-identity.js` (`COMPANY.dataProtection`) and reconciled across the go-live/readiness/operations docs. All four engineering/documentation must-fixes are complete. A targeted re-audit of the four remediated areas and the full remediation record are in **Addendum A** at the end of this report. **Note:** ODPC *registration* status (below) is distinct from the *platform compliance assessment* (this report's 14 areas) — registration does not by itself attest to ongoing technical compliance.
 
 > **Remediation log — 2026-07-28 (later):** MUST-FIX **#2 (durable consent records)** and **#3 (data-rights enum)** are now **RESOLVED and deployed** too.
 > - **#2:** signup now persists a latest-consent snapshot on `users/{uid}.consent` **and** an append-only `consentRecords` row (`uid` + `consentedAt` + `policyVersion` + `source`); `POLICY_VERSION` constant enables re-consent on notice changes; `firestore.rules` make consent records owner-create + immutable. Proof 5/5 rules-unit.
@@ -89,9 +91,9 @@ Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Fire
 - **Documented plans:** `docs/deployment/INCIDENT_RESPONSE.md:155-171` ("INC-006 Data Breach": maintenance mode, secret rotation, `revokeRefreshTokens`, **notify affected users within 72 h**); `DISASTER_RECOVERY_PLAYBOOK.md:201-239` (KDPA 2019 + GDPR Art.33, **ODPC notification within 72 h**).
 - **Verified live detection:** `fraudAlerts`, `oversoldAlerts` (in stock txn, `index.js:2767`), `securityAlerts`/`rateLimitViolations` (`enterprise-health.js:659-697`).
 
-## 14. Operational Evidence / ODPC Registration Reconciliation — **PARTIAL**
+## 14. Operational Evidence / ODPC Registration Reconciliation — **VERIFIED** *(remediated 2026-07-28 — see Addendum A)*
 - **Verified:** rules/Storage deployed + predeploy security gates (`firebase.json:534-559`); App Check live; admin claims enforced; `version.json` production marker.
-- **⚠️ Action required — registration reference not in the codebase.** The business reports the ODPC Data Processor registration as **approved** (portal certificate + approval email — external evidence not visible to this audit). The **codebase does not yet reflect this**: `docs/GO_LIVE_CHECKLIST.md:132,151` still says "ODPC registration | Pending"; `CHANGELOG.md` records it as *paid* (2026-07-17). **Before issuing a certification, embed the actual ODPC certificate/registration number in `company-identity.js` and update the docs from "pending" to "registered ‹number›."** (Do not overstate the status in code until the certificate reference is recorded.)
+- **✅ Resolved — registration reference embedded.** The business supplied the official ODPC Certificate of Registration: **Registration/Identification No. 630-8669-F056**, certificate serial **24670**, category **Data Processor**, registered entity **Bravilex International Co. Limited**, valid **28/07/2026 – 28/07/2028**. Now recorded as the canonical `COMPANY.dataProtection` block in `functions/company-identity.js:52-62` and reconciled across `docs/GO_LIVE_CHECKLIST.md`, `docs/LAUNCH_READINESS_REVIEW.md`, `docs/PRODUCTION_OPERATIONS_MANUAL.md`, and `security-compliance.html`. Per the distinction adopted below, the code and docs state the **registration** status explicitly and keep it separate from the **platform compliance assessment**.
 
 ---
 
@@ -119,6 +121,27 @@ Owner-scoped Firestore/Storage rules with anti-privilege-escalation; append-only
 ---
 
 ## Certification statement
-On the evidence audited, SOKONI's data-protection **implementation is CONDITIONALLY COMPLIANT**: the security, access-control, transparency, audit, breach-readiness, and data-export controls meet a strong standard and are code-verified. **Full KDPA certification should be withheld until the four MUST-FIX items are closed** — foremost, delivering genuine right-to-erasure and durable consent records, and aligning the privacy notice to actual behavior. Once those are remediated and re-verified, and the ODPC certificate reference is embedded, this platform is well-positioned for certification.
+On the evidence audited, SOKONI's data-protection **implementation meets a strong standard**: the security, access-control, transparency, audit, breach-readiness, and data-export controls are code-verified, and **all four MUST-FIX items originally identified have been remediated and re-verified** (see Addendum A) — genuine right-to-erasure with an immutable audit trail, durable consent records, a working data-rights intake, and the ODPC registration reference embedded. The platform is now well-positioned for external certification, subject to the SHOULD-FIX recommendations and independent legal review below.
+
+Two statuses remain deliberately distinct and should never be conflated:
+- **ODPC registration:** Bravilex is a **Registered Data Processor** — Registration No. 630-8669-F056, valid 28 Jul 2026 – 28 Jul 2028. This is an external, authority-issued fact.
+- **Platform compliance assessment:** this document — an **internal engineering self-assessment** of implemented technical/organisational controls. Registration does not by itself attest to ongoing technical compliance, and this assessment does not substitute for the ODPC registration.
 
 *This is an internal engineering self-assessment for Bravilex International Co. Limited, not legal advice and not an official ODPC determination. A qualified data-protection practitioner should review before any external certification or filing.*
+
+---
+
+# Addendum A — Must-Fix Remediation Record & Targeted Re-Audit (2026-07-28)
+
+This addendum records the closure of all four MUST-FIX items and a **targeted re-audit of only the four remediated areas** (not a regeneration of the 14-area assessment above, which stands as originally written except for the status markers on §14 and the overall banner). Each area was re-verified against the current working tree with `file:line` evidence.
+
+| # | Must-fix | State | Evidence (current tree) | Proof |
+|---|----------|-------|-------------------------|-------|
+| 1 | Right to erasure | ✅ RESOLVED | One deletion authority: `deleteMyAccount` schedules on `status:'pending_deletion'`+`deletionScheduledAt` (`facebook-data-deletion.js:291-297`); `finaliseExpiredDeletions` runs the spec-driven purge (`account-manager.js:283-286`) then writes an **immutable `erasureLog`** *before* the irreversible `auth.deleteUser` (`account-manager.js:287-302`). Purge policy is explicit per collection in `account-purge-spec.js` (`PURGE_WORKER_VERSION='1.0.0'`; delete personal / anonymize 7-yr tax records / retain ledgers). Notice aligned (`privacy.html`). | 14/14 emulator |
+| 2 | Durable consent records | ✅ RESOLVED | Signup writes a latest-consent snapshot `users/{uid}.consent` **and** an append-only row `consentRecords` `{uid, consentedAt, policyVersion, source}` (`auth.js:589,597-599`); `POLICY_VERSION='2026-06'` (`auth.js:561`) distinguishes historical vs renewed consent; rules make records **owner-create + immutable** — `allow update, delete: if false` (`firestore.rules:610-616`). | 5/5 rules-unit |
+| 3 | Data-rights intake | ✅ RESOLVED | `submitDataRightsRequest` normalizes the 6 KDPA UI right-names to a canonical enum and stores both `type` (canonical) and `requestedRight` (as selected) (`facebook-data-deletion.js:203-213,229-230`). | 6/6 accepted |
+| 4 | ODPC registration reference | ✅ RESOLVED | Canonical `COMPANY.dataProtection` block — Reg. No. **630-8669-F056**, serial 24670, Data Processor, valid 28/07/2026–28/07/2028 (`company-identity.js:52-62`); docs reconciled from "pending"/"paid" to "registered" across go-live/readiness/operations/security-compliance. | Static verify |
+
+**Re-audit method.** Read-only inspection of the current working tree on 2026-07-28 (post-remediation); artifacts for #1–#3 are unchanged since their emulator/rules-unit proofs and remain deployed; #4 is a config/documentation embed verified statically. No new gaps were introduced by the remediations (erasure matches on the target `uid` only and anonymizes — never deletes — ambiguously-keyed financial records, so a worst-case mismatch is a no-op, not data loss).
+
+**Residual items (unchanged, non-blocking).** The SHOULD-FIX recommendations (5–12) above remain open and are not certification-blocking. The **production QA gate** (a real end-to-end transaction across both delivery-dispatch branches) is an operational validation owned by the business and is tracked outside this compliance report.
