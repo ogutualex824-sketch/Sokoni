@@ -605,6 +605,16 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    /* Durable consent audit trail (Must-fix #2). A user may only APPEND their own consent event;
+       records are immutable (no update/delete) so historical consent is preserved and auditable. */
+    match /consentRecords/{recId} {
+      allow create:         if isAuthed()
+                            && request.resource.data.uid == request.auth.uid
+                            && request.resource.data.keys().hasAll(['uid','policyVersion','source']);
+      allow read:           if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
+      allow update, delete: if false;
+    }
+
     match /notifications/{notifId} {
 
       allow create: if isAdmin()

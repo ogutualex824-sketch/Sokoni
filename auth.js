@@ -552,9 +552,13 @@ async function _doSignup(name, email, password){
         const { createUserWithEmailAndPassword, updateProfile, sendEmailVerification } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"
         );
-        const { doc, setDoc, serverTimestamp } = await import(
+        const { doc, setDoc, collection, addDoc, serverTimestamp } = await import(
             "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
         );
+        /* Must-fix #2 — the privacy-policy version the user is consenting to at signup.
+           Bump this when the notice materially changes; existing users are then re-prompted and a
+           NEW consentRecords row is appended, so historical vs renewed consent stays distinguishable. */
+        const POLICY_VERSION = '2026-06';
 
         /* Create Firebase Auth account */
         const cred = await createUserWithEmailAndPassword(window.firebaseAuth, email, password);
@@ -581,8 +585,20 @@ async function _doSignup(name, email, password){
         /* Persist to Firestore users collection (the authoritative source) */
         await setDoc(doc(window.firebaseDB, 'users', cred.user.uid), {
             ...profile,
+            /* Latest-consent snapshot on the profile for quick reads / re-consent detection. */
+            consent: { policyVersion: POLICY_VERSION, source: 'signup', privacy: true, terms: true, consentedAt: serverTimestamp() },
             createdAt: serverTimestamp()
         });
+
+        /* Durable, append-only consent record (Must-fix #2) — the auditable lawful-basis proof
+           the ODPC audit found missing. One row per consent event (uid + timestamp + policy version
+           + source), never mutated, so a future audit can distinguish original from renewed consent. */
+        try {
+            await addDoc(collection(window.firebaseDB, 'consentRecords'), {
+                uid: cred.user.uid, source: 'signup', policyVersion: POLICY_VERSION,
+                privacy: true, terms: true, consentedAt: serverTimestamp(),
+            });
+        } catch (_) { /* consent snapshot already on the profile; audit row is best-effort */ }
 
         /* Sync to localStorage for backward-compat */
         _sokoniPurgeOwnerCachesOnSwitch(profile && profile.uid);
