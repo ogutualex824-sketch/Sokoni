@@ -134,6 +134,16 @@ const SPos = (function () {
     /* Load settings into settings panel */
     settings.loadIntoForm();
 
+    /* Bind POS to the signed-in SOKONI account: reflect the owner in the header
+       pill (instead of a dead "Login"), seed a blank business profile from their
+       account so receipts/branding match, and prefill the settings form. All
+       non-destructive and offline-safe. */
+    try {
+      profile.reflectInHeader();
+      await profile.seedBusinessDefaults();
+      profile.syncBusinessProfile({ persist: false });
+    } catch (e) { console.warn('[SmartPOS] profile bind skipped:', e && e.message); }
+
     /* Check pending sync */
     sync.run(true);
 
@@ -1900,6 +1910,7 @@ const SPos = (function () {
       cashier._pinBuffer = '';
       cashier.updatePinDots();
       document.getElementById('pin-error').textContent = '';
+      try { profile.fillPinModal(); } catch (_) {}
       modal.open('pin-modal');
     },
 
@@ -2460,6 +2471,117 @@ const SPos = (function () {
   };
 
   /* ═══════════════════════════════════════════════════════════
+     SOKONI PROFILE — bind this POS device to the signed-in account
+     POS is offline-first, so localStorage.sokoniUser is the primary read (the
+     same identity every other page uses); Firestore users/{uid} enriches it
+     (phone / business name / KRA PIN) when online. This makes the header account
+     pill reflect the real owner and gives the Business Profile a one-tap sync,
+     instead of a dead "Login" pill and a blank, manually-retyped business form.
+  ═══════════════════════════════════════════════════════════ */
+  const profile = {
+    get() {
+      let u = null;
+      try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+      return (u && typeof u === 'object') ? u : null;
+    },
+    displayName() {
+      const u = profile.get();
+      if (!u) return null;
+      return u.name || u.displayName || u.businessName || u.shopName ||
+             (u.email ? String(u.email).split('@')[0] : null) || null;
+    },
+    businessName() {
+      const u = profile.get() || {};
+      return u.businessName || u.shopName || u.name || '';
+    },
+    phone() {
+      const u = profile.get() || {};
+      return u.phoneNumber || u.phone || '';
+    },
+    /* Open the canonical SOKONI profile (same page the rest of the app uses). */
+    open() { window.open('profile.html', '_self'); },
+
+    /* Reflect WHO is signed in on the header pill when no cashier has logged in,
+       so the account surface shows the owner instead of a dead "Login". An
+       explicit cashier login always wins. */
+    reflectInHeader() {
+      if (state.currentCashier) return;
+      const name = profile.displayName();
+      if (!name) return;
+      _setVal('cashier-avatar', name[0].toUpperCase());
+      _setVal('cashier-name-hdr', name);
+    },
+
+    /* Populate the account strip inside the cashier PIN modal. */
+    fillPinModal() {
+      const box = document.getElementById('pin-acct');
+      if (!box) return;
+      const name = profile.displayName();
+      const u = profile.get();
+      if (!u || !name) { box.style.display = 'none'; return; }
+      _setVal('pin-acct-name', name);
+      _setVal('pin-acct-sub', profile.phone() || u.email || '');
+      box.style.display = '';
+    },
+
+    /* Seed blank business settings from the account so receipts/header/branding
+       match the owner's profile without manual entry. Non-destructive: only
+       fills empties, then persists so the change survives reload. */
+    async seedBusinessDefaults() {
+      const u = profile.get();
+      if (!u) return;
+      const want = { bizName: profile.businessName(), bizPhone: profile.phone() };
+      let changed = false;
+      for (const k in want) {
+        if (want[k] && !String(state.settings[k] || '').trim()) {
+          state.settings[k] = want[k];
+          try { await PosDB.settings.set(k, want[k]); } catch (_) {}
+          changed = true;
+        }
+      }
+      if (changed) _setVal('hdr-biz-name', state.settings.bizName || 'SOKONI SmartPOS');
+    },
+
+    /* Prefill the BUSINESS PROFILE settings form from the SOKONI account.
+       Never overwrites values the merchant already typed unless force:true.
+       force+persist (the "Sync from my profile" button) also saves. Returns the
+       number of fields filled. */
+    async syncBusinessProfile(opts) {
+      opts = opts || {};
+      const u = profile.get();
+      if (!u) { if (opts.interactive) toast('Sign in to sync your profile', 'info'); return 0; }
+
+      let doc = {};
+      try {
+        if (navigator.onLine && u.uid && window.firebase && firebase.firestore) {
+          const snap = await firebase.firestore().collection('users').doc(String(u.uid)).get();
+          if (snap && snap.exists) doc = snap.data() || {};
+        }
+      } catch (_) { /* offline / rules — localStorage alone is enough */ }
+
+      const src = Object.assign({}, u, doc);
+      const map = {
+        's-biz-name':    src.businessName || src.shopName || src.name || '',
+        's-biz-phone':   src.phoneNumber  || src.phone    || '',
+        's-biz-address': src.address      || src.location || '',
+        's-biz-pin':     src.kraPin       || src.kra_pin  || '',
+      };
+      let filled = 0;
+      Object.keys(map).forEach(function (id) {
+        const el = document.getElementById(id);
+        if (!el || !map[id]) return;
+        if (opts.force || !String(el.value || '').trim()) { el.value = map[id]; filled++; }
+      });
+      if (filled && opts.persist === true) { try { await settings.save(); } catch (_) {} }
+      if (opts.interactive) {
+        toast(filled ? ('Synced ' + filled + ' field' + (filled === 1 ? '' : 's') + ' from your profile')
+                     : 'Business profile already matches your account', filled ? 'success' : 'info');
+      }
+      return filled;
+    },
+  };
+
+  /* ═══════════════════════════════════════════════════════════
      SYNC
   ═══════════════════════════════════════════════════════════ */
   const sync = {
@@ -2968,7 +3090,7 @@ const SPos = (function () {
   return {
     state, wizard, ui, products, cart, payment, mpesa,
     barcode, inv, reports, customers, cashier, shift,
-    settings, sync, data, modal, printerSetup, bos,
+    settings, profile, sync, data, modal, printerSetup, bos,
     sales, po, cats, split,
     toast, printer: PosPrinter, openAIPricing,
     boot,

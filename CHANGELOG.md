@@ -29,6 +29,24 @@ a booking. There was **no completed-booking gate anywhere**. WS3 adds the author
 - Proof: **17/17** emulator assertions (created / aggregate updated / booking stamped / duplicate
   no-op / non-owner denied / non-completed denied / provider-cannot-review / not-found).
 
+## [2026-07-28] — fix(pos): profile button works + syncs with the SOKONI account
+
+The POS header pill showed a dead "Login" and the Business Profile settings were blank
+and manually retyped — neither reflected the signed-in SOKONI account. Added an SPos.profile
+module that binds the POS device to the canonical identity (offline-first: localStorage
+`sokoniUser`, enriched by Firestore `users/{uid}` when online).
+
+**Files:** `pos.js`, `pos.html`. **Deploy:** hosting only. No CF/rules/migration.
+
+- **Header account pill** now reflects the signed-in owner (avatar initial + name) instead
+  of "Login" when no cashier has logged in; an explicit cashier login still wins.
+- **PIN modal** shows a "Signed in as …" strip with an **Open my SOKONI Profile →** button
+  (opens `profile.html`) — the profile surface now works without hijacking the cashier PIN.
+- **Business Profile settings** auto-seed a blank business name/phone from the account at
+  boot (so receipts/branding match) and gain a **🔄 Sync from my profile** button that pulls
+  name, phone, address & KRA PIN. Non-destructive: never overwrites values the merchant
+  already typed unless they tap Sync.
+
 ## [2026-07-28] — feat(earn): richer plan table — show what each tier INCLUDES, not just price
 
 The earn page's live plans table (subGetPlans) rendered only Plan/Monthly/Annual and
