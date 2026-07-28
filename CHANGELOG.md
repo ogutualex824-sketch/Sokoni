@@ -1,3 +1,22 @@
+## [2026-07-28] — refactor(privacy): single-source requestDataExport (KDPA/ODPC SHOULD-FIX #8)
+
+Removed the duplicate, shadowed `requestDataExport` definition from `functions/account-manager.js`.
+The canonical version in `functions/data-export.js` is unchanged and remains the deployed entry point —
+it writes both `dataExportRequests` (status) AND `dataExportQueue/{id}` so the `processDataExport` worker
+actually builds the export, and it enforces App Check. The removed duplicate wrote only
+`dataExportRequests` (worker never fired) and skipped App Check, so it was a latent landmine if anything
+had ever imported it by name.
+
+- `functions/account-manager.js` — deleted the duplicate `exports.requestDataExport` + updated the header
+  doc; `HttpsError` import retained (still used by `_assertAuth`/admin guards).
+- `functions/index.js` — updated the explanatory comment: the duplicate is now removed, not merely shadowed.
+- `docs/ODPC_COMPLIANCE_CERTIFICATION.md` — gap-summary #8 marked RESOLVED.
+
+Verified: both files pass `node -c`; no reference to `account-manager.requestDataExport` remains anywhere.
+No functional change (the deployed export pipeline was already `data-export.js`). Breaking changes: none.
+
+---
+
 ## [2026-07-28] — fix(privacy): marketing defaults to opt-in (KDPA/ODPC SHOULD-FIX #7)
 
 Post-release backlog item — marketing consent must be opt-in, not opt-out.

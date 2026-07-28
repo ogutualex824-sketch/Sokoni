@@ -109,7 +109,7 @@ Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Fire
 5. Add an explicit **cross-border transfer clause** (KDPA Part VI) to the privacy notice (§11).
 6. Restore **Redis rate limiting** (VPC connector) or add a TTL on `rateLimitsFallback` (§8).
 7. ~~**Marketing opt-in defaults to true** — change to opt-out-by-default (§4).~~ **RESOLVED 2026-07-28** — marketing now opt-in by default in `pos-customers.js` + `email-service.js`.
-8. Reconcile the **duplicate `requestDataExport`** definitions so the signed-URL implementation is exported (§6).
+8. ~~Reconcile the **duplicate `requestDataExport`** definitions so the signed-URL implementation is exported (§6).~~ **RESOLVED 2026-07-28** — the older shadowed duplicate in `functions/account-manager.js` was removed; `functions/data-export.js` (signed-URL, App Check, dataExportQueue worker) is now the single definition and the deployed entry point.
 9. Appoint a **named DPO** rather than a role mailbox (§1).
 10. Unify the **consent/privacy entry point** (canonical `privacy.html`/`terms.html`, not `legal.html#…`) (§5).
 11. Maintain a formal **RoPA + DPAs** per processor (§12).

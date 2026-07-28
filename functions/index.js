@@ -11282,8 +11282,8 @@ exports.cancelAccountDeletion     = _acctMgr.cancelAccountDeletion;
    fired. A user's GDPR Art.20 / Kenya DPA §26 request was queued and then
    processed by nothing. The data-export version also enforces App Check, which
    this one did not, so restoring it also closes that gap.
-   (account-manager.js still defines the function; it is simply no longer the
-   deployed entry point. Left in place — removing it is unrelated cleanup.) */
+   (The account-manager.js duplicate has now been REMOVED — single-source
+   reconciliation, 2026-07-28 — so ./data-export is the only definition.) */
 exports.revokeAllSessions         = _acctMgr.revokeAllSessions;
 exports.finaliseExpiredDeletions  = _acctMgr.finaliseExpiredDeletions;
 
