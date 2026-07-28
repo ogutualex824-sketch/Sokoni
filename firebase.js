@@ -167,6 +167,34 @@ window.__sokoniAppCheckReady = _appCheck
     })
   : Promise.resolve('disabled');
 
+window.__sokoniAuthReady = false;
+window.__sokoniAuthReadyDetail = null;
+let _sokoniAuthReadyResolve = null;
+function _resetSokoniAuthReadyPromise() {
+  window.__sokoniAuthReadyPromise = new Promise(function (resolve) {
+    _sokoniAuthReadyResolve = resolve;
+  });
+}
+_resetSokoniAuthReadyPromise();
+window.waitForSokoniAuthReady = function (cb) {
+  const done = function (detail) {
+    try { if (typeof cb === 'function') cb(detail); } catch (e) { console.error('[Firebase] auth ready callback threw:', e); }
+    return detail;
+  };
+  if (window.__sokoniAuthReady) return Promise.resolve(done(window.__sokoniAuthReadyDetail));
+  return window.__sokoniAuthReadyPromise.then(done);
+};
+
+function _publishSokoniAuthReady(detail) {
+  window.__sokoniAuthReady = true;
+  window.__sokoniAuthReadyDetail = detail || null;
+  if (_sokoniAuthReadyResolve) {
+    _sokoniAuthReadyResolve(detail);
+    _sokoniAuthReadyResolve = null;
+  }
+  document.dispatchEvent(new CustomEvent('sokoniAuthReady', { detail: detail }));
+}
+
 if (_appCheck) {
   getAppCheckToken(_appCheck, false)
     .then(() => { window.__sokoniAppCheckState = 'exchanged'; if (IS_LOCALHOST) console.info('[SOKONI] App Check OK — token exchanged.'); })
@@ -648,24 +676,19 @@ onAuthStateChanged(auth, async (user) => {
 
         /* Notify all modules that auth state is confirmed with real profile data.
            shared-header.js, auth.js, and realtime modules all listen for this. */
-        document.dispatchEvent(new CustomEvent("sokoniAuthReady", {
-          detail: {
-            uid:   user.uid,
-            roles: existing.roles || ["buyer"],
-            role:  existing.role  || (existing.roles && existing.roles[0]) || "buyer",
-          }
-        }));
+        const authReadyDetail = {
+          uid:   user.uid,
+          roles: existing.roles || ["buyer"],
+          role:  existing.role  || (existing.roles && existing.roles[0]) || "buyer",
+        };
+        _publishSokoniAuthReady(authReadyDetail);
 
-        if (isGoogle) {
-          const safeUpdates = { lastLogin: serverTimestamp() };
-          if (!existing.photoURL && user.photoURL) {
-            safeUpdates.photoURL = user.photoURL;
-          }
-          /* Record that this account now has google as a provider */
-          if (!existing.providers || !existing.providers.includes("google")) {
-            safeUpdates.providers = [...(existing.providers || ["password"]), "google"];
-          }
-          setDoc(doc(db, "users", user.uid), safeUpdates, { merge: true }).catch(() => {});
+        /* Preserve the existing profile while updating any safe fields for
+           Google users only if they are missing from the canonical Firestore doc. */
+        const profileUpdates = {};
+        if (isGoogle && !existing.photoURL && user.photoURL) profileUpdates.photoURL = user.photoURL;
+        if (Object.keys(profileUpdates).length) {
+          setDoc(doc(db, "users", user.uid), profileUpdates, { merge: true }).catch(() => {});
         }
       } else {
         /* ── New user ──────────────────────────────────────────────
@@ -753,9 +776,7 @@ onAuthStateChanged(auth, async (user) => {
         localStorage.setItem("sokoniUser", JSON.stringify(profile));
 
         /* Notify all modules that auth state is confirmed — new user path */
-        document.dispatchEvent(new CustomEvent("sokoniAuthReady", {
-          detail: { uid: user.uid, roles: ["buyer"], role: "buyer" }
-        }));
+        _publishSokoniAuthReady({ uid: user.uid, roles: ["buyer"], role: "buyer" });
 
         /* ── First-login initialisation: wallet + notification prefs ──
            These are fire-and-forget; failure is non-fatal.            */
@@ -804,32 +825,26 @@ onAuthStateChanged(auth, async (user) => {
         const _c = JSON.parse(localStorage.getItem('sokoniUser') || '{}');
         if (_c.roles && _c.roles.length) { _roles = _c.roles; _role = _c.roles[0]; }
       } catch (_) {}
-      document.dispatchEvent(new CustomEvent('sokoniAuthReady', {
-        detail: { uid: user.uid, roles: _roles, role: _role }
-      }));
+      const fallback = {
+        uid: user.uid,
+        email: user.email || null,
+        phoneNumber: user.phoneNumber || null,
+        name: user.displayName || (user.email || '').split('@')[0] || 'User',
+        provider: providerId || 'password',
+        emailVerified: user.emailVerified,
+        accountStatus: 'active',
+        registeredAs: { user: true },
+        roles: _roles,
+        role: _role,
+      };
+      localStorage.setItem('sokoniUser', JSON.stringify(fallback));
+      _publishSokoniAuthReady({ uid: user.uid, roles: _roles, role: _role });
     }
-
-    /* ── SokoniSync: restore cross-device data on every login ── */
-    _initSokoniSync(db, user.uid);
-
-    /* ── Start idle session timeout ── */
-    if (window._sokoniStartIdleTimer) window._sokoniStartIdleTimer();
-
-    /* ── Update lastSeen + sync any cached FCM token (fire-and-forget) ── */
-    try {
-      const { doc, setDoc, serverTimestamp } = await import(
-        "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
-      );
-      const updates = { lastSeen: serverTimestamp() };
-      const cachedFcmToken = localStorage.getItem("sokoni_fcm_token");
-      if (cachedFcmToken) {
-        updates.fcmToken = cachedFcmToken;
-        updates.fcmUpdatedAt = serverTimestamp();
-      }
-      setDoc(doc(db, "users", user.uid), updates, { merge: true }).catch(() => {});
-    } catch (_) {}
-
   } else {
+    window.__sokoniAuthReady = false;
+    window.__sokoniAuthReadyDetail = null;
+    _resetSokoniAuthReadyPromise();
+
     /* Stop idle timeout when signed out */
     if (window._sokoniStopIdleTimer) window._sokoniStopIdleTimer();
 

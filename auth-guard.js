@@ -32,6 +32,17 @@
   var hasUser = false;
   try { hasUser = !!JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (e) {}
 
+  /* Never bounce the auth pages themselves — that is a redirect loop.
+     Matches with and without .html because cleanUrls:true strips it. */
+  var path = (location.pathname || '').toLowerCase();
+  if (/(^|\/)(login|signup|register|reset-password)(\.html)?$/.test(path)) return;
+
+  /* Preserve the destination so login returns the user here. Only the
+     path + query is kept — never an absolute URL, which would let an
+     open-redirect be smuggled in via the address bar. */
+  var next = location.pathname + location.search;
+  var target = 'login.html?next=' + encodeURIComponent(next);
+
   /* Already authenticated — show page as normal.
      BUGFIX 2026-07-26: this required BOTH loggedIn AND a cached sokoniUser. But
      sokoniUser is a PROFILE CACHE, not the session — it is legitimately absent for
@@ -44,29 +55,41 @@
      bug that broke isLoggedIn() (the u.name requirement). */
   if (loggedIn) return;
 
-  /* Never bounce the auth pages themselves — that is a redirect loop.
-     Matches with and without .html because cleanUrls:true strips it. */
-  var path = (location.pathname || '').toLowerCase();
-  if (/(^|\/)(login|signup|register|reset-password)(\.html)?$/.test(path)) return;
+  /* If the browser has a valid Firebase session but the local cache is stale,
+     wait briefly for the auth bootstrap to restore it. This avoids redirecting
+     an actually-signed-in user to login when the auth state has not been
+     materialized yet. */
+  var _redirectTimer = null;
+  function _doRedirect() {
+      if (window.__sokoniAuthReady) return;
+      _logRedirect();
+      try { location.replace(target); } catch (e) { location.href = target; }
+  }
+  function _cancelRedirect() {
+      if (_redirectTimer) { clearTimeout(_redirectTimer); _redirectTimer = null; }
+  }
+  function _logRedirect() {
+      try {
+          console.warn('[SOKONI AUTH REDIRECT]', { page: path, loggedIn: loggedIn, hasUser: hasUser, reason: 'auth-guard→login' });
+          var _log = JSON.parse(localStorage.getItem('sk_auth_redirects') || '[]');
+          _log.push({ t: Date.now(), page: path, loggedIn: loggedIn, hasUser: hasUser, reason: 'auth-guard→login' });
+          while (_log.length > 25) _log.shift();
+          localStorage.setItem('sk_auth_redirects', JSON.stringify(_log));
+      } catch (e) {}
+  }
+  document.addEventListener('sokoniAuthReady', function() {
+      _cancelRedirect();
+  });
+  if (window.__sokoniAuthReady) return;
+  if (window.__sokoniFirebaseReady) {
+      _redirectTimer = setTimeout(_doRedirect, 4000);
+  } else {
+      _redirectTimer = setTimeout(_doRedirect, 10000);
+      document.addEventListener('sokoniFirebaseReady', function() {
+          if (_redirectTimer) { clearTimeout(_redirectTimer); _redirectTimer = null; }
+          if (window.__sokoniAuthReady) return;
+          _redirectTimer = setTimeout(_doRedirect, 4000);
+      }, { once: true });
+  }
 
-  /* Preserve the destination so login returns the user here. Only the
-     path + query is kept — never an absolute URL, which would let an
-     open-redirect be smuggled in via the address bar. */
-  var next = location.pathname + location.search;
-  var target = 'login.html?next=' + encodeURIComponent(next);
-
-  /* Instrument the redirect so a loop is diagnosable (chrome://inspect, or
-     /android-doctor which reads sk_auth_redirects). If the SAME reason logs many
-     times in seconds, that is the loop. */
-  try {
-    console.warn('[SOKONI AUTH REDIRECT]', { page: path, loggedIn: loggedIn, hasUser: hasUser, reason: 'auth-guard→login' });
-    var _log = JSON.parse(localStorage.getItem('sk_auth_redirects') || '[]');
-    _log.push({ t: Date.now(), page: path, loggedIn: loggedIn, hasUser: hasUser, reason: 'auth-guard→login' });
-    while (_log.length > 25) _log.shift();
-    localStorage.setItem('sk_auth_redirects', JSON.stringify(_log));
-  } catch (e) {}
-
-  /* replace(), not assign(): the protected page must not sit in history,
-     or Back from login lands on it and bounces straight here again. */
-  try { location.replace(target); } catch (e) { location.href = target; }
 })();
