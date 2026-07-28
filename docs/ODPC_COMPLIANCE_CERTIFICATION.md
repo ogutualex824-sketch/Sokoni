@@ -17,7 +17,9 @@
 
 ---
 
-## Overall compliance status: **CONDITIONAL — strong foundations, 4 must-fix items before certification**
+## Overall compliance status: **CONDITIONAL — 3 must-fix items remaining (erasure REMEDIATED 2026-07-28)**
+
+> **Remediation log — 2026-07-28:** MUST-FIX #1 (right to erasure) is **RESOLVED and deployed.** The two deletion systems were converged onto one authority; `deleteMyAccount` now schedules on the fields the working purge worker consumes (`status:'pending_deletion'` + `deletionScheduledAt`, 30-day cancellable grace, immediate Auth lockout); `finaliseExpiredDeletions` now performs a full spec-driven cross-collection purge (`functions/account-purge-spec.js`) — DELETE personal data, ANONYMIZE statutorily-retained financial/tax records (7-yr, Income Tax Act), RETAIN ledgers — writes an immutable `erasureLog` audit event, then `auth.deleteUser`; and `privacy.html` was rewritten to describe the actual lifecycle. Proof: 14/14 emulator (delete-vs-anonymize per spec, other users untouched, idempotent). See §6/§10 (now VERIFIED). **3 must-fix items remain (#2 consent records, #3 data-rights enum, #4 ODPC cert reference).**
 
 SOKONI demonstrates a **mature security and transparency posture** — owner-scoped access control with anti-privilege-escalation, App Check + a full CSP/HSTS header stack, secrets in Secret Manager, append-only audit logs, substantive KDPA-structured privacy/terms/cookie notices naming Bravilex, a **working self-service data export**, and two documented 72-hour breach playbooks.
 
