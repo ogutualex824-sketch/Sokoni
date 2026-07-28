@@ -1,3 +1,23 @@
+## [2026-07-28] — test(qa): on-demand E2E harness certifies both dispatch branches + exactly-once settlement
+
+Repeatable emulator integration harness for the delivery-pipeline QA gate — proves the
+server-authoritative correctness a real prod transaction would exercise, with zero prod pollution.
+
+- **`functions/qa-dispatch-settlement-e2e.js`** — imports and runs the REAL `settleOrder`
+  (`order-settlement.js`) and mirrors the exact first-claim-wins `riderClaim` transaction
+  (`sokoni-orders.js:447`) against a live Firestore emulator. Lives outside `test/` so `npm test`
+  ignores it; refuses to run unless `FIRESTORE_EMULATOR_HOST` is set (never targets prod).
+- **`scripts/qa/run-dispatch-e2e.sh`** — boots the cached emulator (JDK17), runs the harness, tears down.
+- **Result: 14/14 PASS.** Branch A (auto-assigned rider → completed → settled once); Branch B
+  (no rider → 5 riders race → exactly one wins, losers cleanly rejected → completed → settled once);
+  idempotency (3 concurrent + 1 replayed `settleOrder` → single wallet credit, no double-pay).
+
+This certifies the code paths. The remaining **production QA gate** — a real M-Pesa charge + a real
+human rider claiming on production — is an operational validation owned by the business (runbook in the
+commit message / session handoff). Security changes: none. Breaking changes: none.
+
+---
+
 ## [2026-07-28] — docs(compliance): ODPC Data Processor registration ISSUED — must-fix #4 RESOLVED (all 4 closed)
 
 The Office of the Data Protection Commissioner (ODPC) issued Bravilex International Co. Limited's
