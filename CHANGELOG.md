@@ -29,6 +29,17 @@ a booking. There was **no completed-booking gate anywhere**. WS3 adds the author
 - Proof: **17/17** emulator assertions (created / aggregate updated / booking stamped / duplicate
   no-op / non-owner denied / non-completed denied / provider-cannot-review / not-found).
 
+## [2026-07-28] — feat(earn): richer plan table — show what each tier INCLUDES, not just price
+
+The earn page's live plans table (subGetPlans) rendered only Plan/Monthly/Annual and
+discarded the whole `features` payload — so it read as "less info." Now each plan shows
+its free-trial period and an "Includes" column of canonical feature chips (listings
+limit, photos/listing, featured, commission discount, analytics, AI assistant, bulk
+import, priority support, API, team seats, storage, verified badge). Still sourced live
+from subGetPlans → sub-billing.js (no invented figures); prices unchanged.
+
+**Files:** `earnings.html`. **Deploy:** hosting only.
+
 ## [2026-07-27] — fix(perf): homepage scroll-crash (renderer OOM) — bound catalogue feed
 
 The homepage subscribed to the **entire `products` collection** with no cap. The Firestore

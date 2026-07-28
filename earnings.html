@@ -87,6 +87,12 @@
   td .free{color:var(--accent);font-weight:800}
   td .cs{color:var(--amber);font-weight:700}
   td .permo{font-size:11px;color:var(--dim);font-weight:500}
+  .plan-trial{display:block;font-size:10.5px;color:var(--accent);font-weight:600;margin-top:3px}
+  .feat-chips{display:flex;flex-wrap:wrap;gap:5px;max-width:340px}
+  .feat-chip{font-size:10.5px;font-weight:600;color:var(--sub);background:var(--surface2);
+    border:1px solid var(--border);padding:2px 8px;border-radius:999px;white-space:nowrap}
+  td.feat{vertical-align:top}
+  td .noincl{font-size:11.5px;color:var(--dim)}
   .tbl-note{font-size:12px;color:var(--dim);margin-top:9px;display:flex;gap:6px;align-items:flex-start}
 
   .note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
@@ -444,6 +450,33 @@
     if(n === 0)            return '<span class="free">Free</span>';
     return 'KES ' + Math.round(n/100).toLocaleString('en-KE');
   }
+  /* Humanize a plan's numeric value: -1 / very large / "unlimited" → "Unlimited". */
+  function _fnum(v){
+    if(v===-1 || v==='unlimited' || (typeof v==='number' && v>=999999)) return 'Unlimited';
+    if(v==null) return null;
+    return Number(v).toLocaleString('en-KE');
+  }
+  /* Turn subGetPlans' features{} into readable "Includes" chips — the whole point
+     of pulling live plans is that what each tier INCLUDES stays canonical, not just
+     its price. Ordered most-compelling first; only present keys render. */
+  function _featChips(f){
+    if(!f || typeof f!=='object') return '<span class="noincl">Core marketplace access</span>';
+    var out=[];
+    if(f.listings_limit!=null)        out.push(_fnum(f.listings_limit)+' listings');
+    if(f.photos_per_listing!=null)    out.push(_fnum(f.photos_per_listing)+' photos/listing');
+    if(f.featured_listings)           out.push(_fnum(f.featured_listings)+' featured');
+    if(f.commission_discount_pct)     out.push(f.commission_discount_pct+'% commission off');
+    if(f.analytics)                   out.push('Analytics');
+    if(f.ai_assistant)                out.push('AI assistant');
+    if(f.bulk_import)                 out.push('Bulk import');
+    if(f.priority_support)            out.push('Priority support');
+    if(f.api_access)                  out.push('API access');
+    if(f.team_members)                out.push(_fnum(f.team_members)+' team seats');
+    if(f.storage_gb)                  out.push(_fnum(f.storage_gb)+'GB storage');
+    if(f.badge_verified)              out.push('Verified badge');
+    if(!out.length) return '<span class="noincl">Core marketplace access</span>';
+    return '<div class="feat-chips">'+out.map(function(t){return '<span class="feat-chip">'+_e(t)+'</span>';}).join('')+'</div>';
+  }
   async function renderSubPlans(){
     var host = document.getElementById('subPlansLive');
     if(!host) return;
@@ -466,11 +499,16 @@
           var mo = Number(moC), yr = Number(yrC);
           var moPer = (Number.isFinite(mo) && mo>0) ? ' <span class="permo">/mo</span>' : '';
           var yrPer = (Number.isFinite(yr) && yr>0) ? ' <span class="permo">/yr</span>' : '';
-          return '<tr><td>'+_e(p.name || p.id || 'Plan')+'</td><td class="rate">'+_priceCell(moC)+moPer+'</td><td class="rate">'+_priceCell(yrC)+yrPer+'</td></tr>';
+          var trialD = p.trial && Number(p.trial.days) > 0 ? Number(p.trial.days) : 0;
+          var trial  = trialD ? '<span class="plan-trial">✓ '+trialD+'-day free trial</span>' : '';
+          return '<tr><td>'+_e(p.name || p.id || 'Plan')+trial+'</td>'+
+                 '<td class="rate">'+_priceCell(moC)+moPer+'</td>'+
+                 '<td class="rate">'+_priceCell(yrC)+yrPer+'</td>'+
+                 '<td class="feat">'+_featChips(p.features)+'</td></tr>';
         }).join('');
         var n = byHub[h].length;
         return '<div class="sub-hub"><div class="sub-hub-h">'+_e(HUB_LABELS[h]||h)+' <span class="pill">'+n+' plan'+(n===1?'':'s')+'</span></div>'+
-               '<div class="tbl-wrap"><table><thead><tr><th>Plan</th><th>Monthly</th><th>Annual</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+               '<div class="tbl-wrap"><table><thead><tr><th>Plan</th><th>Monthly</th><th>Annual</th><th>Includes</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
       }).join('');
     }catch(e){
       /* Never a broken/blank section — degrade to the summary + Plans link. */
