@@ -25,7 +25,9 @@
   'use strict';
 
   /* Non-user infra keys that survive a purge — same allow-list as sokoniSignOut. */
-  var LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware/i;
+  /* Keep infra keys + the admin lock-screen credential hashes (a per-device
+     second factor, not user data — see firebase.js _SOKONI_LS_KEEP). */
+  var LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware|sokoniadmin(pin|pattern|pw)hash/i;
 
   function cachedUser() {
     try { return JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) { return null; }

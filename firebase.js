@@ -897,7 +897,13 @@ const _SOKONI_LS_KEYS = [
 /* Non-user infrastructure keys that MUST survive sign-out — everything else in
    local/session storage is treated as user data and wiped. Matched case-insensitively
    as a substring of the key name. */
-const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware/i;
+/* Also preserve the admin LOCK-SCREEN credential hashes (sokoniAdminPinHash /
+   PatternHash / PwHash). They are a per-DEVICE second factor the admin sets
+   themselves, not user session data — wiping them on sign-out silently locked
+   admins out ("No credentials set") and forced a re-setup every time. The
+   authoritative admin gate is the Firebase claim, not this hash, so keeping the
+   hash is safe. */
+const _SOKONI_LS_KEEP = /theme|darkmode|consent|cookie|appcheck|debug|install|onboard|dismiss|locale|printer|hardware|sokoniadmin(pin|pattern|pw)hash/i;
 
 async function sokoniSignOut() {
   /* 1. Stop any registered Firestore listeners so no post-signout snapshot can fire

@@ -609,6 +609,10 @@ body.adm-light .adm-sec-h{color:#111;}
       <button class="adm-unlock-btn" type="button" onclick="checkLockPassword()">Unlock →</button>
     </div>
     <div class="adm-lock-error" id="lockError"></div>
+    <!-- Forgot / reset the device lock — gated on the live Firebase admin claim so
+         only a verified admin can clear it (the claim, not this PIN, is the real gate). -->
+    <button type="button" onclick="adminForgotReset()"
+      style="background:none;border:none;color:rgba(113,255,0,0.7);font-size:11.5px;text-decoration:underline;cursor:pointer;font-family:inherit;margin-top:4px;">Forgot PIN? Reset (admin only)</button>
     <!-- First-run credential setup (shown when no PIN/password stored) -->
     <div id="firstRunSetup" style="display:none;margin-top:16px;border-top:1px solid rgba(113,255,0,0.1);padding-top:16px;text-align:left;">
       <div style="font-size:11px;font-weight:800;color:#71ff00;text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px;">⚙️ First-Time Setup</div>
@@ -2624,6 +2628,30 @@ window.firstRunSavePin = async function() {
   document.getElementById('firstRunSetup').style.display = 'none';
   document.getElementById('lockError').textContent = '';
   setTimeout(function(){ switchLockMode('pin'); }, 800);
+};
+
+/* ── Forgot PIN / reset the device lock ──
+   The lock is a per-device second factor whose hash cannot be recovered. A
+   verified admin (Firebase admin/superAdmin claim) can always clear it and set a
+   new PIN, so a forgotten/wiped lock never causes a permanent lockout. Non-admins
+   are told to use "Activate Admin Account" — they can't reset what they can't pass. */
+window.adminForgotReset = async function () {
+  try {
+    var u = window.firebaseAuth && window.firebaseAuth.currentUser;
+    if (!u) { _lockSetError('Sign in with your admin account first, then tap Reset.'); return; }
+    var tr = await u.getIdTokenResult(true /* force refresh */);
+    if (!tr.claims || (tr.claims.admin !== true && tr.claims.superAdmin !== true)) {
+      _lockSetError('Only a verified admin can reset the lock. If you have no admin claim yet, use "Activate Admin Account" below.');
+      var bs = document.getElementById('bootstrapSection'); if (bs) bs.style.display = 'block';
+      return;
+    }
+    Object.values(CRED_KEYS).forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
+    var frs = document.getElementById('firstRunSetup'); if (frs) frs.style.display = 'block';
+    switchLockMode('pin');
+    _lockSetError('✅ Lock reset — choose a new 4-digit PIN below.');
+  } catch (e) {
+    _lockSetError('Could not verify admin — check your connection and try again.');
+  }
 };
 
 /* ── Change credentials (called from settings pane) ── */
