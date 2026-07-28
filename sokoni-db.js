@@ -160,6 +160,10 @@ const SokoniDB = {
       ...booking,
       clientPhone: normalizedPhone,
       uid: _uid(),
+      /* WS4b — tag the legacy free-request create path so it is MEASURABLE for the
+         Phase F retirement decision (a client can't write systemHealth directly, so
+         it's counted server-side via a .count() on this tag). Observational only. */
+      bookingSource: 'legacy-request',
       createdAt: serverTimestamp()
     });
     return ref.id;

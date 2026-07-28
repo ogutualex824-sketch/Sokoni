@@ -179,10 +179,25 @@ Run service**):
   reset on regression" gate. Proof: 17/17 (WS3) + 14/14 (WS4a) emulator assertions, incl. the
   counter firing from the real handler (not silently swallowed by the best-effort catch).
 
-**WS4b (next):** persistent "My Bookings" (canonical `providerBookings where customerUid == me`) with
-lifecycle status + a per-completed-booking review entry wired to `bookingSubmitReview` — the deferred
-WS3 persistent review surface. Provider-domain only; other hubs (healthcare/legal/property/…) remain a
-separate future convergence.
+### WS4b — Persistent My Bookings + review entry (DONE)
+
+Completes the customer side of the canonical flow.
+
+- **Rules: no change (evidence-driven).** Proven 4/4 that the current rule already authorizes the
+  customer list `providerBookings where customerUid == me` (denies unscoped + other-customer lists).
+- **Canonical "Service Bookings" card** in `profile.html` — its own `customerUid` listener + own render,
+  **not interwoven with the legacy sources**, so Phase F retirement is a deletion not a refactor. Lifecycle
+  status per booking; every visible state from the booking doc.
+- **Persistent review entry** — completed + unreviewed → "Leave a review" → `SokoniBookService.review()`,
+  reusing the WS3 review prompt + `bookingSubmitReview` gate (one review UI, one server path).
+- **Free-request telemetry gap closed** — `SokoniDB.saveBooking` tags `bookingSource:'legacy-request'`;
+  `computeBookingConvergence` counts it (`.count()`), folds into `legacyAll`, and reports `legacyRetired`
+  only when the webhook counter AND the free-request tag are both zero (the Phase F signal).
+- Proof: 4/4 rules + 10/10 summary + 11/11 real render (incl. XSS escaping) + WS3 17/17 reused submit.
+
+**Phase F is now unblocked** — the meters (WS4a) + the customer surface (WS4b) are live; retirement waits
+only on the §Exit criteria (canonical share sustained, legacy paths at zero for the observation window).
+Provider-domain only; other hubs (healthcare/legal/property/…) remain a separate future convergence.
 
 ## Legacy retirement lifecycle (Phase F)
 

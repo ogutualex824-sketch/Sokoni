@@ -2159,6 +2159,13 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 
   <!-- BOOKINGS panel -->
   <div id="panel-bookings" class="up-panel">
+    <!-- WS4b — canonical service bookings (providerBookings). Own card + own listener +
+         own render, deliberately NOT interwoven with the legacy sources below, so Phase F
+         retirement of the legacy list is a deletion, not a refactor. -->
+    <div class="up-card" id="myServiceBookingsCard" style="display:none">
+      <div class="up-card-title">Service Bookings <a href="services.html" class="up-card-link">Book More</a></div>
+      <div id="myServiceBookingsPanel"></div>
+    </div>
     <div class="up-card">
       <div class="up-card-title">My Bookings <a href="services.html" class="up-card-link">Book More</a></div>
       <div id="bookingsPanel">
@@ -2850,6 +2857,8 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
 <script src="sw-register.js" defer></script>
+<script src="sokoni-book-service.js" defer></script>
+
 <script src="nav-active.js" defer></script>
 
 <script>
@@ -3027,6 +3036,7 @@ if(!_user) _user = {};   /* cache absent — proceed; firebase/bootstrap + sokon
 /* ── Listener teardown guard — all onSnapshot unsubs collected here ── */
 var _profSellerProductsUnsub = null;
 var _profBookingsUnsub = null;
+var _myServiceBookingsUnsub = null;   /* WS4b — canonical providerBookings listener (its own source) */
 var _profReviewsUnsub = null;
 var _profFollowingUnsub = null;
 var _profWalletUnsub = null;
@@ -3034,6 +3044,7 @@ var _profUserDataUnsub = null;
 window.addEventListener('beforeunload', function() {
   if (_profSellerProductsUnsub) _profSellerProductsUnsub();
   if (_profBookingsUnsub) _profBookingsUnsub();
+  if (_myServiceBookingsUnsub) _myServiceBookingsUnsub();
   if (_profReviewsUnsub) _profReviewsUnsub();
   if (_profFollowingUnsub) _profFollowingUnsub();
   if (_profWalletUnsub) _profWalletUnsub();
@@ -3770,6 +3781,7 @@ function toggleListing(id, btn){
    BOOKINGS PANEL
 ══════════════════════════════════════════════════════════════ */
 function loadBookings(){
+  try{ loadMyServiceBookings(); }catch(e){}   /* WS4b — canonical providerBookings (independent card) */
   var el = document.getElementById('bookingsPanel');
   if(!el) return;
 
@@ -3819,6 +3831,80 @@ function loadBookings(){
       }, function(){});
     }).catch(function(){});
   }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   WS4b — CANONICAL SERVICE BOOKINGS (providerBookings)
+   Self-contained: own listener, own render, own card. The customer's
+   authoritative service bookings, filtered by customerUid (rules already
+   authorize this list — proven in the emulator). Completed + unreviewed
+   bookings expose a review entry that reuses SokoniBookService.review()
+   → bookingSubmitReview (one review UI, one server gate). Deleting this
+   whole block + its card is all Phase F needs — no legacy entanglement.
+══════════════════════════════════════════════════════════════ */
+function loadMyServiceBookings(){
+  var el = document.getElementById('myServiceBookingsPanel');
+  var card = document.getElementById('myServiceBookingsCard');
+  if(!el || !card) return;
+  var uid = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+  if(!uid || !firebase.firestore) return;
+
+  /* Display state derives ONLY from the booking doc (single source of truth). */
+  var STATUS = {
+    pending:      {t:'Awaiting provider', c:'rgba(255,185,0,0.18)'},
+    confirmed:    {t:'Confirmed',         c:'rgba(113,255,0,0.15)'},
+    in_progress:  {t:'In progress',       c:'rgba(113,255,0,0.15)'},
+    completed:    {t:'Completed',         c:'rgba(113,255,0,0.22)'},
+    cancelled:    {t:'Cancelled',         c:'rgba(255,77,77,0.15)'},
+    declined:     {t:'Declined',          c:'rgba(255,77,77,0.15)'},
+    no_show:      {t:'No-show',           c:'rgba(255,77,77,0.15)'}
+  };
+  function label(b){
+    if(b.paymentStatus==='refunded') return {t:'Refunded', c:'rgba(255,185,0,0.18)'};
+    if(b.status!=='completed' && b.paymentStatus==='paid_held') return {t:'Paid · Held', c:'rgba(113,255,0,0.15)'};
+    return STATUS[b.status] || {t:(b.status||'pending'), c:'rgba(255,255,255,0.07)'};
+  }
+  function render(list){
+    if(!list.length){ card.style.display='none'; return; }
+    card.style.display='';
+    el.innerHTML = list.slice(0,20).map(function(b){
+      var st = label(b);
+      var when = (b.date?escHtml(b.date):'') + (b.startTime?(' &middot; '+escHtml(b.startTime)):'');
+      var reviewed = !!b.reviewedAt;
+      var canReview = b.status==='completed' && !reviewed;
+      var svc = escHtml(b.service||'Service');
+      var action = canReview
+        ? '<button type="button" class="up-card-link" style="border:none;background:none;cursor:pointer;color:#71ff00;font-weight:800" '
+          + 'onclick="SokoniBookService.review({bookingId:\''+escHtml(b.id)+'\',serviceName:\''+svc.replace(/'/g,"&#39;")+'\'})">Leave a review</button>'
+        : reviewed
+          ? '<span style="color:#9a9a9a;font-size:12px">&#11088; '+(b.reviewRating?escHtml(String(b.reviewRating)):'')+' Reviewed</span>'
+          : '';
+      return '<div class="up-booking-card">'
+        +'<div class="up-booking-header">'
+        +'<span class="up-booking-type">&#128295; '+svc+'</span>'
+        +'<span style="font-size:10px;font-weight:800;background:'+st.c+';color:#fff;padding:2px 9px;border-radius:6px;">'+escHtml(st.t.toUpperCase())+'</span>'
+        +'</div>'
+        +'<div class="up-booking-meta">'+when+'</div>'
+        + (action?('<div style="margin-top:8px">'+action+'</div>'):'')
+        +'</div>';
+    }).join('');
+  }
+
+  try{
+    if(_myServiceBookingsUnsub){ _myServiceBookingsUnsub(); _myServiceBookingsUnsub=null; }
+    /* customerUid list query — authorized by the current rule (no rule change). No orderBy
+       (avoids a composite index); sort newest-first in memory by startTs/createdAt. */
+    _myServiceBookingsUnsub = firebase.firestore().collection('providerBookings')
+      .where('customerUid','==',uid).limit(50)
+      .onSnapshot(function(snap){
+        var rows = snap.docs.map(function(d){ var x=d.data()||{}; x.id=d.id; return x; })
+          .sort(function(a,b){
+            var av=(a.startTs||(a.createdAt&&a.createdAt.seconds*1000)||0), bv=(b.startTs||(b.createdAt&&b.createdAt.seconds*1000)||0);
+            return bv-av;
+          });
+        render(rows);
+      }, function(){ /* listener error — leave last rendered state */ });
+  }catch(e){ /* non-fatal */ }
 }
 
 /* ══════════════════════════════════════════════════════════════

@@ -228,6 +228,17 @@
       show();
       if (_ctx.serviceId) loadSlots(); else loadServices();   /* per-service card → slots; generic → pick service first */
     },
+    /* Open the modal directly on an existing booking to leave a review (WS4b — the
+       persistent entry from the profile "My Bookings" list). Reuses the SAME observe()
+       → reviewPrompt/reviewDone path and the same bookingSubmitReview submit, so there
+       is exactly one review UI and one server gate. */
+    review(opts) {
+      _ctx = Object.assign({}, opts || {});
+      if (!firebase.auth().currentUser) { location.href = 'login.html?next=' + encodeURIComponent(location.pathname + location.search); return; }
+      if (!_ctx.bookingId) return;
+      show(); title('Your booking'); body('<div class="sbs-empty">Loading…</div>');
+      observe(_ctx.bookingId);                 /* renders reviewPrompt (completed+unreviewed) or reviewDone */
+    },
     /* Resume an in-flight booking after a refresh — recover from the doc, not the flow. */
     resume() {
       let saved; try { saved = JSON.parse(sessionStorage.getItem(K) || 'null'); } catch (_) { saved = null; }

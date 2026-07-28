@@ -1,3 +1,30 @@
+## [2026-07-28] — feat(booking): WS4b — persistent My Bookings + review entry
+
+Completes the customer side of the canonical booking flow. Before this, a customer had NO
+persistent view of their canonical `providerBookings` after dismissing the live booking modal
+— the profile "Bookings" tab queried top-level `bookings where userId == uid`, which no writer
+populates for service bookings.
+
+**Files:** `profile.html`, `sokoni-book-service.js`, `sokoni-db.js`, `functions/booking-convergence.js`.
+**Deploy:** functions (`aggregatePlatformMetrics` — the free-request count) + hosting. **Rules:** none (see below).
+
+- **Rules unchanged (evidence-driven).** Proven 4/4 in the emulator that the current rule already
+  authorizes the customer list query `providerBookings where customerUid == me` (and denies both
+  unscoped and other-customer lists). Per the agreed process, no rule was added because none was needed.
+- **Canonical My Bookings** (`profile.html`) — a self-contained "Service Bookings" card with its own
+  `providerBookings where customerUid == me` listener and its own render, **deliberately not interwoven
+  with the legacy sources** so Phase F retirement of the legacy list is a deletion, not a refactor.
+  Every visible state derives from the booking doc; lifecycle status shown per booking.
+- **Persistent review entry** — a completed + unreviewed booking exposes "Leave a review" wired to the
+  new `SokoniBookService.review({bookingId})`, which reuses the SAME WS3 review prompt +
+  `bookingSubmitReview` gate (one review UI, one server path). Delivers the surface deferred from WS3.
+- **Free-request telemetry gap closed** (the WS4a documented gap) — `SokoniDB.saveBooking` now tags the
+  legacy free-request create with `bookingSource:'legacy-request'`; `computeBookingConvergence` counts it
+  with a `.count()` aggregation, folds it into `legacyAll`, and only reports `legacyRetired` when EVERY
+  legacy path (webhook counter + free-request tag) is zero — the Phase F signal.
+- Proof: 4/4 rules + 10/10 convergence-summary + 11/11 real render logic (extracted from profile.html,
+  incl. XSS escaping + review-entry exposure) + WS3 17/17 reused submit path.
+
 ## [2026-07-28] — feat(booking): WS4a — service-booking convergence telemetry
 
 The Phase F retirement decision must be evidence-based ("zero legacy traffic for a sustained

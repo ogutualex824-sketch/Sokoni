@@ -43,14 +43,25 @@ async function computeBookingConvergence(db) {
   const d = snap.exists ? snap.data() : {};
   const canonicalTotal = Number(d.canonicalTotal) || 0;
   const legacyTotal = Number(d.legacyTotal) || 0;
-  const total = canonicalTotal + legacyTotal;
+
+  /* WS4b — the client-direct free-request path can't increment systemHealth, so it is
+     tagged (bookingSource:'legacy-request') and counted here with a single-field .count()
+     aggregation (no docs read). Best-effort: a count failure must not fail the metrics run. */
+  let legacyRequestTotal = 0;
+  try {
+    const agg = await db.collection('bookings').where('bookingSource', '==', 'legacy-request').count().get();
+    legacyRequestTotal = agg.data().count || 0;
+  } catch (_) { legacyRequestTotal = null; /* signal "not measured this run" rather than a false 0 */ }
+
+  const legacyAll = legacyTotal + (legacyRequestTotal || 0);
+  const total = canonicalTotal + legacyAll;
   const date = nairobiDate();
   const today = (d.daily && d.daily[date]) || {};
   return {
-    canonicalTotal, legacyTotal, total,
-    canonicalShare: total ? canonicalTotal / total : null,   /* cumulative adoption */
+    canonicalTotal, legacyTotal, legacyRequestTotal, legacyAll, total,
+    canonicalShare: total ? canonicalTotal / total : null,   /* cumulative adoption (all legacy paths) */
     today: { date, canonical: Number(today.canonical) || 0, legacy: Number(today.legacy) || 0 },
-    legacyRetired: total > 0 && legacyTotal === 0,            /* informational only */
+    legacyRetired: total > 0 && legacyAll === 0,             /* informational only */
   };
 }
 
