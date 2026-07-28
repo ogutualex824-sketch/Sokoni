@@ -21,8 +21,11 @@ function ok(name, cond) { if (cond) pass++; else { fail++; console.log('  ✗ ' 
 })();
 
 /* Fallback / bad src */
-ok('empty src → placeholder', SI.render({ src: '' }).includes('assets/default-product.png'));
-ok('data: URI src → placeholder', SI.render({ src: 'data:image/png;base64,AAA' }).includes('assets/default-product.png'));
+ok('empty src → placeholder', SI.render({ src: '' }).includes('src="assets/default-product.png"'));
+/* v1.2: base64 data: URIs now RENDER (the homepage OOM was fixed by bounding the
+   catalogue listener, not by hiding images) — so a data: src is carried through,
+   not swapped for the placeholder. Real Storage URLs are still preferred via pick(). */
+ok('data: URI src → renders (base64 allowed)', SI.render({ src: 'data:image/png;base64,AAA' }).includes('src="data:image/png;base64,AAA"'));
 ok('carries data-sk-fallback for the error handler', SI.render({ src: 'https://s/x' }).includes('data-sk-fallback='));
 
 /* Priority */
@@ -63,10 +66,22 @@ ok('buildSrcset skips zero/empty widths',
   SI.configure({ cdnRewrite: null }); // reset
 })();
 
-/* isBadSrc */
-ok('isBadSrc: data: true', SI.isBadSrc('data:x') === true);
+/* isBadSrc — v1.2: only empty/blank is "bad"; base64 is allowed (renders). */
+ok('isBadSrc: data: allowed (false)', SI.isBadSrc('data:x') === false);
 ok('isBadSrc: https false', SI.isBadSrc('https://s/x') === false);
 ok('isBadSrc: empty true', SI.isBadSrc('') === true);
+ok('isBadSrc: blank true', SI.isBadSrc('   ') === true);
+
+/* pick — canonical field resolver: prefers a real Storage URL, then base64, then ''. */
+ok('pick: imageStorageUrls[0] wins', SI.pick({ imageStorageUrls: ['https://s/a.jpg'], image: 'data:x' }) === 'https://s/a.jpg');
+ok('pick: real URL preferred over base64 image', SI.pick({ image: 'data:x', imageUrl: 'https://s/b.jpg' }) === 'https://s/b.jpg');
+ok('pick: images[] entry (string)', SI.pick({ images: ['https://s/c.jpg'] }) === 'https://s/c.jpg');
+ok('pick: images[] entry (object .url)', SI.pick({ images: [{ url: 'https://s/d.jpg' }] }) === 'https://s/d.jpg');
+ok('pick: base64 only when no URL', SI.pick({ image: 'data:img' }) === 'data:img');
+ok('pick: root-absolute path is a URL', SI.pick({ image: '/assets/x.png' }) === '/assets/x.png');
+ok('pick: empty object → ""', SI.pick({}) === '');
+ok('pick: null/undefined string skipped', SI.pick({ image: 'null', imageUrl: 'https://s/e.jpg' }) === 'https://s/e.jpg');
+ok('render {product} resolves via pick', SI.render({ product: { imageStorageUrls: ['https://s/p.jpg'] } }).includes('src="https://s/p.jpg"'));
 
 /* Fallback modes (v1.1) */
 ok('default mode → no fallmode attr (placeholder, v1.0 behaviour)',
@@ -81,7 +96,7 @@ ok('always keeps sk-img + data-sk-fallback regardless of mode',
     return h.includes('sk-img') && h.includes('data-sk-fallback'); })());
 
 /* Version + diagnostics */
-ok('exposes a version constant', SI.version === '1.1.0');
+ok('exposes a version constant', SI.version === '1.2.0');
 ok('checkAdoption is callable (no-op without a DOM)',
   (() => { const r = SI.checkAdoption(); return r && typeof r.unmanaged === 'number'; })());
 

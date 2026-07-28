@@ -44,7 +44,12 @@
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  var VERSION = '1.1.0';   // bump on any behaviour change; surfaced for prod diagnostics
+  var VERSION = '1.2.0';   // bump on any behaviour change; surfaced for prod diagnostics
+  /* v1.2.0 — base64 data: URIs now RENDER instead of falling back to the placeholder
+     (the homepage OOM was fixed by BOUNDING the catalogue listener + stripping base64
+     from the warm cache, not by hiding images), and added pick() — the canonical
+     image-field resolver (prefers a real Storage URL, then base64, then '') plus
+     render({product}) support. isBadSrc now rejects only empty/blank. */
   /* v1.1.0 — added the optional `fallbackMode` (placeholder | css-hide | remove).
      Backward compatible: default is 'placeholder' (v1.0 behaviour). This lets an
      existing page keep its OWN intended fallback (a branded CSS placeholder via a
