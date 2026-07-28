@@ -47,35 +47,79 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
     if (iSnap.exists && iSnap.data().resourceType === 'providerBooking') bookingId = iSnap.data().resourceId || null;
   } catch (_) { return false; }
   if (!bookingId) return false;
+  /* Terminal lifecycle states: the booking has died and released its slot; a payment
+     landing now can NEVER become a valid held booking. Consult the booking STATE MACHINE,
+     not just paymentStatus — the two can disagree in the expiry→webhook race (expiry sets
+     status:'cancelled' but leaves paymentStatus:'pending'). */
+  const TERMINAL = ['cancelled', 'declined', 'no_show'];
+  const FV = adminSdk.firestore.FieldValue;
   try {
     const bRef = db.collection('providerBookings').doc(bookingId);
-    const held = await db.runTransaction(async (txn) => {
+    /* outcome: 'held' | 'refunded' | 'noop' | 'no-booking' — drives intent status + notify. */
+    const res = await db.runTransaction(async (txn) => {
       const bSnap = await txn.get(bRef);
-      if (!bSnap.exists) return false;
+      if (!bSnap.exists) return { outcome: 'no-booking' };
       const b = bSnap.data();
-      if (['paid_held', 'settled', 'refunded'].includes(b.paymentStatus)) return false;  /* replay-safe no-op */
+      if (['paid_held', 'settled', 'refunded'].includes(b.paymentStatus)) return { outcome: 'noop' };  /* replay-safe no-op */
+
+      /* Race fix: payment arrived AFTER the booking became terminal (e.g. TTL expiry cancelled
+         it). Do NOT revive it — the slot is gone and no settlement will run. A system/expiry
+         cancellation is a FULL refund (no forfeit): return the payment to the customer wallet,
+         the platform's established refund destination (matches _disburseHeldFunds). */
+      if (TERMINAL.includes(b.status)) {
+        const shillings = Math.max(0, Math.floor(Number(amountKES) || 0));
+        if (shillings >= 1 && b.customerUid) {
+          txn.set(db.collection('users').doc(b.customerUid), { walletBalance: FV.increment(shillings) }, { merge: true });
+          /* deterministic ledger id → double-credit-proof even under txn retry (belt & suspenders
+             on top of the paymentStatus guard, which already makes a replay a no-op). */
+          txn.set(db.collection('ledger').doc(`${b.customerUid}_${apiRef}_latepay_refund`), {
+            uid: b.customerUid, type: 'booking_refund', credit: shillings, bookingId,
+            reason: 'paid-after-' + b.status, createdAt: FV.serverTimestamp(),
+          });
+        }
+        txn.update(bRef, {
+          paymentStatus: 'refunded',
+          refundedCents: Math.round((Number(amountKES) || 0) * 100),
+          refundReason:  'paid-after-' + b.status,   /* audit: why a cancelled booking is 'refunded' */
+          paymentRef:    apiRef,
+          updatedAt:     FV.serverTimestamp(),
+        });
+        return { outcome: 'refunded', shillings, customerUid: b.customerUid, status: b.status };
+      }
+
+      /* Active booking → hold as before. */
       txn.update(bRef, {
         paymentStatus: 'paid_held',
         heldAmount:    Math.round(amountKES * 100),   /* cents held (price + fee) */
         paymentRef:    apiRef,
-        paidAt:        adminSdk.firestore.FieldValue.serverTimestamp(),
-        updatedAt:     adminSdk.firestore.FieldValue.serverTimestamp(),
+        paidAt:        FV.serverTimestamp(),
+        updatedAt:     FV.serverTimestamp(),
       });
-      return true;
+      return { outcome: 'held' };
     });
-    await db.collection('paymentIntents').doc(intentRef || apiRef)
-      .set({ status: 'paid', paidRef: apiRef, paidAt: adminSdk.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
-    if (held) {
-      try {
-        const { notify } = require('./notify');
+
+    /* Intent status mirrors the outcome so a re-read of the intent is truthful. */
+    const intentStatus = res.outcome === 'refunded' ? 'refunded' : res.outcome === 'held' ? 'paid' : null;
+    if (intentStatus) {
+      await db.collection('paymentIntents').doc(intentRef || apiRef)
+        .set({ status: intentStatus, paidRef: apiRef, paidAt: FV.serverTimestamp() }, { merge: true }).catch(() => {});
+    }
+
+    try {
+      const { notify } = require('./notify');
+      if (res.outcome === 'held') {
         const b = (await bRef.get()).data() || {};
         if (b.customerUid) notify({ uid: b.customerUid, type: 'booking_paid', title: 'Payment received ✅',
           body: `Your booking is paid and held. The provider will confirm shortly. Ref ${apiRef}.`, dedupeKey: `booking_paid_${apiRef}` }).catch(() => {});
         if (b.providerId) notify({ uid: b.providerId, type: 'booking_new', title: 'New paid booking 📅',
           body: `A customer has paid for a booking${b.service ? ' — ' + b.service : ''}. Ref ${apiRef}.`, dedupeKey: `booking_new_${apiRef}` }).catch(() => {});
-      } catch (_) { /* notify optional */ }
-    }
-    console.log(`[webhook] service booking ${held ? 'HELD' : 'already processed'} (no wallet credit): ${apiRef} -> ${bookingId}`);
+      } else if (res.outcome === 'refunded' && res.customerUid) {
+        notify({ uid: res.customerUid, type: 'booking_refund', title: 'Payment refunded ↩',
+          body: `That time slot was no longer available, so your payment has been refunded to your SOKONI wallet. Ref ${apiRef}.`, dedupeKey: `booking_latepay_refund_${apiRef}` }).catch(() => {});
+      }
+    } catch (_) { /* notify optional */ }
+
+    console.log(`[webhook] service booking ${res.outcome} (${res.outcome === 'refunded' ? 'refunded to wallet, slot had expired' : 'no wallet credit'}): ${apiRef} -> ${bookingId}`);
   } catch (e) {
     console.error('[webhook] service-booking hold failed (recoverable, payment stands):', e.message);
   }

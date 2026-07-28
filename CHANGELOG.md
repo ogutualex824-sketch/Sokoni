@@ -1,3 +1,29 @@
+## [2026-07-28] — fix(booking): webhook-after-expiry race — refund a payment that lands after the slot expired
+
+Canonical-path money-integrity hardening (its own focused workstream, NOT part of the convergence
+build phase, NOT a Phase F prerequisite). A latent race: the 15-min TTL reaper cancels an unpaid
+booking (`status:'cancelled'`, slot lock released) but leaves `paymentStatus:'pending'`; the payment
+webhook guarded ONLY on `paymentStatus`, so a payment landing seconds later flipped a **cancelled**
+booking to `paid_held` — customer charged, funds held, slot gone, and no refund (the refund path
+triggers on cancel-of-a-held booking, but here the cancel preceded the hold). Narrow window, real money.
+
+**Files:** `functions/booking-payment-sweep.js` (`holdServiceBookingPayment`). **Deploy:** functions
+(`intasendWebhook`, `webhookIntasend`). **Rules/DB/hosting:** none.
+
+- **The webhook now consults the booking STATE MACHINE, not just `paymentStatus`.** Terminal states
+  `{cancelled, declined, no_show}` are recognized: a payment landing on a terminal booking does NOT
+  revive it.
+- **Deterministic compensation** — a system/expiry cancellation is a **full refund** (no deposit
+  forfeit): the payment is credited to the customer's `users.walletBalance` (the platform's established
+  refund destination, matching `_disburseHeldFunds`) with a `booking_refund` `ledger` row, the booking
+  marked `paymentStatus:'refunded'` + `refundReason:'paid-after-<status>'`, and the intent → `refunded`.
+- **Replay-safe & idempotent** — the existing `paymentStatus ∈ {paid_held,settled,refunded}` guard makes
+  a webhook replay a complete no-op (no double-credit), reinforced by a deterministic
+  `{uid}_{ref}_latepay_refund` ledger id. The active-booking hold path is unchanged.
+- Proof: **15/15** emulator — both interleavings (expiry→webhook refunds; webhook→expiry stays safe via
+  `isExpired`'s paymentStatus guard, expiry sweep skips the held booking), refund replay no-double-credit,
+  declined/no_show also refund, active hold + its replay unchanged.
+
 ## [2026-07-28] — feat(booking): WS4b — persistent My Bookings + review entry
 
 Completes the customer side of the canonical booking flow. Before this, a customer had NO
