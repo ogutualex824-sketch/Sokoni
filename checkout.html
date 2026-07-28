@@ -2341,6 +2341,12 @@ async function sendStkPush(){
           phone:           phone,
           deliveryName:    document.getElementById("coName")?.value.trim()    || "",
           deliveryAddress: document.getElementById("coAddress")?.value.trim() || "",
+          /* Blocker B2 — send geo so the server can persist pickup/dropoff for rider dispatch.
+             Buyer (dropoff) from live geolocation; seller (pickup) best-effort from the cart's first item. */
+          deliveryCoords:  (window.deliveryLocation && window.deliveryLocation.lat)
+                             ? { lat: window.deliveryLocation.lat, lng: window.deliveryLocation.lng } : null,
+          pickupCoords:    (function(){ try { var c = JSON.parse(localStorage.getItem("cart")||"[]")[0]||{};
+                             return (c.sellerLat && c.sellerLng) ? { lat: c.sellerLat, lng: c.sellerLng } : null; } catch(_) { return null; } })(),
           /* amount and orderItems omitted when sessionId is present — server uses session data */
           ...(!_sessionId && { amount: orderTotal, orderItems: cart }),
         }),

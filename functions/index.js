@@ -2472,8 +2472,13 @@ exports.verifyIntasendPayment = onRequest(
     const {
       invoiceId, trackingId, amount, phone, orderItems,
       deliveryName, deliveryAddress,
+      pickupCoords, deliveryCoords, /* Blocker B2 — geo for rider dispatch (pickup=shop, dropoff=buyer) */
       sessionId, /* preferred: server-side checkout session ID */
     } = req.body;
+    /* Normalize coords → flat lat/lng the dispatch engine reads (_autoAssignRider: after.pickupLat/pickupLng). */
+    const _num = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+    const _pLat = pickupCoords && _num(pickupCoords.lat), _pLng = pickupCoords && _num(pickupCoords.lng);
+    const _dLat = deliveryCoords && _num(deliveryCoords.lat), _dLng = deliveryCoords && _num(deliveryCoords.lng);
 
     if (!invoiceId && !trackingId) {
       res.status(400).json({ verified: false, error: "invoiceId or trackingId required" });
@@ -2643,6 +2648,14 @@ exports.verifyIntasendPayment = onRequest(
         buyerPhone:      phone,
         buyerName:       deliveryName || "Customer",
         deliveryAddress: deliveryAddress || "",
+        /* Blocker B2 — pickup (shop) + dropoff (buyer) geo so rider dispatch can route.
+           `_autoAssignRider` reads pickupLat/pickupLng; the delivered fee-split + rider ETA need both.
+           Null-safe: a missing seller shop-geo leaves pickup null (seller-onboarding NEEDS-DATA). */
+        pickupLat:       _pLat || null,
+        pickupLng:       _pLng || null,
+        dropoffLat:      _dLat || null,
+        dropoffLng:      _dLng || null,
+        deliveryCoords:  (_dLat != null && _dLng != null) ? { lat: _dLat, lng: _dLng } : null,
         /* Carry the server-clamped delivery fee from the session onto the order (was dropped).
            Fixes TWO things: the `delivered` fee-split (onOrderStatusChange read `after.deliveryFee`
            → previously 0), AND settlement gross (order-settlement `_grossCents` = total − deliveryFee,
