@@ -1,3 +1,19 @@
+## [2026-07-29] — docs(privacy): cross-border transfer clause, KDPA Part VI (ODPC SHOULD-FIX #5)
+
+Added an explicit international-data-transfer disclosure to the privacy notice. Previously the policy
+named its processors (§8) but did not state a KDPA Part VI legal basis for transferring Kenyan personal
+data out of the country — even though Firestore/Auth/Storage/Hosting run on Google Cloud `us-central1` (USA).
+
+- `privacy.html` §8.1 "International Data Transfers" — names the out-of-Kenya processing (Google Cloud US,
+  payment processor), states the Part VI (ss.48–50) bases and safeguards (contract necessity; contractual
+  data-protection terms; TLS 1.2+ / AES-256; processor certifications) and an objection route to
+  privacy@mysokoni.co.ke. Placed inside §8 (no section renumbering, ToC unchanged).
+- `docs/ODPC_COMPLIANCE_CERTIFICATION.md` — §11 GAP + gap-summary #5 marked RESOLVED.
+
+Client-only notice text. No functional/runtime change. Breaking changes: none.
+
+---
+
 ## [2026-07-28] — fix(ui): Messages page — duplicate search bar, title overlap, mojibake placeholders (P1)
 
 Reported from iPhone Safari during public testing: the "Messages" heading overlapped the search bar,

@@ -81,7 +81,7 @@ However, **it is not yet certifiable as fully KDPA-compliant** because of four m
 
 ## 11. Cross-Border Processing / Data Residency — **PARTIAL (disclosure GAP)**
 - **Verified:** region `us-central1` (USA) — Functions (`firebase.json:71-101`), Firestore/Auth/Storage (Google Cloud US). This is a cross-border transfer of Kenyan personal data. At-rest AES-256 (`privacy.html:364`).
-- **GAP:** the privacy notice names processors (§8) but has **no explicit KDPA Part VI cross-border transfer basis** (adequacy / appropriate safeguards clause). Add it before certifying.
+- **GAP (RESOLVED 2026-07-29):** the privacy notice now carries an explicit KDPA Part VI cross-border transfer clause — `privacy.html` §8.1 "International Data Transfers" names the out-of-Kenya processing (Google Cloud `us-central1`, payment processor) and states the legal bases + safeguards (contract necessity, contractual data-protection terms, TLS 1.2+/AES-256, processor certifications) and an objection route.
 
 ## 12. Third-Party Processors — **VERIFIED (inventory)**
 Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Firebase** (Auth/Firestore/Storage/FCM/Hosting), **IntaSend** (M-Pesa/card; name+phone+amount), **SendGrid** (email), **Google Analytics 4** (usage; 26-mo), **Nominatim/OSRM** (geocode/route; coordinates), **Algolia/Typesense** (search), **KRA eTIMS** (tax; legal obligation), **Meta** (login + deletion callback), **Redis** (declared, unreachable).
@@ -106,7 +106,7 @@ Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Fire
 4. **ODPC registration reference absent from the codebase (§14).** Embed the certificate/number; reconcile docs from "pending"/"paid" to "registered."
 
 ## SHOULD-FIX / Recommendations
-5. Add an explicit **cross-border transfer clause** (KDPA Part VI) to the privacy notice (§11).
+5. ~~Add an explicit **cross-border transfer clause** (KDPA Part VI) to the privacy notice (§11).~~ **RESOLVED 2026-07-29** — `privacy.html` §8.1 International Data Transfers.
 6. Restore **Redis rate limiting** (VPC connector) or add a TTL on `rateLimitsFallback` (§8).
 7. ~~**Marketing opt-in defaults to true** — change to opt-out-by-default (§4).~~ **RESOLVED 2026-07-28** — marketing now opt-in by default in `pos-customers.js` + `email-service.js`.
 8. ~~Reconcile the **duplicate `requestDataExport`** definitions so the signed-URL implementation is exported (§6).~~ **RESOLVED 2026-07-28** — the older shadowed duplicate in `functions/account-manager.js` was removed; `functions/data-export.js` (signed-URL, App Check, dataExportQueue worker) is now the single definition and the deployed entry point.
