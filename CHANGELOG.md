@@ -1,3 +1,24 @@
+## [2026-07-28] — fix(booking): provider activation gate — reject bookings for non-active providers
+
+Trust & safety hardening (its own focused workstream; from the universality audit). `bookingCreateService`
+validated the *service* but never the *provider's* status, so **suspending/disabling a provider had no
+effect** while their services + availability stayed published — bookings kept succeeding.
+
+**Files:** `functions/booking-service.js` (`bookingCreateService`). **Deploy:** functions (`providerDispatch`).
+**Rules/DB/hosting:** none.
+
+- The create path now reads the canonical registry doc `providers/{providerId}` and requires
+  `status ∈ {active, approved}` **and** `acceptsBookings !== false` before any write. Server-side only.
+- **Fail-closed:** a missing registry doc (never published / unapproved) is not bookable. Verified against
+  live — all 4 production provider docs are `active` + `acceptsBookings:true`, so zero regression; and
+  `providerPublish` writes the registry doc atomically with services+availability, so any bookable provider
+  has one.
+- Clear customer-facing error ("This provider isn't currently available for bookings."); the gate precedes
+  all writes, so a rejected provider leaves no orphan `providerBookings` doc.
+- Proof: **9/9** emulator — active/approved succeed; suspended/disabled/pending/missing/paused rejected;
+  message present; no booking doc created on rejection.
+- Scope note: reschedule (a provider-side op on an already-created booking) is intentionally not gated here.
+
 ## [2026-07-28] — fix(booking): webhook-after-expiry race — refund a payment that lands after the slot expired
 
 Canonical-path money-integrity hardening (its own focused workstream, NOT part of the convergence

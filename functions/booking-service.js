@@ -99,6 +99,19 @@ _h.bookingCreateService = async (req) => {
   }
   if (customerUid === providerId) throw new HttpsError('failed-precondition', 'You cannot book your own service.');
 
+  /* Provider activation gate (trust & safety): a booking may be created ONLY for a
+     provider whose canonical registry doc is active and still accepting bookings.
+     WITHOUT this, suspending/disabling a provider had no effect while their services
+     + availability stayed published (the registry read is the platform's bookability
+     source of truth — providers/{uid}, written active at publish). Fail-closed:
+     a missing doc (never published / unapproved) is NOT bookable. Server-side only. */
+  const provSnap = await db.collection('providers').doc(providerId).get();
+  const prov = provSnap.exists ? provSnap.data() : null;
+  const ACTIVE_PROVIDER_STATES = ['active', 'approved'];
+  if (!prov || !ACTIVE_PROVIDER_STATES.includes(prov.status) || prov.acceptsBookings === false) {
+    throw new HttpsError('failed-precondition', 'This provider isn’t currently available for bookings.');
+  }
+
   /* ── Server-authoritative service lookup: price + duration come from the rate
      card, NEVER the client (the client cannot manipulate the amount). ── */
   const svcSnap = await db.collection('providerServices').doc(serviceId).get();
