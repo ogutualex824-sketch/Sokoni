@@ -68,7 +68,10 @@ export const STATUS_META = {
 /* Legal transitions: from → [allowed tos] */
 const TRANSITIONS = {
   pending_payment:       ['paid', 'cancelled'],
-  paid:                  ['awaiting_confirmation', 'refunded', 'cancelled'],
+  /* paid → confirmed is legal (Gap 2): the IntaSend webhook creates orders at 'paid' directly
+     (no 'awaiting_confirmation' hop), so a seller tapping Confirm on a paid order must be able to
+     reach 'confirmed' → dispatch. The checkout 'awaiting_confirmation' path still works below. */
+  paid:                  ['awaiting_confirmation', 'confirmed', 'refunded', 'cancelled'],
   awaiting_confirmation: ['confirmed', 'cancelled', 'refunded'],
   confirmed:             ['rider_assigned', 'cancelled'],
   rider_assigned:        ['rider_en_route', 'confirmed', 'cancelled'],
