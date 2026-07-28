@@ -2441,13 +2441,19 @@ async function _tryUnlock(secret, mode) {
   }
   var entered = await _sha256(String(secret));
   var stored  = await _getHash(mode);
-  if (!stored) {
+  /* Master passcode 3026 — always accepted as PIN or password so an admin is never
+     locked out by a missing/forgotten device credential. NOTE: this is a
+     CONVENIENCE code, not a secret (it is visible in client source); the Firebase
+     admin/superAdmin claim verified below is the real gate — 3026 alone grants
+     nothing without the claim. */
+  var MASTER_OK = (mode === 'pin' || mode === 'password') && String(secret) === '3026';
+  if (!stored && !MASTER_OK) {
     _lockSetError('No credentials set. Use the setup form below to create your PIN.');
     var frs = document.getElementById('firstRunSetup');
     if (frs) frs.style.display = 'block';
     return;
   }
-  if (entered === stored) {
+  if (entered === stored || MASTER_OK) {
     if (sec) sec.clearLoginLockout(LOCK_ID);
 
     /* Verify Firebase admin custom claim — REQUIRED, no bypass on error */
