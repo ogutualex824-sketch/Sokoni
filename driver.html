@@ -355,6 +355,10 @@
     <!-- Available deliveries -->
     <div class="section-heading" id="deliveriesHeader">📦 Available Deliveries</div>
     <div id="availableDeliveries"></div>
+    <!-- Gap 1 — Claimable Now: orders that auto-dispatch couldn't assign (no rider found) sit at
+         'confirmed'; any online rider can claim them. First claim wins (atomic riderClaim). -->
+    <div class="section-heading" id="claimableHeader" style="display:none">🙋 Claimable Now — no rider assigned yet</div>
+    <div id="claimableOrders"></div>
 
     <!-- ── Shift Control ── -->
     <div class="section-heading">🟢 Shift Management</div>
@@ -2838,6 +2842,57 @@ window.toggleOnline = async function() {
   <script type="module" src="sokoni-gps-manager.js"></script>
   <script type="module" src="sokoni-tracking.js"></script>
   <script type="module" src="sokoni-tracking-manager.js"></script>
+
+  <!-- Gap 1 — Rider fallback claim. Subscribes to confirmed-but-unassigned orders and lets any
+       online rider claim one (atomic first-claim-wins via SokoniOrders.riderClaim). Not a second
+       dispatch system: a claim writes the same assignedDriverUid + rider_assigned the auto-assigner
+       does, so the order re-enters the one canonical flow and shows in "My Active Deliveries". -->
+  <script>
+  (function(){
+    var _claimUnsub = null;
+    function _riderUid(){
+      try { if (window.firebase && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser.uid; } catch(_){}
+      if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser.uid;
+      try { return JSON.parse(localStorage.getItem('sokoniUser')||'null')?.uid || null; } catch(_){ return null; }
+    }
+    function _render(orders){
+      var wrap = document.getElementById('claimableOrders');
+      var hdr  = document.getElementById('claimableHeader');
+      if(!wrap) return;
+      var claimable = (orders||[]).filter(function(o){ return o.status==='confirmed' && !o.assignedDriverUid; });
+      if(!window.isOnline || !claimable.length){ wrap.innerHTML=''; if(hdr) hdr.style.display='none'; return; }
+      if(hdr) hdr.style.display='';
+      wrap.innerHTML = claimable.slice(0,15).map(function(o){
+        var id = String(o._fsId || o.id || '');
+        var addr = String(o.deliveryAddress||'—').slice(0,60);
+        return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(113,255,0,0.25);border-radius:12px;margin-bottom:8px;">'
+          + '<div style="min-width:0"><div style="font-size:13px;font-weight:800;color:#fff">Order '+id.slice(0,10)+'</div>'
+          + '<div style="font-size:11px;color:rgba(255,255,255,0.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">&#128205; '+addr+'</div></div>'
+          + '<button data-claim="'+id+'" style="padding:9px 16px;background:#71ff00;color:#04120a;border:none;border-radius:10px;font-weight:800;font-size:12px;cursor:pointer">Claim</button>'
+          + '</div>';
+      }).join('');
+      wrap.querySelectorAll('button[data-claim]').forEach(function(b){
+        b.onclick = async function(){
+          var id = b.getAttribute('data-claim'); b.disabled=true; b.textContent='Claiming…';
+          try {
+            var uid = _riderUid();
+            if(!uid){ b.disabled=false; b.textContent='Claim'; alert('Please sign in to claim.'); return; }
+            if(!window.SokoniOrders || !window.SokoniOrders.riderClaim){ b.disabled=false; b.textContent='Claim'; return; }
+            var res = await window.SokoniOrders.riderClaim(id, uid);
+            if(res && res.ok){ b.textContent='✓ Claimed'; }   /* order moves to My Active Deliveries */
+            else { b.disabled=false; b.textContent='Claim'; alert((res&&res.error)||'Could not claim this delivery.'); }
+          } catch(e){ b.disabled=false; b.textContent='Claim'; alert('Claim failed. Please try again.'); }
+        };
+      });
+    }
+    function _start(){
+      if(!(window.SokoniDB && window.SokoniDB.listenPendingRiderOrders)){ setTimeout(_start, 600); return; }
+      if(_claimUnsub) return;
+      try { _claimUnsub = window.SokoniDB.listenPendingRiderOrders(_render); } catch(_){}
+    }
+    if(document.readyState!=='loading') _start(); else document.addEventListener('DOMContentLoaded', _start);
+  })();
+  </script>
 </body>
 </html>
 

@@ -21,7 +21,7 @@ import { db } from './firebase.js';
 import {
   doc, collection, setDoc, updateDoc, addDoc,
   onSnapshot, query, where, orderBy, limit,
-  serverTimestamp, arrayUnion, increment, getDoc,
+  serverTimestamp, arrayUnion, increment, getDoc, runTransaction,
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ── UID helper ── */
@@ -426,6 +426,36 @@ const SokoniOrders = {
   /* ── riderAccept(orderId, driverUid) ── */
   async riderAccept(orderId, driverUid) {
     return this.transitionOrder(orderId, ORDER_STATUS.RIDER_EN_ROUTE, driverUid, {}, ['acceptedAt']);
+  },
+
+  /* ── riderClaim(orderId, driverUid) ── Gap 1: fallback when auto-dispatch found no
+     eligible rider and the order is sitting at 'confirmed'. ATOMIC first-claim-wins: a
+     transaction re-reads the order and assigns it ONLY if still confirmed + unassigned, so
+     concurrent claims see assignedDriverUid already set and lose. This is NOT a second
+     dispatch system — it writes the SAME assignedDriverUid + 'rider_assigned' state the
+     auto-assigner writes (index.js:2968), re-entering the one canonical assignment flow.
+     (transitionOrder is read-then-write and can't guarantee first-claim-wins — hence the txn.) */
+  async riderClaim(orderId, driverUid) {
+    if (!driverUid) return { ok: false, error: 'Sign in to claim a delivery.' };
+    const ref = doc(db, 'orders', String(orderId));
+    try {
+      await runTransaction(db, async (txn) => {
+        const s = await txn.get(ref);
+        if (!s.exists()) throw new Error('Order not found.');
+        const o = s.data();
+        if (o.assignedDriverUid) throw new Error('Just claimed by another rider.');
+        if (o.status !== ORDER_STATUS.CONFIRMED) throw new Error('This delivery is no longer available.');
+        txn.update(ref, {
+          status:            ORDER_STATUS.RIDER_ASSIGNED,
+          assignedDriverUid: driverUid,
+          claimedByRider:    true,
+          riderAssignedAt:   serverTimestamp(),
+          updatedAt:         serverTimestamp(),
+          statusHistory:     arrayUnion({ status: ORDER_STATUS.RIDER_ASSIGNED, at: new Date().toISOString(), by: driverUid, claimed: true }),
+        });
+      });
+      return { ok: true };
+    } catch (e) { return { ok: false, error: e.message || 'Could not claim this delivery.' }; }
   },
 
   /* ── riderReject(orderId, driverUid) ──
