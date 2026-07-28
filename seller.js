@@ -811,7 +811,10 @@ async function addProduct(){
             location: productLocation,
             description: productDescription,
             kebsCert,
-            sellerName: user ? user.name : "Sokoni Seller",
+            /* Denormalise the STORE name (falls back to the person's name), so a
+               product card shows the shop, and it matches what shopNameSync fans
+               out on a later rename. */
+            sellerName: user ? (user.storeName || user.name) : "Sokoni Seller",
             sellerEmail: user ? user.email : "",
             views: 0,
             uploadedAt: Date.now(),
@@ -1856,7 +1859,7 @@ function parseBulkCsv(input){
                 kebsCert:     get(row,"kebscert") || "",
                 image:        "assets/default-product.png",
                 sold: 0, views: 0, outOfStock: false,
-                sellerName:  user ? user.name : "Sokoni Seller",
+                sellerName:  user ? (user.storeName || user.name) : "Sokoni Seller",
                 sellerEmail: user ? user.email : "",
                 uploadedAt: Date.now()
             });
@@ -2238,7 +2241,7 @@ function previewStoreLogo(input){
     reader.readAsDataURL(file);
 }
 
-function saveMiniStore(){
+async function saveMiniStore(){
     const name      = document.getElementById("storeName")?.value.trim();
     const tagline   = document.getElementById("storeTagline")?.value.trim();
     const about     = document.getElementById("storeAbout")?.value.trim();
@@ -2267,7 +2270,40 @@ function saveMiniStore(){
     };
 
     localStorage.setItem("sokoniMiniStore", JSON.stringify(store));
-    showNotification("🏪 Store saved! Buyers can now visit your store.", "success");
+
+    /* Persist to Firestore. Without this the rename lived ONLY in localStorage, so
+       store.html (which reads sellers/{uid}.name) never updated AND the shopNameSync
+       Cloud Function — which fans the new name out to every already-uploaded
+       product's denormalised `sellerName` and the search indexes — never fired,
+       because it triggers on a sellers/{uid} UPDATE that was never happening. That
+       is the "shop-name change doesn't take effect on existing products" bug. */
+    const uid = user?.uid;
+    if (uid && window.firebaseDB) {
+        try {
+            const { doc, setDoc, serverTimestamp } = await import(
+                "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+            );
+            await setDoc(doc(window.firebaseDB, "sellers", uid), {
+                name,                 /* canonical field store.html reads + shopNameSync triggers on */
+                storeName: name,      /* mirror for readers that use storeName */
+                tagline, about, phone, email, website, sellerType,
+                updatedAt: serverTimestamp(),
+            }, { merge: true });
+
+            /* Keep future uploads consistent — the product upload denormalises
+               user.storeName into each product's sellerName. */
+            if (user) {
+                user.storeName = name;
+                localStorage.setItem("sokoniUser", JSON.stringify(user));
+            }
+            showNotification("🏪 Store saved! Your existing products are being updated with the new name.", "success");
+        } catch (e) {
+            console.warn("[saveMiniStore] Firestore write failed:", e && e.message);
+            showNotification("🏪 Store saved locally, but syncing to your products failed — check your connection and save again.", "error");
+        }
+    } else {
+        showNotification("🏪 Store saved! Sign in to sync the name across your products and devices.", "success");
+    }
 
     const link = document.getElementById("visitMiniStoreLink");
     if(link){
