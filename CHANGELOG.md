@@ -1,3 +1,22 @@
+## [2026-07-29] — docs(compliance): evaluate National ID / KRA PIN at-rest protection (ODPC SHOULD-FIX #12)
+
+Evidence-based evaluation of masking/tokenisation for high-sensitivity identifiers — the finding is that
+they are **already protected**, so no speculative crypto change was made (which would have risked breaking
+invoicing/eTIMS):
+
+- **National ID** — hashed with salt (`age-verification.js`, raw identity not retained); stored as a
+  document URL in **restricted Storage** for KYC (`provider-onboarding.js`); **AES-256-GCM encrypted** in
+  payroll (`hr-payroll.js`); **excluded from the search index** (`algolia-admin.js`); **redacted from
+  logs/DLQ** (`ecc.js`, `wap.js`).
+- **KRA PIN** — eTIMS credentials encrypted + Secret Manager (`etims.js`); index-excluded. The only
+  plaintext instance is the **business** KRA PIN (`businesses/{merchantId}`), a semi-public invoice/tax
+  identifier where masking is inappropriate.
+
+Documented in `docs/RECORDS_OF_PROCESSING_ACTIVITIES.md` (Activity 3 + open items) and
+`docs/ODPC_COMPLIANCE_CERTIFICATION.md` (§3 + gap #12). Docs only. No runtime change. Breaking: none.
+
+---
+
 ## [2026-07-29] — docs(compliance): Records of Processing Activities + processor/DPA register (ODPC SHOULD-FIX #11)
 
 Added `docs/RECORDS_OF_PROCESSING_ACTIVITIES.md` — the accountability record an ODPC-registered

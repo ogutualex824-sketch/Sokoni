@@ -46,7 +46,7 @@ However, **it is not yet certifiable as fully KDPA-compliant** because of four m
 ## 3. Data Minimization — **PARTIAL / DOCUMENTED**
 - **Documented:** collection disclosed (`privacy.html:172-206`) — name, email, phone, profile photo, **National ID + KRA PIN (KYC)**, payout details, delivery address, **GPS** (explicit-permission), IP.
 - **Verified positives:** signup collects only name/email/DOB/phone (`auth.js:525-535`); client IP stored **pseudonymised** (`ipHash`, per `docs/ADR.md:204-206`); KYC docs in a restricted Storage path (§7).
-- **Recommendation:** high-sensitivity identifiers (National ID, KRA PIN) are stored without evidence of masking/tokenisation at rest; retention depends on the (currently non-functional) purge — see §6/§10.
+- **Recommendation (EVALUATED 2026-07-29):** high-sensitivity identifiers are in fact protected at rest — **National ID** is hashed (`age-verification.js` `_hashId`, "identity data not retained"), stored as a document URL in **restricted Storage** for KYC (`provider-onboarding.js:670-675`), **AES-256-GCM encrypted** in payroll (`hr-payroll.js`), **excluded from the search index** (`algolia-admin.js:413`) and **redacted from logs/DLQ** (`ecc.js:316`, `wap.js:1234`); **eTIMS credentials** encrypted + Secret Manager (`etims.js`). The only plaintext instance is the **business KRA PIN** (`business-bootstrap.js` → `businesses/{merchantId}`), a semi-public invoice/tax identifier where masking would break invoicing/eTIMS and is not warranted. No new masking change required. (Retention now functional — §6/§10 remediated.)
 
 ## 4. Purpose Limitation — **DOCUMENTED**
 - **Documented:** purposes enumerated `privacy.html:248-256`; "we do not sell/rent/trade personal data … for marketing" `:316`; marketing consent-gated `:251`.
@@ -113,7 +113,7 @@ Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Fire
 9. Appoint a **named DPO** rather than a role mailbox (§1).
 10. Unify the **consent/privacy entry point** (canonical `privacy.html`/`terms.html`, not `legal.html#…`) (§5).
 11. ~~Maintain a formal **RoPA + DPAs** per processor (§12).~~ **RoPA DONE 2026-07-29** (`docs/RECORDS_OF_PROCESSING_ACTIVITIES.md`); residual = execute/archive per-processor DPAs (Part D).
-12. Evaluate **masking/tokenisation of National ID / KRA PIN** at rest (§3).
+12. ~~Evaluate **masking/tokenisation of National ID / KRA PIN** at rest (§3).~~ **EVALUATED 2026-07-29** — already protected (hash/AES-256-GCM/Secret Manager/restricted Storage/index-exclusion/log-redaction); only the semi-public business KRA PIN is plaintext, where masking is inappropriate. No change warranted.
 
 ## Verified strengths (support certification)
 Owner-scoped Firestore/Storage rules with anti-privilege-escalation; append-only audit logs; App Check + full CSP/HSTS stack; secrets in Secret Manager (no plaintext); pseudonymised IP storage; **working self-service data export** with signed URLs; two documented 72-hour breach playbooks citing KDPA; live fraud/oversell/security anomaly alerting; substantive KDPA-structured privacy/terms/cookie notices naming Bravilex.
