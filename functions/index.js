@@ -2651,6 +2651,10 @@ exports.verifyIntasendPayment = onRequest(
         paymentMethod:   "mpesa",
         sessionId:       sessionId || null,
         escrow:          { held: confirmedAmount, released: 0, refunded: 0 },
+        /* Product Settlement Convergence — funds are HELD by SOKONI at payment; released
+           to the seller's wallet ONLY at fulfillment (settleOrder). State machine:
+           UNSETTLED→HELD→ELIGIBLE_FOR_SETTLEMENT→SETTLING→SETTLED (REFUNDED if refunded first). */
+        settlementStatus: "HELD",
         statusHistory:   [{ status: "paid", at: Date.now(), by: "intasend-webhook" }],
         createdAt:       admin.firestore.FieldValue.serverTimestamp(),
       };
@@ -2874,6 +2878,17 @@ exports.onOrderStatusChange = onDocumentUpdated(
         status:         "pending",
         createdAt:      admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
+    }
+
+    /* ── Product Settlement Convergence — settle the seller ONCE on fulfillment ──
+       `completed` = customer confirmed OR the auto-confirm sweep. Reuses the canonical
+       settlement engine, credits the seller's withdrawable wallets.balance, writes the
+       settlement/wallet/ledger records. Exactly-once (guarded on settlementStatus);
+       best-effort so a settlement hiccup never blocks the status write. */
+    if (toStatus === "completed" && before.status !== "completed" && after.sellerUid) {
+      try {
+        await require("./order-settlement").settleOrder(db, admin, orderId);
+      } catch (e) { console.error("[onOrderStatusChange] order settlement failed (recoverable):", e.message); }
     }
   }
 );
@@ -8187,6 +8202,15 @@ exports.expireOldEscrows = onSchedule(
     });
     await batch.commit().catch(() => {});
     console.log("[Maintenance] Expired " + snap.size + " old escrows");
+
+    /* Product Settlement Convergence — auto-confirm delivered orders past the policy
+       window (config: _systemConfig/settlement.autoConfirmDays, default 3) → marks them
+       `completed`, which fires onOrderStatusChange → settleOrder. Folded into THIS existing
+       scheduler (no new Cloud Run service). Best-effort. */
+    try {
+      const n = await require("./order-settlement").autoConfirmDeliveredOrders(db, admin);
+      if (n) console.log("[Maintenance] auto-confirmed " + n + " delivered order(s)");
+    } catch (e) { console.error("[Maintenance] auto-confirm sweep failed:", e && e.message); }
   }
 );
 

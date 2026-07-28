@@ -1,3 +1,53 @@
+## [2026-07-28] — fix(auth): avoid auth-guard redirect loop when Firebase session restoration is delayed
+
+Platform availability hardening for authenticated pages. `auth-guard.js` could redirect a still-signed-in
+visitor to `login.html` before Firebase's auth bootstrap restored the live session, causing a redirect
+bounce and a broken page load. `firebase.js` now exposes `window.__sokoniAuthReady` and `waitForSokoniAuthReady`,
+so late listeners can await the live session state instead of relying on stale localStorage.
+
+Also fixed `firebase.js` session restore logic where an undefined `safeUpdates` reference could throw while
+reconciling an existing user's profile. The auth-ready signal is now published cleanly and safe profile
+merges happen only when necessary.
+
+Fixed missing auth gate wiring on pages marked `data-require-auth="true"` so protected pages now
+use `auth-guard.js` before the app renders.
+
+**Files:** `auth-guard.js`, `firebase.js`, `dispute-portal.html`, `fleet-monitor.html`.
+
+## [2026-07-28] — feat(commerce): Product Settlement Convergence — wire the dormant engine to fulfillment
+
+The audit found that a checkout product order was created `paid` with `escrow.held = full, released:0`,
+stock deducted — but **no fulfillment event ever released funds to the seller** (the canonical settlement
+engine, webhook credit, and escrow sweep were all dormant/unreachable). Sellers were never paid for a
+checkout product sale. (Currently zero production impact — the `orders` collection is empty — so this is a
+latent gap fixed before real product sales, not an active incident.) This wires the EXISTING engine in;
+it does NOT create a second settlement/commission/wallet system.
+
+**Files:** `functions/order-settlement.js` (new), `functions/index.js` (order-create + `onOrderStatusChange`
++ `expireOldEscrows`). **Deploy:** functions (`verifyIntasendPayment`, `onOrderStatusChange`, `expireOldEscrows`).
+**Rules/DB/hosting:** none.
+
+- **Held-model mirror of provider bookings.** Order created `paid` now stamps `settlementStatus:'HELD'`.
+  Funds release to the seller ONLY at fulfillment.
+- **Settlement state machine** on the order: `UNSETTLED → HELD → ELIGIBLE_FOR_SETTLEMENT → SETTLING →
+  SETTLED` (`REFUNDED` if refunded before settlement) — so operators can see exactly where an order sits.
+- **`settleOrder`** reuses `settlement-engine.computeSettlement` (the SAME `calculateCommission`) for the
+  breakdown, credits the ONE canonical withdrawable wallet **`wallets.balance` (shillings)** — not the
+  retired cents rail — and writes `settlements/{orderId}` + `walletTransactions` + the engine's balanced
+  double-entry `ledger`, all `orderId`-correlated. **Exactly-once** (deterministic ids + `settlementStatus`
+  transaction guard); commission on product gross (order total **minus** delivery fee, which is split
+  separately). Wired into the existing `onOrderStatusChange` on the `→completed` transition (no new Cloud Run).
+- **Auto-confirm sweep** (config `_systemConfig/settlement.autoConfirmDays`, default **3** — a value, not a
+  constant): delivered orders past the window with no open dispute become `completed` → settle. Folded into
+  the existing `expireOldEscrows` scheduler (no new Cloud Run).
+- **Refund guard:** a refund before settlement marks the order `REFUNDED` so `settleOrder` is a no-op
+  (post-settlement reversal remains a separate follow-up).
+- Proof: **19/19** emulator — wallet credited exactly the engine's net, settlement/wallet/balanced-ledger
+  records, exactly-once (no double-credit), refund/cancelled skip, gross excludes delivery, sweep
+  confirms past-window & pauses on dispute.
+- Scope boundary (D5): money path only. Fulfillment UX (seller queue, rider tracking, order chat, timeline)
+  is a separate program — much already exists (dispatch, delivery tracking, `sokoni-chat-engine.js`).
+
 ## [2026-07-28] — fix(booking): provider activation gate — reject bookings for non-active providers
 
 Trust & safety hardening (its own focused workstream; from the universality audit). `bookingCreateService`
