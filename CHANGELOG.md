@@ -1,3 +1,21 @@
+## [2026-07-29] — docs(compliance): Records of Processing Activities + processor/DPA register (ODPC SHOULD-FIX #11)
+
+Added `docs/RECORDS_OF_PROCESSING_ACTIVITIES.md` — the accountability record an ODPC-registered
+Data Processor is expected to maintain (KDPA; Art. 30-style). Evidence-based from the compliance
+audit + live privacy notice, reflecting the post-remediation state (durable consent + right-to-erasure
+implemented). Contents:
+
+- Data-subject categories + personal-data-category inventory (flags National ID / KRA PIN as high-sensitivity).
+- 9-activity processing register: purpose, subjects, data, KDPA lawful basis, processors, retention,
+  cross-border, safeguards (settlement, KYC, delivery/GPS, comms, analytics, search, tax, trust & safety).
+- Processor / sub-processor / DPA register (Google, IntaSend, SendGrid, GA4, Nominatim/OSRM, Algolia/
+  Typesense, KRA eTIMS, Meta, Redis) with location + KDPA Part VI transfer basis + DPA status.
+- Open items feeding the record: #7 ID/KRA masking, per-processor DPA execution, named DPO.
+
+`docs/ODPC_COMPLIANCE_CERTIFICATION.md` §12 + gap #11 updated. Docs only; no runtime change. Breaking: none.
+
+---
+
 ## [2026-07-29] — docs(privacy): cross-border transfer clause, KDPA Part VI (ODPC SHOULD-FIX #5)
 
 Added an explicit international-data-transfer disclosure to the privacy notice. Previously the policy

@@ -85,7 +85,7 @@ However, **it is not yet certifiable as fully KDPA-compliant** because of four m
 
 ## 12. Third-Party Processors — **VERIFIED (inventory)**
 Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Firebase** (Auth/Firestore/Storage/FCM/Hosting), **IntaSend** (M-Pesa/card; name+phone+amount), **SendGrid** (email), **Google Analytics 4** (usage; 26-mo), **Nominatim/OSRM** (geocode/route; coordinates), **Algolia/Typesense** (search), **KRA eTIMS** (tax; legal obligation), **Meta** (login + deletion callback), **Redis** (declared, unreachable).
-- **Recommendation:** maintain this as a formal Record of Processing Activities (RoPA) with DPAs on file per processor.
+- **Recommendation (ADDRESSED 2026-07-29):** a formal Record of Processing Activities now exists — `docs/RECORDS_OF_PROCESSING_ACTIVITIES.md` (processing-activity register + processor/DPA register + cross-border basis). **Residual:** execute/confirm and archive the per-processor DPAs flagged in that document's Part D.
 
 ## 13. Incident Response & Breach Readiness — **VERIFIED / DOCUMENTED**
 - **Documented plans:** `docs/deployment/INCIDENT_RESPONSE.md:155-171` ("INC-006 Data Breach": maintenance mode, secret rotation, `revokeRefreshTokens`, **notify affected users within 72 h**); `DISASTER_RECOVERY_PLAYBOOK.md:201-239` (KDPA 2019 + GDPR Art.33, **ODPC notification within 72 h**).
@@ -112,7 +112,7 @@ Evidenced by CSP allow-list (`firebase.json:485`) + code + notice: **Google/Fire
 8. ~~Reconcile the **duplicate `requestDataExport`** definitions so the signed-URL implementation is exported (§6).~~ **RESOLVED 2026-07-28** — the older shadowed duplicate in `functions/account-manager.js` was removed; `functions/data-export.js` (signed-URL, App Check, dataExportQueue worker) is now the single definition and the deployed entry point.
 9. Appoint a **named DPO** rather than a role mailbox (§1).
 10. Unify the **consent/privacy entry point** (canonical `privacy.html`/`terms.html`, not `legal.html#…`) (§5).
-11. Maintain a formal **RoPA + DPAs** per processor (§12).
+11. ~~Maintain a formal **RoPA + DPAs** per processor (§12).~~ **RoPA DONE 2026-07-29** (`docs/RECORDS_OF_PROCESSING_ACTIVITIES.md`); residual = execute/archive per-processor DPAs (Part D).
 12. Evaluate **masking/tokenisation of National ID / KRA PIN** at rest (§3).
 
 ## Verified strengths (support certification)
