@@ -93,6 +93,22 @@ surface keys on the same `providers/{uid}` identity (`providerBookings.providerI
 event hubs carry their own provider/entity identities and publication state — the core reason cross-hub
 convergence is a distinct future program. This rule is the guardrail that keeps expansion consistent.
 
+## Rule 7 — New-hub convergence policy (adopt-or-document)
+Every new marketplace hub (healthcare, events, venues, rentals, jobs, and future categories) MUST
+either adopt Rules 1–6 or **explicitly document why it cannot**, in this contract.
+- This does NOT require every hub to immediately use the provider-services implementation.
+- It requires every intentional divergence to be **documented, not accidental** — so divergence is a
+  deliberate, reviewable decision with a stated reason, not hidden drift.
+- Over time this yields a clear convergence roadmap instead of accumulating competing sources of truth.
+
+**Status: NEW POLICY (2026-07-28).** Applies to all future hubs from now on. Known existing divergences
+to be documented as the convergence program proceeds: healthcare (`healthAppointments`), venues
+(`venueBookings`), events (`eventOrders`) run their own booking/identity/publication state (see Rules 3 & 6).
+
+### Documented divergences (register)
+*(none yet formally reviewed — existing hub divergences above are pre-policy and enter this register when
+the Onboarding & Discovery Convergence program audits them.)*
+
 ---
 
 ## Future program: Onboarding & Discovery Convergence
