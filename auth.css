@@ -325,7 +325,8 @@ body{
 @media(max-width:320px){
   .auth-card{padding:18px 12px;border-radius:14px;}
   .auth-title{font-size:17px;}
-  .auth-social-grid{grid-template-columns:1fr;} /* stack buttons vertically at 320px */
+  .auth-social-grid{flex-direction:column;align-items:center;} /* stack buttons, centered, at 320px */
+  .auth-social-btn{flex-basis:auto;width:100%;max-width:200px;}
 }
 
 /* Desktop: remove card height clip so OTP entry is never hidden off-screen.
@@ -404,13 +405,18 @@ body{
    SOCIAL PROVIDER GRID — 3 columns, icon + label
 ══════════════════════════════════════════════════════════════ */
 .auth-social-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  /* Centered cluster. Was a 3-col grid for Google/Phone/Facebook; Facebook was
+     removed, so the two remaining buttons are centered rather than left-anchored
+     in a phantom third column. */
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 2px 0 6px;
 }
 
 .auth-social-btn {
+  flex: 0 1 150px;          /* fixed-ish width so the pair sits centered, shrinks on narrow screens */
   display: flex;
   flex-direction: column;
   align-items: center;

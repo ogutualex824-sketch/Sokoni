@@ -53,6 +53,23 @@ box-drawing separators. Tracked separately; a repo-wide sweep should not ride on
 
 ---
 
+## [2026-07-29] — fix(auth): centre the Google/Phone login buttons
+
+The social-login row was a 3-column grid built for Google/Phone/Facebook. Facebook login was
+removed, so the two remaining buttons sat in columns 1–2 with an empty phantom third column,
+making them look left-shifted rather than centred.
+
+- `auth.css` `.auth-social-grid` — grid → `display:flex; justify-content:center; flex-wrap:wrap`
+  so the two buttons form a centred cluster; `.auth-social-btn` gets `flex:0 1 150px` (fixed-ish
+  width, shrinks on narrow screens). The 320px rule now stacks them centred (it previously set
+  `grid-template-columns`, dead once the container is flex).
+- Applies to both `login.html` and `signup.html` (shared stylesheet; both have exactly the two buttons).
+
+Verified with a Playwright measurement at 480px and 360px: cluster midpoint == card midpoint,
+`offsetFromCentre: 0`. Client-only CSS. Breaking changes: none.
+
+---
+
 ## [2026-07-28] — refactor(privacy): single-source requestDataExport (KDPA/ODPC SHOULD-FIX #8)
 
 Removed the duplicate, shadowed `requestDataExport` definition from `functions/account-manager.js`.
