@@ -407,16 +407,19 @@ else{
             ${(()=>{
                 const allMedia = [];
                 if (product.videoUrl) allMedia.push({ type:'video', src: product.videoUrl });
+                const _picked = (window.pickProductImage ? pickProductImage(product) : '');
                 const imgs = (product.images && product.images.length)
                   ? product.images
-                  : (product.image ? [product.image] : ['assets/default-product.png']);
+                  : (product.imageStorageUrls && product.imageStorageUrls.length)
+                    ? product.imageStorageUrls
+                    : (_picked ? [_picked] : (product.image ? [product.image] : ['assets/default-product.png']));
                 imgs.forEach(i => allMedia.push({ type:'image', src: i }));
                 const first = allMedia[0];
                 const thumbsHtml = allMedia.map((m, idx) =>
                   `<div class="prd-thumb ${idx===0?'active':''} ${m.type==='video'?'prd-video-thumb':''}" data-idx="${idx}" onclick="_prdGalleryGo(${idx})">`+
                     (m.type==='video'
                       ? `<video src="${m.src}" style="width:100%;height:100%;object-fit:cover;" muted playsinline></video>`
-                      : `<img src="${m.src}" alt="" loading="lazy">`)+
+                      : `<img src="${m.src}" alt="" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">`)+
                   `</div>`
                 ).join('');
                 const dotsHtml = allMedia.length > 1
@@ -429,7 +432,7 @@ else{
                   <div class="prd-gallery-main" id="prdGalleryMain" onclick="_prdLightboxOpen()" title="Tap to enlarge">
                     ${first.type==='video'
                       ? `<video id="prdMainVid" src="${first.src}" controls muted playsinline style="width:100%;height:100%;object-fit:contain;"></video>`
-                      : `<img id="prdMainImg" src="${first.src}" alt="${(product.name||'').replace(/"/g,'&quot;')}">`}
+                      : `<img id="prdMainImg" src="${first.src}" alt="${(product.name||'').replace(/"/g,'&quot;')}" onerror="this.onerror=null;this.src='assets/default-product.png'">`}
                     ${navHtml}
                     <div class="prd-gallery-zoom-hint">Tap to zoom</div>
                   </div>

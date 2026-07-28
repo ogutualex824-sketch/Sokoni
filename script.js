@@ -705,7 +705,11 @@ function buildProductCard(product, size = "normal"){
     const safeId   = String(product.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
     const badge    = productBadge(product);
     const kebs     = kebsBadge(product);
-    const img      = product.image
+    /* pick() resolves the canonical field first (prefers imageStorageUrls[0] — a
+       product can have image:'' with the real URL only there after base64-strip),
+       then the legacy chain as a fallback for anything it doesn't cover. */
+    const img      = (window.pickProductImage && pickProductImage(product))
+                   || product.image
                    || product.imageUrl
                    || product.imageURL
                    || (Array.isArray(product.images) && product.images[0] && (product.images[0].url || product.images[0]))

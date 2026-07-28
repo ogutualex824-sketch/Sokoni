@@ -57,6 +57,31 @@ a booking. There was **no completed-booking gate anywhere**. WS3 adds the author
 - Proof: **17/17** emulator assertions (created / aggregate updated / booking stamped / duplicate
   no-op / non-owner denied / non-completed denied / provider-cannot-review / not-found).
 
+## [2026-07-28] — fix(images): product & provider photos render everywhere (canonical resolver)
+
+Product/provider images rendered inconsistently — the same item showed on some pages and a
+placeholder/emoji on others — because every render site hand-read a different field and
+sokoni-image.js rejected base64 to a placeholder.
+
+**Files:** `sokoni-image.js`, `script.js`, `category.js`, `product.js`, `cart.js`, `wishlist.js`,
+`services.html`, `flashsale.html`, `store.html`, `seller-public.html`, `providers.html`, +
+`sokoni-image.js` include added to category/product/cart/wishlist/seller-public/providers/services/flashsale.
+**Deploy:** hosting only.
+
+- **Canonical resolver** `SokoniImage.pick()` (window.pickProductImage): prefers a real Storage
+  URL, then base64, then ''. Fixes the biggest bug — a doc can have `image:''` with the real
+  URL only in `imageStorageUrls[0]` (seller.js strips base64 before the Firestore write / on
+  cache degradation), so single-field readers showed placeholders for products whose photo was
+  fine. Every render site now resolves the same way.
+- **base64 now renders** instead of forcing a placeholder (the homepage OOM was fixed by
+  BOUNDING the catalogue listener, not by hiding images) — resolves the cross-page inconsistency.
+- **`data:`-only inversions fixed** — services.html service cards & flashsale.html rendered the
+  image ONLY when it was base64, hiding every real uploaded Storage-URL photo (showed emoji).
+- **Provider photos now show** on the services.html directory (was initials-only) with an
+  initials fallback on load error; providers.html avatar gained an onerror fallback.
+- **Missing onerror fallbacks added** (product.js gallery, cart, wishlist, seller-public, store)
+  so a dead URL degrades to the placeholder instead of a broken-image icon.
+
 ## [2026-07-28] — fix(pos): profile button works + syncs with the SOKONI account
 
 The POS header pill showed a dead "Login" and the Business Profile settings were blank

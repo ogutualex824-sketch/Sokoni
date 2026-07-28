@@ -687,7 +687,7 @@
   } else {
     qs("spProductsGrid").innerHTML = products.map(p => `
       <a class="sp-product-card" href="product.html?id=${p.id}">
-        <img src="${p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy">
+        <img src="${(window.pickProductImage && pickProductImage(p)) || p.image || 'assets/default-product.png'}" alt="${p.name}" loading="lazy" onerror="this.onerror=null;this.src='assets/default-product.png'">
         <div class="sp-product-info">
           <div class="sp-product-name">${p.name}</div>
           <div class="sp-product-price">KES ${Number(p.price).toLocaleString()}</div>
@@ -1039,6 +1039,7 @@ function switchTab(name, btn){
 </script>
 <script src="nav-active.js" defer></script>
 <script src="analytics.js" defer></script>
+<script src="sokoni-image.js" defer></script>
 <script src="sw-register.js" defer></script>
 <nav class="bottom-nav" role="navigation" aria-label="Main navigation">
   <a href="/" class="bnav-item"><span class="bnav-emoji">🏠</span><span>Home</span></a>
