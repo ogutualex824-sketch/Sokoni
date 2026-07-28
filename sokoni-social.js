@@ -319,69 +319,72 @@ function _fallbackCopy(text){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   4. FOLLOWERS SYSTEM
+   4. FOLLOWERS SYSTEM — canonical, self-sufficient, entity-agnostic
+   ONE model for EVERY followable entity (provider / store / shop / hub / future
+   brand, service, …): follows/{uid}--{type}--{entityId}, matching the deployed rule
+   and SokoniDB. Firestore is authoritative; localStorage is a UI cache only. Uses
+   firebase.firestore() DIRECTLY — no SokoniDB dependency — so it works on every page
+   (SokoniDB is absent on ~40 of them). Follower COUNTS are best-effort/UI-only, a
+   deferred aggregation workstream; a count write never fails the follow.
 ═══════════════════════════════════════════════════════════ */
-function _getFollowing(){
-  try{return JSON.parse(localStorage.getItem('sokoniFollowing')||'[]');}catch(e){return[];}
+function _fUid(){ try{ return (window.firebase && firebase.auth && firebase.auth().currentUser || {}).uid || null; }catch(e){ return null; } }
+function _fDb(){ try{ return (window.firebase && firebase.firestore) ? firebase.firestore() : null; }catch(e){ return null; } }
+function _fKey(type,id){ return (type||'store')+'--'+String(id); }
+function _fDocId(uid,type,id){ return uid+'--'+(type||'store')+'--'+String(id).replace(/[^a-zA-Z0-9]/g,'_'); }
+function _fCache(){ try{ var v=JSON.parse(localStorage.getItem('sokoniFollowing')||'{}'); return (v && !Array.isArray(v)) ? v : {}; }catch(e){ return {}; } }
+function _fCacheSet(m){ try{ localStorage.setItem('sokoniFollowing',JSON.stringify(m)); }catch(e){} }
+
+/* Sync check for instant render — the UI cache (hydrated from Firestore on load). */
+function isFollowing(id,type){ return !!_fCache()[_fKey(type,id)]; }
+
+function _bumpCount(id,d){ try{ var c=JSON.parse(localStorage.getItem('sokoniFollowerCounts')||'{}'); c[id]=Math.max(0,(c[id]||0)+d); localStorage.setItem('sokoniFollowerCounts',JSON.stringify(c)); }catch(e){} }
+function getFollowerCount(id){ try{ return JSON.parse(localStorage.getItem('sokoniFollowerCounts')||'{}')[id]||0; }catch(e){ return 0; } }
+
+/* The ONE canonical write. Firestore authoritative + optimistic UI cache. */
+function _writeFollow(type,id,name,on){
+  var m=_fCache();
+  if(on) m[_fKey(type,id)]={type:type||'store',entityId:String(id),entityName:name||'',followedAt:Date.now()}; else delete m[_fKey(type,id)];
+  _fCacheSet(m); _bumpCount(id,on?1:-1);
+  var uid=_fUid(), db=_fDb();
+  if(!uid||!db) return Promise.resolve();
+  var fid=_fDocId(uid,type,id), cid=(type||'store')+'--'+String(id), FV=firebase.firestore.FieldValue;
+  /* Follower count is BEST-EFFORT (deferred aggregation) — it must never fail the follow. */
+  db.collection('followerCounts').doc(cid).set({count:FV.increment(on?1:-1),type:type||'store',entityId:String(id),entityName:name||''},{merge:true}).catch(function(){});
+  return on
+    ? db.collection('follows').doc(fid).set({uid:uid,type:type||'store',entityId:String(id),entityName:name||'',createdAt:FV.serverTimestamp()},{merge:true}).catch(function(e){ console.warn('[social] follow write failed',e&&e.message); })
+    : db.collection('follows').doc(fid).delete().catch(function(e){ console.warn('[social] unfollow write failed',e&&e.message); });
 }
 
-function isFollowing(storeId){
-  return _getFollowing().some(function(f){return f.id===storeId;});
-}
+/* Back-compat wrappers (any external caller still works). */
+function followStore(data){ _writeFollow(data.type,data.id,data.name,true); return getFollowerCount(data.id); }
+function unfollowStore(id,type){ _writeFollow(type,id,'',false); return getFollowerCount(id); }
 
-function followStore(data){
-  var list=_getFollowing();
-  if(!list.some(function(f){return f.id===data.id;})){
-    list.unshift({id:data.id,name:data.name,type:data.type||'store',followedAt:Date.now()});
-    localStorage.setItem('sokoniFollowing',JSON.stringify(list));
-    _bumpCount(data.id,1);
-  }
-  /* Sync to Firestore if available */
-  _syncFollowFirestore(data.id, data.name, true);
-  return getFollowerCount(data.id);
-}
-
-function unfollowStore(storeId){
-  var list=_getFollowing().filter(function(f){return f.id!==storeId;});
-  localStorage.setItem('sokoniFollowing',JSON.stringify(list));
-  _bumpCount(storeId,-1);
-  _syncFollowFirestore(storeId,'',false);
-  return getFollowerCount(storeId);
-}
-
-function _bumpCount(storeId,d){
-  try{
-    var c=JSON.parse(localStorage.getItem('sokoniFollowerCounts')||'{}');
-    c[storeId]=Math.max(0,(c[storeId]||0)+d);
-    localStorage.setItem('sokoniFollowerCounts',JSON.stringify(c));
-  }catch(e){}
-}
-
-function getFollowerCount(storeId){
-  try{return JSON.parse(localStorage.getItem('sokoniFollowerCounts')||'{}')[storeId]||0;}catch(e){return 0;}
-}
-
-function _syncFollowFirestore(storeId, storeName, isFollow){
-  try{
-    if(!window.SokoniDB) return;
-    var user=null; try{user=JSON.parse(localStorage.getItem('sokoniUser')||'null');}catch(e){}
-    if(!user||!user.uid) return;
-    if(isFollow){
-      SokoniDB.setDoc('userFollowing/'+user.uid+'/following/'+storeId,{storeId:storeId,storeName:storeName,followedAt:Date.now()});
-    } else {
-      SokoniDB.deleteDoc('userFollowing/'+user.uid+'/following/'+storeId);
-    }
-  }catch(e){}
-}
-
+/* ONE entry point for every follow button — entity-agnostic via `type`. */
 function toggleFollow(storeId,storeName,btn,type){
-  var f=isFollowing(storeId);
-  if(f){ unfollowStore(storeId); }
-  else { followStore({id:storeId,name:storeName,type:type||'store'}); }
-  _updateFollowBtn(btn,!f,getFollowerCount(storeId));
-  /* Update sibling count span if any */
-  var countSpan=document.getElementById('_fcount_'+storeId.replace(/[^a-z0-9]/gi,'_'));
-  if(countSpan) countSpan.textContent=getFollowerCount(storeId).toLocaleString()+' followers';
+  if(!_fUid()){ if(confirm('Sign in to follow?')) location.href='login.html?next='+encodeURIComponent(location.pathname+location.search); return; }
+  var willFollow=!isFollowing(storeId,type);
+  _updateFollowBtn(btn,willFollow,getFollowerCount(storeId));   /* optimistic */
+  var span=document.getElementById('_fcount_'+String(storeId).replace(/[^a-z0-9]/gi,'_'));
+  if(span) span.textContent=getFollowerCount(storeId).toLocaleString()+' followers';
+  _writeFollow(type,storeId,storeName,willFollow);   /* idempotent — safe even if the label was stale cross-device */
+}
+
+/* Cross-device hydration: load THIS user's follows from Firestore into the cache on
+   load, then refresh any follow buttons on the page so they show the correct state on
+   a new device. Uses a documentId prefix query (uid--…) so it stays within the existing
+   per-doc read rule (no new rule). If denied/offline, the same-device cache still works. */
+function _hydrateFollows(){
+  var uid=_fUid(), db=_fDb(); if(!uid||!db||!document.querySelectorAll) return;
+  var cache=_fCache();
+  document.querySelectorAll('[data-follow-id]').forEach(function(el){
+    var id=el.getAttribute('data-follow-id'), type=el.getAttribute('data-follow-type')||'store';
+    db.collection('follows').doc(_fDocId(uid,type,id)).get().then(function(sn){
+      var following=sn.exists, ck=_fKey(type,id);
+      if(following) cache[ck]={type:type,entityId:String(id),entityName:'',followedAt:Date.now()}; else delete cache[ck];
+      _fCacheSet(cache);
+      _updateFollowBtn(el, following, getFollowerCount(id));
+    }).catch(function(){});
+  });
 }
 
 function _updateFollowBtn(btn,nowFollowing,count){
@@ -395,11 +398,11 @@ function _updateFollowBtn(btn,nowFollowing,count){
 /* Render an inline follow button into a container element */
 function renderFollowBtn(storeId,storeName,container,type){
   if(!container) return;
-  var f=isFollowing(storeId);
+  var f=isFollowing(storeId,type);
   var count=getFollowerCount(storeId);
   var sid=storeId.replace(/[^a-z0-9]/gi,'_');
   container.innerHTML=
-    '<button type="button" onclick="window.SokoniSocial.toggleFollow(\''+_esc(storeId)+'\',\''+_esc(storeName)+'\',this,\''+_esc(type||'store')+'\')" '+
+    '<button type="button" data-follow-id="'+_esc(storeId)+'" data-follow-type="'+_esc(type||'store')+'" onclick="window.SokoniSocial.toggleFollow(\''+_esc(storeId)+'\',\''+_esc(storeName)+'\',this,\''+_esc(type||'store')+'\')" '+
     'style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:999px;border:1px solid '+(f?'rgba(113,255,0,0.4)':'rgba(255,255,255,0.18)')+';background:'+(f?'rgba(113,255,0,0.1)':'rgba(255,255,255,0.05)')+';color:'+(f?'#71ff00':'rgba(255,255,255,0.7)')+';font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;transition:all .18s;-webkit-tap-highlight-color:transparent;touch-action:manipulation;">'+(f?'✓ Following':'+ Follow')+'</button>' +
     (count>0?'<span id="_fcount_'+sid+'" style="font-size:11px;color:rgba(255,255,255,0.35);margin-left:5px;">'+count.toLocaleString()+' followers</span>':'');
 }
@@ -573,6 +576,14 @@ document.addEventListener('DOMContentLoaded',function(){
   if(page==='provider.html') initProviderShare();
 });
 
+/* Hydrate the follow cache from Firestore on auth-ready, so a follow made on ANOTHER
+   device shows the correct state here. Runs once auth resolves; re-runs are cheap. */
+try {
+  if (window.firebase && firebase.auth) {
+    firebase.auth().onAuthStateChanged(function(u){ if (u) { try { _hydrateFollows(); } catch(e){} } });
+  }
+} catch(e){}
+
 /* ═══════════════════════════════════════════════════════════
    PUBLIC API
 ═══════════════════════════════════════════════════════════ */
@@ -584,6 +595,7 @@ window.SokoniSocial={
   unfollowStore:      unfollowStore,
   toggleFollow:       toggleFollow,
   getFollowerCount:   getFollowerCount,
+  hydrateFollows:     _hydrateFollows,
   renderFollowBtn:    renderFollowBtn,
   notifyFollowers:    notifyFollowers,
   patchServicesFollowBtns: patchServicesFollowBtns,

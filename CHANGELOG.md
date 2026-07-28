@@ -26,6 +26,28 @@ page"). Same class as the Android Aw-Snap sentinel.
   different page). **Close criteria:** on-device iPhone Chrome + Safari scroll/navigate/reload
   stability — engineering-complete ≠ production-proven.
 
+## [2026-07-28] — fix(social): converge Follow onto the canonical follows/{uid}--{type}--{entityId} schema
+
+Follow appeared to work but never persisted server-side. Root cause: `sokoni-social.js` wrote to
+`userFollowing/{uid}/following/{id}` — a path with NO rule (default-deny) — so follows were localStorage-only
+(per-device) and it silently no-op'd on the ~40 pages that don't load `SokoniDB` (incl. store.html).
+
+**File:** `sokoni-social.js`. **Deploy:** hosting only. No rules change, no new collection, no page edits.
+
+- **Canonical schema:** every follow now writes `follows/{uid}--{type}--{entityId}` — matching the already-deployed
+  `follows` rule and `SokoniDB`. `type` is entity-agnostic (provider / store / shop / hub / future).
+- **Self-sufficient:** uses `firebase.firestore()` directly (present on all 57 follow pages), so it no longer
+  depends on `SokoniDB` — fixes follow on store.html + the other db-less pages.
+- **Firestore authoritative; localStorage = UI cache only.** Removed the broken `userFollowing` write.
+- **Idempotent toggle** (safe cross-device); **follower counts best-effort** (deferred aggregation — a count
+  write never fails the follow). Cross-device state via per-doc gets (the rule allows per-doc reads; bulk lists
+  are denied — verified).
+- **Verified (rules emulator):** user can create/read/delete own `follows/{uid}--…`; cannot write another's; no
+  more `userFollowing` writes.
+- **KNOWN FOLLOW-UP (UX, not correctness):** inline hub follow buttons with dynamically-built ids can't hydrate
+  their initial label cross-device (persistence + action are correct). Enhancement: add `data-follow-*` markers to
+  inline buttons so each can do an authoritative per-doc lookup on render. `renderFollowBtn` buttons already do.
+
 ## [2026-07-28] — feat(booking): Phase E WS2 — customer booking UI (canonical held-payment flow)
 
 Repoints the customer "Book Now" onto the WS1 authoritative backend. Thin orchestration — no client business logic.
