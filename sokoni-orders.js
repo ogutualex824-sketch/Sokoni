@@ -362,6 +362,29 @@ const SokoniOrders = {
        set on the doc, never inside the arrayUnion history entry. */
     (serverStampFields || []).forEach(function (f) { patch[f] = serverTimestamp(); });
 
+    /* Gap 3 — project the canonical status onto the BUYER timeline (track.html reads
+       orders.timelineStage + orders.timeline[]). ONE progression: the timeline is DERIVED
+       from status, not a second independent model — so every status change keeps the
+       buyer's live map in sync (previously the rider lane advanced status but never the
+       timeline, stalling track.html). Stage keys/indices match notify.js ORDER_TIMELINE. */
+    const _STAGE = {
+      paid:                 ['paid',      'Payment Confirmed', 1],
+      awaiting_confirmation:['paid',      'Payment Confirmed', 1],
+      confirmed:            ['accepted',  'Seller Accepted',   2],
+      rider_assigned:       ['assigned',  'Rider Assigned',    5],
+      rider_en_route:       ['assigned',  'Rider Assigned',    5],
+      picked_up:            ['picked_up', 'Picked Up',         6],
+      in_transit:           ['halfway',   'On The Way',        7],
+      delivered:            ['delivered', 'Delivered',         9],
+      completed:            ['completed', 'Completed',        10],
+    };
+    const _stg = _STAGE[toStatus];
+    if (_stg && (order.timelineIndex == null || _stg[2] >= order.timelineIndex)) {   /* never regress */
+      patch.timelineStage = _stg[0];
+      patch.timelineIndex = _stg[2];
+      patch.timeline      = arrayUnion({ key: _stg[0], label: _stg[1], at: now });
+    }
+
     await updateDoc(doc(db, 'orders', orderId), patch);
     await _writeEvent(orderId, fromStatus, toStatus, actor, meta || {});
 
