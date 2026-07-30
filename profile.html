@@ -1725,6 +1725,15 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
                   background:rgba(113,255,0,0.14);border-color:rgba(113,255,0,0.4);color:#71ff00;">
           &#127978; My Store
         </a>
+        <!-- My Services — the provider equivalent of "My Store". Leads to the provider
+             dashboard (Calendar, Availability, Bookings, service management). Hidden by
+             default; revealed only for provider/freelancer roles by _syncMyServicesBtn(),
+             mirroring _syncMyStoreBtn(), so non-providers never see a dead link. -->
+        <a href="provider-dashboard.html" id="upMyServicesBtn" class="up-edit-btn"
+           style="display:none;text-decoration:none;align-items:center;justify-content:center;gap:6px;
+                  background:rgba(249,115,22,0.14);border-color:rgba(249,115,22,0.4);color:#f97316;">
+          &#128296; My Services
+        </a>
         <!-- My Shops & Branches — the seller's shop (business identity, distinct
              from the person's name above) and each of its branches, every one a
              separate shareable storefront (store.html?id=<uid>&branch=<id>).
@@ -3174,6 +3183,14 @@ function _isProviderUser(u){
   return roles.indexOf('provider') > -1 || roles.indexOf('freelancer') > -1 ||
          !!(u && u.isProvider) || !!(u && u.registeredAs && u.registeredAs.provider);
 }
+/* Show the My Services shortcut only to service providers. Mirrors _syncMyStoreBtn()
+   (seller → seller.html) exactly, using the same provider test as the Services section
+   and the workspace switcher, so they can never disagree about who is a provider. */
+function _syncMyServicesBtn(u){
+  var btn = document.getElementById('upMyServicesBtn');
+  if(!btn) return;
+  btn.style.display = _isProviderUser(u) ? 'inline-flex' : 'none';
+}
 /* List the provider's bookable services — the service equivalent of "My Shops & Branches".
    Additive: shows for a provider (or anyone who has services) INDEPENDENTLY of the shops section.
    "Manage" reuses the existing provider-dashboard service management (extend, don't rebuild). */
@@ -3217,6 +3234,7 @@ function renderHeaderCard(){
   if(!_user) return;
 
   _syncMyStoreBtn(_user);
+  _syncMyServicesBtn(_user);  /* provider equivalent of My Store → provider-dashboard.html */
   _renderMyBranches(_user);   /* seller's shop + branches (Marketplace module) */
   _renderMyServices(_user);   /* provider's services (Services module) — additive, independent of shops */
 

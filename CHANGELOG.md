@@ -1,3 +1,25 @@
+## [2026-07-29] — feat(profile): "My Services" button → provider dashboard (symmetry with "My Store")
+
+Service providers now get a prominent one-tap entry to manage everything about their services —
+Calendar, Availability, Bookings, service listings — exactly as sellers get "My Store".
+
+Previously the profile had a prominent **My Store** button (`upMyStoreBtn` → `seller.html`, shown for
+sellers by `_syncMyStoreBtn`), but providers only had a conditional *list section*. Added the symmetric
+provider control (extend, don't rebuild — it reuses the already-built `provider-dashboard.html`):
+
+- `profile.html` — new **My Services** button (`upMyServicesBtn` → `provider-dashboard.html`), styled in
+  the provider accent (#f97316). Shown only for provider/freelancer roles by `_syncMyServicesBtn()`, a
+  line-for-line mirror of `_syncMyStoreBtn()` using the existing `_isProviderUser()` predicate (same test
+  as the Services section + workspace switcher, so they can't disagree). Wired into `renderHeaderCard()`.
+- `provider-dashboard.html` is the existing management surface (Calendar / Availability "Working Schedule" /
+  Bookings / reviews / settings) — unchanged; this only adds the entry point.
+
+Client-only. Non-providers never see the button (no dead link). Breaking changes: none.
+Note: live-DOM verification via the headless harness was blocked by the page's multi-layer auth gate;
+change verified structurally (coherent id/href/wiring) as a mirror of the in-production My Store pattern.
+
+---
+
 ## [2026-07-29] — docs(compliance): evaluate National ID / KRA PIN at-rest protection (ODPC SHOULD-FIX #12)
 
 Evidence-based evaluation of masking/tokenisation for high-sensitivity identifiers — the finding is that
