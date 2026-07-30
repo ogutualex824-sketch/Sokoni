@@ -273,11 +273,33 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* ── Applications: the onboarding request for every role ───────────────────
+       Providers, riders, businesses, professionals and healthcare facilities all
+       submit here, and `applicationLifecycle` projects an approved applicant onto
+       the registry that makes them discoverable and dispatchable.
+
+       THIS IS THE ONLY `applications` BLOCK. A second, more permissive one used
+       to exist further down this file. Firestore takes the UNION of all matching
+       allow rules, so the effective read rule was the looser one — which included
+       `resource.data.status == 'open' || 'active'`, granting UNAUTHENTICATED read
+       of any application in either state. Every application carries the
+       applicant's phone number and a rider's carries their National ID and
+       driving-licence number, so a single document set to 'active' would have
+       published those to the open internet. Nothing in the codebase writes either
+       status to this collection (checked: no writer, and production held only
+       'pending' and 'approved'), so the clause bought nothing and risked
+       everything. Consolidated here, with no public read.
+
+       Personal data is owner-or-admin only. Approval is an admin act:
+       noAdminFields() keeps `approved`/`verified`/`role` out of an applicant's
+       own update, so nobody can approve themselves by editing their request. */
     match /applications/{appId} {
-      allow create: if claimsOwner();
+      allow create: if claimsOwner() && noAdminFields();
       allow read:   if isAdmin() || isOwner();
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
+      /* The applicant may amend or withdraw a request that is still theirs
+         (e.g. correcting a phone number), but cannot decide it. */
+      allow update: if isAdmin() || (isOwner() && claimsOwner() && noAdminFields());
+      allow delete: if isAdmin() || isOwner();
     }
 
     /* Administrator invitations. Written EXCLUSIVELY by the inviteUser /
@@ -4816,6 +4838,41 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /* ── Driver / rider records ────────────────────────────────────────────────
+       `drivers/{uid}` is the operational rider record read by navigation.js
+       (auto-dispatch), admin-os.js (online counts) and email-triggers.js. It had
+       NO rule block at all, which in a default-deny ruleset means the rider could
+       not read their own record — the driver dashboard could show a rider nothing
+       about their own approval state or payout setting.
+
+       Written exclusively by the server (`applicationLifecycle` /
+       `applicationDecide` via the Admin SDK, which bypasses rules), so all client
+       writes are denied. Approval status, suspension and vehicle verification are
+       platform decisions; a rider who could write this document could approve
+       themselves onto the road. Going online is a separate act and is expressed
+       through `rideDrivers` + `riderLocations`, which have their own rules.
+
+       Read is owner-or-admin, NOT `isAuthed()`: this record carries the rider's
+       payout frequency and home area, which no other customer needs. */
+    match /drivers/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;   // CF-only — applicationLifecycle / dispatch
+    }
+
+    /* Rider identity documents — National ID, driving licence, expiry.
+       Deliberately a SEPARATE collection from `drivers` and `rideDrivers`,
+       because `rideDrivers` is readable by every signed-in user (dispatch needs
+       the rider's operational record) and putting identity numbers there would
+       expose every rider's National ID to any account on the platform. Consistent
+       with providerVerification above and with the ODPC treatment of
+       high-sensitivity identifiers: restricted at rest, never search-indexed.
+       Admin-read for review; the rider may read their own to see what is still
+       outstanding. CF-write only. */
+    match /driverVerification/{uid} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;   // CF-only — applicationLifecycle
+    }
+
     match /providerSettings/{uid} {
       allow read:  if isAuthed() && request.auth.uid == uid;
       allow write: if false;
@@ -5045,16 +5102,19 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isAuthed() && resource.data.employerUid == request.auth.uid);
     }
 
-    /* Job application listing (open calls) — searchable public listings */
-    match /applications/{appId} {
-      allow read:   if resource.data.status == 'open' || resource.data.status == 'active'
-                    || (isAuthed() && resource.data.uid == request.auth.uid)
-                    || isAdmin();
-      allow create: if isAuthed() && request.resource.data.uid == request.auth.uid && noAdminFields();
-      allow update: if isAdmin()
-                    || (isAuthed() && resource.data.uid == request.auth.uid && noAdminFields());
-      allow delete: if isAdmin() || (isAuthed() && resource.data.uid == request.auth.uid);
-    }
+    /* REMOVED — duplicate `applications` block.
+       This was labelled "Job application listing (open calls) — searchable public
+       listings", but it matched the SAME path as the onboarding-application rule
+       near the top of this file. Firestore unions all matching allow rules, so
+       this block's `status == 'open' || 'active'` read clause silently applied to
+       provider, business and rider applications too — documents that hold a phone
+       number, a National ID and a driving-licence number. No code ever wrote
+       either status here (job posts live in `jobs`/`jobApplications`), so the
+       public-listing intent was never realised while the PII exposure was real.
+
+       The single authoritative block is `match /applications/{appId}` above;
+       see the comment there. Do not re-add a second block for this path — add
+       clauses to the one rule instead, or the union quietly widens access again. */
 
     /* Healthcare providers — publicly discoverable directory */
     match /healthProviders/{providerId} {

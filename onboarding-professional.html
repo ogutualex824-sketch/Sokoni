@@ -483,11 +483,23 @@
       proData.submittedAt   = new Date().toISOString();
       proData.status        = 'pending_verification';
 
+      /* The write is the gate. This block used to catch every failure into a
+         console.warn and then show the success modal regardless, so a
+         professional whose write was rejected was told their application was in
+         when no document existed anywhere. */
       try {
         var db   = window.firebaseDB;
         var uid  = auth.currentUser.uid;
-        if(db){
+        if(!db) throw new Error('Database unavailable — check your connection.');
+        {
           var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+          /* Contact number in both canonical shapes — the reviewer has to be
+             able to phone the applicant to confirm identity, and the admin cards
+             render `phone` while every SMS path keys on `phoneNumber`. */
+          var _rawPhone = (proData.phone || (auth.currentUser && auth.currentUser.phoneNumber) || '').replace(/\D/g,'');
+          var _e164 = /^0[17]\d{8}$/.test(_rawPhone) ? '+254' + _rawPhone.slice(1)
+                    : /^254[17]\d{8}$/.test(_rawPhone) ? '+' + _rawPhone : null;
+          if(_e164){ proData.phoneNumber = _e164; proData.phone = '0' + _e164.slice(4); }
           /* Save to applications */
           await fs.addDoc(fs.collection(db,'applications'), Object.assign({type:'professional', uid:uid}, proData));
           /* Save stub to the canonical providers registry.
@@ -510,13 +522,35 @@
               fullName:         proData.fullName,
               name:             proData.fullName,
               county:           proData.county,
+              city:             proData.county,
               location:         proData.county,
+              phone:            proData.phone || '',
+              phoneNumber:      proData.phoneNumber || '',
               status:           'pending',
-              createdAt:        new Date().toISOString()
+              createdAt:        new Date().toISOString(),
+              /* `updatedAt` is load-bearing, not decoration. sokoni-providers.js
+                 reads the registry with orderBy('updatedAt','desc'), and Firestore
+                 silently omits documents that lack the ordering field — so a stub
+                 written without it could never appear in the directory no matter
+                 what an admin did to `status` afterwards. Server clock: this is
+                 the ordering key the whole directory depends on, so it must not
+                 come from an unsynced device. */
+              updatedAt:        fs.serverTimestamp()
             }, { merge: true });
           }
         }
-      } catch(err){ console.warn('[ProOnboarding]', err); }
+      } catch(err){
+        console.error('[ProOnboarding] submit failed', err);
+        var _e = document.getElementById('errProAgree');
+        if(_e){
+          _e.textContent = 'We could not submit your application: ' +
+            ((err && err.message) ? err.message : 'unknown error') +
+            ' — please check your connection and tap Submit again.';
+          _e.style.display = 'block';
+        }
+        (window._skToast||alert)('Application NOT submitted. Please try again.');
+        return;   /* no success modal — the application does not exist */
+      }
 
       if(window.SokoniOnboarding){
         SokoniOnboarding.setStep('professional', 4, proData);

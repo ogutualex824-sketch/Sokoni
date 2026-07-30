@@ -1,3 +1,119 @@
+## [2026-07-30] — fix(onboarding): approval → registry convergence; applications reach admin with number + location
+
+**Approval was a dead end.** Every intake surface wrote a document into `applications`, every dashboard
+flipped `status` to `'approved'` from the browser, and nothing projected the approved applicant onto the
+registry customers actually read. Verified live on `sokoni-aeb26` (2026-07-30): `providers` held 4
+documents, **`drivers` / `rideDrivers` / `riders` held 0**, and `applications/e0cOABIk…`
+("Langa'ta mamafua") was already `approved` while its business name had never reached `providers/{uid}`
+— it appeared in the directory only because that person had separately self-registered.
+
+A cleaning company (`applications/PRVMS7IACKG`, "Kasindi holdings limited", Nairobi/Kilimani) sat
+`pending` with no registry document: invisible in the directory and unsearchable.
+
+### New: one convergence engine — `functions/application-lifecycle.js`
+
+`applications` is the REQUEST; the registries are the TRUTH. Approval projects request → registry,
+rejection retracts it. Server-side, idempotent, with a receipt the dashboards display.
+
+| Role | Projected onto |
+|---|---|
+| provider / business / professional | `providers/{uid}` |
+| driver / rider | `drivers/{uid}` **and** `rideDrivers/{uid}` (+ restricted `driverVerification/{uid}`) |
+
+- **Indexing is part of the projection, not a follow-up.** Every projection stamps `updatedAt` and builds
+  `searchableTerms`/`nameLower` through the shared `./search-terms` generator in the *same* commit as the
+  visibility flip. `updatedAt` is load-bearing: `sokoni-providers.js` orders by it and Firestore omits
+  documents lacking the ordering field — the old approve path never wrote it, so "approve" could publish a
+  provider straight into permanent invisibility.
+- **Two driver collections** because two engines read two: `dispatch.js` ranks `rideDrivers`,
+  `navigation.js`/`admin-os.js` read `drivers`. Writing one left the rider half-dispatchable.
+- Riders are created **offline** (`isOnline`/`available: false`) — approval grants the right to work, it
+  does not put an unverified rider on the road. **No invented rating or acceptance rate.**
+- `'boda'` → `'moto'`: `VEHICLE_CAPACITY` has no `boda` key, so every boda rider scored 0.7 instead of 1.0
+  on vehicle match and was quietly de-ranked.
+- Role routing pools *every* descriptive field. Production used two disjoint vocabularies
+  (`type:'business'`+`category:'cleaning'` vs `type:'Cleaning Company / Housekeeper'`+`hub:'service'`);
+  routing on `type` alone dropped whole surfaces. An unrecognised vocabulary is still applied but raises an
+  `adminAlerts` row — never a silent mis-file.
+
+New CFs (re-exported by name in `functions/index.js`): `applicationLifecycle` (trigger `applications/{appId}`),
+`applicationDecide`, `applicationReconcile` (drift repair), `applicationList` (one canonical admin read).
+
+### Applications now carry the number and location needed to identify people
+
+- `onboarding-driver.html` — the M-Pesa number was stored only as `mpesa`, so every admin card rendered
+  `phone` as "—" and its WhatsApp/Approve buttons built a number from an empty string and refused with
+  "No valid phone number". Now writes `phone`; adds a required **county + area** step (GPS alone is a
+  coordinate pair a reviewer cannot say on the phone).
+- Server normaliser derives `phone` (07…) **and** `phoneNumber` (+254…) from any shape, falling back to the
+  account's verified number, splits `location` into `city`/`area` against the 47 gazetted counties, and
+  stamps one server `receivedAt`. `provider.html` had written `submittedAt` as `"30/07/2026"`
+  (`toLocaleDateString`), which cannot order anything next to ISO strings — now ISO-8601.
+- Absent data is labelled ("no reachable number", "location not stated") instead of an em dash that reads
+  as a formatting quirk.
+
+### Fake success removed (this is why no rider record existed)
+
+`onboarding-driver.html`, `onboarding-professional.html`, `hub-register.js` and `provider.html` each wrapped
+the Firestore write in a `catch` that logged a warning and then **showed the success screen anyway**. A rider
+whose write was rejected saw "Application submitted!" and left no trace — consistent with three empty driver
+collections. The write is now the gate: it lands, or the applicant is told why and can retry. `hub-register.js`
+and `provider.html` also now require a real Auth session (a `localStorage` uid can never satisfy
+`request.resource.data.uid == request.auth.uid`).
+
+### Admin + super-admin synchronised
+
+- **`moderation.html`** — the verifications query was `where('status','in',[…])` + `orderBy('submittedAt')`,
+  needing a `(status, submittedAt)` composite index that was never declared (only `(status, createdAt)`).
+  Firestore rejected every call with `failed-precondition` into a bare `console.warn`, so the tab read
+  **"No pending verifications." forever** regardless of how many were waiting. Now a no-index listener with
+  in-memory filtering, and a read failure is *reported* rather than rendered as a convincing zero.
+- **`super-admin.html`** — had **no view of `applications` at all**. New Applications panel (nav + badge)
+  reading the same `applicationList`, with a bulk **Repair all** action.
+- **`admin.html`** — `seedApps()` injected four *fabricated* applicants ("Kamau Electronics", …) whenever
+  the real list was empty, inflating the pending badge on a production dashboard; now behind the standard
+  `_demoAllowed` gate. The rider pane's `where('type','==','driver')` missed a boda operator who registered
+  through the business form; now filters on the server-resolved `role`. A failed read no longer silently
+  substitutes localStorage.
+- All three surfaces now show **"approved but NOT published"** — the state none of them could previously
+  express — with a one-click re-projection, and route decisions through `applicationDecide` instead of
+  partial client-side writes wrapped in empty catches.
+
+### Security
+
+- **`applications` had TWO rule blocks.** Firestore unions matching allow rules, so the effective read
+  included `resource.data.status == 'open' || 'active'` — **unauthenticated read** of any application in
+  either state. Applications carry the applicant's phone; rider applications carry National ID and
+  driving-licence number. No code ever wrote either status (production held only `pending`/`approved`), so
+  the clause bought nothing and risked everything. Consolidated into one block, no public read, and
+  `noAdminFields()` on create/self-update so nobody can approve themselves.
+- **`drivers/{uid}` had no rule block at all** — default-deny meant a rider could not read their own record.
+  Added owner-or-admin read, `write: if false` (CF-only).
+- Rider identity documents go to **`driverVerification/{uid}`** (CF-write, admin/owner-read), never into
+  `rideDrivers`, which is `allow read: if isAuthed()` — putting a National ID there would expose every
+  rider's to any account. Consistent with the ODPC treatment of high-sensitivity identifiers.
+- **Stored XSS against admins fixed.** Application ids are client-chosen
+  (`setDoc(doc(db,'applications',app.id))`) and applicant names are attacker-controlled, yet both were
+  interpolated into inline `onclick` handlers. HTML entities are decoded *before* the JS is parsed, so
+  `h()`/`esc()` does not protect a JS string context — a crafted id or name executed in the reviewing
+  admin's session. All such handlers now pass integer indices.
+- `_sanText` keeps apostrophes for human-readable fields: the platform-wide `_san` strips `'`, silently
+  rewriting `Langa'ta` as `Langata` and the county `Murang'a` as `Muranga`. Escape on output, don't mutilate
+  on input.
+
+### Files
+`functions/application-lifecycle.js` (new), `functions/test/application-lifecycle.test.js` (new, 83 tests),
+`functions/index.js`, `functions/test/firestore-rules-audit.test.js` (+6), `firestore.rules`,
+`admin.html`, `super-admin.html`, `moderation.html`, `onboarding-driver.html`,
+`onboarding-professional.html`, `hub-register.js`, `provider.html`.
+
+**Database:** new `driverVerification` collection; `applications` gains `role`, `phoneNumber`, `city`,
+`area`, `geo`, `receivedAt`, `intakeVersion`, `projectionStatus`, `decisionAppliedFor`.
+**API:** 4 new CFs. **Indexes:** none added (all new queries are index-free by design).
+**Breaking:** none — every projection uses `merge`, and existing ratings/admin flags are never overwritten.
+
+---
+
 ## [2026-07-29] — feat(profile): "My Services" button → provider dashboard (symmetry with "My Store")
 
 Service providers now get a prominent one-tap entry to manage everything about their services —

@@ -2903,6 +2903,12 @@ var D={ products:[], sellers:[], orders:[], posOrders:[], providers:[], apps:[],
   subscriptions:[], points:[], referrals:[], reviews:[] };
 var _chargingSeller='';
 
+/* Demo-data gate — platform standard (same expression as the hub pages).
+   Demo rows are permitted on localhost, or when an operator explicitly opts in
+   with localStorage.sokoniDemoData='true'. Never on production by default: an
+   admin dashboard that invents applicants cannot be used to make decisions. */
+var _demoAllowed=(function(){try{if(localStorage.getItem('sokoniDemoData')==='true')return true;}catch(e){}return /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);})();
+
 function ls(k){ try{ return JSON.parse(localStorage.getItem(k))||[]; }catch(e){ return []; } }
 
 function loadAll(){
@@ -2969,9 +2975,16 @@ function loadAll(){
   });
   D.sellers=Object.values(m);
 
-  /* Seed demo if empty */
-  if(!D.products.length) seedProducts();
-  if(!D.apps.length) seedApps();
+  /* Seed demo if empty — ONLY where demo data is permitted.
+     `seedApps()` used to run unconditionally whenever the real list was empty,
+     writing four invented applicants ("Kamau Electronics", "Aisha Fashions", …)
+     into localStorage and rendering them as pending applications an admin could
+     click Approve on. On a production dashboard that is fabricated data in the
+     one place that must be trustworthy: it inflates the pending badge, and a real
+     application arriving later appears alongside four fictional ones with no way
+     to tell which is which. Gated behind the platform's standard demo switch. */
+  if(!D.products.length && _demoAllowed) seedProducts();
+  if(!D.apps.length && _demoAllowed) seedApps();
   loadFinData();
   if(!FIN.costs.length) seedDemoCosts();
 
@@ -3414,25 +3427,83 @@ function msgSeller(name){
 /* ════════════════════════════════
    APPLICATIONS
 ════════════════════════════════ */
+/* Local 07… form from whichever shape the intake surface stored. Applications
+   arrive with `phone` (07…), `phoneNumber` (+254…) or — from the driver wizard —
+   only `mpesa`, which is why the driver cards used to show no number at all. */
+function _appLocalPhone(a){
+  var d=String((a&&(a.phoneNumber||a.phone||a.mpesa))||'').replace(/\D/g,'');
+  if(/^254[17]\d{8}$/.test(d)) return '0'+d.slice(3);
+  if(/^0[17]\d{8}$/.test(d))   return d;
+  if(/^[17]\d{8}$/.test(d))    return '0'+d;
+  return '';
+}
+/* Identification block shared by the applications and driver panes: a tappable
+   number, the location, and a GPS pin when one was captured. Where a field is
+   genuinely absent it says so — an em dash reads as a formatting quirk, and a
+   reviewer needs to know the difference between "no number given" and "not
+   rendered". */
+function _appContactBlock(a){
+  var p=_appLocalPhone(a), intl=p?'254'+p.slice(1):'';
+  var out='<div style="margin:8px 0;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;">';
+  out += p
+    ? '<a href="tel:+'+h(intl)+'" style="color:#71ff00;font-weight:800;text-decoration:none;">📞 '+h(p)+'</a>'
+      +'<a href="https://wa.me/'+h(intl)+'" target="_blank" rel="noopener" style="color:#25d366;font-weight:700;text-decoration:none;">💬 WhatsApp</a>'
+    : '<span style="color:#ff8c42;font-weight:800;">⚠ no reachable number</span>';
+  if(a.email) out+='<span style="color:rgba(255,255,255,0.45);">✉ '+h(a.email)+'</span>';
+  var loc=a.location||a.city||'';
+  out += loc
+    ? '<span style="color:rgba(255,255,255,0.6);">📍 '+h(loc)+'</span>'
+    : '<span style="color:#ff8c42;">📍 location not stated</span>';
+  if(a.geo&&a.geo.lat!=null){
+    out+='<a href="https://maps.google.com/?q='+encodeURIComponent(a.geo.lat+','+a.geo.lng)
+       +'" target="_blank" rel="noopener" style="color:#00aaff;text-decoration:none;">🗺️ map pin</a>';
+  }
+  return out+'</div>';
+}
+
 function renderApps(list){
   var grid=document.getElementById('appsGrid'); if(!grid) return;
   if(!list.length){ grid.innerHTML=empty('📬','No applications'); return; }
   grid.innerHTML=list.map(function(a,i){
-    var typeBadge=a.type==='provider'?'<span class="badge b-blue">🛠️ Provider</span>':'<span class="badge b-purple">🏪 Seller</span>';
-    var stBadge=a.status==='approved'?'<span class="badge b-green">✅ Approved</span>':a.status==='rejected'?'<span class="badge b-red">❌ Rejected</span>':'<span class="badge b-yellow">⏳ Pending</span>';
-    return '<div class="adm-card">'
+    var ROLE_BADGE={ provider:'<span class="badge b-blue">🛠️ Provider</span>',
+                     driver:'<span class="badge b-blue">🛵 Rider</span>',
+                     seller:'<span class="badge b-purple">🏪 Seller</span>',
+                     legal:'<span class="badge b-purple">⚖️ Legal</span>',
+                     health:'<span class="badge b-purple">🏥 Health</span>' };
+    var typeBadge=ROLE_BADGE[a.role||a.type]||'<span class="badge b-purple">🏪 '+h(a.type||'Applicant')+'</span>';
+    var st=String(a.status||'pending').toLowerCase();
+    var stBadge=st==='approved'?'<span class="badge b-green">✅ Approved</span>':st==='rejected'?'<span class="badge b-red">❌ Rejected</span>':'<span class="badge b-yellow">⏳ Pending</span>';
+    /* Approved is not the same as live. When the projection did not land the
+       applicant was told yes and is still invisible — the one state the old card
+       could not express. */
+    var stranded=(st==='approved'||st==='active') && a.projectionStatus && a.projectionStatus!=='applied';
+    return '<div class="adm-card"'+(stranded?' style="border-color:rgba(255,60,60,0.4);"':'')+'>'
       +'<div class="adm-card-head">'
         +'<div><div class="adm-card-name">'+typeBadge+' '+h(a.name)+'</div>'
-        +'<div class="adm-card-sub">'+h(a.email)+' · '+h(a.phone)+' · '+h(a.location||'—')+'</div></div>'
+        +'<div class="adm-card-sub">'+h(a.categoryLabel||a.category||'')+'</div></div>'
         +stBadge
       +'</div>'
+      +_appContactBlock(a)
+      +(stranded?'<div style="margin:6px 0;font-size:11px;color:#ff6b6b;font-weight:800;">'
+        +'⚠ APPROVED BUT NOT PUBLISHED — customers still cannot find them.'
+        +(a.projectionError?'<br>'+h(String(a.projectionError).slice(0,140)):'')
+        /* Index, not the id. An id interpolated into an inline handler is unsafe
+           even after h(): the HTML parser decodes entities BEFORE the JS is
+           parsed, so an escaped quote becomes a real quote and closes the string.
+           These ids are client-chosen (provider.html does
+           setDoc(doc(db,'applications',app.id))), so a crafted application id
+           would be stored XSS against whichever admin opened this pane. An
+           integer index cannot carry a payload. */
+        +'<br><button class="abtn abtn-blue" style="margin-top:6px;" onclick="republishApp('+i+')">🔁 Publish now</button>'
+      +'</div>':'')
       +'<div style="margin:10px 0;font-size:12px;color:rgba(255,255,255,0.5);">'
-        +'<b style="color:rgba(255,255,255,0.7);">Category:</b> '+h(a.category||'—')
+        +'<b style="color:rgba(255,255,255,0.7);">Category:</b> '+h(a.categoryLabel||a.category||'—')
         +(a.business?' · <b style="color:rgba(255,255,255,0.7);">Business:</b> '+h(a.business):'')
         +(a.experience?' · <b style="color:rgba(255,255,255,0.7);">Exp:</b> '+h(a.experience):'')
-        +' · Applied: '+h(a.date||'—')
+        +(a.uid?'':' · <b style="color:#ff8c42;">no account linked</b>')
+        +' · Applied: '+h(_appWhen(a))
       +'</div>'
-      +(a.status==='pending'?'<div class="adm-card-actions">'
+      +(st==='pending'?'<div class="adm-card-actions">'
         +'<button class="abtn abtn-green" onclick="approveApp('+i+')">✅ Approve</button>'
         +'<button class="abtn abtn-red" onclick="rejectApp('+i+')">❌ Reject</button>'
         +'<button class="abtn abtn-blue" onclick="requestInfo('+i+')">📋 Request Info</button>'
@@ -3440,63 +3511,121 @@ function renderApps(list){
     +'</div>';
   }).join('');
 }
+
+/* One date formatter for every timestamp shape the intake surfaces produced:
+   Firestore Timestamp, epoch millis, ISO string, and the day-first
+   "30/07/2026" that provider.html used to write. */
+function _appWhen(a){
+  var v=a.receivedAt||a.createdAt||a.submittedAt||a.date;
+  if(!v) return '—';
+  try{
+    if(typeof v.toDate==='function') v=v.toDate();
+    else if(typeof v==='object'&&v._seconds!=null) v=new Date(v._seconds*1000);
+    else if(typeof v==='number') v=new Date(v);
+    else if(/^\d{2}\/\d{2}\/\d{4}$/.test(v)){ var p=v.split('/'); v=new Date(p[2]+'-'+p[1]+'-'+p[0]); }
+    else v=new Date(v);
+    if(isNaN(v.getTime())) return '—';
+    return v.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'});
+  }catch(e){ return '—'; }
+}
+
+/* Re-run the server projection for an application approved before the
+   application-lifecycle engine existed (or whose projection failed).
+   Takes an INDEX into D.apps rather than an id — see the note at the call site. */
+async function republishApp(i){
+  var a=D.apps[i]; if(!a){ toast('Application not found','error'); return; }
+  var fsId=a._fsId||a.id;
+  if(!fsId){ toast('No Firestore id on this application','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn=window.sokoniCallable('applicationReconcile');
+    var r=await fn({applicationId:fsId});
+    var w=(r&&r.data&&r.data.results&&r.data.results[0])||{};
+    if(w.ok===false) throw new Error(w.reason||w.error||'projection failed');
+    var writes=(w.writes||[]).map(function(x){return x.collection+' '+x.action;}).join('; ');
+    toast('✅ Published — '+(writes||'no change'));
+  }catch(e){
+    console.error('[Admin] republish failed',e);
+    toast('Publish failed: '+(e.message||'unknown'),'error');
+  }
+}
 var _ROLE_MAP={seller:'seller',provider:'seller',driver:'driver',delivery:'delivery',lawyer:'legal',law_firm:'legal',healthcare:'healthcare',landlord:'landlord'};
 
+/* ── Decisions are server-authoritative ──────────────────────────────────────
+   The old approveApp did two client-side writes, each in its own empty catch: it
+   flipped the application status and set registeredAs.<role> on the user. It
+   never created the registry document, so an approved cleaning company never
+   entered `providers/{uid}` and an approved rider never entered
+   `drivers`/`rideDrivers` — the toast said "Approved … roles updated" over an
+   applicant no customer could find and no dispatcher could reach. Because both
+   writes were swallowed, a rules rejection produced the same cheerful toast.
+
+   `applicationDecide` does the whole transition on the server — registry
+   projection, `updatedAt`, search index, role grant, applicant notification —
+   atomically, and returns a receipt this UI reports verbatim. */
+async function _decideApp(i, decision, reason){
+  var a=D.apps[i]; if(!a) return null;
+  var fsId=a._fsId||a.id;
+  if(!fsId){ toast('This application has no Firestore id — cannot decide','error'); return null; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return null; }
+  var fn=window.sokoniCallable('applicationDecide');
+  var res=await fn({applicationId:fsId,decision:decision,reason:reason||null});
+  return (res&&res.data)||{};
+}
+
 async function approveApp(i){
-  var a=D.apps[i];
-  a.status='approved';
-
-  /* 1 — Firestore: update application document */
-  if(a._fsId && window.SokoniDB){
-    try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
+  var a=D.apps[i]; if(!a) return;
+  try{
+    var d=await _decideApp(i,'approve');
+    if(!d) return;
+    a.status='approved';
+    var writes=((d.receipt&&d.receipt.writes)||[]);
+    var summary=writes.map(function(w){
+      var s=w.collection+' '+w.action;
+      if(w.documentsMissing&&w.documentsMissing.length) s+=' (collect: '+w.documentsMissing.join(', ')+')';
+      return s;
+    }).join('; ');
+    /* Report what the server actually wrote, not what we hoped it wrote. */
+    toast('✅ Approved: '+a.name+' — '+(summary||'no registry change'));
+  }catch(e){
+    console.error('[Admin] approve failed',e);
+    toast('Approve FAILED for '+a.name+': '+(e.message||'unknown error'),'error');
+    renderApps(D.apps); renderStats();
+    return;   /* status not changed locally — the decision did not happen */
   }
-
-  /* 2 — Firestore: grant role on the user's profile doc */
-  if(a.uid && window.firebaseDB){
-    try{
-      var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      var roleKey=_ROLE_MAP[a.type]||'seller';
-      var patch={'approved':true,'approvedAt':new Date().toISOString()};
-      patch['registeredAs.'+roleKey]=true;
-      await updateDoc(doc(window.firebaseDB,'users',a.uid),patch);
-    }catch(e){ console.warn('[Admin] role grant failed',e); }
-  }
-
-  /* 3 — local state */
-  localStorage.setItem('sokoniPendingApplications',JSON.stringify(D.apps));
   renderApps(D.apps); renderStats();
 
-  /* 4 — open WhatsApp so admin can send real notification */
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    /* Canonical public domain only — this is the first URL a new merchant ever receives.
-       sokoni-aeb26.web.app is engineering infrastructure and must never reach a merchant. */
-    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://mysokoni.co.ke and start listing. Welcome aboard! — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+waMsg,'_blank','noopener');
+  /* WhatsApp is now a courtesy on top of the server-sent notification, not the
+     notification itself. Built from whichever phone shape is present — it used
+     to read only `a.phone`, so every driver application (which stored the number
+     as `mpesa`) silently produced no message at all. */
+  var p=_appLocalPhone(a);
+  if(p){
+    var waMsg=encodeURIComponent('Hello '+a.name+'! 🎉 Your SOKONI application has been approved. Log in at https://mysokoni.co.ke and start earning. Welcome aboard! — SOKONI Team');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+waMsg,'_blank','noopener');
   }
-  toast('✅ Approved: '+a.name+(a.uid?' — roles updated':'')+' — WhatsApp opened');
 }
 
 async function rejectApp(i){
+  var a=D.apps[i]; if(!a) return;
   var reason=prompt('Reason for rejection (optional):');
-  var a=D.apps[i];
-  a.status='rejected'; a.rejectReason=reason||'';
-
-  /* Firestore: update application document */
-  if(a._fsId && window.SokoniDB){
-    try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'rejected',{rejectReason:reason||''}); }catch(e){}
+  try{
+    var d=await _decideApp(i,'reject',reason);
+    if(!d) return;
+    a.status='rejected'; a.rejectReason=reason||'';
+    toast('❌ Rejected: '+a.name);
+  }catch(e){
+    console.error('[Admin] reject failed',e);
+    toast('Reject FAILED for '+a.name+': '+(e.message||'unknown error'),'error');
+    return;
   }
-
-  localStorage.setItem('sokoniPendingApplications',JSON.stringify(D.apps));
   renderApps(D.apps); renderStats();
 
-  /* WhatsApp rejection notice */
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
+  var p=_appLocalPhone(a);
+  if(p){
     var rMsg=encodeURIComponent('Hello '+a.name+', your SOKONI application was reviewed'+(reason?' ('+reason+')':'')+'. Feel free to reapply. — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+rMsg,'_blank','noopener');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+rMsg,'_blank','noopener');
   }
-  toast('❌ Rejected: '+a.name);
 }
 
 function requestInfo(i){
@@ -3528,17 +3657,43 @@ async function renderDriverApps(filter){
   if(!list) return;
   list.innerHTML = '<div style="color:rgba(255,255,255,0.25);font-size:12px;padding:16px 0;">Loading driver applications…</div>';
 
-  /* Try Firestore first */
+  /* Read Firestore.
+     The old query was where('type','==','driver'), which only matches an
+     application whose `type` is literally "driver". A boda operator who
+     registered through the business form (type:'business', category:'boda') is a
+     rider by any sensible reading and never appeared in this pane at all. The
+     server now resolves a canonical `role` on intake, so the whole (small,
+     admin-only) collection is read and filtered on that — which also needs no
+     composite index and so cannot fail the way the moderation query did. */
+  var _loadErr = null;
   try{
     if(window.firebaseDB){
       var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      var q  = fs.query(fs.collection(window.firebaseDB,'applications'), fs.where('type','==','driver'));
-      var snap = await fs.getDocs(q);
-      _drvApps = snap.docs.map(function(d){ return Object.assign({_fsId:d.id},d.data()); });
+      var snap = await fs.getDocs(fs.query(fs.collection(window.firebaseDB,'applications'), fs.limit(300)));
+      _drvApps = snap.docs.map(function(d){ return Object.assign({_fsId:d.id},d.data()); })
+        .filter(function(a){
+          if(a.role) return a.role === 'driver';
+          /* Pre-normalisation documents: fall back to keyword matching. */
+          return /\b(driver|rider|boda|courier)\b/i.test([a.type,a.category,a.categoryLabel].filter(Boolean).join(' '));
+        });
     }
-  }catch(e){ _drvApps = []; }
+  }catch(e){
+    /* Do NOT quietly substitute localStorage for a failed server read — that is
+       how a broken dashboard passes for an empty one. */
+    console.error('[Admin] driver applications read failed',e);
+    _loadErr = e;
+    _drvApps = [];
+  }
 
-  /* Fallback: localStorage */
+  if(_loadErr){
+    list.innerHTML = '<div style="padding:20px 0;color:#ff6b6b;font-size:13px;font-weight:700;">'
+      +'Could not load rider applications: '+h(_loadErr.message||'unknown error')
+      +'<div style="font-weight:400;color:rgba(255,255,255,0.45);margin-top:6px;">'
+      +'This is a read failure, not an empty queue. Reload, or check your admin claim.</div></div>';
+    return;
+  }
+
+  /* Offline backup — only when the server genuinely returned nothing. */
   if(!_drvApps.length){
     try{ _drvApps = (JSON.parse(localStorage.getItem('sokoniDriverApplications')||'[]')).filter(function(a){ return a.type==='driver'; }); }catch(e){}
   }
@@ -3559,83 +3714,148 @@ async function renderDriverApps(filter){
     var stBadge = a.status==='approved' ? '<span class="badge b-green">✅ Approved</span>'
                 : a.status==='rejected' ? '<span class="badge b-red">❌ Rejected</span>'
                 : '<span class="badge b-yellow">⏳ Pending</span>';
-    return '<div class="adm-card">'
+    /* Rider applications store the contact number as `mpesa`, so this card used
+       to render `a.phone` as "—" and hand an empty string to the WhatsApp button,
+       which then refused with "No valid phone number". _appContactBlock reads
+       every shape and shows a tappable number plus location and GPS pin. */
+    var stranded=(a.status==='approved') && a.projectionStatus && a.projectionStatus!=='applied';
+    return '<div class="adm-card"'+(stranded?' style="border-color:rgba(255,60,60,0.4);"':'')+'>'
       +'<div class="adm-card-head">'
-        +'<div><div class="adm-card-name">🚕 '+h(a.fullName||a.name||'—')+'</div>'
-        +'<div class="adm-card-sub">'+h(a.phone||'—')+' · '+h(a.nationalId?'ID: '+a.nationalId:'')+'</div></div>'
+        +'<div><div class="adm-card-name">🛵 '+h(a.fullName||a.name||'—')+'</div>'
+        +'<div class="adm-card-sub">'+h(a.nationalId?'ID on file':'ID not supplied')+'</div></div>'
         +stBadge
       +'</div>'
+      +_appContactBlock(a)
+      +(stranded?'<div style="margin:6px 0;font-size:11px;color:#ff6b6b;font-weight:800;">'
+        +'⚠ APPROVED BUT NOT DISPATCHABLE — no rider record was created.'
+        +(a.projectionError?'<br>'+h(String(a.projectionError).slice(0,140)):'')
+        /* Index into _drvApps — see the note on republishApp. */
+        +'<br><button class="abtn abtn-blue" style="margin-top:6px;" onclick="republishDriverApp('+idx+')">🔁 Create rider record</button>'
+      +'</div>':'')
       +'<div style="margin:10px 0;font-size:12px;color:rgba(255,255,255,0.5);display:flex;flex-wrap:wrap;gap:10px;">'
         +(a.vehicleType?'<span><b style="color:rgba(255,255,255,0.7);">Vehicle:</b> '+h(a.vehicleType)+'</span>':'')
         +(a.plate?'<span><b style="color:rgba(255,255,255,0.7);">Plate:</b> '+h(a.plate)+'</span>':'')
         +(a.model?'<span><b style="color:rgba(255,255,255,0.7);">Model:</b> '+h(a.model)+'</span>':'')
         +(a.year?'<span><b style="color:rgba(255,255,255,0.7);">Year:</b> '+h(a.year)+'</span>':'')
-        +(a.dlNumber?'<span><b style="color:rgba(255,255,255,0.7);">DL#:</b> '+h(a.dlNumber)+'</span>':'')
+        +(a.dlNumber?'<span><b style="color:rgba(255,255,255,0.7);">DL#:</b> '+h(a.dlNumber)+'</span>':'<span style="color:#ff8c42;"><b>DL#:</b> not supplied</span>')
         +(a.dlExpiry?'<span><b style="color:rgba(255,255,255,0.7);">DL Expiry:</b> '+h(a.dlExpiry)+'</span>':'')
         +(a.payoutFrequency?'<span><b style="color:rgba(255,255,255,0.7);">Payout:</b> '+h(a.payoutFrequency)+'</span>':'')
-        +(a.createdAt||a.date?'<span><b style="color:rgba(255,255,255,0.7);">Applied:</b> '+h((a.createdAt||a.date||'').slice(0,10))+'</span>':'')
+        +'<span><b style="color:rgba(255,255,255,0.7);">Applied:</b> '+h(_appWhen(a))+'</span>'
       +'</div>'
       +(a.status==='pending'||!a.status?'<div class="adm-card-actions">'
         +'<button class="abtn abtn-green" onclick="approveDriver(\''+h(a._fsId||'')+'\','+idx+')">✅ Approve</button>'
         +'<button class="abtn abtn-red" onclick="rejectDriver(\''+h(a._fsId||'')+'\','+idx+')">❌ Reject</button>'
-        +'<button class="abtn abtn-blue" onclick="driverWhatsApp(\''+h(a.phone||'')+'\',\''+h(a.fullName||a.name||'')+'\')">'
+        /* Index, not the name. The applicant's name is attacker-controlled and an
+           inline handler decodes HTML entities before parsing the JS, so h() does
+           not contain it — a name like `');alert(1);//` executed in the admin's
+           session. */
+        +'<button class="abtn abtn-blue" onclick="driverWhatsApp('+idx+')">'
           +'📱 WhatsApp</button>'
       +'</div>':'')
     +'</div>';
   }).join('');
 }
 
+/* Approving a rider used to flip the application status and set
+   registeredAs.driver — and stop. No `drivers/{uid}` and no `rideDrivers/{uid}`
+   document was ever created, so dispatch.js (which ranks `rideDrivers` where
+   isOnline == true) had nothing to rank and every delivery reported 'exhausted'.
+   Production confirmed it: all three driver collections held zero documents.
+   Both writes also sat inside an empty catch, so a rules rejection produced the
+   same cheerful "Driver approved" toast as a success.
+
+   `applicationDecide` creates both dispatch records plus the restricted
+   driverVerification document, grants the role and notifies the rider. */
 async function approveDriver(fsId, idx){
   var a = _drvApps[idx]; if(!a) return;
-  a.status = 'approved'; a.approvedAt = new Date().toISOString();
-
-  if(fsId && window.firebaseDB){
-    try{
-      var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      await fs.updateDoc(fs.doc(window.firebaseDB,'applications',fsId),{status:'approved',approvedAt:a.approvedAt});
-      /* Grant driver role on user profile */
-      if(a.uid){
-        await fs.updateDoc(fs.doc(window.firebaseDB,'users',a.uid),{'registeredAs.driver':true,'approved':true,'approvedAt':a.approvedAt});
-      }
-    }catch(e){ console.warn('[Admin] driver approve',e); }
+  if(!fsId){ toast('This application has no Firestore id — cannot approve','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn = window.sokoniCallable('applicationDecide');
+    var res = await fn({applicationId:fsId,decision:'approve'});
+    var d = (res&&res.data)||{};
+    a.status = 'approved'; a.approvedAt = new Date().toISOString();
+    var w = ((d.receipt&&d.receipt.writes)||[])[0]||{};
+    var missing = (w.documentsMissing||[]);
+    toast('✅ Rider approved: '+(a.fullName||a.name)+' — '+(w.collection||'no record')+' '+(w.action||''));
+    /* Approval grants the right to work; it does not mean the paperwork was
+       seen. Say which documents are still outstanding rather than implying a
+       completed check. */
+    if(missing.length) toast('⚠ Still to collect before first trip: '+missing.join(', '),'error');
+  }catch(e){
+    console.error('[Admin] driver approve failed',e);
+    toast('Approve FAILED for '+(a.fullName||a.name)+': '+(e.message||'unknown error'),'error');
+    renderDriverApps(_drvFilter);
+    return;   /* status unchanged locally — the approval did not happen */
   }
-
-  var phone = (a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    /* Canonical public domain, extensionless (cleanUrls:true) to avoid a redirect hop. */
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI driver application has been approved. Log in at https://mysokoni.co.ke/driver and start earning. Welcome aboard! — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+msg,'_blank','noopener');
-  }
-  toast('✅ Driver approved: '+(a.fullName||a.name));
   renderDriverApps(_drvFilter);
+
+  /* Built from whichever phone shape exists. It used to read only `a.phone`, so
+     every rider application (which stores the number as `mpesa`) produced no
+     message at all. */
+  var p = _appLocalPhone(a);
+  if(p){
+    /* Canonical public domain, extensionless (cleanUrls:true) to avoid a redirect hop. */
+    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+'! 🎉 Your SOKONI rider application has been approved. Log in at https://mysokoni.co.ke/driver and go online to start earning. Welcome aboard! — SOKONI Team');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+msg,'_blank','noopener');
+  }
+}
+
+/* Rider equivalent of republishApp — indexes _drvApps, not D.apps. */
+async function republishDriverApp(idx){
+  var a = _drvApps[idx]; if(!a){ toast('Application not found','error'); return; }
+  var fsId = a._fsId;
+  if(!fsId){ toast('No Firestore id on this application','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn=window.sokoniCallable('applicationReconcile');
+    var r=await fn({applicationId:fsId});
+    var w=(r&&r.data&&r.data.results&&r.data.results[0])||{};
+    if(w.ok===false) throw new Error(w.reason||w.error||'projection failed');
+    var writes=(w.writes||[]).map(function(x){return x.collection+' '+x.action;}).join('; ');
+    toast('✅ Rider record created — '+(writes||'no change'));
+    renderDriverApps(_drvFilter);
+  }catch(e){
+    console.error('[Admin] rider republish failed',e);
+    toast('Failed: '+(e.message||'unknown'),'error');
+  }
 }
 
 async function rejectDriver(fsId, idx){
-  var reason = prompt('Reason for rejection (optional):');
   var a = _drvApps[idx]; if(!a) return;
-  a.status = 'rejected'; a.rejectReason = reason||'';
-
-  if(fsId && window.firebaseDB){
-    try{
-      var fs = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      await fs.updateDoc(fs.doc(window.firebaseDB,'applications',fsId),{status:'rejected',rejectReason:reason||''});
-    }catch(e){ console.warn('[Admin] driver reject',e); }
+  var reason = prompt('Reason for rejection (optional):');
+  if(!fsId){ toast('This application has no Firestore id — cannot reject','error'); return; }
+  if(!window.sokoniCallable){ toast('Callable bridge unavailable — reload','error'); return; }
+  try{
+    var fn = window.sokoniCallable('applicationDecide');
+    await fn({applicationId:fsId,decision:'reject',reason:reason||null});
+    a.status = 'rejected'; a.rejectReason = reason||'';
+    toast('❌ Rider rejected: '+(a.fullName||a.name));
+  }catch(e){
+    console.error('[Admin] driver reject failed',e);
+    toast('Reject FAILED for '+(a.fullName||a.name)+': '+(e.message||'unknown error'),'error');
+    return;
   }
-
-  var phone = (a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12){
-    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+', your SOKONI driver application was not approved'+(reason?' ('+reason+')':'')+'. Please contact support for assistance. — SOKONI Team');
-    window.open('https://wa.me/'+phone+'?text='+msg,'_blank','noopener');
-  }
-  toast('❌ Driver rejected: '+(a.fullName||a.name));
   renderDriverApps(_drvFilter);
+
+  var p = _appLocalPhone(a);
+  if(p){
+    var msg = encodeURIComponent('Hello '+(a.fullName||a.name)+', your SOKONI rider application was not approved'+(reason?' ('+reason+')':'')+'. Please contact support for assistance. — SOKONI Team');
+    window.open('https://wa.me/254'+p.slice(1)+'?text='+msg,'_blank','noopener');
+  }
 }
 
-function driverWhatsApp(phone, name){
-  var p = (phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(p.length<12){ toast('No valid phone number','error'); return; }
+/* Takes an INDEX into _drvApps rather than (phone, name) strings — see the note
+   at the call site. Resolving the values here also means the number is read
+   through _appLocalPhone, so a rider whose contact arrived as `mpesa` (which was
+   every rider) gets a working message instead of "No valid phone number". */
+function driverWhatsApp(idx){
+  var a = _drvApps[idx]; if(!a){ toast('Application not found','error'); return; }
+  var local = _appLocalPhone(a);
+  if(!local){ toast('No valid phone number on this application','error'); return; }
+  var name = a.fullName || a.name || 'there';
   var msg = encodeURIComponent('Hello '+name+', this is SOKONI Admin. ');
-  window.open('https://wa.me/'+p+'?text='+msg,'_blank','noopener');
+  window.open('https://wa.me/254'+local.slice(1)+'?text='+msg,'_blank','noopener');
 }
 
 /* ════════════════════════════════

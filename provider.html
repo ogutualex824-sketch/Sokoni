@@ -975,12 +975,24 @@ function finishSetup(){
   saveBookings();
   /* Publish availability to localStorage so hub pages can read it */
   _publishAvailability();
-  /* Send application to admin pending queue */
+  /* Send application to admin pending queue.
+     `submittedAt` was `toLocaleDateString('en-KE')`, which produces "30/07/2026"
+     — a day-first string that sorts lexicographically as nonsense next to the
+     ISO timestamps every other intake surface writes, so any dashboard ordering
+     on it ordered applications wrongly. ISO-8601 UTC, matching the platform
+     timestamp standard; the server also stamps its own `receivedAt` on intake
+     and that is what the dashboards actually order by. */
+  const _phoneDigits = String(_profile.phone || '').replace(/\D/g, '');
   const app = {
     id: _profile.id, name: _profile.name, phone: _profile.phone,
+    /* E.164 alongside the local form — the reviewer's WhatsApp link uses one and
+       every SMS path keys on the other. */
+    phoneNumber: /^0[17]\d{8}$/.test(_phoneDigits) ? '+254' + _phoneDigits.slice(1) : null,
+    email: _profile.email || '',
+    description: _profile.bio || '',
     location: _profile.location, type: cat?.label||_selectedCat,
     hub: 'service', category: 'Service Provider',
-    status: 'pending', submittedAt: new Date().toLocaleDateString('en-KE')
+    status: 'pending', submittedAt: new Date().toISOString()
   };
   let apps=[]; try{apps=JSON.parse(localStorage.getItem('sokoniPendingApplications'))||[];}catch(e){}
   if(!apps.some(a=>a.id===app.id)){ apps.unshift(app); localStorage.setItem('sokoniPendingApplications',JSON.stringify(apps)); }
@@ -990,8 +1002,13 @@ function finishSetup(){
     try{
       import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js').then(function(m){
         const db=window.firebaseDB; if(!db) return;
-        const u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
-        const uid=u?(u.uid||u.id||null):null;
+        /* Auth session only. A uid recovered from localStorage cannot satisfy
+           firestore.rules (`request.resource.data.uid == request.auth.uid`), so a
+           stale cached value produced an application the server would reject —
+           or one written under a uid with no matching account, which approval
+           then could not grant a role to. */
+        const uid=(window.firebaseAuth&&window.firebaseAuth.currentUser)
+          ? window.firebaseAuth.currentUser.uid : null;
         const ts=m.serverTimestamp();
         /* NOTE (2026-07-27): the direct write to `providers/{PRV…}` was REMOVED.
            It was keyed by a 'PRV…' id (not uid) with status:'available' and no
@@ -1002,8 +1019,22 @@ function finishSetup(){
            server publish flow (provider-onboarding.html → providerPublish), which
            writes a complete uid-keyed `providers` doc. This lightweight setup only
            records the admin application below; discovery comes from publishing. */
-        /* Save pending application to Firestore for admin review */
-        m.setDoc(m.doc(db,'applications',app.id),Object.assign({},app,{uid:uid||null,createdAt:ts})).catch(function(){});
+        /* Save pending application to Firestore for admin review.
+           The empty catch here meant a rejected write left the operator on a
+           dashboard that looked set up while no reviewer would ever see them.
+           An application with no uid cannot be approved into anything, so that
+           case is reported too rather than written and stranded. */
+        if(!uid){
+          console.error('[Provider] not signed in — application not submitted');
+          (window._skToast||alert)('Please sign in so we can link this listing to your account, then save again.');
+          return;
+        }
+        m.setDoc(m.doc(db,'applications',app.id),Object.assign({},app,{uid:uid,createdAt:ts}))
+          .catch(function(e){
+            console.error('[Provider] application write failed',e);
+            (window._skToast||alert)('Your listing was saved on this device but NOT sent for review: '+
+              ((e&&e.message)?e.message:'unknown error')+' — please check your connection and save again.');
+          });
         /* Update user document to mark as provider */
         if(uid){
           m.updateDoc(m.doc(db,'users',uid),{'registeredAs.provider':true,providerProfileId:_profile.id}).catch(function(){});

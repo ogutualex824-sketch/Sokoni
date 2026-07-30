@@ -11422,3 +11422,18 @@ exports.getPrescriptions         = _health.getPrescriptions;
 exports.searchHealthProviders    = _health.searchHealthProviders;
 exports.rateHealthProvider       = _health.rateHealthProvider;
 exports.getHealthDashboard       = _health.getHealthDashboard;
+
+/* ── Application Lifecycle ─────────────────────────────────────────────────────
+   The convergence point between `applications` (the request) and the canonical
+   registries that make an approved applicant discoverable and dispatchable.
+   Approval previously flipped a status field and stopped there, so an approved
+   cleaning company never reached `providers/{uid}` and an approved rider never
+   reached `drivers`/`rideDrivers` — both invisible, one undispatchable.
+
+   `applicationLifecycle` is a Firestore trigger; deploy it by that exact name
+   or the projection never runs. See functions/application-lifecycle.js. */
+const _appLife = require('./application-lifecycle');
+exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: applications/{appId}
+exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)
+exports.applicationReconcile  = _appLife.applicationReconcile;   // onCall (admin) — drift repair
+exports.applicationList       = _appLife.applicationList;        // onCall (admin) — one canonical read

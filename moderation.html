@@ -242,11 +242,11 @@
         <table class="mod-table" id="verifTable">
           <thead>
             <tr>
-              <th>Type</th><th>Name</th><th>Professional Type</th><th>Submitted</th><th>Actions</th>
+              <th>Type</th><th>Name</th><th>Contact</th><th>Location</th><th>Submitted</th><th>Actions</th>
             </tr>
           </thead>
           <tbody id="verifBody">
-            <tr><td colspan="5" class="mod-table-empty"><span class="mod-spinner"></span> Loading verification queue...</td></tr>
+            <tr><td colspan="6" class="mod-table-empty"><span class="mod-spinner"></span> Loading verification queue...</td></tr>
           </tbody>
         </table>
       </div>
@@ -400,8 +400,15 @@
 
     /* ── Render helpers ── */
     function typeBadge(type){
-      var cls = { user:'badge-user', listing:'badge-listing', business:'badge-business', message:'badge-message' };
-      return '<span class="badge '+(cls[type]||'')+'">'+esc(type)+'</span>';
+      var cls = { user:'badge-user', listing:'badge-listing', business:'badge-business', message:'badge-message',
+      /* Application roles reach this badge too, now that the verifications table
+         renders the server-resolved `role`. Without these the badge fell through
+         to no class and rendered unstyled. */
+                  provider:'badge-business', driver:'badge-listing', seller:'badge-business',
+                  legal:'badge-message', health:'badge-user' };
+      var label = { driver:'🛵 rider', provider:'🛠️ provider', seller:'🏪 seller',
+                    legal:'⚖️ legal', health:'🏥 health' };
+      return '<span class="badge '+(cls[type]||'')+'">'+esc(label[type]||type)+'</span>';
     }
 
     function statusBadge(status){
@@ -483,69 +490,226 @@
        VERIFICATIONS
     ================================================================ */
     var unsubVerif;
+    /* ── Pending applications ────────────────────────────────────────────────
+       The previous query was `where('status','in',[…])` + `orderBy('submittedAt')`,
+       which needs a (status, submittedAt) composite index. firestore.indexes.json
+       only ever declared (status, createdAt), so Firestore rejected every call
+       with failed-precondition — straight into the error callback, which was a
+       bare console.warn. The table then kept its placeholder and read
+       "No pending verifications." forever, no matter how many applications were
+       waiting. A dashboard that reports zero because its query failed is worse
+       than one that reports an error.
+
+       This listens to the collection with NO where and NO orderBy, so it needs
+       no composite index and cannot fail this way again. The collection is
+       administrative (hundreds of documents, admin-only read), and filtering in
+       memory also lets the table show the state that matters most and was
+       previously invisible: approved but never published. */
     async function listenVerifications(){
       var f = await getFS();
-      if(!db){ verifBody.innerHTML='<tr><td colspan="5" class="mod-table-empty">Database not available.</td></tr>'; return; }
+      var tbody = document.getElementById('verifBody');
+      if(!db){ if(tbody) tbody.innerHTML='<tr><td colspan="6" class="mod-table-empty">Database not available.</td></tr>'; return; }
       try {
-        var q = f.query(
-          f.collection(db,'applications'),
-          f.where('status','in',['pending','pending_verification']),
-          f.orderBy('submittedAt','desc'),
-          f.limit(100)
-        );
+        var q = f.query(f.collection(db,'applications'), f.limit(300));
         unsubVerif = f.onSnapshot(q, function(snap){
-          var items = [];
-          snap.forEach(function(d){ items.push(Object.assign({id:d.id},d.data())); });
+          var all = [];
+          snap.forEach(function(d){ all.push(Object.assign({id:d.id},d.data())); });
+
+          /* Awaiting a decision — every spelling the intake surfaces emit. */
+          var PENDING = ['pending','pending_verification','pending_review','submitted','info_requested'];
+          var items = all.filter(function(a){
+            return PENDING.indexOf(String(a.status||'pending').toLowerCase()) !== -1;
+          });
+
+          /* Approved but the registry projection did not land: the applicant was
+             told yes and is still invisible. Surfaced at the top of the same
+             queue because it needs action, not because it is pending. */
+          var stranded = all.filter(function(a){
+            var s = String(a.status||'').toLowerCase();
+            return (s==='approved'||s==='active'||s==='verified') && a.projectionStatus !== 'applied';
+          }).map(function(a){ a._stranded = true; return a; });
+
+          /* Newest first on the server-stamped key, with the legacy fields as
+             fallbacks. Never on `submittedAt` — one surface wrote "30/07/2026"
+             and another an ISO string, so that field cannot order anything. */
+          function when(a){
+            var v = a.receivedAt || a.createdAt || a.submittedAt;
+            if(!v) return 0;
+            if(typeof v.toMillis === 'function') return v.toMillis();
+            if(typeof v === 'number') return v;
+            var t = Date.parse(v); return isNaN(t) ? 0 : t;
+          }
+          var rows = stranded.concat(items).sort(function(a,b){
+            if(!!b._stranded !== !!a._stranded) return b._stranded ? 1 : -1;
+            return when(b) - when(a);
+          });
+
           document.getElementById('statVerifications').textContent = items.length;
           document.getElementById('tcVerifications').textContent   = items.length;
-          renderVerifications(items);
-        }, function(err){ console.warn('[Moderation verif]',err); });
-      } catch(e){ console.error(e); }
+          renderVerifications(rows);
+        }, function(err){
+          /* Report the failure instead of rendering a convincing zero. */
+          console.error('[Moderation verif]',err);
+          if(tbody) tbody.innerHTML='<tr><td colspan="6" class="mod-table-empty" style="color:#ff6b6b;">'
+            +'Could not load applications: '+esc(err.message)+'</td></tr>';
+          document.getElementById('statVerifications').textContent = '!';
+        });
+      } catch(e){
+        console.error(e);
+        if(tbody) tbody.innerHTML='<tr><td colspan="6" class="mod-table-empty" style="color:#ff6b6b;">'
+          +'Could not load applications: '+esc(e.message)+'</td></tr>';
+      }
+    }
+
+    /* Local 07… form for tel:/wa.me links, from whichever shape is present. */
+    function _localPhone(a){
+      var d = String(a.phoneNumber||a.phone||a.mpesa||'').replace(/\D/g,'');
+      if(/^254[17]\d{8}$/.test(d)) return '0'+d.slice(3);
+      if(/^0[17]\d{8}$/.test(d))   return d;
+      if(/^[17]\d{8}$/.test(d))    return '0'+d;
+      return '';
     }
 
     function renderVerifications(data){
       var tbody = document.getElementById('verifBody');
       if(!tbody) return;
       if(!data.length){
-        tbody.innerHTML = '<tr><td colspan="5" class="mod-table-empty">No pending verifications.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="mod-table-empty">No pending verifications.</td></tr>';
         return;
       }
-      tbody.innerHTML = data.map(function(a){
-        return '<tr>'
-          +'<td>'+typeBadge(a.type||'professional')+'</td>'
-          +'<td><strong>'+esc(a.fullName||a.name||'—')+'</strong></td>'
-          +'<td>'+esc(a.professionalType||'—')+'</td>'
-          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(a.submittedAt)+'</td>'
+      /* Retained so the action handlers can look an application up by index.
+         Interpolating an id into an inline onclick is unsafe even after esc():
+         the HTML parser decodes entities BEFORE the JS is parsed, so an escaped
+         quote becomes a real one and closes the string. These ids are
+         client-chosen (provider.html does setDoc(doc(db,'applications',app.id))),
+         so a crafted id was stored XSS against any moderator who opened this tab.
+         An integer index cannot carry a payload. */
+      _verifRows = data;
+      tbody.innerHTML = data.map(function(a,i){
+        var phone = _localPhone(a);
+        var intl  = phone ? '254'+phone.slice(1) : '';
+        var name  = a.name||a.fullName||a.businessName||'—';
+
+        /* Contact cell. A reviewer's job is to ring the applicant and confirm who
+           they are, so the number is a live tel:/WhatsApp link rather than text —
+           and when there is no reachable number that is stated outright instead
+           of rendering an em dash that looks like a formatting quirk. */
+        var contact = phone
+          ? '<a href="tel:+'+esc(intl)+'" style="color:#71ff00;font-weight:700;text-decoration:none;">'+esc(phone)+'</a>'
+            +' <a href="https://wa.me/'+esc(intl)+'" target="_blank" rel="noopener" title="WhatsApp"'
+            +' style="text-decoration:none;">💬</a>'
+            +(a.email?'<div style="font-size:10px;color:rgba(255,255,255,0.35);">'+esc(a.email)+'</div>':'')
+          : '<span style="color:#ff8c42;font-weight:700;" title="Cannot be identity-checked by phone">no number</span>';
+
+        /* Location cell — free text plus a map pin when GPS was captured. */
+        var loc = a.location||a.city||'';
+        var locCell = loc
+          ? esc(loc) + (a.city && a.area ? '<div style="font-size:10px;color:rgba(255,255,255,0.35);">'+esc(a.city)+' · '+esc(a.area)+'</div>' : '')
+          : '<span style="color:#ff8c42;">not stated</span>';
+        if(a.geo && a.geo.lat!=null){
+          locCell += ' <a href="https://maps.google.com/?q='+encodeURIComponent(a.geo.lat+','+a.geo.lng)+'"'
+                   + ' target="_blank" rel="noopener" title="Open GPS pin" style="text-decoration:none;">📍</a>';
+        }
+
+        /* Vehicle / trade detail, so the decision is made on real information. */
+        var detail = [a.professionalType, a.categoryLabel||a.category,
+                      a.vehicleType ? (a.vehicleType+(a.plate?' '+a.plate:'')) : '']
+                     .filter(Boolean).map(esc).join(' · ');
+
+        var strandedBanner = a._stranded
+          ? '<div style="font-size:10px;color:#ff6b6b;font-weight:800;">APPROVED BUT NOT PUBLISHED'
+            +(a.projectionError?' — '+esc(String(a.projectionError).slice(0,80)):'')+'</div>'
+          : '';
+
+        return '<tr'+(a._stranded?' style="background:rgba(255,60,60,0.06);"':'')+'>'
+          +'<td>'+typeBadge(a.role||a.type||'professional')+'</td>'
+          +'<td><strong>'+esc(name)+'</strong>'
+            +(detail?'<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+detail+'</div>':'')
+            +strandedBanner+'</td>'
+          +'<td style="font-size:12px;">'+contact+'</td>'
+          +'<td style="font-size:12px;">'+locCell+'</td>'
+          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(a.receivedAt||a.createdAt||a.submittedAt)+'</td>'
           +'<td><div class="mod-action-row">'
-          +'<button class="mod-action-btn btn-approve" onclick="verifAction(\'approve\',\''+esc(a.id)+'\',\''+esc(a.uid||'')+'\')">Approve</button>'
-          +'<button class="mod-action-btn btn-reject" onclick="verifAction(\'reject\',\''+esc(a.id)+'\')">Reject</button>'
-          +'<button class="mod-action-btn btn-view" onclick="verifAction(\'info\',\''+esc(a.id)+'\')">Request Info</button>'
+          +(a._stranded
+            ? '<button class="mod-action-btn btn-approve" onclick="verifAction(\'republish\','+i+')">Publish now</button>'
+            : '<button class="mod-action-btn btn-approve" onclick="verifAction(\'approve\','+i+')">Approve</button>'
+              +'<button class="mod-action-btn btn-reject" onclick="verifAction(\'reject\','+i+')">Reject</button>'
+              +'<button class="mod-action-btn btn-view" onclick="verifAction(\'info\','+i+')">Request Info</button>')
           +'</div></td>'
           +'</tr>';
       }).join('');
     }
 
-    async function verifAction(action, appId, uid){
+    /* ── Decisions go through the server, not the browser ─────────────────────
+       The old approve path did three client-side writes and got two of them
+       wrong. It flipped `applications.status`, then queried `providers` by uid
+       and set {verified,status:'active',approvedAt} — but NOT `updatedAt`.
+       sokoni-providers.js reads the registry with orderBy('updatedAt','desc') and
+       Firestore omits documents missing the ordering field, so "approve" could
+       leave a provider approved and permanently invisible. And when no provider
+       document existed at all (every business registered through hub-register.js
+       or provider.html), the forEach body simply never ran: the application went
+       green and nothing whatsoever was published.
+
+       `applicationDecide` is the single server-authoritative decision path. It
+       projects the applicant onto the right registry, stamps `updatedAt`, builds
+       the search index in the same commit, grants the account role and notifies
+       the applicant — atomically, idempotently, and with a receipt this UI shows.
+       'republish' re-runs the projection for an application that was approved
+       before this engine existed. */
+    /* Rows currently rendered in the verifications table, so an action can
+       resolve its application by index instead of by an interpolated id. */
+    var _verifRows = [];
+
+    async function verifAction(action, rowIndex){
+      var row = _verifRows[rowIndex];
+      if(!row){ showToast('Application not found — refresh the list.', true); return; }
+      var appId = row.id;
+      var OPS = { approve:'approve', reject:'reject', info:'request_info' };
+      var reason = null;
+      if(action==='reject'){
+        reason = prompt('Reason for rejection (sent to the applicant, optional):');
+      }
       try {
-        /* Server clock — verification decisions are audited events. */
-        var f = await getFS();
+        if(!window.sokoniCallable) throw new Error('Callable bridge unavailable — reload the page.');
+
+        if(action==='republish'){
+          var recon = window.sokoniCallable('applicationReconcile');
+          var rr = await recon({ applicationId: appId });
+          var w = (rr && rr.data && rr.data.results && rr.data.results[0]) || {};
+          if(w.ok === false) throw new Error(w.reason || w.error || 'projection failed');
+          showToast('Published. ' + _receiptText(w));
+          return;
+        }
+
+        var fn = window.sokoniCallable('applicationDecide');
+        var res = await fn({ applicationId: appId, decision: OPS[action], reason: reason || null });
+        var d = (res && res.data) || {};
         if(action==='approve'){
-          await updateDoc('applications', appId, { status:'approved', approvedAt:f.serverTimestamp() });
-          if(uid){
-            /* Try to update provider doc if it exists */
-            var q = f.query(f.collection(db,'providers'), f.where('uid','==',uid), f.limit(1));
-            var snap = await f.getDocs(q);
-            snap.forEach(async function(d){ await f.updateDoc(d.ref,{verified:true,status:'active',approvedAt:f.serverTimestamp()}); });
-          }
-          showToast('Application approved and provider verified.');
+          showToast('Approved — ' + _receiptText(d.receipt || {}));
         } else if(action==='reject'){
-          await updateDoc('applications', appId, { status:'rejected', rejectedAt:f.serverTimestamp() });
           showToast('Application rejected.');
         } else {
-          await updateDoc('applications', appId, { status:'info_requested', infoRequestedAt:f.serverTimestamp() });
           showToast('More info requested from applicant.');
         }
-      } catch(e){ showToast('Action failed: '+e.message, true); }
+      } catch(e){
+        /* Never report success on a failed decision. */
+        console.error('[Moderation] decision failed', e);
+        showToast('Action failed: '+(e.message||'unknown error'), true);
+      }
+    }
+
+    /* Turn the server's projection receipt into one honest line: which registry
+       document was written, and what still has to be collected. */
+    function _receiptText(r){
+      if(!r || !r.writes || !r.writes.length) return 'no registry change.';
+      return r.writes.map(function(w){
+        var s = w.collection + ' ' + w.action;
+        if(w.documentsMissing && w.documentsMissing.length){
+          s += ' (still to collect: ' + w.documentsMissing.join(', ') + ')';
+        }
+        return s;
+      }).join('; ');
     }
 
     /* ================================================================
