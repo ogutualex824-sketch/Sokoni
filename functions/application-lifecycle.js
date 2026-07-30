@@ -363,9 +363,18 @@ async function projectProvider(db, app, uid, approved) {
   const name = _sanText(app.name || app.businessName || app.fullName, 160);
   const description = _sanText(app.description || app.bio || app.services || app.about, 2000);
   const categoryLabel = _sanText(app.categoryLabel || app.type, 120);
-  /* Both the machine slug and the human label are indexed: a customer searches
-     "cleaning" (slug) or "housekeeping" (label) and must find the same firm. */
-  const categories = [app.category, app.categoryLabel, app.subcategory, app.professionalType]
+  /* Both the machine slug and the human label are indexed, because they carry
+     different words and customers type the words. `categories` is one of the
+     fields buildSearchTerms reads; `categoryLabel` is NOT — so the label has to
+     be a member of this array or it never reaches the index.
+
+     This must use the RESOLVED `categoryLabel` above, not `app.categoryLabel`.
+     Kasindi's application carried category:'Service Provider' with the useful
+     words in `type` ('Cleaning Company / Housekeeper') and no `categoryLabel`
+     field at all; reading the raw field indexed only "Service Provider", so a
+     search for "cleaning" did not find a cleaning company. Verified against the
+     live document. */
+  const categories = [app.category, categoryLabel, app.subcategory, app.professionalType]
     .map(c => _sanText(c, 120)).filter(Boolean)
     .filter((c, i, a) => a.findIndex(x => x.toLowerCase() === c.toLowerCase()) === i);
 

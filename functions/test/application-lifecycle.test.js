@@ -373,6 +373,31 @@ describe('projectDriver / projectProvider — written shape', () => {
     expect(r.action).toBe('created');
   });
 
+  test('the human category label reaches the search index', async () => {
+    /* Regression: `categories` was built from the RAW app.categoryLabel, which
+       Kasindi's application did not have — its useful words were in `type`
+       ('Cleaning Company / Housekeeper') while `category` was the generic
+       'Service Provider'. Only "Service Provider" got indexed, so a customer
+       searching "cleaning" did not find a cleaning company. Caught by verifying
+       discoverability against the live document rather than trusting the write.
+       `categoryLabel` is not a field buildSearchTerms reads, so the label MUST be
+       a member of `categories`. */
+    const db = stubDb();
+    await L.projectProvider(db, KASINDI, 'WLt0Voww', true);
+    const p = byPath(db, 'providers/WLt0Voww').data;
+    expect(p.categories).toContain('Cleaning Company / Housekeeper');
+    ['cleaning', 'company', 'housekeeper', 'service', 'provider']
+      .forEach((t) => expect(p.searchableTerms).toContain(t));
+  });
+
+  test('label-only applications still index their trade', async () => {
+    /* type carries the trade, category is absent entirely. */
+    const db = stubDb();
+    await L.projectProvider(db, { applicationId: 'A', name: 'X', type: 'Plumber' }, 'u', true);
+    const p = byPath(db, 'providers/u').data;
+    expect(p.searchableTerms).toContain('plumber');
+  });
+
   test('re-approving does not reset a live provider rating or history', async () => {
     const db = stubDb();
     db._docs['providers/WLt0Voww'] = {
