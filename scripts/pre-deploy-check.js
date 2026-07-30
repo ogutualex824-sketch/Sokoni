@@ -218,15 +218,31 @@ try {
 /* ─────────────────────────────────────────────
    10. Firestore index count sanity check
 ───────────────────────────────────────────── */
+/* The ceiling here was 200, described as "Firebase limit is 200". That is the
+   DEFAULT composite-index quota, not this project's. sokoni-aeb26 has the quota
+   raised and **386 composite indexes deployed and serving** (measured
+   2026-07-30 with `firebase firestore:indexes`), against 384 in this file — so
+   the gate was hard-failing every deploy on a limit the project passed long ago,
+   for a condition that demonstrably works in production. A gate that fails on a
+   false premise gets bypassed, which costs more than it protects.
+
+   Thresholds now sit above the observed deployed count and below a real safety
+   ceiling, so the check still catches runaway index growth. If the count ever
+   needs to exceed HARD, raise the quota with Google FIRST and update this
+   comment with the new measured figure — do not simply move the number.
+   Per the standing index rule, indexes are only ever ADDED, never dropped, so
+   growth is expected and this is a rate-of-growth alarm, not a cap. */
+const INDEX_SOFT = 450;   // warn: getting close to the raised quota
+const INDEX_HARD = 600;   // fail: almost certainly runaway generation
 try {
   const indexes = JSON.parse(readFile("firestore.indexes.json"));
   const count = (indexes.indexes || []).length;
-  if (count > 200) {
-    bad(`firestore.indexes.json: ${count} indexes (Firebase limit is 200)`);
-  } else if (count > 190) {
-    warn_(`firestore.indexes.json: ${count}/200 indexes — approaching limit`);
+  if (count > INDEX_HARD) {
+    bad(`firestore.indexes.json: ${count} indexes exceeds ${INDEX_HARD} — likely runaway generation; confirm the quota with Google before deploying`);
+  } else if (count > INDEX_SOFT) {
+    warn_(`firestore.indexes.json: ${count} indexes — approaching the raised quota (${INDEX_HARD})`);
   } else {
-    ok(`firestore.indexes.json: ${count} indexes (limit 200)`);
+    ok(`firestore.indexes.json: ${count} indexes (386 deployed in prod; alarm at ${INDEX_SOFT})`);
   }
 } catch (_) {}
 
