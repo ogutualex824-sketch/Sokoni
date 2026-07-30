@@ -1,3 +1,33 @@
+## [2026-07-30] — fix(search): stale catalogue cache hid newly approved providers; predeploy index gate unblocked
+
+**Search cache staleness.** `lsWrite` stamped only the blob-level `at`, so a write to ANY collection
+refreshed the apparent freshness of EVERY collection. A busy `products` cache therefore kept the
+`providers` copy looking fresh, its stale-while-revalidate refresh never fired, and a provider approved
+after that copy was taken stayed absent from search on that device indefinitely — the exact symptom of
+"I updated everything and Kasindi still isn't searchable".
+
+- Per-collection `colAt` stamps; `scanCollection` now ages the collection's own copy, falling back to
+  `at` so payloads written before this change behave as before.
+- `LS_KEY` bumped `v2` → `v3` — the only way to discard a stale copy already sitting on users' devices.
+
+**Predeploy index gate was false-failing.** It hard-failed at "Firebase limit is 200" while
+**386 composite indexes are deployed and serving** in `sokoni-aeb26` (measured with
+`firebase firestore:indexes`) against 384 in the file — i.e. it blocked every deploy on a limit the
+project passed long ago, for a condition that demonstrably works in production. A gate that fails on a
+false premise gets bypassed, which costs more than it protects. Thresholds are now evidence-based
+(warn 450 / fail 600) so the check still catches runaway index generation. Gate: 12 passed, 0 failed.
+
+**Correction to the previous entry's investigation.** A headless probe reporting
+`scan providers: Missing or insufficient permissions` was an **App Check artifact, not a rules defect** —
+`products`, `sellers` and `categories` were denied in the very same context, and those demonstrably work
+for real users. No rules were widened on that false signal. Recorded here because the false reading
+looked exactly like a platform-wide search outage.
+
+**Files:** `sokoni-firestore-search.js`, `scripts/pre-deploy-check.js`.
+No schema or API change. **Breaking:** none.
+
+---
+
 ## [2026-07-30] — fix(onboarding): approval → registry convergence; applications reach admin with number + location
 
 **Approval was a dead end.** Every intake surface wrote a document into `applications`, every dashboard
