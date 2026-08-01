@@ -1,3 +1,62 @@
+## [2026-08-01] — findings(admin): the 29 blank panels are 112 duplicate element ids
+
+Priority 1 asked for loading/empty/error/retry states on 29 orphan admin containers. Classifying them
+first — as the rules require, since wiring them blind would be a speculative fix — showed that adding
+states would not have fixed a single one. **The element being rendered into is not the element on
+screen.**
+
+### Root cause
+
+`admin.html` carries **two parallel layouts for the same data**:
+
+- a consolidated sub-tab layout (~L880–1300): `ord-sub-disputes`, `ride-sub-delivery`, `biz-sub-*`
+- a pane-per-topic layout (~L2000–2400): `adm-pane-disputes`, `adm-pane-delivery`, …
+
+The renderers feed one of them. Everything in the other is permanently blank. `#bizAppsGrid` — the P0
+fixed earlier today — was simply the instance someone happened to report.
+
+**`showPane()` does `document.getElementById('adm-pane-' + name)`, which returns the FIRST match and
+nothing else.** Five pane ids exist twice — `orders`, `properties`, `rides`, `settings`, `users` — so
+the second copy of each, and everything inside it, can never be displayed.
+
+Worse where a renderer straddles the two. `renderProperties()` writes stats to `#propStats` (first
+occurrence L1210, in the sub-tab layout) and the table to `#bnbBody` (L2083, in the unreachable
+pane). **The Properties pane a human can open shows stats above an empty table, while the table data
+is written into a pane nobody can reach.** `deliveryStats` and `communityStats` collide the same way.
+
+### Scale
+
+`scripts/audit-duplicate-ids.js` (new): **112 duplicate ids in `admin.html`**.
+`super-admin.html`, `moderation.html`, `trust-safety.html`, `verification-admin.html` and
+`index.html` are **clean** — this is one file's problem.
+
+Among them: **`#newPin`, `#newAdminPw`, `#patternCanvasNew`** — credential inputs. A duplicated
+credential field means the code may read a different element than the administrator typed into.
+Flagged for the security review; not touched here.
+
+### What shipped, and what deliberately did not
+
+Shipped: the audit, plus a **ratchet** wired into `predeploy`. The current count is the baseline and
+the check fails only when it goes **up**. Failing the build on 112 today would block every deploy
+until a multi-day cleanup lands, which is how a gate ends up disabled and then ignored. The number may
+fall freely; it may never rise.
+
+Mutation-tested both directions: adding one duplicate reports `112 -> 113` and fails; removing one
+reports `112 -> 111` and passes with a note to re-baseline. A bug in the flag parser was caught doing
+this — `--update-baseline` was being scanned as a filename, which wrote an empty baseline that would
+have made all 112 real duplicates look like fresh regressions. Fixed before the baseline was recorded.
+
+**Not shipped: the de-duplication itself.** Removing a layout means deciding, per pane, which copy is
+canonical and relocating any fed container out of the copy being deleted. Done carelessly it deletes a
+working admin pane. That is the next commit, one pane per commit, and it is not something to rush at
+the end of a long session.
+
+Files: `scripts/audit-duplicate-ids.js` (new), `scripts/duplicate-ids-baseline.json` (new),
+`package.json`.
+Database changes: none. API changes: none. Breaking changes: none. No runtime code changed.
+
+---
+
 ## [2026-08-01] — chore(auth): authorization is claim-based, and now gated to stay that way
 
 Prerequisite for renaming the administrative identities:
