@@ -1,3 +1,39 @@
+## [2026-08-02] — audit(security): admin credential inputs — risk report, no code changed
+
+Audit only. Full report: `docs/ADMIN_CREDENTIAL_RISK_REPORT.md`.
+
+**Severity depends on what the lock protects, so that was established first.** `admin.html` has **two
+independent gates**: the Firebase claim check (`getIdTokenResult(true)` + `firestore.rules isAdmin()`),
+which protects **all data**, and the manager lock (PIN/pattern/password hashed into `localStorage`),
+which protects **the console UI on that device**. Defeating the lock reveals the admin *shell*; every
+read and write inside still needs a valid ID token carrying an admin claim, which the lock cannot
+grant. That is the correct architecture and it caps the blast radius of everything below.
+
+| # | finding | severity |
+|---|---|---|
+| 1 | **Unsalted, single-round SHA-256.** A 4-digit PIN is 10,000 values — every hash is precomputable in under a second, so the stored hash is equivalent to storing the PIN | HIGH (within the lock's scope) |
+| 2 | The hash is readable by any script on the origin, so XSS or device access yields the PIN itself, not a hash | HIGH |
+| 3 | Minimums are low — 4 digits, 6 characters, no complexity, no unlock rate limit | MEDIUM |
+| 4 | **No re-authentication before a credential change.** `changePin()`/`changePassword()` never ask for the current credential, so anyone at an unlocked console can silently replace the lock | MEDIUM |
+| 5 | Duplicated credential inputs | **RESOLVED** in `631b632` |
+
+**Already correct, and worth recording so it is not "fixed" later by mistake:** `autocomplete="new-password"`
+on both inputs; values cleared after submit; the raw value never logged; **no hardcoded default
+credentials** (`DEFAULTS = {}`, with first-run enrolment forced when no hash exists — a shipped default
+PIN would have been the worst finding here and it is absent); inputs are `type="password"`.
+
+**Checked and not applicable:** clipboard (no handler touches these fields), browser cache
+(`type="password"` is not cached, and the page is not form-posted), logging (nothing writes these
+values anywhere), password-manager compatibility (`new-password` is the correct signal).
+
+**Recommended order when scheduled:** re-authentication before a credential change (cheapest, no
+migration) → PBKDF2 with a per-install salt (needs a re-enrolment path for existing hashes) → raise
+minimums and rate-limit unlock attempts.
+
+Files: `docs/ADMIN_CREDENTIAL_RISK_REPORT.md` (new). **No authentication code changed.**
+
+---
+
 ## [2026-08-02] — refactor(admin): Phase 1 pane 5 — Settings, unreachable duplicate removed
 
 **Last of the five panes.** UI cleanup only.
