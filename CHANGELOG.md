@@ -1,3 +1,30 @@
+## [2026-08-01] — feat(booking): canonical refund terminal (Slice 2 step 3) — completes the lifecycle
+
+The customer "Request Refund" resolution, routed through the ONE existing money engine. No new
+refund/payment logic. Completes the lifecycle: ACTION_REQUIRED → { reschedule | refund→cancel }.
+
+- **`functions/booking-resolution.js`** — `customerRequestRefund` (single refund authority). Money moves
+  ONLY via `provider-ops._disburseHeldFunds` with `by:'provider'` (FULL refund — the provider caused the
+  change; no deposit forfeit). Freezes negotiation (`resolution.refundLock`; `_propose`/`_respond` now reject
+  while locked), first-claim-wins txn, then cancels the booking + frees the slot lock + deletes the calendar
+  mirror, sets `resolution=CANCELLED`, appends the immutable chain CUSTOMER_REQUESTED_REFUND → REFUND_STARTED
+  → REFUND_COMPLETED → BOOKING_CANCELLED, notifies customer (refunded) + provider (cancelled). Guardrailed +
+  **resumable/idempotent** (completed→reject; already-refunded/cancelled→alreadyDone, no double credit).
+- **`functions/provider-ops.js`** — export `_disburseHeldFunds` + `_slotLockRef` (the reused engine + slot ref;
+  no behavior change) via the module.exports at the file end (the earlier `exports.` lines were being wiped).
+- **`functions/provider-dispatch.js`** — registered `customerRequestRefund`.
+- **`sokoni-booking-resolution.js`** — customer card gains a "Request refund" button (confirm dialog).
+- **`functions/qa-booking-refund-e2e.js`** (new) — emulator-proven **11/11** (full refund to wallet, cancel,
+  CANCELLED, audit chain, idempotent no-double-refund, ownership, negotiation frozen, unpaid→refunds 0).
+
+Note: an availability-affected booking is `confirmed`+`paid_held` (not yet settled), so the before-service
+release path applies; the after-settlement reversal (`order-settlement.reverseSettledOrder`) is for the
+completed-then-refunded edge and is left to that engine (a completed booking can't reach this path).
+Deploy: `functions:providerDispatch` + hosting. Breaking changes: none. FOLLOW-ON: Step 4 freeze provider
+availability edits on ACTION_REQUIRED, escalation scheduler, emergency closure, analytics.
+
+---
+
 ## [2026-08-01] — feat(booking): resolution UI + negotiation timeline (Slice 2 step 2b)
 
 Wires the (already-proven) negotiation engine to real UI on both sides + a timeline that renders the

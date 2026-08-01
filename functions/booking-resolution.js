@@ -34,6 +34,7 @@ const EVT = {
   AFFECTED: 'BOOKING_AFFECTED', CUST_NOTIFIED: 'CUSTOMER_NOTIFIED', PROPOSED: 'PROVIDER_PROPOSED_RESCHEDULE',
   CUST_ACCEPTED: 'CUSTOMER_ACCEPTED', CUST_DECLINED: 'CUSTOMER_DECLINED', CUST_PROPOSED: 'CUSTOMER_PROPOSED_TIME',
   PROV_ACCEPTED: 'PROVIDER_ACCEPTED_TIME', PROV_DECLINED: 'PROVIDER_DECLINED', RESCHEDULED: 'BOOKING_RESCHEDULED',
+  CUST_REQUESTED_REFUND: 'CUSTOMER_REQUESTED_REFUND', REFUND_STARTED: 'REFUND_STARTED',
   CANCELLED: 'BOOKING_CANCELLED', REFUND_DONE: 'REFUND_COMPLETED',
 };
 const REASONS = ['sick', 'emergency', 'venue_unavailable', 'equipment_failure', 'personal_emergency', 'weather', 'other'];
@@ -165,6 +166,7 @@ async function _propose(req, party) {
   const b = bSnap.data();
   if ((party === 'provider' ? b.providerId : b.customerUid) !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
   if (!(b.resolution && b.resolution.status === RES.ACTION_REQUIRED)) throw new HttpsError('failed-precondition', 'This booking is not awaiting resolution.');
+  if (b.resolution.refundLock) throw new HttpsError('failed-precondition', 'A refund is in progress — negotiation is locked.');
   const cur = b.resolution.proposal;
   if (cur && /^pending_/.test(cur.status || '')) throw new HttpsError('failed-precondition', 'A proposal is already pending — resolve it first.');
   const durationMins = Math.max(15, Number(b.durationMins) || 30);
@@ -189,6 +191,7 @@ async function _respond(req, party) {
   if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
   const b = bSnap.data();
   if ((party === 'provider' ? b.providerId : b.customerUid) !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  if (b.resolution && b.resolution.refundLock) throw new HttpsError('failed-precondition', 'A refund is in progress — negotiation is locked.');
   const prop = b.resolution && b.resolution.proposal;
   const expectStatus = party === 'customer' ? 'pending_customer' : 'pending_provider';
   const expectBy = party === 'customer' ? 'provider' : 'customer';   // you respond to the COUNTERPARTY's proposal
@@ -258,6 +261,78 @@ _h.customerListAffectedBookings = async (req) => {
     .filter(function (a) { return a.resolutionStatus === RES.ACTION_REQUIRED; })
     .sort(function (a, b) { return (a.deadlineTs || 0) - (b.deadlineTs || 0); });
   return { count: items.length, items: items };
+};
+
+/* Step 3 — THE single customer refund authority. Money moves ONLY through the canonical engine
+   (`provider-ops._disburseHeldFunds`); a provider-caused change refunds in FULL (`by:'provider'`).
+   Freezes negotiation (refundLock), cancels the booking + frees the slot, sets resolution CANCELLED,
+   appends immutable events, notifies both parties. Guardrailed + resumable (no duplicate refunds). */
+_h.customerRequestRefund = async (req) => {
+  const uid = _uid(req);
+  const bookingId = _san((req.data || {}).bookingId, 128);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId required.');
+  const bRef = db.collection('providerBookings').doc(bookingId);
+  const bSnap = await bRef.get();
+  if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b = bSnap.data();
+  if (b.customerUid !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  const parts = { providerId: b.providerId, customerUid: uid };
+  const alreadyRefunded = b.paymentStatus === 'refunded';
+  const alreadyCancelled = b.status === 'cancelled' || (b.resolution && b.resolution.status === RES.CANCELLED);
+
+  /* ── guardrails: return existing state, never duplicate ── */
+  if (b.status === 'completed') throw new HttpsError('failed-precondition', 'A completed booking cannot be refunded here.');
+  if (alreadyRefunded && alreadyCancelled) return { ok: true, alreadyDone: true, status: RES.CANCELLED };
+  if (!alreadyRefunded && b.resolution && b.resolution.refundLock) return { ok: true, inProgress: true };
+  if (!alreadyRefunded && !(b.resolution && b.resolution.status === RES.ACTION_REQUIRED)) {
+    throw new HttpsError('failed-precondition', 'This booking is not awaiting resolution.');
+  }
+
+  const { _disburseHeldFunds, _slotLockRef } = require('./provider-ops');
+  let refundResult = null;
+
+  if (!alreadyRefunded) {
+    /* 1 — freeze negotiation (first-claim-wins) + start events */
+    const claimed = await db.runTransaction(async (t) => {
+      const s = await t.get(bRef); const c = s.data();
+      if (c.status === 'cancelled' || c.paymentStatus === 'refunded' || (c.resolution && c.resolution.refundLock)) return false;
+      t.update(bRef, { 'resolution.refundLock': true, 'resolution.refundStartedAt': FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
+      return true;
+    });
+    if (!claimed) return { ok: true, inProgress: true };
+    const b0 = db.batch();
+    _batchEvent(b0, bookingId, EVT.CUST_REQUESTED_REFUND, uid, parts, {});
+    _batchEvent(b0, bookingId, EVT.REFUND_STARTED, uid, parts, {});
+    await b0.commit();
+
+    /* 2 — move money via the ONE canonical engine (idempotent; only paid_held disburses) */
+    try { refundResult = await _disburseHeldFunds(b, bRef, { by: 'provider', isNoShow: false }); }
+    catch (e) {
+      await bRef.update({ 'resolution.refundLock': FV.delete() }).catch(function () {});   /* release lock → allow retry */
+      throw new HttpsError('internal', 'Refund could not be completed. Please try again.');
+    }
+  }
+
+  /* 3 — cancel booking + free slot + resolution CANCELLED + events (idempotent finish) */
+  const batch = db.batch();
+  batch.update(bRef, {
+    status: 'cancelled', cancelledAt: FV.serverTimestamp(), cancelledBy: 'system', cancelReason: 'availability_refund',
+    resolution: { status: RES.CANCELLED, reason: (b.resolution && b.resolution.reason) || null, resolvedAt: FV.serverTimestamp() },
+    updatedAt: FV.serverTimestamp(),
+  });
+  const lockRef = _slotLockRef(b.providerId, b);
+  if (lockRef) batch.delete(lockRef);
+  batch.delete(db.collection('providerCalendar').doc(bookingId));
+  batch.set(db.collection('affectedBookings').doc(bookingId), { resolutionStatus: RES.CANCELLED, refundPending: false, reschedulePending: false, resolvedAt: FV.serverTimestamp(), proposal: FV.delete() }, { merge: true });
+  _batchEvent(batch, bookingId, EVT.REFUND_DONE, uid, parts, { refundCents: (refundResult && refundResult.refundC) || 0 });
+  _batchEvent(batch, bookingId, EVT.CANCELLED, uid, parts, {});
+  await batch.commit();
+
+  /* 4 — notify both parties */
+  await _notifySafe({ uid: uid, type: 'booking_refund_completed', title: 'Refund completed', body: 'Your booking was cancelled and refunded.', deepLink: '/my-bookings', group: 'bookings', dedupeKey: 'refund_' + bookingId, data: { bookingId: bookingId } });
+  await _notifySafe({ uid: b.providerId, type: 'booking_cancelled', title: 'Booking cancelled', body: 'A booking was cancelled and the customer refunded following your availability change.', deepLink: '/provider-dashboard', group: 'bookings', dedupeKey: 'cancelled_' + bookingId, data: { bookingId: bookingId } });
+
+  return { ok: true, status: RES.CANCELLED, refundCents: (refundResult && refundResult.refundC) || 0 };
 };
 
 module.exports = { _h, RES, EVT, REASONS, DEADLINE_HOURS };

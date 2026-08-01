@@ -99,6 +99,7 @@
         A.push('<span style="font-size:12px;color:rgba(255,255,255,.55);">The provider will propose a new time — or</span>');
         A.push('<button data-act="cust-suggest" data-id="' + id + '" style="' + BTN + 'background:rgba(255,255,255,.05);color:#fff;">Suggest a time</button>');
       }
+      A.push('<button data-act="cust-refund" data-id="' + id + '" style="' + BTN + 'background:transparent;color:#ff8098;border-color:rgba(255,84,112,.35);">Request refund</button>');
     } else { /* provider */
       if (p && p.by === 'customer' && p.status === 'pending_provider') {
         A.push('<button data-act="prov-accept" data-id="' + id + '" style="' + BTN_P + '">Accept customer’s time</button>');
@@ -147,6 +148,10 @@
       else if (act === 'cust-decline') { await _dispatch({ op: 'customerRespondToProposal', bookingId: id, action: 'decline' }); _toast('Declined. The provider can propose another time.', true); }
       else if (act === 'prov-accept') { await _dispatch({ op: 'providerRespondToCustomerProposal', bookingId: id, action: 'accept' }); _toast('Accepted — booking rescheduled.', true); }
       else if (act === 'prov-decline') { await _dispatch({ op: 'providerRespondToCustomerProposal', bookingId: id, action: 'decline' }); _toast('Declined.', true); }
+      else if (act === 'cust-refund') {
+        if (!window.confirm('Request a refund? Your booking will be cancelled and the amount refunded to your SOKONI wallet. This cannot be undone.')) return;
+        await _dispatch({ op: 'customerRequestRefund', bookingId: id }); _toast('Refund completed — your booking was cancelled.', true);
+      }
       else if (act === 'cust-suggest' || act === 'prov-propose') {
         var t = await _pickTime(act === 'prov-propose' ? 'Propose a new time' : 'Suggest a time');
         if (!t) return;

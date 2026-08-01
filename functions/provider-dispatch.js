@@ -87,6 +87,8 @@ const ROUTES = [
   'providerRespondToCustomerProposal',
   'bookingGetTimeline',
   'customerListAffectedBookings',
+  // booking-resolution (Slice 2 step 3) — canonical refund terminal (reuses _disburseHeldFunds)
+  'customerRequestRefund',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');

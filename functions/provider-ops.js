@@ -794,4 +794,6 @@ _h.providerToggleService = async (req) => {
   return { success: true, active: next };
 };
 
-module.exports = { _h };
+/* _disburseHeldFunds + _slotLockRef are reused by the booking resolution engine (Step 3 refund):
+   the ONE place booking money moves, and the canonical slot-lock ref. No behavior change. */
+module.exports = { _h, _disburseHeldFunds, _slotLockRef };
