@@ -1,3 +1,66 @@
+## [2026-08-01] — refactor(admin): Orders is Firestore-only — legacy cluster removed
+
+**Root cause.** Once `_renderAdmOrders` became the sole renderer, the legacy localStorage cluster —
+`renderOrders()`, `flagDispute()`, `resolveOrderDispute()`, `_doResolveDispute()` — was reachable only
+from markup that `renderOrders` itself emitted. Nothing else called it.
+
+It had to be **removed** rather than merely left uncalled: `flagDispute` wrote an order status to
+`localStorage` and nowhere else, so any path that reached it produced a change Firestore never saw.
+A working-looking dispute button sitting in the source is how that comes back.
+
+**Reachability proof, per function, before deleting**
+
+| function | direct calls | HTML handlers | dynamic (`window[…]`, string) | exports |
+|---|---|---|---|---|
+| `renderOrders` | 0 | 0 | 0 | 0 |
+| `flagDispute` | 0 | 0 | 0 | 0 |
+| `resolveOrderDispute` | 0 | 0 | 0 | 0 |
+| `_doResolveDispute` | 0 | 0 | 0 | 0 |
+
+Every surviving mention is a comment. The one apparent live reference — `admin.html:6479` — is the
+banner comment *"ORDERS PANE — replace existing renderOrders"*. Other pages define their own
+`renderOrders`; each HTML page is a separate JS realm, so they are unaffected.
+
+The removal refused to run unless the first and last line of each range matched the expected text.
+
+**A withholding-tax report was reading a dead source.** `renderWHT()` computed from
+`localStorage.getItem('sokoniOrders')`. That key is now never written — and *before* this cleanup it
+was only ever written as a side effect of clicking a dispute button, so on any device where nobody had
+done that, **the WHT report was computed from an empty array and looked entirely normal**. Repointed
+at `window._admOrders`, the live Firestore snapshot. Fixed here rather than deferred because this
+commit is what made it deterministic.
+
+`D.orders` no longer boots from `localStorage`; `_renderAdmOrders` syncs it for the stat counters.
+
+**Orders now has:** one listener · one renderer · one filter · one dispute path
+(`admFileDispute` / `openDisputeModal` / `openOverride`) · **one write path — Firestore**.
+`localStorage.setItem('sokoniOrders')` occurrences: **0**. The only remaining mention is `clearDemo()`,
+which removes legacy residue from older devices — correct to keep.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | **783 passed, 17 suites** |
+| applications render contract | 25/25 |
+| inline script syntax | 9 blocks, 0 errors |
+| definitions of the four functions | 4 → **0** |
+| `getElementById('ordersBody')` writers | 3 → **2** (renderer + its own filter, one pipeline) |
+| `sokoniOrders` writes | **0** |
+| `<div>` balance | 0 → 0 |
+| net lines removed | 23 |
+| predeploy | all gates green |
+
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+Remaining duplicate ids: **107**. Remaining unreachable functions in the Orders pane: **0**.
+Next pane: **Users**.
+
+---
+
 ## [2026-08-01] — fix(admin): one orders renderer — and a lost-write window closed
 
 **Root cause.** Four functions wrote `#ordersBody` / `#ordersCount`, forming two competing pipelines:

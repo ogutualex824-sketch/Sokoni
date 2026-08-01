@@ -2895,7 +2895,7 @@ function ls(k){ try{ return JSON.parse(localStorage.getItem(k))||[]; }catch(e){ 
 function loadAll(){
   /* ── Core marketplace ── */
   D.products    = ls('sellerProducts');
-  D.orders      = ls('sokoniOrders');
+  D.orders      = [];   /* Firestore-only; _renderAdmOrders syncs this for the stat counters. */
   D.posOrders   = ls('sokoniPOSOrders');
   D.providers   = ls('sokoniServiceProviders');
   D.apps        = ls('sokoniPendingApplications');
@@ -4400,27 +4400,18 @@ function previewBc(){
 /* ════════════════════════════════
    ORDERS
 ════════════════════════════════ */
-function renderOrders(list){
-  var el=document.getElementById('ordersCount'); if(el) el.textContent=list.length;
-  var body=document.getElementById('ordersBody'); if(!body) return;
-  if(!list.length){ body.innerHTML=emptyRow(7,'🛒','No orders yet'); return; }
-  body.innerHTML=list.map(function(o,i){
-    var st=o.status||'pending';
-    var bc=st==='delivered'?'b-green':st==='cancelled'||st==='disputed'||st==='refunded'?'b-red':st==='processing'?'b-blue':'b-yellow';
-    return '<tr>'
-      +'<td style="font-size:10px;font-family:monospace;color:#71ff00;">#'+(o.id||i)+'</td>'
-      +'<td>'+h(o.buyerName||o.buyer||'Guest')+'</td>'
-      +'<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+h(o.productName||'—')+'</td>'
-      +'<td><b>KES '+(o.total||o.amount||0).toLocaleString()+'</b></td>'
-      +'<td><span class="badge '+bc+'">'+st+'</span></td>'
-      +'<td style="font-size:10px;color:rgba(255,255,255,0.3);">'+h(o.date||o.createdAt||'—')+'</td>'
-      +'<td style="display:flex;gap:4px;flex-wrap:wrap;">'
-        +(st==='disputed'?'<button class="abtn abtn-green" onclick="resolveOrderDispute('+i+')">⚖️ Resolve</button>':'')
-        +(st!=='disputed'&&st!=='cancelled'&&st!=='delivered'?'<button class="abtn abtn-yellow" onclick="flagDispute('+i+')">🚨 Flag</button>':'')
-      +'</td>'
-    +'</tr>';
-  }).join('');
-}
+/* The legacy localStorage Orders cluster lived here: renderOrders(), plus the
+   dispute handlers flagDispute(), resolveOrderDispute() and _doResolveDispute()
+   that only its own rows could reach.
+
+   It was removed once _renderAdmOrders became the sole renderer. The reason it
+   had to go rather than merely stop being called: flagDispute wrote an order
+   status to localStorage and nowhere else, so any path that reached it produced
+   a change Firestore never saw. Leaving a working-looking dispute button in the
+   source is how it comes back.
+
+   Orders are now Firestore-only: one listener, one renderer, one filter, one
+   dispute path (admFileDispute / openDisputeModal / openOverride). */
 function renderPOS(list){
   var cnt=document.getElementById('posCount'); if(cnt) cnt.textContent=list.length;
   var rev=list.reduce(function(s,o){return s+(o.total||0);},0);
@@ -4459,21 +4450,7 @@ function filterPOS(){
    inline oninput/onchange handler resolves through window — so the newer,
    Firestore-backed filter always won. Kept as a note rather than a stub because a
    shadowed duplicate is exactly what made the orders table behave inconsistently
-   depending on whether you had typed in the search box. */function flagDispute(i){
-  D.orders[i].status='disputed';
-  localStorage.setItem('sokoniOrders',JSON.stringify(D.orders));
-  renderOrders(D.orders); renderStats(); toast('🚨 Order flagged as disputed');
-}
-function resolveOrderDispute(i){
-  _skConfirm('Resolve in favour of BUYER (refund)?',
-    function(){ _doResolveDispute(i,true); },
-    function(){ _doResolveDispute(i,false); });
-}
-function _doResolveDispute(i, refund){
-  D.orders[i].status=refund?'refunded':'resolved';
-  localStorage.setItem('sokoniOrders',JSON.stringify(D.orders));
-  renderOrders(D.orders); renderStats(); toast('⚖️ Dispute '+(refund?'refunded':'resolved'));
-}
+   depending on whether you had typed in the search box. */
 
 
 /* ════════════════════════════════
@@ -4939,8 +4916,13 @@ function renderWHT(){
   if(!body) return;
 
   var period = document.getElementById('finPeriod') ? document.getElementById('finPeriod').value : 'month';
-  var orders = [];
-  try { orders = JSON.parse(localStorage.getItem('sokoniOrders')||'[]'); } catch(e){}
+  /* Firestore, not localStorage. This read sokoniOrders, a key that is now
+     never written — and before the legacy Orders cluster was removed it was
+     only ever written as a side effect of clicking a dispute button, so on any
+     device where nobody had done that the withholding-tax report was computed
+     from an empty array and looked perfectly normal. window._admOrders is the
+     live snapshot the Orders listener maintains. */
+  var orders = Array.isArray(window._admOrders) ? window._admOrders : [];
   var filtered = filterByPeriod(orders, period);
 
   var map = {};
