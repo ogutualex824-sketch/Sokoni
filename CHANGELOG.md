@@ -1,3 +1,55 @@
+## [2026-08-02] — design(inventory): Phase 4 subtypes — most of it already exists
+
+Design only. **Not implemented.** Full note: `docs/INVENTORY_SUBTYPE_DESIGN.md`.
+
+**`functions/inventory-engine.js` is already an append-only movement ledger with balance buckets** —
+precisely the architecture the brief asks for:
+
+```
+inventory_levels/{id}      balances
+inventory_movements/{id}   append-only
+inventory_audit/{id}       audit log
+```
+
+Every adjustment runs in `db.runTransaction`, appends a movement, and never overwrites history. And
+`inventoryReserve` **already transfers between buckets** (`available → reserved`, released with
+`increment(-qty)`) — the bucket-transfer primitive the bottle workflow needs is already written and
+already transactional.
+
+| requested subtype | status |
+|---|---|
+| `filled` · `damaged` · `reserved` · `in_transit` | **already exist** (`available`, `damaged`, `reserved`, `incoming`/`allocated`) |
+| `empty` · `on_loan` | **missing** |
+| `exchanged` | correctly *not* a balance — a movement type, as the brief states |
+
+Movement types `sale`, `damage`, `transfer`, `adjustment`, `reserve`, `release` exist; `refill`,
+`exchange`, `return`, `dispatch`, `receive` do not.
+
+**So Phase 4 is two balance buckets, five movement types, and one generalised transfer** — not a new
+subsystem. That is the outcome the declarative merchant template was written to produce.
+
+### The one thing that must be got right
+
+**`onHand` must exclude `empty` and `onLoan`.** An empty bottle is not sellable stock, and a bottle in
+a customer's kitchen is not on hand at all. Getting this wrong overstates sellable stock — the exact
+failure mode the shared-inventory design exists to prevent.
+
+**The deposit never touches inventory.** It is money: a receipt line item returned through
+`autoOnRefundRequest` (ADR-010). Inventory moves objects; the financial pipeline moves money.
+
+### Verification defined before implementation
+
+The engine's collections are **empty in production**, so correctness cannot be measured against data
+and must be proven by test: conservation across a refill · `onHand` excluding `empty`/`onLoan` · **two
+concurrent tills selling the last bottle, one succeeding and one failing the negative-stock guard** ·
+a movement for every balance change · `damage` requiring a reason.
+
+The concurrency case is the oversell guarantee and matters most.
+
+Files: `docs/INVENTORY_SUBTYPE_DESIGN.md` (new). No runtime code changed.
+
+---
+
 ## [2026-08-02] — decision(ADR-009): `receiptNumber` is canonical; `receiptNo` deprecated and ratcheted
 
 **Decision:** `receiptNumber` and `invoiceNumber` are canonical. `receiptNo` and `invoiceNo` are
