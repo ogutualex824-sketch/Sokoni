@@ -400,3 +400,68 @@ That is Phase 2's first task, and it now has a specific, measurable target rathe
 Each change goes through the A/B protocol against `layoutMs`/`styleMs` (±2% floor), which are both the
 dominant cost and the most sensitive available metrics.
 
+---
+
+## Sprint 2 Phase 2 Task 1 — `_measure()` read/write restructure — **REJECTED**
+
+**Target chosen on authoritative evidence:** `_measure @ sokoni-layout.js:151`, the largest forced
+synchronous style/layout site on the homepage — 1598 ms across 12 invocations, 30% of all forced work,
+attribution CV 0.9%.
+
+### What was changed
+
+1. **Strict read → mutate phases.** `_applyZIndex` was writing `style.zIndex` inside the read phase
+   during bottom-nav auto-detection; deferred to a mutate phase. Verified: no layout read occurs after
+   the first write.
+2. **Dirty-checked custom-property writes.** `_propagate` wrote all ten `:root` custom properties on
+   every pass regardless of change. Since `setProperty` on `:root` invalidates style for every element
+   consuming the variable, twelve passes meant twelve document-wide invalidations, most of them
+   writing an identical value.
+
+The dirty-check was verified correct in isolation: identical values suppressed, changed values always
+applied, final state always equal to the last attempted write.
+
+### Paired A/B result (6 pairs, ±2% floor on style/layout)
+
+| metric | delta | consistency | verdict |
+|---|---|---|---|
+| **styleMs** | **+10.4%** | 1/6 | **regression** |
+| **layoutMs** | **+9.8%** | 2/6 | **regression** |
+| tbt | +6.8% | 1/6 | regression |
+| loadMs | +6.7% | 1/6 | regression |
+
+Wrong direction, far outside the floor, consistent across pairs. **Rejected and reverted.**
+
+### Why — and this is the durable lesson
+
+`shared-header.js` **also writes `--sk-header-h`.**
+
+The dirty-check assumes the writer owns the property. It does not. `sokoni-layout.js` caches "I wrote
+110px", `shared-header.js` then writes a different value, and the cache is now stale: layout.js
+believes the DOM already holds its value and stops correcting it. Elements settle at the wrong offsets
+and generate *more* invalidation than the redundant writes ever cost.
+
+This was not merely a failed optimisation — it was a **correctness bug**, and it happened to be
+detectable only because style/layout were being measured directly. Against TBT alone it would have
+looked like ordinary noise.
+
+> **Rule: never dirty-check a shared CSS custom property.** Caching a write is only safe where
+> ownership is exclusive. `--sk-header-h` has at least two writers, which also explains why it was
+> observed changing 100px → 110px during load in the earlier CLS investigation.
+
+### What remains viable
+
+The two halves were tested together, which was a protocol error on my part — one isolated change, one
+isolated measurement. The **read/write phase separation** (deferring `_applyZIndex`) is independently
+correct, carries no ownership assumption, and is untested on its own. It remains a candidate and should
+be measured alone.
+
+The redundant-write problem is real but needs a different remedy: either establish exclusive ownership
+of `--sk-header-h` (one writer, others read), or verify the live value with `getComputedStyle` before
+skipping — which reintroduces a read and probably costs more than it saves.
+
+**Recommended next target:** `shared-header.js` `_update` + `publishHeaderHeight` (1615 ms combined,
+31% of forced work). The ownership conflict found here suggests these two modules are already fighting
+over the same property, so consolidating that ownership may fix both the correctness hazard and a
+share of the cost.
+
