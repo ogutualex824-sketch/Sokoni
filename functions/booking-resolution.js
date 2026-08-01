@@ -215,6 +215,34 @@ async function _respond(req, party) {
   return { ok: true, status: RES.ACTION_REQUIRED };
 }
 
+/* bookingGetTimeline — participant-scoped read of the resolution overlay + immutable event
+   timeline for one booking. Powers the Negotiation Timeline on both customer and provider views.
+   Admin SDK reads (bypasses rules); we enforce participant access here. */
+_h.bookingGetTimeline = async (req) => {
+  const uid = _uid(req);
+  const bookingId = _san((req.data || {}).bookingId, 128);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId required.');
+  const bSnap = await db.collection('providerBookings').doc(bookingId).get();
+  if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b = bSnap.data();
+  if (b.providerId !== uid && b.customerUid !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  const evSnap = await db.collection('bookingEvents').where('bookingId', '==', bookingId).get();
+  const events = evSnap.docs
+    .map(function (d) { const x = d.data(); return { type: x.type, actor: x.actor || null, ts: Number(x.ts) || 0, data: x.data || {} }; })
+    .sort(function (a, b2) { return a.ts - b2.ts; });
+  const r = b.resolution || null;
+  return {
+    bookingId: bookingId,
+    role: b.providerId === uid ? 'provider' : 'customer',
+    resolutionStatus: r ? r.status : null,
+    reason: r ? r.reason || null : null,
+    proposal: r ? r.proposal || null : null,
+    service: b.service || b.serviceName || null,
+    date: b.date || null, startTime: b.startTime || null,
+    events: events,
+  };
+};
+
 _h.providerProposeReschedule = function (req) { return _propose(req, 'provider'); };     // provider proposes
 _h.customerProposeTime = function (req) { return _propose(req, 'customer'); };            // customer suggests
 _h.customerRespondToProposal = function (req) { return _respond(req, 'customer'); };      // customer accept/decline provider proposal

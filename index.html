@@ -164,6 +164,29 @@
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="stylesheet" href="sokoni-home-v3.css">
+
+  <!-- ══ Pre-paint header space reservation ══════════════════════════════════
+       index.html bakes in a static #sk-top-nav for zero-flash render, but the
+       matching body padding lives inside the stylesheet shared-header.js INJECTS
+       at runtime — and a stylesheet delivered by JS can never be pre-paint. So
+       the page rendered at ~64px of top padding and jumped to 106px once that
+       style landed, pushing everything below down 42px.
+
+       Measured 2026-08-01 on production: body padding-top 64px -> 106px at
+       ~3.2s, moving .glass-hero from top:80 to top:122. That single +42px move
+       was the homepage's entire CLS (0.0491 + 0.0442 of 0.0932) — the hero was
+       blamed by the layout-shift API because it MOVED, not because it resized.
+
+       These values mirror shared-header.js lines 712 / 1151-1177 / 1180-1187
+       exactly. Keep them in sync: if the header's own padding rules change,
+       change these too, or the jump returns.
+       ══════════════════════════════════════════════════════════════════════ -->
+  <style>
+    body.sk-has-search { padding-top: max(106px, calc(106px + env(safe-area-inset-top, 0px))); }
+    @media (max-width: 380px) {
+      body.sk-has-search { padding-top: max(100px, calc(100px + env(safe-area-inset-top, 0px))); }
+    }
+  </style>
 </head>
 
 <body class="sk-has-search">

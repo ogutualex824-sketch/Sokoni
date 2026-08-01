@@ -85,6 +85,7 @@ const ROUTES = [
   'customerRespondToProposal',
   'customerProposeTime',
   'providerRespondToCustomerProposal',
+  'bookingGetTimeline',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');
