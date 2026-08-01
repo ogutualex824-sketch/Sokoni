@@ -28,7 +28,10 @@ const DOW = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', '
 /* Provenance versions — bump when the create semantics or the price source change.
    Stamped on every booking so records stay reproducible without migration. */
 const ENGINE_VERSION  = '1.0.0';   /* this create engine */
-const PRICING_VERSION = '1.1.0';   /* v1.1 (D3): booking now carries declared fee + deposit alongside price (all cents) */
+const PRICING_VERSION = '2.0.0';   /* v2.0: advanced rate cards — server computes the authoritative total via
+                                      service-pricing.computePrice (packages/surcharges/travel/extra-hours/add-ons/
+                                      deposit) and persists a pricingSnapshot. Back-compat: services without a
+                                      `pricing` config still price at svc.price (v1.1 behavior). */
 
 /* ── Shared availability gate ────────────────────────────────────────────────
    Validates a candidate slot against the provider's config (working hours,
@@ -119,11 +122,43 @@ _h.bookingCreateService = async (req) => {
   const svc = svcSnap.data();
   if (svc.providerId !== providerId) throw new HttpsError('failed-precondition', 'Service does not belong to this provider.');
   if (svc.active === false) throw new HttpsError('failed-precondition', 'This service is not available.');
-  const durationMins = Math.max(15, Number(svc.durationMins) || 30);
-  const price       = Math.max(0, Math.round(Number(svc.price) || 0)); /* cents, server-owned */
-  const fee         = Math.max(0, Math.round(Number(svc.fee) || 0));     /* cents — declared per-service fee (D3) */
-  const deposit     = Math.max(0, Math.round(Number(svc.deposit) || 0)); /* cents — declared upfront hold (collected in Phase E) */
   const serviceName = _san(svc.name, 200);
+  const fee         = Math.max(0, Math.round(Number(svc.fee) || 0));     /* cents — declared per-service fee (D3) */
+
+  /* ── Canonical pricing (Slice B): the SERVER computes the authoritative total from the
+     provider's rate card + the customer's SELECTION (packageId / add-ons / duration). The client
+     never sends an amount. Back-compat: a service with no `pricing` config prices at svc.price
+     exactly as before. The computed breakdown is snapshotted on the booking so a later rate-card
+     edit never changes an existing booking (payment/settlement/commission/refund read the snapshot). */
+  const selection = {
+    packageId: _san(d.packageId, 128) || null,
+    addOns: Array.isArray(d.addOns) ? d.addOns.slice(0, 30).map(function (a) {
+      return { id: _san((a && a.id) || a, 128), qty: Math.max(1, Math.min(Number(a && a.qty) || 1, 99)) };
+    }) : [],
+    durationMins: d.durationMins != null ? Math.max(0, Math.round(Number(d.durationMins) || 0)) : undefined,
+  };
+  let durationMins, price, deposit, pricingSnapshot = null;
+  if (svc.pricing && typeof svc.pricing === 'object') {
+    const br = require('./service-pricing').computePrice(svc.pricing, selection, {
+      date: date, startTime: startTime, durationMins: selection.durationMins, distanceKm: Number(d.distanceKm) || 0,
+    });
+    price       = Math.max(0, Math.round(Number(br.totalCents) || 0));
+    deposit     = Math.max(0, Math.round(Number(br.depositCents) || 0));
+    durationMins = Math.max(15, Number(br.durationMins) || Number(svc.durationMins) || 30);
+    const _pkg  = br.breakdown.filter(function (x) { return x.type === 'package'; })[0];
+    pricingSnapshot = {
+      pricingVersion: PRICING_VERSION, currency: br.currency,
+      packageId: br.packageId || null, packageName: (_pkg && _pkg.label) || null,
+      baseCents: br.baseCents, surchargeCents: br.surchargeCents, extraHoursCents: br.extraHoursCents,
+      travelCents: br.travelCents, addOnsCents: br.addOnsCents, subtotalCents: br.subtotalCents,
+      totalCents: br.totalCents, depositCents: br.depositCents, depositMode: br.depositMode,
+      balanceDue: br.balanceDue, addOns: br.addOns, breakdown: br.breakdown,
+    };
+  } else {
+    durationMins = Math.max(15, Number(svc.durationMins) || 30);
+    price        = Math.max(0, Math.round(Number(svc.price) || 0));   /* legacy — unchanged behavior */
+    deposit      = Math.max(0, Math.round(Number(svc.deposit) || 0));
+  }
 
   /* Validate the slot through the shared availability gate (same path reschedule uses). */
   const slot = await _prepareSlot(db, { providerId, date, startTime, durationMins });
@@ -178,8 +213,10 @@ _h.bookingCreateService = async (req) => {
       serviceId, service: serviceName,
       date, startTime, endTime, startTs, endTs, durationMins, slotKey,
       scheduledAt: admin.firestore.Timestamp.fromMillis(startTs),
-      price, fee, deposit, currency: 'KES',   /* all cents; server-authoritative from the rate card.
-                                                 fee/deposit are DECLARED amounts — Phase E collects them. */
+      price, fee, deposit, currency: 'KES',   /* all cents; server-authoritative. `price` is THE total —
+                                                 payment/held/settlement/commission/refund consume it (or the
+                                                 snapshot) and NEVER recompute. */
+      ...(pricingSnapshot ? { pricingSnapshot } : {}),   /* immutable price breakdown → rate-card edits can't change this booking */
       paymentStatus: 'pending',
       status,                        /* server-authoritative */
       note: _san(d.note, 300),

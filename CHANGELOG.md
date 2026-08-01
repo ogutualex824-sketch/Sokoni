@@ -1,3 +1,28 @@
+## [2026-08-01] — feat(pricing): wire pricing engine into booking (Advanced Rate Cards — Slice B)
+
+The pricing engine is now the single authority for every service booking. The server computes the
+authoritative total from the provider's rate card + the customer's selection and snapshots it.
+
+- **`functions/booking-service.js`** `bookingCreateService` — accepts the customer SELECTION
+  (`packageId`, `addOns:[{id,qty}]`, `durationMins`, `distanceKm`); if the service has a `pricing` config
+  it calls `service-pricing.computePrice(...)` → `booking.price` = the authoritative TOTAL, `deposit` =
+  computed deposit, `durationMins` follows the package/selection (drives the slot span). Persists an
+  immutable **`pricingSnapshot`** (version, package, base, surcharges, extra-hours, travel, add-ons,
+  subtotal, deposit, balance-due, full line-item breakdown) so a later rate-card edit never changes an
+  existing booking. `PRICING_VERSION` bumped 1.1.0 → **2.0.0**.
+  **Back-compat:** a service with NO `pricing` config prices at `svc.price` exactly as before (no snapshot).
+- Settlement, commission, and refund already consume `booking.price` **snapshot-only** (never re-read the
+  rate card) — so the authoritative total flows through payment → held → settlement → commission → refund
+  unchanged. No recomputation anywhere downstream.
+- **`functions/qa-booking-pricing-e2e.js`** (new) — emulator-proven **13/13** (advanced total + snapshot,
+  package price/deposit/duration, client can't inject price, legacy back-compat).
+
+Deploy: `functions:providerDispatch` (hosts bookingCreateService). No client change yet — the selection
+fields are accepted but nothing sends them until Slice D. FOLLOW-ON: Slice C provider rate-card editor,
+Slice D customer package/add-on selector. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(pricing): canonical service pricing engine (Advanced Rate Cards — Slice A)
 
 The ONE authority for a service's final price — a PURE, universal function (DJs, photographers, caterers,
