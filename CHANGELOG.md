@@ -1,3 +1,60 @@
+## [2026-08-01] — fix(email): a failed send silently deduped its own retry; admin invitation re-issued
+
+**The queue fallback that exists to rescue a failed send was guaranteed to be discarded by that
+failure.** Re-issuing the lapsed `ochisaac@gmail.com` admin invitation exposed it: the invitation
+reported success, wrote `status: sent` / `signInReady: true`, and delivered nothing.
+
+### Root cause — dedup could not tell "already sent" from "failed to send"
+
+`_log()` records **failures** under the same `emailId` as the attempt, stamping `sentAt` on them.
+`_isDuplicate()` matched on the id alone and treated any row inside the 5-minute window as proof of
+delivery. So the sequence was:
+
+1. inline send fails (`SENDGRID_API_KEY not set` in that runtime) → `emailLogs` row, `status: failed`, `sentAt` now
+2. `sendPasswordSetupMail()` falls back to the durable queue, reusing the same `emailId` — as designed
+3. `processEmailQueue` drains it 41s later → `_isDuplicate()` sees the **failure** row → duplicate
+
+Observed: `emailQueue/1NIBiH09rdI2TqYEyhWu` → `status: "skipped"`, invitee still `lastSignInTime: null`.
+This is the 2026-08-01 stranding defect one layer down — the invitation engine's guarantee held its end
+(mail was queued, and the queue is durable), while the mail layer dropped it and reported nothing.
+
+### Fix
+
+- **`functions/email-service.js`** — `_isDuplicate()` now suppresses an attempt only when a matching row
+  has `status: "sent"` within the window. Genuine double-submits still collapse. Filtered in code, not
+  with a second `where()`, so **no new composite index** is required.
+- **`functions/invitations-core.js`** — the queued fallback no longer reuses the emailId of the attempt
+  that just failed (`…-queued`). Derived rather than random, so two fallbacks in the same minute bucket
+  still collapse to one message instead of mailing an invitee twice. This is what makes the fix effective
+  from any runtime **before** the Cloud Functions redeploy, since the queue row's id is written by the caller.
+- **`functions/invitations-core.js`** — invitation records gain `setupMailDelivery` (`sent` | `queued` | `null`).
+  The record previously showed only a queue id, which reads as delivered — the ambiguity that hid this.
+
+### Ops tooling (new)
+
+- **`functions/scripts/resend-invite.js`** — re-issues an invitation through the canonical
+  `createInvitation()` (fresh token, fresh 7-day expiry, role-consistency re-check, mandatory setup mail,
+  audit entry). Dry run by default; `--send` to apply. Exists because `resendPasswordSetup` /
+  `invitePlatformEmployee` both set `enforceAppCheck: true` and no admin UI is wired to either yet.
+- **`functions/scripts/verify-invite-mail.js`** — polls the queue row to a **terminal** status. "Pending"
+  and "will never send" are identical at the instant of queueing; this refuses to call a message delivered
+  until a provider accepted it.
+
+### Result — `ochisaac@gmail.com`
+
+Invitation re-issued as **admin** (the claim the account already held; consistency verdict `noop`, so no
+privilege changed). `emailQueue/qPY4mCwp7W7tyhOsicFi` → `status: sent`, `emailLogs` `outcome: delivered`
+at 2026-08-01T16:57:04Z. Invitation valid to 2026-08-08; the Firebase `oobCode` inside it expires sooner
+(~1h), which is the likeliest reason the previous link lapsed unused.
+
+**Files:** `functions/email-service.js`, `functions/invitations-core.js`,
+`functions/scripts/resend-invite.js` (new), `functions/scripts/verify-invite-mail.js` (new).
+**Database:** `invitations` gains `setupMailDelivery`. **API:** none. **Tests:** 783 pass.
+**Deployment:** the `_isDuplicate` fix requires a `functions` deploy to take effect for sends originating
+in production; the invitation above was delivered without one. **Breaking:** none.
+
+---
+
 ## [2026-08-01] — fix(privacy): consent-gated analytics — the consent answer is now acted on (P0)
 
 SOKONI put a KDPA consent modal in front of every user and then ignored the answer. `analytics.js`

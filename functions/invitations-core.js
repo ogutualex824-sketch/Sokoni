@@ -133,7 +133,17 @@ async function sendPasswordSetupMail({ email, name, roleLabel, dest, reason }) {
     logger.warn('[invite] immediate send failed — falling back to queue', {
       email, error: sendErr.message,
     });
-    const queueId = await emailSvc.queue(payload);   // throws → caller strands the invite
+    /* The attempt that just failed is already in `emailLogs` under this emailId.
+       Any dedup check that matches on the id alone would therefore drop the very
+       retry the queue exists to perform — which is exactly what happened on
+       2026-08-01 (emailQueue row drained 41s later, status "skipped", invitee still
+       stranded). The retry gets its own identity. It is derived, not random, so two
+       fallbacks inside the same minute bucket still collapse to one message rather
+       than mailing the invitee twice. */
+    const queueId = await emailSvc.queue({
+      ...payload,
+      emailId: `${payload.emailId}-queued`,
+    });                                              // throws → caller strands the invite
     logger.info('[invite] password setup mail queued for retry', { email, queueId, reason });
     return { queueId, messageId: null, delivery: 'queued', link };
   }
@@ -310,6 +320,11 @@ async function createInvitation({ email, role, invitedBy, name }) {
        made the original failure invisible. */
     setupMailQueueId: prov.setupMail ? prov.setupMail.queueId : null,
     setupMailRequired: !!prov.setupMail,
+    /* 'sent' = a provider accepted it; 'queued' = durable row awaiting the 2-minute
+       worker; null = no setup mail was needed. Recorded because the record used to
+       show only a queue id, which reads as delivered — the ambiguity that hid a
+       skipped message on 2026-08-01. */
+    setupMailDelivery: prov.setupMail ? prov.setupMail.delivery : null,
     signInReady: true,
     provisionReason: prov.reason,
     source: 'invitations-core',
