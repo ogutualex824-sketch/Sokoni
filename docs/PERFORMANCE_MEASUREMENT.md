@@ -130,6 +130,62 @@ that is fast.*
 
 ---
 
+## Between-run drift — why within-run CV is not enough
+
+The CV classification above measures variance **between the samples of one invocation**. It is blind
+to drift **between invocations**. Measured 2026-08-01 on **identical code**, five consecutive runs:
+
+```
+TBT   10642 -> 11579 -> 12438 -> 13087 -> 13115      (+23%)
+```
+
+Every one was AUTHORITATIVE at 5–9% CV internally. The host was simply getting slower — thermal
+throttling and accumulated load.
+
+**This caused a real mistake.** A layout fix that reduced `sokoni-layout.js` self-time by 34%
+(3392 ms → 2237 ms, confirmed by CPU profile) was reverted because total TBT looked 9% worse — when the
+baseline had moved further than the effect being measured. The revert was unsound; so was the verdict
+that prompted it.
+
+### The fix: `scripts/perf-ab.js`
+
+Measure A and B **alternately inside one invocation** (A,B / B,A …). Drift applies to both arms
+equally, so absolutes still wander but the **paired delta** stays valid.
+
+```bash
+node scripts/perf-ab.js --a HEAD --b working --pairs 6
+node scripts/perf-ab.js --a HEAD --b HEAD              # null control
+```
+
+Two calibrations were needed to make even that trustworthy, both found by running the **null control**
+(A and B pointing at identical trees):
+
+1. **Balanced pair count.** An odd count leaves one arm measured first once more than the other.
+   Pairs are now forced even.
+2. **A discarded warm-up.** The first load of an invocation is the coldest, and whichever arm takes it
+   is penalised. This alone produced a `4/4 consistent` 4.3% LCP difference between *identical* trees —
+   a confident false positive. One throwaway load per arm absorbs it.
+
+### Noise floor on this host (null control, calibrated)
+
+| Metric | Floor |
+|---|---|
+| LCP / TBT / loadMs | **±5–9%** |
+| worstTask | ±4% |
+| CLS / longTasks | ±1.6% |
+
+**Believe a timing result only if it exceeds ~10%, or wins in n/n pairs.** Re-run the null control
+whenever the hardware or environment changes: the floor is a property of the machine, not of the tool.
+
+### Practical consequence
+
+The CPU profile (`scripts/perf-profile.js`) is the more reliable guide for this class of work, because
+self-time attribution is not subject to this drift. Use the profile to choose *what* to change, and the
+paired A/B to confirm the change was worth keeping.
+
+
+---
+
 ## Baseline — 2026-08-01 (local, pinned, 5 runs)
 
 | page | LCP | CLS | INP | longest task | tasks | JS (uncomp.) | fsReads |

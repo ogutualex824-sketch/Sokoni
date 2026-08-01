@@ -1099,5 +1099,585 @@
         }
       }
     }
+  },
+  {
+    "at": "2026-08-01T09:20:30.404Z",
+    "base": "http://localhost:8288",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6560,
+            "p95": 7600,
+            "min": 6280,
+            "max": 7600,
+            "cv": 7.2,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 152,
+            "p95": 224,
+            "min": 128,
+            "max": 224,
+            "cv": 21.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "tbt": {
+            "median": 11579,
+            "p95": 12185,
+            "min": 10461,
+            "max": 12185,
+            "cv": 5.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 36,
+            "p95": 40,
+            "min": 33,
+            "max": 40,
+            "cv": 8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1360,
+            "p95": 1705,
+            "min": 1222,
+            "max": 1705,
+            "cv": 12,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 41330,
+            "p95": 43792,
+            "min": 40813,
+            "max": 43792,
+            "cv": 2.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 21002,
+            "p95": 23895,
+            "min": 19809,
+            "max": 23895,
+            "cv": 6.5,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 139,
+            "p95": 141,
+            "min": 138,
+            "max": 141,
+            "cv": 0.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3085,
+            "p95": 3085,
+            "min": 3085,
+            "max": 3085,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 227,
+            "max": 227,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4891,
+            "p95": 4891,
+            "min": 4891,
+            "max": 4891,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:23:50.223Z",
+    "base": "http://localhost:8288",
+    "runs": 5,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 5,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6564,
+            "p95": 6660,
+            "min": 6340,
+            "max": 6660,
+            "cv": 1.8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 144,
+            "p95": 208,
+            "min": 128,
+            "max": 208,
+            "cv": 18.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "tbt": {
+            "median": 12438,
+            "p95": 13190,
+            "min": 10458,
+            "max": 13190,
+            "cv": 8,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 38,
+            "p95": 40,
+            "min": 35,
+            "max": 40,
+            "cv": 4.6,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1370,
+            "p95": 1645,
+            "min": 1225,
+            "max": 1645,
+            "cv": 10.5,
+            "n": 5,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 41664,
+            "p95": 42083,
+            "min": 41178,
+            "max": 42083,
+            "cv": 0.7,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 22219,
+            "p95": 23048,
+            "min": 20008,
+            "max": 23048,
+            "cv": 4.9,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 140,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 196,
+            "max": 227,
+            "cv": 5.6,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4889,
+            "p95": 4889,
+            "min": 4858,
+            "max": 4889,
+            "cv": 0.3,
+            "n": 5,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:26:28.976Z",
+    "base": "http://localhost:8288",
+    "runs": 4,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 4,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 6834,
+            "p95": 6928,
+            "min": 6536,
+            "max": 6928,
+            "cv": 2.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.7,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 252,
+            "p95": 312,
+            "min": 136,
+            "max": 312,
+            "cv": 30.9,
+            "n": 4,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 13087,
+            "p95": 15402,
+            "min": 12177,
+            "max": 15402,
+            "cv": 9.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "longTasks": {
+            "median": 40,
+            "p95": 45,
+            "min": 39,
+            "max": 45,
+            "cv": 6,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "worstTask": {
+            "median": 1513,
+            "p95": 1756,
+            "min": 1322,
+            "max": 1756,
+            "cv": 13.4,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "scriptMs": {
+            "median": 42428,
+            "p95": 43139,
+            "min": 41950,
+            "max": 43139,
+            "cv": 1.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 23342.5,
+            "p95": 25489,
+            "min": 21285,
+            "max": 25489,
+            "cv": 6.8,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "requests": {
+            "median": 140,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 211.5,
+            "p95": 227,
+            "min": 196,
+            "max": 227,
+            "cv": 7.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4873.5,
+            "p95": 4889,
+            "min": 4858,
+            "max": 4889,
+            "cv": 0.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
+  },
+  {
+    "at": "2026-08-01T09:28:29.165Z",
+    "base": "http://localhost:8288",
+    "runs": 4,
+    "conditions": {
+      "cpuThrottle": 4,
+      "network": {
+        "downloadKbps": 10240,
+        "uploadKbps": 3072,
+        "latencyMs": 40
+      },
+      "viewport": {
+        "width": 393,
+        "height": 852
+      },
+      "deviceScaleFactor": 3,
+      "settleMs": 4000
+    },
+    "pages": {
+      "home": {
+        "status": "OK",
+        "samples": 4,
+        "discarded": 0,
+        "metrics": {
+          "lcp": {
+            "median": 7192,
+            "p95": 9260,
+            "min": 6600,
+            "max": 9260,
+            "cv": 13.6,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "cls": {
+            "median": 0.133,
+            "p95": 0.135,
+            "min": 0.133,
+            "max": 0.135,
+            "cv": 0.7,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "inp": {
+            "median": 168,
+            "p95": 480,
+            "min": 120,
+            "max": 480,
+            "cv": 62,
+            "n": 4,
+            "grade": "NOISY"
+          },
+          "tbt": {
+            "median": 13115,
+            "p95": 19115,
+            "min": 11418,
+            "max": 19115,
+            "cv": 21.2,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "longTasks": {
+            "median": 38,
+            "p95": 43,
+            "min": 31,
+            "max": 43,
+            "cv": 12,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "worstTask": {
+            "median": 1607.5,
+            "p95": 2637,
+            "min": 1247,
+            "max": 2637,
+            "cv": 29.6,
+            "n": 4,
+            "grade": "NOISY"
+          },
+          "scriptMs": {
+            "median": 40942.5,
+            "p95": 43384,
+            "min": 40447,
+            "max": 43384,
+            "cv": 2.8,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "loadMs": {
+            "median": 24458.5,
+            "p95": 30996,
+            "min": 20461,
+            "max": 30996,
+            "cv": 16.6,
+            "n": 4,
+            "grade": "INDICATIVE"
+          },
+          "requests": {
+            "median": 140,
+            "p95": 142,
+            "min": 138,
+            "max": 142,
+            "cv": 1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "fsReads": {
+            "median": 4,
+            "p95": 4,
+            "min": 4,
+            "max": 4,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "jsKB": {
+            "median": 3083,
+            "p95": 3083,
+            "min": 3083,
+            "max": 3083,
+            "cv": 0,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "imgKB": {
+            "median": 227,
+            "p95": 227,
+            "min": 196,
+            "max": 227,
+            "cv": 6.1,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          },
+          "totalKB": {
+            "median": 4889,
+            "p95": 4889,
+            "min": 4858,
+            "max": 4889,
+            "cv": 0.3,
+            "n": 4,
+            "grade": "AUTHORITATIVE"
+          }
+        }
+      }
+    }
   }
 ]
