@@ -1,3 +1,54 @@
+## [2026-08-01] — chore(auth): authorization is claim-based, and now gated to stay that way
+
+Prerequisite for renaming the administrative identities:
+
+```
+alexochieng3030@gmail.com   ->  superadmin@mysokoni.co.ke
+ochisaac@gmail.com          ->  ceo@mysokoni.co.ke
+bravilexinternational@…     ->  company@mysokoni.co.ke
+```
+
+A rename is only safe if no gate depends on the old string. One
+`if (user.email === "founder@…")` left anywhere turns an address change into a silent privilege loss
+— or worse, leaves the **old** address privileged after it has been handed to someone else.
+
+### Audit result: the codebase is already clean
+
+Searched all 1,192 source files for email-equality checks, hardcoded privileged-address lists and
+domain-suffix privilege tests. **Zero found.** Every gate reads custom claims.
+
+The five named strings (`alexochieng3030`, `ochisaac`, `ogutualex824`, `bravilexinternational@`,
+`alex@`/`isaac@`) appear **only** in comments recording the invitation incident, test fixtures, the
+changelog, and an ops-script default recipient. None is consulted by any authorization path.
+
+Two things that look like exceptions and are not:
+
+- **`functions/index.js:8311` `PLATFORM_ADMIN_EMAIL = "orders@mysokoni.co.ke"`** — a *recipient*
+  allowlist on `sendInvoiceEmail`, restricting where an invoice may be sent to the caller's own
+  address or the platform inbox. Sending something to a fixed address grants nobody anything.
+- **The bootstrap allowlist is keyed on UID, not email** (`_systemConfig/bootstrap.allowedUids`), and
+  `admin.html:5879` records that the old `FOUNDER_EMAIL` escape hatch was already removed. A UID is
+  stable across a rename — which is exactly why it was moved.
+
+**So the identity rename requires no authorization changes.** Claims travel with the UID; the address
+is a label.
+
+### The gate
+
+`scripts/verify-claim-based-auth.js` (new), wired into `predeploy` and available as
+`npm run verify:auth`. It flags an email compared to a literal address inside an auth context, a
+hardcoded list of privileged addresses, and domain-suffix privilege tests — while deliberately not
+flagging notification recipients, test fixtures, comments or UID allowlists.
+
+Mutation-tested, because a check that cannot fail is worth nothing: injecting an
+`email === "founder@mysokoni.co.ke"` admin gate is caught, and so is a hardcoded
+`ADMINS.includes(...)` allowlist. Both restored; the tree is unchanged.
+
+Files: `scripts/verify-claim-based-auth.js` (new), `package.json`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — fix(auth): admin registry converged to claims + passwordless migration baseline
 
 `functions/scripts/sync-admin-estate.js` (new) sweeps every Auth account once and produces the four

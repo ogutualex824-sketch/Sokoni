@@ -4,8 +4,9 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
+    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:consent": "node scripts/verify-consent-gate.js",
+    "verify:auth": "node scripts/verify-claim-based-auth.js",
     "verify:appcheck": "node scripts/verify-appcheck.js",
     "test:offline": "node scripts/test-offline-detection.js",
     "verify:indexes": "node scripts/verify-index-governance.js",
