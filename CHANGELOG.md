@@ -1,3 +1,53 @@
+## [2026-08-01] — fix(bnb): P1 — a guest could be told "Booking confirmed" when nothing was saved
+
+**Root cause — two independent failure modes, both silent.**
+
+1. **`_saveBnBBookingFS` swallowed every error.** `try { await addDoc(…) } catch(e) {}` — an empty
+   body. A rules rejection, an offline device or a quota error lost the booking with no trace: no
+   throw, no log, no signal.
+2. **The caller never waited for it.** `_finalise()` called the async helper fire-and-forget and showed
+   `✅ Booking confirmed!` on the next line. The banner could not have reflected the outcome even if
+   the error had been reported, because it fired first.
+
+There was also a **third path with no error at all**: `window._saveBnBBookingFS` is defined in a
+`type="module"` block near the end of `<body>`, which executes *after* the inline booking script. A
+guest who completed payment quickly hit `if (window._saveBnBBookingFS)` while it was still `undefined`
+and the Firestore write was **skipped entirely** — the guard read as "not available, carry on".
+
+In every case the guest saw a confirmation, the **host was WhatsApped**, an **invoice was generated**
+and **commission was recorded** for a booking that reached no database.
+
+**Fix**
+
+- The helper returns `{ok, id}` / `{ok, reason}` and logs failures with the booking reference.
+- `_finalise` is `async` and **awaits persistence before saying anything**.
+- `_persistBnBBooking()` waits up to 4s for the module to load rather than silently skipping it, and
+  reports if it never arrives.
+- The success banner is conditional. On failure the guest is **not** told to try again — **payment may
+  already have been taken, and a retry risks a second charge**. They are told: *payment received,
+  confirmation pending, keep this reference*, with the failure reason, and to contact support. The
+  local record is deliberately kept so the booking is recoverable.
+
+Deliberately **not** changed: the host WhatsApp, invoice and commission steps still run. Suppressing
+them on a persistence failure would be a larger behavioural decision, and a host who has been told
+about a real, paid booking is better off than one who has not. Flagged for a product call.
+
+### Also — a false positive in my own guard
+
+`verify-admin-markup.js` reported `bnb.html:28 Unexpected token ':'`. That line is
+`<script type="application/ld+json">` — structured data, not JavaScript. The checker parsed any
+non-module script as JS. Now it only parses blocks with no `type` or a JavaScript mime type. **This
+guard is in `predeploy`, so the false positive would have blocked deploys on any page carrying
+JSON-LD.** Corrected before it could.
+
+**Tests:** functions 783 passed · `bnb.html` 21/21 `<div>` balanced, 2 inline blocks parse · all five
+admin consoles still clean · predeploy green.
+
+Files: `bnb.html`, `scripts/verify-admin-markup.js`.
+Database changes: none. Breaking changes: none — a successful booking behaves exactly as before.
+
+---
+
 ## [2026-08-01] — findings(admin): Properties data source — **B, migration required**
 
 Investigation only. Nothing implemented. Full write-up: `docs/PROPERTIES_DATA_SOURCE.md`.

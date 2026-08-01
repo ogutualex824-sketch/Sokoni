@@ -239,7 +239,21 @@
     const total  = nights * Number(b?.pricePerNight || 0);
     const ref    = _bnbRef || ("BNB" + Date.now().toString().slice(-6));
 
-    function _finalise(mpesaCode){
+    /* Waits for the Firestore module, which is a type="module" block later in
+       the document and therefore not defined when this inline script runs. */
+    async function _persistBnBBooking(payload){
+      const deadline = Date.now() + 4000;
+      while (!window._saveBnBBookingFS && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 100));
+      }
+      if (!window._saveBnBBookingFS) {
+        console.error('[BnB] Firestore module never loaded — booking not persisted', payload && payload.id);
+        return { ok:false, reason:'the booking service did not load' };
+      }
+      return window._saveBnBBookingFS(payload);
+    }
+
+    async function _finalise(mpesaCode){
       _bnbRef = null;
       /* Save booking */
       let bookings = [];
@@ -247,15 +261,24 @@
       const _bkData = { id:ref, bnbId, bnbName:b?.name, name, phone, checkIn, checkOut, nights, total, status:"confirmed", mpesaCode:mpesaCode||null, bookedAt: Date.now() };
       bookings.unshift(_bkData);
       localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
-      /* Persist to Firestore */
-      if(window._saveBnBBookingFS){
-        window._saveBnBBookingFS({
-          ..._bkData,
-          listingId:bnbId,
-          hostUid:b?.hostUid||'',
-          hostPhone:b?.phone||b?.hostPhone||b?.contact||''
-        });
-      }
+      /* Persist to Firestore BEFORE telling the guest anything.
+
+         Previously this was fire-and-forget into an empty catch, and the
+         success banner fired on the next line. A guest could be shown
+         "Booking confirmed", have the host WhatsApped, and be issued an
+         invoice for a booking that reached no database at all.
+
+         The write is not retried and the booking is NOT discarded on failure:
+         payment may already have been taken, so the safe outcome is to keep the
+         local record, hand the guest their reference, and say plainly that
+         confirmation is pending. Telling them to "try again" would risk a
+         second charge. */
+      const _fsOutcome = await _persistBnBBooking({
+        ..._bkData,
+        listingId:bnbId,
+        hostUid:b?.hostUid||'',
+        hostPhone:b?.phone||b?.hostPhone||b?.contact||''
+      });
 
       /* Notify host via WhatsApp */
       const hostPhone = b?.phone || b?.hostPhone || b?.contact || "";
@@ -287,7 +310,15 @@
       }
 
       document.getElementById("bnbBookModal").style.display = "none";
-      showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
+      if (_fsOutcome && _fsOutcome.ok) {
+        showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
+      } else {
+        /* Never claim a confirmation that did not happen. The reference is the
+           thing support needs to reconcile it, so it leads. */
+        showNotif(`\u26a0\ufe0f Payment received \u2014 confirmation pending. Keep your reference: ${ref}. `
+          + `We could not finish recording this booking (${(_fsOutcome && _fsOutcome.reason) || "unknown error"}). `
+          + `Please contact support with that reference.`, "error");
+      }
     }
 
     /* Real Daraja payment if host has configured it */
@@ -417,10 +448,23 @@ try {
 } catch(e) {}
 window.addEventListener('beforeunload', () => { if (_bnbUnsub) _bnbUnsub(); });
 
-/* ── Save booking to Firestore after confirmed payment ── */
+/* ── Save booking to Firestore after confirmed payment ──────────────────────
+   Returns the outcome. This used to be `catch(e) {}` — an empty body — so a
+   rules rejection, an offline device or a quota error lost the booking
+   silently while the guest was told "Booking confirmed". The caller now awaits
+   this and reports honestly. */
 window._saveBnBBookingFS = async function(bk) {
-  try { await addDoc(collection(db,'bnbBookings'), {...bk, uid:_uid||null, createdAt:serverTimestamp()}); } catch(e) {}
+  try {
+    const ref = await addDoc(collection(db,'bnbBookings'), {...bk, uid:_uid||null, createdAt:serverTimestamp()});
+    return { ok: true, id: ref.id };
+  } catch (e) {
+    console.error('[BnB] booking did NOT persist to Firestore:', e && (e.code || e.message), bk && bk.id);
+    return { ok: false, reason: (e && (e.code || e.message)) || 'unknown error' };
+  }
 };
+/* Signals that the module above has executed, so a booking completed in the
+   first moments of the page can wait for it rather than skip Firestore. */
+window._bnbFsReady = true;
 </script>
 </body>
 </html>

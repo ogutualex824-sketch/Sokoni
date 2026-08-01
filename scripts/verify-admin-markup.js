@@ -74,6 +74,12 @@ for (const rel of files) {
     const attrs = m[1] || '', body = m[2] || '';
     if (/\bsrc\s*=/.test(attrs) || !body.trim()) continue;
     if (/type\s*=\s*["']module["']/.test(attrs)) continue;   /* needs a module loader */
+    /* Only parse blocks that are actually JavaScript. A <script
+       type="application/ld+json"> holds structured data, and feeding it to a JS
+       parser reports "Unexpected token ':'" on a perfectly valid page — which is
+       exactly what this check did on bnb.html before the guard was corrected. */
+    const type = (attrs.match(/type\s*=\s*["']([^"']+)["']/) || [])[1];
+    if (type && !/^(text\/javascript|application\/javascript|text\/ecmascript)$/i.test(type)) continue;
     n++;
     try { new vm.Script(body); }
     catch (e) {
