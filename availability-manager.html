@@ -1479,6 +1479,17 @@ async function saveAll() {
       _affected = (_impact && _impact.data) || null;
     } catch (_e) { _affected = null; /* op unavailable / offline → proceed (no regression) */ }
 
+    /* Step 4 — FREEZE: refuse a change that would move the target for a booking already in
+       resolution (mid-negotiation). The provider must resolve those first. */
+    if (_affected && (_affected.locked || []).length > 0) {
+      const _L = _affected.locked;
+      const _ll = _L.slice(0, 6).map(function (a) { return "• " + a.customerName + " — " + a.date + " " + (a.startTime || ""); }).join("\n");
+      const _lm = _L.length > 6 ? "\n…and " + (_L.length - 6) + " more" : "";
+      window.alert("This change affects " + _L.length + " booking" + (_L.length > 1 ? "s" : "") + " already in resolution:\n\n" +
+        _ll + _lm + "\n\nFinish resolving them (reschedule or refund) from your Bookings before changing availability that affects them.");
+      return;   /* BLOCK — don't move the negotiation target */
+    }
+
     if (_affected && _affected.affectedCount > 0) {
       const _reason = await _pickResolutionReason(_affected);
       if (!_reason) { showToast("No changes made — your bookings are unchanged."); return; }

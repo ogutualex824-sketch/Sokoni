@@ -1,3 +1,21 @@
+## [2026-08-01] — feat(booking): freeze availability edits on in-resolution bookings (Slice 2 step 4)
+
+Preserves negotiation integrity: a provider can no longer change availability in a way that affects a
+booking already mid-resolution (ACTION_REQUIRED) — which would move the negotiation target while the
+customer is deciding.
+
+- `functions/booking-availability-guard.js` — `providerCheckAvailabilityImpact` now splits stranded
+  bookings into `affected` (raisable) vs **`locked`** (already `resolution.status === ACTION_REQUIRED`),
+  returning `lockedCount` + `locked`. Read-only. Emulator 2/2.
+- `availability-manager.html` — `saveAll()` BLOCKS the save (alert listing the locked bookings) when any
+  locked booking would be affected; the provider must resolve them (reschedule/refund) first. Non-locked
+  affected bookings still flow through the Step-2 reason→raise path.
+
+Completes the booking resolution engine: impact → ACTION_REQUIRED → negotiation → { reschedule | refund }
+with the target frozen during resolution. Deploy: `functions:providerDispatch` + hosting. Breaking: none.
+
+---
+
 ## [2026-08-01] — feat(provider): duplicate service (completes service-management CRUD)
 
 Provider service management audit (before more booking features): Add / Edit-every-field (name,

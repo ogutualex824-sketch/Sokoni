@@ -95,27 +95,32 @@ _h.providerCheckAvailabilityImpact = async (req) => {
     .map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); })
     .filter(function (b) { return ACTIVE_BOOKING_STATES.indexOf(b.status) > -1 && Number(b.startTs) >= now; });
 
-  const affected = future
+  function _slim(b) {
+    return {
+      id: b.id, customerName: b.customerName || 'Customer', service: b.service || b.serviceName || '',
+      date: b.date || null, startTime: b.startTime || null, endTime: b.endTime || null,
+      startTs: Number(b.startTs) || null, status: b.status || null,
+      paymentStatus: b.paymentStatus || null, price: Number(b.price) || 0,
+    };
+  }
+  const strandedAll = future
     .filter(function (b) { return !_servable(b, proposed, blackoutDates); })
     .sort(function (a, b) { return Number(a.startTs) - Number(b.startTs); });
 
+  /* Step 4 — FREEZE: bookings already mid-resolution (resolution.status === ACTION_REQUIRED) are
+     LOCKED. The caller must NOT apply an availability change that affects them — that would move
+     the negotiation target while the customer is deciding. They are reported separately so the UI
+     can block the save until the provider resolves them (reschedule/refund). */
+  function _isLocked(b) { return b.resolution && b.resolution.status === 'ACTION_REQUIRED'; }
+  const locked = strandedAll.filter(_isLocked);
+  const affected = strandedAll.filter(function (b) { return !_isLocked(b); });
+
   return {
     affectedCount: affected.length,
+    lockedCount: locked.length,
     totalFuture: future.length,
-    affected: affected.map(function (b) {
-      return {
-        id: b.id,
-        customerName: b.customerName || 'Customer',
-        service: b.service || b.serviceName || '',
-        date: b.date || null,
-        startTime: b.startTime || null,
-        endTime: b.endTime || null,
-        startTs: Number(b.startTs) || null,
-        status: b.status || null,
-        paymentStatus: b.paymentStatus || null,
-        price: Number(b.price) || 0,
-      };
-    }),
+    affected: affected.map(_slim),
+    locked: locked.map(_slim),
   };
 };
 
