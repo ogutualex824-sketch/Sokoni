@@ -68,10 +68,62 @@ window.SokoniSpotlight = (function(){
       + '</div></div>';
   }
 
+  /* ── Visibility gate (Sprint 2, Experiment 2) ────────────────────────────────
+     The seller grid sits at ~4249px on a 12903px homepage — about 5 viewports
+     below the fold — yet `_sellerTimer` rebuilt it every 7 seconds for the whole
+     session whether or not anyone could see it. Measured 2026-08-01: 428 nodes
+     across 4 rebuilds inside the load window alone, and it keeps going
+     indefinitely afterwards.
+
+     A rotating carousel nobody is looking at is not a feature; it is a timer
+     burning style and layout work, and on mobile, battery.
+
+     This gates ONLY the rendering, not the rotation logic: `_sellerPage` still
+     advances on schedule, so when the section does come into view the rotation
+     is where it would have been. Behaviour when visible is unchanged.
+
+     Defaults to TRUE so that any browser without IntersectionObserver, or any
+     moment before the observer attaches, behaves exactly as before.
+
+     The observer is attached only once the layout has SETTLED. Attaching it
+     during init reported the grid as visible, and correctly so: at that moment
+     every section above it is still empty, so it genuinely sits near the top of
+     a collapsed page. The geometry was real — it just was not representative of
+     the page the user ends up looking at. Waiting for `load` plus a frame avoids
+     acting on a transient layout.
+
+     Consequently the FIRST render is left untouched; only the 7-second rotations
+     are gated. That is where the cost actually is: one render is 107 nodes, but
+     the rotation repeats for the entire session. */
+  var _sellersVisible = true;
+  function _watchSellersVisibility(grid) {
+    if(!('IntersectionObserver' in window) || !grid || grid.__spWatched) return;
+    grid.__spWatched = true;
+
+    function attach() {
+      requestAnimationFrame(function(){
+        var io = new IntersectionObserver(function(entries){
+          entries.forEach(function(e){
+            var wasVisible = _sellersVisible;
+            _sellersVisible = e.isIntersecting;
+            /* Coming into view after being skipped — refresh so the user never
+               meets a stale grid. */
+            if(e.isIntersecting && !wasVisible) _renderSellers();
+          });
+        }, { rootMargin: '600px 0px' });
+        io.observe(grid);
+      });
+    }
+    if(document.readyState === 'complete') attach();
+    else window.addEventListener('load', attach, { once: true });
+  }
+
   /* ── Render next 3 sellers ── */
   function _renderSellers() {
     var grid = document.getElementById('_spSellersGrid');
     if(!grid || _paused) return;
+    /* Advance the rotation regardless, but skip the DOM write when off-screen. */
+    if(!_sellersVisible) { _sellerPage = (_sellerPage + 3) % Math.max(1, SELLER_POOL.length); return; }
     var pool = _weighted(SELLER_POOL);
     _sellerPage = (_sellerPage + 3) % pool.length;
     var chunk = pool.slice(_sellerPage, _sellerPage + 3);
@@ -204,6 +256,7 @@ window.SokoniSpotlight = (function(){
             '<div id="_spCtrl"><button id="_spPauseBtn" onclick="window.SokoniSpotlight.togglePause()">⏸ Pause</button></div>');
         }
       }
+      _watchSellersVisibility(sellerContainer);
       _renderSellers();
       clearInterval(_sellerTimer);
       _sellerTimer = setInterval(_renderSellers, 7000);
