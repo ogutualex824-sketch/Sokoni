@@ -224,6 +224,28 @@
     document.getElementById("bnbBookModal").style.display = "flex";
   }
 
+  /* Reopens the booking the guest was making when they were sent to sign in.
+     Without this the gate costs them every field they had typed, which is how a
+     correct security boundary turns into an abandoned booking. */
+  window._bnbResumeIntent = function(){
+    let intent = null;
+    try { intent = JSON.parse(sessionStorage.getItem("sokoniBnBIntent") || "null"); } catch(e) {}
+    if (!intent || !intent.bnbId) return;
+    /* 30 minutes: long enough to sign in, short enough not to resurrect a
+       stale intent days later. */
+    if (Date.now() - (intent.at || 0) > 30 * 60 * 1000) {
+      try { sessionStorage.removeItem("sokoniBnBIntent"); } catch(e) {}
+      return;
+    }
+    try { sessionStorage.removeItem("sokoniBnBIntent"); } catch(e) {}
+    if (typeof openBookModal !== "function") return;
+    openBookModal(intent.bnbId);
+    const set = function(id, v){ const el = document.getElementById(id); if (el && v) el.value = v; };
+    set("bookName", intent.name); set("bookPhone", intent.phone);
+    set("bookIn", intent.checkIn); set("bookOut", intent.checkOut);
+    showNotif("Signed in — your booking details were kept.", "success");
+  };
+
   function confirmBooking(bnbId){
     const _btn = document.querySelector('.modal-confirm-btn');
     if(_btn){ _btn.disabled = true; _btn.textContent = '⏳ Processing...'; }
@@ -233,6 +255,33 @@
     const checkOut = document.getElementById("bookOut").value;
     if(!name || !phone || !checkIn || !checkOut){ if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } showNotif("⚠️ Fill all booking details","error"); return; }
     if(new Date(checkOut) <= new Date(checkIn)){ if(_btn){ _btn.disabled = false; _btn.textContent = 'Confirm Booking'; } showNotif("⚠️ Check-out must be after check-in","error"); return; }
+
+    /* ── Authentication is required BEFORE payment ────────────────────────
+       firestore.rules requires request.resource.data.uid == request.auth.uid on
+       bnbBookings create, so an unauthenticated booking CANNOT be persisted. It
+       used to be attempted anyway: payment was taken, the write was rejected,
+       and the empty catch reported success. Since the commit-point gating the
+       guest is told the truth — but they have still paid for a booking that was
+       never creatable.
+
+       Never collect payment for a booking that cannot legally be persisted. The
+       rules are NOT weakened to admit anonymous bookings: a booking needs a
+       verified identity for its history, its disputes, its notifications and its
+       payment reconciliation. */
+    if (!window._bnbAuthUid) {
+      if(_btn){ _btn.disabled = false; _btn.textContent = "Confirm Booking"; }
+      /* Keep what they entered so signing in does not cost them the form. */
+      try {
+        sessionStorage.setItem("sokoniBnBIntent", JSON.stringify({
+          bnbId, name, phone, checkIn, checkOut, at: Date.now()
+        }));
+      } catch(e) {}
+      showNotif("Please sign in to complete your booking — it keeps your booking history, notifications and payment protection.", "error");
+      setTimeout(function(){
+        window.location.href = "login.html?redirect=" + encodeURIComponent("bnb.html");
+      }, 1600);
+      return;
+    }
 
     const b      = allBnBs.find(b => b.id === bnbId);
     const nights = Math.max(1, Math.round((new Date(checkOut) - new Date(checkIn)) / 86400000));
@@ -466,7 +515,14 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 
 import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 let _uid = null;
-onAuthStateChanged(auth, u => { _uid = u ? u.uid : null; });
+onAuthStateChanged(auth, u => {
+  _uid = u ? u.uid : null;
+  /* The booking flow runs in the inline script above, which cannot see _uid.
+     It needs the answer BEFORE taking payment, so publish it. */
+  window._bnbAuthUid   = _uid;
+  window._bnbAuthReady = true;
+  if (_uid && typeof window._bnbResumeIntent === "function") window._bnbResumeIntent();
+});
 
 /* ── Load listings from Firestore and merge with localStorage ── */
 let _bnbUnsub = null;

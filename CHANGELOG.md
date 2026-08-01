@@ -1,3 +1,46 @@
+## [2026-08-01] — feat(bnb): booking requires authentication — never take payment for a booking that cannot be persisted
+
+**Product decision applied.** `firestore.rules` requires
+`request.resource.data.uid == request.auth.uid` on `bnbBookings` create, so an unauthenticated booking
+**cannot** be persisted. The rules are **not** weakened — a booking needs a verified identity for its
+history, its disputes, its notifications and its payment reconciliation.
+
+**Before:** an unauthenticated guest could pay, the write was rejected by rules, and the empty `catch`
+reported success. After the commit-point gating (`94de38a`) they were at least told the truth — but
+**they had still paid for a booking that was never creatable.**
+
+**Now** the check happens *before* payment. Verified by position: auth gate @15232 → persist @17381 →
+payment @22281. The gate precedes both.
+
+### The gate does not cost the guest their form
+
+A correct security boundary that discards everything typed is how you get an abandoned booking. The
+selection — listing, name, phone, check-in, check-out — is kept in `sessionStorage` under
+`sokoniBnBIntent`, and `_bnbResumeIntent()` reopens the booking modal with the fields restored the
+moment `onAuthStateChanged` reports a signed-in user. The intent expires after **30 minutes**: long
+enough to sign in, short enough not to resurrect a stale booking days later.
+
+Auth state also had to be **published**: `_uid` lives inside the `type="module"` block and the booking
+runs in the inline script above it, which could not see it. `window._bnbAuthUid` / `_bnbAuthReady`
+close that gap.
+
+Sign-in routes to `login.html?redirect=bnb.html`, the convention already used by ~5 other consoles.
+Available methods today are **Google** and **Phone OTP**; **Email Link** joins them when the client
+flow lands — the gate needs no change to pick it up.
+
+**Extended, not rebuilt:** `venue-booking.html` already had `requireAuth(fn)` for the same problem.
+This follows it and closes its two weaknesses — it loses the in-progress booking, and it does not pass
+a return URL.
+
+**Tests:** functions 783 passed · `bnb.html` `<div>` balanced 21/21, 2 inline blocks parse · gate
+ordering verified programmatically · rules confirmed unchanged · predeploy green.
+
+Files: `bnb.html`.
+Database changes: none. **Security rules: unchanged — deliberately.** Breaking changes: none for a
+signed-in guest. An anonymous guest is now stopped before payment instead of after it.
+
+---
+
 ## [2026-08-01] — feat(admin): Properties Commit 1 — reads come from Firestore
 
 **Reads only.** `approveProp` / `rejectProp` still write localStorage; they are Commit 2.
