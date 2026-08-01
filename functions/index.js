@@ -5068,9 +5068,17 @@ exports.onDeliveryStatusChange = onDocumentUpdated(
 
 const PLATFORM_ROLES = ["moderator","support","driverCoordinator","financeReviewer","contentManager"];
 const SHOP_ROLES     = ["cashier","manager","inventory","support"];
+/* One invitation engine for every entry point — see functions/invitations-core.js. */
+const invitationsCore = require("./invitations-core");
 
 /* ── Create platform-staff invite (admin only) ─────────────────────── */
-exports.invitePlatformEmployee = onCall({}, async (request) => {
+/* `secrets` is REQUIRED here, not decorative: this handler now sends the
+   password-setup email inline, and a function can only read a secret it declares.
+   Without it every send fails with "SENDGRID_API_KEY not set" and silently
+   degrades to the 2-minute queue — which still delivers, but throws away the
+   immediate confirmation this whole change exists to provide. */
+exports.invitePlatformEmployee = onCall(
+  { secrets: require('./email-service').EMAIL_SECRETS }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
   const c = request.auth.token;
   if (!c.admin && !c.superAdmin)
@@ -5081,63 +5089,48 @@ exports.invitePlatformEmployee = onCall({}, async (request) => {
   if (!email || !role)              throw new HttpsError("invalid-argument", "email and role are required.");
   if (!PLATFORM_ROLES.includes(role)) throw new HttpsError("invalid-argument", "Invalid role: " + role);
 
-  const token = require("crypto").randomUUID();
-  await db.collection("platformInvites").doc(token).set({
-    token,
-    email,
-    role,
-    invitedBy: request.auth.uid,
-    status: "pending",
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    expiresAt: admin.firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 86400000))
+  /* Delegated to invitations-core — the ONE invitation path.
+     This handler used to write a `platformInvites` token document and return it,
+     and do nothing else: no Auth account, no email, no way for the invitee to
+     learn the link existed. Combined with an ops script that created accounts
+     with a discarded random password, that produced ochisaac@gmail.com — an
+     `admin` account that had never signed in and never could, because the only
+     mail it ever received was a bare welcome with no password-setup link.
+
+     createInvitation() will not report success unless the invitee can actually
+     sign in, and it refuses outright if the role contradicts a claim the account
+     already holds. */
+  const res = await invitationsCore.createInvitation({
+    email, role, invitedBy: request.auth.uid, name: request.data.name || '',
   });
-  return { token };
+  return {
+    token: res.token, inviteId: res.inviteId, uid: res.uid,
+    acceptUrl: res.acceptUrl,
+    authAccountCreated: res.authAccountCreated,
+    setupMailQueueId: res.setupMailQueueId,
+    signInReady: res.signInReady,
+  };
 });
 
 /* ── Accept platform invite (called after the new user creates account) */
 exports.acceptPlatformInvite = onCall({}, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-  const token = (request.data.token || "").trim();
-  if (!token) throw new HttpsError("invalid-argument", "Token required.");
+  /* Delegated to invitations-core — the ONE acceptance flow.
+     It resolves the token against the canonical `invitations` collection AND the
+     legacy `platformInvites` collection, so links already in circulation keep
+     working while new invitations are written in one place.
 
-  const ref  = db.collection("platformInvites").doc(token);
-  const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError("not-found", "Invalid invite link.");
-
-  const data = snap.data();
-  if (data.status !== "pending")
-    throw new HttpsError("failed-precondition", "Invite already used or revoked.");
-  if (data.expiresAt.toDate() < new Date())
-    throw new HttpsError("deadline-exceeded", "Invite expired. Ask admin for a new one.");
-  if (data.email !== request.auth.token.email)
-    throw new HttpsError("permission-denied", "This invite was sent to " + data.email + ". Sign in with that email.");
-
-  const prev = (await admin.auth().getUser(request.auth.uid)).customClaims || {};
-  await admin.auth().setCustomUserClaims(request.auth.uid, {
-    ...prev,
-    [data.role]: true,
-    platformEmployee: true,
-    platformRole: data.role
-  });
-
-  await db.collection("platformEmployees").doc(request.auth.uid).set({
+     The material addition over the previous inline version is the role-consistency
+     gate: this used to spread `{[data.role]: true}` over the existing claims
+     unconditionally, so a `moderator` invite landing on an account that already
+     held `admin` produced an account carrying BOTH — privileges nobody decided to
+     grant. A contradiction is now refused and reported for a human to resolve. */
+  return invitationsCore.acceptInvitation({
+    token: request.data.token,
     uid: request.auth.uid,
-    email: data.email,
-    displayName: request.auth.token.name || "",
-    role: data.role,
-    invitedBy: data.invitedBy,
-    active: true,
-    joinedAt: admin.firestore.FieldValue.serverTimestamp()
+    callerEmail: request.auth.token.email,
   });
-
-  await ref.update({
-    status: "accepted",
-    acceptedByUid: request.auth.uid,
-    acceptedAt: admin.firestore.FieldValue.serverTimestamp()
-  });
-
-  return { success: true, role: data.role };
 });
 
 /* ── Revoke a platform invite ──────────────────────────────────────── */
@@ -11432,6 +11425,49 @@ exports.getHealthDashboard       = _health.getHealthDashboard;
 
    `applicationLifecycle` is a Firestore trigger; deploy it by that exact name
    or the projection never runs. See functions/application-lifecycle.js. */
+/* ── Invitation onboarding audit ──────────────────────────────────────────────
+   Finds accounts that CANNOT sign in: a password provider, never a successful
+   sign-in, and no password-setup mail on record. That combination is invisible in
+   the Firebase console — the account looks healthy and is simply unusable — which
+   is how ochisaac@gmail.com sat stranded from 2026-07-21 to 2026-08-01. Also
+   reports invitations whose role contradicts a claim the account already holds. */
+exports.auditInviteOnboarding = onCall(
+  { region: 'us-central1', maxInstances: 3, enforceAppCheck: true, timeoutSeconds: 300 },
+  async (req) => {
+    const t = req.auth?.token || {};
+    if (!t.admin && !t.superAdmin) {
+      throw new HttpsError('permission-denied', 'Administrator access required.');
+    }
+    return require('./invitations-core').auditOnboarding();
+  }
+);
+
+/* Re-send a password-setup link to an invitee who never received one. Separate
+   from resendInvitation because the remedy for a stranded account is the LINK,
+   not another invitation record. */
+exports.resendPasswordSetup = onCall(
+  { region: 'us-central1', maxInstances: 5, enforceAppCheck: true,
+    secrets: require('./email-service').EMAIL_SECRETS },
+  async (req) => {
+    const t = req.auth?.token || {};
+    if (!t.admin && !t.superAdmin) {
+      throw new HttpsError('permission-denied', 'Administrator access required.');
+    }
+    const core = require('./invitations-core');
+    const email = String(req.data?.email || '').toLowerCase().trim();
+    if (!email) throw new HttpsError('invalid-argument', '"email" is required.');
+    const user = await admin.auth().getUserByEmail(email);
+    const claims = user.customClaims || {};
+    const role = core.CLAIM_RANK.slice().reverse().find(r => claims[r] === true) || 'admin';
+    const meta = core.CLAIM_ROLES[role] || { label: role, dest: '/' };
+    const res = await core.sendPasswordSetupMail({
+      email, name: user.displayName || '', roleLabel: meta.label, dest: meta.dest,
+      reason: 'manual_resend',
+    });
+    return { ok: true, email, uid: user.uid, role, queueId: res.queueId };
+  }
+);
+
 const _appLife = require('./application-lifecycle');
 exports.applicationLifecycle  = _appLife.applicationLifecycle;   // trigger: applications/{appId}
 exports.applicationDecide     = _appLife.applicationDecide;      // onCall (admin)

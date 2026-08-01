@@ -1,3 +1,80 @@
+## [2026-08-01] — fix(onboarding): invited admins could never sign in; one invitation engine
+
+**An invited administrator had no way into the platform, and nothing recorded it.**
+`ochisaac@gmail.com` was created 2026-07-21 by an ops script with a deliberately random password
+("never returned, never logged, never usable"), granted `admin` via identitytoolkit, and sent exactly
+one email: `template=welcome`, containing no password-setup link. Firebase showed a perfectly healthy
+account. It had `lastSignInTime: null` for eleven days, and every attempt returned
+`auth/invalid-credential` — the modern collapse of `wrong-password`/`user-not-found` — because the
+password was a 32-byte random string nobody had ever known.
+
+Authentication was never the defect. Sign-in failed *before* any invitation logic ran, so the
+invitation (valid, unexpired, unused) was never reached.
+
+### Root cause: two invitation systems, neither closing the loop
+
+| | `invitations` (admin-invitations.js) | `platformInvites` (index.js) |
+|---|---|---|
+| Auth account | created | **none** |
+| Password setup mail | sent | **none** |
+| Acceptance flow | none (reset link *is* the flow) | token + claims |
+
+`invitePlatformEmployee` wrote a token document and returned it to the caller — no account, no email,
+no way for the invitee to learn the link existed.
+
+### New: `functions/invitations-core.js` — one engine, one acceptance flow
+
+- **The guarantee (tasks 1+2).** `provisionInvitee()` will not report success unless the invitee can
+  actually sign in: either the account has signed in before (it owns a password we never touched), or a
+  password-setup mail carrying a real reset link was delivered. Otherwise the invitation is recorded
+  `blocked_no_setup_mail` and the call **fails**. A stranded invitee is a defect, not a pending state.
+- **`hasUsablePassword()`** is the signal nobody was checking: a password provider plus
+  `lastSignInTime: null` is precisely the stranded shape. `lastSignInTime` is set by Firebase and cannot
+  be faked, so it is the only trustworthy server-side evidence.
+- **Sent, not merely queued.** `queue()` writes a pending row drained every 2 minutes; "queued" is
+  indistinguishable from "delivered" to the admin who just clicked Invite. Setup mail now sends inline,
+  falling back to the durable queue on provider failure and reporting which occurred.
+  `invitePlatformEmployee` had to declare `secrets: EMAIL_SECRETS`: SendGrid is configured and working
+  in production, but a Cloud Function can only read a secret it *declares*, so without this the inline
+  send would fail on a correctly-configured provider and silently degrade to the queue.
+- **Consolidation (task 3).** `invitations` is canonical. `invitePlatformEmployee` and
+  `acceptPlatformInvite` both delegate here. Acceptance resolves a token against the canonical
+  collection **and** legacy `platformInvites`, so links already in circulation keep working, and a
+  legacy record that is honoured is mirrored forward — no migration needed.
+- **Role consistency (task 4).** The old handler spread `{...prev, [role]: true}` unconditionally, so a
+  `moderator` invite landing on an `admin` account produced one holding **both** — privileges nobody
+  granted. `checkRoleConsistency()` now refuses a downgrade, permits an upgrade, no-ops a match, and
+  correctly treats vertical roles (`merchant`) as non-claims — the first audit reported three merchant
+  invites as conflicts purely because `merchant` is a `registeredAs` key, not an Auth claim.
+- **Audit (task 6).** `auditInviteOnboarding` (admin onCall) finds accounts that cannot sign in and
+  invitations that contradict existing claims. A bare welcome email does **not** clear the flag —
+  otherwise any "did we email them?" check passes while the person still cannot get in.
+  `resendPasswordSetup` sends the remedy.
+
+### Production audit result
+
+61 Auth accounts scanned. **Exactly one stranded: `ochisaac@gmail.com`.** No other invitee was affected.
+
+### Resolved
+
+- Founder decision: ochisaac is an **admin**. The contradictory `moderator` invite
+  (`platformInvites/94707b34-…`, created 9 days after the owner-authorised admin grant) was **revoked**
+  so acceptance could never downgrade them. Recorded in `adminAudit`.
+- Password-setup mail delivered — `emailQueue/KCa6YLillF14Psxgm6aW`, `status: sent`,
+  `template: invitation-password-setup`, 2026-08-01T05:27:04Z.
+- `alexochieng3030@gmail.com` verified as already holding `superAdmin` (signs in normally). Unchanged.
+
+### Files
+`functions/invitations-core.js` (new), `functions/test/invitations-core.test.js` (new, 25 tests),
+`functions/index.js` (`invitePlatformEmployee` / `acceptPlatformInvite` delegate; new
+`auditInviteOnboarding`, `resendPasswordSetup`).
+
+**Database:** `invitations` gains `token`, `roleKind`, `setupMailQueueId`, `signInReady`,
+`provisionReason`; `platformInvites` retained read-only for links in circulation.
+**API:** 2 new admin callables. **Tests:** 781 pass. **Breaking:** none — existing invite links still work.
+
+---
+
 ## [2026-07-30] — fix(search): stale catalogue cache hid newly approved providers; predeploy index gate unblocked
 
 **Search cache staleness.** `lsWrite` stamped only the blob-level `at`, so a write to ANY collection

@@ -983,12 +983,27 @@ async function loadDashboard(user){
   }
 }
 
+/* Deep-link support: the profile Business Hub links to #bookings / #calendar / #reviews /
+   #services (Rate Cards) / #availability etc. so a provider lands on the right panel. */
+function _applyHash(){
+  var h=(location.hash||'').replace(/^#/,'').toLowerCase();
+  if(!h)return;
+  var sub={services:'services',ratecards:'services',availability:'avail',avail:'avail',pricing:'pricing',payment:'payment',notifications:'notif',verification:'verif',subscription:'sub'};
+  var panels=['overview','calendar','bookings','earnings','reviews','settings'];
+  function sbEl(key){return Array.prototype.slice.call(document.querySelectorAll('.sb-item')).find(function(i){var o=i.getAttribute('onclick')||'';return o.indexOf("show('"+key+"'")>-1;})||null;}
+  try{
+    if(sub[h]){P.show('settings',sbEl('settings'),sub[h]);}
+    else if(panels.indexOf(h)>-1){P.show(h,sbEl(h));}
+  }catch(_){}
+}
 document.addEventListener('DOMContentLoaded',()=>{
   firebase.auth().onAuthStateChanged(async user=>{
     if(!user){window.location.href='login.html';return}
     await loadDashboard(user);
+    _applyHash();
   });
 });
+window.addEventListener('hashchange',_applyHash);
 </script>
 </body>
 </html>

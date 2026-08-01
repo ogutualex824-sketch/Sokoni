@@ -2055,6 +2055,14 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
+    <!-- ── Business Management hub — role-driven modules (Marketplace / Services / Finance /
+         Insights / Rider / Admin). Additive: shows ONLY the modules the user has access to,
+         and a seller+provider sees BOTH. Populated by _renderBusinessHub(). -->
+    <div class="up-card" id="upBizHub" style="padding:16px;display:none;">
+      <div class="up-card-title">&#128188; Business Management</div>
+      <div id="upBizHubGrid" style="display:flex;flex-direction:column;gap:14px;margin-top:6px;"></div>
+    </div>
+
     <!-- ── S7: Cross-Module Summaries ── -->
     <div class="up-card" id="pi7ModuleCards" style="padding:14px 16px;display:none;"></div>
 
@@ -3191,6 +3199,58 @@ function _syncMyServicesBtn(u){
   if(!btn) return;
   btn.style.display = _isProviderUser(u) ? 'inline-flex' : 'none';
 }
+/* Additive role predicates for the Business Hub (rider/admin, and any-business). */
+function _isRiderUser(u){ var r=(u&&Array.isArray(u.roles))?u.roles:[]; return r.indexOf('driver')>-1||r.indexOf('rider')>-1||!!(u&&u.isDriver)||!!(u&&u.registeredAs&&u.registeredAs.driver); }
+function _isAdminUser(u){ var r=(u&&Array.isArray(u.roles))?u.roles:[]; return r.indexOf('admin')>-1||r.indexOf('superAdmin')>-1||!!(u&&u.isAdmin); }
+
+/* ── Business Management hub ─────────────────────────────────────────────────
+   Role-driven and ADDITIVE: renders ONLY the modules the user can access, and a
+   seller+provider sees BOTH (no exclusive roles). Consolidates the scattered entry
+   points into one titled surface. Each item links to an already-built page. */
+function _renderBusinessHub(u){
+  var wrap=document.getElementById('upBizHub'), grid=document.getElementById('upBizHubGrid');
+  if(!wrap||!grid) return;
+  var seller=_isSellerUser(u), provider=_isProviderUser(u), rider=_isRiderUser(u), admin=_isAdminUser(u);
+  var anyBiz=seller||provider, mods=[];
+  if(seller) mods.push({icon:'🛍',title:'Marketplace',accent:'#71ff00',items:[
+    {label:'My Shops',href:'seller.html'},{label:'Products',href:'seller.html'},
+    {label:'Orders',href:'seller.html'},{label:'Open POS',href:'pos.html'}]});
+  if(provider) mods.push({icon:'🛠',title:'Services',accent:'#f97316',items:[
+    {label:'My Services',href:'provider-dashboard.html#services',id:'bizSvcMain'},
+    {label:'Availability',href:'availability-manager.html'},
+    {label:'Bookings',href:'provider-dashboard.html#bookings'},
+    {label:'Reviews',href:'provider-dashboard.html#reviews'}]});
+  if(anyBiz) mods.push({icon:'💰',title:'Finance',accent:'#22d3ee',items:[
+    {label:'Wallet',href:'wallet.html'},{label:'Payouts',href:'wallet.html'},{label:'Transactions',href:'wallet.html'}]});
+  if(anyBiz) mods.push({icon:'📊',title:'Insights',accent:'#a78bfa',items:[{label:'Analytics',href:'analytics.html'}]});
+  if(rider) mods.push({icon:'🛵',title:'Rider',accent:'#71ff00',items:[{label:'Rider Dashboard',href:'driver.html'}]});
+  if(admin) mods.push({icon:'🛡',title:'Admin',accent:'#ff5470',items:[{label:'Admin OS',href:'admin.html'}]});
+  if(!mods.length){ wrap.style.display='none'; return; }
+  grid.innerHTML=mods.map(function(m){
+    var chips=m.items.map(function(it){
+      return '<a href="'+it.href+'"'+(it.id?' id="'+it.id+'"':'')+' style="padding:8px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:rgba(255,255,255,0.82);font-size:12px;font-weight:700;text-decoration:none;white-space:nowrap;">'+escHtml(it.label)+'</a>';
+    }).join('');
+    return '<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:'+m.accent+';margin:0 0 8px;">'+m.icon+' '+escHtml(m.title)+'</div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:8px;">'+chips+'</div></div>';
+  }).join('');
+  wrap.style.display='block';
+  if(provider) _bizRouteProvider(u);   /* Priority 2 — dashboard-or-onboarding, no bounce */
+}
+/* Priority 2 — resolve the provider's "My Services" destination up front so we NEVER do the
+   dashboard→not-found→onboarding round-trip: dashboard if a providerProfiles doc exists,
+   onboarding if it doesn't. Updates both the header button and the hub link. */
+async function _bizRouteProvider(u){
+  var uid=u&&(u.uid||u.id); if(!uid) return;
+  for(var i=0;i<40&&!window.firebaseDB;i++){ await new Promise(function(r){ setTimeout(r,100); }); }
+  var db=window.firebaseDB; if(!db) return;
+  try{
+    var m=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+    var snap=await m.getDoc(m.doc(db,'providerProfiles',String(uid)));
+    var exists=!!(snap && snap.exists && snap.exists());
+    var link=document.getElementById('bizSvcMain'); if(link) link.setAttribute('href', exists?'provider-dashboard.html#services':'provider-onboarding.html');
+    var btn=document.getElementById('upMyServicesBtn'); if(btn) btn.setAttribute('href', exists?'provider-dashboard.html':'provider-onboarding.html');
+  }catch(e){}
+}
 /* List the provider's bookable services — the service equivalent of "My Shops & Branches".
    Additive: shows for a provider (or anyone who has services) INDEPENDENTLY of the shops section.
    "Manage" reuses the existing provider-dashboard service management (extend, don't rebuild). */
@@ -3235,6 +3295,7 @@ function renderHeaderCard(){
 
   _syncMyStoreBtn(_user);
   _syncMyServicesBtn(_user);  /* provider equivalent of My Store → provider-dashboard.html */
+  _renderBusinessHub(_user);  /* consolidated role-driven Business Management modules */
   _renderMyBranches(_user);   /* seller's shop + branches (Marketplace module) */
   _renderMyServices(_user);   /* provider's services (Services module) — additive, independent of shops */
 
