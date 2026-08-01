@@ -3310,7 +3310,7 @@ function renderBizSellers(){
         +'</div>'
       +'</div>'
     +'</div>';
-  }).join('');
+  })(a, i);
 }
 
 function filterBizSellers(){
@@ -3463,10 +3463,103 @@ function _appContactBlock(a){
   return out+'</div>';
 }
 
+/* ── Applications rendering ───────────────────────────────────────────────
+   P0, 2026-08-01: the Business → Applications tab was blank. Firestore was
+   NOT empty — four applications existed in production (2 pending, 2
+   approved). #bizAppsGrid was an ORPHAN: declared once by the markup and
+   written to by nothing, while _subTabSwitch only toggles display. So the
+   tab showed an empty box with no spinner, no empty state and no error —
+   indistinguishable from "nobody has applied".
+
+   Three rules now hold, and scripts/audit-orphan-panels.js exists to find
+   the next container that breaks them:
+     1. Every container that shows applications is rendered by THIS function.
+     2. A blank area is never a valid outcome. Empty says so; failure says so.
+     3. One malformed document cannot take the others down with it. */
+var _APPS_TARGETS = ['appsGrid', 'bizAppsGrid'];
+var _appsLastList = null;      /* so a tab switch can re-render without a refetch */
+var _appsLoadState = 'idle';   /* idle | loading | ready | error */
+
+function _appsEls(){
+  return _APPS_TARGETS.map(function(id){ return document.getElementById(id); })
+                      .filter(Boolean);
+}
+function _appsWrite(html){ _appsEls().forEach(function(el){ el.innerHTML = html; }); }
+
+/* The loading state must always resolve. It is set only where a resolution
+   is guaranteed to follow. */
+function renderAppsLoading(){
+  _appsLoadState = 'loading';
+  _appsWrite('<div style="color:rgba(255,255,255,0.35);font-size:12px;padding:16px 0;">Loading applications…</div>');
+}
+function renderAppsError(msg){
+  _appsLoadState = 'error';
+  console.error('[Admin][applications] load failed:', msg);
+  _appsWrite('<div style="color:#ff6b6b;font-size:12.5px;font-weight:700;padding:16px 0;">'
+    + 'Could not load applications: ' + h(String(msg || 'unknown error'))
+    + '<div style="color:rgba(255,255,255,0.4);font-weight:400;margin-top:6px;">'
+    + 'This is a read failure, not an empty queue.</div></div>');
+}
+
 function renderApps(list){
-  var grid=document.getElementById('appsGrid'); if(!grid) return;
-  if(!list.length){ grid.innerHTML=empty('📬','No applications'); return; }
-  grid.innerHTML=list.map(function(a,i){
+  list = Array.isArray(list) ? list : [];
+  _appsLastList = list;
+  var els = _appsEls();
+
+  /* Diagnostics the P0 report asked for, on every render. */
+  var pending = 0;
+  for (var q = 0; q < list.length; q++) if ((list[q].status || 'pending') === 'pending') pending++;
+  console.info('[Admin][applications]', {
+    documents: list.length,
+    pending: pending,
+    collection: 'applications',
+    ordering: 'createdAt desc',
+    limit: 100,
+    listenerAttached: !!window._appsListenerAttached,
+    listenerUpdates: window._appsListenerUpdates || 0,
+    targets: _APPS_TARGETS.map(function(id){
+      return id + (document.getElementById(id) ? '' : ' (MISSING)');
+    }).join(', ')
+  });
+
+  if (!els.length) { console.warn('[Admin][applications] no render target in the DOM'); return; }
+
+  /* Badge — was declared in the markup and never populated. */
+  var cnt = document.getElementById('biz-app-count');
+  if (cnt) { cnt.textContent = pending || ''; cnt.style.display = pending ? '' : 'none'; }
+
+  if(!list.length){
+    _appsLoadState = 'ready';
+    _appsWrite(empty('📬','No applications found.'));
+    return;
+  }
+
+  /* Per-record isolation. One document with an unexpected shape used to throw
+     inside .map(), which aborts the WHOLE batch before innerHTML is assigned —
+     leaving the panel exactly as blank as having no data at all. Now a bad
+     record renders as a visible, actionable card and the rest still list. */
+  var failed = 0;
+  var html = list.map(function(a, i){
+    try { return _renderAppCard(a, i); }
+    catch (err) {
+      failed++;
+      console.error('[Admin][applications] record ' + i + ' failed to render',
+        { id: (a && (a._fsId || a.id)) || '(no id)', error: err && err.message });
+      return '<div class="adm-card" style="border-color:rgba(255,107,107,.4);">'
+        + '<div style="color:#ff6b6b;font-weight:800;font-size:13px;">⚠ This application could not be displayed</div>'
+        + '<div style="color:rgba(255,255,255,.45);font-size:11.5px;margin-top:4px;">id: '
+        + h(String((a && (a._fsId || a.id)) || 'unknown')) + ' — ' + h(String(err && err.message || 'render error'))
+        + '</div></div>';
+    }
+  }).join('');
+
+  _appsLoadState = 'ready';
+  _appsWrite(html);
+  console.info('[Admin][applications] rendered', { rendered: list.length - failed, failed: failed });
+}
+
+function _renderAppCard(a, i){
+  return (function(a,i){
     var ROLE_BADGE={ provider:'<span class="badge b-blue">🛠️ Provider</span>',
                      driver:'<span class="badge b-blue">🛵 Rider</span>',
                      seller:'<span class="badge b-purple">🏪 Seller</span>',
@@ -5853,18 +5946,42 @@ function _mergeFirestorePOSOrders(fsOrders){
   if(typeof renderStats==='function') renderStats();
 }
 
-/* Start listeners once admin is authenticated */
-document.addEventListener('sokoniAdminReady', () => {
-  SokoniDB.listenApplications(_mergeFirestoreApps);
+/* ── Applications listener ────────────────────────────────────────────────
+   Attached exactly once. It used to be started from two places — the
+   sokoniAdminReady event AND a 1.5s timer — so an admin who unlocked quickly
+   got two live snapshot listeners on the same query, double the reads and two
+   renders per change. The guard keeps whichever fires first.
+
+   A failure is now reported to the panel rather than warned to the console:
+   see listenApplications' onError in sokoni-db.js. */
+window._appsListenerAttached = false;
+window._appsListenerUpdates  = 0;
+function _startAdminListeners(){
+  if (window._appsListenerAttached) return;
+  window._appsListenerAttached = true;
+  if (typeof renderAppsLoading === 'function') renderAppsLoading();
+  SokoniDB.listenApplications(
+    function(apps){ window._appsListenerUpdates++; _mergeFirestoreApps(apps); },
+    100,
+    function(err){
+      /* The listener is dead, so nothing else will resolve the spinner. */
+      if (typeof renderAppsError === 'function') renderAppsError(err && err.message);
+    }
+  );
   SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
-});
-/* Also trigger immediately if already authenticated */
-setTimeout(()=>{
-  if(sessionStorage.getItem('sokoniAdminUnlocked')){
-    SokoniDB.listenApplications(_mergeFirestoreApps);
-    SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
-  }
+}
+document.addEventListener('sokoniAdminReady', _startAdminListeners);
+/* Also start if this device unlocked earlier in the session. */
+setTimeout(function(){
+  if(sessionStorage.getItem('sokoniAdminUnlocked')) _startAdminListeners();
 }, 1500);
+/* Last resort: if neither path fired, say so instead of showing an empty box
+   forever. A panel that cannot explain itself is what made this a P0. */
+setTimeout(function(){
+  if (!window._appsListenerAttached && typeof renderAppsError === 'function') {
+    renderAppsError('admin session not established — reload and sign in again');
+  }
+}, 12000);
 
 /* ── Bootstrap admin claim (one-time founder setup) ── */
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
@@ -7137,7 +7254,17 @@ window.loadSupportQueue = loadSupportQueue;
   }
 
   /* Sub-tab switchers for each admin section */
-  window.bizSubTab  = function(tab, btn) { _subTabSwitch('biz',  tab, btn); };
+  window.bizSubTab  = function(tab, btn) {
+    _subTabSwitch('biz',  tab, btn);
+    /* _subTabSwitch only toggles display. Without this, opening Applications
+       for the first time shows an empty box until the next snapshot arrives —
+       which, if the listener already delivered its only update, is never. */
+    if (tab === 'applications' && typeof renderApps === 'function') {
+      if (_appsLoadState === 'idle') renderAppsLoading();
+      if (_appsLastList) renderApps(_appsLastList);
+      else if (window.D && D.apps) renderApps(D.apps);
+    }
+  };
   window.ordSubTab  = function(tab, btn) { _subTabSwitch('ord',  tab, btn); };
   window.rideSubTab = function(tab, btn) { _subTabSwitch('ride', tab, btn); };
   window.svcSubTab  = function(tab, btn) { _subTabSwitch('svc',  tab, btn); };

@@ -1,3 +1,101 @@
+## [2026-08-01] — fix(admin): P0 — the Applications panel was a blank box, not an empty queue
+
+**Firestore was not empty.** Production held four applications — 2 pending, 2 approved, all
+`provider`, all carrying `createdAt`: `k Riss`, `Kasindi holdings limited`, `Langa'ta mamafua`,
+`Hometown Movers kenya`. Verified from the server with `functions/scripts/probe-applications.js`
+before touching any code, because answering "is there data?" by reading the broken panel is circular.
+
+### Root cause
+
+`admin.html` has **two** applications containers. The desktop pane `#appsGrid` is rendered by
+`renderApps()`. The Business sub-tab container **`#bizAppsGrid` is referenced exactly once in the
+entire file — by the markup that creates it.** Nothing ever writes to it, and `_subTabSwitch()` only
+toggles `display`. So the tab showed an empty `<div>`: no spinner, no empty state, no error.
+Indistinguishable from "nobody has applied", which is why it read as a data problem.
+
+`#biz-app-count`, the badge on that tab, was orphaned the same way.
+
+### Fix
+
+- **`renderApps()` renders every container**, via `_APPS_TARGETS`. Both grids and the badge now show
+  the same list.
+- **A blank area is no longer a reachable state.** Empty renders *"No applications found."*; a load
+  failure renders *"Could not load applications: … This is a read failure, not an empty queue."*;
+  the loading state is written only where a resolution is guaranteed to follow, plus a 12s backstop
+  that reports a session that never established rather than showing an empty box forever.
+- **One malformed document can no longer abort the batch.** The list was built inside a single
+  `.map()`, so a throw on record 3 meant records 1, 2, 4 and 5 never reached the DOM either. Each
+  record now renders inside its own `try`; a bad one becomes a visible, id-bearing failure card and
+  the rest still list.
+- **`bizSubTab('applications')` re-renders on open.** `_subTabSwitch` only toggles display, so a
+  container populated by a listener showed whatever it had when last hidden — nothing, on first open.
+- **A missing container is warned about** instead of `return`ing silently, which is precisely how
+  `#bizAppsGrid` stayed invisible.
+
+### Listener
+
+- **`sokoni-db.js` `listenApplications()` gained an `onError` callback.** It used to warn to the
+  console and stop, so a rules rejection or a missing index left the caller holding whatever it had
+  and no way to tell failure from emptiness.
+- **The listener is now attached exactly once.** It was started from two places — the
+  `sokoniAdminReady` event *and* a 1.5s timer — so an admin who unlocked quickly got two live
+  snapshot listeners on the same query: double the reads, two renders per change.
+- `orderBy('createdAt','desc')` is load-bearing and is documented as such: Firestore omits documents
+  that lack the ordering field, so a write path that forgets `createdAt` makes its own record
+  invisible rather than erroring. Measured on the same collection: `orderBy('updatedAt')` returns
+  **1 of 4**.
+
+### Diagnostics
+
+Every render emits `[Admin][applications]` with documents returned, pending count, active collection,
+ordering, limit, listener attached, listener update count, and which targets are present or missing —
+followed by `rendered` / `failed` counts.
+
+### This is a class of bug, not one instance
+
+`scripts/audit-orphan-panels.js` (new) finds containers declared once and written to by nothing.
+**`admin.html` has 29 more**, cross-checked repo-wide: `disputesGrid`, `returnsGrid`,
+`deliveriesBody`, `couriersBody`, `propsBody`, `verificationBody`, `communityGrid`,
+`communityPostsGrid`, `groundSlotsGrid`, `modStats`, `verificationStats`, `disputeStats`, `invDiag`,
+`userDetailContent`, `ord-dispute-cnt`, `ride-payout-cnt`, `verif-badge`, `mod-badge` and others.
+Each renders as a permanently blank area. `super-admin.html`, `moderation.html` and
+`trust-safety.html` are clean. **Reported, not fixed — each needs a product decision about whether it
+should be populated or removed, and that is a bigger scope than this P0.**
+
+### Cross-console consistency — a real divergence, deliberately left standing
+
+The three consoles do **not** read one source:
+
+| console | source |
+|---|---|
+| `super-admin.html` | `applicationList` Cloud Function — canonical |
+| `admin.html` | client Firestore, `orderBy('createdAt')`, limit 100 |
+| `moderation.html` | client Firestore, no ordering, limit 300 |
+
+Converging `admin.html` and `moderation.html` onto `applicationList` is the right end state and is
+what the Publication Contract implies. It is **not** in this commit: that is a data-path change to two
+live consoles, and folding it into a P0 blank-screen fix would make the fix impossible to verify or
+roll back independently. Filed as the next step.
+
+### Verification
+
+`scripts/test-apps-render.js` (new) lifts `renderApps` **verbatim out of `admin.html`** and runs it
+against a stub DOM — testing a reimplementation would prove nothing about the page actually served.
+**25/25**: both containers rendered, badge populated, explicit empty state, `undefined` handled,
+three healthy records surviving a throwing fourth, failure distinguishable from empty, loading
+resolving, missing container warned, and the full diagnostics payload.
+
+**Not yet verified in a live authenticated browser session** — that needs an admin ID token this
+environment cannot mint, so no screenshot accompanies this. The production data is server-verified and
+the render contract is source-verified; the end-to-end confirmation is a manual step.
+
+Files: `admin.html`, `sokoni-db.js`, `scripts/audit-orphan-panels.js` (new),
+`scripts/test-apps-render.js` (new), `functions/scripts/probe-applications.js` (new).
+Database changes: none. API changes: `listenApplications(cb, limit, onError)` — third argument
+optional, existing callers unaffected. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(privacy): explicit Reject control + revocable consent (Sprint 3 P0.1)
 
 The consent gate stopped analytics from running without a "yes", but the banner offered only

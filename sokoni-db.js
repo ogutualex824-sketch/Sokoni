@@ -86,11 +86,24 @@ const SokoniDB = {
     return id;
   },
 
-  listenApplications(callback, limitN = 100) {
+  /* onError is not optional here. This used to warn to the console and stop,
+     so a rules rejection or a missing index left the caller holding whatever
+     it had before — usually nothing — with no way to tell "failed to load"
+     from "nobody has applied". The caller now gets told, and can say so.
+
+     orderBy(createdAt) is load-bearing: Firestore omits documents that lack
+     the ordering field entirely, so a write path that forgets createdAt makes
+     its own record invisible here rather than erroring. Verified against
+     production 2026-08-01: 4/4 application documents carry createdAt.
+     (orderBy(updatedAt) on the same collection returns 1 of 4.) */
+  listenApplications(callback, limitN = 100, onError) {
     const q = query(collection(db, 'applications'), orderBy('createdAt', 'desc'), limit(limitN));
     return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
-      err  => _log.warn('[SokoniDB] applications:', err.message)
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() })), { source: 'firestore' }),
+      err  => {
+        _log.warn('[SokoniDB] applications:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
     );
   },
 
