@@ -384,11 +384,42 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
   const { providerId, startDate, days = 7 } = request.data;
   if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
 
+  /* ── Canonical availability, with convergence fallback so an approved provider is NEVER
+     permanently unbookable. A default (Mon–Fri 09:00–17:00, appointments enabled) is applied —
+     and PERSISTED once — when the doc is missing or effectively unconfigured (empty schedule /
+     appointments not enabled). This is the one availability authority; no parallel source. ── */
+  const DEFAULT_SCHEDULE = {
+    monday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    tuesday:   { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    wednesday: { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    thursday:  { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    friday:    { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] },
+    saturday:  { closed: true, periods: [], breaks: [] },
+    sunday:    { closed: true, periods: [], breaks: [] },
+  };
+  const DEFAULT_APPT = { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, minNoticeHours: 1, allowSameDay: false, maxDaysAhead: 30 };
+
   const configSnap = await db.collection("providerAvailability").doc(providerId).get();
-  if (!configSnap.exists) {
-    throw new HttpsError("not-found", "Provider has not configured availability.");
+  let cfg = configSnap.exists ? configSnap.data() : {};
+  const _anyOpen = cfg.schedule && Object.keys(cfg.schedule).some(function (k) {
+    return cfg.schedule[k] && !cfg.schedule[k].closed && (cfg.schedule[k].periods || []).length > 0;
+  });
+  const _apptOk = cfg.appt && cfg.appt.enabled === true && Number(cfg.appt.durationMins) > 0;
+  const _unconfigured = !configSnap.exists || !_anyOpen || !_apptOk;
+  if (_unconfigured) {
+    if (!_anyOpen) cfg.schedule = DEFAULT_SCHEDULE;
+    cfg.appt = Object.assign({}, DEFAULT_APPT, cfg.appt || {});
+    if (cfg.appt.enabled == null) cfg.appt.enabled = true;
+    if (!(Number(cfg.appt.durationMins) > 0)) cfg.appt.durationMins = DEFAULT_APPT.durationMins;
+    /* One-time backfill so the manager shows it + the config is canonical. Non-fatal on failure. */
+    try {
+      await db.collection("providerAvailability").doc(providerId).set({
+        schedule: cfg.schedule, appt: cfg.appt, modes: cfg.modes || ["fixed_hours"], uid: providerId,
+        autoConfiguredAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      console.info("[getAvailabilitySlots] auto-configured default availability", { providerId, existed: configSnap.exists });
+    } catch (e) { console.warn("[getAvailabilitySlots] default backfill failed", { providerId, code: e && e.code, message: e && e.message }); }
   }
-  const cfg = configSnap.data();
 
   // Enforce minNoticeHours — earliest bookable time
   const minNoticeMs = (cfg.appt?.minNoticeHours || 1) * 3_600_000;

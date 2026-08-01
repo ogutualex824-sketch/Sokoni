@@ -582,3 +582,88 @@ Remaining forced-layout sites (`shared-header.js` `_update` 1003 ms, `sokoni-per
 995 ms) should be re-profiled *after* staged boot, since they are likely subject to the same
 attribution effect and may shrink or move without being touched.
 
+---
+
+## Sprint 2 Phase 4 prep — Boot sequence map (homepage)
+
+Tool: `scripts/perf-boot.js` · Data: `docs/perf-boot-home.json`
+
+Every mutating DOM API is wrapped before any page script runs; each call is attributed to the first
+stack frame outside the shim. Paint milestones share the same clock.
+
+**Limits, stated up front:** instrumentation inflates absolute timings, so these must not be compared
+with `perf-probe` numbers. Order, attribution and relative volume are the results. Parser-inserted
+markup is not counted — this measures *script-driven* mutation.
+
+### The map
+
+```
+Milestones: FCP 4428ms · LCP 7252ms · DCL 15100ms · load 25198ms
+Script-driven DOM mutations: 462 calls / ~4215 nodes
+                             18 calls BEFORE first paint
+```
+
+| window | calls | nodes | top mutators |
+|---|---|---|---|
+| 300–600 ms | 18 | 34 | security.js (21), splash.js (13) |
+| 5000 ms+ | **444** | **4181** | **script.js (3330)**, sokoni-spotlight.js (215), shared-header.js (205) |
+
+| nodes | calls | before/after FCP | window | script |
+|---|---|---|---|---|
+| **3330** | 62 | 0 / 62 | 11769–29690 ms | **script.js** |
+| 215 | 3 | 0 / 3 | 18961–27087 ms | sokoni-spotlight.js |
+| 205 | 71 | 0 / 71 | 8603–28334 ms | shared-header.js |
+| 103 | 84 | 15 / 69 | 474–24856 ms | security.js |
+| 63 | 63 | 0 / 63 | 18090–29637 ms | sokoni-layout.js |
+
+### The premise was wrong — mine and the brief's
+
+The working assumption was *"the page is building too much, too early."* **It is not.**
+
+Only **18 of 462 mutation calls (4%), and 34 of 4215 nodes (0.8%), occur before first paint.** The
+shell paints on an almost-empty DOM. **96% of mutation happens after FCP**, and the single largest
+mutator does not start until 11.7 s — nearly three times FCP.
+
+A staged boot that defers work out of the pre-paint window therefore has almost nothing to defer.
+Stage 0 is already nearly empty. Had it been built as scoped, it would have reorganised code that was
+not on the critical path and measured no improvement — a fifth rejected experiment.
+
+### What the map actually shows
+
+**`script.js` creates 3330 nodes — 79% of all DOM built — in 62 calls spread across 18 seconds.**
+
+The homepage renders only 20 products (`products.slice(0, 20)`), so a single feed pass is roughly 320
+nodes. 3330 is an order of magnitude more, and `displayProducts` has **10 call sites**, at least two of
+which fire during boot on the same data:
+
+```
+line 402   displayProducts(products.slice(0, 20));
+line 501   displayProducts(products.slice(0, 8));   // re-render with distance badges
+line 623   displayProducts(products.slice(0, 20));
+```
+
+Line 501 is an explicit re-render triggered by the geolocation callback. Lines 402 and 623 both render
+the same first-20 slice from different entry points.
+
+**The dominant cost looks like repeated re-rendering of the same feed, not a feed that is too large.**
+That is consistent with 62 calls producing 3330 nodes over 18 seconds — the same cards being rebuilt
+several times as data, location and distance badges arrive.
+
+### Why this also explains the rejected experiments
+
+`_measure` was charged 1598 ms of forced layout because it runs on `requestAnimationFrame` and is
+often the first code to read geometry after a mutation. If the feed is rebuilt repeatedly between
+11.7 s and 29.7 s, `_measure` is repeatedly the first reader after each rebuild. Optimising the reader
+could never work — the mutations kept coming.
+
+### Recommended next investigation (not yet an optimisation)
+
+1. **Instrument `displayProducts` call count and payload during boot.** Confirm how many times each
+   card is rebuilt and with what data. This is a counting exercise, not a change.
+2. If re-rendering is confirmed, the fix is Category A (architectural): render once when the data is
+   complete, or patch the affected cards rather than rebuilding the grid — e.g. add distance badges to
+   existing nodes instead of calling `displayProducts` again.
+3. Only then measure, against `styleMs`/`layoutMs` at the ±2% floor.
+
+**Do not** implement a staged boot on the current evidence. The data does not support it for this page.
+
