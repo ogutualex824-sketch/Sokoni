@@ -93,6 +93,14 @@
      the real gtag. */
   window.gtag = window.gtag || function () {};
 
+  /* Google's own kill switch, ON by default. Belt to the gate's braces: gtag.js
+     honours this flag internally, so even if the tag were loaded by some other
+     path it would send nothing and set no cookie. It is also the ONLY way to stop
+     GA4 once it has loaded — a script cannot be unloaded — which is what makes
+     mid-session withdrawal actually work rather than merely look like it does. */
+  var GA_KILL = 'ga-disable-' + GA_ID;
+  window[GA_KILL] = true;
+
   /* _initGA4 is not called here. Both layers start from the single consent
      subscription at the bottom of this module — see section 7. */
 
@@ -429,20 +437,72 @@
   ════════════════════════════════════════════════════════ */
 
   /* Everything above only defines capability; this is the only place either layer
-     is switched on. Runs synchronously for a visitor who already accepted, and on
-     the accept click for a new one — so the page view is recorded at the moment
-     consent is given, exactly like GA4's own send_page_view. Declining leaves this
-     unrun: no gtag.js request, no GA cookie, no local writes. */
+     is switched on or off.
+
+     Consent is not a one-way latch. A user can accept, then withdraw from Privacy
+     Settings, then accept again — possibly in another tab — so this subscribes to
+     the DECISION, not to a single grant event. */
+
+  /* Set once, ever: whether the load-time collectors have already run. _collect
+     alone cannot carry this, because it goes back to false on withdrawal — and
+     re-running _push() on a re-grant would record the same page view twice. */
+  var _bootstrapped = false;
+
   function _startAnalytics() {
-    if (_collect) return;                /* exactly once */
+    if (_collect) return;                /* already collecting */
     _collect = true;
-    _initGA4();
+    window[GA_KILL] = false;             /* release Google's kill switch */
+    _initGA4();                          /* idempotent — injects gtag.js once */
+    if (_bootstrapped) return;
+    _bootstrapped = true;
+    /* The page view lands at the moment consent is given, exactly like GA4's own
+       send_page_view — it is not a replay of a pre-consent event. */
     try { _push(); } catch (e) {}
     try { _trackRetention(); } catch (e) {}
   }
 
-  if (window.SokoniConsent) {
-    window.SokoniConsent.onGrant(_startAnalytics);
+  /* Withdrawal has to be real, not cosmetic. gtag.js cannot be unloaded, so:
+     stop Layer 2 writes, flip Google's kill switch so no further hit is sent and
+     no GA cookie is (re)set, then delete what is already on the device. Leaving
+     the behavioural store behind after "reject" would keep the data the user just
+     asked us not to have. */
+  function _stopAnalytics() {
+    _collect = false;
+    window[GA_KILL] = true;
+    try {
+      localStorage.removeItem("sokoniAnalytics");
+      localStorage.removeItem("_sokoniLastSession");
+    } catch (e) {}
+    _clearGaCookies();
+  }
+
+  /* _ga / _gid / _gat* / _ga_<STREAM>. Cleared on the exact host and on the
+     registrable-domain form, because GA sets them on the latter — expiring only
+     the host-scoped copy leaves the real cookie in place. */
+  function _clearGaCookies() {
+    try {
+      var host = location.hostname;
+      var parts = host.split('.');
+      var domains = [host, '.' + host];
+      if (parts.length > 2) domains.push('.' + parts.slice(-2).join('.'));
+      var names = document.cookie.split(';')
+        .map(function (c) { return c.split('=')[0].trim(); })
+        .filter(function (n) { return /^_ga(_|$)|^_gid$|^_gat/.test(n); });
+      for (var i = 0; i < names.length; i++) {
+        for (var j = 0; j < domains.length; j++) {
+          document.cookie = names[i] + '=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/; domain=' + domains[j];
+        }
+        document.cookie = names[i] + '=; expires=Thu, 01 Jan 1970 00:00:01 GMT; path=/';
+      }
+    } catch (e) {}
+  }
+
+  if (window.SokoniConsent && typeof window.SokoniConsent.onChange === 'function') {
+    /* Fires immediately with the current decision, then on every change. One
+       subscription covers first visit, returning visitor, reject, and re-accept. */
+    window.SokoniConsent.onChange(function (granted) {
+      if (granted) _startAnalytics(); else _stopAnalytics();
+    });
   } else if (window.console && console.warn) {
     /* security.js defines SokoniConsent and is a blocking script far earlier in the
        document, so this branch should be unreachable. If it is ever taken, FAIL

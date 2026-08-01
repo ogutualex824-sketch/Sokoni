@@ -445,6 +445,25 @@
   <div id="pane-cookies" class="legal-pane">
     <div class="update-date">Last updated: 29 May 2026</div>
 
+    <!-- Privacy Settings — the user's decision must be changeable, not just recordable.
+         This is the same SokoniConsent authority the consent banner writes to; there is
+         no second consent system and no separate storage key. -->
+    <div class="legal-card" id="cookie-choices" style="border-color:rgba(113,255,0,0.22);">
+      <h3>⚙️ Your Privacy Settings</h3>
+      <p>Analytics runs only if you accept it. You can change your mind at any time, and the change takes effect immediately — you do not need to reload the page.</p>
+      <p style="margin-top:12px;">Current setting: <strong id="consentStatus" style="color:#71ff00;">Checking…</strong></p>
+      <div id="consentControls" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;">
+        <button type="button" id="consentAcceptBtn"
+                style="flex:1 1 160px;min-height:48px;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;">
+          Accept analytics</button>
+        <button type="button" id="consentRejectBtn"
+                style="flex:1 1 160px;min-height:48px;background:transparent;color:rgba(255,255,255,0.92);border:1px solid rgba(255,255,255,0.3);border-radius:12px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;">
+          Reject analytics</button>
+      </div>
+      <p id="consentSaved" role="status" aria-live="polite" style="margin-top:12px;font-size:13px;color:#71ff00;min-height:18px;"></p>
+      <p style="margin-top:10px;font-size:12px;color:rgba(255,255,255,0.4);">Rejecting also deletes the analytics data already held on this device and clears the Google Analytics cookies. Essential storage — your login, cart and wishlist — is unaffected either way.</p>
+    </div>
+
     <h2>🍪 What Are Cookies?</h2>
     <p>Cookies are small text files stored on your device when you visit a website. SOKONI uses cookies and similar technologies (such as localStorage and sessionStorage) to make the Platform work and to understand how you use it.</p>
 
@@ -459,17 +478,20 @@
         <li><strong>wishlist</strong> — stores saved items</li>
         <li><strong>sokoniAgeVerified</strong> — stores age verification result (session only)</li>
         <li><strong>sokoniDemoSeeded</strong> — records that demo data has been loaded</li>
+        <li><strong>sokoniPrivacyAccepted</strong> / <strong>sokoniPrivacyRejected</strong> — records your analytics decision so we do not ask again</li>
       </ul>
     </div>
 
     <div class="legal-card">
       <h3>📊 Analytics Cookies (Opt-In)</h3>
       <p>Used to understand Platform usage via Google Analytics 4.</p>
+      <p>Nothing here is created until you accept. Reject, and Google Analytics is never loaded at all.</p>
       <ul>
         <li><strong>_ga, _gid, _gat</strong> — Google Analytics session tracking (anonymised IP)</li>
         <li><strong>sokoniAnalytics</strong> — local analytics data stored on your device only</li>
       </ul>
       <p>Google Analytics data is anonymised and processed under Google's data processing terms.</p>
+      <p><a href="#cookie-choices" style="color:#71ff00;">Change your analytics setting →</a></p>
     </div>
 
     <div class="legal-card">
@@ -532,6 +554,60 @@ if(hash){
 <script src="scroll-top.js" defer></script>
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-invoice.js"></script><script src="sw-register.js" defer></script>
+<script>
+/* ── Privacy Settings ──────────────────────────────────────────────────────
+   Reads and writes ONLY through window.SokoniConsent (security.js). No second
+   consent system, no direct localStorage access here — a second writer is
+   exactly how the original defect happened, where the banner owned the answer
+   and analytics.js never looked at it.
+
+   security.js is a blocking script in <head>, so the API is defined before this
+   runs. If it somehow is not, the controls are hidden rather than left on screen
+   pretending to work. */
+(function(){
+  var status  = document.getElementById('consentStatus');
+  var accept  = document.getElementById('consentAcceptBtn');
+  var reject  = document.getElementById('consentRejectBtn');
+  var saved   = document.getElementById('consentSaved');
+  var wrap    = document.getElementById('consentControls');
+  if (!status || !accept || !reject) return;
+
+  if (!window.SokoniConsent) {
+    status.textContent = 'Unavailable — clear site data in your browser to reset.';
+    if (wrap) wrap.style.display = 'none';
+    return;
+  }
+
+  var C = window.SokoniConsent;
+
+  function paint(granted){
+    var decided = C.decided();
+    status.textContent = !decided ? 'Not set — analytics is off until you choose'
+                       : granted  ? 'Accepted — analytics is on'
+                                  : 'Rejected — analytics is off';
+    status.style.color = granted ? '#71ff00' : 'rgba(255,255,255,0.75)';
+    /* The button for the state you are already in is dimmed but stays enabled:
+       disabling it would remove the only affordance that confirms which one is
+       active, and re-confirming a choice must never be harder than changing it. */
+    accept.style.opacity = granted ? '0.5' : '1';
+    reject.style.opacity
+      = (decided && !granted) ? '0.5' : '1';
+  }
+
+  /* Fires immediately with the current decision, then on every change —
+     including a change made in another tab. */
+  C.onChange(paint);
+
+  accept.addEventListener('click', function(){
+    C.grant();
+    saved.textContent = 'Saved. Analytics is now on.';
+  });
+  reject.addEventListener('click', function(){
+    C.deny();
+    saved.textContent = 'Saved. Analytics is off and the data held on this device has been deleted.';
+  });
+})();
+</script>
 <script>
 /* Nav state init */
 (function(){

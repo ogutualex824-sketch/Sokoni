@@ -63,10 +63,72 @@ const securitySrc  = fs.readFileSync(SECURITY_JS, 'utf8');
 /* The consent authority exists and is the only implementation of the check. */
 check(/window\.SokoniConsent\s*=\s*\{/.test(securitySrc),
   'security.js defines window.SokoniConsent');
-check(/granted:\s*function/.test(securitySrc) && /onGrant:\s*function/.test(securitySrc),
-  'SokoniConsent exposes granted() and onGrant()');
-check(/_notifyGranted\s*&&|SokoniConsent\s*&&\s*window\.SokoniConsent\._notifyGranted|window\.SokoniConsent\._notifyGranted\(\)/.test(securitySrc),
-  'the accept handler publishes the grant');
+for (const fn of ['granted', 'denied', 'decided', 'onGrant', 'onChange', 'grant', 'deny']) {
+  check(new RegExp('\\b' + fn + ':\\s*function').test(securitySrc),
+    `SokoniConsent exposes ${fn}()`);
+}
+
+/* Comment-stripped copy. Several checks below enforce the ABSENCE of a pattern,
+   and the comment that records why the pattern was removed would otherwise trip
+   the check that removed it. */
+const securityCode = securitySrc.replace(/\/\*[\s\S]*?\*\//g, '');
+
+/* The banner must offer both answers, and Reject must cost no more than Accept.
+   A reject buried behind a link or a settings page is a dark pattern regardless
+   of how correct the code behind it is. */
+check(/_sokoniPrivacyRejectBtn/.test(securitySrc),
+  'the consent banner has an explicit Reject button');
+const btnRow = securityCode.match(/_sokoniPrivacyRejectBtn[\s\S]{0,2000}?Accept<\/button>/);
+check(!!btnRow && (btnRow[0].match(/width:calc\(50% - 5px\)/g) || []).length === 2,
+  'Reject and Accept are equal width', 'explicit widths, immune to the inline-style !important rules');
+/* Both buttons must carry the SAME padding and font-size, because
+   button[style*="background:linear-gradient(135deg,#71ff00"] in mobile.css forces
+   13px 20px / 14px on Accept only. Matching them here keeps the rule from making
+   Reject the visually smaller of the two. */
+check(!!btnRow && (btnRow[0].match(/padding:13px 20px;font-size:14px/g) || []).length === 2,
+  'Reject and Accept carry identical padding and type size');
+check(!/grid-template-columns:1fr 1fr/.test(securityCode),
+  'the button row avoids the mobile grid-collapse selector',
+  '[style*="grid-template-columns:1fr 1fr"] would stack them');
+check(!!btnRow && (btnRow[0].match(/min-height:48px/g) || []).length === 2,
+  'Reject and Accept are equal height', 'both above the 44px touch floor');
+check(/_decide\(false\)/.test(securitySrc) && /_decide\(true\)/.test(securitySrc),
+  'both buttons run the same dismiss path');
+
+/* Gating the prompt on "accepted" alone would re-ask a user who said no on every
+   page load — attrition dressed up as a consent prompt. */
+check(/if\(!window\.SokoniConsent\.decided\(\)\)\{/.test(securitySrc),
+  'the prompt is shown until ANSWERED, not until accepted');
+check(/if \(!window\.SokoniConsent\.decided\(\)\) return;/.test(securitySrc),
+  'the stale-layer sweeper never removes an unanswered prompt');
+
+/* The banner may no longer claim an answer the user has not given. */
+check(!/By continuing you accept/.test(securityCode),
+  'no implied-consent wording in the banner');
+
+/* Withdrawal has to be real: gtag.js cannot be unloaded, so the kill switch and
+   the on-device purge are the only things that make "reject" mean anything after
+   a session in which the user had accepted. */
+check(/ga-disable-/.test(analyticsSrc), 'GA kill switch is used');
+check(/window\[GA_KILL\] = true;/.test(analyticsSrc),
+  'the kill switch defaults ON', 'fail-safe if gtag.js loads by any other path');
+check(/function _stopAnalytics\(\)/.test(analyticsSrc),
+  'analytics can be stopped, not only started');
+check(/removeItem\("sokoniAnalytics"\)/.test(analyticsSrc),
+  'withdrawal deletes the on-device store');
+check(/function _clearGaCookies\(\)/.test(analyticsSrc),
+  'withdrawal clears the GA cookies');
+
+/* Privacy Settings must reuse the authority, not grow a second one. */
+const legalSrc = fs.readFileSync(path.join(ROOT, 'legal.html'), 'utf8');
+check(/id="cookie-choices"/.test(legalSrc),
+  'legal.html has a Privacy Settings control');
+check(/C\.grant\(\)/.test(legalSrc) && /C\.deny\(\)/.test(legalSrc),
+  'Privacy Settings writes through SokoniConsent');
+const legalInline = legalSrc.slice(legalSrc.indexOf('Privacy Settings \u2500'));
+check(!/localStorage\.(setItem|removeItem)\(['"]sokoniPrivacy/.test(legalInline),
+  'Privacy Settings does not touch the consent keys directly',
+  'one writer, or the two drift apart');
 
 /* analytics.js must not read the consent key itself. Two readers of the same
    localStorage key is exactly how the original drift happened: one of them can
@@ -96,8 +158,11 @@ check(/if \(_collect\) localStorage\.setItem\("_sokoniLastSession"/.test(analyti
   'otherwise a pre-consent visit burns the 30-min session window');
 
 /* Exactly one start point, and it fails closed. */
-const startCalls = (analyticsSrc.match(/SokoniConsent\.onGrant\(/g) || []).length;
+const startCalls = (analyticsSrc.match(/SokoniConsent\.(onGrant|onChange)\(/g) || []).length;
 check(startCalls === 1, 'exactly one consent subscription', `found ${startCalls}`);
+check(/SokoniConsent\.onChange\(/.test(analyticsSrc),
+  'analytics subscribes to the DECISION, not just to grants',
+  'onGrant alone would keep collecting after a withdrawal');
 check(/_collect = true;[\s\S]{0,200}_initGA4\(\);/.test(analyticsSrc),
   'both layers start from the same point');
 check(/analytics disabled/.test(analyticsSrc),
@@ -194,11 +259,35 @@ if (CONSENT_START === -1) {
       addEventListener: () => {},
     };
 
+    /* A real cookie jar, because "withdrawal clears the GA cookies" is a claim
+       about observable state and a stub that swallows writes would let a broken
+       purge pass. Honours expiry in the past as a delete, which is the only
+       mechanism a page has for removing a cookie. */
+    const jar = {};
+    Object.defineProperty(document, 'cookie', {
+      get() {
+        return Object.keys(jar).map(k => k + '=' + jar[k]).join('; ');
+      },
+      set(str) {
+        const parts = String(str).split(';');
+        const [name, value] = parts[0].split('=');
+        const exp = parts.slice(1).map(p => p.trim().toLowerCase())
+          .find(p => p.startsWith('expires='));
+        if (exp && new Date(exp.slice(8)).getTime() < 2000000000000 &&
+            new Date(exp.slice(8)).getTime() < Date.parse('2000-01-01')) {
+          delete jar[name.trim()];
+        } else {
+          jar[name.trim()] = (value || '').trim();
+        }
+      },
+    });
+
     const win = {
       document,
       localStorage,
+      jar,
       navigator: { userAgent: 'Mozilla/5.0 (consent-gate-test)' },
-      location: { pathname: '/index.html', href: 'https://mysokoni.co.ke/' },
+      location: { pathname: '/index.html', href: 'https://mysokoni.co.ke/', hostname: 'mysokoni.co.ke' },
       innerHeight: 800,
       scrollY: 0,
       console: { warn: () => {}, log: () => {}, error: () => {} },
@@ -224,6 +313,9 @@ if (CONSENT_START === -1) {
         } catch (e) { return 0; }
       },
       configCalls: () => (win.dataLayer || []).filter(a => a[0] === 'config').length,
+      gaCookies:   () => Object.keys(jar).filter(n => /^_ga(_|$)|^_gid$|^_gat/.test(n)),
+      killSwitch:  () => win['ga-disable-' + (win.localStorage.getItem('sokoniGaId') || '')],
+      seedGaCookies: () => { jar['_ga'] = 'GA1.1.x'; jar['_gid'] = 'GA1.1.y'; jar['_ga_QT32H65TJS'] = 'GS1.1.z'; },
     };
   }
 
@@ -316,6 +408,99 @@ if (CONSENT_START === -1) {
     check(sb.gaRequested() === 1, 'S7 re-notification does not re-inject gtag.js', `${sb.gaRequested()}`);
     check(sb.configCalls() === 1, 'S7 re-notification does not duplicate config',  `${sb.configCalls()}`);
     check(sb.pageViews() === 1,   'S7 re-notification does not duplicate page views', `${sb.pageViews()}`);
+  }
+
+  /* 9 ── Reject. The decision must be RECORDED, not merely obeyed — an
+          unrecorded "no" means the prompt returns on the next page load, which
+          is attrition, not consent. */
+  {
+    const sb = boot({});
+    sb.ctx.window.SokoniConsent.deny();
+    check(sb.ctx.window.SokoniConsent.granted() === false, 'S9 reject: not granted');
+    check(sb.ctx.window.SokoniConsent.denied()  === true,  'S9 reject: recorded as denied');
+    check(sb.ctx.window.SokoniConsent.decided() === true,
+      'S9 reject: counts as answered', 'the prompt will not re-ask');
+    check(!Object.prototype.hasOwnProperty.call(sb.store, 'sokoniPrivacyAccepted'),
+      'S9 reject: the accept marker is not left behind');
+    check(sb.gaRequested() === 0, 'S9 reject: gtag.js never requested');
+    check(!sb.localWritten(),     'S9 reject: nothing stored');
+  }
+
+  /* 10 ── Reject, then refresh. */
+  {
+    const sb1 = boot({});
+    sb1.ctx.window.SokoniConsent.deny();
+    const sb2 = boot(sb1.store);
+    check(sb2.gaRequested() === 0, 'S10 refresh after reject: still no GA request');
+    check(!sb2.localWritten(),     'S10 refresh after reject: still nothing stored');
+    check(sb2.ctx.window.SokoniConsent.decided() === true,
+      'S10 refresh after reject: decision persists');
+  }
+
+  /* 11 ── Withdrawal mid-session, from Privacy Settings, after having accepted.
+           This is the case a grant-only subscription gets WRONG: gtag.js is already
+           loaded and cannot be unloaded, so unless the kill switch flips and the
+           device is purged, "reject" is cosmetic. */
+  {
+    const sb = boot({ sokoniPrivacyAccepted: '1730000000000' });
+    sb.seedGaCookies();
+    check(sb.localWritten(), 'S11 setup: collecting before withdrawal');
+    check(sb.gaCookies().length === 3, 'S11 setup: GA cookies present');
+
+    sb.ctx.window.SokoniConsent.deny();
+
+    check(!sb.localWritten(),  'S11 withdrawal: on-device store deleted');
+    check(!Object.prototype.hasOwnProperty.call(sb.store, '_sokoniLastSession'),
+      'S11 withdrawal: session stamp deleted');
+    check(sb.gaCookies().length === 0, 'S11 withdrawal: GA cookies cleared',
+      `left: ${sb.gaCookies().join(',') || 'none'}`);
+    check(sb.ctx.window['ga-disable-G-QT32H65TJS'] === true,
+      'S11 withdrawal: GA kill switch engaged', 'gtag.js sends nothing further');
+
+    /* And it must STAY stopped. */
+    sb.ctx.sokoniTrackProductView({ id: 'p9', name: 'After', price: 1, category: 'x' });
+    sb.ctx.sokoniTrackEngagement('tap', 1);
+    check(!sb.localWritten(), 'S11 withdrawal: later events collect nothing');
+  }
+
+  /* 12 ── Accept after previously rejecting. Collection resumes, and the page
+           view is NOT recorded twice — the load-time collectors already ran for
+           this page load. */
+  {
+    const sb = boot({ sokoniPrivacyAccepted: '1730000000000' });
+    const before = sb.pageViews();
+    sb.ctx.window.SokoniConsent.deny();
+    sb.ctx.window.SokoniConsent.grant();
+    check(sb.gaRequested() === 1, 'S12 re-accept: gtag.js still requested only once',
+      `${sb.gaRequested()}`);
+    check(sb.configCalls() === 1, 'S12 re-accept: GA config not duplicated', `${sb.configCalls()}`);
+    check(sb.ctx.window['ga-disable-G-QT32H65TJS'] === false,
+      'S12 re-accept: kill switch released');
+    sb.ctx.sokoniTrackEngagement('tap', 1);
+    check(sb.localWritten(), 'S12 re-accept: collection resumes');
+    check(sb.pageViews() <= before,
+      'S12 re-accept: the page view is not recorded again', `before ${before}, now ${sb.pageViews()}`);
+  }
+
+  /* 13 ── Returning visitor who previously rejected. */
+  {
+    const sb = boot({ sokoniPrivacyRejected: '1730000000000' });
+    check(sb.gaRequested() === 0, 'S13 returning rejecter: GA not initialised at load');
+    check(!sb.localWritten(),     'S13 returning rejecter: nothing collected at load');
+    check(sb.ctx.window.SokoniConsent.decided() === true,
+      'S13 returning rejecter: not re-asked');
+  }
+
+  /* 14 ── Republishing an unchanged decision must not re-initialise anything.
+           A cross-tab storage event does exactly this. */
+  {
+    const sb = boot({ sokoniPrivacyAccepted: '1730000000000' });
+    sb.ctx.window.SokoniConsent._publish();
+    sb.ctx.window.SokoniConsent._publish();
+    sb.ctx.window.SokoniConsent.grant();
+    check(sb.gaRequested() === 1, 'S14 no duplicate initialisation', `${sb.gaRequested()} gtag.js requests`);
+    check(sb.configCalls() === 1, 'S14 no duplicate GA config',       `${sb.configCalls()}`);
+    check(sb.pageViews() === 1,   'S14 no duplicate page view',       `${sb.pageViews()}`);
   }
 
   /* 8 ── Reads stay open. The admin dashboard must keep working; gating writes

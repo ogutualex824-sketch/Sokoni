@@ -524,35 +524,107 @@ const SokoniSecurity = (() => {
        while analytics.js is deferred (:3104), so this API is always defined
        before any subscriber runs. No load-order race, no polling.
 
-         SokoniConsent.granted()      → boolean, the persisted decision
-         SokoniConsent.onGrant(fn)    → run fn once consent exists; fires
-                                        immediately if it already does */
+         SokoniConsent.granted()    → boolean: the user said yes
+         SokoniConsent.denied()     → boolean: the user said no
+         SokoniConsent.decided()    → boolean: the user has answered at all
+         SokoniConsent.grant()      → record yes and publish
+         SokoniConsent.deny()       → record no, publish, and revoke
+         SokoniConsent.onGrant(fn)  → run fn once consent exists
+         SokoniConsent.onChange(fn) → fn(granted) now, and on every change
+
+       onChange exists because consent is not a one-way latch. A user can
+       reject after accepting, and a subscriber that only ever learned about
+       grants would keep collecting forever after a withdrawal. */
     (function(){
       if (window.SokoniConsent) return;
-      var _subs = [];
+
+      /* Storage model: exactly ONE of these keys is ever set, so there is no
+         state where accepted and rejected are both true and a reader has to
+         guess which one wins.
+
+         sokoniPrivacyAccepted is kept as the "yes" marker rather than being
+         replaced by one tri-state key: every device that has already accepted
+         carries it, and re-prompting all of them would be a regression dressed
+         up as a schema tidy-up. */
+      var ACCEPT_KEY = "sokoniPrivacyAccepted";
+      var REJECT_KEY = "sokoniPrivacyRejected";
+
+      var _grantSubs  = [];   /* onGrant  — fire once, then forget */
+      var _changeSubs = [];   /* onChange — fire on every transition */
+
+      function _read(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+      function _write(k,v){ try { localStorage.setItem(k,v); } catch(e){} }
+      function _drop(k){ try { localStorage.removeItem(k); } catch(e){} }
+
+      /* Last state handed to onChange subscribers. Publishing an unchanged
+         state would make a subscriber that counts initialisations count twice. */
+      var _last = !!_read(ACCEPT_KEY);
+
       window.SokoniConsent = {
-        granted: function(){
-          try { return !!localStorage.getItem("sokoniPrivacyAccepted"); }
-          catch(e){ return false; }   /* private mode → treat as not granted */
-        },
+        granted: function(){ return !!_read(ACCEPT_KEY); },
+        denied:  function(){ return !!_read(REJECT_KEY); },
+        decided: function(){ return this.granted() || this.denied(); },
+
         onGrant: function(fn){
           if (typeof fn !== 'function') return;
           if (this.granted()) { try { fn(); } catch(e){} return; }
-          _subs.push(fn);
+          _grantSubs.push(fn);
         },
-        /* Called by the accept handler. Subscribers run exactly once. */
-        _notifyGranted: function(){
-          var list = _subs.splice(0, _subs.length);
-          for (var i = 0; i < list.length; i++) { try { list[i](); } catch(e){} }
+
+        /* Fires immediately with the current state, so one code path in the
+           subscriber covers the first visit, the returning visitor and every
+           later change — it never has to ask "what is it right now?" first. */
+        onChange: function(fn){
+          if (typeof fn !== 'function') return;
+          _changeSubs.push(fn);
+          try { fn(this.granted()); } catch(e){}
+        },
+
+        grant: function(){ this._set(true); },
+        deny:  function(){ this._set(false); },
+
+        _set: function(granted){
+          if (granted) { _write(ACCEPT_KEY, Date.now().toString()); _drop(REJECT_KEY); }
+          else         { _write(REJECT_KEY, Date.now().toString()); _drop(ACCEPT_KEY); }
+          this._publish();
+        },
+
+        _publish: function(){
+          var granted = this.granted();
+          if (granted) {
+            var list = _grantSubs.splice(0, _grantSubs.length);
+            for (var i = 0; i < list.length; i++) { try { list[i](); } catch(e){} }
+          }
+          if (granted !== _last) {
+            _last = granted;
+            for (var j = 0; j < _changeSubs.length; j++) {
+              try { _changeSubs[j](granted); } catch(e){}
+            }
+          }
           try {
-            window.dispatchEvent(new CustomEvent('sokoni:consent', { detail: { granted: true } }));
+            window.dispatchEvent(new CustomEvent('sokoni:consent', { detail: { granted: granted } }));
           } catch(e){}
-        }
+        },
+
+        /* Back-compat: a cached older page may still call this. */
+        _notifyGranted: function(){ this.grant(); }
       };
+
+      /* Another tab is the same person making the same decision. Without this,
+         a second tab keeps collecting after consent is withdrawn in the first. */
+      try {
+        window.addEventListener('storage', function(e){
+          if (!e || (e.key !== ACCEPT_KEY && e.key !== REJECT_KEY)) return;
+          window.SokoniConsent._publish();
+        });
+      } catch(e){}
     })();
 
     /* Privacy / Cookie consent banner — Kenya Data Protection Act 2019 */
-    if(!localStorage.getItem("sokoniPrivacyAccepted")){
+    /* Shown until the user ANSWERS. Gating on "accepted" alone would re-ask
+       someone who already said no on every single page load — which is not a
+       consent prompt, it is attrition. */
+    if(!window.SokoniConsent.decided()){
       const _showBanner = function(){
         if(document.getElementById("_sokoniPrivacyBanner")) return;
         const b = document.createElement("div");
@@ -670,20 +742,57 @@ const SokoniSecurity = (() => {
               "🍪 Privacy &amp; Cookies</div>",
 
             "<div style='font-size:13px;line-height:1.6;color:rgba(255,255,255,0.6);margin-bottom:18px;'>",
-              "SOKONI uses cookies and local storage to deliver and improve your experience. ",
-              "By continuing you accept our ",
+              /* "By continuing you accept" was implied consent — it claimed an
+                 answer the user had not given, and it is now simply untrue: there
+                 is a Reject button and continuing is not an answer. */
+              "SOKONI uses essential storage to run the site, and optional analytics ",
+              "to understand how it is used. Analytics runs only if you accept — ",
+              "rejecting changes nothing about how the site works for you. See our ",
               "<a href='legal.html#privacy' style='color:#71ff00;text-decoration:underline;'>Privacy Policy</a>",
               " and ",
               "<a href='legal.html#cookies' style='color:#71ff00;text-decoration:underline;'>Cookie Policy</a>",
-              ", in compliance with the Kenya Data Protection Act 2019.",
+              ", under the Kenya Data Protection Act 2019.",
             "</div>",
 
-            /* Both controls hold the 44px touch floor. */
-            "<button id='_sokoniPrivacyAcceptBtn' aria-label='Accept cookies' ",
-              "style='width:100%;min-height:48px;",
-              "background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;",
-              "border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:inherit;'>",
-              "Accept</button>",
+            /* Reject must cost no more than Accept. Same row, same height, equal
+               width, one tap each, and both above the 44px touch floor — a
+               "reject" hidden behind a link or a settings page is a dark pattern
+               whatever the code behind it does. Reject is styled quieter but is
+               not quieter to USE, which is the thing that actually matters. */
+            /* ── Why the widths are written out longhand ──────────────────────
+               Two earlier attempts were measured wrong on a 393px viewport by
+               scripts/check-consent-render.js, and both failures came from the same
+               place: mobile.css and sokoni-responsive.css carry !important rules
+               that key off the INLINE STYLE STRING.
+
+                 flex:1 1 0  →  170px / 132px. Accept alone matches
+                   button[style*="background:linear-gradient(135deg,#71ff00"]
+                   { padding:13px 20px !important; font-size:14px !important }
+                   and the extra padding skewed the flex distribution.
+
+                 grid-template-columns:1fr 1fr  →  311px / 311px, stacked. That
+                   exact substring is matched by
+                   [style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr
+                   !important} — a deliberate rule that collapses two-column layouts
+                   on phones, and correct for the forms it was written for.
+
+               So: explicit widths that no substring rule targets and that padding
+               cannot perturb, and the same padding/font-size on BOTH buttons so the
+               rule that only matches Accept cannot make Reject the odd one out.
+               Do not "simplify" this back to 1fr 1fr — it will silently stack. */
+            "<div style='display:flex;gap:10px;align-items:stretch;'>",
+              "<button id='_sokoniPrivacyRejectBtn' aria-label='Reject optional analytics' ",
+                "style='width:calc(50% - 5px);min-width:0;box-sizing:border-box;min-height:48px;padding:13px 20px;font-size:14px;",
+                "background:transparent;color:rgba(255,255,255,0.92);",
+                "border:1px solid rgba(255,255,255,0.3);",
+                "border-radius:12px;font-weight:800;cursor:pointer;font-family:inherit;'>",
+                "Reject</button>",
+              "<button id='_sokoniPrivacyAcceptBtn' aria-label='Accept optional analytics' ",
+                "style='width:calc(50% - 5px);min-width:0;box-sizing:border-box;min-height:48px;padding:13px 20px;font-size:14px;",
+                "background:linear-gradient(135deg,#71ff00,#4fc800);color:black;border:none;",
+                "border-radius:12px;font-weight:900;cursor:pointer;font-family:inherit;'>",
+                "Accept</button>",
+            "</div>",
 
             "<a href='legal.html#privacy' ",
               "style='display:flex;align-items:center;justify-content:center;min-height:44px;margin-top:8px;",
@@ -699,7 +808,13 @@ const SokoniSecurity = (() => {
            of the signup form the moment it renders would fight the user for the caret —
            a subtler version of the bug being fixed. Accept stays reachable by Tab. */
         if (!_isAuthPage) {
-          try { document.getElementById("_sokoniPrivacyAcceptBtn").focus({ preventScroll: true }); } catch (_) {}
+          /* Focus the DIALOG, not Accept. Landing focus on one of two answers
+             makes that answer one keystroke cheaper than the other; from the
+             dialog, Tab reaches Reject then Accept in order. */
+          try {
+            var _card = b.firstElementChild;
+            if (_card) { _card.setAttribute('tabindex', '-1'); _card.focus({ preventScroll: true }); }
+          } catch (_) {}
         }
 
         /* Reserve the sheet's height so it cannot sit over the submit button at the foot
@@ -776,7 +891,7 @@ const SokoniSecurity = (() => {
            `visibility:hidden !important` (and re-applying `overflow:hidden`) with no _dropFabs()
            left to undo it — the buttons vanished permanently. This latch + the clearTimeout in
            accept() close that window from both ends. */
-        var _accepted    = false;
+        var _answered    = false;   /* answered EITHER way — not necessarily accepted */
         var _padTimers   = [];
         /* iOS Safari bug: body{overflow:hidden} on a scrolled page offsets fixed-element
            tap targets by window.scrollY, making the Accept button unreachable and freezing
@@ -787,7 +902,7 @@ const SokoniSecurity = (() => {
         var _scrollLocked = false;
 
         var _pad = function(){
-          if (_accepted) return;
+          if (_answered) return;
           /* AUTH PAGES ARE A SHEET, NOT A MODAL — and this routine is the modal's.
              Running it on /login and /signup did two things that together made social
              sign-in unreachable:
@@ -898,11 +1013,18 @@ const SokoniSecurity = (() => {
         }
         window.addEventListener('resize', _pad);   /* it reflows/wraps on narrow screens */
 
-        document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){
-          localStorage.setItem("sokoniPrivacyAccepted", Date.now().toString());
-          /* Publish BEFORE the dismiss animation, so analytics initialises on the
-             same tick the user consented rather than a quarter-second later. */
-          try { window.SokoniConsent && window.SokoniConsent._notifyGranted(); } catch (_) {}
+        /* Accept and Reject share ONE dismiss path. The teardown below (pad
+           restore, FAB re-show, scroll-lock release, bfcache-safe removal) is the
+           accumulated fix for several real production freezes; forking it per
+           button would mean rediscovering all of them on the Reject branch. */
+        var _decide = function(granted){
+          /* Record and publish BEFORE the dismiss animation, so analytics starts
+             or stops on the same tick the user answered, not a quarter-second
+             later. The consent module owns the write — this handler never
+             touches localStorage directly. */
+          try {
+            if (window.SokoniConsent) granted ? window.SokoniConsent.grant() : window.SokoniConsent.deny();
+          } catch (_) {}
           /* Give back the space the bottom sheet reserved on auth pages, so the form does
              not keep a strip of dead padding under it after consent. No-op elsewhere. */
           try { if (b._skRestorePad) b._skRestorePad(); } catch (_) {}
@@ -913,7 +1035,7 @@ const SokoniSecurity = (() => {
           b.style.setProperty('pointer-events', 'none');
           /* Latch first, then cancel every re-arm timer. Without this the 2.5s / 5s _pad()
              timers fired AFTER _dropFabs() and re-hid the buttons for good. */
-          _accepted = true;
+          _answered = true;
           _padTimers.forEach(clearTimeout);
           _padTimers = [];
           window.removeEventListener('resize', _pad);
@@ -962,6 +1084,9 @@ const SokoniSecurity = (() => {
           b.addEventListener('transitionend', _kill, { once: true });
           setTimeout(_kill, 300);
         };
+
+        document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){ _decide(true);  };
+        document.getElementById("_sokoniPrivacyRejectBtn").onclick = function(){ _decide(false); };
       };
       /* Show after DOM is ready, skip on legal/auth pages to avoid clutter */
       var _skipPages = ["legal.html","login.html","signup.html","register.html"];
@@ -991,7 +1116,7 @@ const SokoniSecurity = (() => {
        Consent is already stored, so removing the element cannot bypass consent —
        it only clears a layer that is purely visual residue. */
     var _sweepStaleConsent = function(){
-      if (!localStorage.getItem("sokoniPrivacyAccepted")) return;  /* never remove a live prompt */
+      if (!window.SokoniConsent.decided()) return;  /* never remove a live prompt */
 
       /* Clear the scroll lock BEFORE the early return below, and independently of whether
          the banner element is still present.

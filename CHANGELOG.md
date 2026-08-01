@@ -1,3 +1,86 @@
+## [2026-08-01] — feat(privacy): explicit Reject control + revocable consent (Sprint 3 P0.1)
+
+The consent gate stopped analytics from running without a "yes", but the banner offered only
+**Accept** and a "Learn more" link — declining was expressible only by not answering, and the prompt
+came back on every page load until you gave in. Correct code, coercive interface. KDPA/ODPC practice
+expects rejecting to be as easy as accepting.
+
+### Reject is now a first-class answer
+
+- **`security.js`** — the banner has **Reject** beside **Accept**: same row, same width, same 48px
+  height, one tap each. Both run **one** dismiss path (`_decide`), because that teardown — pad
+  restore, FAB re-show, scroll-lock release, bfcache-safe removal — is the accumulated fix for several
+  real production freezes, and forking it per button would mean rediscovering all of them.
+- Initial focus moved from Accept to the **dialog**, so neither answer is a keystroke cheaper.
+- Copy fixed: *"By continuing you accept"* was implied consent — it claimed an answer the user had not
+  given, and with a Reject button present it was simply untrue.
+- The prompt now shows until the user has **answered** (`decided()`), not until they have accepted.
+  Gating on "accepted" alone re-asks someone who said no on every page load — attrition, not consent.
+
+### Consent became revocable, so analytics had to become stoppable
+
+`SokoniConsent` gains `denied()`, `decided()`, `grant()`, `deny()` and **`onChange(fn)`**, and a
+`storage` listener so a decision made in one tab reaches the others. Exactly one of
+`sokoniPrivacyAccepted` / `sokoniPrivacyRejected` is ever set — no state where both are true and a
+reader has to guess. `sokoniPrivacyAccepted` is kept as the "yes" marker so no already-consented
+device is re-prompted.
+
+`analytics.js` now subscribes to the **decision** rather than to a single grant. A grant-only
+subscription gets withdrawal wrong: gtag.js cannot be unloaded, so without more than a flag, "reject"
+after a session of accepting is cosmetic. `_stopAnalytics()` therefore stops Layer 2 writes, flips
+Google's own `ga-disable-<ID>` kill switch (now **defaulted ON** and released only on consent), and
+deletes what is already on the device — the `sokoniAnalytics` store, the session stamp, and the GA
+cookies on both the host and registrable-domain forms. A `_bootstrapped` latch keeps a re-grant from
+recording the same page view twice.
+
+### Privacy Settings
+
+**`legal.html`** gains a *Your Privacy Settings* card (`#cookie-choices`) showing the current setting
+and offering both actions, wired to the same authority — it never touches the consent keys directly.
+Also: the essential-storage list documents both decision keys, and the analytics card states that
+nothing is created until you accept.
+
+### Verification
+
+`scripts/verify-consent-gate.js` extended to **86 checks, all passing** — the six scenarios requested
+plus the ones that make them meaningful: reject, refresh-after-reject, **withdrawal mid-session after
+accepting** (store deleted, cookies cleared, kill switch engaged, later events collect nothing),
+accept-after-reject (no duplicate init, page view not re-recorded), returning rejecter, and
+republishing an unchanged decision. Mutation-tested: dropping the purge fails 3, subscribing with
+`onGrant` fails 6, removing the Reject button fails 3.
+
+**`scripts/check-consent-render.js` (new, manual, needs Playwright — deliberately NOT in predeploy):
+24/24.** It proves the pixels, and it earned its place immediately.
+
+### What the render check caught — twice
+
+Equal width did not survive contact with the real page, and the cause was not in this code:
+
+1. **`flex:1 1 0` → 170px / 132px.** `button[style*="background:linear-gradient(135deg,#71ff00"]` in
+   `mobile.css` forces `padding:13px 20px !important; font-size:14px !important` on Accept **only**,
+   and the extra padding skewed the flex distribution.
+2. **`grid-template-columns:1fr 1fr` → 311px / 311px, stacked.** That exact substring is matched by
+   `[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr !important}` — a deliberate
+   rule that collapses two-column layouts on phones, and correct for the forms it was written for.
+
+Both are `!important` rules keyed off the **inline style string**. Fixed with explicit
+`width:calc(50% - 5px)` that no substring rule targets and that padding cannot perturb, plus identical
+padding and type size on both buttons so the Accept-only rule cannot make Reject the smaller one.
+Measured: **151px each, same row, both tappable at their centre.**
+
+Worth recording separately: my first CSS scan reported "no rule matches" because it walked only 325
+rules across 46 stylesheets. That was a scanner blind spot, not a fact. Chrome's own
+`CSS.getMatchedStylesForNode` over CDP gave the real answer.
+
+Files: `security.js`, `analytics.js`, `legal.html`, `scripts/verify-consent-gate.js`,
+`scripts/check-consent-render.js` (new).
+Database changes: none. API changes: `SokoniConsent` gains `denied/decided/grant/deny/onChange`;
+`onGrant` and `_notifyGranted` kept for back-compat.
+Security/privacy: consent is now revocable and withdrawal is enforced, not merely recorded.
+Breaking changes: none — an already-consented device is unaffected and is never re-prompted.
+
+---
+
 ## [2026-08-01] — fix(email): a failed send silently deduped its own retry; admin invitation re-issued
 
 **The queue fallback that exists to rescue a failed send was guaranteed to be discarded by that
