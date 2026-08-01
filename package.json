@@ -9,6 +9,7 @@
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
     "verify:markup": "node scripts/verify-admin-markup.js",
+    "test:rules:landlord": "firebase emulators:exec --only firestore --project sokoni-landlord-rules-test "node scripts/test-landlord-rules.js"",
     "test:panels": "node scripts/test-apps-render.js && node scripts/test-users-render.js",
     "audit:panels": "node scripts/audit-orphan-panels.js",
     "verify:appcheck": "node scripts/verify-appcheck.js",
