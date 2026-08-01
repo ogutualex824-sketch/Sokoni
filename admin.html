@@ -3070,7 +3070,17 @@ function renderPane(name){
   if(name==='applications') renderApps(D.apps);
   if(name==='billing')      renderBilling();
   if(name==='broadcasts')   renderBroadcasts();
-  if(name==='orders')       renderOrders(D.orders);
+  /* Orders are NOT rendered here. The Firestore listener in the realtime block
+     owns this table: window.showPane is overridden there and calls
+     _renderAdmOrders(window._admOrders) on every switch to 'orders'.
+
+     Rendering from D.orders as well meant the pane painted stale localStorage
+     rows and was overwritten by Firestore rows ~50ms later. That was not just a
+     flash: the two renderers emit DIFFERENT actions — legacy rows carry
+     flagDispute/resolveOrderDispute, which write only localStorage, while the
+     Firestore rows carry admFileDispute/openDisputeModal/openOverride. A click
+     inside that window performed a status change that never reached Firestore
+     and was then discarded. One renderer, one action set, no lost write. */
   if(name==='pos')          renderPOS(D.posOrders);
   if(name==='disputes')     renderDisputes();
   if(name==='delivery')     renderDelivery();
@@ -4444,19 +4454,12 @@ function filterPOS(){
   });
   renderPOS(list);
 }
-function filterOrders(){
-  var q=(document.getElementById('orderSearch').value||'').toLowerCase();
-  var f=document.getElementById('orderFilter').value;
-  var list=D.orders.filter(function(o){
-    var mq=!q||(o.id||'').includes(q)||(o.buyerName||'').toLowerCase().includes(q)||(o.productName||'').toLowerCase().includes(q);
-    return mq&&(!f||o.status===f);
-  });
-  var el=document.getElementById('ordersCount'); if(el) el.textContent=list.length;
-  var body=document.getElementById('ordersBody'); if(!body) return;
-  if(!list.length){ body.innerHTML=emptyRow(7,'🛒','No matching orders'); return; }
-  renderOrders(list);
-}
-function flagDispute(i){
+/* The legacy filterOrders() lived here. It was already unreachable: the realtime
+   block assigns window.filterOrders = function(){…} later in the document, and an
+   inline oninput/onchange handler resolves through window — so the newer,
+   Firestore-backed filter always won. Kept as a note rather than a stub because a
+   shadowed duplicate is exactly what made the orders table behave inconsistently
+   depending on whether you had typed in the search box. */function flagDispute(i){
   D.orders[i].status='disputed';
   localStorage.setItem('sokoniOrders',JSON.stringify(D.orders));
   renderOrders(D.orders); renderStats(); toast('🚨 Order flagged as disputed');
@@ -6454,6 +6457,11 @@ import SokoniDB           from './sokoni-db.js';
 /* ── Expose on window so inline handlers can call them ── */
 window.SokoniOrders        = SokoniOrders;
 window._admOrders          = [];
+/* Distinguishes "the listener has not delivered yet" from "there are no orders".
+   Without it, removing the legacy localStorage render leaves the pane showing
+   "No orders yet" while data is still in flight — a healthy-looking failure,
+   indistinguishable from an genuinely empty queue. */
+window._admOrdersLoaded    = false;
 window._admDeliveries      = [];
 window._admDisputes        = [];
 
@@ -6522,7 +6530,12 @@ function _renderAdmOrders(orders) {
 
   const body  = document.getElementById('ordersBody');
   if (!body) return;
-  if (!orders.length) { body.innerHTML = _emptyRow(8,'🛒','No orders yet'); return; }
+  if (!orders.length) {
+    body.innerHTML = window._admOrdersLoaded
+      ? _emptyRow(8,'🛒','No orders yet')
+      : _emptyRow(8,'⏳','Loading orders…');
+    return;
+  }
 
   body.innerHTML = orders.map(o => {
     const itemSummary = (o.items||[]).map(i=>`${i.qty||1}× ${i.name||'Item'}`).slice(0,2).join(', ') || _h(o.productName||'—');
@@ -6810,6 +6823,7 @@ function _startListeners() {
   /* Orders */
   if (_ordersUnsub) _ordersUnsub();
   _ordersUnsub = SokoniDB.listenAllOrders(orders => {
+    window._admOrdersLoaded = true;   /* a delivered snapshot, empty or not */
     _renderAdmOrders(orders);
     _renderEscrowBar(orders);
     /* Patch stat counter */

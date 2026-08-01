@@ -1,3 +1,65 @@
+## [2026-08-01] — fix(admin): one orders renderer — and a lost-write window closed
+
+**Root cause.** Four functions wrote `#ordersBody` / `#ordersCount`, forming two competing pipelines:
+
+| | legacy (script block 4) | canonical (script block 20) |
+|---|---|---|
+| data | `D.orders` ← `localStorage.sokoniOrders` | `SokoniDB.listenAllOrders()` — live Firestore |
+| render | `renderOrders()` colspan 7 | `_renderAdmOrders()` colspan 8 |
+| filter | `filterOrders()` | `window.filterOrders = …` |
+| row actions | `flagDispute`, `resolveOrderDispute` | `admFileDispute`, `openDisputeModal`, `openOverride` |
+
+Block 20 **overrides `window.showPane`** and re-renders from Firestore 50 ms after the original. So
+opening Orders painted stale localStorage rows, then replaced them.
+
+That was not merely a flash. **The two renderers emit different actions.** `flagDispute` writes
+`D.orders[i].status` straight to `localStorage` and nothing else — so a click inside that 50 ms window
+performed an order status change that **never reached Firestore and was then discarded** by the
+incoming snapshot. A lost write, invisible to the admin who made it.
+
+`filterOrders` was defined twice. The block-20 assignment to `window.filterOrders` runs later, and an
+inline `oninput`/`onchange` resolves through `window` — so the legacy definition was already
+unreachable, and the table behaved differently depending on whether you had typed in the search box.
+
+**Fix.** One renderer owns the pane:
+
+- `renderPane()` no longer renders orders. The Firestore listener owns the table via the `showPane`
+  override, as it already did.
+- The shadowed legacy `filterOrders()` is removed.
+- Legacy `renderOrders()` and its dispute handlers are now unreachable — `flagDispute` was only ever
+  referenced from markup that `renderOrders` itself emitted. **Left in place deliberately:** removing
+  them is a separate concern and a separate commit.
+
+**Loading is no longer indistinguishable from empty.** Dropping the legacy render would have left the
+pane showing *"No orders yet"* while the first snapshot was still in flight — a healthy-looking
+failure. `window._admOrdersLoaded` is set when a snapshot actually arrives, so the pane shows
+*"Loading orders…"* until then. Included here rather than deferred because without it this change
+would have introduced a regression.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | **783 passed, 17 suites** |
+| inline script syntax | 9 blocks, 0 errors |
+| `renderOrders` calls from `renderPane` | 1 → **0** |
+| `filterOrders` definitions | 2 → **1** |
+| duplicate ids | 107, unchanged (this commit touches renderers, not markup) |
+| predeploy | all gates green |
+
+Static verification of the survivor's coverage: realtime listener unchanged; filters, counts and the
+Billing / Disputes / POS sub-tabs untouched. **Not verified in a live authenticated browser** — that
+needs an admin ID token this environment cannot mint.
+
+Files: `admin.html`.
+Database changes: none. API changes: none. Breaking changes: none.
+Behaviour: the stale-data flash is gone, and a status click during load can no longer be lost.
+
+Remaining duplicate ids: **107**. Next: remove the now-unreachable legacy orders cluster, then the
+Users pane.
+
+---
+
 ## [2026-08-01] — refactor(admin): Phase 1 pane 1 — remove the unreachable Orders pane
 
 **Root cause.** `admin.html` declared `#adm-pane-orders` twice. `showPane()` resolves
