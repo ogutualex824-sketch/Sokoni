@@ -1,3 +1,69 @@
+## [2026-08-01] — refactor(admin): Phase 1 pane 2 — Users converged onto one pane
+
+**Root cause.** `#adm-pane-users` was declared twice. `showPane()` resolves to the first match, so the
+second copy was unreachable. But unlike Orders, **the unreachable copy was the correct one** — and the
+reachable pane carried two live defects because of it.
+
+| | reachable pane (kept) | unreachable copy (deleted) |
+|---|---|---|
+| `<thead>` | **6 columns** | 7 columns |
+| search handler | `filterUsers()` — **no argument** | `filterUsers(this.value)` |
+| role filter | `filterUsers()` — discards the query | reads the query back |
+| detail slide-in | present | absent |
+
+`renderUsers()` emits **seven** `<td>` and its empty state is `emptyRow(7,…)`.
+
+So in production, on the pane an administrator can actually open:
+
+1. **Every column after Email was rendered under the wrong heading.** "Roles" sat above email/phone,
+   "Joined" above role, "Status" above city, and the seventh cell had no header at all.
+2. **The Users search box did nothing.** `filterUsers(q)` filters on `q`; the reachable pane passed
+   nothing, `q||''` made that an empty query, and typing silently re-rendered the whole list.
+3. Changing the role filter discarded whatever had been typed.
+
+**Fix — move the live implementation into the survivor, then delete the copy.** The survivor now
+carries the 7-column header, `oninput="filterUsers(this.value)"`, and a role filter that reads the
+query back via `#userSearch` rather than the deleted copy's
+`querySelector('#adm-pane-users .adm-search')` — which resolved to the *first* match and only worked
+by accident of document order.
+
+Unique to the survivor and therefore preserved: the `#userDetailPanel` slide-in.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | 783 passed, 17 suites |
+| applications render contract | 25/25 |
+| inline script syntax | 9 blocks, 0 errors |
+| `#adm-pane-users` | 2 → **1** |
+| `userSearch` / `userRoleFilter` / `usersCount` / `usersBody` | 1 each |
+| **header ↔ renderer parity** | thead 7 · `<td>` 7 · `emptyRow(7)` — **aligned** |
+| duplicate ids | **107 → 103** |
+| `<div>` balance | 0 → 0 |
+| predeploy | all gates green |
+
+### Found, not fixed — the Users pane has no data source
+
+`sokoniAllUsers` has **exactly two references in the entire repository**: one read
+(`D.users = ls('sokoniAllUsers')`) and one write — inside `adminDeleteUser()`, after splicing a user
+out. **Nothing populates it.** `D.users` is therefore `[]` on every device, so the pane renders
+"No users found" permanently, for everyone, while 64 real accounts exist in Firebase Auth and a
+`users` collection exists in Firestore.
+
+De-duplicating the pane does not fix that, and pretending Users is "complete" would be false. Wiring
+it to the Firestore `users` collection is a **data-source change, not a de-duplication** — a separate
+concern and the next commit. `#userDetailContent` is likewise an orphan: the slide-in has a close
+button, no opener and no filler.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+Remaining duplicate ids: **103**. Unreachable functions in Users: **0**. Orphan containers: **27**.
+Next: give Users a real data source, then pane 3 — Properties.
+
+---
+
 ## [2026-08-01] — refactor(admin): Orders is Firestore-only — legacy cluster removed
 
 **Root cause.** Once `_renderAdmOrders` became the sole renderer, the legacy localStorage cluster —

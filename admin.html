@@ -870,15 +870,15 @@ body.adm-light .adm-sec-h{color:#111;}
       ═══════════════════════════════════ -->
       <div id="adm-pane-users" class="adm-pane">
         <div class="adm-toolbar">
-          <input class="adm-search" id="userSearch" placeholder="🔍 Search name, email, phone, uid…" oninput="filterUsers()">
-          <select id="userRoleFilter" onchange="filterUsers()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+          <input class="adm-search" id="userSearch" placeholder="🔍 Search name, email, phone, uid…" oninput="filterUsers(this.value)">
+          <select id="userRoleFilter" onchange="filterUsers((document.getElementById('userSearch')||{}).value||'')" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
             <option value="">All</option><option value="buyer">Buyers</option><option value="seller">Sellers</option><option value="driver">Drivers</option><option value="provider">Providers</option><option value="admin">Admins</option><option value="suspended">Suspended</option>
           </select>
         </div>
         <div class="adm-sec-h">Users (<span id="usersCount">0</span>)</div>
         <div class="adm-table-wrap">
           <table class="adm-table">
-            <thead><tr><th>User</th><th>Email</th><th>Roles</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Name</th><th>Email / Phone</th><th>Role</th><th>City</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody id="usersBody"></tbody>
           </table>
         </div>
@@ -1998,26 +1998,6 @@ body.adm-light .adm-sec-h{color:#111;}
         </div>
       </div>
 
-      <!-- ═══ USERS ═══ -->
-      <div id="adm-pane-users" class="adm-pane">
-        <div class="adm-toolbar">
-          <input class="adm-search" placeholder="🔍 Search users by name, email, phone…" oninput="filterUsers(this.value)">
-          <select id="userRoleFilter" onchange="filterUsers(document.querySelector('#adm-pane-users .adm-search').value)" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
-            <option value="">All Roles</option>
-            <option value="buyer">🛒 Buyer</option>
-            <option value="seller">🏪 Seller</option>
-            <option value="provider">🛠️ Provider</option>
-            <option value="driver">🚗 Driver</option>
-          </select>
-        </div>
-        <div class="adm-sec-h">Registered Users (<span id="usersCount">0</span>)</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Name</th><th>Email / Phone</th><th>Role</th><th>City</th><th>Joined</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="usersBody"></tbody>
-          </table>
-        </div>
-      </div>
 
       <!-- ═══ DISPUTES ═══ -->
       <div id="adm-pane-disputes" class="adm-pane">
