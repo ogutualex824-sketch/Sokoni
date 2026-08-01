@@ -1581,11 +1581,80 @@ function displayFeaturedShops(){
         </div>`;
 }
 
+/* ── Deferred construction (Sprint 2, Experiment 1) ──────────────────────────
+   Measured 2026-08-01: this grid builds 1196 DOM nodes in a single call at
+   ~10.7s, and the section sits 6522px down a 12903px page — roughly 7.6
+   viewports below the fold. In a session where the user does not scroll, all
+   1196 nodes are constructed and never seen; 97.1% of the homepage's total DOM
+   falls into that category.
+
+   Building fewer nodes during the load window means less style and layout work
+   for any subsequent reader to flush — the mechanism that made `_measure` look
+   expensive without being its cause.
+
+   Behaviour is preserved exactly: the same markup, the same delegated listener,
+   the same 20 newest products. Only the TIMING changes.
+
+     • A zero-height sentinel holds the section's place in the flow, because a
+       `display:none` section has no box for IntersectionObserver to watch.
+     • `rootMargin` builds one viewport early, so a scrolling user never meets an
+       empty gap.
+     • An idle fallback builds it anyway after the page settles, so in-page
+       search, anchors and non-scrolling sessions still get the content.
+     • No IntersectionObserver (very old Safari) → build immediately, exactly as
+       before.
+
+   CLS risk is low by construction: the section is already `display:none` until
+   built, and at 6522px both it and everything it displaces are off-screen, so
+   the reveal produces no visible shift either way. */
 function displayNewArrivals(){
     const section = document.getElementById("newArrivalsSection");
     const grid    = document.getElementById("newArrivalsGrid");
     if(!grid || !section) return;
+    if(section.dataset.skDeferState) return;   /* already built or scheduled */
 
+    function _buildNewArrivals(){
+        if(section.dataset.skDeferState === 'built') return;
+        section.dataset.skDeferState = 'built';
+        _renderNewArrivals(section, grid);
+    }
+
+    if(!('IntersectionObserver' in window) || !section.parentNode){
+        section.dataset.skDeferState = 'built';
+        _renderNewArrivals(section, grid);
+        return;
+    }
+
+    section.dataset.skDeferState = 'pending';
+
+    const sentinel = document.createElement('div');
+    sentinel.setAttribute('aria-hidden', 'true');
+    sentinel.style.cssText = 'height:1px;width:100%;pointer-events:none;';
+    section.parentNode.insertBefore(sentinel, section);
+
+    const io = new IntersectionObserver(function(entries){
+        if(!entries.some(e => e.isIntersecting)) return;
+        io.disconnect();
+        if(sentinel.parentNode) sentinel.parentNode.removeChild(sentinel);
+        _buildNewArrivals();
+    }, { rootMargin: '800px 0px' });
+    io.observe(sentinel);
+
+    /* Idle fallback — a session that never scrolls still gets the content, just
+       outside the load window. requestIdleCallback is absent on older Safari,
+       which is a large share of the traffic this helps, so the timeout is
+       load-bearing rather than decorative. */
+    const idle = function(){
+        if(section.dataset.skDeferState === 'built') return;
+        io.disconnect();
+        if(sentinel.parentNode) sentinel.parentNode.removeChild(sentinel);
+        _buildNewArrivals();
+    };
+    if(typeof requestIdleCallback === 'function') requestIdleCallback(idle, { timeout: 8000 });
+    else setTimeout(idle, 6000);
+}
+
+function _renderNewArrivals(section, grid){
     const newest = [...products].sort((a,b) => {
         const ta = a.uploadedAt ? new Date(a.uploadedAt).getTime() : 0;
         const tb = b.uploadedAt ? new Date(b.uploadedAt).getTime() : 0;

@@ -794,3 +794,93 @@ flush. That is why `_measure` looked expensive without being the cause.
 Acceptance unchanged: paired A/B ≥6 pairs on `styleMs`/`layoutMs` against the ±2% floor, plus LCP,
 plus nodes-before-first-scroll, plus no visual/SEO/accessibility regression.
 
+---
+
+## Sprint 2 Experiment 1 — Defer `newArrivalsGrid` — **ACCEPTED**
+
+Category A: changes *whether* work happens during startup, not *how* it is performed.
+
+### Evidence for the target
+
+1196 nodes in a single call at ~10.7 s, in a section at **6522px** on a 12903px page — 7.6 viewports
+below the fold. In a no-scroll session every one of those nodes is constructed and never seen.
+
+### Implementation
+
+`displayNewArrivals()` keeps its signature and both call sites; the render body moved verbatim into
+`_renderNewArrivals()`. Only the **timing** changes.
+
+- A zero-height sentinel holds the section's place in flow, because a `display:none` section has no box
+  for IntersectionObserver to watch.
+- `rootMargin: 800px` builds one viewport early, so a scrolling user never meets an empty gap.
+- Idle fallback (`requestIdleCallback`, 8 s timeout; `setTimeout` 6 s where unavailable) builds it
+  anyway, so non-scrolling sessions, in-page search and anchors still get the content.
+- No IntersectionObserver → builds immediately, exactly as before.
+
+Behaviour verified in both scenarios before measuring: content present, `display:block`, delegated
+listener attached, no page errors, whether or not the user scrolls.
+
+### Result — two independent paired A/B runs (6 pairs each)
+
+| metric | run 1 | run 2 | floor | verdict |
+|---|---|---|---|---|
+| **styleMs** | **−6.3% (6/6)** | **−7.1% (6/6)** | ±2% | **ACCEPTED** |
+| **tbt** | **−10.1% (6/6)** | **−10.4% (6/6)** | ±5–9% | **ACCEPTED** |
+| **worstTask** | **−25.6% (6/6)** | **−22.2% (6/6)** | ±30% | improved, reported not claimed |
+| loadMs | −4.6% (5/6) | — | ±5–9% | below floor |
+| layoutMs | −1.4% (3/6) | +0.5% (2/6) | ±2% | no effect |
+| LCP | +0.9% (3/6) | +1.5% (2/6) | ±5–9% | no regression |
+| CLS | −0.9% (3/6) | 0.0% (1/6) | ±1.6% | **no regression** |
+
+Three metrics at **6/6 consistency across both runs** — the strongest and most reproducible signal of
+the sprint. `worstTask` improved dramatically but its calibrated floor is ±30%, so it is reported
+rather than claimed.
+
+No CLS regression, which was the main risk: the section was already `display:none` until built and sits
+off-screen, so deferring its reveal adds no visible shift.
+
+### Why this worked when four function-level optimisations did not
+
+Every rejected experiment tried to make existing work cheaper. This removes work from the load window
+entirely. The mechanism is the one that finally explained the whole sprint: fewer nodes constructed
+during load means less style and layout work for any subsequent reader to flush — which is why
+`_measure` was charged 1598 ms it did not cause.
+
+### Next
+
+Experiment 2: `_spSellersGrid` (428 nodes, 4249px). Same pattern, same acceptance criteria.
+
+`productsContainer` remains **on hold** pending the information-architecture question below — it is
+1895 nodes at 7220px, but it is the core shopping surface and deferring it is a product decision, not
+only a performance one.
+
+---
+
+## Information architecture finding — why the feed is 7220px down
+
+Asked before touching the primary feed. **Seventeen sections occupy 7286px above it:**
+
+| top | height | section |
+|---|---|---|
+| 122 | 450 | glass-hero |
+| 588 | 271 | storiesSection |
+| 873–2534 | ~1660 | trust strip, hubs nav, categories, hubs scroller, Car Hub, quick links, services |
+| 2772 | 757 | Healthcare Hub |
+| **3515** | **610** | **EARN TODAY** |
+| 4167 | 472 | Featured Sellers |
+| **4626** | **459** | **For Business Owners** |
+| **5127** | **519** | **Get Verified** |
+| 5654 | 558 | Spotlight Shops |
+| 6253 | 283 | B2B Wholesale |
+| 6522 | 548 | New Arrivals |
+| **7084** | — | **productsContainer — "TRENDING NOW"** |
+
+This is deliberate information architecture, not stray spacing or a layout bug. But it means **a buyer
+landing on the marketplace scrolls past 8.5 screens — including ~1588px (1.9 screens) of
+seller-recruitment content (EARN TODAY, For Business Owners, Get Verified) — before reaching any
+shoppable product grid.**
+
+That is a product question, not a performance one, and it is arguably the more valuable finding:
+deferring the rendering of a grid users cannot find does not help them find it. Worth deciding
+independently of this sprint.
+
