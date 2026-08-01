@@ -72,6 +72,8 @@ const ROUTES = [
   'providerUpdateService',
   'providerToggleService',
   'providerDuplicateService',
+  'providerUpdateServicePricing',
+  'bookingPreviewPrice',
   // booking-service (Phase B) — authoritative service-appointment create
   'bookingCreateService',
   // booking-service (WS3) — authoritative customer review, gated on a completed booking

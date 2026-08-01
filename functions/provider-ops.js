@@ -773,6 +773,91 @@ _h.providerDuplicateService = async (req) => {
   return { success: true, serviceId: ref.id };
 };
 
+/* ── Advanced Rate Cards (Slice C) — pricing config sanitiser + save + preview ─────────────
+   The client sends money already in cents (_k2c). The server coerces (_cents), never trusts the
+   structure, and stores the canonical config on providerServices/{id}.pricing. */
+function _sanRate(r) {
+  if (!r || (r.type !== 'pct' && r.type !== 'flat')) return undefined;
+  const v = Number(r.value) || 0; if (v <= 0) return undefined;
+  const out = { type: r.type, value: r.type === 'flat' ? _cents(v) : Math.max(0, v) };
+  if (Array.isArray(r.hours) && r.hours.length === 2) out.hours = [_san(r.hours[0], 5), _san(r.hours[1], 5)];
+  return out;
+}
+function _sanDeposit(dep) {
+  if (!dep || ['fixed', 'pct', 'full'].indexOf(dep.mode) < 0) return undefined;
+  const out = { mode: dep.mode };
+  if (dep.mode === 'fixed') out.value = _cents(dep.value);
+  else if (dep.mode === 'pct') out.value = Math.max(0, Math.min(100, Number(dep.value) || 0));
+  if (dep.balanceDue === 'before' || dep.balanceDue === 'completion') out.balanceDue = dep.balanceDue;
+  return out;
+}
+function _sanitizePricing(p) {
+  p = p || {};
+  const out = {
+    currency: _san(p.currency, 8) || 'KES',
+    basePrice: _cents(p.basePrice),
+    durationMins: Math.max(0, Math.round(Number(p.durationMins) || 0)),
+    extraHourRate: _cents(p.extraHourRate),
+    holidays: Array.isArray(p.holidays) ? p.holidays.slice(0, 60).map(function (x) { return _san(x, 10); }).filter(Boolean) : [],
+  };
+  const wk = _sanRate(p.weekendRate); if (wk) out.weekendRate = wk;
+  const hd = _sanRate(p.holidayRate); if (hd) out.holidayRate = hd;
+  const pk = _sanRate(p.peakRate); if (pk) out.peakRate = pk;
+  const op = _sanRate(p.offPeakDiscount); if (op) out.offPeakDiscount = op;
+  const dep = _sanDeposit(p.deposit); if (dep) out.deposit = dep;
+  if (p.travel && (Number(p.travel.fee) || Number(p.travel.perKm) || Number(p.travel.freeRadiusKm))) {
+    out.travel = { fee: _cents(p.travel.fee), perKm: _cents(p.travel.perKm), freeRadiusKm: Math.max(0, Number(p.travel.freeRadiusKm) || 0) };
+    if (Number(p.travel.maxKm)) out.travel.maxKm = Math.max(0, Number(p.travel.maxKm) || 0);
+  }
+  if (Array.isArray(p.packages)) {
+    out.packages = p.packages.slice(0, 40).map(function (pk, i) {
+      const o = { id: _san(pk.id, 64) || ('pkg_' + i), name: _san(pk.name, 120), price: _cents(pk.price),
+        durationMins: Math.max(0, Math.round(Number(pk.durationMins) || 0)), description: _san(pk.description, 500) };
+      const pd = _sanDeposit(pk.deposit); if (pd) o.deposit = pd;
+      if (Array.isArray(pk.includes)) o.includes = pk.includes.slice(0, 30).map(function (x) { return _san(x, 120); }).filter(Boolean);
+      if (Array.isArray(pk.extras)) o.extras = pk.extras.slice(0, 30).map(function (x) { return _san(x, 64); }).filter(Boolean);
+      return o;
+    }).filter(function (x) { return x.name; });
+  }
+  if (Array.isArray(p.addOns)) {
+    out.addOns = p.addOns.slice(0, 60).map(function (a, i) {
+      return { id: _san(a.id, 64) || ('addon_' + i), name: _san(a.name, 120), price: _cents(a.price),
+        qtyMax: Math.max(0, Math.round(Number(a.qtyMax) || 0)), available: a.available !== false, description: _san(a.description, 300) };
+    }).filter(function (x) { return x.name; });
+  }
+  return out;
+}
+
+_h.providerUpdateServicePricing = async (req) => {
+  const uid = _uid(req);
+  const id  = _san(req.data?.serviceId, 128);
+  if (!id) throw new HttpsError('invalid-argument', 'serviceId is required.');
+  const ref  = _db().collection('providerServices').doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Service not found.');
+  if (snap.data().providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
+  const pricing = _sanitizePricing(req.data?.pricing || {});
+  await ref.update({ pricing: pricing, pricingUpdatedAt: _ts(), updatedAt: _ts() });
+  return { success: true, pricing: pricing };
+};
+
+/* bookingPreviewPrice — the ONE preview authority. Runs the SAME computePrice so a provider's
+   preview and the customer's charge can never diverge. Pass {serviceId} to preview the SAVED
+   config, or {pricing} to preview an unsaved draft (editor live preview). Auth required. */
+_h.bookingPreviewPrice = async (req) => {
+  _uid(req);
+  const d = req.data || {};
+  let pricing;
+  if (d.serviceId) {
+    const s = await _db().collection('providerServices').doc(_san(d.serviceId, 128)).get();
+    if (!s.exists) throw new HttpsError('not-found', 'Service not found.');
+    pricing = s.data().pricing || {};
+  } else {
+    pricing = _sanitizePricing(d.pricing || {});
+  }
+  return require('./service-pricing').computePrice(pricing, d.selection || {}, d.ctx || {});
+};
+
 /* ── 13. providerUpdateService — edit a rate card (owner-only, whitelisted fields).
    providerId/createdAt are never client-mutable; a non-owner is rejected before
    any write. Only fields the caller actually sent are patched. ──────────────── */

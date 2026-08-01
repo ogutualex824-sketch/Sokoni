@@ -1,3 +1,23 @@
+## [2026-08-01] — feat(pricing): Pricing Studio — provider rate-card editor (Advanced Rate Cards — Slice C)
+
+Gives providers the workspace to configure the pricing rules the engine already consumes.
+
+- `functions/provider-ops.js` — `providerUpdateServicePricing` (owner-scoped; sanitises + coerces cents;
+  writes `providerServices/{id}.pricing` + **`pricingUpdatedAt`**) and `bookingPreviewPrice` (THE preview
+  authority — runs the SAME `service-pricing.computePrice` on a saved service `{serviceId}` or an unsaved
+  draft `{pricing}`, so provider preview == customer charge). Sanitiser validates rates/deposit/travel/
+  packages/add-ons and drops nameless entries. Smoke-proven 6/6 (incl. preview(saved)==direct computePrice).
+- `functions/provider-dispatch.js` — registered both ops.
+- `sokoni-pricing-studio.js` (new, shared) — `SokoniPricingStudio.open(serviceId, pricing, onSaved)`: a
+  full editor (General, Dynamic pricing weekend/holiday/peak/off-peak, Travel, Duration/extra-hour, unlimited
+  Packages + Add-ons repeaters) with a **live Preview** rendered from the server engine. Money shown in KES,
+  sent as cents; draft package/add-on ids match the sanitiser's index fallback so previews resolve.
+- `provider-dashboard.html` — "💰 Pricing" button on each rate card → opens the Studio; script included.
+
+Deploy: `functions:providerDispatch` + hosting. Slice D (customer selector) next. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(pricing): wire pricing engine into booking (Advanced Rate Cards — Slice B)
 
 The pricing engine is now the single authority for every service booking. The server computes the

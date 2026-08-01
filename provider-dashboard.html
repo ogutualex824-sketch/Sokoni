@@ -533,6 +533,7 @@ a{color:var(--acc);text-decoration:none}
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
+<script src="sokoni-pricing-studio.js" defer></script>
 <script>
 const _q=id=>document.getElementById(id);
 const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -876,6 +877,7 @@ const Sv={
         ${s.description?`<div style="font-size:.76rem;color:var(--sub);margin-top:4px">${this._esc(s.description)}</div>`:''}
         <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
           <button class="btn btn-g btn-sm" onclick="Sv.openEdit('${s.id}')">Edit</button>
+          <button class="btn btn-g btn-sm" style="color:#71ff00" onclick="Sv.pricing('${s.id}')">💰 Pricing</button>
           <button class="btn btn-g btn-sm" onclick="Sv.toggle('${s.id}',${on?'false':'true'})">${on?'Hide':'Show'}</button>
           <button class="btn btn-g btn-sm" onclick="Sv.duplicate('${s.id}')">Duplicate</button>
           <button class="btn btn-g btn-sm" style="color:var(--warn)" onclick="Sv.remove('${s.id}')">Delete</button>
@@ -919,7 +921,8 @@ const Sv={
   },
   async toggle(id,active){showLoad('Updating…');try{await this._fn()({op:'providerToggleService',serviceId:id,active});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async remove(id){if(!confirm('Delete this rate card? Customers will no longer see it.'))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async duplicate(id){showLoad('Duplicating…');try{await this._fn()({op:'providerDuplicateService',serviceId:id});toast('Service duplicated — edit the copy.');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}}
+  async duplicate(id){showLoad('Duplicating…');try{await this._fn()({op:'providerDuplicateService',serviceId:id});toast('Service duplicated — edit the copy.');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  pricing(id){const s=this._svc.find(x=>x.id===id);if(!window.SokoniPricingStudio){toast('Pricing Studio loading — try again.','err');return}SokoniPricingStudio.open(id,(s&&s.pricing)||{},()=>Sv.load())}
 };
 window.Sv=Sv;
 
