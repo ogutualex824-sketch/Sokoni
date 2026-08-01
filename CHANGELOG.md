@@ -1,3 +1,70 @@
+## [2026-08-02] — docs(architecture): receipt architecture — ADR-010
+
+Design only. **Nothing implemented.**
+
+**Principle:** *a receipt is a financial record; a delivery note is an operational record; they evolve
+under different rules.*
+
+### The survey inverted the problem
+
+The `orders` rule at `firestore.rules:561` **already enforces the financial half** through per-role
+`hasOnly()` allowlists. **No financial field appears in any allowlist** — `total`, `items`, `taxes` and
+the payment reference are already immutable to buyers, sellers and drivers. And
+`orders/{orderId}/events` **already exists** as a subcollection, so the event log this design needs is
+not new infrastructure.
+
+Three gaps, and the first is the opposite of what was assumed:
+
+| # | gap |
+|---|---|
+| **1** | **No delivery field is in ANY allowlist.** Not `estate`, not `houseNumber`, not `landmark`. **A merchant cannot correct a house number after payment today, except as an admin.** The concern was that delivery details were too editable; in fact the water business's core operational need is currently impossible. |
+| 2 | **`isAdmin()` is unrestricted** — an administrator may rewrite `total` with no audit requirement. The financial record is immutable to everyone except the actor most able to cause a reconciliation problem. |
+| 3 | **No dispatch lock** — a driver may rewrite `driverNote` after delivery. |
+
+### The design
+
+**State 1 — financial, immutable after payment.** Corrections create new records through pipelines
+that already exist (`fosSubmitRefund`, `processRefund`, `autoOnRefundRequest`, the FinOS ledger). The
+change needed is to **narrow `isAdmin()`**, applying the rule already proved on a paid landlord ledger
+entry in ADR-006.
+
+**State 2 — fulfilment, mutable until dispatch.** A `fulfilment` map **on the order**, not a parallel
+collection — a second document is a second authority to reconcile, and this programme has spent two
+days removing exactly that shape. Every edit appends to the existing `events` subcollection with
+editor, timestamp, previous value, new value and a **required `reason`**: an audit trail of *what*
+changed without *why* answers the easy question and not the useful one.
+
+Rules cannot enforce "and also write an event", so fulfilment edits go through a callable with the
+rule narrowed against direct client writes.
+
+**State 3 — dispatch lock.** Later change happens through `failed_delivery` · `return` · `redelivery` ·
+`cancellation` · `exchange`. **A redelivery is a new attempt, not a rewrite of the first.**
+
+**Water extension.** Bottle movements are fulfilment events. But a **deposit is money** — it is a
+receipt line item returned through the refund pipeline, never a fulfilment edit. This preserves the
+invariant that made the landlord ledger correct: *the thing that moves money is append-only; the thing
+that moves objects is an event stream.*
+
+### Blocking question, recorded rather than assumed away
+
+`receiptNo` (63 uses) and `receiptNumber` (45) are the same concept under two names; `invoiceNumber`
+(53) is genuinely different. **Freezing an ambiguous field name would freeze the ambiguity** — resolve
+under ADR-009 before implementing State 1.
+
+### Implementation order
+
+1. Resolve `receiptNo` vs `receiptNumber`.
+2. Fulfilment map + `orderUpdateFulfilment` callable — **closes Gap 1, the merchant's actual blocker.**
+3. Narrow `isAdmin()` once `paidAt` exists — **ship the refund path first and verify it**, since
+   narrowing could otherwise block a correction that has no other route.
+4. Dispatch lock.
+5. Bottle events, on Phase 4's inventory subtypes.
+
+Files: `docs/RECEIPT_ARCHITECTURE.md` (new), `docs/adr/ADR-010-…md` (new), `docs/adr/README.md`.
+No runtime code changed.
+
+---
+
 ## [2026-08-02] — fix(disputes): a dispute rule decides the outcome; the financial engine moves the money
 
 **Policy applied:** automatic dispute resolution must not approve a refund directly.

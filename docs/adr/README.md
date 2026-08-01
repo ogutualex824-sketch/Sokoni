@@ -19,6 +19,7 @@ Each ADR states the decision, the evidence that produced it, and — most useful
 | [007](ADR-007-pane-convergence-protocol.md) | Map, then remove one concern per commit; never bundle UI cleanup with data migration | **Accepted** | 5 panes, 112 → 90 duplicate ids |
 | [008](ADR-008-evidence-before-change.md) | Measure production before changing code; if evidence contradicts the plan, stop and revise | **Accepted** | landlord model revision |
 | [009](ADR-009-canonical-field-representation.md) | One canonical representation per concept; dual-read before converging writes | **Accepted** · specification | `CANONICAL_DATA_MODEL.md` |
+| [010](ADR-010-financial-append-only-operational-event-driven.md) | Financial records append-only; operational records event-driven until dispatch | **Accepted** · design | `RECEIPT_ARCHITECTURE.md` |
 
 ## The rule that governs all of them
 
@@ -36,6 +37,7 @@ absolute gate against a large existing backlog gets disabled, and a disabled gat
 - `docs/CANONICAL_DATA_MODEL.md` — the specification for ADR-009
 - `docs/ADMIN_CREDENTIAL_RISK_REPORT.md` — credential findings, unpatched by design
 - `docs/RIDE_HUB_ROADMAP.md` — deferred product module, not debt
+- `docs/RECEIPT_ARCHITECTURE.md` — the design for ADR-010
 
 ## Guards enforcing these decisions
 
