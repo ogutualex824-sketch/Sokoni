@@ -1,3 +1,56 @@
+## [2026-08-02] — refactor(admin): Phase 1 pane 4 — Rides, unreachable duplicate removed
+
+**UI cleanup only.** No data migration — see the finding below, which is a separate concern.
+
+**Root cause.** `#adm-pane-rides` was declared twice. `showPane()` resolves to the first, so the second
+copy (16 lines, `ridesBody` + `driversBody`) could never be displayed. Both ids were already declared
+in the surviving pane, so nothing was lost.
+
+**The bigger finding — Rides has no implementation, not a broken one**
+
+Unlike Orders (a legacy pipeline), Users (a dead localStorage key) or Properties (a disconnected
+Firestore collection), the Rides tables have **never had a renderer at all**:
+
+| | |
+|---|---|
+| `#ridesBody` | declared 2× · **referenced by JavaScript 0 times** |
+| `#driversBody` | declared 2× · **referenced by JavaScript 0 times** |
+| `renderPane('rides')` | **no entry** — only `name==='drivers'` → `renderDriverApps()`, which is driver *applications*, a different container |
+| `D.rides` / `D.drivers` | declared in the state object, **never assigned, never read** |
+
+And there is nothing to render. Measured in production:
+
+| collection | documents |
+|---|---|
+| `rides` · `rideRequests` · `rideDrivers` · `drivers` | **0** |
+| `driverApplications` · `deliveries` · `deliveryRequests` · `couriers` | **0** |
+
+The only ride-related root collections that exist at all are `deliveryLocations` and `driverLocations`
+— GPS tracking, not ride records.
+
+So the Rides pane is **aspirational markup**: two tables, no renderer, no data source, no collection.
+This is a *feature that was never built*, not one that regressed, and calling it a migration would
+misdescribe it. Written up rather than silently wired to an empty collection.
+
+The Delivery sub-tab inside Rides is a third case again: `#deliveriesBody` and `#couriersBody` are
+orphans, while a **separate, reachable `adm-pane-delivery` works** — fed by the live
+`_renderAdmDeliveries` Firestore listener writing `#deliveryBody` and `#couriersGrid`. Two UIs for the
+same thing, one real. That is a de-duplication question and is deliberately not answered here.
+
+**Tests:** functions 783 passed · users contract 36/36 · `<div>` balanced 751/751, 5 inline blocks
+parse · duplicate ids **100 → 97** · `#adm-pane-rides`, `#ridesBody`, `#driversBody` now 1 each ·
+predeploy green.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none — the removed pane was unreachable.
+
+**Rides is NOT complete** by the completion rule: it has one visible pane and no unreachable duplicate,
+but **no renderer, no data source and no write path**. Orphan containers rose 100 → 97 duplicates but
+27 → 29 orphans, because removing the duplicate leaves the surviving pane's unfed containers visible
+to the audit rather than hidden behind a twin. That number is honest, not a regression.
+
+---
+
 ## [2026-08-02] — findings(properties): landlord model — measured, **Option B recommended**
 
 Analysis only. No schema change, no migration, no rule edited. Full document:
