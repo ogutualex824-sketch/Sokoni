@@ -255,24 +255,11 @@
 
     async function _finalise(mpesaCode){
       _bnbRef = null;
-      /* Save booking */
-      let bookings = [];
-      try { bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings")) || []; } catch(e) {}
       const _bkData = { id:ref, bnbId, bnbName:b?.name, name, phone, checkIn, checkOut, nights, total, status:"confirmed", mpesaCode:mpesaCode||null, bookedAt: Date.now() };
-      bookings.unshift(_bkData);
-      localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
-      /* Persist to Firestore BEFORE telling the guest anything.
-
-         Previously this was fire-and-forget into an empty catch, and the
-         success banner fired on the next line. A guest could be shown
-         "Booking confirmed", have the host WhatsApped, and be issued an
-         invoice for a booking that reached no database at all.
-
-         The write is not retried and the booking is NOT discarded on failure:
-         payment may already have been taken, so the safe outcome is to keep the
-         local record, hand the guest their reference, and say plainly that
-         confirmation is pending. Telling them to "try again" would risk a
-         second charge. */
+      /* Persist first. Nothing downstream may run until this resolves — see the
+         commit-point note below. The write is not retried, and the guest is never
+         told to try again on failure: payment may already have been taken and a
+         retry would risk a second charge. */
       const _fsOutcome = await _persistBnBBooking({
         ..._bkData,
         listingId:bnbId,
@@ -280,6 +267,55 @@
         hostPhone:b?.phone||b?.hostPhone||b?.contact||''
       });
 
+      document.getElementById("bnbBookModal").style.display = "none";
+
+      /* ── The booking document is the commit point ────────────────────────
+         Everything below depends on the booking existing. Until Firestore has
+         accepted it there is no booking, whatever the payment did — so the host
+         is not notified, no invoice is raised, no commission is recorded, and
+         the guest is not told it is confirmed.
+
+         Previously all of those ran unconditionally, and the local record was
+         written as status:"confirmed" BEFORE the write was even attempted. A
+         failed persist produced a host WhatsApp, an invoice, a commission entry
+         and a confirmation banner for a booking that existed nowhere.
+
+         The money does not need a new home: darajaSTKCallback records every
+         payment in posPayments/{checkoutId} server-side, and where the
+         paid-for document is absent it already writes orphanPayments/{checkoutId}
+         with reason "order_document_absent_at_callback". That is the platform
+         reconciliation path; this deliberately does not invent a second one.
+         The reference shown to the guest is the key that matches the two up. */
+      if (!(_fsOutcome && _fsOutcome.ok)) {
+        /* A recovery record, under a DIFFERENT key and a non-confirmed status.
+           Writing it into sokoniBnBBookings would manufacture a confirmed
+           booking on the device — the exact thing that made this dangerous. */
+        try {
+          const rec = JSON.parse(localStorage.getItem("sokoniBnBBookingRecovery") || "[]");
+          rec.unshift({ ..._bkData, status:"payment_received_not_persisted",
+            failureReason:(_fsOutcome && _fsOutcome.reason) || "unknown error",
+            failedAt:new Date().toISOString() });
+          localStorage.setItem("sokoniBnBBookingRecovery", JSON.stringify(rec));
+        } catch(e) {}
+
+        console.error("[BnB] BOOKING NOT PERSISTED — payment may have been taken", {
+          ref, bnbId, total, mpesaCode: mpesaCode || null,
+          reason: (_fsOutcome && _fsOutcome.reason) || "unknown error" });
+
+        showNotif(`Payment received. Your booking is being verified. Keep this reference: ${ref}.`, "error");
+        return;
+      }
+
+      /* ── Commit succeeded: the downstream workflow, in order ───────────── */
+
+      /* 1. Local record — only now, and confirmed because it genuinely is. */
+      try {
+        const bookings = JSON.parse(localStorage.getItem("sokoniBnBBookings") || "[]");
+        bookings.unshift(_bkData);
+        localStorage.setItem("sokoniBnBBookings", JSON.stringify(bookings));
+      } catch(e) {}
+
+      /* 2. Host notification */
       /* Notify host via WhatsApp */
       const hostPhone = b?.phone || b?.hostPhone || b?.contact || "";
       if(hostPhone){
@@ -290,6 +326,7 @@
         setTimeout(()=> window.open(`https://wa.me/${waNum}?text=${msg}`, "_blank"), 1000);
       }
 
+      /* 3. Invoice */
       /* Auto-invoice */
       if(window.SokoniInvoice){
         SokoniInvoice.generate({
@@ -302,6 +339,7 @@
         });
       }
 
+      /* 4. Commission */
       /* Commission */
       if(window.SokoniPay && SokoniPay.saveCommission && total > 0){
         var _cPct =SokoniCommission.pct('bnb');
@@ -309,16 +347,8 @@
         SokoniPay.saveCommission({ref,providerName:b?.hostName||b?.name||'BnB Host',category:'bnb',commissionPct:_cPct,sokoniCut:_cCut,providerNet:total-_cCut,serviceTotal:total,status:'auto_collected',note:'BnB booking · '+nights+' night(s)',createdAt:Date.now()});
       }
 
-      document.getElementById("bnbBookModal").style.display = "none";
-      if (_fsOutcome && _fsOutcome.ok) {
-        showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
-      } else {
-        /* Never claim a confirmation that did not happen. The reference is the
-           thing support needs to reconcile it, so it leads. */
-        showNotif(`\u26a0\ufe0f Payment received \u2014 confirmation pending. Keep your reference: ${ref}. `
-          + `We could not finish recording this booking (${(_fsOutcome && _fsOutcome.reason) || "unknown error"}). `
-          + `Please contact support with that reference.`, "error");
-      }
+      /* 5. Customer confirmation */
+      showNotif(`✅ Booking confirmed! ${b?.name} · ${nights} night${nights>1?"s":""} · KES ${total.toLocaleString()}`, "success");
     }
 
     /* Real Daraja payment if host has configured it */

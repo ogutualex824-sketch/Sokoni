@@ -1,3 +1,57 @@
+## [2026-08-01] — fix(bnb): the booking document is the commit point
+
+**Decision applied:** if the booking does not persist, nothing that depends on it runs.
+
+**Before**, every downstream step ran unconditionally, and the local record was written as
+`status:"confirmed"` *before the Firestore write was even attempted*. A failed persist produced a host
+WhatsApp, an invoice, a commission entry and a confirmation banner **for a booking that existed
+nowhere**.
+
+**Now:**
+
+```
+persist ──✗──▶ recovery record · ops log · "Payment received. Your booking is
+                being verified. Keep this reference: <ref>."   [stop]
+
+persist ──✓──▶ 1 local record   2 host notification   3 invoice
+               4 commission     5 customer confirmation
+```
+
+The failure branch `return`s. There is no path from a failed commit to a notification, an invoice, a
+commission entry or a confirmation.
+
+### The money already has a home — no second source of truth
+
+`darajaSTKCallback` records **every** payment in `posPayments/{checkoutId}` server-side. Where the
+paid-for document is absent at callback time, it already writes
+`orphanPayments/{checkoutId}` with `reason: "order_document_absent_at_callback"` — precisely the
+"money exists, the thing it paid for does not" case. That is the platform's reconciliation path, and
+this change deliberately does not invent another. The reference shown to the guest is the key that
+matches the two together.
+
+**`unmatchedPayments` + `flagUnmatchedPayment` also exist and were considered and rejected here:**
+that callable is `assertAdmin`-gated, and the rules are `allow write: if false` (CF-only). Correct —
+money handling should not be client-writable. A guest cannot and should not flag their own payment.
+
+**Gap, documented not invented:** there is **no client-callable ops alert** in the codebase
+(`reportClientError` / `opsAlert` / equivalent: none). The failure is written to `console.error` with
+the reference, amount and M-Pesa code, and to a local `sokoniBnBBookingRecovery` record — under a
+**different key** and a **non-confirmed status**, because writing it into `sokoniBnBBookings` would
+manufacture a confirmed booking on the device, which is the exact hazard being removed. Routing this
+to operations in real time needs a server-side entry point and is **not** something to bolt on
+client-side.
+
+### Tests
+
+`bnb.html` 21/21 `<div>` balanced, 2 inline blocks parse · **ordering verified programmatically**:
+persist → fail-gate → recovery → early return → local record → host → invoice → commission →
+confirmation, each strictly after the last · functions 783 passed · predeploy green.
+
+Files: `bnb.html`.
+Database changes: none. Breaking changes: none — a successful booking behaves exactly as before.
+
+---
+
 ## [2026-08-01] — fix(bnb): P1 — a guest could be told "Booking confirmed" when nothing was saved
 
 **Root cause — two independent failure modes, both silent.**
