@@ -137,3 +137,6 @@ sokoni-release.keystore
 docs/_pr-body.md
 scripts/*-output*
 
+
+# Performance probe auth fixture — a LIVE SESSION, never commit
+.perf-auth.json
