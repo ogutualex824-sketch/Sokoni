@@ -43,7 +43,8 @@
     "check:variants": "node scripts/check-variant-parity.js",
     "check:profile-rules": "node scripts/check-profile-rules.js",
     "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js",
-    "audit:storage": "node scripts/audit-admin-localstorage.js"
+    "audit:storage": "node scripts/audit-admin-localstorage.js",
+    "regression:admin": "node scripts/admin-os-regression.js --live"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

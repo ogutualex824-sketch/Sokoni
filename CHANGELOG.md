@@ -1,3 +1,59 @@
+## [2026-08-02] — test(admin): Admin OS regression harness — 44 PASS · 0 FAIL · 2 BLOCKED
+
+Run before any new product work, per the agreed order.
+
+**PASS / FAIL / BLOCKED are never conflated.** BLOCKED means *this could not be executed here*, not
+*this passed* — a suite that reports BLOCKED as PASS is worse than no suite.
+
+### Result
+
+| | |
+|---|---|
+| **PASS** | **44** |
+| **FAIL** | **0** |
+| **BLOCKED** | **2** |
+
+Covered: pane convergence per pane (one pane · one renderer · one data source · no localStorage
+authority) · claim-based authorization · consent gate (86) · admin markup · duplicate-id ratchet ·
+localStorage ratchet · Applications render contract (25) · Users render contract (36) · Cloud Function
+unit tests (783) · audit logging reuse · realtime listeners guarded against double-attach · live
+production assets, `<div>` balance and all five panes single.
+
+### The two BLOCKED, and why they are not FAIL
+
+1. **`landlordProperties` rule behaviour** — 26 assertions written, unexecuted. The Firestore emulator
+   needs JDK 21; this host has 17.0.19.
+2. **`sokoniLandlordProperties` still a localStorage authority** — landlord Phases 2/3/6 are gated on
+   the above.
+
+I first classified the second as **FAIL**, and that was wrong. FAIL means *something that worked has
+broken*. This has never worked and is held behind a declared gate. Reporting it as a failure would
+make every future run red for a reason nobody can act on — which is precisely how a red suite starts
+getting ignored. It is still counted, still listed, and still blocks completion.
+
+### What this harness cannot do
+
+It **cannot mint an admin ID token**, so there is no live authenticated click-through. Eleven manual
+checks are printed on every run rather than quietly omitted — sign-in, each pane's list and actions,
+Moderation and Super Admin, notifications, search, mobile at 393px, and an audit entry appearing in
+`auditLogs`.
+
+**Mutation-tested:** re-introducing a duplicate `#adm-pane-users` produces
+`FAIL exactly one pane — 2 declaration(s)` and `FAIL duplicate-id ratchet`, and exits 1.
+
+### Dash Premium — decision recorded
+
+No production merchant record was created, per the decision. The survey found **141 POS / till /
+inventory Cloud Functions already deployed**, including `posSyncToMarketplace` and
+`posMarketplaceOrderSync` — **shared inventory across POS and marketplace already works in both
+directions**. The Water Supplier work is therefore a **category + onboarding template on existing
+modules**, not new systems. Queued behind this regression per the agreed order.
+
+Files: `scripts/admin-os-regression.js` (new), `package.json` (`npm run regression:admin`).
+No runtime code changed.
+
+---
+
 ## [2026-08-02] — docs(architecture): canonical data model + ADR index
 
 Specification and decision records. **Nothing migrated, no runtime code changed.**
