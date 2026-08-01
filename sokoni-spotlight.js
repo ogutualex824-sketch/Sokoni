@@ -39,7 +39,24 @@ window.SokoniSpotlight = (function(){
   }
 
   /* ── Fade a container out, swap content, fade in ── */
+  /* ── Reduced motion ──────────────────────────────────────────────────────────
+     Read live rather than cached, because the OS setting can change mid-session
+     and a user who turns it on should not have to reload to be respected. */
+  function _reducedMotion() {
+    try {
+      return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    } catch (e) { return false; }
+  }
+
   function _fade(el, cb) {
+    /* No cross-fade when motion is reduced — swap content directly. The 350ms
+       timeout is skipped too, so the update is immediate rather than animated. */
+    if (_reducedMotion()) {
+      el.style.transition = '';
+      el.style.opacity = '1';
+      try { cb(); } catch (e) {}
+      return;
+    }
     el.style.transition = 'opacity 0.35s ease';
     el.style.opacity = '0';
     setTimeout(function(){
@@ -220,10 +237,20 @@ window.SokoniSpotlight = (function(){
       '#_spLiveDot{width:7px;height:7px;border-radius:50%;background:#ff4444;display:inline-block;animation:_spPulse 1.2s ease-in-out infinite;}',
       '#_spLiveBadge{display:inline-flex;align-items:center;gap:5px;background:rgba(255,50,50,0.12);border:1px solid rgba(255,50,50,0.35);color:#ff6060;font-size:10px;font-weight:900;padding:3px 8px;border-radius:20px;vertical-align:middle;margin-left:8px;}',
       '#_spSellersBadge{display:inline-flex;align-items:center;gap:5px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-size:10px;font-weight:900;padding:3px 8px;border-radius:20px;vertical-align:middle;margin-left:8px;}',
-      '#_spCtrl{display:flex;align-items:center;gap:8px;}',
-      '#_spCtrl button{background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;font-family:inherit;transition:all .2s;}',
-      '#_spCtrl button:hover{border-color:rgba(113,255,0,0.4);color:#71ff00;}',
-      '#_spCtrl button._sp-paused{border-color:rgba(255,100,0,0.4);color:#ff8844;}',
+      '#_spCtrl,._sp-ctrl-wrap{display:flex;align-items:center;gap:8px;}',
+      '#_spCtrl button,._sp-ctrl-wrap button{background:none;border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;font-family:inherit;transition:all .2s;}',
+      '#_spCtrl button:hover,._sp-ctrl-wrap button:hover{border-color:rgba(113,255,0,0.4);color:#71ff00;}',
+      '#_spCtrl button._sp-paused,._sp-ctrl-wrap button._sp-paused{border-color:rgba(255,100,0,0.4);color:#ff8844;}',
+      /* Tap target for the rotation controls — these sit in a section title row
+         and were 3px/9px padded, well under a thumb's reach. */
+      '@media (pointer:coarse){#_spCtrl button,._sp-ctrl-wrap button{min-height:44px;padding:10px 14px;}}',
+      /* Reduced motion: the pulsing "LIVE" dots and the glow are decorative
+         attention-grabbers, and they animate indefinitely. The rotation itself is
+         stopped in init(); this covers the CSS half. */
+      '@media (prefers-reduced-motion: reduce){',
+      '  #_spLiveDot,#_spLiveDot2,._sp-glow{animation:none!important;}',
+      '  #_spSellersGrid,#productsContainer{transition:none!important;opacity:1!important;}',
+      '}',
     ].join('');
     document.head.appendChild(s);
   }
@@ -273,8 +300,35 @@ window.SokoniSpotlight = (function(){
         prodH2.insertAdjacentHTML('beforeend',
           '<span id="_spLiveBadge"><span id="_spLiveDot2" style="width:7px;height:7px;border-radius:50%;background:#ff4444;display:inline-block;animation:_spPulse 1.2s ease-in-out infinite;"></span> LIVE <span id="_spPageBadge" style="opacity:.6;font-size:9px;">1/' + Math.ceil(_productPool.length/8) + '</span></span>');
       }
+      /* ── WCAG 2.2.2 (Pause, Stop, Hide) ────────────────────────────────────
+         The primary shopping feed auto-updates every 10 seconds, and until now
+         the only control lived in the SELLER section's title row — a different
+         section, further up the page. A buyer reading a product card had no
+         adjacent way to stop it changing underneath them. `_paused` does
+         suppress rotation for 15s after a scroll or touch, which covers someone
+         actively scrolling, but not someone who stops to read.
+
+         Same handler, so one control governs all rotations; this simply gives
+         the products section its own. */
+      var prodRow = prodH2 ? prodH2.parentElement : null;
+      if (prodRow && !document.getElementById('_spCtrlProducts')) {
+        prodRow.insertAdjacentHTML('beforeend',
+          '<div id="_spCtrlProducts" class="_sp-ctrl-wrap">' +
+          '<button id="_spPauseBtnProducts" type="button" ' +
+          'aria-label="Pause automatic rotation of the product feed" ' +
+          'onclick="window.SokoniSpotlight.togglePause()">&#9208; Pause</button></div>');
+      }
+      /* The feed is an auto-updating region; announce changes politely rather
+         than interrupting, and only when it is not rotating on a timer. */
+      var prodContainer = document.getElementById('productsContainer');
+      if (prodContainer && !prodContainer.getAttribute('aria-live')) {
+        prodContainer.setAttribute('aria-live', 'polite');
+      }
+
       clearInterval(_productTimer);
-      _productTimer = setInterval(_rotateProducts, 10000);
+      /* Reduced motion: do not auto-rotate at all. Content that changes without
+         being asked is motion, whether or not it is animated. */
+      if (!_reducedMotion()) _productTimer = setInterval(_rotateProducts, 10000);
     }
 
     /* --- STORIES SECTION --- */
