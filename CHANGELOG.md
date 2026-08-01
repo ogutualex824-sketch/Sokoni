@@ -1,3 +1,60 @@
+## [2026-08-02] — docs(architecture): canonical data model + ADR index
+
+Specification and decision records. **Nothing migrated, no runtime code changed.**
+
+### Canonical data model — measured, not assumed
+
+`docs/CANONICAL_DATA_MODEL.md`, generated from
+`functions/scripts/probe-canonical-fields.js` against production.
+
+Measuring rather than reading changed the answer every time. `phone` is the obvious field name and
+covers **5%** of users; `phoneNumber` covers **75%**.
+
+| concept | measured reality | canonical |
+|---|---|---|
+| role | **four representations** on `users`: `roles[]` 97% · `registeredAs` 97% · `role` 13% · `accountType` 13% — and **2 documents carry none** | **`roles[]`** |
+| identity | `providers` carries **`uid` AND `providerId` on 100%** — pure duplication | `uid`, or a role-qualified uid |
+| phone | `phone` 5% vs `phoneNumber` 75%; `applications` carries **both on 100%** | **`phoneNumber`**, E.164 |
+| created | `applications` carries **`createdAt` AND `submittedAt` on 100%**; `auditLogs` uses `ts`; **`users.joined` is 0%** | `createdAt` |
+| status | **`payments` is UPPERCASE** (`COMPLETE`/`FAILED`/`PENDING`) while every other collection is lowercase | lowercase, per-lifecycle vocabulary |
+| verified | `verified` 2% vs `verificationStatus` 7% on users | `verified: boolean` + `verifiedAt`/`verifiedBy` |
+| location | **`city` exists on 0% of users** while the admin pane renders a City column | one `location` map, `county` queryable |
+
+**The `payments` case mismatch is a live correctness risk**, not a cosmetic one: a comparison against
+`'complete'` fails silently against `COMPLETE`. It is first in the migration order.
+
+Three things are recorded as **deliberately distinct, so they are not "unified" later**:
+`ownerUid`/`hostUid`/`tenantUid` (different people, sometimes on the same document, and the rules
+depend on telling them apart); `applications.type` (the application *kind*, not a role); and
+`projectionStatus` (whether an approval reached its registry — the fact that made
+approved-but-invisible providers detectable).
+
+Migration principles: **dual-read before converging writes** · **normalise, never rename**, where
+formats differ (`07…` → `+2547…`) · **backfill before ordering**, because `orderBy` silently drops
+documents lacking the field · one field per commit with measured before/after coverage.
+
+### ADR index — 9 records
+
+`docs/adr/` — ADR-001 claim-based authorization · 002 one renderer/source/write path · 003 no
+business authority in localStorage · 004 single writer for shared layout state · 005 commit-point
+persistence gating · 006 hierarchical landlord model · 007 pane convergence protocol · 008
+evidence-before-change · 009 canonical field representation.
+
+Each states the decision, the production evidence that produced it, and — most usefully — **what it
+forbids**, because every one of these is the kind of decision a future contributor reverses by
+accident while fixing something else.
+
+The index cross-references every implementation document and every guard, with each guard's mode
+(absolute vs ratchet) and current count.
+
+**The rule governing all of them:** a ratchet may decrease; it never increases without explicit
+architectural justification. Raising a baseline to silence a gate converts the gate into decoration.
+
+Files: `docs/CANONICAL_DATA_MODEL.md` (new), `docs/adr/README.md` + 9 ADRs (new),
+`functions/scripts/probe-canonical-fields.js` (new).
+
+---
+
 ## [2026-08-02] — audit(admin): localStorage inventory + CI ratchet · Ride Hub roadmap
 
 ### Ride Hub — deferred, documented as a product module
