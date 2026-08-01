@@ -454,8 +454,10 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
       periods   = dayClosed ? [] : (day.periods || []);
     }
 
-    if (dayClosed || !cfg.appt?.enabled || periods.length === 0) {
-      results.push({ date: dateStr, available: false, closedReason: dayClosed ? "closed" : "no_slots", slots: [] });
+    const _rej = dayClosed ? "closed" : (!cfg.appt?.enabled ? "appointments_disabled" : (periods.length === 0 ? "no_periods" : null));
+    if (_rej) {
+      console.info("[getAvailabilitySlots] day unavailable", { providerId, date: dateStr, dow, reason: _rej });
+      results.push({ date: dateStr, available: false, closedReason: _rej, slots: [] });
       continue;
     }
 
@@ -505,6 +507,11 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
       }
     }
 
+    const _availCount = daySlots.filter((s) => s.available).length;
+    if (!_availCount && daySlots.length) {
+      const _booked = daySlots.filter((s) => s.booked).length;
+      console.info("[getAvailabilitySlots] day generated but no open slots", { providerId, date: dateStr, total: daySlots.length, booked: _booked, tooSoon: daySlots.length - _booked });
+    }
     results.push({
       date:      dateStr,
       available: daySlots.some((s) => s.available),

@@ -203,6 +203,16 @@ const INSTRUMENT = `
     });
     const scripts = [...byScript.entries()].sort((a, b) => b[1].nodes - a[1].nodes);
 
+    /* Per-SITE attribution (file:line). Aggregating by file alone hid which line
+       inside script.js does the work — and that ambiguity sent one hypothesis
+       (repeated displayProducts calls) down a dead end. */
+    const bySite = new Map();
+    muts.forEach(m => {
+      if (!bySite.has(m.s)) bySite.set(m.s, { calls: 0, nodes: 0, kinds: {} });
+      const r = bySite.get(m.s); r.calls++; r.nodes += m.n; r.kinds[m.k] = (r.kinds[m.k]||0)+1;
+    });
+    const sites = [...bySite.entries()].sort((a,b) => b[1].nodes - a[1].nodes).slice(0, 20);
+
     /* Timeline buckets. */
     const BUCKETS = [[0,50],[50,150],[150,300],[300,600],[600,1200],[1200,2500],[2500,5000],[5000,Infinity]];
     const timeline = BUCKETS.map(([lo, hi]) => {
@@ -217,6 +227,7 @@ const INSTRUMENT = `
       totalCalls: muts.length, totalNodes: muts.reduce((s, m) => s + m.n, 0),
       beforeFcp: muts.filter(m => fcp && m.t <= fcp).length,
       scripts: scripts.map(([f, r]) => ({ file: f, ...r, first: r.first === Infinity ? null : r.first })),
+      sites: sites.map(([s2, r]) => ({ site: s2, ...r })),
       timeline };
 
     if (AS_JSON) { console.log(JSON.stringify(out, null, 2)); }

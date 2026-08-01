@@ -786,9 +786,19 @@ function switchTab(btn) {
    Now the READ is separated from the RENDER, the real error is always logged, the
    settings document is created on first use, and the page always reaches a terminal
    state — loaded, or an error with a Retry. It is never left mid-load. */
+/* A NEW provider must land on a bookable default (Mon–Fri 09:00–17:00, appointments enabled) —
+   matching the server-side getAvailabilitySlots fallback — never an empty schedule that renders
+   every day closed and produces zero slots. They can then customise + Save. */
+const _DEF_DAY = { closed: false, periods: [{ open: "09:00", close: "17:00" }], breaks: [] };
+const _CLOSED_DAY = { closed: true, periods: [], breaks: [] };
 const DEFAULT_CONFIG = {
   modes: ["fixed_hours"],
-  schedule: {}, appt: {}, cap: {}, notify: {}, vacation: {},
+  schedule: {
+    monday: { ..._DEF_DAY }, tuesday: { ..._DEF_DAY }, wednesday: { ..._DEF_DAY },
+    thursday: { ..._DEF_DAY }, friday: { ..._DEF_DAY }, saturday: { ..._CLOSED_DAY }, sunday: { ..._CLOSED_DAY },
+  },
+  appt: { enabled: true, durationMins: 60, bufferMins: 0, travelMins: 0, minNoticeHours: 1, allowSameDay: false, maxDaysAhead: 30 },
+  cap: {}, notify: {}, vacation: {},
   businessName: "", hubType: "",
 };
 

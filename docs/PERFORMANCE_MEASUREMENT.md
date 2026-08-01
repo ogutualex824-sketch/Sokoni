@@ -667,3 +667,58 @@ could never work — the mutations kept coming.
 
 **Do not** implement a staged boot on the current evidence. The data does not support it for this page.
 
+---
+
+## Render audit — what actually builds the homepage DOM
+
+### My hypothesis was only partly right
+
+I predicted the ~3330 nodes attributed to `script.js` were *repeated re-rendering of the same feed*.
+Per-line attribution says otherwise:
+
+| nodes | calls | site | what it is |
+|---|---|---|---|
+| 1280 | **2** | `script.js:1015` | `displayProducts` first batch (12 cards) — **called twice** |
+| **1196** | **1** | `script.js:1595` | **"New Arrivals" — 20 compact cards, one shot** |
+| 514 | 1 | `script.js:1034` | `displayProducts` idle-appended remainder |
+| 214 | 2 | `sokoni-spotlight.js:86` | spotlight |
+| 135 | 1 | `shared-header.js:1372` | header |
+
+**Repetition is real but minor.** `displayProducts`' first batch does run twice (2 calls, line 1015),
+which confirms the duplicate-caller suspicion. But the largest single cost is a section I had not
+considered at all: **New Arrivals builds 1196 nodes in one call.**
+
+The homepage renders **three separate product grids** — main feed (12 + 8 idle), New Arrivals (20
+compact), and spotlight — totalling ~52 cards and ~3000 nodes, **all after first paint**.
+
+### A flaw in my own instrument
+
+`scripts/perf-render-audit.js` measured nodes as `containerNodesAfter − containerNodesBefore`. For an
+`innerHTML` **replacement** that delta is (new − old), so rebuilding a grid of the same size reports
+approximately zero. It showed 255 nodes where the boot map showed 1280.
+
+**A delta is the wrong measure for a replacement.** The boot map's approach — counting `<` in the
+assigned string — is closer to the truth. This is the second time an instrument, not the product, was
+the thing that needed fixing; recorded here so the next reader does not trust that number.
+
+### What this makes the real target
+
+Not "stop re-rendering" — the repetition is 2× on a 12-card batch. The target is that **~3000 nodes of
+product grid are constructed during load for content that is largely below the fold.**
+
+New Arrivals (1196 nodes) is the clearest case: an entire secondary grid built eagerly, after FCP,
+while the user is looking at the hero and the main feed.
+
+### Recommended next experiment (Category A)
+
+**Defer below-fold grids to intersection or idle.** Render New Arrivals when it approaches the
+viewport rather than during load. Expected mechanism: ~1200 fewer nodes constructed in the load window,
+so less style/layout work for any subsequent reader to flush — which is the same mechanism that makes
+`_measure` look expensive.
+
+Acceptance unchanged: paired A/B, ≥6 pairs, `styleMs`/`layoutMs` against the ±2% floor, reproduced.
+
+**Secondary, cheap:** the duplicate `displayProducts` first-batch call (2× at line 1015). Worth fixing
+on correctness grounds — rendering the same 12 cards twice is not intentional — but on this evidence it
+is ~640 nodes, not the main event, and should be measured separately.
+

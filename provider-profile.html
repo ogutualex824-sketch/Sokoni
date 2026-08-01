@@ -270,7 +270,7 @@
     /* ── Pricing ── */
     if (p.rate == null && pending.pricing) {
       h.push('<div class="pp-section"><h2>Pricing</h2>'
-        + '<div class="pp-pending">Pricing not published yet — message '
+        + '<div class="pp-pending" id="ppPricing">Pricing not published yet — message '
         + esc(p.name.split(' ')[0]) + ' for a quote.</div></div>');
     }
 
@@ -282,6 +282,25 @@
 
     wrap.innerHTML = h.join('');
     renderActions(p);
+    enrichServicesPricing(uid);   /* canonical: if the provider has priced services, show them */
+  }
+
+  /* The public profile must agree with the booking modal: if a bookable service has a live price,
+     show it instead of "Pricing not published". Reads the canonical providerServices (same source
+     the booking flow uses); prices are cents. Non-fatal + best-effort. */
+  async function enrichServicesPricing(uid) {
+    var el = document.getElementById('ppPricing');
+    if (!el || !window.firebaseDB) return;
+    try {
+      var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var snap = await m.getDocs(m.query(m.collection(window.firebaseDB, 'providerServices'), m.where('providerId', '==', uid), m.limit(50)));
+      var svcs = snap.docs.map(function (d) { return d.data(); }).filter(function (s) { return s.active !== false && !s.removedAt; });
+      var prices = svcs.map(function (s) { return Number(s.pricing && s.pricing.basePrice) || Number(s.price) || 0; }).filter(function (x) { return x > 0; });
+      if (!prices.length) return;
+      var min = Math.min.apply(null, prices);
+      el.className = 'pp-card';
+      el.textContent = 'From KES ' + Math.round(min / 100).toLocaleString() + ' · ' + svcs.length + ' service' + (svcs.length > 1 ? 's' : '') + ' available — tap Book for full pricing.';
+    } catch (e) { /* keep the pending message */ }
   }
 
   function renderActions(p) {

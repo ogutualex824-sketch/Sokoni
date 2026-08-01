@@ -1,3 +1,31 @@
+## [2026-08-01] — fix(availability): provider bookability convergence — auto-onboard + default schedule + logging (P1)
+
+Live QA exposed a real blocker: a provider with no/empty availability was permanently unbookable
+("No open times") and the dashboard availability tab hung on "Loading availability…". Root cause: the
+manager created `schedule:{}` + `appt:{}` (every day closed, appointments disabled), and the slot
+generator threw `not-found` for a missing doc. Convergence fix (one availability authority, no new system):
+
+- **`functions/availability.js`** `getAvailabilitySlots` — never leaves an approved provider unbookable:
+  if the doc is missing OR effectively unconfigured (no open day / appointments disabled), it applies a
+  usable default (**Mon–Fri 09:00–17:00, appointments enabled**) and **persists it once** (auto-onboarding),
+  then generates slots. Reads the canonical `providerAvailability/{providerId}` only. Now **logs the exact
+  per-day rejection reason** (closed / appointments_disabled / no_periods) and no-open-slots (booked/too-soon).
+  Emulator-proven 4/4 (empty-schedule + missing-doc both become bookable + backfilled).
+- **`availability-manager.html`** — `DEFAULT_CONFIG` now Mon–Fri 09:00–17:00 + appointments enabled (matches
+  the server), so first visit shows a bookable default instead of an empty all-closed schedule.
+- **`provider-dashboard.html`** — the Settings→Availability tab called `loadAvail` only when dashboard data
+  had loaded, so it could hang on "Loading availability…" forever; now always renders (null-safe).
+- **`provider-profile.html`** — pricing display convergence: reads the canonical `providerServices` and shows
+  "From KES X" when priced services exist, instead of "Pricing not published yet" (which disagreed with the
+  booking modal's live price).
+- **`functions/booking-availability-guard.js`** — fixed a day-key bug I introduced (3-letter `mon` vs the
+  canonical `monday`) that made the impact/freeze check silently under-detect.
+
+Deploy: `functions:bookingDispatch,getAvailabilitySlots,providerDispatch` + hosting. Extend-don't-rebuild;
+one availability authority, one pricing authority. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(pricing): customer package/add-on selector (Advanced Rate Cards — Slice D) — pipeline complete
 
 The customer booking flow now presents packages/add-ons/duration and shows the server-authoritative price

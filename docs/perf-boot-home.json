@@ -1,25 +1,25 @@
 {
   "page": "home",
   "ref": "working",
-  "at": "2026-08-01T14:06:16.332Z",
+  "at": "2026-08-01T14:12:29.380Z",
   "marks": {
-    "fcp": 4428,
-    "lcp": 7252,
-    "dcl": 15100,
-    "load": 25198
+    "fcp": 2512,
+    "lcp": 7452,
+    "dcl": 12923,
+    "load": 21365
   },
-  "totalCalls": 462,
-  "totalNodes": 4215,
+  "totalCalls": 459,
+  "totalNodes": 4214,
   "beforeFcp": 18,
   "scripts": [
     {
       "file": "script.js",
       "calls": 62,
-      "nodes": 3330,
+      "nodes": 3332,
       "beforeFcp": 0,
       "afterFcp": 62,
-      "first": 11769,
-      "last": 29690,
+      "first": 9562,
+      "last": 26022,
       "kinds": {
         "setAttribute": 5,
         "innerHTML": 11,
@@ -34,8 +34,8 @@
       "nodes": 215,
       "beforeFcp": 0,
       "afterFcp": 3,
-      "first": 18961,
-      "last": 27087,
+      "first": 15424,
+      "last": 23165,
       "kinds": {
         "appendChild": 1,
         "innerHTML": 2
@@ -47,8 +47,8 @@
       "nodes": 205,
       "beforeFcp": 0,
       "afterFcp": 71,
-      "first": 8603,
-      "last": 28334,
+      "first": 7614,
+      "last": 24464,
       "kinds": {
         "setAttribute": 20,
         "appendChild": 38,
@@ -65,8 +65,8 @@
       "nodes": 103,
       "beforeFcp": 15,
       "afterFcp": 69,
-      "first": 474,
-      "last": 24856,
+      "first": 551,
+      "last": 21101,
       "kinds": {
         "appendChild": 16,
         "setAttribute": 3,
@@ -80,8 +80,8 @@
       "nodes": 65,
       "beforeFcp": 0,
       "afterFcp": 14,
-      "first": 28464,
-      "last": 29190,
+      "first": 24590,
+      "last": 25318,
       "kinds": {
         "appendChild": 3,
         "setAttribute": 6,
@@ -96,8 +96,8 @@
       "nodes": 63,
       "beforeFcp": 0,
       "afterFcp": 63,
-      "first": 18090,
-      "last": 29637,
+      "first": 14495,
+      "last": 25975,
       "kinds": {
         "setProperty": 63
       }
@@ -108,8 +108,8 @@
       "nodes": 47,
       "beforeFcp": 0,
       "afterFcp": 2,
-      "first": 29419,
-      "last": 29442,
+      "first": 25717,
+      "last": 25763,
       "kinds": {
         "appendChild": 1,
         "innerHTML": 1
@@ -121,8 +121,8 @@
       "nodes": 38,
       "beforeFcp": 0,
       "afterFcp": 38,
-      "first": 8552,
-      "last": 8591,
+      "first": 7574,
+      "last": 7600,
       "kinds": {
         "setAttribute": 29,
         "appendChild": 9
@@ -130,15 +130,15 @@
     },
     {
       "file": "sokoni-performance.js",
-      "calls": 28,
-      "nodes": 28,
+      "calls": 25,
+      "nodes": 25,
       "beforeFcp": 0,
-      "afterFcp": 28,
-      "first": 16022,
-      "last": 17006,
+      "afterFcp": 25,
+      "first": 10860,
+      "last": 12194,
       "kinds": {
         "appendChild": 1,
-        "setAttribute": 27
+        "setAttribute": 24
       }
     },
     {
@@ -147,8 +147,8 @@
       "nodes": 22,
       "beforeFcp": 0,
       "afterFcp": 17,
-      "first": 13201,
-      "last": 18028,
+      "first": 10830,
+      "last": 15232,
       "kinds": {
         "appendChild": 3,
         "setAttribute": 6,
@@ -163,8 +163,8 @@
       "nodes": 18,
       "beforeFcp": 0,
       "afterFcp": 18,
-      "first": 8084,
-      "last": 28313,
+      "first": 7267,
+      "last": 24441,
       "kinds": {
         "appendChild": 11,
         "class.add": 7
@@ -176,8 +176,8 @@
       "nodes": 17,
       "beforeFcp": 3,
       "afterFcp": 4,
-      "first": 565,
-      "last": 26610,
+      "first": 611,
+      "last": 22642,
       "kinds": {
         "appendChild": 1,
         "setAttribute": 1,
@@ -193,8 +193,8 @@
       "nodes": 17,
       "beforeFcp": 0,
       "afterFcp": 11,
-      "first": 28518,
-      "last": 28939,
+      "first": 24637,
+      "last": 25119,
       "kinds": {
         "appendChild": 1,
         "setAttribute": 8,
@@ -207,8 +207,8 @@
       "nodes": 11,
       "beforeFcp": 0,
       "afterFcp": 11,
-      "first": 23313,
-      "last": 24994,
+      "first": 19494,
+      "last": 21134,
       "kinds": {
         "innerHTML": 1,
         "appendChild": 3,
@@ -222,8 +222,8 @@
       "nodes": 8,
       "beforeFcp": 0,
       "afterFcp": 5,
-      "first": 14621,
-      "last": 14627,
+      "first": 12542,
+      "last": 12548,
       "kinds": {
         "appendChild": 2,
         "setAttribute": 2,
@@ -236,8 +236,8 @@
       "nodes": 6,
       "beforeFcp": 0,
       "afterFcp": 6,
-      "first": 14632,
-      "last": 14639,
+      "first": 12552,
+      "last": 12557,
       "kinds": {
         "class.remove": 5,
         "class.add": 1
@@ -249,8 +249,8 @@
       "nodes": 6,
       "beforeFcp": 0,
       "afterFcp": 6,
-      "first": 17101,
-      "last": 17146,
+      "first": 13727,
+      "last": 13755,
       "kinds": {
         "setAttribute": 1,
         "appendChild": 1,
@@ -263,8 +263,8 @@
       "nodes": 5,
       "beforeFcp": 0,
       "afterFcp": 5,
-      "first": 15057,
-      "last": 15079,
+      "first": 12880,
+      "last": 12903,
       "kinds": {
         "appendChild": 5
       }
@@ -275,8 +275,8 @@
       "nodes": 3,
       "beforeFcp": 0,
       "afterFcp": 3,
-      "first": 29300,
-      "last": 29306,
+      "first": 25450,
+      "last": 25501,
       "kinds": {
         "appendChild": 3
       }
@@ -287,8 +287,8 @@
       "nodes": 2,
       "beforeFcp": 0,
       "afterFcp": 2,
-      "first": 13352,
-      "last": 13355,
+      "first": 12412,
+      "last": 12415,
       "kinds": {
         "appendChild": 2
       }
@@ -299,8 +299,8 @@
       "nodes": 2,
       "beforeFcp": 0,
       "afterFcp": 2,
-      "first": 14642,
-      "last": 14658,
+      "first": 12559,
+      "last": 12572,
       "kinds": {
         "appendChild": 2
       }
@@ -311,8 +311,8 @@
       "nodes": 2,
       "beforeFcp": 0,
       "afterFcp": 2,
-      "first": 20311,
-      "last": 20319,
+      "first": 17188,
+      "last": 17198,
       "kinds": {
         "prepend": 1,
         "insertBefore": 1
@@ -324,8 +324,8 @@
       "nodes": 1,
       "beforeFcp": 0,
       "afterFcp": 1,
-      "first": 8594,
-      "last": 8594,
+      "first": 7604,
+      "last": 7604,
       "kinds": {
         "appendChild": 1
       }
@@ -336,10 +336,174 @@
       "nodes": 1,
       "beforeFcp": 0,
       "afterFcp": 1,
-      "first": 15090,
-      "last": 15090,
+      "first": 12913,
+      "last": 12913,
       "kinds": {
         "appendChild": 1
+      }
+    }
+  ],
+  "sites": [
+    {
+      "site": "script.js:1015",
+      "calls": 2,
+      "nodes": 1280,
+      "kinds": {
+        "innerHTML": 2
+      }
+    },
+    {
+      "site": "script.js:1595",
+      "calls": 1,
+      "nodes": 1196,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "script.js:1034",
+      "calls": 1,
+      "nodes": 514,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "sokoni-spotlight.js:86",
+      "calls": 2,
+      "nodes": 214,
+      "kinds": {
+        "innerHTML": 2
+      }
+    },
+    {
+      "site": "shared-header.js:1372",
+      "calls": 1,
+      "nodes": 135,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "script.js:3111",
+      "calls": 1,
+      "nodes": 92,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "script.js:2753",
+      "calls": 1,
+      "nodes": 84,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "script.js:299",
+      "calls": 1,
+      "nodes": 80,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "kass-widget.js:559",
+      "calls": 1,
+      "nodes": 48,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "inspiq.js:699",
+      "calls": 1,
+      "nodes": 46,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "security.js:820",
+      "calls": 29,
+      "nodes": 29,
+      "kinds": {
+        "setProperty": 29
+      }
+    },
+    {
+      "site": "security.js:821",
+      "calls": 29,
+      "nodes": 29,
+      "kinds": {
+        "setProperty": 29
+      }
+    },
+    {
+      "site": "seo.js:111",
+      "calls": 22,
+      "nodes": 22,
+      "kinds": {
+        "setAttribute": 22
+      }
+    },
+    {
+      "site": "script.js:1518",
+      "calls": 1,
+      "nodes": 22,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "script.js:1022",
+      "calls": 20,
+      "nodes": 20,
+      "kinds": {
+        "setProperty": 20
+      }
+    },
+    {
+      "site": "(unknown)",
+      "calls": 18,
+      "nodes": 18,
+      "kinds": {
+        "appendChild": 11,
+        "class.add": 7
+      }
+    },
+    {
+      "site": "script.js:1039",
+      "calls": 17,
+      "nodes": 17,
+      "kinds": {
+        "appendChild": 17
+      }
+    },
+    {
+      "site": "shared-header.js:1213",
+      "calls": 15,
+      "nodes": 15,
+      "kinds": {
+        "setAttribute": 15
+      }
+    },
+    {
+      "site": "security.js:611",
+      "calls": 1,
+      "nodes": 14,
+      "kinds": {
+        "innerHTML": 1
+      }
+    },
+    {
+      "site": "seo.js:110",
+      "calls": 12,
+      "nodes": 12,
+      "kinds": {
+        "setAttribute": 6,
+        "appendChild": 6
       }
     }
   ],
@@ -368,25 +532,26 @@
     {
       "lo": 300,
       "hi": 600,
-      "calls": 18,
-      "nodes": 34,
+      "calls": 15,
+      "nodes": 21,
       "top": [
         [
           "security.js",
           21
-        ],
-        [
-          "splash.js",
-          13
         ]
       ]
     },
     {
       "lo": 600,
       "hi": 1200,
-      "calls": 0,
-      "nodes": 0,
-      "top": []
+      "calls": 3,
+      "nodes": 13,
+      "top": [
+        [
+          "splash.js",
+          13
+        ]
+      ]
     },
     {
       "lo": 1200,
@@ -405,12 +570,12 @@
     {
       "lo": 5000,
       "hi": null,
-      "calls": 444,
-      "nodes": 4181,
+      "calls": 441,
+      "nodes": 4180,
       "top": [
         [
           "script.js",
-          3330
+          3332
         ],
         [
           "sokoni-spotlight.js",

@@ -22,7 +22,9 @@ if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
 const { HttpsError } = require('firebase-functions/v2/https');
 
-const DOW = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+/* Full day names — MUST match the canonical schedule keys (monday…) and booking-service DOW.
+   (A 3-letter version silently read the wrong key → schedule check never matched.) */
+const DOW = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const ACTIVE_BOOKING_STATES = ['pending', 'requested', 'confirmed', 'in_progress'];
 
 function _uid(req) {

@@ -815,7 +815,7 @@ const Rv={
 
 /* ── Settings ────────────────────────────────────────────────────────────── */
 const S={
-  tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail'&&_data)S.loadAvail();if(t==='services')Sv.load()},
+  tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail')S.loadAvail();if(t==='services')Sv.load()},
   loadAvail(){
     const av=_data?.availability||{};
     _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><a href="availability-manager.html" class="btn btn-p btn-sm">Manage Availability &amp; Breaks</a></div>`;
