@@ -1,0 +1,127 @@
+{
+  "base": "https://mysokoni.co.ke",
+  "sessions": 3,
+  "results": [
+    {
+      "label": "home",
+      "path": "/",
+      "sessions": 3,
+      "discarded": 0,
+      "landedAs": null,
+      "cold": {
+        "fcp": 1464,
+        "lcp": 2256,
+        "cls": 0.0063,
+        "tbt": 423,
+        "longTasks": 11,
+        "worstTask": 161,
+        "loadMs": 4268,
+        "tti": 3222,
+        "scripts": 76,
+        "jsKB": 1573,
+        "imgKB": 187,
+        "totalKB": 2089,
+        "shifts": []
+      },
+      "warm": {
+        "lcp": 1548,
+        "cls": 0.0352,
+        "tbt": 393,
+        "loadMs": 3393
+      }
+    },
+    {
+      "label": "search",
+      "path": "/search?q=cleaning",
+      "sessions": 3,
+      "discarded": 0,
+      "landedAs": null,
+      "cold": {
+        "fcp": 1068,
+        "lcp": 1072,
+        "cls": 0,
+        "tbt": 215,
+        "longTasks": 4,
+        "worstTask": 146,
+        "loadMs": 2576,
+        "tti": 1649,
+        "scripts": 62,
+        "jsKB": 1442,
+        "imgKB": 37,
+        "totalKB": 1524,
+        "shifts": []
+      },
+      "warm": {
+        "lcp": 1212,
+        "cls": 0.0003,
+        "tbt": 0,
+        "loadMs": 2306
+      }
+    },
+    {
+      "label": "category",
+      "path": "/category?cat=electronics",
+      "sessions": 3,
+      "discarded": 0,
+      "landedAs": null,
+      "cold": {
+        "fcp": 1436,
+        "lcp": 1628,
+        "cls": 0,
+        "tbt": 206,
+        "longTasks": 4,
+        "worstTask": 135,
+        "loadMs": 2718,
+        "tti": 2300,
+        "scripts": 61,
+        "jsKB": 1574,
+        "imgKB": 90,
+        "totalKB": 1724,
+        "shifts": []
+      },
+      "warm": {
+        "lcp": 1660,
+        "cls": 0.0001,
+        "tbt": 0,
+        "loadMs": 2688
+      }
+    },
+    {
+      "label": "product",
+      "path": "/product",
+      "sessions": 3,
+      "discarded": 0,
+      "landedAs": null,
+      "cold": {
+        "fcp": 1084,
+        "lcp": 1208,
+        "cls": 0,
+        "tbt": 63,
+        "longTasks": 3,
+        "worstTask": 91,
+        "loadMs": 2648,
+        "tti": 1738,
+        "scripts": 62,
+        "jsKB": 1442,
+        "imgKB": 30,
+        "totalKB": 1534,
+        "shifts": []
+      },
+      "warm": {
+        "lcp": 1416,
+        "cls": 0,
+        "tbt": 0,
+        "loadMs": 2101
+      }
+    },
+    {
+      "label": "checkout",
+      "path": "/checkout",
+      "sessions": 0,
+      "discarded": 3,
+      "landedAs": "/login",
+      "cold": null,
+      "warm": null
+    }
+  ]
+}

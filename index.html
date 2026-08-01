@@ -159,7 +159,7 @@
   <link rel="stylesheet" href="sokoni-hscroll.css">
   <script src="market-actions.js" defer></script>
   <script src="sokoni-commission-rates.js"></script>
-<script src="sokoni-pay.js" defer></script>
+
 <script src="sokoni-intasend.js" defer></script>
 <script src="shared-header.js" defer></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
@@ -3082,7 +3082,7 @@ import SokoniDB from "./sokoni-db.js";
   <script src="sokoni-share.js" defer></script>
   <script src="sokoni-ui-extras.js" defer></script>
   <script src="sw-register.js" defer></script>
-  <script src="inspiq.js" defer></script>
+  
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       setTimeout(function () {
@@ -3447,7 +3447,18 @@ section button[onclick*="stopPropagation"]{-webkit-tap-highlight-color:transpare
     margin:16px auto !important;
     width:calc(100% - 32px) !important;   /* 16px each side, matches the auto margin */
     max-width:none !important;
-    min-height:auto !important;
+    /* Reserve the hero's height BEFORE its text renders.
+       This was `min-height:auto`, i.e. zero reserved space on mobile, so roughly
+       450px of hero appeared out of nothing once the heading, sub-heading and
+       buttons laid out — measured as the homepage's two largest layout shifts
+       (0.0468 + 0.0444 of a 0.0912 CLS, against a 0.1 budget).
+
+       450px is the MEASURED floor, not a guess: the settled hero is 450px at
+       393px wide, 453px at 412px and 467px at 375px (narrower wraps taller).
+       Because the floor equals the smallest real height, content always wins and
+       the reservation can never open an empty gap — it only stops the collapse.
+       Desktop keeps its 44vh rule above this breakpoint. */
+    min-height:450px !important;
   }
   /* Card follows the section: it is a card on all four sides now, not a bleed panel.
      border-radius returns to all four corners and the side/top borders are restored,
@@ -3955,7 +3966,7 @@ document.addEventListener('DOMContentLoaded',function(){
 <script type="module" src="sokoni-ai-policy.js"></script>
 
 <!-- ── PERSONALISED RECOMMENDATIONS ── -->
-<script src="sokoni-recommendations.js" defer></script>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   /* This chain had NO error handling: if init() or getForYou() rejected, the
@@ -4131,6 +4142,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.addEventListener('touchend', bump, true);
   })();
   </script>
+
+  <!-- Idle-loaded: 158KB of optional modules (payment SDK, recommendations,
+       Inspiq) that the homepage never references at first paint. Loads on idle
+       OR first interaction, whichever comes first. See sokoni-lazy.js. -->
+  <script src="sokoni-lazy.js" defer data-lazy="sokoni-pay.js,sokoni-recommendations.js,inspiq.js"></script>
 </body>
 
 </html>
