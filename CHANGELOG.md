@@ -1,3 +1,39 @@
+## [2026-08-01] — fix(admin): my Users regression — a stray `</div>` let the table escape its pane
+
+**Self-inflicted, shipped in `4c2b495` (v199), live for one release.**
+
+The status filter was inserted one line too early: it landed *after* the toolbar's existing `</div>`
+and brought a second `</div>` with it. That extra close ended `#adm-pane-users` prematurely, so the
+users table, the pager and the detail slide-in became **siblings of the pane instead of children**.
+
+`.adm-pane { display:none }` hides the pane element and nothing else — so those three blocks rendered
+on **every other admin pane**. The diff looked reasonable, the page parsed, and every gate passed.
+
+Fixed: the select now sits inside the toolbar where it belongs, and the extra close is gone. Both
+filter handlers call `filterUsers()` with no argument, since the Firestore renderer reads the controls
+straight from the DOM.
+
+### The guard that would have caught it
+
+`scripts/verify-admin-markup.js` (new), wired into `predeploy`:
+
+1. `<div>` opens and closes balance across the file — computed on markup only, with `<script>` bodies
+   and comments stripped so a renderer building `'<div>'` in a template literal is not miscounted.
+2. Every inline `<script>` block parses.
+
+Neither proves a layout is correct. Both make *"I moved some markup and it still renders"* a claim
+with something behind it.
+
+Mutation-tested: re-introducing the stray close reports `756 open, 757 close (-1)` and fails with
+*"a container is ending early… panes hidden with display:none stop hiding it."* All five admin
+consoles are balanced today.
+
+Files: `admin.html`, `scripts/verify-admin-markup.js` (new), `package.json`.
+Tests: users contract 36/36, consent 86/86, markup guard green, predeploy green.
+Database changes: none. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(admin): Users reads Firestore — the pane finally has a data source
 
 **Root cause.** The pane read `D.users`, populated from localStorage key `sokoniAllUsers`. That key

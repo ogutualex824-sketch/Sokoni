@@ -4,10 +4,11 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
+    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:consent": "node scripts/verify-consent-gate.js",
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
+    "verify:markup": "node scripts/verify-admin-markup.js",
     "test:panels": "node scripts/test-apps-render.js && node scripts/test-users-render.js",
     "audit:panels": "node scripts/audit-orphan-panels.js",
     "verify:appcheck": "node scripts/verify-appcheck.js",

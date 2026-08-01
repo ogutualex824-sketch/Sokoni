@@ -871,10 +871,9 @@ body.adm-light .adm-sec-h{color:#111;}
       <div id="adm-pane-users" class="adm-pane">
         <div class="adm-toolbar">
           <input class="adm-search" id="userSearch" placeholder="🔍 Search name, email, phone, uid…" oninput="filterUsers(this.value)">
-          <select id="userRoleFilter" onchange="filterUsers((document.getElementById('userSearch')||{}).value||'')" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
+          <select id="userRoleFilter" onchange="filterUsers()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
             <option value="">All</option><option value="buyer">Buyers</option><option value="seller">Sellers</option><option value="driver">Drivers</option><option value="provider">Providers</option><option value="admin">Admins</option><option value="suspended">Suspended</option>
           </select>
-        </div>
           <select id="userStatusFilter" onchange="filterUsers()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:inherit;font-size:12px;">
             <option value="">Any status</option>
             <option value="active">Active</option>
