@@ -73,6 +73,41 @@ Everything revolves around the user's **permanent identity**.
 
 ---
 
+## Rule 9 — Single Writer for Shared Layout State (Permanent)
+
+> Every shared CSS custom property that affects layout must have **exactly one authoritative
+> writer**. Everything else observes it. Nobody else writes it.
+
+Covers `--sk-header-h`, safe-area offsets, bottom-navigation height, sticky header offsets, and any
+future positional token.
+
+**Why this is a rule.** Two writers is a *correctness* defect, not a style preference. Measured
+2026-08-01: `--sk-header-h` was written by both `sokoni-layout.js` and `shared-header.js`, neither
+aware of the other. Any caching by one was silently invalidated by the other — which is how a
+dirty-check produced a **10% style-recalculation regression**: layout.js cached a value it did not
+own, then stopped correcting a property it no longer controlled, and elements settled at wrong
+offsets. It also explains the header height observed jumping 100px → 110px during load in the earlier
+CLS investigation, which had been filed at the time as a timing artefact.
+
+Establishing single ownership improved style recalculation by **6–12%** across two independent paired
+A/B runs (−12.0% at 5/6 pairs, then −6.0% at 5/6; ±2% floor).
+
+**Choosing the owner:** the module that owns the DOM element owns the property. `shared-header.js`
+wins on merit here — it owns the header element, knows when it changes, and publishes
+`getBoundingClientRect().bottom`, i.e. where the header actually *ends*, which accounts for safe-area
+insets and banners. `sokoni-layout.js` was publishing `offsetHeight`, which does not. A consumer that
+needs the value reads the CSS variable; it never re-derives and re-publishes it.
+
+**Enforcement:** `node scripts/audit-layout-ownership.js` classifies every tracked property as
+OWNED / CONTESTED / STATIC / ORPHAN and exits non-zero on any CONTESTED property.
+Current state: **CONTESTED 0 · OWNED 7 · STATIC 4 · ORPHAN 4**.
+
+The 4 ORPHAN properties (`--sk-keyboard-h`, `--sk-tab-bar-h`, `--sk-viewport-w`, and one more) are
+written on every measurement pass and read by nobody. Each write invalidates style document-wide for
+no consumer. Removing them is a separate, individually-measured change — not folded in here.
+
+---
+
 ## Rule 8 — Administrative Authority (Permanent)
 
 > Every operational subsystem — marketplace, services, bookings, dispatch, finance,
