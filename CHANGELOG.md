@@ -1,3 +1,30 @@
+## [2026-08-01] — feat(booking): resolution engine (Slice 2 step 1) — ACTION_REQUIRED state + records + immutable events
+
+The single resolution engine for every "affected booking". Availability changes still never directly
+modify a confirmed booking — they raise a managed workflow. State machine:
+`(none) → ACTION_REQUIRED → RESCHEDULED | CANCELLED | EXCEPTION`.
+
+- **`functions/booking-resolution.js`** (new) — `providerRaiseAffectedBookings({bookingIds,reason})` moves
+  stranded confirmed bookings into ACTION_REQUIRED. **Core `status` and HELD PAYMENT are left untouched**
+  (resolution lives in a `resolution` overlay) — settlement/dashboard/customer logic still sees a normal
+  confirmed booking. Per booking (transactional, idempotent, owner-scoped): sets the overlay, creates
+  `affectedBookings/{id}` (admin/provider queue, data-only), emits immutable `bookingEvents`
+  (AVAILABILITY_CHANGED, BOOKING_AFFECTED, CUSTOMER_NOTIFIED), notifies the customer via notify.js.
+  Reason is REQUIRED (sick/emergency/venue_unavailable/equipment_failure/personal_emergency/weather/other).
+  `providerListAffectedBookings` reads the provider's queue. **Emulator-proven 15/15.**
+- **`functions/provider-dispatch.js`** — merged handler + registered the two ops.
+- **`firestore.rules`** — `bookingEvents` (append-only: create/update/delete `if false`, participant+admin read)
+  and `affectedBookings` (server-write only, participant+admin read).
+- **`availability-manager.html`** — `saveAll()` now: detect affected → require a reason (premium modal) →
+  save future availability → raise affected into resolution + notify. Degrades gracefully if ops absent.
+
+Production impact: additive; changes provider save-flow to flag (not delete) affected bookings; core
+status/payment unchanged (back-compatible). Deploy: `functions:providerDispatch` + `firestore:rules` + hosting.
+FOLLOW-ON (Steps 2-6): customer accept/reschedule/refund choices, refund/reschedule via existing engines,
+more events, admin queue UI (OFF-LIMITS here), emergency closure, analytics. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — fix(mobile): P0 responsive pass — one shared admin module, measured on real viewports
 
 **P0 per founder priority: make the platform usable on a phone before expanding admin tooling.**

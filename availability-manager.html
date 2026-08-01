@@ -1378,6 +1378,44 @@ async function deleteHoliday(date) {
 }
 
 /* ── Save all ───────────────────────────────────────────────────────────── */
+/* Reason picker for affected-booking resolution. Resolves to a canonical reason string
+   (sick|emergency|venue_unavailable|equipment_failure|personal_emergency|weather|other)
+   or null if the provider cancels. Premium dark modal — no native prompt. */
+function _pickResolutionReason(r) {
+  return new Promise(function (resolve) {
+    const REASONS = [["sick", "Sick"], ["emergency", "Emergency"], ["venue_unavailable", "Venue unavailable"],
+      ["equipment_failure", "Equipment failure"], ["personal_emergency", "Personal emergency"], ["weather", "Weather"], ["other", "Other"]];
+    const esc = function (s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); };
+    const list = (r.affected || []).slice(0, 6).map(function (a) {
+      return "• " + esc(a.customerName) + " — " + esc(a.date) + " " + esc(a.startTime || "") + (a.service ? " (" + esc(a.service) + ")" : "");
+    }).join("<br>");
+    const more = r.affectedCount > 6 ? "<br>…and " + (r.affectedCount - 6) + " more" : "";
+    const back = document.createElement("div");
+    back.style.cssText = "position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px;";
+    back.innerHTML =
+      '<div style="background:#0f0f0f;border:1px solid rgba(255,255,255,.12);border-radius:18px;max-width:440px;width:100%;padding:20px;color:#fff;font-family:inherit;">' +
+        '<div style="font-size:16px;font-weight:800;margin-bottom:6px;">This change affects ' + r.affectedCount + ' confirmed booking' + (r.affectedCount > 1 ? "s" : "") + '</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.55);margin-bottom:12px;line-height:1.5;">Existing bookings are kept and honored. They’ll be flagged for resolution and the customer can accept a new time, pick another slot, or request a refund.</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.78);background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;margin-bottom:14px;">' + list + more + '</div>' +
+        '<label style="font-size:12px;font-weight:700;color:rgba(255,255,255,.6);">Reason for the change (required)</label>' +
+        '<select id="_resReason" style="width:100%;margin-top:6px;margin-bottom:16px;padding:11px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#fff;font-size:14px;font-family:inherit;">' +
+          '<option value="">Select a reason…</option>' + REASONS.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join("") + '</select>' +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
+          '<button id="_resCancel" style="padding:10px 16px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.14);border-radius:10px;color:#fff;font-weight:700;cursor:pointer;font-family:inherit;">Cancel</button>' +
+          '<button id="_resApply" style="padding:10px 16px;background:#71ff00;border:none;border-radius:10px;color:#04120a;font-weight:800;cursor:pointer;font-family:inherit;">Apply &amp; notify</button>' +
+        '</div></div>';
+    document.body.appendChild(back);
+    const done = function (v) { back.remove(); resolve(v); };
+    back.querySelector("#_resCancel").onclick = function () { done(null); };
+    back.querySelector("#_resApply").onclick = function () {
+      const v = back.querySelector("#_resReason").value;
+      if (!v) { back.querySelector("#_resReason").style.borderColor = "#ff5470"; return; }
+      done(v);
+    };
+    back.addEventListener("click", function (e) { if (e.target === back) done(null); });
+  });
+}
+
 async function saveAll() {
   const btn = document.getElementById("saveBtn");
   btn.disabled = true; btn.textContent = "Saving…";
@@ -1427,31 +1465,38 @@ async function saveAll() {
       },
     };
 
-    /* ── Booking-integrity guard ──────────────────────────────────────────────
-       Never silently strand a confirmed customer booking. Before applying the change,
-       ask the server which confirmed bookings fall in the newly-unavailable window and
-       let the provider decide. Existing bookings are KEPT (Option A) — the change applies
-       to future availability only. READ-ONLY pre-check; if the op isn't available yet
-       (functions not redeployed) or the user is offline, we proceed exactly as before. */
+    /* ── Booking-integrity guard + resolution (Slice 2) ───────────────────────
+       Never silently strand a confirmed booking. Detect the confirmed bookings that fall
+       in the newly-unavailable window; if any, require a reason and move them into the
+       managed resolution workflow (ACTION_REQUIRED) — the booking + held payment are kept,
+       the customer is notified and can accept a new time, pick another slot, or refund.
+       The impact check is READ-ONLY; if the ops aren't deployed / offline, we save as before. */
+    let _affected = null;
     try {
       const _impact = await firebase.functions().httpsCallable("providerDispatch")({
         op: "providerCheckAvailabilityImpact", proposed: config,
       });
-      const _r = (_impact && _impact.data) || {};
-      if (_r.affectedCount > 0) {
-        const _lines = (_r.affected || []).slice(0, 8).map(function (a) {
-          return "• " + a.customerName + " — " + a.date + " " + (a.startTime || "") + (a.service ? " (" + a.service + ")" : "");
-        }).join("\n");
-        const _more = _r.affectedCount > 8 ? "\n…and " + (_r.affectedCount - 8) + " more" : "";
-        const _ok = window.confirm(
-          "This change affects " + _r.affectedCount + " confirmed booking" + (_r.affectedCount > 1 ? "s" : "") + ":\n\n" +
-          _lines + _more + "\n\n" +
-          "These existing bookings will be KEPT and honored — the change applies to future availability only. " +
-          "You can reschedule or cancel them from your Bookings if needed.\n\nApply the change?"
-        );
-        if (!_ok) { showToast("No changes made — your bookings are unchanged."); return; }
+      _affected = (_impact && _impact.data) || null;
+    } catch (_e) { _affected = null; /* op unavailable / offline → proceed (no regression) */ }
+
+    if (_affected && _affected.affectedCount > 0) {
+      const _reason = await _pickResolutionReason(_affected);
+      if (!_reason) { showToast("No changes made — your bookings are unchanged."); return; }
+      await saveProviderAvailability(config);   /* future availability applies immediately */
+      try {
+        const _raise = await firebase.functions().httpsCallable("providerDispatch")({
+          op: "providerRaiseAffectedBookings",
+          bookingIds: (_affected.affected || []).map(function (a) { return a.id; }),
+          reason: _reason,
+        });
+        const _n = (_raise && _raise.data && _raise.data.raisedCount) || 0;
+        showToast("Saved. " + _n + " affected booking" + (_n === 1 ? "" : "s") + " flagged for resolution — customers notified.");
+      } catch (e) {
+        showToast("Saved, but flagging affected bookings failed — please review your Bookings.", true);
       }
-    } catch (_e) { /* op unavailable / offline → don't block the save (no regression) */ }
+      await loadConfig();
+      return;
+    }
 
     await saveProviderAvailability(config);
     showToast("Availability settings saved! ✓");
