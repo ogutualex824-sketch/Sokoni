@@ -1,3 +1,70 @@
+## [2026-08-01] — audit(auth): admin authorization pipeline — what is actually stored (P0 investigation)
+
+Investigation only. **No authorization code was changed** — see "Why nothing was repaired yet" below.
+
+`functions/scripts/audit-admin-claims.js` (new, read-only) prints Firebase Auth custom claims, token
+freshness, and every Firestore source that claims to describe admin authority, side by side.
+
+### Production result
+
+| account | UID | custom claims | last sign-in | admin.html | registry |
+|---|---|---|---|---|---|
+| `superadmin@mysokoni.co.ke` | — | — | — | **NO ACCOUNT** | — |
+| `ceo@mysokoni.co.ke` | — | — | — | **NO ACCOUNT** | — |
+| `ochisaac@gmail.com` | `zPYdnpHfdxNV…` | `admin` | **NEVER** | ALLOWED | none |
+| `alexochieng3030@gmail.com` | `D5Ql2EYr95bt…` | `admin`, `superAdmin`, `role:5` | 30 Jul | ALLOWED | none |
+| `ogutualex824@gmail.com` | `uwpD5gx3pvPu…` | `admin`, `superAdmin` | 21 Jul | ALLOWED | none |
+
+### Findings
+
+1. **Two of the five named platform accounts do not exist in Firebase Auth.** `superadmin@` and
+   `ceo@mysokoni.co.ke` have no account at all. Anyone expecting them to work gets nothing, which on
+   its own reads as "admin access is inconsistent".
+
+2. **`platformEmployees` is empty for every account that holds an admin claim.** It is not a mirror
+   of authority: `invitations-core.js` writes it in `acceptInvitation()` only. A claim granted by any
+   other path — and all three live admins were granted by another path — never produces a row. The
+   registry records *accepted invitations*, not *who is an administrator*. Two different things
+   wearing similar names.
+
+3. **`ochisaac@gmail.com` holds `admin` but has never signed in.** The claim is in place, so their
+   first token will carry it. Their invitation is `status: sent`, `setupMailDelivery: queued` — it
+   reached them via the queue fallback (see 48305b6). Not a bug; a pending setup.
+
+4. **Claim changes do not force a token reissue.** 17 `setCustomUserClaims()` call sites; only a
+   handful call `revokeRefreshTokens()`. `index.js` grant/revoke-admin does. `invitations-core.js`,
+   `admin-os.js`, `super-admin.js` and four other paths do not. A device therefore keeps its old
+   claims for up to an hour — or indefinitely if the user never returns — and the UI's only recourse
+   is to ask the user to sign out and back in. **This is the mechanism behind "inconsistent".**
+
+5. **Two role fields disagree in `users/{uid}`.** `role` (string) is `"admin"` for one account and
+   `null` for the other two; `roles` (array) is the marketplace axis and never contains an admin
+   value. Neither is read by any gate — `firestore.rules isAdmin()` and `admin.html` both read the
+   token — but both are readable by code that might mistake them for authority.
+
+6. **The gate itself is correct.** `admin.html` calls `getIdTokenResult(true)` (force refresh) and,
+   on denial, says so explicitly *and* tells the user that a recent grant needs a sign-out. It does
+   not fail silently. The gap is server-side, not in the UI.
+
+### Authoritative source
+
+**Firebase custom claims.** Both enforcement points read them and nothing else. Every other store is
+a projection and must be repaired toward the claims, never the reverse.
+
+### Why nothing was repaired yet
+
+The deterministic fix is to call `revokeRefreshTokens(uid)` wherever an authorization-relevant claim
+changes. That is correct and it is also a **sign-out for that user on every device**, at 17 call
+sites, in security-critical code — some of it in files another agent is actively working in. Making
+that change inside an investigation commit would ship a user-visible consequence the founder has not
+agreed to, in a change that could not be reviewed independently. Proposed, with the evidence, for an
+explicit decision.
+
+Files: `functions/scripts/audit-admin-claims.js` (new).
+Database changes: none. API changes: none. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — fix(admin): P0 — the Applications panel was a blank box, not an empty queue
 
 **Firestore was not empty.** Production held four applications — 2 pending, 2 approved, all
