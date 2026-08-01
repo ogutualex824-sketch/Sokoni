@@ -1,3 +1,56 @@
+## [2026-08-02] — decision(ADR-009): `receiptNumber` is canonical; `receiptNo` deprecated and ratcheted
+
+**Decision:** `receiptNumber` and `invoiceNumber` are canonical. `receiptNo` and `invoiceNo` are
+deprecated aliases. An invoice is a different document from a receipt — that distinction is kept.
+
+### No migration layer is needed, because there is no data
+
+**Zero production documents carry any of these fields.** `receipts` holds 1 document, `payments` 8,
+and `orders` / `posSales` / `invoices` are empty. The split exists **only in code**, so the recommended
+dual-write compatibility layer would guard nothing. This is the landlord situation again: decide now,
+at zero cost.
+
+### I got the count wrong twice, in the same way
+
+| report | figure | why it was wrong |
+|---|---|---|
+| first | "63 vs 45" | counted **local variable names** as fields — `finos-router.js` declares `const receiptNo` and writes the field as `receiptNumber` |
+| second | "20 vs 19" | correct about fields, but **scoped to `functions/*.js` and root `*.html` only** |
+| measured | **91 `receiptNo` in 34 files · 18 `invoiceNo` in 10 · 109 total** | repo-wide, field usage only |
+
+Both errors were scope errors, and both made a contained problem look smaller or larger than it is.
+ADR-008 exists for this and I still had to apply it twice to my own numbers.
+
+### Why the rename is not in this commit
+
+109 uses across 34 files, including **POS receipt printing** (`pos-checkout.html`,
+`print-station.html`, `pos-ios-print-test.html`) and `financial-engine.js`, which carries a paired
+`invoiceNo`/`receiptNo` vocabulary.
+
+That is a mechanical change to **printed financial documents** which I cannot test from here — no
+authenticated POS session, no printer. It carries no *data* risk (nothing to migrate) but real
+*behavioural* risk, and it belongs with the **Phase 7 multi-till verification** where a real merchant
+can confirm a receipt still prints correctly.
+
+### What shipped instead
+
+`scripts/verify-receipt-naming.js`, wired into `predeploy` as a **ratchet**: the deprecated alias may
+not spread while the rename is scheduled. `--strict` becomes the mode once the count reaches zero, and
+the alias is gone for good.
+
+It counts **field usage only** — an object key or a property read. A local variable of the same name is
+not a schema problem, and counting it is precisely what produced the wrong number the first time.
+
+Mutation-tested: adding `{ receiptNo: 1 }` reports `109 -> 110`, says the alias is spreading, and
+exits 1. (The first mutation attempt silently did nothing because the target file had no
+`module.exports` anchor — caught by re-testing rather than trusting the pass.)
+
+Files: `scripts/verify-receipt-naming.js` (new), `scripts/receipt-naming-baseline.json` (new),
+`docs/adr/ADR-009-canonical-field-representation.md`, `package.json`.
+No runtime code changed.
+
+---
+
 ## [2026-08-02] — docs(architecture): receipt architecture — ADR-010
 
 Design only. **Nothing implemented.**

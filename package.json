@@ -4,7 +4,7 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/audit-admin-localstorage.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
+    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/audit-admin-localstorage.js && node scripts/verify-receipt-naming.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:consent": "node scripts/verify-consent-gate.js",
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
@@ -45,7 +45,8 @@
     "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js",
     "audit:storage": "node scripts/audit-admin-localstorage.js",
     "regression:admin": "node scripts/admin-os-regression.js --live",
-    "test:templates": "node scripts/test-merchant-templates.js"
+    "test:templates": "node scripts/test-merchant-templates.js",
+    "verify:receipts": "node scripts/verify-receipt-naming.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

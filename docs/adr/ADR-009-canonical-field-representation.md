@@ -16,6 +16,8 @@ the read path handles both. See `docs/CANONICAL_DATA_MODEL.md`.
 | verified | `verified: boolean` + `verifiedAt` + `verifiedBy` |
 | location | one `location` map, `county` queryable |
 | status | lowercase, per-lifecycle vocabulary |
+| receipt id | `receiptNumber` — `receiptNo` deprecated |
+| invoice id | `invoiceNumber` — `invoiceNo` deprecated |
 
 ## Evidence
 
@@ -34,6 +36,17 @@ lowercase — so any cross-subsystem comparison is wrong today.
 - Ordering by a partially-present field before backfilling it.
 - Collapsing `ownerUid` and `tenantUid` into `uid` — they are different people on the same document
   and the rules depend on the distinction.
+
+## Receipt identifiers — decided 2026-08-02
+
+`receiptNumber` and `invoiceNumber` are canonical; `receiptNo` and `invoiceNo` are deprecated
+aliases. **Zero production documents carry any of them** — `receipts` holds 1 document, `payments` 8,
+and orders/posSales/invoices are empty — so there is nothing to migrate and **no compatibility layer
+is needed**. The aliases exist only in code: **109 field uses across 34 files**, including POS receipt
+printing and `financial-engine.js`, which carries a paired `invoiceNo`/`receiptNo` vocabulary.
+
+Ratcheted by `scripts/verify-receipt-naming.js` so the alias cannot spread while the rename is
+scheduled; `--strict` becomes the mode once the count reaches zero.
 
 ## Consequences
 
