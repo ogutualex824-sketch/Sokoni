@@ -318,3 +318,85 @@ dominant cost and the most sensitive.
    immediately mutate.
 3. **Bundle splitting** — retained, but re-scoped honestly to transfer/memory rather than startup CPU.
 
+---
+
+## Sprint 2 Phase 1 — Homepage style/layout attribution (deliverable)
+
+Tool: `scripts/perf-render.js` · Data: `docs/perf-render-home.json` · 3 runs, CPU 4×, local tree.
+
+### Stability first
+
+| Aggregate | Median | CV | Grade |
+|---|---|---|---|
+| Style recalculation | **10133 ms** | **0.9%** | AUTHORITATIVE |
+| Layout | **6289 ms** | **0.9%** | AUTHORITATIVE |
+
+Runs: style `[10133, 10238, 10007]`, layout `[6394, 6263, 6289]`.
+
+**Attribution is roughly an order of magnitude more stable than aggregate timing** (CV 0.9% vs the
+±5–9% floor on LCP/TBT/loadMs). Decisions should be driven by attribution and confirmed by A/B — not
+the reverse.
+
+### Ranked: forced synchronous style/layout, by call site
+
+Script wrote the DOM then immediately read geometry, forcing the browser to flush. **5310 ms across 12
+call sites** — the actionable subset, because each has a named culprit and a known remedy.
+
+| # | Call site | Cost | Calls | Share |
+|---|---|---|---|---|
+| 1 | `_measure @ sokoni-layout.js:151` | **1598 ms** | 12 | **30%** |
+| 2 | `_update @ shared-header.js:2306` | 1003 ms | 2 | 19% |
+| 3 | `(anon) @ sokoni-performance.js:125` | 995 ms | 14 | 19% |
+| 4 | `publishHeaderHeight @ shared-header.js:2392` | 612 ms | 2 | 12% |
+| 5 | `(anon) @ sokoni-layout.js:236` | 451 ms | 2 | 8% |
+| 6 | `injectDesktopBellBadge @ sokoni-ui-extras.js:159` | 265 ms | 2 | 5% |
+| 7 | `headerZ @ sokoni-sheet.js:339` | 192 ms | 4 | 4% |
+| 8–12 | `promote`, `_bnavHeight`, `_writeSafeAreaVars`, recaptcha, `_showBanner` | 194 ms | 14 | 4% |
+
+**Top 3 = 68% of all forced work.**
+
+### Ranked: invalidation reasons
+
+| Count | Reason | Node |
+|---|---|---|
+| 1512 | Added to layout | `#text` |
+| 1139 | Related style rule | `SPAN` |
+| 856 | Related style rule | `DIV` |
+| 723 | Style changed | `#text` |
+| **684** | **@keyframes rule change** | `A` |
+| **578** | **Animation** | `::before` |
+| **544** | **Animation** | `DIV.kebs-badge.kebs-unverified` |
+| 473 | Style rule change | `SPAN` |
+| **405** | **Animation** | `::after` |
+
+**~2200 invalidations are animation-driven** — `@keyframes` on anchors, `::before`/`::after`
+pseudo-elements, and one specific badge (`kebs-badge kebs-unverified`). Animating a property that is
+not `transform`/`opacity` invalidates style on every frame, for every matching element.
+
+### Worst individual events
+
+Style recalcs and layouts of 418–794 ms each, one touching **3615 objects** with only 488 dirty —
+a document-wide invalidation doing 7× more work than needed.
+
+### What this corrects
+
+The earlier `sokoni-layout.js` attempt targeted the **right function** (`_measure`, now confirmed as
+the single largest forced-layout site at 30%) but the **wrong mechanism**: it narrowed the
+ResizeObserver's scope, when the cost is the read/write interleaving *inside* `_measure` — it reads
+`getComputedStyle` and `offsetHeight`, then writes `style.bottom` and `z-index`, then reads again.
+Changing what triggers it does not stop the flush; batching the reads before the writes would.
+
+That is Phase 2's first task, and it now has a specific, measurable target rather than a hypothesis.
+
+### Recommended Phase 2 order (by evidence)
+
+1. **`_measure` read/write batching** — 1598 ms, 30% of forced work, single function.
+2. **`shared-header.js` `_update` + `publishHeaderHeight`** — 1615 ms combined, 31%.
+3. **`sokoni-performance.js:125`** — 995 ms across 14 calls; a performance module that is itself the
+   third-largest cost is worth deferring wholesale.
+4. **Animation audit** — move `@keyframes` to `transform`/`opacity` only; `kebs-badge` is a named,
+   contained starting point.
+
+Each change goes through the A/B protocol against `layoutMs`/`styleMs` (±2% floor), which are both the
+dominant cost and the most sensitive available metrics.
+

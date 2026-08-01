@@ -1,0 +1,195 @@
+{
+  "page": "home",
+  "ref": "working",
+  "at": "2026-08-01T10:46:58.525Z",
+  "runs": 3,
+  "styleMs": {
+    "median": 10133.396,
+    "cv": 0.9,
+    "grade": "AUTHORITATIVE",
+    "all": [
+      10133.396,
+      10238.436,
+      10006.543
+    ]
+  },
+  "layoutMs": {
+    "median": 6289.483,
+    "cv": 0.9,
+    "grade": "AUTHORITATIVE",
+    "all": [
+      6393.577,
+      6262.686,
+      6289.483
+    ]
+  },
+  "detail": {
+    "styleMs": 10006.543,
+    "layoutMs": 6289.483,
+    "styleCount": 109,
+    "layoutCount": 99,
+    "elements": 21950,
+    "topStyle": [
+      {
+        "ms": 990.9,
+        "elements": 1968
+      },
+      {
+        "ms": 978.4,
+        "elements": 1968
+      },
+      {
+        "ms": 918.8,
+        "elements": 1983
+      },
+      {
+        "ms": 737.9,
+        "elements": 1400
+      },
+      {
+        "ms": 701.9,
+        "elements": 1372
+      },
+      {
+        "ms": 687,
+        "elements": 1962
+      }
+    ],
+    "topLayout": [
+      {
+        "ms": 1058.2,
+        "dirty": 745,
+        "total": 1897
+      },
+      {
+        "ms": 794.4,
+        "dirty": 329,
+        "total": 405
+      },
+      {
+        "ms": 665.2,
+        "dirty": 608,
+        "total": 608
+      },
+      {
+        "ms": 620,
+        "dirty": 401,
+        "total": 1160
+      },
+      {
+        "ms": 563.5,
+        "dirty": 76,
+        "total": 81
+      },
+      {
+        "ms": 418.3,
+        "dirty": 488,
+        "total": 3615
+      }
+    ],
+    "forced": [
+      {
+        "site": "_measure @ sokoni-layout.js:151",
+        "ms": 1597.8,
+        "n": 12
+      },
+      {
+        "site": "_update @ shared-header.js:2306",
+        "ms": 1002.6,
+        "n": 2
+      },
+      {
+        "site": "(anon) @ sokoni-performance.js:125",
+        "ms": 994.8,
+        "n": 14
+      },
+      {
+        "site": "publishHeaderHeight @ shared-header.js:2392",
+        "ms": 612.1,
+        "n": 2
+      },
+      {
+        "site": "(anon) @ sokoni-layout.js:236",
+        "ms": 451.3,
+        "n": 2
+      },
+      {
+        "site": "injectDesktopBellBadge @ sokoni-ui-extras.js:159",
+        "ms": 264.5,
+        "n": 2
+      },
+      {
+        "site": "headerZ @ sokoni-sheet.js:339",
+        "ms": 192.1,
+        "n": 4
+      },
+      {
+        "site": "promote @ sokoni-sheet.js:354",
+        "ms": 62.3,
+        "n": 3
+      },
+      {
+        "site": "_bnavHeight @ sokoni-float.js:26",
+        "ms": 40.5,
+        "n": 4
+      },
+      {
+        "site": "_writeSafeAreaVars @ sokoni-form-engine.js:296",
+        "ms": 34.3,
+        "n": 2
+      },
+      {
+        "site": "(anon) @ recaptcha__en.js:687",
+        "ms": 28.7,
+        "n": 2
+      },
+      {
+        "site": "_showBanner @ security.js:660",
+        "ms": 28.5,
+        "n": 3
+      }
+    ],
+    "reasons": [
+      [
+        "Added to layout  #text",
+        1512
+      ],
+      [
+        "Related style rule  SPAN",
+        1139
+      ],
+      [
+        "Related style rule  DIV",
+        856
+      ],
+      [
+        "Style changed  #text",
+        723
+      ],
+      [
+        "@keyframes rule change  A",
+        684
+      ],
+      [
+        "Animation  ::before",
+        578
+      ],
+      [
+        "Animation  DIV class='kebs-badge kebs-unverified'",
+        544
+      ],
+      [
+        "Style rule change  SPAN",
+        473
+      ],
+      [
+        "Related style rule  A",
+        409
+      ],
+      [
+        "Animation  ::after",
+        405
+      ]
+    ]
+  }
+}
