@@ -32,7 +32,8 @@ const RES = { NONE: 'NONE', ACTION_REQUIRED: 'ACTION_REQUIRED', RESCHEDULED: 'RE
 const EVT = {
   CREATED: 'BOOKING_CREATED', CONFIRMED: 'BOOKING_CONFIRMED', AVAIL_CHANGED: 'AVAILABILITY_CHANGED',
   AFFECTED: 'BOOKING_AFFECTED', CUST_NOTIFIED: 'CUSTOMER_NOTIFIED', PROPOSED: 'PROVIDER_PROPOSED_RESCHEDULE',
-  CUST_ACCEPTED: 'CUSTOMER_ACCEPTED', CUST_DECLINED: 'CUSTOMER_DECLINED', RESCHEDULED: 'BOOKING_RESCHEDULED',
+  CUST_ACCEPTED: 'CUSTOMER_ACCEPTED', CUST_DECLINED: 'CUSTOMER_DECLINED', CUST_PROPOSED: 'CUSTOMER_PROPOSED_TIME',
+  PROV_ACCEPTED: 'PROVIDER_ACCEPTED_TIME', PROV_DECLINED: 'PROVIDER_DECLINED', RESCHEDULED: 'BOOKING_RESCHEDULED',
   CANCELLED: 'BOOKING_CANCELLED', REFUND_DONE: 'REFUND_COMPLETED',
 };
 const REASONS = ['sick', 'emergency', 'venue_unavailable', 'equipment_failure', 'personal_emergency', 'weather', 'other'];
@@ -131,5 +132,92 @@ _h.providerListAffectedBookings = async (req) => {
     .sort(function (a, b) { return (a.deadlineTs || 0) - (b.deadlineTs || 0); });
   return { count: items.length, items: items };
 };
+
+/* ── Step 2: negotiation state machine ───────────────────────────────────────
+   Ownership matrix (enforced): provider PROPOSES, customer ACCEPT/DECLINE/SUGGESTS,
+   provider APPROVES the customer's suggestion. Single active proposal per booking.
+   A proposed time MUST pass the canonical validator (_prepareSlot); the actual move
+   REUSES providerRescheduleBooking (no duplicate reschedule/payment logic). The booking's
+   core status + held payment stay untouched — only the resolution overlay + slot move. */
+async function _validateSlot(providerId, date, startTime, durationMins) {
+  const { _prepareSlot } = require('./booking-service');
+  return _prepareSlot(db, { providerId: providerId, date: date, startTime: startTime, durationMins: durationMins });
+}
+async function _execReschedule(actorUid, bookingId, date, startTime) {
+  const opsH = require('./provider-ops')._h;   // accepts provider OR customer; validates + slot-CAS
+  return opsH.providerRescheduleBooking({ auth: { uid: actorUid }, data: { bookingId: bookingId, date: date, startTime: startTime } });
+}
+function _batchEvent(batch, bookingId, type, actor, parts, data) {
+  batch.set(db.collection('bookingEvents').doc(), {
+    bookingId: bookingId, type: type, actor: actor || 'system',
+    providerId: (parts && parts.providerId) || null, customerUid: (parts && parts.customerUid) || null,
+    data: data || {}, at: FV.serverTimestamp(), ts: Date.now(),
+  });
+}
+function _notifySafe(job) { if (_notify && job.uid) { try { return _notify(job).catch(function () {}); } catch (_) {} } return Promise.resolve(); }
+
+async function _propose(req, party) {
+  const uid = _uid(req), d = req.data || {};
+  const bookingId = _san(d.bookingId, 128), date = _san(d.date, 10), startTime = _san(d.startTime, 5);
+  if (!bookingId || !date || !startTime) throw new HttpsError('invalid-argument', 'bookingId, date, startTime required.');
+  const bSnap = await db.collection('providerBookings').doc(bookingId).get();
+  if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b = bSnap.data();
+  if ((party === 'provider' ? b.providerId : b.customerUid) !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  if (!(b.resolution && b.resolution.status === RES.ACTION_REQUIRED)) throw new HttpsError('failed-precondition', 'This booking is not awaiting resolution.');
+  const cur = b.resolution.proposal;
+  if (cur && /^pending_/.test(cur.status || '')) throw new HttpsError('failed-precondition', 'A proposal is already pending — resolve it first.');
+  const durationMins = Math.max(15, Number(b.durationMins) || 30);
+  await _validateSlot(b.providerId, date, startTime, durationMins);   // canonical validator — throws if not bookable
+  const expiresAt = Date.now() + DEADLINE_HOURS * 3600000;
+  const proposal = { by: party, date: date, startTime: startTime, status: party === 'provider' ? 'pending_customer' : 'pending_provider', proposedAt: Date.now(), expiresAt: expiresAt };
+  const parts = { providerId: b.providerId, customerUid: b.customerUid || null };
+  const batch = db.batch();
+  batch.update(db.collection('providerBookings').doc(bookingId), { 'resolution.proposal': proposal, updatedAt: FV.serverTimestamp() });
+  batch.set(db.collection('affectedBookings').doc(bookingId), { proposal: proposal, reschedulePending: true, updatedAt: FV.serverTimestamp() }, { merge: true });
+  _batchEvent(batch, bookingId, party === 'provider' ? EVT.PROPOSED : EVT.CUST_PROPOSED, uid, parts, { date: date, startTime: startTime, expiresAt: expiresAt });
+  await batch.commit();
+  await _notifySafe({ uid: party === 'provider' ? b.customerUid : b.providerId, type: 'booking_reschedule_proposed', title: 'New time proposed', body: 'A new time was proposed for your booking: ' + date + ' ' + startTime + '. Accept, suggest another, or request a refund.', deepLink: '/my-bookings', group: 'bookings', dedupeKey: 'proposal_' + bookingId, data: { bookingId: bookingId, kind: 'reschedule_proposed' } });
+  return { ok: true, proposal: proposal };
+}
+
+async function _respond(req, party) {
+  const uid = _uid(req), d = req.data || {};
+  const bookingId = _san(d.bookingId, 128), action = _san(d.action, 20);
+  if (['accept', 'decline'].indexOf(action) < 0) throw new HttpsError('invalid-argument', 'action must be accept or decline.');
+  const bSnap = await db.collection('providerBookings').doc(bookingId).get();
+  if (!bSnap.exists) throw new HttpsError('not-found', 'Booking not found.');
+  const b = bSnap.data();
+  if ((party === 'provider' ? b.providerId : b.customerUid) !== uid) throw new HttpsError('permission-denied', 'Not your booking.');
+  const prop = b.resolution && b.resolution.proposal;
+  const expectStatus = party === 'customer' ? 'pending_customer' : 'pending_provider';
+  const expectBy = party === 'customer' ? 'provider' : 'customer';   // you respond to the COUNTERPARTY's proposal
+  if (!prop || prop.status !== expectStatus || prop.by !== expectBy) throw new HttpsError('failed-precondition', 'No proposal awaiting your response.');
+  const parts = { providerId: b.providerId, customerUid: b.customerUid || null };
+
+  if (action === 'accept') {
+    await _execReschedule(uid, bookingId, prop.date, prop.startTime);   // reuse canonical reschedule (re-validates + slot-CAS)
+    const batch = db.batch();
+    batch.update(db.collection('providerBookings').doc(bookingId), { resolution: { status: RES.RESCHEDULED, reason: (b.resolution && b.resolution.reason) || null, resolvedAt: FV.serverTimestamp() }, updatedAt: FV.serverTimestamp() });
+    batch.set(db.collection('affectedBookings').doc(bookingId), { resolutionStatus: RES.RESCHEDULED, reschedulePending: false, resolvedAt: FV.serverTimestamp(), proposal: FV.delete() }, { merge: true });
+    _batchEvent(batch, bookingId, party === 'customer' ? EVT.CUST_ACCEPTED : EVT.PROV_ACCEPTED, uid, parts, { date: prop.date, startTime: prop.startTime });
+    _batchEvent(batch, bookingId, EVT.RESCHEDULED, uid, parts, { date: prop.date, startTime: prop.startTime });
+    await batch.commit();
+    await _notifySafe({ uid: party === 'customer' ? b.providerId : b.customerUid, type: 'booking_rescheduled', title: 'Booking rescheduled', body: 'The booking was rescheduled to ' + prop.date + ' ' + prop.startTime + '.', deepLink: '/my-bookings', group: 'bookings', data: { bookingId: bookingId } });
+    return { ok: true, status: RES.RESCHEDULED };
+  }
+  const batch = db.batch();
+  batch.update(db.collection('providerBookings').doc(bookingId), { 'resolution.proposal': FV.delete(), updatedAt: FV.serverTimestamp() });
+  batch.set(db.collection('affectedBookings').doc(bookingId), { proposal: FV.delete(), reschedulePending: false, updatedAt: FV.serverTimestamp() }, { merge: true });
+  _batchEvent(batch, bookingId, party === 'customer' ? EVT.CUST_DECLINED : EVT.PROV_DECLINED, uid, parts, {});
+  await batch.commit();
+  await _notifySafe({ uid: party === 'customer' ? b.providerId : b.customerUid, type: 'booking_proposal_declined', title: 'Proposal declined', body: 'The proposed time was declined. Another time can be proposed.', deepLink: '/my-bookings', group: 'bookings', data: { bookingId: bookingId } });
+  return { ok: true, status: RES.ACTION_REQUIRED };
+}
+
+_h.providerProposeReschedule = function (req) { return _propose(req, 'provider'); };     // provider proposes
+_h.customerProposeTime = function (req) { return _propose(req, 'customer'); };            // customer suggests
+_h.customerRespondToProposal = function (req) { return _respond(req, 'customer'); };      // customer accept/decline provider proposal
+_h.providerRespondToCustomerProposal = function (req) { return _respond(req, 'provider'); }; // provider accept/decline customer suggestion
 
 module.exports = { _h, RES, EVT, REASONS, DEADLINE_HOURS };

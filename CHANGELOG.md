@@ -1,3 +1,28 @@
+## [2026-08-01] — feat(booking): resolution negotiation state machine (Slice 2 step 2 — backend)
+
+The customer/provider resolution workflow for an ACTION_REQUIRED booking. Touches NO money — a
+reschedule keeps the payment held; the REFUND terminal is Step 3. Reuses the canonical engine.
+
+- **`functions/booking-resolution.js`** — four ops (in providerDispatch):
+  `providerProposeReschedule` (provider), `customerRespondToProposal` (customer accept/decline),
+  `customerProposeTime` (customer), `providerRespondToCustomerProposal` (provider approve/decline).
+  Ownership matrix enforced per op; **single active proposal** per booking; 48h expiry stamped.
+  A proposed time MUST pass the canonical validator (`booking-service._prepareSlot`); accept REUSES
+  `providerRescheduleBooking` (no duplicate reschedule/payment logic) — the booking is actually moved
+  via slot-CAS. **Core `status` + held payment stay untouched**; only the `resolution` overlay + slot move.
+  Immutable events per transition: PROVIDER_PROPOSED_RESCHEDULE, CUSTOMER_PROPOSED_TIME, CUSTOMER_ACCEPTED,
+  CUSTOMER_DECLINED, PROVIDER_ACCEPTED_TIME, PROVIDER_DECLINED, BOOKING_RESCHEDULED.
+- **`functions/provider-dispatch.js`** — registered the four ops.
+- **`functions/qa-booking-negotiation-e2e.js`** (new) — emulator-proven **16/16** (propose/accept/decline/
+  suggest/approve, single-active, ownership, booking-moved, status+payment untouched, events).
+
+Production impact: additive backend ops, dormant until Step 2b wires the customer/provider UI (My Bookings
++ dashboard). No hosting change this step. FOLLOW-ON: Step 2b UI, Step 3 refund via existing engines
+(release-hold / settlement reversal), Step 4 freeze provider edits, then emergency closure + analytics.
+Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(booking): resolution engine (Slice 2 step 1) — ACTION_REQUIRED state + records + immutable events
 
 The single resolution engine for every "affected booking". Availability changes still never directly

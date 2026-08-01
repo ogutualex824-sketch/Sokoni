@@ -80,6 +80,11 @@ const ROUTES = [
   // booking-resolution (Slice 2 step 1) — raise affected bookings into ACTION_REQUIRED + queue read
   'providerRaiseAffectedBookings',
   'providerListAffectedBookings',
+  // booking-resolution (Slice 2 step 2) — negotiation state machine (reschedule via canonical engine)
+  'providerProposeReschedule',
+  'customerRespondToProposal',
+  'customerProposeTime',
+  'providerRespondToCustomerProposal',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');
