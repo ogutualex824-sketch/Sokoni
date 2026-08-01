@@ -465,3 +465,55 @@ skipping — which reintroduces a read and probably costs more than it saves.
 over the same property, so consolidating that ownership may fix both the correctness hazard and a
 share of the cost.
 
+---
+
+## Sprint 2 Phase 2 Task 2 — Remove ORPHAN properties — **REJECTED (performance)**
+
+**Candidate.** Four `:root` custom properties written on every measurement pass and read by nobody:
+`--sk-content-pad-bottom`, `--sk-keyboard-h`, `--sk-tab-bar-h`, `--sk-viewport-w`.
+
+**Verification of "no readers"** — this was the entire safety argument, so it was attacked rather than
+assumed. Across every `.js`/`.html`/`.css` file, the only mentions are this module's own writes, the
+default declarations in `sokoni-tokens.css` (a default is not a reader), and documentation. No
+dynamically-constructed `var(--sk-…)` references exist anywhere. Confirmed: zero consumers.
+
+**Change.** Removed three of the four writes, cutting `_propagate` from 10 `setProperty` calls to 6.
+`--sk-keyboard-h` was deliberately kept: it is written from the `visualViewport` handler on keyboard
+open/close, not on every pass, so it carries no load-time cost and remains a useful hook.
+
+**Paired A/B (6 pairs):**
+
+| metric | delta | consistency | floor | verdict |
+|---|---|---|---|---|
+| styleMs | −0.6% | 3/6 | ±2% | below floor |
+| layoutMs | −1.0% | 3/6 | ±2% | below floor |
+| tbt | −1.8% | 5/6 | ±5–9% | below floor |
+
+**Rejected and reverted.** No measurable benefit.
+
+### The valuable part: the assumed mechanism was wrong
+
+The hypothesis was that *every* `setProperty` on `:root` invalidates style for the whole document.
+Removing 40% of those writes should then have been clearly visible. It was not — the effect is
+indistinguishable from zero.
+
+**Blink scopes custom-property invalidation to elements that actually reference the property.** A
+variable with zero readers therefore costs approximately nothing to write. The write is wasteful in
+the ordinary sense — dead code — but it is not a *style-invalidation* cost.
+
+This also explains, retrospectively, why the earlier dirty-check idea was doubly wrong: it was not
+merely unsafe (shared ownership), it was solving a problem that does not exist at the scale assumed.
+The 10% regression it caused came entirely from the stale-cache correctness bug, not from any saving
+it failed to deliver.
+
+**Corrected model:** the cost of `:root` custom properties is proportional to the number of elements
+that *consume* them, not the number of properties written. Optimising here means reducing consumers or
+narrowing scope — not reducing writes.
+
+### Note on scope discipline
+
+These writes are genuinely dead and removing them is defensible on hygiene grounds. That is a
+*different* justification from the one tested, and folding it in under a failed performance claim
+would misrepresent the evidence. The revert stands; removing dead writes can be proposed separately
+and judged on maintainability criteria, where it does not need to clear a performance floor.
+

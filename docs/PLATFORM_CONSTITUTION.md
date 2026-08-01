@@ -102,7 +102,7 @@ needs the value reads the CSS variable; it never re-derives and re-publishes it.
 OWNED / CONTESTED / STATIC / ORPHAN and exits non-zero on any CONTESTED property.
 Current state: **CONTESTED 0 · OWNED 7 · STATIC 4 · ORPHAN 4**.
 
-The 4 ORPHAN properties (`--sk-keyboard-h`, `--sk-tab-bar-h`, `--sk-viewport-w`, and one more) are
+The 4 ORPHAN properties (`--sk-content-pad-bottom`, `--sk-keyboard-h`, `--sk-tab-bar-h`, `--sk-viewport-w`) are
 written on every measurement pass and read by nobody. Each write invalidates style document-wide for
 no consumer. Removing them is a separate, individually-measured change — not folded in here.
 
