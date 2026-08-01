@@ -1,0 +1,162 @@
+{
+  "page": "home",
+  "at": "2026-08-01T14:18:25.678Z",
+  "viewportH": 852,
+  "docH": 12903,
+  "totalNodes": 4621,
+  "wastedIfNoScroll": 4485,
+  "wastedPctIfNoScroll": 97.1,
+  "wastedEvenIfScrolled": 814,
+  "sections": [
+    {
+      "id": "productsContainer",
+      "nodes": 1895,
+      "calls": 22,
+      "start": 10427,
+      "end": 39351,
+      "offset": 7220,
+      "seenNoScroll": false,
+      "seenScrolled": true
+    },
+    {
+      "id": "newArrivalsGrid",
+      "nodes": 1196,
+      "calls": 1,
+      "start": 10700,
+      "end": 10700,
+      "offset": 6644,
+      "seenNoScroll": false,
+      "seenScrolled": true
+    },
+    {
+      "id": "(body)",
+      "nodes": 631,
+      "calls": 106,
+      "start": 468,
+      "end": 35876,
+      "offset": null,
+      "seenNoScroll": false,
+      "seenScrolled": false
+    },
+    {
+      "id": "_spSellersGrid",
+      "nodes": 428,
+      "calls": 4,
+      "start": 22214,
+      "end": 40407,
+      "offset": 4249,
+      "seenNoScroll": false,
+      "seenScrolled": true
+    },
+    {
+      "id": "sk-menu-drawer",
+      "nodes": 135,
+      "calls": 1,
+      "start": 8155,
+      "end": 8155,
+      "offset": 0,
+      "seenNoScroll": false,
+      "seenScrolled": false
+    },
+    {
+      "id": "storiesRing",
+      "nodes": 92,
+      "calls": 1,
+      "start": 10772,
+      "end": 10772,
+      "offset": 661,
+      "seenNoScroll": true,
+      "seenScrolled": true
+    },
+    {
+      "id": "homepageReviews",
+      "nodes": 84,
+      "calls": 1,
+      "start": 10759,
+      "end": 10759,
+      "offset": 10627,
+      "seenNoScroll": false,
+      "seenScrolled": true
+    },
+    {
+      "id": "kassModal",
+      "nodes": 48,
+      "calls": 1,
+      "start": 30698,
+      "end": 30699,
+      "offset": 0,
+      "seenNoScroll": false,
+      "seenScrolled": false
+    },
+    {
+      "id": "inspiqPicker",
+      "nodes": 46,
+      "calls": 1,
+      "start": 31778,
+      "end": 31778,
+      "offset": 7773,
+      "seenNoScroll": false,
+      "seenScrolled": true
+    },
+    {
+      "id": "featuredShopsGrid",
+      "nodes": 22,
+      "calls": 1,
+      "start": 10733,
+      "end": 10733,
+      "offset": 5742,
+      "seenNoScroll": false,
+      "seenScrolled": true
+    },
+    {
+      "id": "_sokoniPrivacyBanner",
+      "nodes": 14,
+      "calls": 1,
+      "start": 18855,
+      "end": 18855,
+      "offset": 0,
+      "seenNoScroll": true,
+      "seenScrolled": true
+    },
+    {
+      "id": "sk-spl",
+      "nodes": 11,
+      "calls": 1,
+      "start": 508,
+      "end": 509,
+      "offset": null,
+      "seenNoScroll": true,
+      "seenScrolled": true
+    },
+    {
+      "id": "sk-notif-btn",
+      "nodes": 8,
+      "calls": 2,
+      "start": 30764,
+      "end": 31477,
+      "offset": 7,
+      "seenNoScroll": true,
+      "seenScrolled": true
+    },
+    {
+      "id": "sk-offline-bar",
+      "nodes": 6,
+      "calls": 1,
+      "start": 11865,
+      "end": 11865,
+      "offset": 55,
+      "seenNoScroll": true,
+      "seenScrolled": true
+    },
+    {
+      "id": "kassBtn",
+      "nodes": 5,
+      "calls": 1,
+      "start": 30697,
+      "end": 30697,
+      "offset": 714,
+      "seenNoScroll": true,
+      "seenScrolled": true
+    }
+  ]
+}

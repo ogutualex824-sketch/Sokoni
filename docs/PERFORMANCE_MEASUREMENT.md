@@ -722,3 +722,75 @@ Acceptance unchanged: paired A/B, ≥6 pairs, `styleMs`/`layoutMs` against the �
 on correctness grounds — rendering the same 12 cards twice is not intentional — but on this evidence it
 is ~640 nodes, not the main event, and should be measured separately.
 
+---
+
+## Phase 1 — Section construction vs visibility (homepage)
+
+Tool: `scripts/perf-sections.js` · Data: `docs/perf-sections-home.json`
+Two synthetic sessions: **no-scroll** (land, wait, leave) and **full-scroll** (walk to the bottom).
+
+```
+viewport 852px · document 12903px   →  6.6% of the page is visible on landing
+total nodes built                     4621
+NEVER SEEN if the user does not scroll 4485   (97.1%)
+NEVER SEEN even after scrolling to end  814
+```
+
+| nodes | calls | built (ms) | offset from top | seen on landing | seen if scrolled | section |
+|---|---|---|---|---|---|---|
+| **1895** | 22 | 10427–39351 | **7220px** | no | YES | `productsContainer` |
+| **1196** | 1 | 10700 | **6644px** | no | YES | `newArrivalsGrid` |
+| 631 | 106 | 468–35876 | — | no | NO | `(body)` misc |
+| 428 | 4 | 22214–40407 | 4249px | no | YES | `_spSellersGrid` |
+| 135 | 1 | 8155 | 0 | no | NO | `sk-menu-drawer` |
+| 92 | 1 | 10772 | 661px | **YES** | YES | `storiesRing` |
+| 84 | 1 | 10759 | **10627px** | no | YES | `homepageReviews` |
+| 48 | 1 | 30698 | 0 | no | NO | `kassModal` |
+
+### The finding that changes the plan
+
+**`productsContainer` — the "primary feed" — sits at offset 7220px.** That is 8.5 viewports below the
+fold. The main feed is *not* above-the-fold content on this homepage; the hero and stories occupy the
+visible area.
+
+Only **~136 nodes** of the 4621 built are actually visible on landing: `storiesRing` (92), the privacy
+banner, splash, notification button, offline bar and the KASS button.
+
+So the earlier framing — "defer New Arrivals and Spotlight, keep the primary feed" — is too
+conservative. On the measured layout, **every product grid is below the fold**, including the one we
+had classified as primary.
+
+### Never seen even after scrolling: 814 nodes
+
+`(body)` misc (631), `sk-menu-drawer` (135) and `kassModal` (48) are never visible in either session.
+The drawer and modal are legitimately hidden UI — but they are *constructed during load* for an
+interaction most sessions never perform. `sk-menu-drawer` builds 135 nodes at 8155 ms; building it on
+first open would cost nothing perceptible.
+
+### Honest limits
+
+- **Synthetic sessions, not real users.** "Never seen" here means never seen by *these two scripted
+  sessions*. How often real users scroll is a RUM question, and the deferral case gets stronger or
+  weaker with that number. What is *not* in doubt is the offsets: 7220px is below the fold for
+  everyone.
+- **Local data volume may differ from production.** Grid sizes could be larger with a full catalogue,
+  which would strengthen rather than weaken the case.
+- `(body)` is an attribution bucket for mutations whose nearest id-bearing ancestor is the body, not a
+  single component.
+
+### Phase 2 recommendation (revised by the evidence)
+
+Defer **all product grids** to IntersectionObserver, not just the secondary ones:
+`productsContainer`, `newArrivalsGrid`, `_spSellersGrid`, `featuredShopsGrid`, `homepageReviews`.
+
+Keep eager: hero, `storiesRing` (visible on landing at 661px), navigation, search, auth.
+
+Add `sk-menu-drawer` as a separate, smaller candidate: build on first open.
+
+Expected mechanism — and it is the same one that has explained every result in this sprint: fewer
+nodes constructed in the load window means less style and layout work for any subsequent reader to
+flush. That is why `_measure` looked expensive without being the cause.
+
+Acceptance unchanged: paired A/B ≥6 pairs on `styleMs`/`layoutMs` against the ±2% floor, plus LCP,
+plus nodes-before-first-scroll, plus no visual/SEO/accessibility regression.
+
