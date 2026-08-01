@@ -1019,6 +1019,32 @@ const SokoniDB = {
      ADMIN — ALL ORDERS + DELIVERIES
   ════════════════════════════════════════ */
 
+  /* ── Users, for the admin console ──────────────────────────────────────────
+     Deliberately NOT ordered server-side. Firestore omits any document that
+     lacks the ordering field, and measured against production on 2026-08-01:
+
+         orderBy('createdAt') -> 59 of 61 documents
+         orderBy('updatedAt') -> 13 of 61
+         orderBy('joined')    ->  0 of 61   (the field does not exist)
+
+     Two real people would simply not appear in the admin Users list, with no
+     error to explain it — the same failure that made the Applications panel look
+     empty. The collection is small enough to sort in the caller, so it does.
+
+     If this ever needs server-side ordering for pagination, backfill createdAt
+     FIRST and verify the count matches, rather than accepting a query that
+     silently hides accounts. */
+  listenUsers(callback, onError, limitN = 500) {
+    const _q = query(collection(db, 'users'), limit(limitN));
+    return onSnapshot(_q,
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, uid: d.id, ...d.data() }))),
+      err  => {
+        _log.warn('[SokoniDB] users:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
+    );
+  },
+
   listenAllOrders(callback, statusFilter, limitN) {
     let _q;
     if (statusFilter && limitN) {

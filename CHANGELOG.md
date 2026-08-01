@@ -1,3 +1,101 @@
+## [2026-08-01] — feat(admin): Users reads Firestore — the pane finally has a data source
+
+**Root cause.** The pane read `D.users`, populated from localStorage key `sokoniAllUsers`. That key
+had exactly two references in the entire repository: this read, and one write inside the delete
+handler. **Nothing ever populated it.** `D.users` was `[]` on every device, so the Users pane rendered
+"No users found" permanently while **61 user documents** sat in Firestore.
+
+**Data source.** The `users` collection, via a new `SokoniDB.listenUsers()`. Firebase Auth is the
+identity provider only and is never listed from — Firestore is the record.
+
+### The query is deliberately unordered
+
+Measured against production before writing a line of it:
+
+| query | returns |
+|---|---|
+| `orderBy('createdAt')` | **59 of 61** |
+| `orderBy('updatedAt')` | 13 of 61 |
+| `orderBy('joined')` | **0 of 61** — the field does not exist |
+
+Firestore omits documents that lack the ordering field, so two real people would simply not appear,
+with no error to explain it. The collection is small enough to sort in the caller, so it does. If
+server-side ordering is ever needed for scale, **backfill `createdAt` first and verify the count**
+rather than accepting a query that silently hides accounts.
+
+### Built to the schema that exists, not the one the renderer assumed
+
+Coverage across 61 documents, and what each meant:
+
+| field | coverage | handling |
+|---|---|---|
+| `city` | **0%** | explicit `—`; there is no city on a user document |
+| `joined` | **0%** | falls back to `createdAt` (97%) |
+| `suspended` | **0%** | status now comes from `status` (93%) |
+| `verified` | 2% | badge shows only where genuinely set |
+| `phone` | 5% | reads `phoneNumber` (75%) first — the old renderer showed "no phone" for three quarters of the directory |
+| `roles[]` / `role` | 59 / 8, **2 documents have neither** | both read |
+
+Roles are one concept stored two ways. A filter reading only `roles[]` hides eight real accounts; one
+reading only `role` hides fifty-nine. Both are read — this is not a cross-collection join, and no data
+is merged in from `providers`, `sellers` or anywhere else. **Converging the write path onto `roles[]`
+is a separate, deliberate change to the canonical user model**, and until it happens the two-field read
+is the only honest option. Two documents carry neither field and are shown as "no role set".
+
+Nothing is fabricated. Absent values render as `—`, `unnamed`, `no phone` or `not set`.
+
+### Also
+
+- **Loading, empty, error and retry** are now distinct states. "Loading users…" is not "No users
+  found."; a read failure says *"This is a read failure, not an empty directory."* and offers Retry;
+  a filter that matches nothing says so differently from an empty directory.
+- **Pagination** at 50/page, with the count reporting the full match rather than the page.
+- **Search** across name, email, phone and uid. **Role** and **status** filters.
+- **Per-row isolation** — one malformed document renders as a visible, uid-bearing failure card
+  instead of taking the table down.
+- **The slide-in works.** `#userDetailContent` was an orphan: close button, no opener, no renderer.
+  `openUserDetail(uid)` now fills it from the same cached snapshot the table renders, so it costs no
+  extra read and cannot disagree with the row above it.
+- **`adminDeleteUser` removed.** It spliced a local array and wrote localStorage — it changed nothing
+  in Firestore and nothing for the user, only hiding the row until reload. Removing an account is a
+  server-side operation with auth, audit and cascade implications and belongs behind a Cloud Function.
+  The row action is now View.
+
+### Tests
+
+`scripts/test-users-render.js` (new) lifts the pipeline **verbatim from admin.html** and exercises it
+against the real production shapes — including the two role-less documents and a user with no
+`createdAt`. **36/36.**
+
+| check | result |
+|---|---|
+| users render contract | **36/36** |
+| applications render contract | 25/25 |
+| functions unit tests | 783 passed, 17 suites |
+| inline script syntax | 9 blocks, 0 errors |
+| `sokoniAllUsers` references | 2 → **1** (only `clearDemo`, which clears legacy residue) |
+| `adminDeleteUser` | removed |
+| predeploy | all gates green |
+
+Rules confirmed: `match /users/{userId} { allow read: if isAdmin() … }` — an admin may list.
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`, `sokoni-db.js`, `scripts/test-users-render.js` (new),
+`functions/scripts/probe-users-schema.js` (new), `package.json`.
+Database changes: none. API changes: `SokoniDB.listenUsers(cb, onError, limit)` added.
+Breaking changes: none.
+
+### Gap documented, not patched over
+
+`city` does not exist on any user document, and role storage is split across two fields. Both are
+**canonical-model gaps**, not UI problems. They should be closed by extending the user model
+deliberately — not by joining `providers`/`sellers` into this pane, which would give Users two
+sources of truth and undo what this commit is for.
+
+Remaining duplicate ids: **103**. Orphan containers: **26**. Next pane: **Properties**.
+
+---
+
 ## [2026-08-01] — refactor(admin): Phase 1 pane 2 — Users converged onto one pane
 
 **Root cause.** `#adm-pane-users` was declared twice. `showPane()` resolves to the first match, so the

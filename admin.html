@@ -875,6 +875,13 @@ body.adm-light .adm-sec-h{color:#111;}
             <option value="">All</option><option value="buyer">Buyers</option><option value="seller">Sellers</option><option value="driver">Drivers</option><option value="provider">Providers</option><option value="admin">Admins</option><option value="suspended">Suspended</option>
           </select>
         </div>
+          <select id="userStatusFilter" onchange="filterUsers()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;font-family:inherit;font-size:12px;">
+            <option value="">Any status</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="suspended">Suspended</option>
+          </select>
+        </div>
         <div class="adm-sec-h">Users (<span id="usersCount">0</span>)</div>
         <div class="adm-table-wrap">
           <table class="adm-table">
@@ -882,6 +889,7 @@ body.adm-light .adm-sec-h{color:#111;}
             <tbody id="usersBody"></tbody>
           </table>
         </div>
+        <div id="usersPager" style="margin-top:12px;text-align:center;"></div>
         <!-- User detail slide-in -->
         <div id="userDetailPanel" style="display:none;position:fixed;right:0;top:0;bottom:0;width:360px;max-width:100vw;background:#0d0d0d;border-left:1px solid rgba(113,255,0,0.2);z-index:500;overflow-y:auto;padding:20px;box-shadow:-8px 0 32px rgba(0,0,0,0.5);">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -2882,7 +2890,7 @@ function loadAll(){
   D.broadcasts  = ls('sokoniBroadcasts');
   D.charges     = ls('sokoniAdminCharges');
   /* ── Users ── */
-  D.users       = ls('sokoniAllUsers');
+  D.users       = [];   /* Firestore-only; startUsersListener fills this. */
   try{ var u=JSON.parse(localStorage.getItem('sokoniUser')||'null');
     if(u && !D.users.find(function(x){return x.email===u.email;})) D.users.unshift(u); }catch(e){}
   /* ── Disputes & returns ── */
@@ -3046,7 +3054,7 @@ function renderPane(name){
   if(name==='attention')    renderAttention();
   if(name==='products')     renderProducts(D.products);
   if(name==='sellers')      renderSellers(D.sellers);
-  if(name==='users')        renderUsers(D.users);
+  if(name==='users')        renderUsers();
   if(name==='applications') renderApps(D.apps);
   if(name==='billing')      renderBilling();
   if(name==='broadcasts')   renderBroadcasts();
@@ -4995,43 +5003,265 @@ function replayInvoice(i){
 /* ════════════════════════════════
    USERS
 ════════════════════════════════ */
-function renderUsers(list){
-  var role=(document.getElementById('userRoleFilter')||{}).value||'';
-  var filtered=list.filter(function(u){ return !role||((u.role||u.type||'buyer').toLowerCase().includes(role)); });
-  var el=document.getElementById('usersCount'); if(el) el.textContent=filtered.length;
-  var body=document.getElementById('usersBody'); if(!body) return;
-  if(!filtered.length){ body.innerHTML=emptyRow(7,'👤','No users found'); return; }
-  body.innerHTML=filtered.map(function(u,i){
-    var role=u.role||u.type||'buyer';
-    var rc={seller:'b-green',provider:'b-blue',driver:'b-yellow',admin:'b-red'}[role]||'b-grey';
-    var status=u.suspended?'<span class="badge b-red">Suspended</span>':u.verified?'<span class="badge b-green">Verified</span>':'<span class="badge b-yellow">Active</span>';
-    return '<tr>'
-      +'<td><b>'+h(u.name||u.displayName||'—')+'</b></td>'
-      +'<td style="font-size:11px;">'+h(u.email||'—')+'<br>'+h(u.phone||'')+'</td>'
-      +'<td><span class="badge '+rc+'">'+h(role)+'</span></td>'
-      +'<td>'+h(u.city||u.location||'—')+'</td>'
-      +'<td style="font-size:11px;">'+h((u.joined||u.createdAt||'').substring(0,10)||'—')+'</td>'
-      +'<td>'+status+'</td>'
-      +'<td style="white-space:nowrap;">'
-        +'<button class="adm-btn-sm adm-btn-red" onclick="adminDeleteUser('+i+')">🗑️</button>'
-      +'</td>'
-      +'</tr>';
-  }).join('');
+/* ══════════════════════════════════════════════════════════════════════════
+   USERS — Firestore is the source of truth
+   ══════════════════════════════════════════════════════════════════════════
+   This pane used to read D.users, which came from localStorage key
+   `sokoniAllUsers`. That key had exactly two references in the whole repository:
+   this read, and one write inside the delete handler. NOTHING populated it, so
+   D.users was [] on every device and the pane showed "No users found" forever
+   while 61 user documents sat in Firestore.
+
+   Auth is the identity provider; the `users` collection is the record. The list
+   is therefore built from Firestore and never from listUsers().
+
+   ── Schema reality, measured against production 2026-08-01 (61 docs) ───────
+   Several fields the old renderer read barely exist. They are rendered as
+   explicit placeholders rather than invented:
+
+       city        0%   -> always "—"; there is no city on a user document
+       joined      0%   -> falls back to createdAt (97%)
+       suspended   0%   -> status comes from `status` (93%) instead
+       verified    2%   -> badge shows only where it is genuinely set
+       phone       5%   -> the real field is phoneNumber (75%)
+
+   Roles are stored two ways: roles[] on 59 docs, a `role` string on 8, and TWO
+   documents carry neither. Both are read here because they are one concept
+   stored inconsistently — not a join across collections. Converging the WRITE
+   path onto roles[] is tracked separately; until then a filter that read only
+   one of them would hide real accounts. */
+
+var _usersAll     = [];      /* every user document, unsorted as delivered */
+var _usersLoaded  = false;   /* a snapshot has arrived — empty is then real */
+var _usersError   = null;
+var _usersPage    = 0;
+var USERS_PER_PAGE = 50;
+
+/* roles[] and role string are one axis. A user with neither matches only "all". */
+function _userRoles(u){
+  var out = [];
+  if (Array.isArray(u.roles)) out = out.concat(u.roles.filter(Boolean));
+  if (typeof u.role === "string" && u.role) out.push(u.role);
+  return out.map(function(r){ return String(r).toLowerCase(); });
 }
-function filterUsers(q){
-  var role=(document.getElementById('userRoleFilter')||{}).value||'';
-  var filtered=D.users.filter(function(u){
-    var s=(u.name||'')+(u.email||'')+(u.phone||'');
-    return s.toLowerCase().includes((q||'').toLowerCase()) && (!role||((u.role||u.type||'').includes(role)));
+function _userPhone(u){ return u.phoneNumber || u.phone || ""; }
+function _userName(u){  return u.name || u.displayName || u.username || ""; }
+function _userJoined(u){
+  var v = u.createdAt || u.joined;
+  if (!v) return "";
+  if (v.toDate) { try { return v.toDate().toISOString().slice(0,10); } catch(e){ return ""; } }
+  if (v.seconds) { try { return new Date(v.seconds*1000).toISOString().slice(0,10); } catch(e){ return ""; } }
+  return String(v).slice(0,10);
+}
+function _userJoinedMs(u){
+  var v = u.createdAt || u.joined;
+  if (!v) return 0;
+  if (v.toDate) { try { return v.toDate().getTime(); } catch(e){ return 0; } }
+  if (v.seconds) return v.seconds*1000;
+  var t = Date.parse(v); return isNaN(t) ? 0 : t;
+}
+
+function usersSetError(msg){
+  _usersError = msg || "unknown error";
+  console.error("[Admin][users] load failed:", _usersError);
+  renderUsers();
+}
+
+/* One entry point. Called by the listener, the filters and the pager alike, so
+   there is exactly one place that decides what the table shows. */
+function renderUsers(){
+  var body = document.getElementById("usersBody");
+  var cnt  = document.getElementById("usersCount");
+  if (!body) { console.warn("[Admin][users] no #usersBody in the DOM"); return; }
+
+  if (_usersError) {
+    if (cnt) cnt.textContent = "0";
+    body.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:#ff6b6b;font-weight:700;">'
+      + "Could not load users: " + h(String(_usersError))
+      + '<div style="color:rgba(255,255,255,.45);font-weight:400;margin:6px 0 12px;">This is a read failure, not an empty directory.</div>'
+      + '<button class="adm-btn-sm adm-btn-blue" onclick="usersRetry()">Retry</button></td></tr>';
+    return;
+  }
+  if (!_usersLoaded) {
+    if (cnt) cnt.textContent = "…";
+    body.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:rgba(255,255,255,.35);">Loading users…</td></tr>';
+    return;
+  }
+
+  var q    = ((document.getElementById("userSearch")||{}).value || "").toLowerCase().trim();
+  var role = ((document.getElementById("userRoleFilter")||{}).value || "").toLowerCase();
+  var stat = ((document.getElementById("userStatusFilter")||{}).value || "").toLowerCase();
+
+  var list = _usersAll.filter(function(u){
+    if (q) {
+      var hay = (_userName(u) + " " + (u.email||"") + " " + _userPhone(u) + " " + (u.uid||"")).toLowerCase();
+      if (hay.indexOf(q) === -1) return false;
+    }
+    if (role && _userRoles(u).indexOf(role) === -1) return false;
+    if (stat && String(u.status||"").toLowerCase() !== stat) return false;
+    return true;
   });
-  renderUsers(filtered);
+  /* Newest first, sorted here because the query is deliberately unordered — see
+     listenUsers() in sokoni-db.js. Documents without createdAt sort last rather
+     than vanishing. */
+  list.sort(function(x,y){ return _userJoinedMs(y) - _userJoinedMs(x); });
+
+  if (cnt) cnt.textContent = list.length;
+
+  var pages = Math.max(1, Math.ceil(list.length / USERS_PER_PAGE));
+  if (_usersPage >= pages) _usersPage = pages - 1;
+  var page = list.slice(_usersPage*USERS_PER_PAGE, (_usersPage+1)*USERS_PER_PAGE);
+
+  if (!list.length) {
+    body.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:rgba(255,255,255,.4);">'
+      + (_usersAll.length ? "No users match this filter." : "No users found.") + "</td></tr>";
+    _usersRenderPager(0, 1);
+    return;
+  }
+
+  var failed = 0;
+  body.innerHTML = page.map(function(u){
+    try { return _renderUserRow(u); }
+    catch (err) {
+      failed++;
+      console.error("[Admin][users] row failed", { uid: u && u.uid, error: err && err.message });
+      return '<tr><td colspan="7" style="color:#ff6b6b;font-size:11.5px;">⚠ ' + h(String((u&&u.uid)||"unknown"))
+        + " could not be displayed — " + h(String(err && err.message || "render error")) + "</td></tr>";
+    }
+  }).join("");
+  _usersRenderPager(_usersPage, pages);
+  console.info("[Admin][users]", { documents:_usersAll.length, matching:list.length,
+    page:_usersPage+1, pages:pages, rendered:page.length-failed, failed:failed,
+    collection:"users", source:"firestore", listenerAttached:!!window._usersUnsub });
 }
-function adminDeleteUser(i,_c){
-  if(!_c){_skConfirm('Remove this user record?',()=>adminDeleteUser(i,true));return;}
-  D.users.splice(i,1);
-  localStorage.setItem('sokoniAllUsers',JSON.stringify(D.users));
-  renderUsers(D.users); toast('User removed');
+
+function _renderUserRow(u){
+  var roles = _userRoles(u);
+  var primary = roles[0] || "";
+  var rc = {seller:"b-green",merchant:"b-green",provider:"b-blue",driver:"b-yellow",
+           rider:"b-yellow",admin:"b-red",business:"b-purple"}[primary] || "b-grey";
+  var roleCell = roles.length
+    ? roles.map(function(r){ return '<span class="badge '+( {seller:"b-green",merchant:"b-green",provider:"b-blue",driver:"b-yellow",rider:"b-yellow",admin:"b-red",business:"b-purple"}[r]||"b-grey")+'">'+h(r)+"</span>"; }).join(" ")
+    : '<span style="color:#ff8c42;font-weight:700;font-size:11px;">no role set</span>';
+
+  /* status (93%) is the real field. `suspended` does not exist on any document. */
+  var st = String(u.status||"").toLowerCase();
+  var statusCell = st === "suspended" || st === "banned" ? '<span class="badge b-red">'+h(u.status)+"</span>"
+    : u.verified === true ? '<span class="badge b-green">Verified</span>'
+    : st ? '<span class="badge b-grey">'+h(u.status)+"</span>"
+    : '<span style="color:rgba(255,255,255,.3);">—</span>';
+
+  var phone = _userPhone(u);
+  var joined = _userJoined(u);
+  /* city is absent from every document. Shown as an explicit dash rather than
+     back-filled from somewhere it does not belong. */
+  var city = u.city || u.location || "";
+
+  return "<tr>"
+    + "<td><b>" + (h(_userName(u)) || '<span style="color:rgba(255,255,255,.3);">unnamed</span>') + "</b>"
+      + '<div style="font-size:10px;color:rgba(255,255,255,.3);font-family:monospace;">' + h(String(u.uid||"").slice(0,14)) + "</div></td>"
+    + '<td style="font-size:11px;">' + (h(u.email||"") || '<span style="color:rgba(255,255,255,.3);">—</span>')
+      + (phone ? "<br>"+h(phone) : '<br><span style="color:rgba(255,255,255,.3);">no phone</span>') + "</td>"
+    + "<td>" + roleCell + "</td>"
+    + '<td>' + (h(city) || '<span style="color:rgba(255,255,255,.3);">—</span>') + "</td>"
+    + '<td style="font-size:11px;">' + (h(joined) || '<span style="color:rgba(255,255,255,.3);">—</span>') + "</td>"
+    + "<td>" + statusCell + "</td>"
+    + '<td style="white-space:nowrap;"><button class="adm-btn-sm adm-btn-blue" onclick="openUserDetail(\''+h(String(u.uid||""))+'\')">View</button></td>'
+    + "</tr>";
 }
+
+function _usersRenderPager(page, pages){
+  var el = document.getElementById("usersPager");
+  if (!el) return;
+  if (pages <= 1) { el.innerHTML = ""; return; }
+  el.innerHTML = '<button class="adm-btn-sm" '+(page<=0?"disabled":"")+' onclick="usersGoPage('+(page-1)+')">‹ Prev</button>'
+    + '<span style="margin:0 12px;font-size:12px;color:rgba(255,255,255,.5);">Page '+(page+1)+" of "+pages+"</span>"
+    + '<button class="adm-btn-sm" '+(page>=pages-1?"disabled":"")+' onclick="usersGoPage('+(page+1)+')">Next ›</button>';
+}
+function usersGoPage(p){ _usersPage = Math.max(0, p); renderUsers(); }
+
+/* Filters re-render from the cached snapshot; they never refetch. */
+function filterUsers(){ _usersPage = 0; renderUsers(); }
+
+function usersRetry(){
+  _usersError = null; _usersLoaded = false; renderUsers();
+  try { if (window._usersUnsub) { window._usersUnsub(); window._usersUnsub = null; } } catch(e){}
+  startUsersListener();
+}
+
+function startUsersListener(){
+  if (window._usersUnsub) return;                 /* exactly one listener */
+  if (!window.SokoniDB || !window.SokoniDB.listenUsers) {
+    usersSetError("data layer unavailable — reload the page");
+    return;
+  }
+  window._usersUnsub = window.SokoniDB.listenUsers(
+    function(users){
+      _usersLoaded = true; _usersError = null;
+      _usersAll = users;
+      D.users = users;                            /* stat counters read this */
+      renderUsers();
+    },
+    function(err){ usersSetError((err && err.message) || "permission denied"); }
+  );
+}
+
+/* ── User detail slide-in ──────────────────────────────────────────────────
+   #userDetailPanel shipped with a close button, no opener and no renderer:
+   #userDetailContent was an orphan container, never written to by anything. It
+   is now filled from the same cached Firestore snapshot the table renders, so
+   opening a row costs no extra read and can never disagree with the row above
+   it.
+
+   Absent fields are shown as "not set" rather than hidden or invented. A blank
+   where a phone number should be tells an administrator nothing; "not set" tells
+   them the record is incomplete, which is usually the thing they need to know
+   before ringing someone. */
+function openUserDetail(uid){
+  var panel = document.getElementById("userDetailPanel");
+  var box   = document.getElementById("userDetailContent");
+  if (!panel || !box) return;
+
+  var u = _usersAll.filter(function(x){ return String(x.uid) === String(uid); })[0];
+  panel.style.display = "block";
+  if (!u) {
+    box.innerHTML = '<div style="color:#ff6b6b;font-size:13px;font-weight:700;">User not found in the current snapshot.</div>'
+      + '<div style="color:rgba(255,255,255,.4);font-size:12px;margin-top:6px;">The list may have changed since this row was drawn. Close and reopen.</div>';
+    return;
+  }
+
+  var NOT_SET = '<span style="color:rgba(255,255,255,.3);">not set</span>';
+  function row(label, value, mono){
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.06);">'
+      + '<span style="color:rgba(255,255,255,.45);font-size:12px;">' + h(label) + "</span>"
+      + '<span style="font-size:12.5px;font-weight:600;text-align:right;word-break:break-all;'+(mono?"font-family:monospace;":"")+'">'
+      + (value || NOT_SET) + "</span></div>";
+  }
+
+  var roles = _userRoles(u);
+  var phone = _userPhone(u);
+  var joined = _userJoined(u);
+
+  box.innerHTML =
+      row("Name",    h(_userName(u)))
+    + row("UID",     h(String(u.uid||"")), true)
+    + row("Email",   h(u.email||""))
+    + row("Phone",   phone ? '<a href="tel:'+h(phone)+'" style="color:var(--accent);text-decoration:none;">'+h(phone)+"</a>" : "")
+    + row("Roles",   roles.length ? roles.map(function(r){ return h(r); }).join(", ") : "")
+    + row("Status",  h(u.status||""))
+    + row("Verified", u.verified === true ? "yes" : (u.verified === false ? "no" : ""))
+    + row("Joined",  h(joined))
+    + row("City",    h(u.city || u.location || ""))
+    + '<div style="margin-top:14px;padding:10px 12px;background:rgba(255,255,255,.03);border-radius:10px;font-size:11.5px;color:rgba(255,255,255,.4);line-height:1.6;">'
+    + "Read from the <b>users</b> collection. Fields marked <i>not set</i> are genuinely absent on this document — nothing here is filled in from another collection."
+    + "</div>";
+}
+/* The delete handler is gone. It spliced a local array and wrote it to
+   localStorage, which changed nothing in Firestore and nothing for the user —
+   it only removed the row until the page reloaded. Removing an account is a
+   server-side operation with auth, audit and cascade implications, so the row
+   action is now View. A real delete belongs behind a Cloud Function. */
+
 
 /* ════════════════════════════════
    DISPUTES
@@ -5913,6 +6143,7 @@ function _startAdminListeners(){
     }
   );
   SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
+  if (typeof startUsersListener === 'function') startUsersListener();
 }
 document.addEventListener('sokoniAdminReady', _startAdminListeners);
 /* Also start if this device unlocked earlier in the session. */

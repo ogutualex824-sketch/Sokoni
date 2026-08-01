@@ -8,6 +8,7 @@
     "verify:consent": "node scripts/verify-consent-gate.js",
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
+    "test:panels": "node scripts/test-apps-render.js && node scripts/test-users-render.js",
     "audit:panels": "node scripts/audit-orphan-panels.js",
     "verify:appcheck": "node scripts/verify-appcheck.js",
     "test:offline": "node scripts/test-offline-detection.js",
