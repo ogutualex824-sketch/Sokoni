@@ -517,3 +517,68 @@ These writes are genuinely dead and removing them is defensible on hygiene groun
 would misrepresent the evidence. The revert stands; removing dead writes can be proposed separately
 and judged on maintainability criteria, where it does not need to clear a performance floor.
 
+---
+
+## Sprint 2 Phase 2 Task 3 — `_measure()` read/write batching — **REJECTED (prediction validated)**
+
+Category B (mechanism-backed): Chrome's trace attributed 1598 ms of forced synchronous style/layout
+directly to `_measure`, so unlike the previous two experiments this rested on measurement, not
+inference.
+
+### A prediction registered before measuring
+
+Static analysis of the call path found that the **only** write inside `_measure` (excluding
+`_propagate`, which is already the terminal mutate step) is `_applyZIndex` in the bottom-nav
+auto-detect branch. `_stackFabs` is not in this path. That branch is guarded by
+`!_registry.bottomNav`, so it runs **at most once per page lifetime**.
+
+**Prediction: no measurable effect.** Batching can remove at most *one* forced flush per page, not the
+twelve the trace counts.
+
+### Result
+
+| metric | delta | consistency | floor | verdict |
+|---|---|---|---|---|
+| styleMs | −1.2% | 4/6 | ±2% | below floor |
+| layoutMs | −0.2% | 4/6 | ±2% | below floor |
+| tbt | −1.3% | 3/6 | ±5–9% | below floor |
+
+**Prediction confirmed. Rejected and reverted.**
+
+This is a materially stronger epistemic position than the previous two rejections: the null result was
+*predicted in advance from a model*, rather than discovered and then explained.
+
+### What the validated model now says
+
+If within-function batching cannot help, and reducing invocation count cannot help (the
+ResizeObserver experiment cut `_measure` self-time 34% with no whole-page effect), then the 1598 ms is
+**not caused by `_measure` at all**.
+
+`_measure` runs on `requestAnimationFrame`, so during load it is frequently the *first code to ask for
+geometry* after other modules have mutated the DOM. The browser flushes at that moment, and the trace
+charges the flush to whoever asked — not to whoever dirtied.
+
+> **`_measure` is a victim of attribution, not a cause.** It pays for style and layout work that other
+> modules made necessary.
+
+That explains all three failures coherently: every attempt optimised the function being *charged*
+rather than the code doing the *dirtying*.
+
+### Consequence for the roadmap
+
+Forced-layout attribution identifies **where the bill lands**, which is not the same as where the cost
+originates. For a first-reader-after-mutation pattern, the actionable target is the **mutation
+schedule**, not the reader.
+
+This is an evidence-based argument for **staged boot** — and for the right reason this time. Not to
+reduce parse/compile (measured at 97 ms, negligible), and not to spread execution, but to reduce *how
+much DOM mutation happens during the load window at all*, so that the first reader has less to flush.
+
+**Recommended next: Phase 4 staged boot**, with the hypothesis stated as: deferring non-critical DOM
+construction out of the load window reduces the style/layout work that any subsequent reader must
+flush. Validate on `styleMs`/`layoutMs` against the ±2% floor, as always.
+
+Remaining forced-layout sites (`shared-header.js` `_update` 1003 ms, `sokoni-performance.js:125`
+995 ms) should be re-profiled *after* staged boot, since they are likely subject to the same
+attribution effect and may shrink or move without being touched.
+
