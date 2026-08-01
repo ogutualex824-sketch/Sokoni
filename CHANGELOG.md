@@ -1,3 +1,26 @@
+## [2026-08-01] — feat(booking): resolution UI + negotiation timeline (Slice 2 step 2b)
+
+Wires the (already-proven) negotiation engine to real UI on both sides + a timeline that renders the
+immutable bookingEvents. No new booking logic.
+
+- **`sokoni-booking-resolution.js`** (new, shared) — `SokoniResolution.mount({role, containerId})`.
+  Customer: Action-Required cards → Accept / Decline / Suggest another time (per proposal state), or
+  "Waiting for provider". Provider: Propose new time / Accept-or-Decline the customer's suggestion.
+  Every card has a **History** toggle rendering the negotiation timeline. Uses `window.sokoniCallable`
+  (modular) or `firebase.functions()` (compat); degrades to hidden if the bridge/ops aren't ready.
+- **`functions/booking-resolution.js`** — `bookingGetTimeline` (participant-scoped resolution overlay +
+  event list) and `customerListAffectedBookings` (customer queue). Smoke-proven 4/4 (incl. stranger denied).
+- **`functions/provider-dispatch.js`** — registered both read ops.
+- **`provider-dashboard.html`** — `#skResolution` in the Bookings panel; mounts on the bookings tab.
+- **`profile.html`** — `#skResolution` Action-Required card near the top; mounts once the callable bridge is ready.
+
+Deploy: `functions:providerDispatch` + hosting. Additive; hidden when nothing is affected → no regression.
+Completes the usable lifecycle: availability change → impact → ACTION_REQUIRED → negotiation → canonical
+reschedule. FOLLOW-ON: Step 3 refund (existing engines), Step 4 freeze edits, escalation, emergency, analytics.
+Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(booking): resolution negotiation state machine (Slice 2 step 2 — backend)
 
 The customer/provider resolution workflow for an ACTION_REQUIRED booking. Touches NO money — a

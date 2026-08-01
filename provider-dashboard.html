@@ -317,6 +317,7 @@ a{color:var(--acc);text-decoration:none}
     <!-- ── Bookings ───────────────────────────────────────────────────── -->
     <div class="panel" id="panel-bookings">
       <div class="pg-header"><div><div class="pg-title">Bookings</div></div></div>
+      <div id="skResolution" style="padding:4px 20px;display:none;"></div>
       <div style="padding:14px 20px">
         <div class="ftabs">
           <button class="ftab on" onclick="B.filter('all',this)">All</button>
@@ -531,6 +532,7 @@ a{color:var(--acc);text-decoration:none}
 
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
+<script src="sokoni-booking-resolution.js" defer></script>
 <script>
 const _q=id=>document.getElementById(id);
 const _esc=s=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -551,7 +553,7 @@ const P={
     if(subTab)setTimeout(()=>S.tab(subTab,_q(`stab${subTab.charAt(0).toUpperCase()+subTab.slice(1)}`)||null),50);
     if(typeof Cal!=='undefined')Cal.close();   // tear down the real-time listener when leaving
     if(id==='calendar')Cal.open();
-    if(id==='bookings'&&!_bkDocs.length)B.load();
+    if(id==='bookings'){ if(!_bkDocs.length)B.load(); if(window.SokoniResolution)SokoniResolution.mount({role:'provider',containerId:'skResolution'}); }
     if(id==='earnings')E.load();
     if(id==='reviews')Rv.load();
   }

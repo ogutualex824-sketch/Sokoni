@@ -2055,6 +2055,11 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
       </div>
     </div>
 
+    <!-- ── Booking Resolution — "Action Required" cards for bookings affected by a provider
+         availability change (accept / decline / suggest / timeline). Rendered by the shared
+         sokoni-booking-resolution.js from the deployed providerDispatch ops. Hidden if none. -->
+    <div class="up-card" id="skResolution" style="padding:16px;display:none;"></div>
+
     <!-- ── Business Management hub — role-driven modules (Marketplace / Services / Finance /
          Insights / Rider / Admin). Additive: shows ONLY the modules the user has access to,
          and a seller+provider sees BOTH. Populated by _renderBusinessHub(). -->
@@ -2882,6 +2887,18 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
 <script src="sokoni-config.js" defer></script>
 <script src="sokoni-ui-extras.js" defer></script>
 <script src="sw-register.js" defer></script>
+<script src="sokoni-booking-resolution.js" defer></script>
+<script>
+/* Mount the customer "Action Required" resolution surface once the callable bridge is ready. */
+(function(){
+  function boot(tries){
+    if(window.SokoniResolution && (typeof window.sokoniCallable==='function' || (window.firebase&&window.firebase.functions))){
+      try{ SokoniResolution.mount({ role:'customer', containerId:'skResolution' }); }catch(e){}
+    } else if((tries||0) < 20){ setTimeout(function(){ boot((tries||0)+1); }, 500); }
+  }
+  document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ boot(0); }, 800); });
+})();
+</script>
 <script src="sokoni-book-service.js" defer></script>
 
 <script src="nav-active.js" defer></script>

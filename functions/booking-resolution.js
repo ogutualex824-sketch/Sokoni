@@ -248,4 +248,16 @@ _h.customerProposeTime = function (req) { return _propose(req, 'customer'); };  
 _h.customerRespondToProposal = function (req) { return _respond(req, 'customer'); };      // customer accept/decline provider proposal
 _h.providerRespondToCustomerProposal = function (req) { return _respond(req, 'provider'); }; // provider accept/decline customer suggestion
 
+/* customerListAffectedBookings — the customer's own bookings awaiting resolution. Single-field
+   query (customerUid) + in-memory filter → no composite index. */
+_h.customerListAffectedBookings = async (req) => {
+  const uid = _uid(req);
+  const snap = await db.collection('affectedBookings').where('customerUid', '==', uid).get();
+  const items = snap.docs
+    .map(function (doc) { return Object.assign({ id: doc.id }, doc.data()); })
+    .filter(function (a) { return a.resolutionStatus === RES.ACTION_REQUIRED; })
+    .sort(function (a, b) { return (a.deadlineTs || 0) - (b.deadlineTs || 0); });
+  return { count: items.length, items: items };
+};
+
 module.exports = { _h, RES, EVT, REASONS, DEADLINE_HOURS };
