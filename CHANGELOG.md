@@ -1,3 +1,27 @@
+## [2026-08-01] — feat(profile): Business Management hub (role-driven) + provider deep-links + onboarding routing
+
+Consolidates the scattered seller/provider entry points into one **Business Management** section on
+the profile that renders ONLY the modules the user can access — additive, never exclusive.
+
+- **`profile.html`** — new `_renderBusinessHub()` renders titled modules by role:
+  Marketplace (seller → My Shops/Products/Orders/POS), Services (provider → My Services/Availability/
+  Bookings/Reviews), Finance (any business → Wallet/Payouts/Transactions), Insights (Analytics), Rider
+  (driver → Rider Dashboard), Admin (admin → Admin OS). A seller+provider sees BOTH; a buyer sees none
+  (hub hidden). Verified against the real functions: seller→3 modules, provider→3, seller+provider→4
+  (12 links), rider/admin→own module, buyer→hidden, no dead links.
+- **Priority-2 onboarding routing** — `_bizRouteProvider()` checks `providerProfiles/{uid}` up front and
+  points "My Services" straight to `provider-dashboard.html` (profile exists) or `provider-onboarding.html`
+  (doesn't), eliminating the dashboard→not-found→onboarding bounce. Applies to both the header button and
+  the hub link.
+- **`provider-dashboard.html`** — added URL-hash routing (`_applyHash`) so hub deep-links open the right
+  panel/tab: `#calendar` `#bookings` `#earnings` `#reviews`, and `#services`→Settings/Rate Cards,
+  `#availability`→Settings/Availability. Fires on load + `hashchange`.
+
+All links target already-built pages (extend, don't rebuild). Client-only. No backend/runtime change.
+Breaking changes: none.
+
+---
+
 ## [2026-08-01] — fix(onboarding): invited admins could never sign in; one invitation engine
 
 **An invited administrator had no way into the platform, and nothing recorded it.**
