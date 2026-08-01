@@ -1,3 +1,84 @@
+## [2026-08-01] — fix(auth): admin registry converged to claims + passwordless migration baseline
+
+`functions/scripts/sync-admin-estate.js` (new) sweeps every Auth account once and produces the four
+reports that were previously guesswork, then repairs exactly one thing.
+
+### Repaired — `platformEmployees` now mirrors the claims (APPLIED to production)
+
+All three accounts holding a privileged claim had **no registry row at all**, because
+`invitations-core.acceptInvitation()` is the only writer and none of them were granted that way.
+Backfilled with `source: 'claims-backfill'` provenance, so a later audit can tell a derived row from
+an accepted invitation:
+
+| account | claims | role written |
+|---|---|---|
+| `alexochieng3030@gmail.com` | `superAdmin`+`admin` | `superAdmin` |
+| `ogutualex824@gmail.com` | `superAdmin`+`admin` | `superAdmin` |
+| `ochisaac@gmail.com` | `admin` | `admin` |
+
+Re-run confirms `registry: ok` for all three, no stale rows.
+
+This is safe because **`platformEmployees` grants nothing**: `firestore.rules` exposes it read-only,
+no rule consults it, no Cloud Function authorizes against it, and `admin.html` reads it only to list
+staff. It also fixes a latent crash — `index.js` `removePlatformEmployee` calls `.update()` on that
+document, and `update()` rejects when the document is absent, so removing any current administrator
+would have thrown.
+
+No claim was set or removed. No refresh token was revoked. No Auth account was created or deleted.
+
+### D — the named platform identities do not exist
+
+`superadmin@mysokoni.co.ke`, `ceo@mysokoni.co.ke` and `company@mysokoni.co.ke` are **all absent from
+Firebase Auth**. Not created here, and the ordering matters: an Auth account for an address with no
+Workspace mailbox can neither receive a password reset nor an email-link sign-in, so creating the Auth
+side first produces an identity that cannot be recovered. Workspace state is not readable with this
+credential.
+
+### E — passwordless migration baseline (64 accounts)
+
+| provider set | accounts |
+|---|---|
+| `password` | **50** |
+| `phone` | 5 |
+| `password`+`phone` | 4 |
+| `google.com` | 3 |
+| `google.com`+`phone` | 2 |
+
+**50 of 64 accounts (78%) are password-only** and would be locked out if password sign-in were
+disabled today. Two of them hold a privileged claim: `ogutualex824@gmail.com` and
+`ochisaac@gmail.com` — disabling password first would lock out an administrator.
+
+**Project sign-in configuration, read from the Identity Toolkit admin API:**
+
+| method | state |
+|---|---|
+| email + password | **enabled** |
+| **email link (passwordless)** | **DISABLED** |
+| phone / OTP | enabled |
+| Google | enabled (3 accounts use it) |
+| anonymous | disabled |
+
+So step one of the migration is a **project configuration change, not code**: email-link sign-in is
+off, and no account can migrate onto a method that does not exist yet. Phone/OTP and Google are
+already available and are the two paths usable today.
+
+### F — token revocation impact
+
+| account | last sign-in | token |
+|---|---|---|
+| `alexochieng3030@gmail.com` | 2 days | may carry stale claims |
+| `ogutualex824@gmail.com` | 11 days | may carry stale claims |
+| `ochisaac@gmail.com` | never | n/a |
+
+Blast radius: **3 accounts, 1 active in the last 7 days, 0 non-admin users.** Small and bounded — but
+still a forced sign-out on every device, so it is scheduled work, not a surprise. Not performed.
+
+Files: `functions/scripts/sync-admin-estate.js` (new).
+Database changes: 3 `platformEmployees` documents created (registry projection only, grants nothing).
+API changes: none. Security: none — claims, tokens and accounts untouched. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — audit(auth): admin authorization pipeline — what is actually stored (P0 investigation)
 
 Investigation only. **No authorization code was changed** — see "Why nothing was repaired yet" below.
