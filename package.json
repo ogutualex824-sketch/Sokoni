@@ -10,7 +10,7 @@
     "audit:ids": "node scripts/audit-duplicate-ids.js",
     "verify:markup": "node scripts/verify-admin-markup.js",
     "test:rules:landlord": "firebase emulators:exec --only firestore --project sokoni-landlord-rules-test \"node scripts/test-landlord-rules.js\"",
-    "test:panels": "node scripts/test-apps-render.js && node scripts/test-users-render.js",
+    "test:panels": "node scripts/test-apps-render.js && node scripts/test-users-render.js && node scripts/test-merchant-templates.js",
     "audit:panels": "node scripts/audit-orphan-panels.js",
     "verify:appcheck": "node scripts/verify-appcheck.js",
     "test:offline": "node scripts/test-offline-detection.js",
@@ -44,7 +44,8 @@
     "check:profile-rules": "node scripts/check-profile-rules.js",
     "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js",
     "audit:storage": "node scripts/audit-admin-localstorage.js",
-    "regression:admin": "node scripts/admin-os-regression.js --live"
+    "regression:admin": "node scripts/admin-os-regression.js --live",
+    "test:templates": "node scripts/test-merchant-templates.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",

@@ -14,6 +14,7 @@
     { id:'wholesale',        label:'Wholesale / Distributor',         hub:'shopping',      emoji:'📦' },
     { id:'supermarket',      label:'Supermarket / Minimart',          hub:'shopping',      emoji:'🏪' },
     { id:'hardware',         label:'Hardware / Building Materials',    hub:'construction',  emoji:'🧱' },
+    { id:'water-supplier',   label:'Water Supplier / Refill Station', hub:'shopping',      emoji:'💧' },
     /* Food & Beverage */
     { id:'restaurant',       label:'Restaurant / Hotel',              hub:'food',          emoji:'🍽️' },
     { id:'cafe',             label:'Café / Coffee Shop',              hub:'food',          emoji:'☕' },

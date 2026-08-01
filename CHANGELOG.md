@@ -1,3 +1,80 @@
+## [2026-08-02] — feat(merchant): Water Supplier category + declarative template (Phases 1–3)
+
+**No Dash Premium production record was created**, per the decision. This is the reusable category any
+water merchant onboards through.
+
+### Phase 1 — the category
+
+One row in `hub-register.js`, alongside the existing 103:
+
+```js
+{ id:'water-supplier', label:'Water Supplier / Refill Station', hub:'shopping', emoji:'💧' }
+```
+
+**No special-case onboarding logic.** The existing merchant flow already reads that registry, so
+selecting it works with no other change.
+
+### Phases 2–3 — `sokoni-merchant-templates.js`, and why it is *data*
+
+The template **declares** which existing capabilities a category turns on and what products it starts
+with. It contains **no POS, inventory, delivery or pricing logic**, because all of that already exists:
+**141 POS/till/inventory Cloud Functions are deployed**, and `posSyncToMarketplace` /
+`posMarketplaceOrderSync` already keep one inventory in step across POS and marketplace **in both
+directions**.
+
+A category template carrying its own logic would be a second POS. A Water Supplier is an ordinary
+SOKONI merchant with a particular starting configuration — **not a special kind of merchant**. The
+contract asserts this directly: no per-category branching, and the module performs **no writes**.
+
+**Adding a future category should require an entry here and a row in `CATS` — nothing else. If a
+category needs code, that is a signal the capability belongs in the platform.**
+
+### What the template refuses to invent
+
+| | why |
+|---|---|
+| `price: null` on every preset | a made-up price would face a real customer |
+| `barcode: ''` | a barcode belongs to the product, not to us |
+| `status: 'draft'` | nothing is listed until the merchant prices it |
+| `defaultDeliveryMode: 'flat-rate'` | **free is deliberately not the default** — defaulting to free gives away a merchant's margin |
+
+SKUs are bound to the merchant id (`DASH01-001`) so two merchants cannot collide.
+
+### Returnable units — subtypes, not a second inventory
+
+`filled · empty · on-loan · damaged`, **reconciled against the product**. Modelling bottles as their
+own inventory would recreate exactly the split this programme has spent two days removing: one number
+in the POS, a different number online, and no way to tell which is true.
+
+**Declared here; the inventory-engine work to honour `subtype` is a separate tracked change and is not
+implied by this file existing.**
+
+### Tests
+
+`scripts/test-merchant-templates.js` — **32/32**, wired into `npm run test:panels`. The assertions
+that matter are the negative ones: nothing invented, no branching, no writes, and `get()` returns a
+copy so a caller cannot corrupt the registry.
+
+Regression re-run: **36 PASS · 0 FAIL · 3 BLOCKED**.
+
+### Phases 4–7 — declared, not implemented
+
+Deliberately **not** in this commit, because each is a real platform extension rather than
+configuration:
+
+| phase | what it actually needs |
+|---|---|
+| 4 — bottle lifecycle | the inventory engine to honour `subtype` on adjustments and exchanges |
+| 5 — receipt split | **financial fields immutable after payment, delivery fields mutable until dispatch, every edit audited** — this is ADR-005 applied in reverse and deserves its own design |
+| 6 — delivery modes | merchant settings UI + dispatch honouring the chosen mode |
+| 7 — multi-till | already exists; needs verification against a real merchant, not new code |
+
+Files: `hub-register.js`, `sokoni-merchant-templates.js` (new),
+`scripts/test-merchant-templates.js` (new), `package.json`.
+Database changes: none. Breaking changes: none — one added category, no existing behaviour altered.
+
+---
+
 ## [2026-08-02] — test(admin): Admin OS regression harness — 44 PASS · 0 FAIL · 2 BLOCKED
 
 Run before any new product work, per the agreed order.
