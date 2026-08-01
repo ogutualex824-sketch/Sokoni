@@ -1,3 +1,44 @@
+## [2026-08-02] — fix(disputes): a dispute rule decides the outcome; the financial engine moves the money
+
+**Policy applied:** automatic dispute resolution must not approve a refund directly.
+
+**And the investigation inverted the problem.** `autoOnRefundRequest` — in the *same file* — already
+triggers on `refundRequests/{refId}` and does everything the policy asked for:
+
+| requirement | already provided by `autoOnRefundRequest` |
+|---|---|
+| audit entry | `_logAction({ action:'auto_approve_refund', … })` |
+| idempotency | `automationProcessed` flag **and** a transactional re-check of `status !== 'pending'` |
+| duplicate protection | the same transactional guard |
+| notification | `_notify()` to the buyer |
+| settlement record | a `ledger` entry — `type:'refund'`, credit, `userId`, `refundId`, `orderId` |
+| human review | `requireManualAbove` (default **KES 20,000**) → `under_review` + exception queue |
+
+**But it returns immediately unless `status === 'pending'`.** The dispute path wrote
+`status: 'approved'`, so the trigger skipped it entirely.
+
+So the defect was worse than "approves refunds too readily": it wrote an **approved refund that was
+then executed by nobody** — no wallet credit, no ledger entry, no notification, no idempotency guard.
+**An approved refund that never reaches the customer is worse than none, because it looks settled.**
+
+**Fix — one value.** The dispute path now writes `status: 'pending'` with
+`requestedBy: 'automation:dispute_auto_resolve'`, handing the money to the pipeline that already
+exists. The dispute rule decides the *outcome*; the financial engine validates and executes.
+
+**Deliberately `'pending'`, not `'pending_execution'.** The consumer defines this vocabulary, and a new
+value would bypass the trigger exactly as `'approved'` did — ADR-009. No new pipeline was built,
+because one already existed and was being stepped around.
+
+Two other `approvedBy: 'automation'` sites were checked and left alone: `autoOnSellerApplication` and
+`autoOnApprovalRequest` are **not financial**.
+
+**Tests:** 783 passed, 17 suites.
+
+Files: `functions/automation-engine.js`.
+Deployed with the `TERMINAL_PAID` consolidation as one functions release.
+
+---
+
 ## [2026-08-02] — refactor(payments): one definition of "has this been paid?"
 
 `TERMINAL_PAID` had been written out **independently in two files** and imported into a third. Two

@@ -426,8 +426,25 @@ exports.autoOnDisputeCreate = onDocumentCreated(
             sellerUid: dispute.sellerId,
             amount,
             reason: 'dispute_auto_resolved_buyer_wins',
-            status: 'approved',
-            approvedBy: 'automation',
+            /* 'pending', NOT 'approved'. autoOnRefundRequest below triggers on
+               refundRequests and returns immediately unless status === 'pending'.
+               Writing 'approved' here skipped it entirely, so the refund was
+               marked approved and then executed by nobody: no wallet credit, no
+               ledger entry, no notification, no idempotency guard. An approved
+               refund that never reaches the customer is worse than none, because
+               it looks settled.
+
+               Handing it to that pipeline instead gives duplicate protection, a
+               transactional idempotency re-check, the wallet credit, a ledger
+               entry, an audit action and the buyer notification — and routes
+               anything at or above requireManualAbove to human review. A dispute
+               rule decides the OUTCOME; the financial engine moves the money.
+
+               Deliberately 'pending' rather than a new value: the consumer
+               defines this vocabulary, and inventing 'pending_execution' would
+               bypass the trigger exactly as 'approved' did. */
+            status: 'pending',
+            requestedBy: 'automation:dispute_auto_resolve',
             createdAt: _ts(),
           });
         }
