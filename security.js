@@ -509,6 +509,48 @@ const SokoniSecurity = (() => {
       if(inPayment && e.key === "F12"){ e.preventDefault(); }
     });
 
+    /* ── Consent authority ────────────────────────────────────────────────────
+       This module owns the KDPA consent decision, so it publishes it. Everything
+       that depends on consent SUBSCRIBES here rather than reading localStorage
+       itself — otherwise each consumer reimplements the check slightly
+       differently and they drift apart.
+
+       That had already happened: a consent modal blocked the page until the user
+       answered, and analytics.js never looked at the answer. GA4 injected
+       gtag.js and fired `config` with send_page_view on every load, before any
+       decision. The platform asked for consent and then did not act on it.
+
+       security.js is a blocking script early in the document (index.html:31)
+       while analytics.js is deferred (:3104), so this API is always defined
+       before any subscriber runs. No load-order race, no polling.
+
+         SokoniConsent.granted()      → boolean, the persisted decision
+         SokoniConsent.onGrant(fn)    → run fn once consent exists; fires
+                                        immediately if it already does */
+    (function(){
+      if (window.SokoniConsent) return;
+      var _subs = [];
+      window.SokoniConsent = {
+        granted: function(){
+          try { return !!localStorage.getItem("sokoniPrivacyAccepted"); }
+          catch(e){ return false; }   /* private mode → treat as not granted */
+        },
+        onGrant: function(fn){
+          if (typeof fn !== 'function') return;
+          if (this.granted()) { try { fn(); } catch(e){} return; }
+          _subs.push(fn);
+        },
+        /* Called by the accept handler. Subscribers run exactly once. */
+        _notifyGranted: function(){
+          var list = _subs.splice(0, _subs.length);
+          for (var i = 0; i < list.length; i++) { try { list[i](); } catch(e){} }
+          try {
+            window.dispatchEvent(new CustomEvent('sokoni:consent', { detail: { granted: true } }));
+          } catch(e){}
+        }
+      };
+    })();
+
     /* Privacy / Cookie consent banner — Kenya Data Protection Act 2019 */
     if(!localStorage.getItem("sokoniPrivacyAccepted")){
       const _showBanner = function(){
@@ -858,6 +900,9 @@ const SokoniSecurity = (() => {
 
         document.getElementById("_sokoniPrivacyAcceptBtn").onclick = function(){
           localStorage.setItem("sokoniPrivacyAccepted", Date.now().toString());
+          /* Publish BEFORE the dismiss animation, so analytics initialises on the
+             same tick the user consented rather than a quarter-second later. */
+          try { window.SokoniConsent && window.SokoniConsent._notifyGranted(); } catch (_) {}
           /* Give back the space the bottom sheet reserved on auth pages, so the form does
              not keep a strip of dead padding under it after consent. No-op elsewhere. */
           try { if (b._skRestorePad) b._skRestorePad(); } catch (_) {}

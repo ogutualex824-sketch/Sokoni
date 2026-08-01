@@ -53,6 +53,14 @@ const REF_B = arg('b', 'working');
 let PAIRS = parseInt(arg('pairs', '6'), 10);
 if (PAIRS % 2) PAIRS++;
 const PAGE = arg('page', 'home');
+/* --consent seeds the KDPA consent decision before the page loads.
+   Since the consent gate landed, analytics.js does not load GA4 until consent
+   exists, so a default (unconsented) run measures a FIRST-TIME visitor. That is
+   a real population, but it is not the steady state: most sessions belong to
+   someone who already accepted. Run with --consent to measure that steady state
+   and without it to measure the first visit. Reporting only one of the two would
+   be measuring a different subject than the one being claimed. */
+const CONSENT = process.argv.includes('--consent');
 const ROOT = path.resolve(__dirname, '..');
 const ROUTES = { home: '/', search: '/search?q=cleaning',
   category: '/category?cat=electronics', product: '/product' };
@@ -90,6 +98,11 @@ async function measure(browser, base) {
   const ctx = await browser.newContext({ viewport: { width: 393, height: 852 },
     deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   await ctx.addInitScript(COLLECTOR);
+  if (CONSENT) {
+    await ctx.addInitScript(() => {
+      try { localStorage.setItem('sokoniPrivacyAccepted', '1730000000000'); } catch (e) {}
+    });
+  }
   const page = await ctx.newPage();
   page.on('pageerror', () => {});
   const cdp = await ctx.newCDPSession(page);
@@ -154,7 +167,8 @@ function pairedDelta(aArr, bArr) {
 
     const browser = await chromium.launch();
     const A = [], B = [];
-    process.stdout.write(`Interleaving ${PAIRS} pairs on /${PAGE}  (A=${REF_A}  B=${REF_B})\n  `);
+    process.stdout.write(`Interleaving ${PAIRS} pairs on /${PAGE}  (A=${REF_A}  B=${REF_B})` +
+      `  consent=${CONSENT ? 'granted (returning visitor)' : 'none (first visit)'}\n  `);
     for (let i = 0; i < PAIRS; i++) {
       /* Order alternates so neither arm is systematically favoured by a warm
          browser or a machine that slows within the pair. */

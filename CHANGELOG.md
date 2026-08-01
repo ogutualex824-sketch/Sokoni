@@ -1,3 +1,85 @@
+## [2026-08-01] — fix(privacy): consent-gated analytics — the consent answer is now acted on (P0)
+
+SOKONI put a KDPA consent modal in front of every user and then ignored the answer. `analytics.js`
+injected `gtag.js` and fired GA4 `config` with `send_page_view` on **every** page load, before any
+decision was made. Layer 2 (the localStorage behavioural store) had the same defect: page views,
+sessions, scroll depth, dwell time, hub visits, retention and engagement were all written before
+consent. `legal.html` already promised "Analytics Cookies (Opt-In)" — the code did not honour it.
+
+Root cause was structural, not a missing `if`: there was no shared definition of "has the user
+agreed?", so `security.js` owned the modal and `analytics.js` never looked at the result.
+
+### Fix — analytics subscribes to consent, it does not poll for it
+
+- **`security.js`** — new `window.SokoniConsent`, the single authority for the decision:
+  `granted()` reads the persisted answer, `onGrant(fn)` runs a subscriber once consent exists (firing
+  immediately for a returning visitor), `_notifyGranted()` is published by the Accept handler **before**
+  the dismiss animation so analytics starts on the same tick the user consented. A `sokoni:consent`
+  DOM event is dispatched alongside, for any future consumer.
+- **`analytics.js`** — GA4 init moved into `_initGA4()`; Layer 2 gated at its single write choke point
+  (`_saveStore` + the `_sokoniLastSession` stamp). Both layers start from **one** subscription,
+  `SokoniConsent.onGrant(_startAnalytics)`. `analytics.js` no longer reads the consent key itself —
+  two readers of one key is how the original drift happened.
+
+Design decisions worth recording:
+
+- **Nothing is buffered.** A pre-consent action is discarded, not queued and replayed. Replaying it
+  would attribute an event to a session the user had not yet agreed to have measured.
+- **The no-op `gtag` shim is installed unconditionally**, so the ~30 `sokoniTrack*` helpers and the
+  three external callers (`kass-widget.js`, `seo.js`, `success.html`) stay safe to call before consent.
+- **Reads stay open.** Only writes are gated, so `sokoniGetAnalytics()` and the admin dashboard are
+  unaffected.
+- **Missing authority fails CLOSED** — no analytics — rather than silently reverting to the ungated path.
+- **Storing locally is not an exemption.** Layer 2 is behavioural data persisted on the user's device
+  and is gated exactly like Layer 1.
+- **The session stamp is gated too.** Otherwise a pre-consent visit would burn the 30-minute session
+  window and the first consented page view would not count as a session.
+
+### Verification — `scripts/verify-consent-gate.js` (new, no browser deps, wired into `predeploy`)
+
+Two halves, because either alone can pass while the product is broken.
+
+- **Static contract (13 checks):** gtag.js is injected nowhere outside `_initGA4`; `_saveStore` is
+  guarded; exactly one subscription; fails closed; `analytics.js` never reads the consent key. Plus:
+  all **91** pages that load `analytics.js` run `security.js` first — evaluated against real HTML
+  script-execution rules (blocking beats deferred regardless of position, `async` is never safe), not
+  document order.
+- **Behaviour (23 checks):** the **real** `SokoniConsent` block is lifted verbatim out of `security.js`
+  and the **real** `analytics.js` is executed in a sandboxed DOM, asserting the observable side effects —
+  what left the device and what was written to it — across 8 scenarios: first visit, pre-consent
+  tracking calls, accept, decline, refresh, returning visitor, double-notify, admin read path.
+
+**36/36 passing.** Mutation-tested to prove the gate can fail: removing the `_saveStore` guard fails 3
+checks; starting analytics unconditionally fails 8.
+
+### Performance
+
+Paired A/B, 6 pairs, consented steady state (`perf-ab.js --consent`, new flag): **no Category A
+regression** — styleMs +0.1%, layoutMs −1.6%, TBT +1.8%, CLS 0.0%, every delta inside its calibrated
+floor and none consistent above 3/6. `--consent` was added because an unconsented benchmark now
+measures a *first-time* visitor, which is not the population the startup numbers claim to represent.
+
+### Also
+
+- **`legal.html`** — lawful basis corrected: analytics moved from "Legitimate interest" to "Consent",
+  matching both the Cookie Policy's "Opt-In" heading and the implementation.
+- **`docs/index-registry.json`** — registered a pre-existing orphan index that was blocking the deploy
+  gate: `bookings|venueId,status,startTs DESC`, used by `venue-manager.html` `loadBookings`. Registered,
+  not dropped (index policy: only add).
+
+Files: `security.js`, `analytics.js`, `legal.html`, `scripts/verify-consent-gate.js` (new),
+`scripts/perf-ab.js`, `package.json`, `docs/index-registry.json`.
+Database changes: none. API changes: none (public `sokoniTrack*` surface unchanged).
+Security/privacy: analytics is now consent-gated end to end (KDPA 2019; ODPC reg. 630-8669-F056).
+Breaking changes: none — with consent granted, behaviour is identical to before.
+
+**Known gap (product decision, not shipped here):** the banner has Accept and "Learn more" but no
+explicit **Reject** control — declining is expressed only by not accepting. The gate treats that
+correctly as a hard no, but KDPA/ODPC practice expects reject to be as easy as accept. Raised for a
+product call.
+
+---
+
 ## [2026-08-01] — fix(availability): provider bookability convergence — auto-onboard + default schedule + logging (P1)
 
 Live QA exposed a real blocker: a provider with no/empty availability was permanently unbookable

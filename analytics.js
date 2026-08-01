@@ -29,7 +29,28 @@
      1. GOOGLE ANALYTICS 4 — load and initialise
   ══════════════════════════════════════════════════════════ */
 
-  if (GA_ID && !window._sokoniGaLoaded) {
+  /* ── Consent gate (KDPA) ────────────────────────────────────
+     GA4 used to load unconditionally: gtag.js was injected and config fired with
+     send_page_view on EVERY page load, before the user had answered the consent
+     modal that security.js puts in front of them. The platform asked for consent
+     and then ignored the answer.
+
+     Analytics now SUBSCRIBES to the consent authority rather than reading
+     localStorage itself, so there is exactly one implementation of "has the user
+     agreed?" — see window.SokoniConsent in security.js. onGrant() fires
+     immediately for a returning visitor who already accepted, and on the accept
+     click for a new one.
+
+     Before consent nothing is transmitted and nothing is queued: the tracking
+     helpers below fall through to the no-op gtag shim, so a pre-consent action is
+     DISCARDED rather than replayed. Replaying it would attribute an event to a
+     session the user had not yet agreed to have measured.
+
+     Declining is the absence of acceptance — the subscriber never runs, gtag.js is
+     never requested, and no GA cookie is set. */
+  function _initGA4() {
+    if (!GA_ID) return;
+    if (window._sokoniGaLoaded) return;   /* exactly once, even if re-notified */
     window._sokoniGaLoaded = true;
 
     /* Inject gtag.js script */
@@ -65,11 +86,15 @@
       allow_google_signals: false,
       allow_ad_personalization_signals: false,
     });
-
-  } else if (!GA_ID) {
-    /* No-op gtag so calls don't throw errors */
-    window.gtag = window.gtag || function () {};
   }
+
+  /* Install the no-op shim FIRST, so every sokoniTrack* helper stays safe to call
+     before consent (and when no GA_ID is configured). _initGA4 replaces it with
+     the real gtag. */
+  window.gtag = window.gtag || function () {};
+
+  /* _initGA4 is not called here. Both layers start from the single consent
+     subscription at the bottom of this module — see section 7. */
 
   /* ══════════════════════════════════════════════════════════
      2. LOCAL ANALYTICS STORE (localStorage-based)
@@ -80,7 +105,19 @@
     catch (e) { return {}; }
   }
 
+  /* Layer 2 is behavioural data persisted on the user's device, so it needs the
+     same consent as Layer 1 — storing it locally instead of sending it does not
+     make it exempt. Gating the single write choke point covers every collector
+     (page views, scroll depth, dwell time, hub visits, retention, engagement)
+     without touching ~30 call sites, and leaves all _getStore() reads working so
+     the admin dashboard is unaffected.
+
+     Reads stay open; only writes are gated. Nothing is buffered while _collect is
+     false, so a pre-consent action is discarded rather than replayed. */
+  var _collect = false;
+
   function _saveStore(d) {
+    if (!_collect) return;
     try { localStorage.setItem("sokoniAnalytics", JSON.stringify(d)); }
     catch (e) {}
   }
@@ -106,7 +143,7 @@
     const lastSession = Number(localStorage.getItem("_sokoniLastSession") || 0);
     if (Date.now() - lastSession > 30 * 60 * 1000) {
       _inc(days[TODAY], "sessions");
-      localStorage.setItem("_sokoniLastSession", String(Date.now()));
+      if (_collect) localStorage.setItem("_sokoniLastSession", String(Date.now()));
       _inc(devices, IS_MOB ? "mobile" : "desktop");
     }
 
@@ -242,7 +279,8 @@
   /* ══════════════════════════════════════════════════════════
      4. AUTO-TRACK ON LOAD
   ══════════════════════════════════════════════════════════ */
-  _push(); /* Always record page view on script load */
+  /* The page view is recorded by _startAnalytics (section 7), not on script load:
+     before consent there is nothing to record. */
 
   /* Also track search inputs automatically */
   window.addEventListener("load", () => {
@@ -333,7 +371,7 @@
      6. RETENTION TRACKING
   ══════════════════════════════════════════════════════════ */
 
-  (function () {
+  function _trackRetention() {
     const store   = _getStore();
     const ret     = store.retention = store.retention || {};
     const visits  = ret.visitDates  = ret.visitDates  || [];
@@ -370,7 +408,7 @@
     if (ret.isReturning) {
       window.gtag("event", "return_visit", { days_since_last: daysSince, total_days: ret.totalDays });
     }
-  })();
+  }
 
   /* Track user actions for engagement score */
   window.sokoniTrackEngagement = function (action, value) {
@@ -385,6 +423,33 @@
     if (actions.length > 50) actions.shift();
     _saveStore(store);
   };
+
+  /* ════════════════════════════════════════════════════════
+     7. START — gated on consent
+  ════════════════════════════════════════════════════════ */
+
+  /* Everything above only defines capability; this is the only place either layer
+     is switched on. Runs synchronously for a visitor who already accepted, and on
+     the accept click for a new one — so the page view is recorded at the moment
+     consent is given, exactly like GA4's own send_page_view. Declining leaves this
+     unrun: no gtag.js request, no GA cookie, no local writes. */
+  function _startAnalytics() {
+    if (_collect) return;                /* exactly once */
+    _collect = true;
+    _initGA4();
+    try { _push(); } catch (e) {}
+    try { _trackRetention(); } catch (e) {}
+  }
+
+  if (window.SokoniConsent) {
+    window.SokoniConsent.onGrant(_startAnalytics);
+  } else if (window.console && console.warn) {
+    /* security.js defines SokoniConsent and is a blocking script far earlier in the
+       document, so this branch should be unreachable. If it is ever taken, FAIL
+       CLOSED — no analytics — rather than silently reverting to the ungated
+       behaviour this change exists to remove. */
+    console.warn('[SOKONI Analytics] consent authority unavailable — analytics disabled');
+  }
 
   /* ── Expose the store for admin dashboard ── */
   window.sokoniGetAnalytics = _getStore;
