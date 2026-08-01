@@ -1,3 +1,22 @@
+## [2026-08-01] — feat(provider): duplicate service (completes service-management CRUD)
+
+Provider service management audit (before more booking features): Add / Edit-every-field (name,
+category, description, price, price-type, duration, fee, deposit, photos) / Pause-Hide / Delete were all
+already present and working; edited prices are authoritative at booking (bookingCreateService reads
+providerServices live). The one missing management action was **Duplicate** — added:
+
+- `functions/provider-ops.js` — `providerDuplicateService`: copies a service as a new active listing,
+  preserving the source's EXACT cents (no KES↔cents rescale) and enforcing the same plan listings cap.
+  Owner-scoped. Emulator-smoke 5/5.
+- `functions/provider-dispatch.js` — registered the op.
+- `provider-dashboard.html` — "Duplicate" button on each rate card → `Sv.duplicate`.
+
+Deploy: `functions:providerDispatch` + hosting. Breaking changes: none.
+KNOWN GAP (enhancement, not built): rate-card surcharges (weekend/holiday/travel/extra-hour/deposit-%) —
+the form has price/fee/deposit/duration only.
+
+---
+
 ## [2026-08-01] — feat(booking): canonical refund terminal (Slice 2 step 3) — completes the lifecycle
 
 The customer "Request Refund" resolution, routed through the ONE existing money engine. No new

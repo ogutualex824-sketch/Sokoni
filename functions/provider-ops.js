@@ -742,6 +742,37 @@ _h.providerRemoveService = async (req) => {
   return { success: true };
 };
 
+/* ── 12b. providerDuplicateService — copy an existing service as a new active listing.
+   Copies the source's exact cents (no KES↔cents rescale) and enforces the same plan cap. */
+_h.providerDuplicateService = async (req) => {
+  const uid = _uid(req);
+  const id  = _san(req.data?.serviceId, 128);
+  if (!id) throw new HttpsError('invalid-argument', 'serviceId is required.');
+  const srcRef = _db().collection('providerServices').doc(id);
+  const [srcSnap, subSnap, listSnap] = await Promise.all([
+    srcRef.get(),
+    _db().collection('providerSubscriptions').doc(uid).get(),
+    _db().collection('providerServices').where('providerId', '==', uid).limit(200).get(),
+  ]);
+  if (!srcSnap.exists) throw new HttpsError('not-found', 'Service not found.');
+  const s = srcSnap.data();
+  if (s.providerId !== uid) throw new HttpsError('permission-denied', 'Not your service.');
+  const activeCount = listSnap.docs.filter((d) => d.data().active !== false).length;
+  const cap = subSnap.exists ? Number(subSnap.data().limits?.listings) : 1;
+  if (cap !== -1 && activeCount >= cap) {
+    throw new HttpsError('resource-exhausted', `Your plan allows ${cap} active service${cap === 1 ? '' : 's'}. Upgrade or delete one to duplicate.`);
+  }
+  const ref = await _db().collection('providerServices').add({
+    providerId: uid, name: ((s.name || 'Service') + ' (copy)').slice(0, 200),
+    category: s.category || '', subcategory: s.subcategory || '', description: s.description || '',
+    priceType: s.priceType || 'quotation', price: Number(s.price) || 0, fee: Number(s.fee) || 0,
+    deposit: Number(s.deposit) || 0, images: Array.isArray(s.images) ? s.images : [],
+    durationMins: Math.max(0, Math.round(Number(s.durationMins) || 0)), active: true,
+    createdAt: _ts(), updatedAt: _ts(),
+  });
+  return { success: true, serviceId: ref.id };
+};
+
 /* ── 13. providerUpdateService — edit a rate card (owner-only, whitelisted fields).
    providerId/createdAt are never client-mutable; a non-owner is rejected before
    any write. Only fields the caller actually sent are patched. ──────────────── */

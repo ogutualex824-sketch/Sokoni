@@ -877,6 +877,7 @@ const Sv={
         <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
           <button class="btn btn-g btn-sm" onclick="Sv.openEdit('${s.id}')">Edit</button>
           <button class="btn btn-g btn-sm" onclick="Sv.toggle('${s.id}',${on?'false':'true'})">${on?'Hide':'Show'}</button>
+          <button class="btn btn-g btn-sm" onclick="Sv.duplicate('${s.id}')">Duplicate</button>
           <button class="btn btn-g btn-sm" style="color:var(--warn)" onclick="Sv.remove('${s.id}')">Delete</button>
         </div>
       </div>`;
@@ -917,7 +918,8 @@ const Sv={
     }catch(e){toast(e.message,'err')}finally{hideLoad()}
   },
   async toggle(id,active){showLoad('Updating…');try{await this._fn()({op:'providerToggleService',serviceId:id,active});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async remove(id){if(!confirm('Delete this rate card? Customers will no longer see it.'))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}}
+  async remove(id){if(!confirm('Delete this rate card? Customers will no longer see it.'))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async duplicate(id){showLoad('Duplicating…');try{await this._fn()({op:'providerDuplicateService',serviceId:id});toast('Service duplicated — edit the copy.');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}}
 };
 window.Sv=Sv;
 
