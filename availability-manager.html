@@ -1427,6 +1427,32 @@ async function saveAll() {
       },
     };
 
+    /* ── Booking-integrity guard ──────────────────────────────────────────────
+       Never silently strand a confirmed customer booking. Before applying the change,
+       ask the server which confirmed bookings fall in the newly-unavailable window and
+       let the provider decide. Existing bookings are KEPT (Option A) — the change applies
+       to future availability only. READ-ONLY pre-check; if the op isn't available yet
+       (functions not redeployed) or the user is offline, we proceed exactly as before. */
+    try {
+      const _impact = await firebase.functions().httpsCallable("providerDispatch")({
+        op: "providerCheckAvailabilityImpact", proposed: config,
+      });
+      const _r = (_impact && _impact.data) || {};
+      if (_r.affectedCount > 0) {
+        const _lines = (_r.affected || []).slice(0, 8).map(function (a) {
+          return "• " + a.customerName + " — " + a.date + " " + (a.startTime || "") + (a.service ? " (" + a.service + ")" : "");
+        }).join("\n");
+        const _more = _r.affectedCount > 8 ? "\n…and " + (_r.affectedCount - 8) + " more" : "";
+        const _ok = window.confirm(
+          "This change affects " + _r.affectedCount + " confirmed booking" + (_r.affectedCount > 1 ? "s" : "") + ":\n\n" +
+          _lines + _more + "\n\n" +
+          "These existing bookings will be KEPT and honored — the change applies to future availability only. " +
+          "You can reschedule or cancel them from your Bookings if needed.\n\nApply the change?"
+        );
+        if (!_ok) { showToast("No changes made — your bookings are unchanged."); return; }
+      }
+    } catch (_e) { /* op unavailable / offline → don't block the save (no regression) */ }
+
     await saveProviderAvailability(config);
     showToast("Availability settings saved! ✓");
     await loadConfig();

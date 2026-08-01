@@ -1,3 +1,28 @@
+## [2026-08-01] — feat(booking): availability-vs-booking impact guard (Slice 1 — detection + provider awareness)
+
+Booking-integrity principle: an availability change must never silently strand a confirmed
+customer booking. (Availability config and bookings are already separate stores, so a change
+does not mutate a booking — but the provider got NO warning that their change conflicts with
+existing confirmed bookings.) Slice 1 adds the read-only impact pre-check + provider awareness;
+existing bookings are KEPT and honored (Option A) — the change applies to future availability only.
+
+- **`functions/booking-availability-guard.js`** (new) — `providerCheckAvailabilityImpact` op
+  (READ-ONLY, no writes). Returns the provider's own future confirmed/active bookings that fall in
+  a newly-unavailable window under the proposed config. `_servable()` mirrors booking-service's gate
+  (vacation range / day-closed / reduced working-hours / blackout date / 24/7). Unit-verified 8/8.
+- **`functions/provider-dispatch.js`** — merged the guard's handler + registered the op.
+- **`availability-manager.html`** — `saveAll()` now calls the pre-check before saving and, if any
+  confirmed bookings are affected, shows the list and asks the provider to confirm. Degrades
+  gracefully (proceeds exactly as before) if the op isn't deployed yet or offline → no regression.
+
+Production impact: additive, read-only. Activating the warning requires redeploying `providerDispatch`
+(`firebase deploy --only functions:providerDispatch`); until then the UI hook no-ops safely.
+FOLLOW-ON SLICES (not in this change): reschedule/cancel resolution + held-payment refund, emergency
+closure mode, immutable audit-event expansion, customer accept/reschedule/refund choices, admin
+affected-bookings queue, provider quality analytics. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(profile): Business Management hub (role-driven) + provider deep-links + onboarding routing
 
 Consolidates the scattered seller/provider entry points into one **Business Management** section on

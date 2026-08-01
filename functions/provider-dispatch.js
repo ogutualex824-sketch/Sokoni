@@ -23,7 +23,8 @@ function _h() {
     _mod = Object.assign({},
       require('./provider-onboarding')._h,
       require('./provider-ops')._h,
-      require('./booking-service')._h);   /* Phase B: authoritative service create */
+      require('./booking-service')._h,             /* Phase B: authoritative service create */
+      require('./booking-availability-guard')._h); /* read-only availability-vs-booking impact check */
   }
   return _mod;
 }
@@ -73,6 +74,8 @@ const ROUTES = [
   'bookingCreateService',
   // booking-service (WS3) — authoritative customer review, gated on a completed booking
   'bookingSubmitReview',
+  // booking-availability-guard — read-only impact pre-check before an availability change
+  'providerCheckAvailabilityImpact',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');
