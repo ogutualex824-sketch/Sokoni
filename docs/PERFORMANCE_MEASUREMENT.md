@@ -208,3 +208,42 @@ paired A/B to confirm the change was worth keeping.
   bundle problem, not a per-page one, so route-level splitting should pay off broadly.
 
 Related: [[PLATFORM_CONSTITUTION]] · [[ADMIN_OS_CONVERGENCE]]
+
+---
+
+## Optimisation log
+
+Every entry records the protocol outcome, including the rejections — a discarded
+optimisation is evidence about where the cost *isn't*, and re-attempting it later is waste.
+
+### 1. `sokoni-layout.js` ResizeObserver scope — **DISCARDED** (2026-08-01)
+
+**Hypothesis.** `init()` observed `document.documentElement` *and* `document.body`, so every image
+and lazy section that grew the page re-ran a full `_measure` — which both reads layout
+(`getComputedStyle` on `:root`, several `offsetHeight`) and writes it (`_stackFabs` sets
+`style.bottom`, `_applyZIndex` sets `z-index`). A measure/write loop during load. Nothing `_measure`
+computes depends on document height, so the change narrowed observation to the registered chrome.
+
+**Attribution:** confirmed. `sokoni-layout.js` self-time share fell 12.1% → 10.4%.
+
+**Paired A/B (6 pairs, warm-up discarded):**
+
+| metric | delta | consistency | verdict |
+|---|---|---|---|
+| tbt | −3.5% | 4/6 | below ±5–9% floor |
+| lcp | −0.4% | 3/6 | noise |
+| longTasks | −1.6% | 3/6 | at ±1.6% floor |
+| worstTask | +5.5% | 2/6 | noise |
+
+**Decision: discarded.** Nothing exceeded the noise floor and nothing won at n/n. The reasoning is
+sound and the script really does get cheaper, but the whole-page effect is unmeasurable — so by
+protocol rule 4 it is not retained.
+
+**What this tells us.** Removing ~430 ms of self-time from the single largest actionable script moved
+the page by less than the noise floor. That is strong evidence the startup cost is **not** concentrated
+in any one module, and that micro-optimising individual functions will not pay. `(program)` — V8 parse
+and compile — is 57–62% of sampled CPU, with ~2.4 MB of JavaScript shared across nearly every route.
+
+**Therefore the next work should be structural, not local:** staged boot (critical → after-paint →
+idle/interaction) and route-based bundle splitting, which attack parse/compile volume rather than
+shaving execution inside already-loaded code.
