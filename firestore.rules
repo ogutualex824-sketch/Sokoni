@@ -1490,6 +1490,83 @@ service cloud.firestore {
                     || (isAuthed() && resource.data.sellerUid == request.auth.uid);
     }
 
+    /* ── Landlord properties ───────────────────────────────────────────────────
+       Three levels: a building, its units, and a financial ledger per unit.
+
+       This replaces landlordData/{uid}.properties[] — an array that held units,
+       which held rentHistory[] and waterBills[]. Recording one tenant's rent
+       rewrote the entire building, ledger entries could not be queried, indexed
+       or audited individually, and the document grew by two entries per unit per
+       month forever. Measured 2026-08-02: 0 documents existed, so the correct
+       shape was built once rather than migrated to later.
+
+       ownerUid is DENORMALISED onto units and ledger entries deliberately. The
+       alternative is get(parent) inside the rule, which costs a document read on
+       every single access and counts against the rules read limit. A copied uid
+       is cheaper and cannot drift, because nothing may change it: it is absent
+       from every hasOnly() list below. */
+    match /landlordProperties/{propertyId} {
+      allow read:   if true;                    /* public directory, as bnbListings */
+      allow create: if isAuthed()
+                    && request.resource.data.ownerUid == request.auth.uid
+                    && request.resource.data.keys().hasAll(['ownerUid','name','status','createdAt'])
+                    /* A landlord may not publish themselves. Moderation is the
+                       platform's, so a new building starts pending and only an
+                       admin can move it. */
+                    && request.resource.data.status == 'pending';
+      allow update: if isAdmin()
+                    || (isAuthed() && resource.data.ownerUid == request.auth.uid
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['name','address','city','phone','description',
+                                       'images','image','updatedAt']));
+      allow delete: if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+
+      /* Units are not public. A building is advertised; who lives in it is not. */
+      match /units/{unitId} {
+        allow read:   if isAdmin()
+                      || (isAuthed() && resource.data.ownerUid  == request.auth.uid)
+                      || (isAuthed() && resource.data.tenantUid == request.auth.uid);
+        allow create: if isAuthed()
+                      && request.resource.data.ownerUid == request.auth.uid
+                      && request.resource.data.keys().hasAll(['ownerUid','number','createdAt']);
+        allow update: if isAdmin()
+                      || (isAuthed() && resource.data.ownerUid == request.auth.uid
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['number','type','monthlyRent','deposit','tenantUid',
+                                         'tenantName','tenantPhone','leaseStart','leaseEnd',
+                                         'occupancyStatus','updatedAt']));
+        allow delete: if isAdmin() || (isAuthed() && resource.data.ownerUid == request.auth.uid);
+
+        /* Ledger entries are financial records. They may be created and settled,
+           and their amount and period may be corrected while still pending — but
+           a PAID entry is closed to the landlord. Reversing money is an
+           adjustment or refund entry of its own, never an edit to history, which
+           is the whole reason these left the array. */
+        match /ledger/{entryId} {
+          allow read:   if isAdmin()
+                        || (isAuthed() && resource.data.ownerUid  == request.auth.uid)
+                        || (isAuthed() && resource.data.tenantUid == request.auth.uid);
+          allow create: if isAuthed()
+                        && request.resource.data.ownerUid == request.auth.uid
+                        && request.resource.data.keys().hasAll(['ownerUid','type','period','amount','status','createdAt'])
+                        && request.resource.data.type in ['rent','water','deposit','refund','adjustment','penalty','discount']
+                        && request.resource.data.amount is number
+                        && request.resource.data.status in ['pending','paid','overdue','refunded'];
+          allow update: if isAdmin()
+                        || (isAuthed() && resource.data.ownerUid == request.auth.uid
+                            && resource.data.status != 'paid'
+                            && request.resource.data.diff(resource.data).affectedKeys()
+                                 .hasOnly(['status','paidAt','reference','amount','period','updatedAt']));
+          /* Deleting a settled financial record is not a landlord's to do. */
+          allow delete: if isAdmin();
+        }
+      }
+    }
+
+    /* SUPERSEDED by landlordProperties above. Left in place, read-only for its
+       owner and admins, so any device still holding a legacy mirror can be
+       inspected. It has no reader in the codebase and nothing writes it after
+       landlord.html moved to the new collection. */
     match /landlordData/{uid} {
       allow read, write: if isAuthed() && request.auth.uid == uid;
       allow read: if isAdmin();
