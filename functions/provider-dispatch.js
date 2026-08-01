@@ -24,7 +24,8 @@ function _h() {
       require('./provider-onboarding')._h,
       require('./provider-ops')._h,
       require('./booking-service')._h,             /* Phase B: authoritative service create */
-      require('./booking-availability-guard')._h); /* read-only availability-vs-booking impact check */
+      require('./booking-availability-guard')._h,  /* read-only availability-vs-booking impact check */
+      require('./booking-resolution')._h);         /* Slice 2: affected-booking resolution engine */
   }
   return _mod;
 }
@@ -76,6 +77,9 @@ const ROUTES = [
   'bookingSubmitReview',
   // booking-availability-guard — read-only impact pre-check before an availability change
   'providerCheckAvailabilityImpact',
+  // booking-resolution (Slice 2 step 1) — raise affected bookings into ACTION_REQUIRED + queue read
+  'providerRaiseAffectedBookings',
+  'providerListAffectedBookings',
 ];
 
 const VALID_OPS = ROUTES.sort().join(', ');

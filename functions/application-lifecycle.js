@@ -378,9 +378,25 @@ async function projectProvider(db, app, uid, approved) {
     .map(c => _sanText(c, 120)).filter(Boolean)
     .filter((c, i, a) => a.findIndex(x => x.toLowerCase() === c.toLowerCase()) === i);
 
+  /* ── Business identity is public; the owner's personal name is internal ──────
+     A registry document can already carry a PERSON's name from a self-registration
+     ("Ann") while the approved application carries the TRADING name
+     ("Langa'ta mamafua"). Overwriting silently loses the owner, and not
+     overwriting leaves customers searching for a business they cannot find.
+
+     Marketplace convention, and the founder's decision 2026-08-01: the trading
+     name is what customers see, the personal name is retained as `ownerName` for
+     support and verification. Only captured when the two genuinely differ and no
+     owner is recorded yet, so re-approval never churns the field. */
+  const priorName = _sanText(existing.name || '', 160);
+  const ownerName = (priorName && priorName.toLowerCase() !== name.toLowerCase() && !existing.ownerName)
+    ? priorName
+    : (existing.ownerName || null);
+
   const doc = {
     uid, providerId,
     name,
+    ...(ownerName ? { ownerName } : {}),
     category: categories[0] || '',
     categories,
     categoryLabel,

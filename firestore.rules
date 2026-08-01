@@ -612,6 +612,22 @@ service cloud.firestore {
       }
     }
 
+    /* Booking resolution engine (Slice 2). Both are written ONLY by Cloud Functions
+       (Admin SDK bypasses rules); clients may READ their own participant rows. */
+    match /bookingEvents/{eventId} {
+      // immutable, append-only canonical event log; participants + admin read
+      allow read:                 if isAdmin()
+                                  || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                                  || resource.data.customerUid == request.auth.uid));
+      allow create, update, delete: if false;   // server-only (Admin SDK)
+    }
+    match /affectedBookings/{bookingId} {
+      allow read:  if isAdmin()
+                   || (isAuthed() && (resource.data.providerId == request.auth.uid
+                                   || resource.data.customerUid == request.auth.uid));
+      allow write: if false;                     // server-only (Admin SDK)
+    }
+
     match /fcm_tokens/{tokenId} {
       allow write: if isAuthed()
                    && request.auth.token.email != null

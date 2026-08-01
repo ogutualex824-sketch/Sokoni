@@ -398,6 +398,34 @@ describe('projectDriver / projectProvider — written shape', () => {
     expect(p.searchableTerms).toContain('plumber');
   });
 
+  test('trading name becomes public; the owner name is retained internally', async () => {
+    /* Production case: providers/H7p6ktBH… was named "Ann" (the owner, from a
+       self-registration) while the approved application was the business
+       "Langa'ta mamafua". Customers searching the business could not find it, and
+       a blind overwrite would have lost the owner entirely. */
+    const db = stubDb();
+    db._docs['providers/u1'] = { uid: 'u1', name: 'Ann', providerId: 'PRV-X' };
+    await L.projectProvider(db, {
+      applicationId: 'A', name: "Langa'ta mamafua", category: 'cleaning', location: 'Nairobi',
+    }, 'u1', true);
+    const p = byPath(db, 'providers/u1').data;
+    expect(p.name).toBe("Langa'ta mamafua");   // public identity
+    expect(p.ownerName).toBe('Ann');            // internal, preserved
+    expect(p.searchableTerms).toContain('mamafua');
+  });
+
+  test('owner name is not churned on re-approval, nor invented when names match', async () => {
+    const db = stubDb();
+    db._docs['providers/u1'] = { uid: 'u1', name: 'Kasindi holdings limited', ownerName: 'Ann' };
+    await L.projectProvider(db, { applicationId: 'A', name: 'Kasindi holdings limited' }, 'u1', true);
+    expect(byPath(db, 'providers/u1').data.ownerName).toBe('Ann');   // untouched
+
+    const db2 = stubDb();
+    db2._docs['providers/u2'] = { uid: 'u2', name: 'Same Name Ltd' };
+    await L.projectProvider(db2, { applicationId: 'A', name: 'Same Name Ltd' }, 'u2', true);
+    expect(byPath(db2, 'providers/u2').data.ownerName).toBeUndefined();  // nothing to record
+  });
+
   test('re-approving does not reset a live provider rating or history', async () => {
     const db = stubDb();
     db._docs['providers/WLt0Voww'] = {
