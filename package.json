@@ -4,7 +4,7 @@
   "description": "SOKONI — Kenya's Premier Marketplace",
   "private": true,
   "scripts": {
-    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
+    "predeploy": "node scripts/verify-commission-single-source.js && node scripts/verify-consent-gate.js && node scripts/verify-claim-based-auth.js && node scripts/audit-duplicate-ids.js && node scripts/verify-admin-markup.js && node scripts/audit-admin-localstorage.js && node scripts/pre-deploy-check.js && node scripts/verify-appcheck.js && node scripts/verify-index-governance.js && node scripts/reconcile-indexes.js --verify",
     "verify:consent": "node scripts/verify-consent-gate.js",
     "verify:auth": "node scripts/verify-claim-based-auth.js",
     "audit:ids": "node scripts/audit-duplicate-ids.js",
@@ -42,7 +42,8 @@
     "scan:xss": "node scripts/scan-xss-sinks.js",
     "check:variants": "node scripts/check-variant-parity.js",
     "check:profile-rules": "node scripts/check-profile-rules.js",
-    "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js"
+    "test:algolia-isolation": "node scripts/test-algolia-batch-isolation.js",
+    "audit:storage": "node scripts/audit-admin-localstorage.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",
