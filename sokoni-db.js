@@ -1045,6 +1045,21 @@ const SokoniDB = {
     );
   },
 
+  /* Admin moderation of a BnB listing. firestore.rules already permits this:
+     `match /bnbListings/{listingId} { allow update: if isAdmin() || … }`, so no
+     Cloud Function is required and none was added.
+
+     Only the moderation fields are touched — status, updatedAt, updatedBy and a
+     reason where one applies. The host owns everything else on the document and
+     an admin decision has no business rewriting it. */
+  async updateBnbListingStatus(listingId, status, meta = {}) {
+    await updateDoc(doc(db, 'bnbListings', listingId), {
+      status,
+      ...meta,
+      updatedAt: serverTimestamp(),
+    });
+  },
+
   /* ── BnB listings & bookings, for the admin console ────────────────────────
      Same shape as listenUsers, and unordered for the same reason: Firestore
      omits documents that lack the ordering field, so a listing written without

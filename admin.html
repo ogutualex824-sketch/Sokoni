@@ -5608,19 +5608,87 @@ function renderProperties(){
         +'</div></div>';
     }).join('')+'</div>';
 }
-async function approveProp(i){
-  var a=D.bnbListings[i]; a.status='active';
-  localStorage.setItem('sokoniBnBListings',JSON.stringify(D.bnbListings));
-  if(a._fsId && window.SokoniDB) try{ await window.SokoniDB.updateApplicationStatus(a._fsId,'approved'); }catch(e){}
-  if(a.uid && window.firebaseDB) try{
-    var {doc,updateDoc}=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-    await updateDoc(doc(window.firebaseDB,'users',a.uid),{'registeredAs.landlord':true,'approved':true});
-  }catch(e){}
-  renderProperties(); toast('✅ Property approved');
-  var phone=(a.phone||'').replace(/\D/g,'').replace(/^0/,'254');
-  if(phone.length>=12) window.open('https://wa.me/'+phone+'?text='+encodeURIComponent('Hello '+a.name+'! 🎉 Your property is now live on SOKONI. — SOKONI Team'),'_blank','noopener');
+/* ── Moderation decisions are written to Firestore ────────────────────────────
+   These used to mutate D.bnbListings and write localStorage. The decision reached
+   the administrator's own browser and nowhere else: no host, no guest and no
+   other admin ever saw it, and a reload discarded it.
+
+   approveProp additionally called updateApplicationStatus(a._fsId, …), which
+   writes the APPLICATIONS collection. Before the read path moved to Firestore
+   there was no _fsId on these objects so it never ran; afterwards _fsId is a
+   bnbListings document id, so it would have updated applications/{listingId} — a
+   document that does not exist — and failed into an empty catch. Wrong
+   collection, silently.
+
+   No Cloud Function was added: firestore.rules already allows
+   `allow update: if isAdmin()` on bnbListings. Verified before writing this.
+
+   The audit entry reuses window.sokoniFirestoreAudit from firebase.js, which
+   exists for exactly this (non-module callers) and matches the auditLogs rule
+   requiring uid, action and ts. No second audit system was invented.
+
+   The listener re-renders on the server's echo, so there is no local mutation to
+   keep in step — what the admin sees after a decision is what Firestore holds. */
+async function _decideProp(i, status, reason){
+  var a = (D.bnbListings || [])[i];
+  if (!a) { toast('That listing is no longer in the list — refresh', 'error'); return; }
+  var id = a._fsId || a.id;
+  if (!id) { toast('This listing has no Firestore id — cannot decide', 'error'); return; }
+  if (!window.SokoniDB || !window.SokoniDB.updateBnbListingStatus) {
+    toast('Data layer unavailable — reload the page', 'error'); return;
+  }
+
+  var uid = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+  var meta = { updatedBy: uid };
+  if (reason) meta.approvalReason = reason;
+
+  try {
+    await window.SokoniDB.updateBnbListingStatus(id, status, meta);
+  } catch (e) {
+    /* Reported, never swallowed. A moderation decision that silently fails is how
+       an admin believes a listing is live when it is not. */
+    console.error('[Admin][properties] decision failed', { id: id, status: status, error: e && e.message });
+    toast('Could not save the decision: ' + (e && e.message || 'unknown error'), 'error');
+    return;
+  }
+
+  try {
+    if (window.sokoniFirestoreAudit && uid) {
+      window.sokoniFirestoreAudit({
+        uid: uid, action: 'bnb_listing_' + status, ts: Date.now(),
+        listingId: id, listingName: a.name || a.title || null,
+        reason: reason || null
+      });
+    }
+  } catch (e) {}
+
+  return a;
 }
-function rejectProp(i){ D.bnbListings[i].status='rejected'; localStorage.setItem('sokoniBnBListings',JSON.stringify(D.bnbListings)); renderProperties(); toast('Property rejected'); }
+
+async function approveProp(i){
+  var a = await _decideProp(i, 'active');
+  if (!a) return;
+  toast('✅ Property approved');
+  /* Host role grant deliberately NOT wired here. The old code read a.uid, but
+     bnbListings documents carry hostUid (see bnb-hub.html / bnb-manage.html), so
+     that branch never ran. Activating it would change user documents, which is a
+     different concern from recording a moderation decision. Documented, not done. */
+  var phone = (a.phone || a.hostPhone || '').replace(/\D/g, '').replace(/^0/, '254');
+  if (phone.length >= 12) {
+    window.open('https://wa.me/' + phone + '?text=' + encodeURIComponent(
+      'Hello ' + (a.name || '') + '! 🎉 Your property is now live on SOKONI.'), '_blank');
+  }
+}
+
+async function rejectProp(i){
+  var reason = prompt('Reason for rejection (recorded in the audit log and visible to the host):');
+  if (reason === null) return;                     /* cancelled — not a decision */
+  reason = String(reason).trim();
+  if (reason.length < 5) { toast('Please give a reason of at least 5 characters', 'error'); return; }
+  var a = await _decideProp(i, 'rejected', reason);
+  if (!a) return;
+  toast('Property rejected');
+}
 
 /* ════════════════════════════════
    LEGAL HUB

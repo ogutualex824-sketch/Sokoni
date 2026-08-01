@@ -1,3 +1,64 @@
+## [2026-08-02] — feat(admin): Properties Commit 2 — moderation decisions are written to Firestore
+
+**Root cause.** `approveProp()` / `rejectProp()` mutated `D.bnbListings` and wrote `localStorage`. The
+decision reached the administrator's own browser **and nowhere else** — no host, no guest and no other
+admin ever saw it, and a reload discarded it.
+
+**A second, quieter defect:** `approveProp` also called `updateApplicationStatus(a._fsId, 'approved')`,
+which writes the **`applications`** collection. Before Commit 1 there was no `_fsId` on these objects
+so it never ran; afterwards `_fsId` is a **`bnbListings`** document id, so it would have updated
+`applications/{listingId}` — a document that does not exist — and failed into an empty `catch`. Wrong
+collection, silently. Removed.
+
+### Reused, not invented
+
+| need | existing thing reused |
+|---|---|
+| collection | **`bnbListings`** — no new collection |
+| authority | `firestore.rules`: `allow update: if isAdmin()` — **verified before writing code**, so **no Cloud Function was added** |
+| audit | **`window.sokoniFirestoreAudit`** in `firebase.js`, which exists for non-module callers and matches the `auditLogs` rule requiring `uid`, `action`, `ts` |
+| update helper | `SokoniDB.updateBnbListingStatus()`, following `updateApplicationStatus()` |
+
+**Minimum fields only** — `status`, `updatedAt`, `updatedBy`, and `approvalReason` on rejection. The
+host owns everything else on the document; an admin decision has no business rewriting it.
+
+**Failures are reported, never swallowed.** A moderation decision that fails silently is how an admin
+comes to believe a listing is live when it is not. The listener re-renders on the server's echo, so
+there is no local mutation to keep in step — what the admin sees after a decision is what Firestore
+holds.
+
+**Rejection now requires a reason** (≥5 characters, recorded in the audit entry). Cancelling the
+prompt is not a decision and writes nothing.
+
+### Deliberately not done
+
+`approveProp` previously tried to set `registeredAs.landlord` on `users/{a.uid}`. `bnbListings`
+documents carry **`hostUid`**, not `uid` (see `bnb-hub.html`, `bnb-manage.html`), so that branch never
+ran. **Activating it would change user documents — a different concern from recording a moderation
+decision.** Documented, not wired.
+
+### Found while verifying, out of scope
+
+`approveLawyer`, `approveFirm` and `approveHcFac` also call `updateApplicationStatus(a._fsId, …)` —
+and for them it is **correct**, because those panes are backed by the `applications` collection. They
+do still write `localStorage` (`sokoniLawyerApp` and friends), which is the same authority pattern in
+the Legal and Healthcare panes. Catalogued for the Legacy LocalStorage Elimination phase, not touched
+here.
+
+**Tests:** functions 783 passed · users contract 36/36 · `admin.html` `<div>` balanced 756/756,
+5 inline blocks parse · **`setItem('sokoniBnBListings')` occurrences: 0** · predeploy green.
+Not verified in a live authenticated browser — no admin ID token available here, and the collection is
+empty in production so there is no listing to decide on.
+
+Files: `admin.html`, `sokoni-db.js`.
+Database changes: none. API changes: `SokoniDB.updateBnbListingStatus()` added.
+**Security rules: unchanged.** Breaking changes: none.
+
+**Properties: reads ✅ writes ✅.** Remaining for this pane: `sokoniLandlordProperties`, which is
+Commit 3 — analysis only, pending a model decision.
+
+---
+
 ## [2026-08-01] — feat(bnb): booking requires authentication — never take payment for a booking that cannot be persisted
 
 **Product decision applied.** `firestore.rules` requires
