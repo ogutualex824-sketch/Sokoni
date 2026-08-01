@@ -1771,27 +1771,6 @@ body.adm-light .adm-sec-h{color:#111;}
         <div id="bcsLog"></div>
       </div>
 
-      <!-- ═══ ORDERS ═══ -->
-      <div id="adm-pane-orders" class="adm-pane">
-        <div class="adm-toolbar">
-          <input class="adm-search" id="orderSearch" placeholder="🔍 Search orders…" oninput="filterOrders()">
-          <select id="orderFilter" onchange="filterOrders()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;">
-            <option value="">All</option>
-            <option value="pending">Pending</option>
-            <option value="processing">Processing</option>
-            <option value="delivered">Delivered</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="disputed">🚨 Disputed</option>
-          </select>
-        </div>
-        <div class="adm-sec-h">Orders (<span id="ordersCount">0</span>)</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Order #</th><th>Buyer</th><th>Product</th><th>Amount</th><th>Status</th><th>Date</th><th>Actions</th></tr></thead>
-            <tbody id="ordersBody"></tbody>
-          </table>
-        </div>
-      </div>
 
       <!-- ═══ POS SALES ═══ -->
       <div id="adm-pane-pos" class="adm-pane">

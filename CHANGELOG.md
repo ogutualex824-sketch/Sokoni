@@ -1,3 +1,49 @@
+## [2026-08-01] — refactor(admin): Phase 1 pane 1 — remove the unreachable Orders pane
+
+**Root cause.** `admin.html` declared `#adm-pane-orders` twice. `showPane()` resolves
+`getElementById('adm-pane-' + name)` to the **first** match, so the second copy (L1774–1794) could
+never be displayed by any navigation path.
+
+Every id inside it — `orderSearch`, `orderFilter`, `ordersCount`, `ordersBody` — is also declared in
+the surviving pane, **earlier in the document**, so every `getElementById` already resolved there. The
+renderers were feeding the reachable pane all along. Removing the duplicate therefore changes nothing
+at runtime; it removes five duplicate ids and 21 lines of unreachable markup.
+
+The removal script refuses to run if any id in the block is not already declared earlier, so a pane
+holding a unique container cannot be deleted by accident. It located the pane by content and walked
+`<div>` depth to find the matching close rather than trusting line numbers.
+
+**Verified**
+
+| check | result |
+|---|---|
+| inline script syntax | 9 blocks, 0 errors |
+| duplicate ids | **112 → 107** (exactly the 5 predicted) |
+| `#adm-pane-orders` declarations | 2 → **1** |
+| `orderSearch` / `orderFilter` / `ordersCount` / `ordersBody` | 1 each, survivor retained |
+| `getElementById('ordersBody')` references | 4, all still resolving |
+| `<div>` balance | 0 before, 0 after |
+| applications render contract | 25/25 |
+| predeploy | all gates green |
+
+The surviving pane is the richer one — it carries the Orders / Billing / Disputes / POS sub-tabs and
+one extra status filter option (`disputed`) that the deleted copy lacked.
+
+**State coverage for Orders, reported honestly:** empty state exists (`No orders yet`). Loading, error
+and retry states do **not** exist yet — they are Phase 2 work and were not added here, because this
+commit is a removal and bundling them would make the "changes nothing at runtime" claim unverifiable.
+
+**Found, not fixed (next commit):** there are **two** orders renderers, both writing `#ordersBody` and
+`#ordersCount` — one with colspan 7, one with colspan 8 that also syncs `D.orders`. Whichever runs
+last wins. That is a duplicate render path and it is a separate concern.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none. Behaviour: identical.
+
+Remaining duplicate ids: **107**. Next pane: **Users**.
+
+---
+
 ## [2026-08-01] — findings(admin): the 29 blank panels are 112 duplicate element ids
 
 Priority 1 asked for loading/empty/error/retry states on 29 orphan admin containers. Classifying them
