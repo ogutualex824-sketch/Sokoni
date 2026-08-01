@@ -1,3 +1,70 @@
+## [2026-08-02] — findings(properties): landlord model — measured, **Option B recommended**
+
+Analysis only. No schema change, no migration, no rule edited. Full document:
+`docs/LANDLORD_PROPERTY_MODEL.md`.
+
+### Measured first
+
+| collection | documents |
+|---|---|
+| `landlordData` | **0** |
+| `landlordProperties` | **0** |
+| `bnbListings` | **0** |
+| `properties` / `propertyListings` | **0** |
+
+Declared indexes touching `landlord*`/`bnb*`/`propert*`: **none**. **Migration cost today is zero.**
+
+### `landlordData` has no reader
+
+It appears in exactly two places in the repository: the rule at `firestore.rules:1493`, and one write
+at `landlord.html:873`. Not read by `landlord.html` itself, `admin.html`, any Cloud Function, or any
+other page.
+
+```js
+function getData(){  return JSON.parse(localStorage.getItem("sokoniLandlordProperties")) || []; }
+function saveData(d){
+  localStorage.setItem("sokoniLandlordProperties", JSON.stringify(d));            // authority
+  setDoc(doc(db,'landlordData',uid), {uid, properties:d, updatedAt}, {merge:true}); // write-only mirror
+}
+```
+
+Three consequences fall out of that shape: the **whole array is rewritten on every edit** (O(n) write
+amplification, and two concurrent edits silently lose one); the **uid comes from
+`localStorage.sokoniUser`, not Firebase Auth**, so the mirror silently no-ops when that key is stale;
+and **a landlord's properties are invisible to moderation** entirely.
+
+### Recommendation — Option B, a `landlordProperties` collection
+
+**Option A is disqualified on moderation alone:** properties inside an array cannot carry an
+individual `status`, so no property can be approved, rejected or suspended without rewriting its
+landlord's whole document. It also cannot be queried or indexed — every admin filter becomes a full
+collection scan.
+
+**Option C (fold into `bnbListings`) was seriously considered and rejected.** A short-stay booking and
+a monthly tenancy are different products: nightly price vs monthly rent, availability vs occupancy,
+guest bookings vs tenancies. It would also break the existing create rule, which requires
+`hasAll(['id','name','type','location','price','phone','hostUid'])`, and `bnb.html` reads
+`pricePerNight`, which a rental does not have. Its one real attraction — a shared moderation queue and
+the generically-named `sokoni_properties` Algolia index — is available to Option B anyway, because
+moderation and search read a **projection**, not the collection.
+
+**Option B** gives one document per property: queryable, individually moderatable, O(1) writes,
+ownership enforceable in rules exactly as `bnbListings` enforces `hostUid`, and the `_decideProp` path
+shipped in Properties Commit 2 works with a collection swap.
+
+**Migration cost: none.** No data to move, no backfill, no consumer to coordinate — `landlordData` has
+no reader. The only thing that grows with delay is the number of documents that would later need
+splitting.
+
+**Properties remains INCOMPLETE** by the completion rule: the admin pane still reads
+`sokoniLandlordProperties` from localStorage. Deliberately unchanged until this recommendation is
+accepted or replaced.
+
+Files: `docs/LANDLORD_PROPERTY_MODEL.md` (new),
+`functions/scripts/probe-landlord-model.js` (new). No runtime code changed.
+
+---
+
 ## [2026-08-02] — feat(admin): Properties Commit 2 — moderation decisions are written to Firestore
 
 **Root cause.** `approveProp()` / `rejectProp()` mutated `D.bnbListings` and wrote `localStorage`. The
