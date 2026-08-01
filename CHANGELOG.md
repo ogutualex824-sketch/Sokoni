@@ -1,3 +1,51 @@
+## [2026-08-02] — refactor(admin): Phase 1 pane 5 — Settings, unreachable duplicate removed
+
+**Last of the five panes.** UI cleanup only.
+
+**Root cause.** `#adm-pane-settings` was declared twice. `showPane()` resolves to the first, so the
+second copy — **80 lines** — could never be displayed. Both copies carried **identical id sets**, so
+nothing was lost.
+
+### This is also the security finding
+
+The two panes each declared **`newPin`, `newAdminPw` and `patternCanvasNew`**. The duplicated
+credential inputs flagged for the security audit were not a separate defect — they were a symptom of
+the duplicated pane, and removing it resolves them:
+
+| id | before | after |
+|---|---|---|
+| `newPin` | 2 | **1** |
+| `newAdminPw` | 2 | **1** |
+| `patternCanvasNew` | 2 | **1** |
+
+`getElementById` resolved to the first copy, so the second set was unreachable and never read by
+`changePin()`, `changePassword()` or `_patNewInit()`. The risk was **latent rather than active** — an
+admin could not reach the dead form — but a second password field that no handler reads is exactly the
+kind of thing that becomes active the moment someone adds a nav entry.
+
+**The deeper credential risks are NOT patched here** and are reported separately, as instructed.
+
+**Tests:** functions 783 passed · users 36/36 · applications 25/25 · `<div>` balanced 704/704, 5 inline
+blocks parse · **duplicate ids 97 → 90** · predeploy green.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none — the removed pane was unreachable.
+
+### Phase 1 complete — all five panes
+
+| pane | duplicate removed | one renderer | one data source | one write path | complete? |
+|---|---|---|---|---|---|
+| Orders | ✅ | ✅ | ✅ Firestore | ✅ Firestore | **✅** |
+| Users | ✅ | ✅ | ✅ Firestore | ⚠️ read-only by design | **✅** |
+| Properties | ✅ | ✅ | ✅ Firestore | ✅ Firestore | ❌ `sokoniLandlordProperties` |
+| Rides | ✅ | ❌ none exists | ❌ none exists | ❌ none exists | ❌ **deferred — not built** |
+| Settings | ✅ | — | — | — | ⚠️ credential risks open |
+
+**Duplicate ids: 112 → 90** across the programme. Every remaining duplicate is now *within* a single
+surviving pane rather than between two copies of one.
+
+---
+
 ## [2026-08-02] — refactor(admin): Phase 1 pane 4 — Rides, unreachable duplicate removed
 
 **UI cleanup only.** No data migration — see the finding below, which is a separate concern.
