@@ -101,23 +101,104 @@
         const t = esc(s.start || s.time || s);
         return `<button type="button" class="sbs-slot" data-date="${esc(d.date)}" data-time="${t}" onclick="SokoniBookService._pick(this)">${t}</button>`;
       }).join('')}</div>`).join('');
-    body(html + `<button class="sbs-btn" id="sbsGo" disabled onclick="SokoniBookService._create()">Select a time</button>`);
+    body(html + `<button class="sbs-btn" id="sbsGo" disabled onclick="SokoniBookService._chooseOptions()">Select a time</button>`);
   }
   function pick(el) {
     document.querySelectorAll('#sbsModal .sbs-slot.sel').forEach(s => s.classList.remove('sel'));
     el.classList.add('sel');
     _ctx.date = el.dataset.date; _ctx.time = el.dataset.time;
-    const go = document.getElementById('sbsGo'); go.disabled = false; go.textContent = `Book ${_ctx.date} at ${_ctx.time}`;
+    const go = document.getElementById('sbsGo'); go.disabled = false; go.textContent = `Continue — ${_ctx.date} at ${_ctx.time}`;
   }
+
+  /* ── 1b. Options (Slice D) — package / add-ons / duration + LIVE server preview.
+     THIN: NO pricing math here. Skipped automatically for a service with no advanced pricing
+     (goes straight to create() = today's behavior). The client sends only the SELECTION; the
+     server (bookingPreviewPrice → same computePrice) returns the authoritative breakdown. ── */
+  async function chooseOptions() {
+    const go = document.getElementById('sbsGo'); if (go && go.disabled) return;
+    let svc;
+    try { svc = (await firebase.firestore().collection('providerServices').doc(_ctx.serviceId).get()).data() || {}; }
+    catch (e) { return create(); }
+    const p = svc.pricing;
+    const advanced = p && ((p.packages && p.packages.length) || (p.addOns && p.addOns.filter(a => a.available !== false).length) || p.extraHourRate);
+    if (!advanced) return create();                       /* simple/legacy service → unchanged flow */
+    _ctx.pricing = p;
+    _ctx.baseDuration = Number(p.durationMins || svc.durationMins || 60);
+    _ctx.selection = { packageId: null, addOns: [], durationMins: _ctx.baseDuration };
+    renderOptions();
+  }
+  function renderOptions() {
+    const p = _ctx.pricing;
+    title('Choose your options');
+    let html = '';
+    if (p.packages && p.packages.length) {
+      html += '<div class="sbs-day">Package</div>';
+      html += '<label style="display:block;margin:5px 0"><input type="radio" name="sbsPkg" value="" checked onchange="SokoniBookService._opt()"> Custom / base</label>';
+      html += p.packages.map(pk => `<label style="display:block;margin:5px 0"><input type="radio" name="sbsPkg" value="${esc(pk.id)}" onchange="SokoniBookService._opt()"> ${esc(pk.name)}</label>`).join('');
+    }
+    const addons = (p.addOns || []).filter(a => a.available !== false);
+    if (addons.length) {
+      html += '<div class="sbs-day">Add-ons</div>';
+      html += addons.map(a => {
+        const maxQ = Number(a.qtyMax) || 1;
+        const qtyCtl = maxQ > 1 ? ` <input type="number" min="1" max="${maxQ}" value="1" data-qty="${esc(a.id)}" onchange="SokoniBookService._opt()" style="width:52px;background:#141414;border:1px solid #262626;color:#eee;border-radius:6px;padding:3px" disabled>` : '';
+        return `<label style="display:block;margin:5px 0"><input type="checkbox" data-addon="${esc(a.id)}" onchange="SokoniBookService._opt()"> ${esc(a.name)} (+${fmtKES(a.price)})${qtyCtl}</label>`;
+      }).join('');
+    }
+    if (p.extraHourRate) {
+      const base = _ctx.baseDuration;
+      html += '<div class="sbs-day">Duration</div><select class="sbs-in" id="sbsDur" onchange="SokoniBookService._opt()">';
+      [0, 60, 120, 180, 240].forEach(add => { const d = base + add; html += `<option value="${d}">${(d / 60)}h${add ? ` (+${add / 60}h)` : ''}</option>`; });
+      html += '</select>';
+    }
+    html += '<div class="sbs-day">Price</div><div id="sbsPreview" class="sbs-empty">Calculating…</div>';
+    html += '<button class="sbs-btn" id="sbsGo2" onclick="SokoniBookService._continue()">Continue to payment</button>';
+    body(html);
+    updatePreview();
+  }
+  function readSelection() {
+    const pkgEl = document.querySelector('#sbsModal input[name=sbsPkg]:checked');
+    const addOns = [];
+    document.querySelectorAll('#sbsModal input[data-qty]').forEach(q => {   /* enable/disable qty with its checkbox */
+      const cb = document.querySelector('#sbsModal input[data-addon="' + q.getAttribute('data-qty') + '"]');
+      q.disabled = !(cb && cb.checked);
+    });
+    document.querySelectorAll('#sbsModal input[data-addon]:checked').forEach(cb => {
+      const id = cb.getAttribute('data-addon');
+      const q = document.querySelector('#sbsModal input[data-qty="' + id + '"]');
+      addOns.push({ id, qty: q ? Math.max(1, parseInt(q.value) || 1) : 1 });
+    });
+    const durEl = document.getElementById('sbsDur');
+    _ctx.selection = { packageId: (pkgEl && pkgEl.value) || null, addOns, durationMins: durEl ? parseInt(durEl.value) : _ctx.baseDuration };
+    return _ctx.selection;
+  }
+  async function updatePreview() {
+    readSelection();
+    const pv = document.getElementById('sbsPreview'); if (!pv) return;
+    pv.textContent = 'Calculating…';
+    try {
+      const b = await call('providerDispatch', { op: 'bookingPreviewPrice', serviceId: _ctx.serviceId, selection: _ctx.selection,
+        ctx: { date: _ctx.date, startTime: _ctx.time, distanceKm: Number(_ctx.distanceKm) || 0 } });
+      pv.innerHTML = (b.breakdown || []).map(x => `<div style="display:flex;justify-content:space-between"><span>${esc(x.label)}</span><span>${x.amount < 0 ? '−' : ''}${fmtKES(Math.abs(x.amount))}</span></div>`).join('')
+        + `<div style="display:flex;justify-content:space-between;font-weight:800;color:#71ff00;border-top:1px solid #262626;margin-top:6px;padding-top:6px"><span>Total</span><span>${fmtKES(b.totalCents)}</span></div>`
+        + (b.depositCents ? `<div style="display:flex;justify-content:space-between;font-size:.8rem;color:#9a9a9a"><span>Deposit today</span><span>${fmtKES(b.depositCents)}</span></div>` : '');
+    } catch (e) { pv.textContent = (e && e.message) || 'Couldn’t price that selection.'; }
+  }
+  function continueToBooking() { readSelection(); create(); }
 
   /* ── 2. Create booking FIRST (recommendation) — then price + intent. ── */
   async function create() {
-    const go = document.getElementById('sbsGo'); if (!go || go.disabled) return;
-    go.disabled = true; go.textContent = 'Reserving…';                 /* dup-click lock */
+    const go = document.getElementById('sbsGo') || document.getElementById('sbsGo2');   /* either entry: slot or options */
+    if (go && go.disabled) return;
+    if (go) { go.disabled = true; go.textContent = 'Reserving…'; }     /* dup-click lock */
     let bk;
     try {
-      bk = await call('providerDispatch', { op: 'bookingCreateService', providerId: _ctx.providerId, serviceId: _ctx.serviceId, date: _ctx.date, startTime: _ctx.time });
-    } catch (e) { go.disabled = false; go.textContent = 'Try another time'; body(document.getElementById('sbsBody').innerHTML); title('Slot unavailable'); alert(e.message || 'That slot is no longer available.'); return loadSlots(); }
+      /* The client sends the SELECTION only — never an amount. The server computes the
+         authoritative total (computePrice) and snapshots it on the booking. */
+      const sel = _ctx.selection || {};
+      bk = await call('providerDispatch', { op: 'bookingCreateService', providerId: _ctx.providerId, serviceId: _ctx.serviceId, date: _ctx.date, startTime: _ctx.time,
+        packageId: sel.packageId || undefined, addOns: sel.addOns || [], durationMins: sel.durationMins || undefined, distanceKm: Number(_ctx.distanceKm) || undefined });
+    } catch (e) { if (go) { go.disabled = false; go.textContent = 'Try another time'; } title('Slot unavailable'); alert(e.message || 'That slot is no longer available.'); return loadSlots(); }
     _ctx.bookingId = bk.bookingId;
     sessionStorage.setItem(K, JSON.stringify({ bookingId: bk.bookingId, providerId: _ctx.providerId, serviceName: _ctx.serviceName }));
     observe(bk.bookingId);                                             /* single source of truth from here */
@@ -250,6 +331,7 @@
     },
     close() { if (_unsub) { _unsub(); _unsub = null; } const el = document.getElementById('sbsModal'); if (el) el.style.display = 'none'; document.body.style.overflow = ''; },
     _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _star: star, _review: submitReview,
+    _chooseOptions: chooseOptions, _opt: updatePreview, _continue: continueToBooking,   /* Slice D */
   };
   global.SokoniBookService = Api;
   /* Auto-resume if the customer refreshed mid-booking. */

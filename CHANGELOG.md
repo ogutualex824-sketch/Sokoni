@@ -1,3 +1,23 @@
+## [2026-08-01] — feat(pricing): customer package/add-on selector (Advanced Rate Cards — Slice D) — pipeline complete
+
+The customer booking flow now presents packages/add-ons/duration and shows the server-authoritative price
+before payment. THIN by design — zero pricing math on the client (backend already deployed in Slices B/C).
+
+- `sokoni-book-service.js` — after slot pick, an **options step** (`chooseOptions`): renders a Package radio
+  list (incl. "Custom / base"), **available** add-ons with quantity, and a Duration select (when an
+  extra-hour rate exists). Every change calls **`bookingPreviewPrice`** and renders the returned breakdown
+  (line items + total + deposit) — the UI never computes. On "Continue to payment", `bookingCreateService`
+  is called with the SELECTION ONLY (`packageId`, `addOns`, `durationMins`, `distanceKm`); the server
+  computes the authoritative total + snapshot. Services with no advanced pricing skip the step entirely
+  (unchanged flow — no regression).
+
+Deploy: hosting only (backend ops already live). **Advanced Rate Cards is now end-to-end:** provider
+configures (Studio) → customer selects → server computes authoritative total → booking snapshot → held
+payment → settlement → commission → refund all use the ONE snapshot. Breaking changes: none.
+NEXT: stop building pricing — run the live QA booking with the real DJ.
+
+---
+
 ## [2026-08-01] — feat(pricing): Pricing Studio — provider rate-card editor (Advanced Rate Cards — Slice C)
 
 Gives providers the workspace to configure the pricing rules the engine already consumes.
