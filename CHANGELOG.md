@@ -1,3 +1,61 @@
+## [2026-08-01] — feat(admin): Properties Commit 1 — reads come from Firestore
+
+**Reads only.** `approveProp` / `rejectProp` still write localStorage; they are Commit 2.
+
+**Root cause.** `D.bnbListings` / `D.bnbBookings` were seeded from `localStorage`, which is per-origin
+**and per device**. A listing created by a host on their machine, or a booking made by a guest on
+their phone, could never reach an administrator. In practice the only thing that populated those keys
+on an admin machine was `demo-seed.js`. Full investigation: `docs/PROPERTIES_DATA_SOURCE.md`.
+
+The canonical collections already existed and were already used by `bnb.html`, `bnb-hub.html`,
+`bnb-manage.html` and the Algolia triggers. The admin console was simply never connected to them.
+
+**Added** — `SokoniDB.listenBnbListings()` and `listenBnbBookings()`, following `listenUsers()`:
+realtime, `onError` callback, one listener pair only.
+
+**Unordered on purpose.** For `users` the ordering risk was *measured* — `orderBy('createdAt')`
+returned 59 of 61. Here it **cannot be measured**: both collections are empty in production. An
+unmeasurable risk is not one to accept on a query that drops rows silently, so sorting stays in the
+caller. `bnb-hub.html` and `bnb-manage.html` both write `serverTimestamp()`, so new documents *should*
+carry `createdAt` — but "should" is not the standard for a query that hides listings. Before adding a
+server-side `orderBy` later: verify coverage against real data and backfill if it is not 100%.
+
+**States.** Loading, empty, error and retry are now distinct. A read failure says
+*"This is a read failure, not an empty directory."* and offers Retry; an empty directory says
+*"No BnB listings found."*; a filter that matches nothing says so differently.
+
+**Rules verified before shipping** — this would otherwise be a permanent error state:
+
+- `bnbListings` — `allow read: if true`, `allow update: if isAdmin() || host(restricted fields)`
+- `bnbBookings` — `allow read: if isAdmin() || own || host`
+
+An admin may list both, and may update a listing directly, so **Commit 2 needs no new Cloud Function**.
+
+### Found while reading the rules — worth your attention
+
+`bnbBookings` requires `request.resource.data.uid == request.auth.uid` on create. **A guest who is not
+signed in cannot create a booking** — the write is rejected by rules. `bnb.html` passes
+`uid: _uid || null`, so an unauthenticated checkout fails.
+
+Until today that failure was invisible: the empty `catch` swallowed it and the guest was told
+"Booking confirmed" anyway. With the commit-point gating shipped in `94de38a` it now surfaces honestly
+as *"Payment received. Your booking is being verified."* — correct behaviour, but it means the message
+may fire for real guests. **Whether BnB checkout should require sign-in, or the rules should admit
+anonymous bookings, is a product decision** and is not made here.
+
+**Tests:** functions 783 passed · users contract 36/36 · `admin.html` `<div>` balanced 756/756,
+5 inline blocks parse · duplicate ids unchanged at 100 · predeploy green.
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`, `sokoni-db.js`.
+Database changes: none. API changes: `listenBnbListings` / `listenBnbBookings` added.
+Breaking changes: none.
+
+Remaining localStorage authorities: `sokoniLandlordProperties` (Commit 3, model decision pending),
+plus the `sokoniBnBListings` **writes** in approve/reject (Commit 2).
+
+---
+
 ## [2026-08-01] — fix(bnb): the booking document is the commit point
 
 **Decision applied:** if the booking does not persist, nothing that depends on it runs.

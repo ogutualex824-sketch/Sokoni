@@ -1045,6 +1045,40 @@ const SokoniDB = {
     );
   },
 
+  /* ── BnB listings & bookings, for the admin console ────────────────────────
+     Same shape as listenUsers, and unordered for the same reason: Firestore
+     omits documents that lack the ordering field, so a listing written without
+     createdAt would be invisible with nothing to explain it.
+
+     For users that risk was measured (59 of 61 carried createdAt). Here it
+     CANNOT be measured — both collections are empty in production as of
+     2026-08-01 — and an unmeasurable risk is not an acceptable one to take on a
+     query that hides rows silently. Sorting happens in the caller.
+
+     Before adding a server-side orderBy later: verify createdAt coverage against
+     real data first, and backfill if it is not 100%. bnb-hub.html and
+     bnb-manage.html both write serverTimestamp() today, so new documents should
+     be safe — but "should be" is not the standard for a query that drops rows. */
+  listenBnbListings(callback, onError, limitN = 500) {
+    return onSnapshot(query(collection(db, 'bnbListings'), limit(limitN)),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, id: d.id, ...d.data() }))),
+      err => {
+        _log.warn('[SokoniDB] bnbListings:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
+    );
+  },
+
+  listenBnbBookings(callback, onError, limitN = 500) {
+    return onSnapshot(query(collection(db, 'bnbBookings'), limit(limitN)),
+      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
+      err => {
+        _log.warn('[SokoniDB] bnbBookings:', err.message);
+        if (typeof onError === 'function') { try { onError(err); } catch (e) {} }
+      }
+    );
+  },
+
   listenAllOrders(callback, statusFilter, limitN) {
     let _q;
     if (statusFilter && limitN) {

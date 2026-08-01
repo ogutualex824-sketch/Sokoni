@@ -2884,8 +2884,8 @@ function loadAll(){
   D.deliveries  = ls('sokoniDeliveryRequests');
   D.couriers    = ls('sokoniDrivers');
   /* ── Properties ── */
-  D.bnbListings = ls('sokoniBnBListings');
-  D.bnbBookings = ls('sokoniBnBBookings');
+  D.bnbListings = [];   /* Firestore-only; startPropertiesListeners fills this. */
+  D.bnbBookings = [];   /* Firestore-only; startPropertiesListeners fills this. */
   D.landlordProps= ls('sokoniLandlordProperties');
   /* ── Legal ── */
   D.lawyerApps  = ls('sokoniLawyerApp');
@@ -5462,6 +5462,58 @@ function verifyCourier(i){ D.couriers[i].verified=true; localStorage.setItem('so
    two cannot drift apart. */
 var _propQ='', _propType='';
 
+/* ── Firestore is the source of truth for Properties ───────────────────────
+   D.bnbListings / D.bnbBookings used to come from localStorage, which is per
+   ORIGIN AND PER DEVICE: a listing created by a host on their machine, or a
+   booking made by a guest on their phone, could never reach an administrator.
+   In practice the only thing that populated those keys on an admin machine was
+   demo-seed.js.
+
+   The canonical collections already existed and were already used by bnb.html,
+   bnb-hub.html, bnb-manage.html and the Algolia triggers — the admin console
+   was simply never connected to them. See docs/PROPERTIES_DATA_SOURCE.md.
+
+   READS ONLY in this commit. approveProp/rejectProp still write localStorage;
+   they are Commit 2. Both collections are empty in production today, so no
+   listing can currently be approved and the transitional gap is not reachable. */
+var _propsLoaded  = false;
+var _propsError   = null;
+window._propsUnsub = window._propsUnsub || null;
+window._bkgsUnsub  = window._bkgsUnsub  || null;
+
+function propsSetError(msg){
+  _propsError = msg || 'unknown error';
+  console.error('[Admin][properties] load failed:', _propsError);
+  renderProperties();
+}
+
+function propsRetry(){
+  _propsError = null; _propsLoaded = false; renderProperties();
+  try { if (window._propsUnsub) { window._propsUnsub(); window._propsUnsub = null; } } catch(e){}
+  try { if (window._bkgsUnsub)  { window._bkgsUnsub();  window._bkgsUnsub  = null; } } catch(e){}
+  startPropertiesListeners();
+}
+
+function startPropertiesListeners(){
+  if (window._propsUnsub) return;                 /* exactly one listener pair */
+  if (!window.SokoniDB || !window.SokoniDB.listenBnbListings) {
+    propsSetError('data layer unavailable — reload the page');
+    return;
+  }
+  window._propsUnsub = window.SokoniDB.listenBnbListings(
+    function(rows){
+      _propsLoaded = true; _propsError = null;
+      D.bnbListings = rows;
+      renderProperties(); if (typeof renderStats === 'function') renderStats();
+    },
+    function(err){ propsSetError((err && err.message) || 'permission denied'); }
+  );
+  window._bkgsUnsub = window.SokoniDB.listenBnbBookings(
+    function(rows){ D.bnbBookings = rows; renderProperties(); },
+    function(err){ propsSetError((err && err.message) || 'permission denied'); }
+  );
+}
+
 function _visibleProperties(){
   var q=(_propQ||'').toLowerCase();
   return (D.bnbListings||[]).filter(function(l){
@@ -5482,6 +5534,26 @@ function filterProperties(){
 window.filterProperties=filterProperties;
 
 function renderProperties(){
+  var _stats = document.getElementById('propStats');
+  var _tbody = document.getElementById('bnbBody');
+  if (!_tbody) return;
+
+  /* A read failure and an empty directory are different things and must never
+     look the same. Neither may look like 'loading'. */
+  if (_propsError) {
+    if (_stats) _stats.innerHTML = '';
+    _tbody.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:#ff6b6b;font-weight:700;">'
+      + 'Could not load properties: ' + h(String(_propsError))
+      + '<div style="color:rgba(255,255,255,.45);font-weight:400;margin:6px 0 12px;">This is a read failure, not an empty directory.</div>'
+      + '<button class="adm-btn-sm adm-btn-blue" onclick="propsRetry()">Retry</button></td></tr>';
+    return;
+  }
+  if (!_propsLoaded) {
+    if (_stats) _stats.innerHTML = '';
+    _tbody.innerHTML = '<tr><td colspan="7" style="padding:22px;text-align:center;color:rgba(255,255,255,.35);">Loading properties…</td></tr>';
+    return;
+  }
+
   document.getElementById('propStats').innerHTML=
     statBox('🏠','b-blue',D.bnbListings.length,'BnB Listings')+
     statBox('📅','b-green',D.bnbBookings.length,'BnB Bookings')+
@@ -5495,7 +5567,7 @@ function renderProperties(){
      The stat boxes above deliberately keep counting EVERYTHING: a filter should narrow
      what you are looking at, not quietly rewrite the totals you are judging it by. */
   var _rows = _visibleProperties();
-  if(!_rows.length){ body.innerHTML=emptyRow(7,'🏠', D.bnbListings.length ? 'No properties match this filter' : 'No BnB listings'); }
+  if(!_rows.length){ body.innerHTML=emptyRow(7,'🏠', D.bnbListings.length ? 'No properties match this filter' : 'No BnB listings found.'); }
   else body.innerHTML=_rows.map(function(l,i){
     var sc={pending:'b-yellow',active:'b-green',rejected:'b-red',suspended:'b-red'}[l.status||'pending']||'b-yellow';
     return '<tr>'
@@ -6128,6 +6200,7 @@ function _startAdminListeners(){
   );
   SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
   if (typeof startUsersListener === 'function') startUsersListener();
+  if (typeof startPropertiesListeners === 'function') startPropertiesListeners();
 }
 document.addEventListener('sokoniAdminReady', _startAdminListeners);
 /* Also start if this device unlocked earlier in the session. */
