@@ -247,3 +247,74 @@ and compile — is 57–62% of sampled CPU, with ~2.4 MB of JavaScript shared ac
 **Therefore the next work should be structural, not local:** staged boot (critical → after-paint →
 idle/interaction) and route-based bundle splitting, which attack parse/compile volume rather than
 shaving execution inside already-loaded code.
+---
+
+## Sprint 2 correction — parse/compile is NOT the bottleneck
+
+Sprint 1B closed with a hypothesis: `(program)` is 57–62% of sampled CPU, therefore V8 **parse and
+compile** of ~2.4 MB of shared JavaScript dominates startup, therefore route-based bundle splitting is
+the highest-value work.
+
+**That hypothesis was wrong, and measuring it directly is what showed it.**
+
+`(program)` in a V8 CPU profile is not compile time. It is everything without JS frames on the stack —
+including the browser's own style and layout work. Reading it as "parse/compile" was an inference, not
+a measurement.
+
+`scripts/perf-profile.js` now reports Chrome's `Performance.getMetrics` directly:
+
+| page | JS delivered | **V8 compile** | script execute | **layout** | **style recalc** | total task |
+|---|---|---|---|---|---|---|
+| home | 3080 KB / 89 files | **97 ms (2%)** | 4034 ms | **6950 ms** | **10547 ms** | 27461 ms |
+| product | 2383 KB / 70 files | **75 ms (3%)** | 2331 ms | 1301 ms | 914 ms | 6525 ms |
+
+Compile is **75–97 ms**. On the homepage, **style recalculation and layout are 64% of total task
+time** — style recalc alone (10.5 s) is more than twice all JavaScript execution.
+
+### What this changes
+
+- **Route-based bundle splitting will not fix startup CPU.** Splitting 3 MB into route bundles saves
+  roughly 97 ms of compile. It remains worth doing for network transfer, memory and cache efficiency —
+  but it must not be sold as the startup-CPU fix, because it is not.
+- **The homepage's real cost is CSS × DOM.** 10.5 s of style recalculation points at selector
+  complexity multiplied by node count, and/or repeated forced synchronous layout. That is the target.
+- **Product page is a different shape entirely** (execute 36%, style+layout 34%), so per-page
+  attribution matters — a single platform-wide theory was always going to mislead.
+
+### `sokoni-layout.js` — re-tested and still discarded
+
+The earlier rejection was suspect: the A/B harness measured TBT/LCP/CLS only, none of which can see
+browser layout work, so a change that reduces layout thrash could have been rejected on metrics blind
+to its benefit. `layoutMs`/`styleMs` were added to `perf-ab.js` and the change re-tested:
+
+| metric | delta | consistency | floor |
+|---|---|---|---|
+| layoutMs | −0.2% | 3/6 | ±2% |
+| styleMs | −0.5% | 3/6 | ±2% |
+| tbt | −0.7% | 4/6 | ±5–9% |
+
+Nothing above the floor on the metrics that *could* have shown it. **Discard confirmed** — this time
+without the "wrong instrument" caveat.
+
+### Noise floor, extended
+
+| Metric | Floor |
+|---|---|
+| layoutMs / styleMs | **±2%** ← tightest, best discriminators |
+| scriptMs | ±3% |
+| LCP / TBT / loadMs | ±5–9% |
+| worstTask | **±30%** — effectively unusable as a single-run signal |
+| compileMs | ±15% relative (tiny absolute: ~30 ms) |
+
+`layoutMs` and `styleMs` should be the primary metrics for the next sprint, since they are both the
+dominant cost and the most sensitive.
+
+### Recommended Sprint 2 (revised)
+
+1. **Style/layout attribution on the homepage** — which selectors and which DOM mutations drive
+   10.5 s of recalculation. Chrome tracing (`disabled-by-default-devtools.timeline`) gives per-recalc
+   attribution.
+2. **Reduce forced synchronous layout** — read/write batching in the modules that measure and then
+   immediately mutate.
+3. **Bundle splitting** — retained, but re-scoped honestly to transfer/memory rather than startup CPU.
+

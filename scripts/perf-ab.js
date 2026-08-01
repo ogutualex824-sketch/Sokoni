@@ -96,6 +96,12 @@ async function measure(browser, base) {
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: CPU_THROTTLE });
   await cdp.send('Network.enable');
   await cdp.send('Network.emulateNetworkConditions', { offline: false, ...NET });
+  /* Style/layout duration. Sprint 2 measurement showed these are 64% of total
+     task time on the homepage while V8 compile is 2% - so a change that reduces
+     browser layout work is invisible to TBT/LCP alone. Rejecting an optimisation
+     on metrics that cannot see its effect is how a real improvement gets thrown
+     away; the sokoni-layout.js ResizeObserver change was very likely such a case. */
+  await cdp.send('Performance.enable');
 
   const t0 = Date.now();
   await page.goto(base + ROUTES[PAGE], { waitUntil: 'load', timeout: 120000 });
@@ -107,8 +113,14 @@ async function measure(browser, base) {
       tbt: Math.round(lt.reduce((s, d) => s + Math.max(0, d - 50), 0)),
       longTasks: lt.length, worstTask: Math.round(lt.length ? Math.max(...lt) : 0) };
   });
+  const perf = await cdp.send('Performance.getMetrics');
+  const M = {}; (perf.metrics || []).forEach(x => { M[x.name] = x.value; });
   await ctx.close();
-  return { ...m, loadMs };
+  return { ...m, loadMs,
+    layoutMs: Math.round((M.LayoutDuration || 0) * 1000),
+    styleMs:  Math.round((M.RecalcStyleDuration || 0) * 1000),
+    scriptMs: Math.round((M.ScriptDuration || 0) * 1000),
+    compileMs: Math.round((M.V8CompileDuration || 0) * 1000) };
 }
 
 const med = (a) => { const s = [...a].sort((x, y) => x - y); const n = s.length;
@@ -153,7 +165,8 @@ function pairedDelta(aArr, bArr) {
     process.stdout.write('\n\n');
     await browser.close();
 
-    const METRICS = ['tbt', 'lcp', 'cls', 'longTasks', 'worstTask', 'loadMs'];
+    const METRICS = ['tbt', 'lcp', 'cls', 'longTasks', 'worstTask', 'loadMs',
+                     'layoutMs', 'styleMs', 'scriptMs', 'compileMs'];
     console.log('metric        A(med)     B(med)   paired-delta   B better in');
     console.log('--------------------------------------------------------------');
     for (const k of METRICS) {
