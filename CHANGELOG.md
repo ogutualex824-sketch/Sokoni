@@ -1,3 +1,56 @@
+## [2026-08-01] — findings(admin): Properties data source — **B, migration required**
+
+Investigation only. Nothing implemented. Full write-up: `docs/PROPERTIES_DATA_SOURCE.md`.
+
+**This is not the Users situation.** The canonical Firestore collections **already exist, already have
+rules, and are already written and read by three other pages**. The admin console is the only consumer
+still reading `localStorage`.
+
+| data | canonical collection | writers | readers |
+|---|---|---|---|
+| listings | **`bnbListings`** | `bnb-hub.html`, `bnb-manage.html` | `bnb.html` (**realtime `onSnapshot`**), Algolia triggers, backfill |
+| bookings | **`bnbBookings`** | `bnb.html` `_saveBnBBookingFS()` | — |
+| landlord | **`landlordData/{uid}`** | `landlord.html` | — |
+
+**All 18 property references in `admin.html` are to local `D.*` arrays. Not one Firestore read.**
+`localStorage` is per-origin *and per-device*: a guest booking on their phone writes to their own
+browser, which the administrator never sees. In practice the only thing that populates
+`sokoniBnBListings` on an admin machine is `demo-seed.js:1202` — **demo data**.
+
+**The write path is worse than the read path.** `approveProp()` / `rejectProp()` set
+`D.bnbListings[i].status` and write `localStorage`. **Approving a BnB listing changes nothing any host,
+guest or other admin can see.** Same defect class as the Orders `flagDispute` lost-write closed
+earlier today — still live.
+
+**All three collections are empty in production** (141 root collections checked by name and by
+enumeration; none property-related). So no real data is currently hidden — but the first genuine
+listing would be invisible, and admin decisions already go nowhere. **It is the cheapest possible
+moment to connect them: nothing to migrate, nothing to reconcile.**
+
+**Historical cause:** `sokoni-sync.js`, a localStorage→Firestore bridge that lists exactly these keys,
+is **loaded by zero pages**. The sync was written and never wired in.
+
+**Found separately, on its own merits:** `bnb.html:421` wraps its `addDoc` in `try { … } catch(e) {}`
+with an empty body. A booking can fail to persist while the guest is told it is confirmed.
+
+### Migration plan (approved scope, not started)
+
+1. **Read** — `listenBnbListings` / `listenBnbBookings` following `listenUsers()`; no server-side
+   `orderBy` until `createdAt` coverage is verified; loading/empty/error/retry.
+2. **Write** — `approveProp`/`rejectProp` update Firestore, ideally behind an audited callable.
+3. **Landlord** — `landlordData/{uid}` holds a `properties` **array**, so an admin list must flatten
+   across documents. **Model decision, needs approval.**
+4. **Cleanup** — remove localStorage reads/writes; wire or delete `sokoni-sync.js`.
+
+**Verdict: Properties is NOT complete.** Internally singular and correctly wired — every container
+resolves, the header matches the renderer — but reading a private per-device cache and writing
+decisions nowhere.
+
+Files: `docs/PROPERTIES_DATA_SOURCE.md` (new), `functions/scripts/probe-properties-source.js` (new).
+No runtime code changed.
+
+---
+
 ## [2026-08-01] — refactor(admin): Phase 1 pane 3 — Properties converged onto one pane
 
 **Root cause.** `#adm-pane-properties` was declared twice, and `renderProperties()` wrote into **both**
