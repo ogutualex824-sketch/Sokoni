@@ -1,10 +1,10 @@
 {
-  "commit": "de38077daf91a67ee928381833c1ad51b0a02e0b",
-  "commitShort": "de38077",
+  "commit": "73fd4f999e7c75edf0c7ca982461459256f4a7a8",
+  "commitShort": "73fd4f9",
   "branch": "HEAD",
-  "buildTime": "2026-08-01T11:08:48.797Z",
+  "buildTime": "2026-08-01T14:31:31.079Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260801110847-v185",
+  "cacheVersion": "sokoni-20260801143130-v186",
   "environment": "production",
   "dirtyWorkingTree": true
 }
