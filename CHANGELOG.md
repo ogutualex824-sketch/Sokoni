@@ -1,3 +1,60 @@
+## [2026-08-01] — refactor(admin): Phase 1 pane 3 — Properties converged onto one pane
+
+**Root cause.** `#adm-pane-properties` was declared twice, and `renderProperties()` wrote into **both**
+copies. `showPane()` resolves to the first, so an administrator saw one half of the render and not the
+other.
+
+| target | resolved to | visible? |
+|---|---|---|
+| `#propStats` | reachable pane | ✅ |
+| `#bnbBody` | **unreachable copy only** | ❌ |
+| `#bnbBookingsBody` | reachable pane | ✅ |
+| `#landlordGrid` | **unreachable copy only** | ❌ |
+
+So the pane showed **statistics above a permanently empty listings table**, with working BnB bookings
+below it, and the Landlord Properties section absent entirely. The reachable pane's own table
+(`#propsBody`) was an orphan — declared once, written to by nothing.
+
+`getElementById('bnbBody')` did not return null, so the renderer's early `if(!body) return` never
+fired; it rendered happily into a pane nobody could open.
+
+**Fix — move every live container into the survivor, then delete the copy.** The reachable pane keeps
+its search box and type filter (which the copy lacked) and gains:
+
+- the `#bnbBody` tbody **and the header that matches the renderer** — `Property · Host · City ·
+  Price/Night · Bookings · Status · Actions`. The reachable pane's own header said `Title · Owner ·
+  Location · Type · Price · Status · Actions`, which would have mislabelled every column.
+- the **Landlord Properties** section, which existed only in the copy and is genuinely fed.
+
+All six containers now resolve inside the single surviving pane; `#propsBody` is gone.
+
+**Tests**
+
+| check | result |
+|---|---|
+| functions unit tests | 783 passed, 17 suites |
+| users render contract | 36/36 |
+| applications render contract | 25/25 |
+| admin markup guard | `<div>` balanced 756/756, 5 inline blocks parse |
+| every `renderProperties` target inside the survivor | 6/6 |
+| duplicate ids | **103 → 100** |
+| predeploy | all gates green |
+
+Not verified in a live authenticated browser — no admin ID token available here.
+
+Files: `admin.html`, `scripts/duplicate-ids-baseline.json`.
+Database changes: none. API changes: none. Breaking changes: none.
+
+**Still localStorage-backed.** `D.bnbListings`, `D.bnbBookings` and `D.landlordProps` read
+`sokoniBnBListings` / `sokoniBnBBookings` / `sokoniLandlordProperties`. Whether anything populates
+those keys is the **same question that turned out to matter more than the duplication on Users**, and
+it is deliberately not answered in this commit — one concern per commit. It is the next thing to check
+for this pane.
+
+Remaining duplicate ids: **100**. Orphan containers: **27**. Next pane: **Rides**.
+
+---
+
 ## [2026-08-01] — fix(admin): my Users regression — a stray `</div>` let the table escape its pane
 
 **Self-inflicted, shipped in `4c2b495` (v199), live for one release.**

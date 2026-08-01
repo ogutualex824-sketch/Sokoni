@@ -1220,9 +1220,14 @@ body.adm-light .adm-sec-h{color:#111;}
           <input class="adm-search" id="propSearch" placeholder="🔍 Search properties…" oninput="filterProperties()">
           <select id="propTypeFilter" onchange="filterProperties()" style="padding:10px 12px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:12px;color:white;font-size:16px;outline:none;font-family:inherit;"><option value="">All Types</option><option value="bnb">BnB / Short Stay</option><option value="rental">Rental</option><option value="sale">For Sale</option></select>
         </div>
-        <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Title</th><th>Owner</th><th>Location</th><th>Type</th><th>Price</th><th>Status</th><th>Actions</th></tr></thead><tbody id="propsBody"></tbody></table></div>
+        <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Property</th><th>Host</th><th>City</th><th>Price/Night</th><th>Bookings</th><th>Status</th><th>Actions</th></tr></thead><tbody id="bnbBody"></tbody></table></div>
         <div class="adm-sec-h" style="margin-top:16px;">BnB Bookings</div>
         <div class="adm-table-wrap"><table class="adm-table"><thead><tr><th>Guest</th><th>Property</th><th>Check-In</th><th>Check-Out</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead><tbody id="bnbBookingsBody"></tbody></table></div>
+        <!-- Landlord Properties: moved here from the unreachable duplicate pane.
+             renderProperties() feeds #landlordGrid, so deleting that pane without
+             bringing this across would have removed a section that actually worked. -->
+        <div class="adm-sec-h" style="margin-top:16px;">🏢 Landlord Properties</div>
+        <div id="landlordGrid"></div>
       </div>
 
       <!-- ═══════════════════════════════════
@@ -2039,26 +2044,6 @@ body.adm-light .adm-sec-h{color:#111;}
         <div id="couriersGrid"></div>
       </div>
 
-      <!-- ═══ PROPERTIES ═══ -->
-      <div id="adm-pane-properties" class="adm-pane">
-        <div class="adm-stats" id="propStats"></div>
-        <div class="adm-sec-h" style="margin-top:8px;">🏠 BnB Listings</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Property</th><th>Host</th><th>City</th><th>Price/Night</th><th>Bookings</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="bnbBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h" style="margin-top:16px;">🏘️ BnB Bookings</div>
-        <div class="adm-table-wrap">
-          <table class="adm-table">
-            <thead><tr><th>Guest</th><th>Property</th><th>Check-in</th><th>Check-out</th><th>Amount</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="bnbBookingsBody"></tbody>
-          </table>
-        </div>
-        <div class="adm-sec-h" style="margin-top:16px;">🏢 Landlord Properties</div>
-        <div id="landlordGrid"></div>
-      </div>
 
       <!-- ═══ LEGAL ═══ -->
       <div id="adm-pane-legal" class="adm-pane">
