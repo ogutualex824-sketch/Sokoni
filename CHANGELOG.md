@@ -1,3 +1,68 @@
+## [2026-08-02] — fix(disputes): small-dispute auto-resolve has never fired
+
+**Root cause.** `automation-engine.js:394` read `payments/{paymentId}` and tested:
+
+```js
+const paymentConfirmed = payment?.status === 'completed';
+```
+
+The `payments` collection stores **UPPERCASE** — measured across 8 production documents:
+`COMPLETE` · `PENDING` · `FAILED`. The literal `'completed'` matches **neither `COMPLETE` nor
+`complete`**. `paymentConfirmed` was therefore permanently `false`, and the guard below it —
+
+```js
+if (isSmall && paymentConfirmed) { … auto-resolve … }
+```
+
+— **never executed. Small-dispute auto-resolution has never worked.**
+
+**It failed CLOSED**, which is why it went unnoticed for so long: disputes fell through to manual
+review rather than being wrongly auto-resolved. No money moved incorrectly. But an automation nobody
+knew was dead is still an automation nobody has.
+
+### How it was found, and a correction to my own claim
+
+I flagged "`COMPLETE` vs `complete`" three times from a schema probe **without checking that a
+comparison actually existed**. That was an assertion, not a finding. Verifying it produced a more
+accurate picture than the one I had been repeating:
+
+- `email-triggers.js:138–143` **already documents the mixed case** — a previous investigation found it.
+- `booking.js:407` and `entitlement-engine.js:47` **already defend against it** with
+  `TERMINAL_PAID = new Set(['COMPLETE','COMPLETED','PAID','SUCCESS'])`.
+- `entitlement-engine.js:401` uses the correct defensive form: `String(status||'').toUpperCase()`.
+
+So the platform mostly handles this. **One path did not**, and it is this one.
+
+### Fix — imported, not redefined
+
+`TERMINAL_PAID` was already **exported** by `entitlement-engine.js:427`. It is imported rather than
+copied: the set exists in two places already, and a third copy is how the next one drifts.
+
+Verified safe before importing — `entitlement-engine` registers no Cloud Function at load, has no
+top-level side effects, and does not require `automation-engine` back. Confirmed by loading both.
+
+```js
+const paymentConfirmed = TERMINAL_PAID.has(String(payment?.status || '').toUpperCase());
+```
+
+Now matches `COMPLETE`, `COMPLETED`, `PAID`, `SUCCESS` — and, because of the `toUpperCase()`, any
+lowercase variant a future writer produces. `PENDING` correctly does not match.
+
+**Tests:** 783 passed, 17 suites · both modules load cleanly with no circular dependency ·
+`COMPLETE` → true, `completed` → true, `PENDING` → false.
+
+**Not deployed** — this is a Cloud Function change and needs `functions:automationEngine` deployed
+deliberately, not folded into a hosting release.
+
+Files: `functions/automation-engine.js`.
+Database changes: none. Breaking changes: none — a guard that never passed can now pass, which is the
+intent. Related: `CANONICAL_DATA_MODEL.md` §5, ADR-009.
+
+**Still open:** `TERMINAL_PAID` is defined in two files and imported in a third. Consolidating it into
+`functions/shared/constants.js` is a separate concern and is not done here.
+
+---
+
 ## [2026-08-02] — feat(merchant): Water Supplier category + declarative template (Phases 1–3)
 
 **No Dash Premium production record was created**, per the decision. This is the reusable category any

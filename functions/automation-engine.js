@@ -38,6 +38,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
 const logger                 = require('firebase-functions/logger');
+/* Canonical terminal-paid vocabulary — see the note at its use site. */
+const { TERMINAL_PAID } = require('./entitlement-engine');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
@@ -391,7 +393,17 @@ exports.autoOnDisputeCreate = onDocumentCreated(
 
     /* Small, clear-evidence disputes → auto-resolve */
     const isSmall = amount <= (rule.autoResolveBelow || 1000);
-    const paymentConfirmed = payment?.status === 'completed';
+    /* payments/{id} stores UPPERCASE ('COMPLETE' | 'PENDING' | 'FAILED') while
+       this compared against lowercase 'completed', which matches neither — so
+       paymentConfirmed was permanently false and the small-dispute auto-resolve
+       below has never fired. It failed CLOSED (disputes fell through to manual
+       review rather than being wrongly resolved), which is why it went unnoticed.
+
+       TERMINAL_PAID is imported rather than redefined. It already exists in two
+       places and a third copy is how the next one drifts. entitlement-engine is a
+       pure module — no Cloud Function registers at load, and it does not require
+       this file back. */
+    const paymentConfirmed = TERMINAL_PAID.has(String(payment?.status || '').toUpperCase());
     const deliveryConfirmed = delivery?.status === 'delivered';
 
     if (isSmall && paymentConfirmed) {
