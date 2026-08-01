@@ -38,8 +38,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { defineSecret }       = require('firebase-functions/params');
 const admin                  = require('firebase-admin');
 const logger                 = require('firebase-functions/logger');
-/* Canonical terminal-paid vocabulary — see the note at its use site. */
-const { TERMINAL_PAID } = require('./entitlement-engine');
+/* Canonical payment vocabulary — one definition, in shared/constants.js. */
+const { isPaid } = require('./shared/constants');
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
@@ -399,11 +399,11 @@ exports.autoOnDisputeCreate = onDocumentCreated(
        below has never fired. It failed CLOSED (disputes fell through to manual
        review rather than being wrongly resolved), which is why it went unnoticed.
 
-       TERMINAL_PAID is imported rather than redefined. It already exists in two
-       places and a third copy is how the next one drifts. entitlement-engine is a
-       pure module — no Cloud Function registers at load, and it does not require
-       this file back. */
-    const paymentConfirmed = TERMINAL_PAID.has(String(payment?.status || '').toUpperCase());
+       isPaid() comes from shared/constants.js, the one definition. It had been
+       written out independently in booking.js and entitlement-engine.js; two
+       copies of a financial vocabulary is one drift from two different answers
+       to "has this been paid?". */
+    const paymentConfirmed = isPaid(payment?.status);
     const deliveryConfirmed = delivery?.status === 'delivered';
 
     if (isSmall && paymentConfirmed) {

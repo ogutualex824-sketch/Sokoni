@@ -404,7 +404,9 @@ exports.bookingCreate = onCall(
     let paymentNote       = null;
 
     if (paymentId) {
-      const TERMINAL_PAID = new Set(['COMPLETE', 'COMPLETED', 'PAID', 'SUCCESS']);
+      /* One definition, in shared/constants.js — a second copy of a financial
+         vocabulary is one drift from two answers to 'has this been paid?'. */
+      const { TERMINAL_PAID } = require('./shared/constants');
       const REVERSED      = new Set(['REFUNDED', 'REVERSED', 'CHARGEBACK', 'CANCELLED']);
       try {
         const paySnap = await db.collection('payments').doc(String(paymentId)).get();

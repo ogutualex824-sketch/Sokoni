@@ -1,3 +1,71 @@
+## [2026-08-02] — refactor(payments): one definition of "has this been paid?"
+
+`TERMINAL_PAID` had been written out **independently in two files** and imported into a third. Two
+copies of a financial vocabulary is one drift away from two different answers to the same question.
+
+`functions/shared/constants.js` now owns it, plus `isPaid(status)` which normalises case at the
+comparison — the actual defect behind the dispute bug was a raw literal comparison, so the safe form is
+provided rather than left to each caller to remember.
+
+| module | before | after |
+|---|---|---|
+| `shared/constants.js` | — | **defines** `TERMINAL_PAID` + `isPaid()` |
+| `entitlement-engine.js` | own `new Set([...])` | imports; **re-exports** so existing importers are unchanged |
+| `booking.js` | own `new Set([...])` inside a function | imports |
+| `automation-engine.js` | imported from `entitlement-engine` | imports from `shared/constants`, uses `isPaid()` |
+
+Independent definitions remaining: **0**. Re-export identity verified — `entitlement.TERMINAL_PAID`
+**is** `constants.TERMINAL_PAID`, so nothing can hold a divergent copy.
+
+**Tests:** 783 passed, 17 suites · all four modules load cleanly, no circular dependency ·
+`isPaid('COMPLETE')` true · `isPaid('completed')` true · `isPaid('PENDING')` false ·
+`isPaid(undefined)` false.
+
+Files: `functions/shared/constants.js`, `functions/entitlement-engine.js`, `functions/booking.js`,
+`functions/automation-engine.js`. **Not deployed** — bundled with the `automationEngine` decision.
+
+---
+
+## [2026-08-02] — verification: `automationEngine` pre-deployment checks
+
+Requested before deploying `8ab9f33`. **All four answered; one finding needs a decision.**
+
+| check | result |
+|---|---|
+| **audit entry per auto-resolution** | ✅ `_logAction({ action:'auto_resolve_dispute', … })` with amount, evidence types and resolution |
+| **notifications still fire** | ✅ `_notify()` to **both** buyer and seller, in a `Promise.all` after the transaction |
+| **amount threshold** | ✅ `amount <= (rule.autoResolveBelow || 1000)` — **KES 1,000**, configurable per rule |
+| **only TERMINAL_PAID qualifies** | ✅ after the fix, via `isPaid()` which normalises case |
+
+**Which dispute types qualify: all of them.** `type` does not gate eligibility — it only selects the
+outcome:
+
+```js
+const resolution = (dispute.type === 'not_received' && deliveryConfirmed)
+  ? 'seller_wins' : 'buyer_wins';
+```
+
+### The finding that needs a decision, not a fix
+
+**The default outcome is `buyer_wins`, and `buyer_wins` writes a `refundRequests` document with
+`status: 'approved'`, `approvedBy: 'automation'`.**
+
+So deploying this means: **any dispute of any type, at or under KES 1,000, against a terminally-paid
+payment, auto-approves a refund to the buyer** — unless it is specifically `not_received` *and*
+delivery is confirmed.
+
+That is the intended design as written. It is also a real financial behaviour that has never once
+executed, so there is no production experience of it. The code is correct; whether the policy is what
+you want is yours.
+
+`deliveryConfirmed` was checked for the same class of bug and is **sound** — `dispatch.js:331` writes
+lowercase `'delivered'` and the comparison is lowercase `'delivered'`.
+
+**Urgency is low:** `disputes`, `deliveries` and `refundRequests` all hold **0 documents** in
+production. Nothing is waiting on this.
+
+---
+
 ## [2026-08-02] — fix(disputes): small-dispute auto-resolve has never fired
 
 **Root cause.** `automation-engine.js:394` read `payments/{paymentId}` and tested:
