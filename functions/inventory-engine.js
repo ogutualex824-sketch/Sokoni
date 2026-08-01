@@ -48,6 +48,42 @@ async function auditLog(tenantId, event) {
 }
 
 /* ─── ADJUST STOCK (atomic) ─────────────────────────────────────── */
+/* ── Balance definitions ─────────────────────────────────────────────────
+   Exported so every consumer shares ONE definition. Two modules computing
+   "sellable" slightly differently is how a POS and a marketplace come to
+   disagree about the same shelf. */
+
+/** What may actually be sold right now: on the shelf, not already promised. */
+function sellableOf(level) {
+  const l = level || {};
+  return Math.max(0, (l.available || 0) - (l.reserved || 0));
+}
+
+/** Physical stock the merchant holds.
+
+    DELIBERATELY EXCLUDES empty and onLoan. An empty bottle is not sellable
+    stock, and a bottle in a customer's kitchen is not on hand at all —
+    counting either would overstate what the merchant can sell, which is the
+    exact failure the shared POS/marketplace inventory exists to prevent. */
+function onHandOf(level) {
+  const l = level || {};
+  return (l.available || 0) + (l.reserved || 0) + (l.incoming || 0) + (l.damaged || 0);
+}
+
+/* Buckets a subtype transfer may move between. `exchanged` is deliberately
+   absent: an exchange is a MOVEMENT between two of these, not a place stock
+   sits. */
+const SUBTYPES = ["available", "reserved", "incoming", "damaged", "empty", "onLoan"];
+
+/* Movement vocabulary for returnable units, alongside the existing
+   sale/purchase/transfer/damage/expiry/theft/loss/write_off/count_adjust. */
+const SUBTYPE_MOVEMENTS = ["sale", "exchange", "return", "loan", "return_from_loan"];
+
+exports.sellableOf = sellableOf;
+exports.onHandOf   = onHandOf;
+exports.SUBTYPES   = SUBTYPES;
+exports.SUBTYPE_MOVEMENTS = SUBTYPE_MOVEMENTS;
+
 exports.inventoryAdjustStock = onCall({ timeoutSeconds: 30, memory: '256MiB' }, async (req) => {
   const uid      = assertAuth(req);
   const data     = req.data;
@@ -73,6 +109,11 @@ exports.inventoryAdjustStock = onCall({ timeoutSeconds: 30, memory: '256MiB' }, 
       warehouseId: data.warehouseId,
       available: 0, reserved: 0, allocated: 0, incoming: 0,
       damaged: 0, expired: 0, onHand: 0,
+      /* Returnable units. empty = returned containers held by the merchant;
+         onLoan = containers currently in a customer's possession. Both are
+         real stock the merchant owns, and NEITHER is sellable — see
+         onHandOf() below for why they are excluded from on-hand. */
+      empty: 0, onLoan: 0,
       reorderPoint: 0, minStock: 0, maxStock: 0,
     };
 
@@ -186,6 +227,123 @@ exports.inventoryReserveStock = onCall({ timeoutSeconds: 20 }, async (req) => {
 });
 
 /* ─── RELEASE RESERVATION ───────────────────────────────────────── */
+/* ─── TRANSFER BETWEEN SUBTYPES (atomic, append-only) ──────────────────────
+   ONE primitive for every returnable-unit movement. Generalised from the
+   reserve/release pair, which already moved quantity between two named
+   buckets inside a transaction — this adds the movement record that pair
+   never wrote.
+
+   Every bottle workflow is expressed here rather than in its own function:
+
+     refill           available -> empty     (customer swaps an empty for a full)
+     loan             available -> onLoan    (bottle leaves with the customer)
+     return_from_loan onLoan    -> empty     (customer brings it back)
+     refill stock     empty     -> available (merchant refills the empties)
+     damage           any       -> damaged
+
+   The deposit does NOT appear here. A deposit is money: it is a receipt line
+   item refunded through the refund pipeline (ADR-010). Inventory moves
+   objects; the financial pipeline moves money. Mixing them is how a stock
+   count starts disagreeing with a ledger. */
+exports.inventoryTransferSubtype = onCall({ timeoutSeconds: 30, memory: '256MiB' }, async (req) => {
+  const uid      = assertAuth(req);
+  const data     = req.data;
+  const tenantId = assertTenant(data);
+
+  validate(data, ['productId', 'warehouseId', 'fromSubtype', 'toSubtype', 'quantity', 'reason']);
+
+  const from = String(data.fromSubtype);
+  const to   = String(data.toSubtype);
+  const qty  = Number(data.quantity);
+
+  if (!SUBTYPES.includes(from)) throw new HttpsError('invalid-argument', `Unknown fromSubtype: ${from}`);
+  if (!SUBTYPES.includes(to))   throw new HttpsError('invalid-argument', `Unknown toSubtype: ${to}`);
+  if (from === to)              throw new HttpsError('invalid-argument', 'fromSubtype and toSubtype must differ');
+  if (!isFinite(qty) || qty <= 0) throw new HttpsError('invalid-argument', 'quantity must be a positive number');
+
+  /* A reason is required, not optional. A bottle count that shrinks without
+     an explanation is indistinguishable from theft. */
+  const reason = String(data.reason || '').trim();
+  if (reason.length < 3) throw new HttpsError('invalid-argument', 'reason is required');
+
+  const movementType = data.movementType || 'exchange';
+  if (!SUBTYPE_MOVEMENTS.includes(movementType) && movementType !== 'adjustment') {
+    throw new HttpsError('invalid-argument', `Unknown movementType: ${movementType}`);
+  }
+
+  const levelId  = slId(data.productId, data.variantId || null, data.warehouseId);
+  const levelRef = tenantCol(tenantId, 'inventory_levels').doc(levelId);
+  const mvRef    = tenantCol(tenantId, 'inventory_movements').doc(data.id || db.collection('_').doc().id);
+
+  let resultLevel;
+
+  await db.runTransaction(async tx => {
+    const snap  = await tx.get(levelRef);
+    const level = snap.exists ? snap.data() : {
+      id: levelId, productId: data.productId,
+      variantId: data.variantId || null, warehouseId: data.warehouseId,
+      available: 0, reserved: 0, allocated: 0, incoming: 0,
+      damaged: 0, expired: 0, onHand: 0, empty: 0, onLoan: 0,
+    };
+
+    /* Read inside the transaction, so two tills racing for the last bottle
+       cannot both pass this check. Exactly one commits; the other retries and
+       then fails here. This is the oversell guarantee. */
+    const fromQty = level[from] || 0;
+    if (fromQty < qty) {
+      throw new HttpsError('failed-precondition',
+        `Only ${fromQty} in ${from}, cannot move ${qty}`);
+    }
+
+    const next = {
+      ...level,
+      [from]: fromQty - qty,
+      [to]:   (level[to] || 0) + qty,
+      updatedAt: nowISO(),
+      tenantId,
+    };
+    /* Recomputed, not incremented — self-healing, and it can never let the
+       new empty/onLoan buckets inflate on-hand. */
+    next.onHand = onHandOf(next);
+    resultLevel = next;
+
+    tx.set(levelRef, next, { merge: true });
+
+    /* Append-only. Every balance change leaves exactly one movement, carrying
+       the before/after subtype the balances alone cannot express. */
+    tx.set(mvRef, {
+      id: mvRef.id,
+      type: movementType,
+      productId:   data.productId,
+      variantId:   data.variantId || null,
+      warehouseId: data.warehouseId,
+      quantity:    qty,
+      subtypeBefore: from,
+      subtypeAfter:  to,
+      reason,
+      orderId:   data.orderId   || null,
+      receiptNumber: data.receiptNumber || null,
+      userId: uid,
+      tenantId,
+      createdAt: nowISO(),
+    });
+  });
+
+  await auditLog(tenantId, {
+    action: 'inventory_transfer_subtype',
+    productId: data.productId, from, to, quantity: qty,
+    reason, movementType, userId: uid, movementId: mvRef.id,
+  });
+
+  return {
+    success: true,
+    movementId: mvRef.id,
+    level: resultLevel,
+    sellable: sellableOf(resultLevel),
+    onHand:   onHandOf(resultLevel),
+  };
+});
+
 exports.inventoryReleaseReservation = onCall({ timeoutSeconds: 20 }, async (req) => {
   const uid      = assertAuth(req);
   const data     = req.data;

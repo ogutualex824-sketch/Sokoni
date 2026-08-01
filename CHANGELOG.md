@@ -1,3 +1,78 @@
+## [2026-08-02] — feat(inventory): Phase 4 — returnable-unit subtypes on the existing ledger
+
+**Extended, not rebuilt.** No bottle inventory, no bottle stock engine, no duplicate balance table, no
+parallel reservation system. `inventory_levels`, `inventory_movements`, `inventory_audit` and the
+existing transaction engine are all reused.
+
+### Two buckets
+
+`empty` (returned containers the merchant holds) and `onLoan` (containers in a customer's possession)
+added to `inventory_levels`. Additive — absent means zero, so no existing level needs backfilling.
+`available`, `reserved`, `incoming` and `damaged` already existed.
+
+**No `exchanged` bucket.** Stock does not *sit* in exchanged, it moves *through* it — a balance would
+only ever grow. It is a movement type, as specified.
+
+### One primitive
+
+```
+inventoryTransferSubtype(fromSubtype, toSubtype, quantity, reason, metadata)
+```
+
+Generalised from `inventoryReserveStock`, which already moved quantity between two named buckets in a
+transaction. **This adds the movement record that pair never wrote.** Every bottle workflow — refill,
+loan, return, damage — is expressed through it rather than getting its own function.
+
+The `from` balance is read **inside** `db.runTransaction`, so two tills racing for the last bottle
+cannot both pass the check.
+
+`reason` is **required**, minimum 3 characters: a bottle count that shrinks without an explanation is
+indistinguishable from theft.
+
+### Shared balance definitions
+
+```js
+sellableOf(level) = max(0, available − reserved)
+onHandOf(level)   = available + reserved + incoming + damaged     // EXCLUDES empty, onLoan
+```
+
+Exported so every consumer shares **one** definition — two modules computing "sellable" slightly
+differently is how a POS and a marketplace come to disagree about the same shelf.
+
+`onHand` is **recomputed** from the buckets on every transfer rather than incremented, so it is
+self-healing and the new buckets can never inflate it. **An empty bottle is not sellable stock, and a
+bottle in a customer's kitchen is not on hand at all.**
+
+### The financial boundary holds
+
+**Deposits never touch inventory.** A deposit is money: a receipt line item refunded through the refund
+pipeline (ADR-010). Inventory moves objects; the financial pipeline moves money. The transfer records
+`receiptNumber` and `orderId` as *references* only.
+
+### Tests — 16 new, 799 total
+
+Conservation across a refill · loan→return→refill restoring balances · damaged never sellable ·
+empty/onLoan never sellable · a warehouse of empties reporting **zero** on hand · `exchanged` absent
+from the buckets.
+
+**Three acceptance cases are named in the file rather than silently omitted**, because they need the
+Firestore emulator and JDK 21 (this host has 17):
+
+1. two concurrent tills selling the last bottle — exactly one succeeds
+2. every balance change appends exactly one movement
+3. `reason` required, short reasons rejected
+
+The in-transaction read gives (1) by Firestore's optimistic concurrency — **but that is an argument,
+not a test, and it is recorded as untested until it runs.** Same gate as the landlord rules.
+
+Registered in `functions/index.js` by name, per repo discipline.
+
+Files: `functions/inventory-engine.js`, `functions/index.js`,
+`functions/test/inventory-subtype.test.js` (new).
+**Not deployed** — a new Cloud Function should ship with the Phase 7 merchant verification.
+
+---
+
 ## [2026-08-02] — design(inventory): Phase 4 subtypes — most of it already exists
 
 Design only. **Not implemented.** Full note: `docs/INVENTORY_SUBTYPE_DESIGN.md`.

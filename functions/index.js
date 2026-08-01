@@ -9025,6 +9025,8 @@ exports.previewEmailTemplate = onCall({ cors: ["https://mysokoni.co.ke", "https:
 const inventoryEngine = require("./inventory-engine");
 exports.inventoryAdjustStock         = inventoryEngine.inventoryAdjustStock;
 exports.inventoryReserveStock        = inventoryEngine.inventoryReserveStock;
+/* Returnable units (bottle lifecycle) — one primitive for every subtype move. */
+exports.inventoryTransferSubtype     = inventoryEngine.inventoryTransferSubtype;
 exports.inventoryReleaseReservation  = inventoryEngine.inventoryReleaseReservation;
 exports.inventoryTransferStock       = inventoryEngine.inventoryTransferStock;
 exports.inventoryReceivePO           = inventoryEngine.inventoryReceivePO;
