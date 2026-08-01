@@ -1,3 +1,23 @@
+## [2026-08-01] — feat(pricing): canonical service pricing engine (Advanced Rate Cards — Slice A)
+
+The ONE authority for a service's final price — a PURE, universal function (DJs, photographers, caterers,
+tutors, lawyers, cleaners, movers … only packages/add-ons differ). Foundation for Advanced Rate Cards.
+
+- `functions/service-pricing.js` (new) — `computePrice(pricing, selection, ctx)` → authoritative cents
+  breakdown. Handles: base/standard price + duration; **packages** (own price/duration/deposit); time-based
+  **weekend / public-holiday / peak / off-peak** rates (pct or flat; holiday overrides weekend); **extra-hour**
+  rate; **travel** (free radius + per-km beyond); **add-ons** (qty-aware, availability-gated, qtyMax-capped);
+  **deposit** modes (fixed / pct / full, capped at subtotal, package-deposit precedence, balance-due timing).
+  Returns a full line-item breakdown. No I/O → identical on server (authoritative) and for client estimates.
+- `functions/qa-service-pricing.js` (new) — unit-proven **16/16**.
+
+No deploy (pure module, dormant until wired). FOLLOW-ON: Slice B wire into `bookingCreateService` (server
+computes the authoritative total from the service's `pricing` config + customer selection; settlement/
+commission use that total — backward-compatible: services without a `pricing` config keep `service.price`).
+Slice C provider rate-card editor UI; Slice D customer package/add-on selector. Breaking changes: none.
+
+---
+
 ## [2026-08-01] — feat(booking): freeze availability edits on in-resolution bookings (Slice 2 step 4)
 
 Preserves negotiation integrity: a provider can no longer change availability in a way that affects a
