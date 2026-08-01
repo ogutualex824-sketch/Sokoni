@@ -884,3 +884,80 @@ That is a product question, not a performance one, and it is arguably the more v
 deferring the rendering of a grid users cannot find does not help them find it. Worth deciding
 independently of this sprint.
 
+---
+
+## Two optimisation categories, two acceptance criteria
+
+Sprint 2 produced a change that reduced real work but showed nothing on the startup benchmark. The
+resolution was **not** to weaken the startup protocol to fit it, but to recognise that two different
+things were being measured.
+
+### Category A — Startup Performance
+
+**Measured by:** `styleMs`, `layoutMs`, TBT, LCP, CLS
+**Instrument:** `scripts/perf-ab.js` (paired A/B, ≥6 pairs, load + 4 s window)
+**Acceptance:** must exceed the calibrated startup noise floor and reproduce.
+
+Example: **Experiment 1 — defer `newArrivalsGrid`.** styleMs −6.3% / −7.1% at 6/6 across two runs.
+**Accepted and deployed.**
+
+### Category B — Runtime Efficiency
+
+**Measured by:** DOM rebuilds per minute, CPU while idle, style/layout work *after* load, timer
+wakeups, hidden-section rendering, battery.
+**Instrument:** direct behavioural counting over a representative session window (30 s+).
+**Acceptance:** demonstrably reduces recurring work · no functional regression · **no measurable
+startup regression**.
+
+Example: **Experiment 2 — gate off-screen seller rotation.** Off-screen rebuilds 4 → 1 over 30 s,
+content preserved, startup metrics flat (styleMs −0.1%, layoutMs +0.4% — both inside the floor, i.e. no
+regression). **Accepted under Category B and deployed.**
+
+**A Category B change must still not regress Category A.** That is what keeps this from becoming a
+loophole: the startup floor is used as a *guard* even when it is not the acceptance metric.
+
+---
+
+## `_rotateProducts` — investigation before any deferral
+
+Requested before touching `productsContainer`. Findings from `sokoni-spotlight.js`:
+
+```js
+_productTimer = setInterval(_rotateProducts, 10000);   // every 10 seconds, forever
+```
+
+Each tick pages the **primary shopping feed** by 8 products and calls `displayProducts(chunk)` — a full
+`innerHTML` replacement, not a patch. This is why `productsContainer` showed **22 calls / 1895 nodes**
+in the section map: it is one initial render plus continuous rotation.
+
+**Why it rotates:** presentation. The section is badged `TRENDING NOW · LIVE 1/N` with a pulsing red
+dot. It is a liveliness device, not a data requirement.
+
+**Answers to the questions asked:**
+
+| question | answer |
+|---|---|
+| Does it improve engagement? | **Unknown — no data.** This is Track B. |
+| Could it patch only changed cards? | Little benefit: every one of the 8 cards changes per tick. The saving would come from not rotating, not from patching. |
+| Could it virtualise? | Not applicable — this is pagination, not a long list. |
+| Could it rotate only when visible? | **Yes**, and it should. The feed sits at 7220px; in a no-scroll session it rotates forever, unseen. Identical pattern to Experiment 2. |
+| Should buyers control it? | See the accessibility finding below. |
+
+### Accessibility concern — raise before optimising
+
+Two issues, both independent of performance:
+
+1. **No pause control for the product rotation.** `_spPauseBtn` is injected into the *seller* section's
+   title row (`sellerRow`). The products section receives only the `LIVE` badge. So the primary
+   shopping feed auto-updates every 10 s with **no adjacent control to stop it**. WCAG 2.2.2
+   (Pause, Stop, Hide) expects auto-updating content to be pausable by the user.
+2. **`prefers-reduced-motion` is not respected anywhere in this module** (0 occurrences). The rotation,
+   the fade transition and the pulsing `LIVE` dot all run regardless of the OS setting.
+
+`_paused` does suppress rotation for 15 s after a scroll or touch, which helps an actively-scrolling
+user — but a buyer who stops to read a card for more than 15 s can have it replaced underneath them.
+
+**Recommendation:** treat the pause control and reduced-motion support as a correctness fix, ahead of
+any performance change to this timer. Then gate the rotation on visibility (Category B). Whether the
+feed should auto-rotate at all is a product decision that Track B data should settle.
+
