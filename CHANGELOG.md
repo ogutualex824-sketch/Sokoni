@@ -1,3 +1,73 @@
+## [2026-08-01] — fix(mobile): P0 responsive pass — one shared admin module, measured on real viewports
+
+**P0 per founder priority: make the platform usable on a phone before expanding admin tooling.**
+Every claim below is measured by `scripts/probe-admin-mobile-output.js` at 375 / 393 / 412 / 768 px on
+emulated touch devices — not eyeballed.
+
+**Result: 6 pages × 4 devices = 24/24 PASS**, stable across repeat runs.
+`admin.html` · `super-admin.html` · `moderation.html` · `trust-safety.html` · `login.html` · `signup.html`
+
+### New: `sokoni-admin-responsive.css` — one module, not 61 copies
+
+Adopt with a single `<link>` after the page's own `<style>`. Additive only: nothing above 768 px
+changes, so adopting it cannot regress an existing console.
+
+- **Tables become cards below 768 px.** `.mod-table` carried `min-width:600px` inside an
+  `overflow-x:auto` wrapper, so every admin table scrolled sideways — and the action buttons live in
+  the last column, meaning an operator could *see* a row but not act on it. Rows now stack as cards
+  with `data-label` driving the field names; renderers without labels still produce a readable card,
+  so adoption is incremental.
+- **Sidebars collapse.** `trust-safety.html` had a fixed 220 px rail — 56% of a 390 px viewport.
+- **Safe-area insets** for the notch and home indicator, including installed PWA. `trust-safety.html`
+  was missing `viewport-fit=cover` entirely, so its insets could only ever resolve to 0.
+- **Sticky bars anchor to `--sk-header-h`** (measured and published by shared-header.js) rather than
+  `top:0`, which slides them under the header.
+- **16 px inputs** below 768 px, so iOS Safari stops zooming the viewport on focus.
+
+### Tap targets — 44 px floor
+
+Measured misses, all of them shared components repeated across the platform rather than one-off
+page bugs:
+
+| Control | Was | Where it appears |
+|---|---|---|
+| `.auth-switch a` ("Create Account") | 17 px | login, signup, every admin auth gate |
+| Terms / Privacy consent links | 16 px | signup |
+| `.auth-pw-toggle`, `.auth-skip`, `.auth-forgot-link`, auth inputs | 43 px | every auth gate |
+| `tel:` / WhatsApp links in review queues | 17 px | moderation — a reviewer's *primary* action |
+| `.mod-action-btn` | ~26 px | every moderation table |
+
+Fixed in `auth.css` (customer-facing login/signup) and mirrored into the shared module for consoles
+that do not load `auth.css`. The auth-overlay floors use `!important` deliberately: the overlay injects
+its own `<style>` *after* this sheet, so an equal-specificity rule loses the cascade — and a tap target
+must not be overridable by load order.
+
+### Measurement honesty
+
+The probe produced **three false failures** before it produced a true one, each fixed in the probe
+rather than by changing the product:
+
+1. `#sokoniScrollTop` reported 30 px — it is a 46 px button carrying inline `transform:scale(0.65)`
+   while hidden (`opacity:0; pointer-events:none`). Now only genuinely tappable elements are measured.
+2. Force-showing `.main`/`#app` to bypass the auth gate un-hid a sign-in prompt no operator can reach,
+   and its 17 px link was reported as a defect. The bypass is now narrowed to `#dashboard`.
+3. The injected table fixture used `href="#"` instead of a real `tel:` href, so it did not match the
+   rule that styles the actual markup. A fixture must mirror what it stands in for.
+
+Also added a 0.5 px tolerance — 43.5 px rounding to 44 is not a real miss — and raised the settle wait
+to 900 ms after identical pages passed on some devices and failed on others, which was the auth overlay
+injecting late rather than any layout difference.
+
+### Files
+`sokoni-admin-responsive.css` (new), `auth.css`, `moderation.html`, `trust-safety.html`, `admin.html`,
+`super-admin.html`, `scripts/probe-admin-mobile-output.js` (new).
+
+**Rollout:** 4 of 34 admin consoles adopted. The remaining 30 need only the `<link>` plus `data-label`
+attributes on their table renderers. **Tests:** 781 pass; deploy gate APPROVED (55 suites).
+**Breaking:** none — desktop rendering is untouched.
+
+---
+
 ## [2026-08-01] — feat(booking): availability-vs-booking impact guard (Slice 1 — detection + provider awareness)
 
 Booking-integrity principle: an availability change must never silently strand a confirmed

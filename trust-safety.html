@@ -8,7 +8,11 @@
 <script src="security.js"></script>
 <script src="shared-header.js"></script>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<!-- viewport-fit=cover is required for env(safe-area-inset-*) to resolve to a
+     real value; without it the iPhone notch and home indicator report 0 and the
+     admin responsive module cannot inset anything. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Trust & Safety — SOKONI Admin</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons">
@@ -89,6 +93,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--txt);min-he
 .bar-fill{height:100%;border-radius:4px;background:var(--r)}
 .bar-val{width:40px;text-align:right;font-weight:700;font-size:11px}
 </style>
+<!-- Shared admin responsive module — one stylesheet for all admin consoles.
+     Must load AFTER the page style block so its media queries win. -->
+<link rel="stylesheet" href="sokoni-admin-responsive.css">
 </head>
 <body>
 <div class="shell">

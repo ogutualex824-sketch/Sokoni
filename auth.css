@@ -270,6 +270,14 @@ body{
     color:#71ff00;
     text-decoration:none;
     font-weight:700;
+    /* "Create Account" / "Sign in" is the primary path for a brand-new user, and
+       it measured 17px tall on every phone tested — well under the 44px a thumb
+       can reliably hit. Inline-block plus vertical padding gives it a real tap
+       target without moving the text or changing the layout on desktop. */
+    display:inline-block;
+    min-height:44px;
+    line-height:44px;
+    padding:0 6px;
 }
 
 .auth-switch a:hover{ text-decoration:underline; }
@@ -633,3 +641,68 @@ body{
   transition: color .18s;
 }
 .auth-pw-toggle:hover { color: rgba(255,255,255,0.7); }
+
+/* ============================================================================
+   TAP TARGETS — measured remediation (2026-08-01)
+   ----------------------------------------------------------------------------
+   Measured with scripts/probe-admin-mobile-output.js at 375/393/412/768px on
+   emulated touch devices. Every control below came in at 43px or narrower —
+   in several cases ONE pixel under the 44px a thumb can reliably hit, which is
+   exactly the kind of miss that never shows up in a visual review.
+
+   These live in auth.css because the sign-in overlay is injected into admin
+   consoles as well as login/signup, so fixing it here fixes the customer-facing
+   auth screens AND every admin page's gate in one place.
+
+   Scoped to coarse pointers so mouse-driven desktop keeps its compact spacing.
+   ========================================================================== */
+@media (pointer: coarse) {
+  .auth-pw-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .auth-skip,
+  .auth-remember .auth-forgot-link,
+  .auth-legal a,
+  .auth-help a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 8px;
+  }
+  /* Text inputs: 44px tall and 16px type so iOS does not zoom on focus. */
+  .auth-input, .auth-form input[type="text"], .auth-form input[type="email"],
+  .auth-form input[type="password"], .auth-form input[type="tel"] {
+    min-height: 48px;
+    font-size: 16px;
+  }
+}
+
+/* Bare anchors inside the auth card (terms/privacy/help lines carry no class of
+   their own) measured 16px on signup. Scoped to the card so it cannot affect
+   body copy elsewhere. */
+@media (pointer: coarse) {
+  .auth-card p a,
+  .auth-card small a,
+  .auth-legal a {
+    display: inline-block;
+    min-height: 44px;
+    line-height: 44px;
+  }
+}
+
+/* Consent line links (Terms of Service / Privacy Policy) are bare anchors with
+   inline styles and measured 16px. A user must be able to actually open the
+   terms they are being asked to accept. */
+@media (pointer: coarse) {
+  .auth-card a[href*="legal.html"],
+  .auth-consent a, .auth-terms a {
+    display: inline-block;
+    min-height: 44px;
+    line-height: 44px;
+  }
+}

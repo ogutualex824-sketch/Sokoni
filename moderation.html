@@ -147,6 +147,9 @@
     /* ── Toast ── */
     #modToast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:rgba(113,255,0,0.95);color:#050505;padding:12px 22px;border-radius:14px;font-size:14px;font-weight:800;z-index:9999;display:none;box-shadow:0 8px 32px rgba(0,0,0,0.5);}
   </style>
+<!-- Shared admin responsive module — one stylesheet for all admin consoles.
+     Must load AFTER the page style block so its media queries win. -->
+<link rel="stylesheet" href="sokoni-admin-responsive.css">
 </head>
 <body>
 
@@ -621,15 +624,19 @@
             +(a.projectionError?' — '+esc(String(a.projectionError).slice(0,80)):'')+'</div>'
           : '';
 
+        /* data-label drives the phone card layout in sokoni-admin-responsive.css:
+           below 768px the header row is hidden and each cell renders as a
+           label/value line, so a 6-column table stays readable at 390px instead
+           of scrolling horizontally with its action buttons off-screen. */
         return '<tr'+(a._stranded?' style="background:rgba(255,60,60,0.06);"':'')+'>'
-          +'<td>'+typeBadge(a.role||a.type||'professional')+'</td>'
-          +'<td><strong>'+esc(name)+'</strong>'
+          +'<td data-label="Type">'+typeBadge(a.role||a.type||'professional')+'</td>'
+          +'<td data-label="Applicant"><strong>'+esc(name)+'</strong>'
             +(detail?'<div style="font-size:10px;color:rgba(255,255,255,0.4);">'+detail+'</div>':'')
             +strandedBanner+'</td>'
-          +'<td style="font-size:12px;">'+contact+'</td>'
-          +'<td style="font-size:12px;">'+locCell+'</td>'
-          +'<td style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(a.receivedAt||a.createdAt||a.submittedAt)+'</td>'
-          +'<td><div class="mod-action-row">'
+          +'<td data-label="Contact" style="font-size:12px;">'+contact+'</td>'
+          +'<td data-label="Location" style="font-size:12px;">'+locCell+'</td>'
+          +'<td data-label="Received" style="font-size:11px;color:rgba(255,255,255,0.35);">'+fmtDate(a.receivedAt||a.createdAt||a.submittedAt)+'</td>'
+          +'<td data-label="Actions"><div class="mod-action-row">'
           +(a._stranded
             ? '<button class="mod-action-btn btn-approve" onclick="verifAction(\'republish\','+i+')">Publish now</button>'
             : '<button class="mod-action-btn btn-approve" onclick="verifAction(\'approve\','+i+')">Approve</button>'
