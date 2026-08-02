@@ -5480,6 +5480,16 @@ function renderPayouts(){
   }).catch(function(e){ setAll('#payoutsBody', errRow((e&&e.message)||'Unable to load withdrawals')); });
 }
 
+/* Normalise a Kenyan phone to wa.me international format WITHOUT double-prefixing.
+   The stored account number is already "2547…", so the old '254'+phone produced
+   "254254…" → WhatsApp reported "number not on WhatsApp". */
+function _waPhone(p){
+  var d = String(p||'').replace(/[^0-9]/g,'');
+  if (d.indexOf('254') === 0) return d;            /* already 2547… */
+  if (d.indexOf('0')   === 0) return '254'+d.slice(1);  /* 07… → 2547… */
+  if (d.length === 9)         return '254'+d;       /* 7xxxxxxxx → 2547… */
+  return d;
+}
 function approveWithdrawal(id, phone, amount, name, ref, _c){
   if(!_c){_skConfirm('Confirm payment of KES '+amount.toLocaleString()+' to '+name+' ('+phone+')?',()=>approveWithdrawal(id,phone,amount,name,ref,true));return;}
   /* Canonical approval: adminProcessPayout reserves→approving→IntaSend B2C on the
@@ -5489,7 +5499,7 @@ function approveWithdrawal(id, phone, amount, name, ref, _c){
   _invCall('adminProcessPayout', { requestId: id, status: 'approved' }).then(function(){
     toast('✅ Payout approved — B2C processing to '+phone);
     var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
-    try { window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    try { window.open('https://wa.me/'+_waPhone(phone)+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
     if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
   }).catch(function(e){ toast('⚠️ Payment could not be completed — '+((e&&e.message)||'unknown error')+' (ref '+ref+')'); });
 }
@@ -5504,7 +5514,7 @@ function rejectWithdrawal(id, phone, name){
   _invCall('adminProcessPayout', { requestId: id, status: 'rejected', note: reason }).then(function(){
     toast('❌ Withdrawal rejected — funds returned to wallet');
     var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nThe funds have been returned to your wallet. — SOKONI Team';
-    try { if (phone) window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    try { if (phone) window.open('https://wa.me/'+_waPhone(phone)+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
     if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
   }).catch(function(e){ toast('⚠️ Rejection could not be completed — '+((e&&e.message)||'unknown error')); });
 }
