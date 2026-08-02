@@ -13,6 +13,7 @@ const _OPTS = {
   enforceAppCheck: true,
   timeoutSeconds:  120,
   memory:          '512MiB',
+  minInstances:    1,     /* keep one warm — the provider dashboard's hot path (no cold start on load) */
 };
 
 let _mod;
