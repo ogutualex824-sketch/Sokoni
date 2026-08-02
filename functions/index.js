@@ -3296,11 +3296,68 @@ exports.darajaSTKPush = onCall(
         pricedItems.push({ productId: pid, qty, unitPrice: unit });
       }
 
-      /* Delivery is the one client-influenced input we accept, because it
-         depends on a destination the server cannot infer here. It is bounded
-         so it can never be used to inflate a charge arbitrarily. */
+      /* ── Delivery pricing is the SERVER's, not the client's ─────────────────
+         This previously accepted request.data.deliveryFee and merely clamped it
+         to 0..5000. A bounded lie is still a lie: within that range the client
+         chose what delivery cost, and the only defence was that it could not be
+         arbitrarily large.
+
+         Now the server recomputes from the merchant's own configuration using
+         the shared delivery engine — the same module the client uses, so the two
+         cannot drift — and a mismatch is REJECTED rather than absorbed.
+
+         Where a merchant has no deliveryConfig yet, the server has nothing to
+         recompute FROM. Rather than silently trusting the client in that case,
+         the legacy clamp still applies and the gap is logged, so unconfigured
+         merchants are visible and migratable instead of invisible. */
       const clientDelivery = Math.round(Number(request.data.deliveryFee) || 0);
-      const deliveryFee = Math.min(Math.max(clientDelivery, 0), 5000);
+      let deliveryFee;
+
+      const _sellerSnap = await db.collection('sellers').doc(String(sellerUid)).get().catch(() => null);
+      const _delCfg = _sellerSnap && _sellerSnap.exists ? _sellerSnap.data().deliveryConfig : null;
+
+      if (_delCfg && _delCfg.enabled !== undefined) {
+        const _engine = require('./shared/delivery-engine.js');
+        const _calc = _engine.calculateDelivery(_delCfg, {
+          subtotal:   serverSubtotal,
+          distanceKm: request.data.distanceKm,
+          zone:       request.data.deliveryZone,
+        });
+        deliveryFee = _calc.fee;
+
+        if (clientDelivery !== deliveryFee) {
+          await db.collection('auditLogs').add({
+            type: 'delivery_fee_mismatch',
+            severity: clientDelivery < deliveryFee ? 'high' : 'low',
+            callerUid: request.auth.uid,
+            merchantId: sellerUid, orderId: orderId || null,
+            clientFee: clientDelivery, serverFee: deliveryFee,
+            deliveryMode: _delCfg.mode || null, reason: _calc.reason,
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+
+          /* Rejected, with the authoritative figure returned so the client can
+             refresh and retry honestly. Silently substituting the server figure
+             would charge a total the customer never saw. */
+          throw new HttpsError('failed-precondition',
+            'Delivery fee is out of date. Please refresh your cart.',
+            { serverDeliveryFee: deliveryFee, clientDeliveryFee: clientDelivery,
+              deliverable: _calc.deliverable, reason: _calc.reason });
+        }
+      } else {
+        deliveryFee = Math.min(Math.max(clientDelivery, 0), 5000);
+        if (clientDelivery > 0) {
+          await db.collection('auditLogs').add({
+            type: 'delivery_fee_unverified',
+            severity: 'low',
+            callerUid: request.auth.uid,
+            merchantId: sellerUid, orderId: orderId || null,
+            clientFee: clientDelivery, serverFee: null,
+            note: 'merchant has no deliveryConfig; legacy clamp applied',
+            ts: admin.firestore.FieldValue.serverTimestamp(),
+          }).catch(() => {});
+        }
+      }
 
       authoritativeAmount = Math.round(serverSubtotal + deliveryFee);
       pricingSource = "server_recomputed";
