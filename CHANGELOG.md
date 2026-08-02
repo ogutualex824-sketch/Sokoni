@@ -1,3 +1,34 @@
+## [2026-08-02] — feat(admin): Admin OS Phase 1 — canonical data synchronization (P1–P3)
+
+Every Admin Console pane/KPI now reads live production data from its **canonical** collection
+(docs/CANONICAL_COLLECTIONS.md) instead of stale `localStorage` mirrors. Reconciliation is
+guaranteed **by construction** — dashboard and pane read the *same* collection, so they can't
+diverge. **Additive backend + data-binding only**; no `showPane()`/`renderPane()`/routing/CSS/
+layout changes (owned by the concurrent pane refactor). Full report:
+`docs/ADMIN_OS_PHASE1_RECONCILIATION.md`.
+
+- **P1 — Providers.** `D.providers = ls('sokoniServiceProviders')` → `SokoniDB.listenProviders`
+  (canonical `providers`, status ∈ active/approved, one-listener discipline). `removeProvider`
+  no longer fakes a persistent delete via localStorage.
+- **P2 — Unified Finance.** New `adminGetFinance()` aggregates `payments` + `commissionLedger`
+  + `providerPayouts` + `payoutRequests` + `wallets` (revenue = product + service commission;
+  gateway fees absorbed → net margin; wallet liability; pending/paid payouts; today/7d/30d
+  buckets; index-safe, capped-with-honesty). admin.html Finance pane appends a live canonical
+  strip into `#finKpis`; the hand-entered cost/tax P&L stays local (legitimate).
+- **P3 — Products.** `ls('sellerProducts')` → `SokoniDB.listenProducts` (canonical `products`).
+  Actions made canonical: `deleteProduct` → real unpublish (`adminUpdateProductStatus`
+  `status:'removed'`) — the old local splice was dangerous (admin saw it vanish while it stayed
+  live for customers); `toggleFeature` persists via the same CF; dead localStorage writes removed.
+- **P5a — Reports.** Revenue source `transactions` (empty) → `payments` (canonical).
+- **Deferred (boundary):** P4 Services `providerServices` catalog + P5b `providerAnalytics` need
+  **new panes** (not localStorage-source defects) → collide with the pane refactor; deferred.
+
+Files: `functions/admin-os.js` (adminGetFinance), `admin.html` (listeners + canonical actions),
+`docs/ADMIN_OS_PHASE1_RECONCILIATION.md` (new). Deploy: `functions:adminOsDispatch, hosting`.
+Enforcement: `scripts/test-canonical-collections.js` (deploy gate). Breaking: none.
+
+---
+
 ## [2026-08-02] — fix(booking): provider not notified on paid booking (QA-gate critical fix)
 
 Scenario 1 of the production QA gate surfaced a real operational bug: a provider was **never**
