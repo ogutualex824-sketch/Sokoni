@@ -521,12 +521,13 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
   const start30 = Timestamp.fromMillis(start30ms);
 
   const CAP_TX = 3000, CAP_WALLET = 2000, CAP_REQ = 1000;
-  const [paysSnap, commSnap, settleSnap, reqSnap, walletsSnap] = await Promise.all([
+  const [paysSnap, commSnap, settleSnap, reqSnap, walletsSnap, ordersSnap] = await Promise.all([
     db.collection('payments').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
     db.collection('commissionLedger').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
     db.collection('providerPayouts').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
     db.collection('payoutRequests').limit(CAP_REQ).get().catch(() => ({ docs: [] })),
     db.collection('wallets').limit(CAP_WALLET).get().catch(() => ({ docs: [] })),
+    db.collection('orders').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),   /* product GMV */
   ]);
 
   const round = (n) => Math.round((n || 0) * 100) / 100;
@@ -585,7 +586,38 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
     else if (DONE.has(s)) { paidAmt += a; paidCnt++; }
   }
 
+  /* Product GMV (30d) from `orders` — only realised (paid/completed/delivered). */
+  const PAID_ORDER = new Set(['paid', 'completed', 'delivered', 'fulfilled']);
+  let productGMV = 0, refunds = 0;
+  for (const d of (ordersSnap.docs || [])) {
+    const x = d.data(); const s = String(x.status || '').toLowerCase();
+    const amt = Number(x.total != null ? x.total : x.amount) || 0;
+    if (PAID_ORDER.has(s)) productGMV += amt;
+    if (s === 'refunded' || x.refunded) refunds += Number(x.refundAmount != null ? x.refundAmount : amt) || 0;
+  }
+
+  /* ── SINGLE SOURCE OF TRUTH: the reconciliation summary every dashboard/report
+     must consume (never re-compute its own totals). 30-day window + point-in-time
+     liability. Net Platform Revenue = commission earned − gateway fees absorbed. */
+  const b30 = B.last30d;
+  const reconciliation = {
+    window: '30d',
+    grossRevenue:         round(productGMV + b30.serviceRevenue),   /* product GMV + service GMV */
+    productRevenue:       round(productGMV),
+    serviceRevenue:       round(b30.serviceRevenue),
+    commission:           round(b30.totalCommission),
+    productCommission:    round(b30.productCommission),
+    serviceCommission:    round(b30.serviceCommission),
+    gatewayFees:          round(b30.gatewayFees),
+    refunds:              round(refunds),
+    walletFloat:          round(walletLiability),
+    pendingWithdrawals:   round(pendingAmt),
+    completedWithdrawals: round(paidAmt),
+    netPlatformRevenue:   round(b30.totalCommission - b30.gatewayFees - refunds),
+  };
+
   return {
+    reconciliation,   /* ← the canonical summary; UIs read THIS, not their own math */
     currency: 'KES',
     generatedAt: new Date().toISOString(),
     buckets: B,
@@ -602,6 +634,7 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
       providerPayouts: (settleSnap.docs || []).length >= CAP_TX,
       payoutRequests: (reqSnap.docs || []).length >= CAP_REQ,
       wallets: (walletsSnap.docs || []).length >= CAP_WALLET,
+      orders: (ordersSnap.docs || []).length >= CAP_TX,
     },
     sources: {
       revenue: 'commissionLedger.sokoniCut + providerPayouts.commission',
