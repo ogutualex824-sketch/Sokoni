@@ -74,6 +74,12 @@ Every transition writes a structured event to `bookingEvents` (query `where book
 | 6 Refresh/resume | `BOOKING_HELD` → `BOOKING_RESUMED` (repeatable) → … |
 | 7 Duplicate callback | exactly **one** `BOOKING_RELEASED` doc (`<bookingId>_released`) no matter how many retries |
 
+## Fast verification
+`node scripts/verify-booking.js <bookingId>` prints the three layers for one booking — server state
+(status, paymentStatus, expiresAt, cancelReason, **slot-lock presence**), the full `bookingEvents` trail,
+and the financial chain (intent, commission ledger, provider calendar) — with a consistency check. Read-only.
+Send me a `bookingId` after each scenario and I run it.
+
 ## What I verify server-side (from your IDs)
 - Booking state transitions (`status`, `paymentStatus`, `cancelReason`, `cancelledBy`, `expiresAt`).
 - Slot-lock presence/absence at `providerAvailability/{providerId}/slotLocks/{slotKey}`.
