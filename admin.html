@@ -5467,7 +5467,12 @@ function renderPayouts(){
     }).join('') : '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>');
 
     setAll('#payoutsDoneBody', done.length ? done.slice(0,20).map(function(w){
-      var sc = (w.status==='rejected')?'b-red':'b-green';
+      /* Status colour must reflect MONEY REALITY — a failed/processing payout must
+         NEVER render like a paid one. paid/completed=green, failed/rejected/refunded=red,
+         processing/approving/sending=amber, approved(awaiting disbursement)=blue. */
+      var sc = ({paid:'b-green',completed:'b-green',rejected:'b-red',failed:'b-red',refunded:'b-red',
+                 processing:'b-yellow',approving:'b-yellow',sending:'b-yellow',retry_scheduled:'b-yellow',
+                 approved:'b-blue'})[w.status] || 'b-yellow';
       return '<tr>'
         +'<td style="font-size:11px;">'+h(w.reference||w.id)+'</td>'
         +'<td>'+h(w.sellerName||'—')+'</td>'
