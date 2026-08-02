@@ -215,6 +215,38 @@ appear on the same document and mean different people; the rules depend on telli
 | Settlement | settlement engine | canonical MoR |
 | Notifications | `notifications` | `userId` → should be `uid` |
 
+## 11. Delivery configuration — **new, and the server depends on it**
+
+**Canonical:** `deliveryConfig` on the merchant document (`sellers/{uid}.deliveryConfig`).
+
+| field | type | meaning |
+|---|---|---|
+| `enabled` | bool | **absent or false means delivery is NOT offered** — never "free" |
+| `mode` | enum | `free` · `flat` · `distance` · `zones` · `own_fleet` · `pickup_only` |
+| `defaultFee` | number | flat / own-fleet fee, KES |
+| `baseFee`, `perKm` | number | distance mode |
+| `maxDistanceKm` | number|null | beyond this, **refused — not priced** |
+| `freeAbove` | number|null | order value at or above which delivery is free |
+| `serviceZones` | array | `[{name, fee, etaMinutes}]` |
+| `operatingHours` | object|null | `{open,close}` "HH:MM"; may cross midnight |
+| `allowEditingUntilDispatch` | bool | ADR-010 fulfilment editing |
+
+### Rules
+
+- **Absent config is not free delivery.** The engine defaults `enabled:false`/`pickup_only`, because a
+  merchant who has configured nothing has not agreed to deliver anywhere for nothing.
+- **"We do not deliver there" is a distinct answer from "delivery costs 0".** Conflating them shows a
+  customer FREE delivery to an address the merchant cannot reach.
+- **A missing input refuses rather than guesses.** An unknown distance returns `distance_unknown`, not
+  an invented fee the customer cannot explain.
+- **The server recomputes from this document** — ADR-011. Until coverage is 100%, unconfigured
+  merchants take the legacy path and are logged as `delivery_fee_unverified`. That log is the
+  migration burndown metric, and the legacy path must not survive full coverage.
+- **Logistics fields do not belong here** — vehicle, weight, urgency are the dispatch layer (ADR-012).
+
+**Coverage today: 0 merchants configured.** The field is defined before it is populated so that the
+first write is already canonical, rather than being converged later.
+
 ## Migration principles
 
 1. **Dual-read before converging writes.** Reading both representations hides nothing; writing one too

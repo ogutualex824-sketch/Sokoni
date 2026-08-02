@@ -25887,3 +25887,35 @@ Key milestones previously achieved:
 - Hyper-scale sprint (14 phases, sokoni-scale/queue/cache/search/monitor.js)
 - 8-role RBAC (sokoni-permissions.js)
 - Platform audit 2026 (monitor.html, 4 Cloud Functions, 15+ indexes)
+
+## 2026-08-02 — Server-authoritative delivery pricing; documentation close-out
+
+**Delivery pricing authority (ADR-011).** `functions/index.js` accepted a client-supplied
+`deliveryFee` and clamped it to 0..5000. Inside that range the client set the price. The server now
+loads `deliveryConfig`, recomputes with the shared engine, and REJECTS a mismatch, returning the
+authoritative figure. Unconfigured merchants keep the legacy path and are logged as
+`delivery_fee_unverified` — a temporary state with an exit condition, not an exemption.
+
+**Engine vendored, drift gated.** Firebase uploads only `functions/`, so a parent `require` would
+deploy green and throw on the first checkout. `functions/shared/delivery-engine.js` is a copy;
+`verify-delivery-engine-sync.js` hash-compares it in predeploy because divergent copies would make
+the server reject every order. Both new guards mutation-tested.
+
+**Layering (ADR-012).** vehicle/weight/urgency are dispatch concerns, not merchant pricing. The
+logistics layer may consume the merchant engine; the merchant engine must never consume logistics.
+
+**Brand.** YouTube handle `@mysokonike` → `@mysokoni_ke`, matching `x.com/mysokoni_ke`. Three
+occurrences — two hrefs and one VISIBLE LABEL; fixing only the links would still have shown the old
+handle to users.
+
+**Documentation.** Image Pipeline survey (read path converged, WRITE path is not: 19 files
+`readAsDataURL` vs 5 using the helper; base64 in Firestore risks the 1 MiB limit) · Email Link client
+design (provider is ENABLED — the earlier "disabled" report was a proto3 default-omission trap) ·
+ADR-011, ADR-012 and index · canonical `deliveryConfig` schema.
+
+**Files:** `functions/index.js`, `functions/shared/delivery-engine.js`, `index.html`,
+`scripts/verify-delivery-engine-sync.js`, `scripts/verify-server-delivery-authority.js`,
+`firebase.json`, `docs/` (5 new/updated).
+**API:** delivery fee mismatch now returns `failed-precondition` with `serverDeliveryFee`.
+**Security:** closes a client-controlled pricing input. **Breaking:** none. **Deployed:** no.
+

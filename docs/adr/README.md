@@ -20,6 +20,8 @@ Each ADR states the decision, the evidence that produced it, and — most useful
 | [008](ADR-008-evidence-before-change.md) | Measure production before changing code; if evidence contradicts the plan, stop and revise | **Accepted** | landlord model revision |
 | [009](ADR-009-canonical-field-representation.md) | One canonical representation per concept; dual-read before converging writes | **Accepted** · specification | `CANONICAL_DATA_MODEL.md` |
 | [010](ADR-010-financial-append-only-operational-event-driven.md) | Financial records append-only; operational records event-driven until dispatch | **Accepted** · design | `RECEIPT_ARCHITECTURE.md` |
+| [011](ADR-011-server-authoritative-pricing.md) | The server prices, the client displays; reject a mismatch, never substitute it | Accepted |
+| [012](ADR-012-engine-layering.md) | Merchant pricing must never depend on logistics; the dependency is one-way | Accepted |
 
 ## The rule that governs all of them
 
@@ -38,6 +40,9 @@ absolute gate against a large existing backlog gets disabled, and a disabled gat
 - `docs/ADMIN_CREDENTIAL_RISK_REPORT.md` — credential findings, unpatched by design
 - `docs/RIDE_HUB_ROADMAP.md` — deferred product module, not debt
 - `docs/RECEIPT_ARCHITECTURE.md` — the design for ADR-010
+- `docs/DELIVERY_HUB_SURVEY.md` — the survey behind ADR-012
+- `docs/IMAGE_PIPELINE_SURVEY.md` — write-path divergence; no ADR yet, deliberately
+- `docs/EMAIL_LINK_DESIGN.md` — passwordless client design, blocked on authenticated verification
 
 ## Guards enforcing these decisions
 
@@ -50,3 +55,5 @@ absolute gate against a large existing backlog gets disabled, and a disabled gat
 | `audit-admin-localstorage.js` | ADR-003 | ratchet — 45 |
 | `test-users-render.js`, `test-apps-render.js` | ADR-002 | absolute |
 | `test-landlord-rules.js` | ADR-006 | **written, not yet executed — needs JDK 21** |
+| `verify-server-delivery-authority.js` | ADR-011 | absolute — mutation-tested |
+| `verify-delivery-engine-sync.js` | ADR-011 | absolute — hash comparison, mutation-tested |
