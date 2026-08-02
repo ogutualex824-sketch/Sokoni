@@ -102,7 +102,8 @@ a{color:var(--acc);text-decoration:none}
 
 /* Filter tabs */
 .ftabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px}
-.ftab{padding:6px 14px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;font-size:.78rem;font-weight:600;white-space:nowrap;transition:all var(--t)}
+.ftab{flex:0 0 auto;padding:6px 14px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--sub);cursor:pointer;font-size:.78rem;font-weight:600;white-space:nowrap;transition:all var(--t)}
+.ftabs::-webkit-scrollbar{height:0}
 .ftab.on{background:var(--acc);color:#000;border-color:var(--acc)}
 
 /* Chart */
@@ -605,9 +606,14 @@ const B={
     if(b.status==='pending'||b.status==='confirmed')A.push(`<button class="btn btn-sm" onclick="B.reschedule('${b.id}')">Reschedule</button>`);
     if(b.status==='pending'||b.status==='confirmed'||b.status==='in_progress'){A.push(`<button class="btn btn-sm" onclick="B.cancel('${b.id}')">Cancel</button>`);A.push(`<button class="btn btn-sm" onclick="B.contact('${b.id}')">Contact</button>`);}
     const acts=A.join('');
-    const dt=b.scheduledAt?.toDate?new Date(b.scheduledAt.toDate()):b.scheduledAt?new Date(b.scheduledAt):null;
-    const dtStr=dt?dt.toLocaleString('en-KE',{dateStyle:'medium',timeStyle:'short'}):'—';
-    return`<div class="booking-item"><div class="b-ava">${_esc(ini)}</div><div class="b-info"><div class="b-name">${_esc(b.customerName||'Customer')} <span class="chip-status ${sc[b.status]||''}">${sl[b.status]||b.status}</span></div><div class="b-meta">${_esc(b.service||'')} • ${dtStr}</div>${b.price?`<div class="b-meta" style="color:var(--acc);margin-top:2px">KSh ${_fmt(b.price/100)}</div>`:''}</div><div class="b-acts">${acts}</div></div>`;
+    /* Build date/time from the plain string fields (date=YYYY-MM-DD, startTime/endTime=HH:MM).
+       scheduledAt arrives over the callable wire as a SERIALIZED timestamp ({_seconds,…}),
+       not a Firestore Timestamp, so new Date(it) was "Invalid Date". Strings never lie. */
+    const _t12=t=>{if(!t||typeof t!=='string'||t.indexOf(':')<0)return t||'';const p=t.split(':');const h=Number(p[0])||0,mi=Number(p[1])||0;const ap=h<12?'AM':'PM';const h12=((h+11)%12)||12;return h12+':'+String(mi).padStart(2,'0')+' '+ap;};
+    let dstr='';try{if(b.date)dstr=new Date(b.date+'T00:00:00').toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'});}catch(_){}
+    const tstr=b.startTime?_t12(b.startTime)+(b.endTime?' – '+_t12(b.endTime):''):'';
+    const when=[dstr,tstr].filter(Boolean).join(' · ')||'—';
+    return`<div class="booking-item"><div class="b-ava">${_esc(ini)}</div><div class="b-info"><div class="b-name">${_esc(b.customerName||'Customer')} <span class="chip-status ${sc[b.status]||''}">${sl[b.status]||b.status}</span></div>${b.service?`<div class="b-meta" style="font-weight:600;color:var(--text)">${_esc(b.service)}</div>`:''}<div class="b-meta">📅 ${_esc(when)}</div>${b.price?`<div class="b-meta" style="color:var(--acc);margin-top:2px;font-weight:700">KSh ${_fmt(b.price/100)}</div>`:''}</div><div class="b-acts">${acts}</div></div>`;
   },
   async confirm(id){showLoad('Confirming…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConfirmBooking',bookingId:id});toast('Booking confirmed!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async decline(id){showLoad('Declining…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerDeclineBooking',bookingId:id});toast('Booking declined.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
