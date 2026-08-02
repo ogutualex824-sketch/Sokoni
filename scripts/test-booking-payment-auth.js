@@ -30,6 +30,12 @@ if (start < 0 || end < 0) {
 }
 const BLOCK = SRC.slice(start, end);
 
+/* The extracted block calls require('./shared/constants'). The synthetic
+ * new Function() scope below has no require, so it must be supplied — bound to
+ * functions/booking.js's directory so relative specifiers resolve EXACTLY as
+ * they do at runtime, not relative to this test file. */
+const bookingRequire = require('module').createRequire(path.resolve('functions/booking.js'));
+
 function run({ paymentId, payments = {}, uid = 'buyer1', total = 5000 }) {
   const db = {
     collection: () => ({
@@ -39,9 +45,9 @@ function run({ paymentId, payments = {}, uid = 'buyer1', total = 5000 }) {
     }),
   };
   const console_ = { warn() {}, error() {} };
-  const fn = new Function('db', 'uid', 'paymentId', 'pricingBreakdown', 'console',
+  const fn = new Function('db', 'uid', 'paymentId', 'pricingBreakdown', 'console', 'require',
     `return (async () => { ${BLOCK} return { verifiedPaymentId, paymentStatus, paymentNote }; })();`);
-  return fn(db, uid, paymentId, { total }, console_);
+  return fn(db, uid, paymentId, { total }, console_, bookingRequire);
 }
 
 let pass = 0, fail = 0;
