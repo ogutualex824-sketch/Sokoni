@@ -836,8 +836,9 @@ body.adm-light .adm-sec-h{color:#111;}
           </a>
         </div>
 
-        <div class="adm-sec-h">📊 Platform Stats</div>
-        <div class="adm-stats" id="overviewStats"></div>
+        <div class="adm-sec-h">📊 Platform Stats <span style="font-size:10px;font-weight:600;color:rgba(124,255,0,.5);text-transform:none;letter-spacing:0">● live · canonical backend</span></div>
+        <div class="cc-kpi-grid" id="overviewStats"></div>
+        <div id="ccDashboard" style="margin-top:22px;"></div>
 
         <div class="adm-sec-h" style="margin-top:20px;">⚡ Quick Actions</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;">
@@ -5299,33 +5300,121 @@ var _payoutsUnsub = null;
    canonical adminGetExecutiveDashboard (via adminOsDispatch) so the homepage
    shows real, live production numbers.
 ════════════════════════════════ */
+/* ── Command Center: premium Overview dashboard (canonical AdminAPI only) ──────
+   Every number here comes from a Cloud Function (adminGetOverview/Payments/
+   PayoutRequests/Finance) via AdminAPI — never a direct client Firestore read.
+   No fabricated trends: only values the backend actually returns are shown. */
+function _ccInjectCss(){
+  if(document.getElementById('cc-css')) return;
+  var s=document.createElement('style'); s.id='cc-css';
+  s.textContent=
+    '.cc-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}'
+   +'.cc-kpi{position:relative;background:linear-gradient(160deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:18px;padding:16px 16px 14px;cursor:pointer;transition:transform .18s ease,border-color .18s ease,background .18s ease;overflow:hidden}'
+   +'.cc-kpi:hover{transform:translateY(-2px);border-color:rgba(124,255,0,.35);background:linear-gradient(160deg,rgba(124,255,0,.06),rgba(255,255,255,.02))}'
+   +'.cc-kpi-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}'
+   +'.cc-kpi-icon{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:11px;background:rgba(124,255,0,.1);font-size:17px}'
+   +'.cc-kpi-val{font-size:26px;font-weight:900;letter-spacing:-.5px;color:#fff;line-height:1.05}'
+   +'.cc-kpi-label{font-size:11px;font-weight:600;color:rgba(255,255,255,.45);margin-top:3px;text-transform:uppercase;letter-spacing:.4px}'
+   +'.cc-kpi-sub{font-size:10.5px;color:rgba(124,255,0,.75);margin-top:6px;font-weight:700}'
+   +'.cc-row{display:grid;gap:14px;margin-top:16px}'
+   +'@media(min-width:900px){.cc-row.cc-2{grid-template-columns:1.4fr 1fr}}'
+   +'.cc-card{background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.015));border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:16px 18px}'
+   +'.cc-card-h{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:800;color:#fff;margin-bottom:12px}'
+   +'.cc-card-h .cc-pill{font-size:10px;font-weight:700;color:rgba(124,255,0,.8);background:rgba(124,255,0,.1);border:1px solid rgba(124,255,0,.2);border-radius:20px;padding:3px 9px}'
+   +'.cc-tbl{width:100%;border-collapse:collapse;font-size:12px}'
+   +'.cc-tbl th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.35);font-weight:700;padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.07)}'
+   +'.cc-tbl td{padding:9px 8px;border-bottom:1px solid rgba(255,255,255,.045);color:rgba(255,255,255,.8)}'
+   +'.cc-tbl tr:last-child td{border-bottom:0}'
+   +'.cc-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:20px}'
+   +'.cc-b-green{background:rgba(16,185,129,.15);color:#34d399}.cc-b-red{background:rgba(239,68,68,.15);color:#f87171}.cc-b-yellow{background:rgba(251,191,36,.15);color:#fbbf24}'
+   +'.cc-fin{display:grid;grid-template-columns:1fr 1fr;gap:10px}'
+   +'.cc-fin-item{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:10px 12px}'
+   +'.cc-fin-item .v{font-size:16px;font-weight:900;color:#fff}.cc-fin-item .l{font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}';
+  document.head.appendChild(s);
+}
+function _ccMoney(n){ return 'KES '+Number(n||0).toLocaleString(); }
+function _ccKpi(icon,val,label,sub,pane){
+  return '<div class="cc-kpi"'+(pane?(' onclick="showPane(\''+pane+'\')"'):'')+'>'
+    +'<div class="cc-kpi-top"><span class="cc-kpi-icon">'+icon+'</span></div>'
+    +'<div class="cc-kpi-val">'+val+'</div>'
+    +'<div class="cc-kpi-label">'+label+'</div>'
+    +(sub?('<div class="cc-kpi-sub">'+sub+'</div>'):'')
+    +'</div>';
+}
 async function renderOverview(){
+  _ccInjectCss();
   var stats = document.getElementById('overviewStats');
-  var act   = document.getElementById('overviewActivity');
+  var dash  = document.getElementById('ccDashboard');
   if(!stats) return;
-  stats.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">⏳</div>Loading platform overview…</div>';
-  var tries=0; while(!window.firebaseApp && tries++<40) await new Promise(r=>setTimeout(r,300));
+  stats.innerHTML = '<div class="adm-empty" style="grid-column:1/-1"><div class="adm-empty-icon">⏳</div>Loading platform overview…</div>';
+  /* AdminAPI is the canonical path; fall back to the raw dispatch only if the
+     helper script hasn't loaded yet (never a direct Firestore read). */
   try{
-    var d = await _invCall('adminOsDispatch', { op:'adminGetExecutiveDashboard' }) || {};
-    var money=function(n){ return 'KES '+Number(n||0).toLocaleString(); };
-    var C=function(v,l){ return '<div class="adm-stat-card"><div class="adm-stat-val">'+v+'</div><div class="adm-stat-label">'+l+'</div></div>'; };
+    var get = (typeof AdminAPI!=='undefined')
+      ? function(op,d){ return AdminAPI.call(op,d); }
+      : function(op,d){ return _invCall('adminOsDispatch', Object.assign({op:op},d||{})); };
+    var d = await get('adminGetOverview') || {};
     stats.innerHTML =
-      C(d.totalUsers||0,'Users')+
-      C(d.totalProviders||0,'Providers')+
-      C(d.activeProviders||0,'Active Providers')+
-      C(d.newUsersToday||0,'New Today')+
-      C(d.totalOrders||0,'Product Orders')+
-      C(d.totalServiceBookings||0,'Service Bookings')+
-      C(money(d.revenueToday),'Revenue Today')+
-      C(d.pendingPayouts||0,'Pending Payouts')+
-      C(money(d.pendingPayoutAmount),'Payout Liability')+
-      C(d.openDisputes||0,'Open Disputes')+
-      C(d.openTickets||0,'Support Tickets')+
-      C(d.activeServiceBookings||0,'Active Bookings');
-    if(act) act.innerHTML = '<div class="adm-empty" style="opacity:.55">Latest activity feed — coming soon.</div>';
+      _ccKpi('👥', (d.totalUsers||0),        'Total Users',    (d.newUsersToday!=null?('+'+d.newUsersToday+' today'):''), 'users')
+     +_ccKpi('🛠️',(d.totalProviders||0),     'Providers',      ((d.activeProviders||0)+' active'), 'providers')
+     +_ccKpi('🛒', (d.totalOrders||0),        'Product Orders', '', 'orders')
+     +_ccKpi('📅', (d.totalServiceBookings||0),'Service Bookings',((d.activeServiceBookings||0)+' active'),'services')
+     +_ccKpi('💰', _ccMoney(d.revenueToday),  'Revenue Today',  '', 'finance')
+     +_ccKpi('⏳', (d.pendingPayouts||0),      'Pending Payouts',_ccMoney(d.pendingPayoutAmount), 'payouts')
+     +_ccKpi('👛', _ccMoney(d.pendingPayoutAmount),'Payout Liability','', 'payouts')
+     +_ccKpi('📑', (d.activeSubscriptions||0),'Active Subs',    '', null)
+     +_ccKpi('⚖️',(d.openDisputes||0),        'Open Disputes',  '', 'disputes')
+     +_ccKpi('🎫', (d.openTickets||0),         'Support Tickets','', null)
+     +_ccKpi('🚚', (d.activeDeliveries||0),    'Active Deliveries','', 'delivery')
+     +_ccKpi('🔥', (d.activeServiceBookings||0),'Active Bookings','', 'services');
+    if(dash) _ccRenderRows(dash, get);
   }catch(e){
-    stats.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">⚠️</div>Unable to load overview'+((e&&e.message)?(' — '+e.message):'')+'</div>';
+    stats.innerHTML = '<div class="adm-empty" style="grid-column:1/-1"><div class="adm-empty-icon">⚠️</div>Unable to load overview'+((e&&e.message)?(' — '+h(e.message)):'')+'</div>';
   }
+}
+/* Dashboard rows — recent payments + withdrawals queue + finance summary, all canonical. */
+async function _ccRenderRows(dash, get){
+  dash.innerHTML =
+    '<div class="cc-row cc-2">'
+     +'<div class="cc-card"><div class="cc-card-h">💳 Latest Transactions <span class="cc-pill" id="ccTxPill">payments</span></div><div id="ccTx"><div class="aapi-skel"><div class="aapi-skel-row"></div><div class="aapi-skel-row"></div><div class="aapi-skel-row"></div></div></div></div>'
+     +'<div class="cc-card"><div class="cc-card-h">⏳ Withdrawals Queue <span class="cc-pill" id="ccWqPill">payoutRequests</span></div><div id="ccWq"><div class="aapi-skel"><div class="aapi-skel-row"></div><div class="aapi-skel-row"></div></div></div></div>'
+    +'</div>'
+    +'<div class="cc-row"><div class="cc-card"><div class="cc-card-h">📈 Finance Summary · 30d <span class="cc-pill" id="ccFinPill">adminGetFinance</span></div><div id="ccFin"><div class="aapi-skel"><div class="aapi-skel-row"></div></div></div></div></div>';
+
+  /* Latest transactions */
+  get('adminGetPayments', { limit: 8 }).then(function(res){
+    var rows=(res&&res.payments)||[]; var el=document.getElementById('ccTx');
+    if(!el) return;
+    if(!rows.length){ el.innerHTML='<div class="adm-empty" style="opacity:.5">No payments yet.</div>'; return; }
+    var badge=function(s){ s=String(s||'').toUpperCase(); var c=s==='COMPLETE'?'cc-b-green':(s==='FAILED'?'cc-b-red':'cc-b-yellow'); return '<span class="cc-badge '+c+'">'+h(s||'—')+'</span>'; };
+    el.innerHTML='<table class="cc-tbl"><thead><tr><th>Date</th><th>Amount</th><th>Status</th><th>Phone</th></tr></thead><tbody>'
+      +rows.map(function(r){ var dt=r.createdAtMs?new Date(r.createdAtMs).toLocaleDateString('en-KE',{day:'numeric',month:'short'}):'—';
+        return '<tr><td style="color:rgba(255,255,255,.5)">'+h(dt)+'</td><td style="font-weight:800;color:#34d399">'+_ccMoney(r.amount)+'</td><td>'+badge(r.status)+'</td><td style="font-family:monospace;font-size:11px">'+h(r.phone||'—')+'</td></tr>'; }).join('')
+      +'</tbody></table>';
+  }).catch(function(){ var el=document.getElementById('ccTx'); if(el) el.innerHTML='<div class="adm-empty" style="opacity:.5">Unable to load payments.</div>'; });
+
+  /* Withdrawals queue */
+  get('adminGetPayoutRequests').then(function(res){
+    var items=(res&&res.items)||[]; var el=document.getElementById('ccWq'); if(!el) return;
+    var pending=items.filter(function(r){ return ['pending','approved','processing'].indexOf(r.status)>=0; });
+    if(!pending.length){ el.innerHTML='<div class="adm-empty" style="opacity:.5">Queue clear — no pending withdrawals.</div>'; return; }
+    el.innerHTML='<table class="cc-tbl"><thead><tr><th>Seller</th><th>Amount</th><th>Status</th></tr></thead><tbody>'
+      +pending.slice(0,6).map(function(r){ return '<tr><td>'+h(r.sellerName||('Seller '+String(r.sellerUid).slice(0,6)))+'</td><td style="font-weight:800;color:#fff">'+_ccMoney(r.amount)+'</td><td><span class="cc-badge cc-b-yellow">'+h((r.status||'').toUpperCase())+'</span></td></tr>'; }).join('')
+      +'</tbody></table><div style="margin-top:10px"><button class="solid-btn solid-green" style="font-size:12px;padding:7px 14px" onclick="showPane(\'payouts\')">Open Withdrawals →</button></div>';
+  }).catch(function(){ var el=document.getElementById('ccWq'); if(el) el.innerHTML='<div class="adm-empty" style="opacity:.5">Unable to load withdrawals.</div>'; });
+
+  /* Finance summary (30d canonical) */
+  get('adminGetFinance').then(function(res){
+    var b=(res&&res.buckets&&res.buckets.last30d)||{}; var L=(res&&res.liability)||{}; var el=document.getElementById('ccFin'); if(!el) return;
+    el.innerHTML='<div class="cc-fin">'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.totalCommission)+'</div><div class="l">Platform Revenue</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.serviceRevenue)+'</div><div class="l">Service GMV</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.gatewayFees)+'</div><div class="l">Gateway Fees</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(b.netMargin)+'</div><div class="l">Net Margin</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(L.walletBalanceTotal)+'</div><div class="l">Wallet Liability</div></div>'
+      +'<div class="cc-fin-item"><div class="v">'+_ccMoney(L.pendingPayoutAmount)+'</div><div class="l">Pending Payouts</div></div>'
+      +'</div>';
+  }).catch(function(){ var el=document.getElementById('ccFin'); if(el) el.innerHTML='<div class="adm-empty" style="opacity:.5">Unable to load finance.</div>'; });
 }
 window.renderOverview = renderOverview;
 /* Populate the default-active Overview once on load (renderPane fires it on switch). */
@@ -6185,6 +6274,7 @@ if(sessionStorage.getItem(SESS_KEY)) loadAll();
 <script src="sokoni-commission-rates.js"></script>
 <script src="sokoni-pay.js"></script>
 <script src="sokoni-intasend.js" defer></script>
+<script src="admin-api.js"></script>
 <script src="sw-register.js" defer></script>
 <script type="module">
 /* Admin gate — redirect non-admins before page renders.
