@@ -2772,7 +2772,7 @@ function loadAll(){
   D.products    = ls('sellerProducts');
   D.orders      = [];   /* Firestore-only; _renderAdmOrders syncs this for the stat counters. */
   D.posOrders   = ls('sokoniPOSOrders');
-  D.providers   = ls('sokoniServiceProviders');
+  D.providers   = [];   /* Firestore-only (canonical `providers`); startProvidersListener fills this. No localStorage source. */
   D.apps        = ls('sokoniPendingApplications');
   D.broadcasts  = ls('sokoniBroadcasts');
   D.charges     = ls('sokoniAdminCharges');
@@ -4356,10 +4356,13 @@ function filterProviders(q){
   renderProviders(D.providers.filter(function(p){ return (p.name||'').toLowerCase().includes(q2)||(p.category||'').toLowerCase().includes(q2); }));
 }
 function removeProvider(i,_c){
-  if(!_c){_skConfirm('Remove '+D.providers[i].name+'?',()=>removeProvider(i,true));return;}
-  D.providers.splice(i,1);
-  localStorage.setItem('sokoniServiceProviders',JSON.stringify(D.providers));
-  renderProviders(D.providers); renderStats(); toast('🚫 Provider removed');
+  /* Providers are now canonical Firestore records (not a localStorage cache), so a
+     client-side splice is not a real removal — the next `providers` snapshot restores
+     the row. Suspension must be a server action. Until that CF is wired, be honest
+     rather than fake a persistent delete. */
+  var p = D.providers[i]; if(!p) return;
+  if(!_c){_skConfirm('Suspend '+(p.name||'this provider')+'?',()=>removeProvider(i,true));return;}
+  toast('ℹ️ Provider suspension is a server action — not yet wired. No local change made.');
 }
 
 /* ════════════════════════════════
@@ -5092,6 +5095,24 @@ function startUsersListener(){
     },
     function(err){ usersSetError((err && err.message) || "permission denied"); }
   );
+}
+
+/* ── Providers listener ─────────────────────────────────────────────────────
+   Canonical source is the Firestore `providers` collection (SokoniDB.listenProviders,
+   status ∈ {active,approved} per the discovery contract) — NOT localStorage. The
+   old `ls('sokoniServiceProviders')` seed showed a stale local cache that never
+   reflected who was actually bookable in production. Cards + the counter now
+   redraw live on every snapshot. Pending/suspended applicants are a separate
+   registry (Applications pane), not bookable providers, so they are intentionally
+   outside this active/approved discovery scope. */
+function startProvidersListener(){
+  if (window._providersUnsub) return;             /* exactly one listener */
+  if (!window.SokoniDB || !window.SokoniDB.listenProviders) return;
+  window._providersUnsub = window.SokoniDB.listenProviders(function(providers){
+    D.providers = providers;                       /* stat counters read this */
+    try { renderProviders(D.providers); } catch(e){}
+    if (typeof renderStats === 'function') try { renderStats(); } catch(e){}
+  });
 }
 
 /* ── User detail slide-in ──────────────────────────────────────────────────
@@ -6201,6 +6222,7 @@ function _startAdminListeners(){
   );
   SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
   if (typeof startUsersListener === 'function') startUsersListener();
+  if (typeof startProvidersListener === 'function') startProvidersListener();
   if (typeof startPropertiesListeners === 'function') startPropertiesListeners();
 }
 document.addEventListener('sokoniAdminReady', _startAdminListeners);
