@@ -1,3 +1,67 @@
+## [2026-08-02] — feat(delivery): Phase 6 — one delivery engine (engine + tests; consumers not yet migrated)
+
+**Delivery was being priced in at least four places, each with its own rules:**
+
+| site | rule |
+|---|---|
+| `checkout.html:3158` | `Math.round(80 + zone.distanceKm * 15)` — hardcoded |
+| `delivery-hub.js:212` | `_calcFee(distance, vehicle, weight, urgency)` |
+| `food-menu.html:320,344` | `_rest.deliveryFee \|\| 50` — hardcoded default |
+| `functions/index.js:3303` | clamps a **client-supplied** fee to 0–5000 |
+
+A merchant setting "free delivery" had no way to be sure every surface agreed, and the last of those
+**trusts a number the client sent**. Four implementations of a price is four answers to "what does this
+cost?" — the same defect class as two inventories or two receipt numbers.
+
+### `sokoni-delivery-engine.js` — pure, by design
+
+No Firestore, no network, no writes. Config + order in, number + **reason** out. That makes it testable
+without an emulator, callable identically on the client and in a Cloud Function, and — the point —
+lets the **server recompute exactly what the client displayed and reject a mismatch, instead of
+clamping an unexplained value.**
+
+Six modes: `free` · `flat` · `distance` · `zones` · `own_fleet` · `pickup_only`.
+Four methods: `calculateDelivery()` · `canDeliver()` · `deliverySummary()` · `isEditable()`.
+
+### The refusals are the important part
+
+- **An unconfigured merchant does not silently get free delivery.** Absent config means *not offered*,
+  never *free*.
+- **An unknown distance refuses rather than inventing a fee.** A charge the customer cannot explain is
+  worse than an error.
+- **An unserved zone never renders as "FREE delivery."** *"We don't go there"* and *"it costs nothing"*
+  are different answers, and conflating them is how a customer is shown free delivery to an address
+  the merchant cannot reach.
+- **Fees are never negative**, even with a negative configured base.
+
+`freeAbove` overrides every priced mode — a merchant who says "free above 2,000" means it regardless of
+distance. Operating-hours windows that cross midnight work, which matters for water deliveries.
+
+### `isEditable` enforces ADR-010 structurally
+
+**There is no branch that returns true for a financial field**, so the function cannot be misused as a
+general *"can I edit this order?"* check. `total`, `tax`, `discount`, `receiptNumber`,
+`paymentReference` and `deposit` return `not_a_fulfilment_field` at every status. Fulfilment fields are
+editable until dispatch and locked by `dispatched` / `out_for_delivery` / `delivered`.
+
+### Tests: 26 new, **825 total**
+
+### Not yet done — stated plainly
+
+**The four existing call sites are not migrated.** That work rewrites **checkout pricing**, and doing
+it at the end of a long session without an authenticated checkout to test against would be exactly the
+kind of change this programme has been avoiding. The engine ships first, tested; the consumers migrate
+next, one at a time, each verified — the same order used for merchant templates (data, then wiring)
+and Phase 4 (primitive, then consumers).
+
+Until they migrate, the four implementations remain. **The engine is additive and changes no existing
+behaviour.**
+
+Files: `sokoni-delivery-engine.js` (new), `functions/test/delivery-engine.test.js` (new).
+Not deployed.
+
+---
+
 ## [2026-08-02] — feat(inventory): Phase 4 — returnable-unit subtypes on the existing ledger
 
 **Extended, not rebuilt.** No bottle inventory, no bottle stock engine, no duplicate balance table, no
