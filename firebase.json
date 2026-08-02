@@ -5,7 +5,7 @@
       "node \"$RESOURCE_DIR/../scripts/predeploy-syntax-gate.js\"",
       "node \"$RESOURCE_DIR/../scripts/verify-commission-single-source.js\"",
       "node \"$RESOURCE_DIR/../scripts/verify-delivery-engine-sync.js\"",
-      "node \"$RESOURCE_DIR/../scripts/reconcile-payouts.js\" --gate"
+      "node \"$RESOURCE_DIR/../scripts/predeploy-payout-gate.js\""
     ],
     "runtime": "nodejs22",
     "concurrency": 80,
