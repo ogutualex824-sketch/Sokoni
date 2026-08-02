@@ -6322,7 +6322,9 @@ window.logoutUser = logoutUser;
       links.push({ icon: '👥', label: 'Applicants', href: 'jobs.html#applications' });
     }
     if (roles.indexOf('provider') !== -1) {
-      links.push({ icon: '🔧', label: 'My Services', href: 'services.html#provider', primary: true });
+      /* "My Services" = the provider's OWN service management (Rate Cards tab), not the
+         customer-facing services browse page. Matches the canonical target used elsewhere. */
+      links.push({ icon: '🔧', label: 'My Services', href: 'provider-dashboard.html#services', primary: true });
     }
 
     /* Universal hubs */
