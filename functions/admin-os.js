@@ -489,6 +489,133 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Unified Finance (Priority 2 — Admin OS Phase 1 canonical sync)
+
+   ONE endpoint that aggregates every finance stream from its CANONICAL source
+   (docs/CANONICAL_COLLECTIONS.md → "Reporting rule: aggregate, don't pick one"):
+
+     • payments            → money-in volume + gateway fees (amount − netAmount)
+     • commissionLedger    → product/marketplace commission (sokoniCut)
+     • providerPayouts     → service revenue (gross) + service commission (commission), settled
+     • payoutRequests      → withdrawals: pending (liability in-flight) + paid/completed
+     • wallets             → wallet balance = platform liability to users
+
+   Platform revenue = product commission + service commission (NEVER `transactions`
+   alone — that misses every service booking). Gateway fees are platform-absorbed
+   (Option 1), so netMargin = totalCommission − gatewayFees.
+
+   Index-safe: single-field `createdAt >=` range per collection, all bucketing done
+   in memory (today / 7d / 30d). Reads are capped and the cap is reported, so a
+   truncated total can never masquerade as complete. */
+exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetFinance = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+
+  const DAY = 86400000;
+  const now = Date.now();
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const startToday = t0.getTime();
+  const start7 = now - 7 * DAY;
+  const start30ms = now - 30 * DAY;
+  const start30 = Timestamp.fromMillis(start30ms);
+
+  const CAP_TX = 3000, CAP_WALLET = 2000, CAP_REQ = 1000;
+  const [paysSnap, commSnap, settleSnap, reqSnap, walletsSnap] = await Promise.all([
+    db.collection('payments').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
+    db.collection('commissionLedger').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
+    db.collection('providerPayouts').where('createdAt', '>=', start30).limit(CAP_TX).get().catch(() => ({ docs: [] })),
+    db.collection('payoutRequests').limit(CAP_REQ).get().catch(() => ({ docs: [] })),
+    db.collection('wallets').limit(CAP_WALLET).get().catch(() => ({ docs: [] })),
+  ]);
+
+  const round = (n) => Math.round((n || 0) * 100) / 100;
+  const msOf = (c) => (c && c.toDate ? c.toDate().getTime() : (c && c._seconds ? c._seconds * 1000 : 0));
+  const emptyBucket = () => ({
+    paymentsVolume: 0, gatewayFees: 0,
+    productCommission: 0, serviceRevenue: 0, serviceCommission: 0,
+    totalCommission: 0, netMargin: 0,
+    paymentsCount: 0, settlementsCount: 0,
+  });
+  const B = { today: emptyBucket(), last7d: emptyBucket(), last30d: emptyBucket() };
+  /* apply `fn(bucket)` to every window this timestamp falls inside */
+  const forWindows = (t, fn) => {
+    if (t >= start30ms) fn(B.last30d);
+    if (t >= start7)    fn(B.last7d);
+    if (t >= startToday) fn(B.today);
+  };
+
+  for (const d of (paysSnap.docs || [])) {
+    const x = d.data();
+    if (String(x.status || '').toUpperCase() !== 'COMPLETE') continue;
+    const amt = Number(x.amount != null ? x.amount : x.amountKES) || 0;
+    const net = Number(x.netAmount != null ? x.netAmount : amt) || 0;
+    const fee = Math.max(0, amt - net);
+    forWindows(msOf(x.createdAt), (b) => { b.paymentsVolume += amt; b.gatewayFees += fee; b.paymentsCount++; });
+  }
+  for (const d of (commSnap.docs || [])) {
+    const x = d.data();
+    const cut = Number(x.sokoniCut != null ? x.sokoniCut : x.commission) || 0;
+    forWindows(msOf(x.createdAt), (b) => { b.productCommission += cut; });
+  }
+  for (const d of (settleSnap.docs || [])) {
+    const x = d.data();
+    if (x.status !== 'settled') continue;   /* only credited settlements are realised revenue */
+    const gross = Number(x.gross) || 0;
+    const comm  = Number(x.commission) || 0;
+    forWindows(msOf(x.createdAt), (b) => { b.serviceRevenue += gross; b.serviceCommission += comm; b.settlementsCount++; });
+  }
+  for (const k of Object.keys(B)) {
+    const b = B[k];
+    b.totalCommission = b.productCommission + b.serviceCommission;
+    b.netMargin = b.totalCommission - b.gatewayFees;
+    for (const f of ['paymentsVolume', 'gatewayFees', 'productCommission', 'serviceRevenue', 'serviceCommission', 'totalCommission', 'netMargin']) b[f] = round(b[f]);
+  }
+
+  /* Liability + payout ledger — point-in-time, not windowed. */
+  let walletLiability = 0;
+  for (const d of (walletsSnap.docs || [])) walletLiability += Number(d.data().balance) || 0;
+
+  const PENDING = new Set(['pending', 'approved', 'processing']);   /* in-flight, still owed */
+  const DONE = new Set(['paid', 'completed']);                      /* disbursed via B2C */
+  let pendingAmt = 0, pendingCnt = 0, paidAmt = 0, paidCnt = 0;
+  for (const d of (reqSnap.docs || [])) {
+    const x = d.data(); const a = Number(x.amount) || 0; const s = String(x.status || '').toLowerCase();
+    if (PENDING.has(s)) { pendingAmt += a; pendingCnt++; }
+    else if (DONE.has(s)) { paidAmt += a; paidCnt++; }
+  }
+
+  return {
+    currency: 'KES',
+    generatedAt: new Date().toISOString(),
+    buckets: B,
+    liability: {
+      walletBalanceTotal: round(walletLiability),
+      walletCount: (walletsSnap.docs || []).length,
+      pendingPayoutAmount: round(pendingAmt), pendingPayoutCount: pendingCnt,
+      completedPayoutAmount: round(paidAmt), completedPayoutCount: paidCnt,
+    },
+    /* Truncation honesty — a capped read must never read as a complete total. */
+    capped: {
+      payments: (paysSnap.docs || []).length >= CAP_TX,
+      commissionLedger: (commSnap.docs || []).length >= CAP_TX,
+      providerPayouts: (settleSnap.docs || []).length >= CAP_TX,
+      payoutRequests: (reqSnap.docs || []).length >= CAP_REQ,
+      wallets: (walletsSnap.docs || []).length >= CAP_WALLET,
+    },
+    sources: {
+      revenue: 'commissionLedger.sokoniCut + providerPayouts.commission',
+      productCommission: 'commissionLedger.sokoniCut',
+      serviceCommission: 'providerPayouts.commission (settled)',
+      serviceRevenue: 'providerPayouts.gross (settled)',
+      gatewayFees: 'payments.amount − payments.netAmount (COMPLETE)',
+      walletLiability: 'sum(wallets.balance)',
+      payouts: 'payoutRequests (pending|approved|processing vs paid|completed)',
+    },
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
    Orders
 ──────────────────────────────────────────────────────────────────────────── */
 exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetOrders = async (req) => {

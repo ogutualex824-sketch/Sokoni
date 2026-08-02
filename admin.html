@@ -4431,6 +4431,36 @@ function loadFinData(){
   try{ FIN.taxes = JSON.parse(localStorage.getItem('sokoniTaxPayments')||'[]'); }catch(e){ FIN.taxes=[]; }
 }
 
+/* Canonical live finance strip (Priority 2 — Admin OS Phase 1 canonical sync).
+   The P&L above is the admin's own cost/tax bookkeeping (legitimately local: FIN.costs /
+   FIN.taxes are hand-entered). REVENUE, however, must come from canonical Firestore — the
+   old localStorage ledgers (sokoniCommissionLedger / sokoniBookingFees / sokoniPhoneLeads /
+   sokoniPlatformBookings) were stale mirrors. This appends live, clearly-labelled cards from
+   adminGetFinance (payments + commissionLedger + providerPayouts + payoutRequests + wallets)
+   into the SAME #finKpis grid — additive data-binding only, no layout/routing/CSS change. */
+async function _admLoadCanonicalFinance(){
+  var grid = document.getElementById('finKpis'); if(!grid || typeof _invCall!=='function') return;
+  grid.querySelectorAll('[data-canon="1"]').forEach(function(n){ n.remove(); });   /* idempotent */
+  try{
+    var f = await _invCall('adminOsDispatch', { op:'adminGetFinance' });
+    if(!f || !f.buckets) return;
+    var b = f.buckets.last30d || {}, L = f.liability || {}, cap = f.capped || {};
+    var star = (cap.payments||cap.commissionLedger||cap.providerPayouts||cap.wallets||cap.payoutRequests) ? ' *' : '';
+    var R = function(n){ return 'KES '+fmt(Math.round(n||0)); };
+    var cards = [
+      fkpi('🟢', R(b.totalCommission),   'Platform Revenue · 30d'+star,      '#71ff00'),
+      fkpi('🛒', R(b.productCommission), 'Product Commission · 30d',         '#64b4ff'),
+      fkpi('🧰', R(b.serviceCommission), 'Service Commission · 30d',         '#00ccff'),
+      fkpi('💸', R(b.gatewayFees),       'Gateway Fees (absorbed) · 30d',    '#ff9f43'),
+      fkpi('📈', R(b.netMargin),         'Net Margin · 30d', (b.netMargin>=0?'#71ff00':'#ff6464')),
+      fkpi('👛', R(L.walletBalanceTotal),'Wallet Liability',                 '#b464ff'),
+      fkpi('⏳', R(L.pendingPayoutAmount),'Pending Payouts ('+(L.pendingPayoutCount||0)+')','#fbbf24'),
+      fkpi('✅', R(L.completedPayoutAmount),'Paid Out ('+(L.completedPayoutCount||0)+')','#71ff00')
+    ];
+    var tmp = document.createElement('div'); tmp.innerHTML = cards.join('');
+    Array.prototype.slice.call(tmp.children).forEach(function(c){ c.setAttribute('data-canon','1'); grid.appendChild(c); });
+  }catch(e){ /* canonical finance unavailable — keep local KPIs, never fabricate */ }
+}
 function renderFinance(){
   loadFinData();
   var period = (document.getElementById('finPeriod')||{}).value || 'month';
@@ -4482,6 +4512,7 @@ function renderFinance(){
     fkpi('✅','KES '+fmt(taxPaid),'Tax Paid (period)','#71ff00'),
     fkpi('📦',periodCosts.length,'Cost Entries','rgba(255,255,255,0.6)')
   ].join('');
+  _admLoadCanonicalFinance();   /* append canonical live finance cards (Firestore-sourced) */
 
   /* P&L bar */
   var maxVal = Math.max(totalRev, totalCost+totalTaxOwed, 1);
