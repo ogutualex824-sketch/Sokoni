@@ -4,7 +4,8 @@
    Phase E WS1 (docs/BOOKING_PAYMENT_CONTRACT.md invariant 4).
 
    A `providerBookings` doc is created (pending, slot-locked) so the customer can
-   pay. If it is NOT paid within the intent TTL (15 min), it must self-clean:
+   pay. If it is NOT paid within its hold window (`expiresAt`, now 5 min; legacy docs
+   fall back to createdAt + 15-min TTL), it must self-clean:
    release the slot lock, cancel the booking (reason: payment-expired), and
    invalidate the payment intent — so a stale unpaid booking never lingers or
    holds a slot other customers could book. Terminal + idempotent.
@@ -17,13 +18,17 @@ const rc = require('./reservation-core');
 
 const TTL_MS = 15 * 60 * 1000;
 
-/** Pure: an unpaid pending booking past the TTL is expired. */
+/** Pure: an unpaid pending booking past its hold window is expired.
+ *  Prefers the explicit `expiresAt` hold stamp (now = 5 min, set at create); falls back
+ *  to createdAt + TTL for legacy bookings written before the hold window existed. */
 function isExpired(booking, nowMs, ttlMs = TTL_MS) {
   if (!booking) return false;
   if (booking.status !== 'pending') return false;                 /* only pending holds a payable slot */
   if (booking.paymentStatus && booking.paymentStatus !== 'pending') return false; /* paid/settled/refunded */
+  const expMs = booking.expiresAt && booking.expiresAt.toMillis ? booking.expiresAt.toMillis() : 0;
+  if (expMs > 0) return nowMs >= expMs;                           /* explicit hold window */
   const createdMs = booking.createdAt && booking.createdAt.toMillis ? booking.createdAt.toMillis() : 0;
-  return createdMs > 0 && createdMs <= (nowMs - ttlMs);
+  return createdMs > 0 && createdMs <= (nowMs - ttlMs);           /* legacy fallback (unchanged) */
 }
 
 function _slotLockRef(db, providerId, b) {
@@ -87,12 +92,14 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
         return { outcome: 'refunded', shillings, customerUid: b.customerUid, status: b.status };
       }
 
-      /* Active booking → hold as before. */
+      /* Active booking → hold as before. Clear the pre-payment expiry stamp so the
+         sweep never treats a paid booking as an abandoned hold. */
       txn.update(bRef, {
         paymentStatus: 'paid_held',
         heldAmount:    Math.round(amountKES * 100),   /* cents held (price + fee) */
         paymentRef:    apiRef,
         paidAt:        FV.serverTimestamp(),
+        expiresAt:     FV.delete(),
         updatedAt:     FV.serverTimestamp(),
       });
       return { outcome: 'held' };

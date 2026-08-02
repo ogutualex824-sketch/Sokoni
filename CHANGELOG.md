@@ -1,3 +1,37 @@
+## [2026-08-02] — feat(booking): Slice 1 — pre-payment slot HOLD lifecycle (fixes "ghost booked" slots)
+
+Audit first (two agents, file:line evidence): the service-booking engine already has transactional
+double-booking protection (deterministic `slotKey` slot-lock CAS) and a rich availability schema
+(hours, breaks, holidays, vacation, min-notice, same-day, buffer, max-per-day). The genuine gap was the
+**pre-payment hold**: `bookingCreateService` locked the slot the instant the booking was created
+(`pending`), with no `expiresAt`; an abandoned unpaid booking held the slot until a **15-min** `createdAt`
+sweep, so a customer retrying their own closed payment saw *"That slot was just taken"* for a slot nobody
+bought. Chosen approach (per owner): **extend `pending` + `expiresAt`**, not a new status or a rebuild.
+
+- **Explicit 5-min hold (`functions/booking-service.js`).** Create stamps `expiresAt = now + 5m` on the
+  booking AND the slot lock, and returns it. Payment (`booking-payment-sweep.js` `holdServiceBookingPayment`)
+  clears `expiresAt` when it sets `paid_held`, so a paid booking is never mistaken for an abandoned hold.
+- **Owner self-resume, not "just taken".** When the slot lock exists and it is THIS customer's own still-unpaid
+  hold (deterministic id ⇒ same booking doc), the create refreshes the window and returns `{resumed:true}` so
+  they continue payment. Anyone else's hold remains a real conflict.
+- **Proactive release (`bookingReleaseHold`, new; registered in `provider-dispatch.js`).** Owner-only,
+  idempotent, never releases a paid hold. Cancels the booking + deletes the slot lock + cancels any open
+  payment intent in one transaction — called by the client the instant the customer closes the payment sheet.
+- **Faster, expiry-driven sweep (`booking-payment-sweep.js` + `booking.js`).** `isExpired` now prefers the
+  explicit `expiresAt` (5 min) and falls back to `createdAt + 15-min TTL` for legacy docs; the cleanup
+  scheduler runs **every 1 minute** (was 5), so an abandoned hold frees within ~1 min even if the device died.
+- **Client (`sokoni-book-service.js`).** Captures `expiresAt`, shows a live "please pay within m:ss" countdown
+  that disables Pay at zero, and releases the hold on close (fire-and-forget; server no-ops if already paid).
+
+Tests: `scripts/test-booking-hold-expiry.js` — 12/12 on the pure expiry decision (expiresAt window, paid/terminal
+guards, legacy fallback, precedence). Booking suite regression-clean (payment-auth 10/10, buffer 11/11,
+waitlist 19/19). Deploy: `functions:providerDispatch` (new op) + `functions:bookingCleanupHolds` (cadence) +
+hosting (`sokoni-book-service.js`). Data: bookings/slot-locks gain `expiresAt` (additive; legacy docs use the
+TTL fallback). Breaking: none. Follow-ups: payment-failure webhook release (currently client + sweep cover it);
+autoConfirm-unpaid holds are not swept by this predicate (pre-existing; autoConfirm is off by default).
+
+---
+
 ## [2026-08-02] — fix(test-tooling): unblock deploy gate (harness drift) + ship Bug 1 to production
 
 The Bug 1 hosting deploy was blocked by the inventory predeploy gate. The Windows symptom was

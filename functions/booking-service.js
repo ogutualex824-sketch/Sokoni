@@ -33,6 +33,13 @@ const PRICING_VERSION = '2.0.0';   /* v2.0: advanced rate cards — server compu
                                       deposit) and persists a pricingSnapshot. Back-compat: services without a
                                       `pricing` config still price at svc.price (v1.1 behavior). */
 
+/* Pre-payment slot-hold window. On create the booking is `pending` + slot-locked and
+   stamped with `expiresAt = now + HOLD_MS` so the customer can pay. If they don't, the
+   hold is released — proactively by bookingReleaseHold (customer abandons/fails payment)
+   or by the expiry sweep once `expiresAt` passes (booking-payment-sweep.js). This is the
+   held→paid_held→confirmed lifecycle: a slot is never booked until payment lands. */
+const HOLD_MS = 5 * 60 * 1000;
+
 /* ── Shared availability gate ────────────────────────────────────────────────
    Validates a candidate slot against the provider's config (working hours,
    blackout override, vacation, min-notice, same-day) and returns the computed
@@ -187,12 +194,30 @@ _h.bookingCreateService = async (req) => {
     custActive = cs.size;
   }
 
+  const holdExpiresMs = Date.now() + HOLD_MS;   /* server clock; stamped on booking + lock so the hold self-expires */
+
   let outcome = null;
   await db.runTransaction(async (txn) => {
     outcome = null;
     if (idemRef) { const i = await txn.get(idemRef); if (i.exists) { outcome = { bookingId: i.data().bookingId, idempotent: true }; return; } }
     const lock = await txn.get(slotLockRef);
-    if (lock.exists) { outcome = { conflict: 'already-exists' }; return; }
+    if (lock.exists) {
+      /* The slot is held. If it is THIS customer's own still-unpaid hold, let them
+         RESUME payment (refresh the 5-min window) instead of seeing "just taken" — the
+         common case of returning to a payment sheet they closed. Deterministic booking id
+         means the lock points at `bookingRef`. Anyone else's hold = a real conflict. */
+      const held = await txn.get(bookingRef);
+      if (held.exists) {
+        const hb = held.data();
+        if (hb.customerUid === customerUid && hb.status === 'pending' && (hb.paymentStatus || 'pending') === 'pending') {
+          txn.update(bookingRef, { expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs), updatedAt: _ts() });
+          outcome = { bookingId, status: 'pending', resumed: true, expiresAt: holdExpiresMs };
+          return;
+        }
+      }
+      outcome = { conflict: 'already-exists' };
+      return;
+    }
     /* Daily total cap (all bookings that day). */
     const maxPerDay = Number(cfg.cap && cfg.cap.maxPerDay || 0);
     if (maxPerDay > 0 && existing.length >= maxPerDay) { outcome = { conflict: 'resource-exhausted' }; return; }
@@ -219,6 +244,7 @@ _h.bookingCreateService = async (req) => {
       ...(pricingSnapshot ? { pricingSnapshot } : {}),   /* immutable price breakdown → rate-card edits can't change this booking */
       paymentStatus: 'pending',
       status,                        /* server-authoritative */
+      expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs),   /* pre-payment hold window; cleared on paid_held */
       note: _san(d.note, 300),
       hubType: _san(d.hubType, 40) || 'services',
       idempotencyKey,
@@ -231,12 +257,14 @@ _h.bookingCreateService = async (req) => {
       pricingVersion:     'rate-card@' + PRICING_VERSION,
       createdAt: _ts(), updatedAt: _ts(),
     });
-    txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts() });
+    txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts(), expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs) });
     if (idemRef) txn.set(idemRef, { bookingId, providerId, customerUid, createdAt: _ts() });
-    outcome = { bookingId, status };
+    outcome = { bookingId, status, expiresAt: holdExpiresMs };
   });
 
   if (outcome && outcome.idempotent) return { success: true, bookingId: outcome.bookingId, idempotent: true };
+  /* Owner resumed their own live hold — not a new booking; skip notify/convergence. */
+  if (outcome && outcome.resumed) return { success: true, bookingId: outcome.bookingId, status: 'pending', resumed: true, expiresAt: outcome.expiresAt };
   if (outcome && outcome.conflict) throw new HttpsError(
     outcome.conflict,
     outcome.conflict === 'resource-exhausted' ? 'The provider is fully booked for that time.'
@@ -256,7 +284,49 @@ _h.bookingCreateService = async (req) => {
     });
   } catch (e) { /* ignore */ }
 
-  return { success: true, bookingId: outcome.bookingId, status: outcome.status, price };
+  return { success: true, bookingId: outcome.bookingId, status: outcome.status, price, expiresAt: outcome.expiresAt };
+};
+
+/* ── bookingReleaseHold (P3) ──────────────────────────────────────────────────
+   Proactive hold release. The client calls this the instant the customer abandons
+   payment — closes the sheet, cancels, or the STK push fails/times out — so the slot
+   is freed IMMEDIATELY instead of waiting for the expiry sweep. Rules:
+     · Owner-only — a caller may release only their OWN reservation.
+     · Never releases a slot that has already been paid (paymentStatus !== 'pending')
+       — a paid hold is protected; releasing it would strand the payment.
+     · Idempotent — a missing/already-terminal booking is a clean no-op (safe to call
+       from a beforeunload handler that may fire more than once).
+   Deletes the slot lock + cancels the booking in ONE transaction, and cancels any open
+   payment intent so a late STK callback can't revive it. */
+const _TERMINAL_STATUSES = ['cancelled', 'declined', 'no_show', 'completed'];
+_h.bookingReleaseHold = async (req) => {
+  const uid = _uid(req);
+  const bookingId = _san((req.data || {}).bookingId, 256);
+  if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId required.');
+  const bRef = db.collection('providerBookings').doc(bookingId);
+
+  const res = await db.runTransaction(async (txn) => {
+    const s = await txn.get(bRef);
+    if (!s.exists) return { released: false, reason: 'not-found' };                 /* already gone → no-op */
+    const b = s.data();
+    if (b.customerUid !== uid) throw new HttpsError('permission-denied', 'Not your reservation.');
+    if ((b.paymentStatus || 'pending') !== 'pending') return { released: false, reason: 'already-paid' };
+    if (_TERMINAL_STATUSES.includes(b.status)) return { released: false, reason: 'already-released' };
+
+    const key = b.slotKey || (b.date && b.startTs && b.endTs ? rc.slotKey(b.date, b.startTs, b.endTs) : null);
+    txn.update(bRef, {
+      status: 'cancelled', cancelReason: 'customer-abandoned', cancelledBy: 'customer',
+      cancelledAt: _ts(), updatedAt: _ts(), expiresAt: admin.firestore.FieldValue.delete(),
+    });
+    if (key) txn.delete(db.collection('providerAvailability').doc(b.providerId).collection('slotLocks').doc(String(key)));
+    return { released: true, paymentRef: b.paymentRef || null };
+  });
+
+  if (res.released && res.paymentRef) {
+    await db.collection('paymentIntents').doc(res.paymentRef)
+      .set({ status: 'cancelled', cancelledReason: 'customer-abandoned' }, { merge: true }).catch(() => {});
+  }
+  return { success: true, ...res };
 };
 
 /* ── WS3 · bookingSubmitReview ────────────────────────────────────────────────

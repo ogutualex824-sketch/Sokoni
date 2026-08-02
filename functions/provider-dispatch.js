@@ -76,6 +76,8 @@ const ROUTES = [
   'bookingPreviewPrice',
   // booking-service (Phase B) — authoritative service-appointment create
   'bookingCreateService',
+  // booking-service (hold lifecycle) — proactive pre-payment hold release on abandon/fail
+  'bookingReleaseHold',
   // booking-service (WS3) — authoritative customer review, gated on a completed booking
   'bookingSubmitReview',
   // booking-availability-guard — read-only impact pre-check before an availability change

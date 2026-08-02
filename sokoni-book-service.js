@@ -22,7 +22,7 @@
     return h12 + ':' + String(m).padStart(2, '0') + ' ' + ap;
   };
 
-  let _unsub = null, _ctx = null;
+  let _unsub = null, _ctx = null, _holdTimer = null;
 
   /* ── Every visible state is derived from the booking doc — never a local timer. ── */
   function stateOf(b) {
@@ -210,6 +210,8 @@
         packageId: sel.packageId || undefined, addOns: sel.addOns || [], durationMins: sel.durationMins || undefined, distanceKm: Number(_ctx.distanceKm) || undefined });
     } catch (e) { if (go) { go.disabled = false; go.textContent = 'Try another time'; } title('Slot unavailable'); alert(e.message || 'That slot is no longer available.'); return loadSlots(); }
     _ctx.bookingId = bk.bookingId;
+    _ctx.expiresAt = Number(bk.expiresAt) || null;                     /* pre-payment hold deadline (epoch ms) */
+    _ctx.settled = false;
     sessionStorage.setItem(K, JSON.stringify({ bookingId: bk.bookingId, providerId: _ctx.providerId, serviceName: _ctx.serviceName }));
     observe(bk.bookingId);                                             /* single source of truth from here */
     await preparePayment();
@@ -230,7 +232,33 @@
       <div class="sbs-note">Paid to SOKONI and held until the service is completed. Deposit is refundable per the cancellation policy.</div>
       <input class="sbs-in" id="sbsPhone" inputmode="numeric" placeholder="M-Pesa number e.g. 0712345678" value="${esc(phone || '')}">
       <button class="sbs-btn" id="sbsPay" onclick="SokoniBookService._pay()">Pay with M-Pesa</button>
+      <div class="sbs-note" id="sbsHold"></div>
       <div class="sbs-note" id="sbsPayNote"></div>`);
+    startHoldCountdown();
+  }
+
+  /* Live countdown of the pre-payment hold. Purely informational — the SERVER hold
+     (expiresAt) and the sweep are authoritative; this just tells the customer how long
+     they have and disables Pay when the window closes (the snapshot then flips the slot
+     to "expired — rebook" on its own). Self-cleans when the element is gone or on close. */
+  function startHoldCountdown() {
+    if (_holdTimer) { clearInterval(_holdTimer); _holdTimer = null; }
+    if (!_ctx || !_ctx.expiresAt) return;
+    const tick = () => {
+      const el = document.getElementById('sbsHold');
+      if (!el) { clearInterval(_holdTimer); _holdTimer = null; return; }
+      const left = Math.max(0, Math.round((_ctx.expiresAt - Date.now()) / 1000));
+      if (left <= 0) {
+        clearInterval(_holdTimer); _holdTimer = null;
+        el.textContent = '⌛ Reservation expired — pick another time.';
+        const pay = document.getElementById('sbsPay'); if (pay) { pay.disabled = true; pay.textContent = 'Reservation expired'; }
+        return;
+      }
+      const m = Math.floor(left / 60), s = left % 60;
+      el.textContent = `Slot reserved — please pay within ${m}:${String(s).padStart(2, '0')}`;
+    };
+    tick();
+    _holdTimer = setInterval(tick, 1000);
   }
 
   /* ── 4. STK push (amount is server-enforced against the intent). ── */
@@ -295,6 +323,12 @@
     _unsub = firebase.firestore().collection('providerBookings').doc(bookingId).onSnapshot(snap => {
       if (!snap.exists) return;
       const b = snap.data(); const st = stateOf(b);
+      /* Once the booking leaves the unpaid-hold state, remember it so close() never
+         releases a paid/terminal slot, and stop the hold countdown. */
+      if (b.paymentStatus === 'paid_held' || b.paymentStatus === 'settled' || b.status === 'completed' || b.status === 'cancelled') {
+        if (_ctx) _ctx.settled = true;
+        if (_holdTimer) { clearInterval(_holdTimer); _holdTimer = null; }
+      }
       if (b.paymentStatus === 'paid_held' || st.done) {
         /* A completed booking becomes reviewable (or shows the thank-you once reviewed). */
         if (b.status === 'completed') {
@@ -339,7 +373,18 @@
       observe(saved.bookingId);
       return true;
     },
-    close() { if (_unsub) { _unsub(); _unsub = null; } const el = document.getElementById('sbsModal'); if (el) el.style.display = 'none'; document.body.style.overflow = ''; },
+    close() {
+      /* Leaving with an unpaid hold → free the slot NOW so it doesn't sit "ghost booked"
+         until the sweep. Fire-and-forget; the server releases only an unpaid hold owned by
+         this customer and no-ops otherwise, so this is safe even if payment just landed. */
+      if (_ctx && _ctx.bookingId && !_ctx.settled) {
+        try { call('providerDispatch', { op: 'bookingReleaseHold', bookingId: _ctx.bookingId }).catch(function () {}); } catch (_) {}
+        try { sessionStorage.removeItem(K); } catch (_) {}
+      }
+      if (_holdTimer) { clearInterval(_holdTimer); _holdTimer = null; }
+      if (_unsub) { _unsub(); _unsub = null; }
+      const el = document.getElementById('sbsModal'); if (el) el.style.display = 'none'; document.body.style.overflow = '';
+    },
     _pick: pick, _pickSvc: pickSvc, _create: create, _pay: pay, _star: star, _review: submitReview,
     _chooseOptions: chooseOptions, _opt: updatePreview, _continue: continueToBooking,   /* Slice D */
   };

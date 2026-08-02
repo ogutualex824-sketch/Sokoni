@@ -1145,10 +1145,10 @@ exports.bookingSendReminders = functions.scheduler.onSchedule(
 );
 
 /* ═══════════════════════════════════════════════════════════
-   17. SCHEDULED — Clean Up Expired Holds (every 5 minutes)
+   17. SCHEDULED — Clean Up Expired Holds (every 1 minute)
 ═══════════════════════════════════════════════════════════ */
 exports.bookingCleanupHolds = functions.scheduler.onSchedule(
-  { schedule: 'every 5 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1' },
+  { schedule: 'every 1 minutes', timeZone: 'Africa/Nairobi', region: 'us-central1' },
   async () => {
     const snap = await db.collection('bookingHolds').where('expiresAt', '<', Date.now()).get();
     const expired = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1161,7 +1161,7 @@ exports.bookingCleanupHolds = functions.scheduler.onSchedule(
     snap.docs.forEach(d => batch.delete(d.ref));
     if (!snap.empty) await batch.commit();
 
-    /* Phase E WS1 — reuse this every-5-min maintenance job (no new Cloud Run service) to
+    /* Phase E WS1 — reuse this every-1-min maintenance job (no new Cloud Run service) to
        expire unpaid service bookings: release the slot lock, cancel, invalidate the intent. */
     try { await require('./booking-payment-sweep').expireUnpaidServiceBookings(db); }
     catch (e) { console.warn('[booking] service-booking payment expiry:', e.message); }
