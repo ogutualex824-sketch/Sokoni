@@ -103,3 +103,53 @@ catch it: those assertions test who may create, not whether an owner can be swap
 3. All 106 occurrences classified.
 4. Every `Dangerous` occurrence remediated.
 5. Classification rationale documented.
+
+---
+
+## Update-branch audit table
+
+`request.resource` (the incoming payload) and `resource` (the stored document) are **not
+interchangeable**. One character of difference, opposite security meaning.
+
+| Update pattern | Verdict |
+|---|---|
+| `resource.data.ownerUid == request.auth.uid` | ✅ correct — the **existing** owner authorizes |
+| `request.resource.data.ownerUid == request.auth.uid` | 🚩 **review** — can permit ownership takeover if ownership is mutable |
+| `resource.data.ownerUid == request.resource.data.ownerUid` enforced | ✅ ownership immutable |
+| ownership field absent from the update allowlist | ✅ **preferred** where ownership never changes |
+
+The fourth row is the strongest form: if `ownerUid` is simply not in the `hasOnly()` list, ownership
+cannot be written at all and no comparison is needed.
+
+### Measuring the 🚩 population needs block-aware parsing, not a grep
+
+A regex cannot tell whether an occurrence sits inside `allow create` or `allow update` — the two have
+opposite correctness. The 106 figure is create-and-update combined. **Splitting it requires walking
+the rule blocks**, and reporting a grep count as the update population would be a misleading number of
+exactly the kind this audit exists to avoid.
+
+## Regression category: OWNERSHIP IMMUTABILITY
+
+Complements the parent-authority tests rather than overlapping them — the landlord suite asserts who
+may **create**, never whether an owner can be **swapped**. For every resource classified
+IMMUTABLE OWNERSHIP:
+
+1. User A creates the resource.
+2. **A attempts to change `ownerUid` → must FAIL.**
+3. **B attempts to change `ownerUid` → must FAIL.**
+4. B attempts to update other fields → must FAIL unless explicitly authorized.
+5. A updates permitted non-owner fields → must SUCCEED.
+6. **`ownerUid` is unchanged after every update above.**
+
+Step 6 is the one that catches a silent transfer: steps 2–5 can all behave correctly while an
+ownership field still drifts through an allowed write.
+
+## Programme
+
+1. **Measure** — complete (106 rules · 25 functions).
+2. **Classify** — taxonomy complete; matrix not yet produced.
+3. **Fix confirmed defects** — the two self-certification holes, with expanded assertions.
+4. **Audit update branches** — ownership must not be silently transferable.
+5. **Triage** the remaining occurrences by category.
+6. **Remediate** only the genuinely dangerous.
+7. **Full regression green** before any feature work resumes.
