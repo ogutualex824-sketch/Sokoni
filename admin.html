@@ -7104,10 +7104,12 @@ async function _admLoadMpesa() {
   if (tbody) tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">Loading…</td></tr>';
 
   try {
-    const q = query(collection(db,'sellerPayments'), orderBy('createdAt','desc'), limit(200));
+    /* Canonical payment record is `payments` (`sellerPayments` was empty → "no payment data").
+       Normalise sellerUid/hub from the payment doc so the existing render + hub filter work. */
+    const q = query(collection(db,'payments'), orderBy('createdAt','desc'), limit(200));
     const snap = await getDocs(q);
     const allRows = [];
-    snap.forEach(d => allRows.push({ id: d.id, ...d.data() }));
+    snap.forEach(d => { const x = d.data(); const meta = x.meta || {}; allRows.push(Object.assign({ id: d.id }, x, { sellerUid: meta.sellerId || meta.providerId || x.uid, hub: meta.hub || meta.category || '' })); });
     const rows = hubFilter ? allRows.filter(r => r.hub === hubFilter) : allRows;
 
     /* Stats */

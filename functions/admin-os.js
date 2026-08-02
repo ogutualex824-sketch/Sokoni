@@ -443,7 +443,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('status', 'in', ['pending', 'processing', 'confirmed']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('transactions').where('createdAt', '>=', todayTs).where('status', '==', 'completed').limit(1000).get().catch(() => ({ docs: [] })),
+    db.collection('payments').where('createdAt', '>=', todayTs).limit(1000).get().catch(() => ({ docs: [] })),   /* canonical payment record (`transactions` was empty); status COMPLETE filtered in memory */
     db.collection('supportTickets').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('disputes').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
@@ -455,8 +455,12 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     db.collection('providerBookings').where('status', 'in', ['pending', 'confirmed', 'in_progress']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
 
-  const revenueToday    = (txToday.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0);
-  const commissionToday = (txToday.docs || []).reduce((s, d) => s + (d.data().platformFee || d.data().commission || 0), 0);
+  const _paidToday      = (txToday.docs || []).filter(d => String(d.data().status || '').toUpperCase() === 'COMPLETE');
+  const revenueToday    = _paidToday.reduce((s, d) => s + (d.data().amount || 0), 0);
+  /* Commission is NOT on the raw payment record — it lives in commissionLedger (products) +
+     providerPayouts (services). Kept best-effort here; the unified Finance endpoint (Phase 2)
+     is the correct aggregation. */
+  const commissionToday = _paidToday.reduce((s, d) => s + (d.data().platformFee || d.data().commission || 0), 0);
 
   return {
     totalUsers: totalUsersCount.data().count, newUsersToday: newUsersCount.data().count,
