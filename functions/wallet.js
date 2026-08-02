@@ -1117,7 +1117,10 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
   const res = await _disburseB2C(db, rid, { ...payout, id: rid });
   if (res.ok)    return { success: true, status: 'processing', intasendRef: res.intasendRef };
   if (res.retry) return { success: true, status: 'retry_scheduled', message: 'Transient provider error — automatic retry scheduled.' };
-  throw new HttpsError('internal', 'Payout failed: ' + (res.error || 'B2C error') + ' — funds returned to the seller for review.');
+  /* Structured gateway failure (NOT bare "internal") — the admin UI shows the real reason. */
+  throw new HttpsError('failed-precondition',
+    'PAYOUT_GATEWAY_FAILED — ' + (res.error || 'IntaSend B2C error') + ' · funds returned to the seller.',
+    { code: 'PAYOUT_GATEWAY_FAILED', gateway: 'IntaSend', reason: res.error || null });
 });
 
 // ─── 9. adminGetPendingPayouts ─────────────────────────────────────────────

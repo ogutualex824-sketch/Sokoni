@@ -789,6 +789,13 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
      requires_approval:'NO' auto-approves so this stays single-step; if the account
      mandates approval, IntaSend returns a JSON error and we add a /approve/ call. */
   const account = String(phone).replace(/\D/g, '').replace(/^0/, '254');
+  const amt = Math.round(Number(amountKES));
+  const maskP = account.length < 6 ? account : account.slice(0, 6) + '****' + account.slice(-2);
+  /* Contract log — NO secret. Proves exactly what was sent to the gateway. */
+  console.log('[intasendB2C] contract', JSON.stringify({
+    endpoint: `${base}/api/v1/send-money/initiate/`, method: 'POST', auth: 'Bearer',
+    provider: 'MPESA-B2C', currency: 'KES', amount: amt, account: maskP, env: isSandbox ? 'sandbox' : 'live',
+  }));
   const res = await fetch(`${base}/api/v1/send-money/initiate/`, {
     method:  'POST',
     headers: { 'Authorization': `Bearer ${privKey}`, 'Content-Type': 'application/json' },
@@ -796,20 +803,22 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
       provider: 'MPESA-B2C',
       currency: 'KES',
       requires_approval: 'NO',
-      transactions: [{
-        name:      remarks || 'SOKONI Payout',
-        account,
-        amount:    Math.round(Number(amountKES)),
-        narrative: remarks || 'SOKONI earnings payout',
-      }],
+      transactions: [{ name: remarks || 'SOKONI Payout', account, amount: amt, narrative: remarks || 'SOKONI earnings payout' }],
     }),
   });
 
+  const bodyText = await res.text().catch(() => '');
+  let parsed = null; try { parsed = JSON.parse(bodyText); } catch (_) {}
+  console.log('[intasendB2C] response', JSON.stringify({ http: res.status, ok: res.ok, body: parsed || String(bodyText).slice(0, 200) }));
   if (!res.ok) {
-    const err = await res.text().catch(() => 'Unknown error');
-    throw new Error(`IntaSend B2C failed (${res.status}): ${String(err).slice(0, 300)}`);
+    /* Structured, machine-readable gateway error — surfaced up as PAYOUT_GATEWAY_FAILED. */
+    const gwCode = parsed && (parsed.errors?.[0]?.code || parsed.code || parsed.error_code) || `HTTP_${res.status}`;
+    const gwMsg  = parsed && (parsed.errors?.[0]?.detail || parsed.detail || parsed.message) || String(bodyText).slice(0, 160);
+    const e = new Error(`IntaSend B2C failed (${res.status}): [${gwCode}] ${gwMsg}`);
+    e.gateway = { name: 'IntaSend', http: res.status, code: gwCode, message: gwMsg };
+    throw e;
   }
-  return await res.json();
+  return parsed || {};
 }
 
 module.exports = {
