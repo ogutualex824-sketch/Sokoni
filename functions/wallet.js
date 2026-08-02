@@ -56,12 +56,18 @@ async function _payoutMetric(db, field, incBy = 1, timingMs = null) {
  */
 async function _settlePayoutPaid(db, rid, extra = {}) {
   const reqRef = db.collection('payoutRequests').doc(rid);
+  /* finalStatus distinguishes the TWO financial events:
+       'paid'             — confirmed by the IntaSend webhook (gateway evidence).
+       'settled_manually' — an admin attests the money was sent OUT-OF-BAND.
+     Both release the reserved hold and write the payout ledger row; they must NEVER
+     be conflated in the UI or in reporting. */
+  const finalStatus = extra.finalStatus || 'paid';
   let settled = null;   // set to the payout data only when THIS call performs the settlement
   await db.runTransaction(async (t) => {
     const reqSnap = await t.get(reqRef);
     if (!reqSnap.exists) return;
     const payout = reqSnap.data();
-    if (payout.status === 'paid') return;   // already settled — idempotent
+    if (['paid', 'settled_manually'].includes(payout.status)) return;   // idempotent
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
     const txRef     = db.collection('walletTransactions').doc(`${payout.sellerUid}_${rid}_payout`);
     const txExisting = await t.get(txRef);
@@ -70,17 +76,26 @@ async function _settlePayoutPaid(db, rid, extra = {}) {
       t.update(walletRef, { pendingPayout: FieldValue.increment(-payout.amount) });
       t.set(txRef, {
         uid: payout.sellerUid, type: 'payout', amount: payout.amount,
-        description: `Payout via ${String(payout.method || 'mpesa').toUpperCase()} — ref ${rid}`,
-        status: 'completed', createdAt: Timestamp.now(),
+        description: `Payout via ${finalStatus === 'settled_manually' ? 'MANUAL' : String(payout.method || 'mpesa').toUpperCase()} — ref ${rid}`,
+        status: 'completed', settlementType: finalStatus === 'settled_manually' ? 'manual' : 'gateway', createdAt: Timestamp.now(),
       });
     }
     t.update(reqRef, {
-      status: 'paid', processedAt: Timestamp.now(), updatedAt: Timestamp.now(),
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('paid', extra.detail || 'Payout completed')),
-      ...(extra.intasendRef ? { intasendRef: extra.intasendRef } : {}),
+      status: finalStatus, processedAt: Timestamp.now(), updatedAt: Timestamp.now(),
+      paidAt: Timestamp.now(), confirmedAt: Timestamp.now(),
+      settlementMethod: finalStatus === 'settled_manually' ? 'manual' : 'gateway',
+      statusHistory: FieldValue.arrayUnion(_payoutEvent(finalStatus, extra.detail || (finalStatus === 'settled_manually' ? 'Settled manually by admin (attested)' : 'Payout confirmed by gateway'))),
+      ...(extra.intasendRef ? { intasendRef: extra.intasendRef, gatewayReference: extra.intasendRef } : {}),
+      ...(extra.webhookReceivedAt ? { webhookReceivedAt: extra.webhookReceivedAt } : {}),
       ...(extra.processedBy ? { processedBy: extra.processedBy } : {}),
+      /* Manual-settlement immutable attestation fields. */
+      ...(finalStatus === 'settled_manually' ? {
+        settledBy: extra.processedBy || null, settledAt: Timestamp.now(),
+        externalReference: extra.externalReference || null,
+        attestation: extra.attestation || null,
+      } : {}),
     });
-    settled = { ...payout, intasendRef: extra.intasendRef || payout.intasendRef };
+    settled = { ...payout, status: finalStatus, intasendRef: extra.intasendRef || payout.intasendRef };
   });
   if (settled) {
     /* Record end-to-end processing latency (request → paid) for analytics. */
@@ -263,6 +278,11 @@ async function _disburseB2C(db, rid, payout) {
     await reqRef.update({
       status: 'processing', intasendRef: ref, b2cInitiatedAt: Timestamp.now(), updatedAt: Timestamp.now(),
       b2cResponse: _redact(resp),
+      /* Immutable gateway evidence — the record that justifies eventually marking paid.
+         confirmedAt/webhookReceivedAt are filled by the webhook on success. */
+      gatewayName: 'IntaSend', gatewayReference: ref,
+      gatewayStatus: String(resp?.status || resp?.state || 'accepted'),
+      gatewayResponse: _redact(resp), submittedAt: Timestamp.now(),
       statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', 'IntaSend B2C initiated' + (ref ? ' · ' + ref : ''))),
     });
     await _payoutMetric(db, 'b2cInitiated');
@@ -1066,9 +1086,21 @@ exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker
 
   // ── PAID (manual mark, or fallback) ────────────────────────────────────────
   if (status === 'paid') {
-    await _settlePayoutPaid(db, rid, { processedBy: request.auth.uid, detail: _san(note, 500) || 'Marked paid by admin' });
-    await _payoutMetric(db, 'paid');
-    return { success: true, status: 'paid' };
+    /* MANUAL settlement — the admin attests money was sent OUT-OF-BAND (not via the
+       gateway). Recorded as 'settled_manually' (distinct from gateway 'paid') with an
+       immutable attestation. Requires an external reference (e.g. the M-Pesa code) AND
+       an attestation note, so an unconfirmed payout can never be marked settled. */
+    const externalReference = _san(request.data.externalReference || request.data.mpesaCode || '', 120);
+    const attestation = _san(request.data.attestation || note || '', 500);
+    if (!externalReference || !attestation) {
+      throw new HttpsError('failed-precondition', 'Manual settlement requires externalReference (e.g. M-Pesa code) + attestation that funds were sent.');
+    }
+    await _settlePayoutPaid(db, rid, {
+      finalStatus: 'settled_manually', processedBy: request.auth.uid,
+      externalReference, attestation, detail: 'Settled manually — ref ' + externalReference,
+    });
+    await _payoutMetric(db, 'settledManually');
+    return { success: true, status: 'settled_manually', externalReference };
   }
 
   // ── REJECTED (refund reserved funds) — only pre-disbursement states ─────────
@@ -1558,7 +1590,7 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
   const REVERSED = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'];
 
   if (COMPLETE.includes(st)) {
-    await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, detail: `IntaSend B2C confirmed (${st})` });
+    await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, webhookReceivedAt: Timestamp.now(), detail: `IntaSend B2C confirmed (${st})` });
     _plog('paid', { ...p, id: reqRef.id, status: 'paid' });   /* metric+latency inside _settlePayoutPaid */
   } else if (REVERSED.includes(st)) {
     await _reversePayout(db, reqRef.id, `IntaSend reversed (${st})`);

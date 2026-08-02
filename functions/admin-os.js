@@ -796,7 +796,14 @@ exports.adminGetPayoutRequests = onCall({ region: 'us-central1', maxInstances: 1
     sellerUid: x.sellerUid || x.uid || '', sellerName: x.sellerName || x.name || '',
     phone: x.accountNumber || x.phone || '', reference: x.reference || x.ref || d.id,
     reason: x.reason || x.note || '', method: x.method || 'M-Pesa',
+    /* settlement evidence — lets the UI distinguish gateway-paid vs manual + show the journey */
+    settlementMethod: x.settlementMethod || null,
+    gatewayReference: x.gatewayReference || x.intasendRef || null,
+    gatewayStatus: x.gatewayStatus || null,
+    externalReference: x.externalReference || null,
+    submittedAt: _iso(x.submittedAt), confirmedAt: _iso(x.confirmedAt), webhookReceivedAt: _iso(x.webhookReceivedAt),
     createdAt: _iso(x.createdAt), processedAt: _iso(x.processedAt) || _iso(x.paidAt) || null,
+    timeline: (Array.isArray(x.statusHistory) ? x.statusHistory : []).slice(-8).map(h => ({ status: h.status || '', detail: (h.detail || '').slice(0, 100), at: _iso(h.at) })),
     _ms: _ms(x.createdAt) }; });
   items.sort((a, b) => b._ms - a._ms);
   const byStatus = items.reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});

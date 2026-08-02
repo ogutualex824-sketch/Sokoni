@@ -5420,6 +5420,38 @@ window.renderOverview = renderOverview;
 /* Populate the default-active Overview once on load (renderPane fires it on switch). */
 document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ try{ renderOverview(); }catch(_){}}, 1200); });
 
+/* ── Payout status model — strict colours + labels; a failed/processing payout
+   must NEVER look paid. Green is reserved for confirmed settlements only. ── */
+function _payoutCss(){
+  if(document.getElementById('payout-badge-css')) return;
+  var s=document.createElement('style'); s.id='payout-badge-css';
+  s.textContent='.badge.b-gray{background:rgba(148,163,184,.15);color:#94a3b8}'
+    +'.badge.b-purple{background:rgba(168,85,247,.18);color:#c084fc}'
+    +'.badge.b-darkred{background:rgba(153,27,27,.3);color:#fca5a5}';
+  document.head.appendChild(s);
+}
+function _payoutStatusMeta(s){
+  s=String(s||'').toLowerCase();
+  var M={
+    pending:{cls:'b-gray',label:'Pending'}, approved:{cls:'b-blue',label:'Approved'},
+    approving:{cls:'b-yellow',label:'Sending'}, sending:{cls:'b-yellow',label:'Sending'},
+    processing:{cls:'b-yellow',label:'Processing'}, retry_scheduled:{cls:'b-yellow',label:'Retrying'},
+    paid:{cls:'b-green',label:'Paid ✓'}, completed:{cls:'b-green',label:'Paid ✓'},
+    settled_manually:{cls:'b-green',label:'Settled (manual) 📝'},
+    failed:{cls:'b-red',label:'Failed'}, refunded:{cls:'b-purple',label:'Refunded'},
+    rejected:{cls:'b-darkred',label:'Rejected'}
+  };
+  return M[s]||{cls:'b-yellow',label:(s||'—').toUpperCase()};
+}
+function _payoutBadge(s){ var m=_payoutStatusMeta(s); return '<span class="badge '+m.cls+'">'+h(m.label)+'</span>'; }
+/* Compact journey from statusHistory — ✓ for progress, ✗ for a failure/refund step. */
+function _payoutTimeline(tl){
+  if(!tl||!tl.length) return '';
+  return '<div style="font-size:9px;color:rgba(255,255,255,.4);margin-top:3px;line-height:1.6;">'
+    +tl.map(function(e){ var bad=['failed','rejected','refunded'].indexOf(String(e.status).toLowerCase())>=0;
+      return '<span style="white-space:nowrap;color:'+(bad?'#f87171':'rgba(255,255,255,.5)')+'">'+(bad?'✗':'✓')+' '+h(_payoutStatusMeta(e.status).label.replace(/ .*/,''))+'</span>';
+    }).join(' <span style="opacity:.3">→</span> ')+'</div>';
+}
 /* Withdrawals pane — canonical AdminAPI (adminGetPayoutRequests), NOT a direct
    Firestore read. The old onSnapshot hung on the super-admin auth-timing (the same
    failure as the payments pane) and left "Loading withdrawals…" forever. This CF
@@ -5428,6 +5460,7 @@ document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){
    refactor), so we write to ALL matches via querySelectorAll — updating only the
    first (hidden) copy was itself a way to leave the visible pane stuck. */
 function renderPayouts(){
+  _payoutCss();
   var setAll = function(sel, html){ document.querySelectorAll(sel).forEach(function(el){ el.innerHTML = html; }); };
   var loadingRow = '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">Loading withdrawals…</td></tr>';
   var errRow = function(msg){ return '<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+h(msg)+' <button class="adm-btn-sm adm-btn-green" style="margin-left:8px;" onclick="renderPayouts()">Retry</button></td></tr>'; };
@@ -5467,19 +5500,17 @@ function renderPayouts(){
     }).join('') : '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>');
 
     setAll('#payoutsDoneBody', done.length ? done.slice(0,20).map(function(w){
-      /* Status colour must reflect MONEY REALITY — a failed/processing payout must
-         NEVER render like a paid one. paid/completed=green, failed/rejected/refunded=red,
-         processing/approving/sending=amber, approved(awaiting disbursement)=blue. */
-      var sc = ({paid:'b-green',completed:'b-green',rejected:'b-red',failed:'b-red',refunded:'b-red',
-                 processing:'b-yellow',approving:'b-yellow',sending:'b-yellow',retry_scheduled:'b-yellow',
-                 approved:'b-blue'})[w.status] || 'b-yellow';
+      /* Badge colour + label from the strict status model; a failed/processing payout
+         can never render like paid. Timeline shows the full journey (no logs needed). */
+      var evid = w.gatewayReference ? ('<div style="font-size:9px;color:rgba(255,255,255,.35)">ref '+h(w.gatewayReference)+(w.settlementMethod==='manual'?' · manual':'')+'</div>')
+               : (w.settlementMethod==='manual' ? '<div style="font-size:9px;color:rgba(255,255,255,.35)">manual · '+h(w.externalReference||'')+'</div>' : '');
       return '<tr>'
         +'<td style="font-size:11px;">'+h(w.reference||w.id)+'</td>'
         +'<td>'+h(w.sellerName||'—')+'</td>'
         +'<td>'+h(w.phone||'—')+'</td>'
         +'<td style="font-weight:800;">'+fmt(w.amount||0)+'</td>'
-        +'<td><span class="badge '+sc+'">'+h(String(w.status).toUpperCase())+'</span></td>'
-        +'<td style="font-size:11px;">'+dt(w.processedAt||w.createdAt)+'</td>'
+        +'<td>'+_payoutBadge(w.status)+evid+_payoutTimeline(w.timeline)+'</td>'
+        +'<td style="font-size:11px;">'+dt(w.confirmedAt||w.processedAt||w.createdAt)+'</td>'
       +'</tr>';
     }).join('') : '<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No processed payouts yet</td></tr>');
   }).catch(function(e){ setAll('#payoutsBody', errRow((e&&e.message)||'Unable to load withdrawals')); });
