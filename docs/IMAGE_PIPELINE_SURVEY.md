@@ -66,3 +66,42 @@ not established which of the 19 writers produce records that are still read.
 
 **Not scheduled. Verification of the financial, inventory and merchant flows takes precedence** — this
 survey exists so the decision is informed when that work completes, not to start it now.
+
+---
+
+## Finding — driver verification photos have no persistence path (`driver.html:883`)
+
+**Measured 2026-08-02. Not a Firestore base64 defect — worse.**
+
+The registration flow reads the national ID photo and driving licence photo as data URLs, then:
+
+```js
+drivers.push(driver);                                    // includes idPhoto, dlPhoto
+localStorage.setItem("sokoniDrivers", JSON.stringify(drivers));
+/* Submit to admin applications queue in Firestore (no photos — too large) */
+window.SokoniDB.saveApplication({ /* …no photos… */ });
+```
+
+The comment is honest and the omission is deliberate. The consequence is not:
+
+1. **The application is unreviewable.** `localStorage` is per-origin *and per-device*. An admin opening
+   the driver application on any other device sees an application with **no verification photos at
+   all** — the two documents the review exists to check.
+2. **It silently fails at ~5–10 MB.** Two base64 photos per driver exhausts the quota after a handful
+   of registrations, and `setItem` then throws where nothing catches it.
+3. **PII at rest in the browser.** National ID and licence images sit unencrypted in `localStorage`
+   with no expiry and no deletion path — an ODPC concern, not merely an engineering one.
+
+**This is not a conversion.** Routing these two reads through `sokoni-upload.js` is necessary but not
+sufficient: the application record needs `idPhotoUrl` / `dlPhotoUrl` fields, Storage rules restricting
+reads to the applicant and admins, and a decision about retention after approval or rejection.
+
+**Recommended sequence** (not started — needs a design decision):
+1. Upload both photos to Storage under `driver-applications/{applicationId}/`.
+2. Store the two URLs on the Firestore application; never the bytes.
+3. Storage rules: write by the applicant, read by the applicant and admin claims only.
+4. Delete on rejection; retain per policy on approval.
+5. Remove `idPhoto`/`dlPhoto` from the `localStorage` object — that also lowers the base64 ratchet.
+
+Relates to the 45-key business-localStorage backlog: this is the same defect class, but carrying
+identity documents rather than preferences.
