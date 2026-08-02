@@ -616,6 +616,54 @@ exports.adminGetFinance = onCall({ region: 'us-central1', maxInstances: 10, enfo
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Payments (M-Pesa pane)
+
+   The admin Payments/M-Pesa pane previously read `payments` DIRECTLY from the
+   browser (client Firestore). That read is gated by firestore.rules `isAdmin()`
+   — which depends on the ID token carrying a fresh admin claim AND App Check
+   passing AND `window.firebaseDB` being the authenticated app instance. When the
+   super-admin session hasn't fully propagated the claim yet, that read returns
+   permission-denied and the pane shows empty — even though 11 payments exist and
+   the query is correct (verified server-side). Routing it through this callable
+   (like adminGetBookings/adminGetExecutiveDashboard) validates the token ONCE,
+   server-side (_requireAdmin), and reads with the admin SDK — no rules-timing,
+   no App-Check-on-raw-read, no which-app ambiguity. Same reliability as the panes
+   that already work. Canonical source unchanged: `payments`.
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetPayments = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPayments = async (req) => {
+  _requireAdmin(req);
+  const { hub, limit: lim } = req.data || {};
+  const db = getFirestore();
+  /* single-field orderBy(createdAt) → built-in index, no composite needed. */
+  const snap = await db.collection('payments').orderBy('createdAt', 'desc').limit(Math.min(lim || 200, 500)).get().catch(() => ({ docs: [] }));
+  let rows = (snap.docs || []).map(d => {
+    const x = d.data(); const meta = x.meta || {};
+    return {
+      id: d.id,
+      amount: Number(x.amount != null ? x.amount : x.amountKES) || 0,
+      status: x.status || '',
+      phone: x.phone || meta.phone || '',
+      mpesaCode: x.mpesaCode || x.mpesaReceipt || x.mpesaReceiptNumber || meta.mpesaCode || '',
+      sellerName: x.sellerName || meta.sellerName || meta.providerName || '',
+      sellerUid: meta.sellerId || meta.providerId || x.uid || '',
+      hub: meta.hub || meta.category || meta.hubType || '',
+      orderId: x.orderId || meta.orderId || x.ref || d.id,
+      createdAtMs: x.createdAt && x.createdAt.toDate ? x.createdAt.toDate().getTime() : null,
+    };
+  });
+  if (hub) rows = rows.filter(r => r.hub === hub);
+  const startToday = new Date(); startToday.setHours(0, 0, 0, 0);
+  const startTodayMs = startToday.getTime();
+  return {
+    payments: rows,
+    count: rows.length,
+    totalVolume: rows.reduce((s, r) => s + r.amount, 0),
+    todayCount: rows.filter(r => r.createdAtMs && r.createdAtMs >= startTodayMs).length,
+    sellerCount: new Set(rows.map(r => r.sellerUid).filter(Boolean)).size,
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
    Orders
 ──────────────────────────────────────────────────────────────────────────── */
 exports.adminGetOrders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetOrders = async (req) => {
