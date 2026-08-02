@@ -1037,7 +1037,14 @@ exports.getPayoutHistory = onCall({ cors: true, enforceAppCheck: true }, async (
 
 // ─── 8. adminProcessPayout ─────────────────────────────────────────────────
 
-exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, secrets: [INTASEND_KEY] }, async (request) => {
+/* invoker:'public' — REQUIRED for a browser-called callable. Cloud Run authenticates
+   at the IAM layer BEFORE the function runs; a Firebase ID token is not a Google IAM
+   token, so without allUsers as invoker the request is rejected with an HTML 403 and
+   the Firebase SDK surfaces a bare "internal" (the code never runs). This function had
+   lost the binding (a redeploy alone does not restore it on an update), so the Pay
+   button failed. App Check + _requireAdmin remain the real auth — allUsers only lets
+   the request REACH the code, exactly like adminOsDispatch. */
+exports.adminProcessPayout = onCall({ cors: true, enforceAppCheck: true, invoker: 'public', secrets: [INTASEND_KEY] }, async (request) => {
   _requireAuth(request);
   _requireAdmin(request);
 
@@ -1156,7 +1163,7 @@ exports.adminGetPendingPayouts = onCall({ cors: true, enforceAppCheck: true }, a
 
 // ─── 10. refundToWallet ────────────────────────────────────────────────────
 
-exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true }, async (request) => {
+exports.refundToWallet = onCall({ cors: true, enforceAppCheck: true, invoker: 'public' }, async (request) => {   /* invoker:'public' — same missing-binding fix as adminProcessPayout (was HTML 403) */
   _requireAuth(request);
   // Refunds must always be admin-initiated to prevent self-enrichment.
   // User-facing return/dispute flows route through the disputes system for approval.

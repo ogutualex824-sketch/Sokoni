@@ -5491,7 +5491,7 @@ function approveWithdrawal(id, phone, amount, name, ref, _c){
     var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
     try { window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
     if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
-  }).catch(function(e){ toast('Error: '+(e&&e.message||'approval failed')); });
+  }).catch(function(e){ toast('⚠️ Payment could not be completed — '+((e&&e.message)||'unknown error')+' (ref '+ref+')'); });
 }
 window.approveWithdrawal = approveWithdrawal;
 
@@ -5506,7 +5506,7 @@ function rejectWithdrawal(id, phone, name){
     var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nThe funds have been returned to your wallet. — SOKONI Team';
     try { if (phone) window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
     if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
-  }).catch(function(e){ toast('Error: '+(e&&e.message||'rejection failed')); });
+  }).catch(function(e){ toast('⚠️ Rejection could not be completed — '+((e&&e.message)||'unknown error')); });
 }
 window.rejectWithdrawal = rejectWithdrawal;
 
