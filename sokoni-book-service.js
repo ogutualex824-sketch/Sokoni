@@ -14,6 +14,13 @@
   const call = (name, data) => firebase.functions().httpsCallable(name)(data).then(r => r.data);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const fmtKES = (cents) => 'KSh ' + (Math.round(Number(cents) || 0) / 100).toLocaleString();   /* cents → KES, UI only */
+  /* HH:MM (24h, the server/canonical value) → "10:00 AM" for display ONLY. data-time stays 24h. */
+  const fmtTime = (hhmm) => {
+    if (!hhmm || typeof hhmm !== 'string' || hhmm.indexOf(':') < 0) return hhmm || '';
+    const parts = hhmm.split(':'); const h = Number(parts[0]) || 0; const m = Number(parts[1]) || 0;
+    const ap = h < 12 ? 'AM' : 'PM'; const h12 = ((h + 11) % 12) + 1;
+    return h12 + ':' + String(m).padStart(2, '0') + ' ' + ap;
+  };
 
   let _unsub = null, _ctx = null;
 
@@ -90,24 +97,27 @@
     title('Pick a time' + (_ctx.serviceName ? ' — ' + _ctx.serviceName : ''));
     body('<div class="sbs-empty">Loading available times…</div>');
     let res;
-    try { res = await call('bookingDispatch', { op: 'getAvailabilitySlots', providerId: _ctx.providerId, days: 14 }); }
+    try { res = await call('bookingDispatch', { op: 'getAvailabilitySlots', providerId: _ctx.providerId, serviceId: _ctx.serviceId, days: 14 }); }
     catch (e) { body(`<div class="sbs-empty">Couldn’t load availability. ${esc(e.message || '')}</div>`); return; }
     const days = (res && (res.days || res.results || res.availability)) || [];
     const open = days.filter(d => d.available && (d.slots || []).length);
     if (!open.length) { body('<div class="sbs-empty">No open times in the next two weeks. Please check back later.</div>'); return; }
     const html = open.map(d => `
       <div class="sbs-day">${esc(d.date)}</div>
-      <div class="sbs-slots">${(d.slots || []).map(s => {
-        const t = esc(s.start || s.time || s);
-        return `<button type="button" class="sbs-slot" data-date="${esc(d.date)}" data-time="${t}" onclick="SokoniBookService._pick(this)">${t}</button>`;
-      }).join('')}</div>`).join('');
+      <div class="sbs-slots">${(d.slots || [])
+        .filter(s => (typeof s === 'string') || s.available !== false)   /* only bookable slots */
+        .map(s => {
+          const t24 = typeof s === 'string' ? s : (s.startTime || s.start || s.time || '');   /* canonical field is startTime */
+          if (!t24) return '';
+          return `<button type="button" class="sbs-slot" data-date="${esc(d.date)}" data-time="${esc(t24)}" onclick="SokoniBookService._pick(this)">${esc(fmtTime(t24))}</button>`;
+        }).join('')}</div>`).join('');
     body(html + `<button class="sbs-btn" id="sbsGo" disabled onclick="SokoniBookService._chooseOptions()">Select a time</button>`);
   }
   function pick(el) {
     document.querySelectorAll('#sbsModal .sbs-slot.sel').forEach(s => s.classList.remove('sel'));
     el.classList.add('sel');
     _ctx.date = el.dataset.date; _ctx.time = el.dataset.time;
-    const go = document.getElementById('sbsGo'); go.disabled = false; go.textContent = `Continue — ${_ctx.date} at ${_ctx.time}`;
+    const go = document.getElementById('sbsGo'); go.disabled = false; go.textContent = `Continue — ${_ctx.date} at ${fmtTime(_ctx.time)}`;
   }
 
   /* ── 1b. Options (Slice D) — package / add-ons / duration + LIVE server preview.

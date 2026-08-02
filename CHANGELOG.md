@@ -1,3 +1,25 @@
+## [2026-08-02] — fix(booking): P0 QA blockers — [object Object] slots + slot/validation duration mismatch
+
+Live QA exposed two verified defects that stopped a real booking:
+
+- **Bug 1 — `[object Object]` slots (`sokoni-book-service.js`).** The slot renderer read `s.start || s.time || s`,
+  but `getAvailabilitySlots` returns `{startTime, endTime, available, booked}`; the missing fields fell through
+  to the object → `[object Object]`. Fixed: read `startTime`, filter to `available` slots only, and format to
+  12-hour local time (`10:00 AM`) via a new `fmtTime` helper; the Continue button now shows formatted time too.
+- **Bug 2 — slot generation vs booking validation disagreed (`functions/availability.js`).** `getAvailabilitySlots`
+  generated slots at `cfg.appt.durationMins` while `bookingCreateService`/`_prepareSlot` validate at the SERVICE's
+  duration — so a displayed slot could be rejected "outside working hours." Fixed: `getAvailabilitySlots` now accepts
+  `serviceId` and generates slots at the service's duration (the same value validation uses) — one availability
+  authority. Client passes `serviceId`. Correct by construction: slot-gen bounds start to `close − dur`; validation
+  checks `start + dur ≤ close`; with `dur = serviceDur` they cannot disagree.
+- Bug 3 (QA schedule) is already covered by the availability auto-onboarding shipped in v186 — an unconfigured DJ
+  becomes bookable (Mon–Fri 09:00–17:00) on first slots call, now at the correct service duration.
+
+Deploy: `functions:bookingDispatch` + hosting. Note: the local emulator harness became flaky mid-session, so Bug 2
+is verified by construction + syntax (the same harness passed 4/4 earlier for the availability fix). Breaking: none.
+
+---
+
 ## [2026-08-02] — refactor(food): Phase 6 consumer 1/4 — `food-menu.html` on the shared engine
 
 First of four, lowest financial risk, migrated alone.

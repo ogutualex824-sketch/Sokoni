@@ -381,8 +381,22 @@ exports.setLiveStatus = onCall(CF_OPTIONS, exports._h.setLiveStatus = async (req
    that allow range queries on the document ID itself.
 ══════════════════════════════════════════════════════════════════════════ */
 exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlots = async (request) => {
-  const { providerId, startDate, days = 7 } = request.data;
+  const { providerId, startDate, days = 7, serviceId } = request.data;
   if (!providerId) throw new HttpsError("invalid-argument", "providerId required.");
+
+  /* Slot duration MUST match what booking validation (_prepareSlot) will use, or a displayed slot can
+     be rejected as "outside working hours". When a serviceId is given, generate slots at the SERVICE's
+     duration (the same value bookingCreateService validates against) — one availability authority. */
+  let _serviceDur = 0;
+  if (serviceId) {
+    try {
+      const svcSnap = await db.collection("providerServices").doc(String(serviceId)).get();
+      if (svcSnap.exists) {
+        const svc = svcSnap.data();
+        _serviceDur = Math.max(0, Math.round(Number((svc.pricing && svc.pricing.durationMins) || svc.durationMins) || 0));
+      }
+    } catch (e) { console.warn("[getAvailabilitySlots] service duration lookup failed", { serviceId, message: e && e.message }); }
+  }
 
   /* ── Canonical availability, with convergence fallback so an approved provider is NEVER
      permanently unbookable. A default (Mon–Fri 09:00–17:00, appointments enabled) is applied —
@@ -478,7 +492,7 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
     );
 
     /* ── Generate slots ── */
-    const dur  = cfg.appt.durationMins;
+    const dur  = _serviceDur > 0 ? _serviceDur : cfg.appt.durationMins;   /* service duration when known → matches _prepareSlot */
     const buf  = cfg.appt.bufferMins + cfg.appt.travelMins;
     const step = dur + buf;
     const daySlots = [];
