@@ -1,3 +1,37 @@
+## [2026-08-02] — feat(booking): Slice 2 — server availability truthfulness (only show bookable slots)
+
+`getAvailabilitySlots` is the single source of truth for what's offerable, but it had gaps that let it
+show slots the booking gate would reject. All fixed in `functions/availability.js`, with the decision
+extracted to a PURE, unit-tested helper (`_computeSlotReason`) so displayed and bookable availability
+can never drift.
+
+- **Booked/held slots now hide (the big one).** The customer UI books via `bookingCreateService`
+  (writes `providerBookings` + `slotLocks`), but `getAvailabilitySlots` only read the legacy
+  `providerAvailability/{id}/bookings` sub-collection (`reserveSlot`'s store) — so a slot booked through
+  the real flow still displayed as free (the transaction blocked the double-book, but only at payment,
+  as "just taken"). Now unions that legacy set with the canonical ACTIVE `providerBookings` (status
+  pending/confirmed/active — a **pending hold** hides the slot too) by true buffered **interval overlap**,
+  the same formula the booking gate uses. Reuses the `providerId+date+status` index already in production.
+- **Unconditional now-floor.** A slot whose start is in the past is never bookable, independent of
+  `allowSameDay` (which now only governs whether *same-day* is permitted). This was the "shows 10 AM at
+  12:24" bug — `allowSameDay=true` used to bypass the time check entirely.
+- **Max-advance horizon.** Slots beyond `now + maxDaysAhead` are not bookable, and the day window is
+  clamped to `maxDaysAhead` (previously stored but unenforced).
+- **Break pre-filter.** A slot overlapping a configured break is not bookable in the LIST, matching the
+  booking gate (previously only rejected at booking time).
+- **Self-describing slots.** Every slot now carries `{ startTime, endTime, status: 'available'|'blocked',
+  bookable, reason }` where `reason ∈ {booked, past, break, too_soon, beyond_horizon}` (null when bookable).
+  The client still filters on `available` (= `bookable`, back-compat); the metadata powers debugging and
+  future provider/admin tooling.
+
+Tests: `scripts/test-availability-slots.js` — 16/16 (now-floor incl. the allowSameDay bug, notice/same-day,
+horizon, breaks, legacy-set + interval-overlap holds, precedence). Booking suite regression-clean.
+Deploy: `functions:bookingDispatch` (routes `getAvailabilitySlots`). Client unchanged. Breaking: none.
+Follow-up (tracked): the two reservation stores (`reserveSlot`'s `bookings` sub-collection vs canonical
+`providerBookings`/`slotLocks`) should converge to one — this change makes the READ reflect both safely.
+
+---
+
 ## [2026-08-02] — feat(booking): Slice 1 — pre-payment slot HOLD lifecycle (fixes "ghost booked" slots)
 
 Audit first (two agents, file:line evidence): the service-booking engine already has transactional

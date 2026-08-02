@@ -10,6 +10,7 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
+const rc = require("./reservation-core");   /* canonical overlap + active-status set (matches the booking gate) */
 
 const db = admin.firestore();
 
@@ -54,6 +55,30 @@ function _mins(t) {
   const [h, m] = t.split(":").map(Number);
   return h * 60 + m;
 }
+
+/** Pure bookability decision for ONE candidate slot — the single place that decides
+ *  whether a generated slot is offerable, so displayed availability and the booking
+ *  gate (_prepareSlot) can never drift. Returns null when bookable, else the blocking
+ *  reason. Precedence is most-definitive-first: an already-taken slot reads as `booked`
+ *  even if it is also in the past. `bookedStartTimes` is the legacy reserveSlot set;
+ *  `activeBookings` are canonical providerBookings (incl. pending HOLDS) checked by
+ *  true buffered interval overlap. */
+function computeSlotReason(o) {
+  const startMins = o.startMins, endMins = o.endMins;
+  const isBooked =
+    (o.bookedStartTimes && o.bookedStartTimes.has(o.startT)) ||
+    (o.activeBookings || []).some((b) =>
+      rc.pairOverlaps(o.slotStartMs, o.slotEndMs, Number(b.startTs), Number(b.endTs), o.bufMs, o.bufMs));
+  if (isBooked) return "booked";
+  if (o.slotStartMs < o.nowMs) return "past";                                   /* unconditional now-floor */
+  const onBreak = (o.breaks || []).some((b) =>
+    b && b.start && b.end && startMins < _mins(b.end) && endMins > _mins(b.start));
+  if (onBreak) return "break";
+  if (o.slotStartMs < o.earliestBookableMs && !o.allowSameDay) return "too_soon";
+  if (o.slotStartMs > o.horizonMs) return "beyond_horizon";
+  return null;
+}
+exports._computeSlotReason = computeSlotReason;   /* pure — unit-tested in test-availability-slots.js */
 
 /**
  * Return current Nairobi time context.
@@ -435,12 +460,20 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
     } catch (e) { console.warn("[getAvailabilitySlots] default backfill failed", { providerId, code: e && e.code, message: e && e.message }); }
   }
 
-  // Enforce minNoticeHours — earliest bookable time
+  // Booking-window bounds (all authoritative, all enforced per slot below):
+  //  · nowMs        — wall clock; a slot in the past is NEVER bookable (independent of allowSameDay).
+  //  · minNoticeMs  — lead time; earliestBookable = now + notice (same-day still governs whether today is allowed).
+  //  · horizonMs    — max advance; a slot beyond now + maxDaysAhead is not bookable.
+  //  · bufMs        — provider buffer/travel, applied to booking-overlap exactly as the booking gate does.
+  const nowMs = Date.now();
   const minNoticeMs = (cfg.appt?.minNoticeHours || 1) * 3_600_000;
-  const earliestBookable = new Date(Date.now() + minNoticeMs);
+  const earliestBookableMs = nowMs + minNoticeMs;
+  const maxAheadDays = Math.max(1, Number(cfg.appt?.maxDaysAhead) || 30);
+  const horizonMs = nowMs + maxAheadDays * 86_400_000;
+  const bufMs = ((cfg.appt?.bufferMins || 0) + (cfg.appt?.travelMins || 0)) * 60_000;
 
   const safeStart = startDate || _nairobiNow().date;
-  const numDays   = Math.max(1, Math.min(30, Number(days) || 7));
+  const numDays   = Math.max(1, Math.min(30, maxAheadDays, Number(days) || 7));
 
   const DOW_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
   const results = [];
@@ -456,16 +489,19 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
       .collection("overrides").doc(dateStr).get();
 
     let periods  = [];
+    let breaks   = [];
     let dayClosed = false;
 
     if (overSnap.exists) {
       const ov = overSnap.data();
       dayClosed = Boolean(ov.closed);
       periods   = dayClosed ? [] : (ov.periods || []);
+      breaks    = dayClosed ? [] : (ov.breaks  || []);
     } else {
       const day = cfg.schedule?.[dow];
       dayClosed = !day || day.closed;
       periods   = dayClosed ? [] : (day.periods || []);
+      breaks    = dayClosed ? [] : (day.breaks  || []);
     }
 
     const _rej = dayClosed ? "closed" : (!cfg.appt?.enabled ? "appointments_disabled" : (periods.length === 0 ? "no_periods" : null));
@@ -491,6 +527,27 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
         .map((d) => d.data().startTime),
     );
 
+    /* Canonical service-booking holds. bookingCreateService (the path the customer UI
+       uses) writes providerBookings + slotLocks, NOT the legacy `bookings` sub-collection
+       read above (that is reserveSlot's store). Read the ACTIVE providerBookings for this
+       date — status pending is a live pre-payment HOLD, so it hides the slot too — and
+       union by true interval overlap (same buffer as the booking gate) so DISPLAYED
+       availability matches BOOKABLE availability regardless of which path reserved it.
+       Reuses the providerId+date+status index bookingCreateService already runs. */
+    let activeBookings = [];
+    try {
+      const pbSnap = await db.collection("providerBookings")
+        .where("providerId", "==", providerId)
+        .where("date", "==", dateStr)
+        .where("status", "in", rc.ACTIVE_STATUSES)
+        .get();
+      activeBookings = pbSnap.docs
+        .map((d) => d.data())
+        .filter((b) => Number(b.startTs) > 0 && Number(b.endTs) > 0);
+    } catch (e) {
+      console.warn("[getAvailabilitySlots] providerBookings read failed", { providerId, date: dateStr, message: e && e.message });
+    }
+
     /* ── Generate slots ── */
     const dur  = _serviceDur > 0 ? _serviceDur : cfg.appt.durationMins;   /* service duration when known → matches _prepareSlot */
     const buf  = cfg.appt.bufferMins + cfg.appt.travelMins;
@@ -505,17 +562,29 @@ exports.getAvailabilitySlots = onCall(CF_OPTIONS, exports._h.getAvailabilitySlot
         const mm  = String(cur % 60).padStart(2, "0");
         const startT = `${hh}:${mm}`;
         const endC   = cur + dur;
-        const endT   = `${String(Math.floor(endC / 60)).padStart(2, "0")}:${String(endC % 60).padStart(2, "0")}`;
+        const endMm  = endC % 60;
+        const endT   = `${String(Math.floor(endC / 60)).padStart(2, "0")}:${String(endMm).padStart(2, "0")}`;
 
-        // Enforce minimum notice
-        const slotDatetime = new Date(`${dateStr}T${startT}:00+03:00`);
-        const tooSoon      = slotDatetime < earliestBookable && !cfg.appt.allowSameDay;
+        const slotStartMs = new Date(`${dateStr}T${startT}:00+03:00`).getTime();
+        const slotEndMs   = new Date(`${dateStr}T${endT}:00+03:00`).getTime();
+
+        /* One authoritative bookability decision (pure, unit-tested) so DISPLAYED and
+           BOOKABLE availability can never disagree. */
+        const reason = computeSlotReason({
+          startT, startMins: cur, endMins: endC, slotStartMs, slotEndMs,
+          nowMs, earliestBookableMs, horizonMs, allowSameDay: cfg.appt.allowSameDay,
+          breaks, activeBookings, bufMs, bookedStartTimes: bookedTimes,
+        });
+        const bookable = reason === null;
 
         daySlots.push({
           startTime: startT,
           endTime:   endT,
-          available: !bookedTimes.has(startT) && !tooSoon,
-          booked:    bookedTimes.has(startT),
+          status:    bookable ? "available" : "blocked",   /* self-describing for client/admin/debug tools */
+          bookable,
+          reason,                                           /* null when bookable; else why it is blocked */
+          available: bookable,                              /* back-compat: existing client filters on this */
+          booked:    reason === "booked",
         });
         cur += step;
       }
