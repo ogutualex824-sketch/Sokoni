@@ -17,6 +17,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { assertSandboxProvides } = require('./harness-sandbox');
 
 const SRC = fs.readFileSync(path.resolve('functions/booking.js'), 'utf8');
 
@@ -35,6 +36,14 @@ const BLOCK = SRC.slice(start, end);
  * functions/booking.js's directory so relative specifiers resolve EXACTLY as
  * they do at runtime, not relative to this test file. */
 const bookingRequire = require('module').createRequire(path.resolve('functions/booking.js'));
+
+/* Fail early and clearly if the block gains a module dependency this sandbox
+ * does not expose, instead of dying mid-run with a cryptic ReferenceError. */
+assertSandboxProvides(
+  BLOCK,
+  ['db', 'uid', 'paymentId', 'pricingBreakdown', 'console', 'require'],
+  'test-booking-payment-auth'
+);
 
 function run({ paymentId, payments = {}, uid = 'buyer1', total = 5000 }) {
   const db = {
