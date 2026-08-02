@@ -454,7 +454,19 @@ a{color:var(--acc);text-decoration:none}
                 <div class="fg"><label class="sk-lbl">Category</label><input class="sk-in" id="svCat" placeholder="e.g. DJ / Entertainment"></div>
                 <div class="fg"><label class="sk-lbl">Price (KSh)</label><input class="sk-in" id="svPrice" type="number" min="0"></div>
                 <div class="fg"><label class="sk-lbl">Price type</label><select class="sk-in" id="svType"><option value="fixed">Fixed</option><option value="hourly">Per hour</option><option value="quotation">Quotation</option></select></div>
-                <div class="fg"><label class="sk-lbl">Duration (minutes)</label><input class="sk-in" id="svDur" type="number" min="0" placeholder="e.g. 240"></div>
+                <div class="fg" style="grid-column:1/-1">
+                  <label class="sk-lbl">Slot length (minutes) — how long each booking runs</label>
+                  <input class="sk-in" id="svDur" type="number" min="5" step="5" placeholder="e.g. 30, 60, 90, 240">
+                  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                    <button type="button" onclick="document.getElementById('svDur').value=30" style="padding:5px 11px;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer">30 min</button>
+                    <button type="button" onclick="document.getElementById('svDur').value=60" style="padding:5px 11px;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer">1 hr</button>
+                    <button type="button" onclick="document.getElementById('svDur').value=90" style="padding:5px 11px;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer">90 min</button>
+                    <button type="button" onclick="document.getElementById('svDur').value=120" style="padding:5px 11px;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer">2 hr</button>
+                    <button type="button" onclick="document.getElementById('svDur').value=240" style="padding:5px 11px;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer">4 hr</button>
+                    <button type="button" onclick="document.getElementById('svDur').value=480" style="padding:5px 11px;font-size:.72rem;border-radius:999px;border:1px solid var(--border);background:var(--surf2);color:var(--text);cursor:pointer">Full day</button>
+                  </div>
+                  <div style="font-size:.72rem;color:var(--sub);margin-top:4px">Customers book in blocks of this length, and time slots are generated to match. Use 30 for half-hour appointments, 240 for a 4-hour gig. Want several lengths? Add one service per length.</div>
+                </div>
                 <div class="fg"><label class="sk-lbl">Booking fee (KSh)</label><input class="sk-in" id="svFee" type="number" min="0" placeholder="optional"></div>
                 <div class="fg"><label class="sk-lbl">Deposit (KSh)</label><input class="sk-in" id="svDeposit" type="number" min="0" placeholder="optional"></div>
               </div>
