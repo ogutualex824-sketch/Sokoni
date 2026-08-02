@@ -5220,9 +5220,11 @@ function renderPayouts(){
   import(FS).then(function(m){
     var db = window.firebaseDB;
     if (!db) { pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">Firestore not ready</td></tr>'; return; }
-    var q = m.query(m.collection(db,'withdrawals'), m.orderBy('createdAt','desc'), m.limit(60));
+    /* Canonical wallet withdrawals live in payoutRequests (requestSellerPayout), NOT the
+       empty `withdrawals` collection. Normalise fields so the existing render works. */
+    var q = m.query(m.collection(db,'payoutRequests'), m.orderBy('createdAt','desc'), m.limit(60));
     _payoutsUnsub = m.onSnapshot(q, function(snap){
-      var all = snap.docs.map(function(d){ return Object.assign({_id:d.id}, d.data()); });
+      var all = snap.docs.map(function(d){ var x=d.data(); return Object.assign({_id:d.id}, x, { phone:x.accountNumber||x.phone||'', ref:x.reference||x.ref||d.id, name:x.sellerName||x.name||('Seller '+String(x.sellerUid||'').slice(0,6)) }); });
       D.withdrawals = all;
       var pending = all.filter(function(w){ return w.status==='pending'; });
       var done    = all.filter(function(w){ return w.status!=='pending'; });
@@ -5278,40 +5280,29 @@ function renderPayouts(){
 
 function approveWithdrawal(id, phone, amount, name, ref, _c){
   if(!_c){_skConfirm('Confirm payment of KES '+amount.toLocaleString()+' to '+name+' ('+phone+')?',()=>approveWithdrawal(id,phone,amount,name,ref,true));return;}
-  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  import(FS).then(function(m){
-    var db = window.firebaseDB; if(!db) return;
-    m.updateDoc(m.doc(db,'withdrawals',id), {
-      status: 'approved',
-      processedAt: new Date().toISOString(),
-      processedBy: (window.sokoniUser||{}).email||'admin'
-    }).then(function(){
-      toast('✅ Payout approved — notifying '+name);
-      /* WhatsApp confirmation to user */
-      var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
-      window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer');
-    }).catch(function(e){ toast('Error: '+e.message); });
-  });
+  /* Canonical approval: adminProcessPayout reserves→approving→IntaSend B2C on the
+     payoutRequests doc. Was updating the empty `withdrawals` collection with NO
+     disbursement (a status flag + a WhatsApp message), so no money ever moved. */
+  toast('Approving payout…');
+  _invCall('adminProcessPayout', { requestId: id, status: 'approved' }).then(function(){
+    toast('✅ Payout approved — B2C processing to '+phone);
+    var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
+    try { window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+  }).catch(function(e){ toast('Error: '+(e&&e.message||'approval failed')); });
 }
 window.approveWithdrawal = approveWithdrawal;
 
 function rejectWithdrawal(id, phone, name){
   var reason = prompt('Reason for rejection (sent to user):','Insufficient account verification');
   if (reason === null) return;
-  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  import(FS).then(function(m){
-    var db = window.firebaseDB; if(!db) return;
-    m.updateDoc(m.doc(db,'withdrawals',id), {
-      status: 'rejected',
-      rejectionReason: reason,
-      processedAt: new Date().toISOString(),
-      processedBy: (window.sokoniUser||{}).email||'admin'
-    }).then(function(){
-      toast('❌ Withdrawal rejected');
-      var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nPlease contact support or resubmit. — SOKONI Team';
-      if (phone) window.open('https://wa.me/254'+phone.replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer');
-    }).catch(function(e){ toast('Error: '+e.message); });
-  });
+  /* Canonical rejection: adminProcessPayout returns the reserved funds to the wallet and
+     marks the payoutRequest rejected. Was updating the empty `withdrawals` collection. */
+  toast('Rejecting…');
+  _invCall('adminProcessPayout', { requestId: id, status: 'rejected', note: reason }).then(function(){
+    toast('❌ Withdrawal rejected — funds returned to wallet');
+    var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nThe funds have been returned to your wallet. — SOKONI Team';
+    try { if (phone) window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+  }).catch(function(e){ toast('Error: '+(e&&e.message||'rejection failed')); });
 }
 window.rejectWithdrawal = rejectWithdrawal;
 
