@@ -41,6 +41,51 @@ These run automatically on every `firebase deploy`. A failure blocks the deploy 
 
 ---
 
+## Reading a predeploy failure on Windows — **ENOENT usually is not ENOENT**
+
+> On Windows, a non-zero exit from a Firebase predeploy hook may be surfaced by the underlying
+> process launcher as an `ENOENT` message. **Always inspect the gate artifact**
+> (`docs/release-gates/<commit>.json`) **and the script's actual exit code** before treating the
+> failure as a missing executable.
+
+### Why it happens
+
+The CLI spawns each hook through `cross-spawn` as a single string with `shell:false`. On a non-zero
+exit, `cross-spawn` runs `verifyENOENT`, tries to resolve a literal file named
+`node scripts/<gate>.js`, fails, and **synthesises a "command not found" error over a real gate
+refusal**:
+
+```
+Error: spawn node scripts\gate-inventory.js ENOENT
+```
+
+The script is present and it ran. Hooks that exit 0 never trip this, which is why a chain can look
+like "seven hooks work, the eighth is misconfigured" when in truth **all eight execute and the
+eighth legitimately fails**.
+
+### How to diagnose it correctly
+
+```bash
+# 1. Real exit code. Do NOT pipe — $? would be the exit code of the pipe's LAST command.
+node scripts/gate-inventory.js >/dev/null 2>&1; echo $?
+
+# 2. The verdict the gate actually recorded
+node -e "console.log(require('./docs/release-gates/<commit>.json').status)"
+```
+
+A `BLOCKED` verdict means a suite could not run (typically the Firestore emulator, which needs
+**JDK 21**) — not that a suite failed. Per the Release Validation Standard these are never conflated.
+
+### What not to do
+
+**Never remove the hook, comment it out, or pass `--force`.** The deployment pipeline is part of
+production. An `ENOENT` here is the gate doing its job behind a bad error message; bypassing it
+ships exactly the unverified code the gate exists to stop.
+
+Verified 2026-08-02: the gate ran 149s to completion, wrote its artifact, reported `BLOCKED`, and
+exited 1 — while the CLI reported `ENOENT`.
+
+
 ## Deployment Commands
 
 ### Full Deploy (all services)
