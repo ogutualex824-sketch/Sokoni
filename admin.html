@@ -2769,7 +2769,7 @@ function ls(k){ try{ return JSON.parse(localStorage.getItem(k))||[]; }catch(e){ 
 
 function loadAll(){
   /* ── Core marketplace ── */
-  D.products    = ls('sellerProducts');
+  D.products    = [];   /* Firestore-only (canonical `products`); startProductsListener fills this. No localStorage source. */
   D.orders      = [];   /* Firestore-only; _renderAdmOrders syncs this for the stat counters. */
   D.posOrders   = ls('sokoniPOSOrders');
   D.providers   = [];   /* Firestore-only (canonical `providers`); startProvidersListener fills this. No localStorage source. */
@@ -3101,32 +3101,43 @@ async function _syncListingApproval(productId, sellerUid, status, reason){
     }
   }catch(e){ console.warn('[Admin] Firestore listing sync failed:',e.message); }
 }
+/* Product actions write to canonical `products` (Firestore). D.products is now a
+   read-only projection of a live snapshot, so localStorage is no longer a source —
+   the removed `localStorage.setItem('sellerProducts', …)` writes were dead (nothing
+   reads them) and the old local-splice "delete" was dangerous: the admin saw the row
+   vanish while the product stayed live for customers. Optimistic UI stays for
+   responsiveness; the next snapshot reconciles to Firestore truth. */
 function approveProduct(i){
-  var p=D.products[i];
+  var p=D.products[i]; if(!p) return;
   D.products[i].approved=true; D.products[i].approvalStatus='approved';
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
   renderProducts(D.products); renderStats(); toast('✅ Product approved');
   _syncListingApproval(p.id||i, p.sellerUid||null, 'approved', null);
 }
 function rejectProduct(i){
-  var p=D.products[i];
+  var p=D.products[i]; if(!p) return;
   var reason=prompt('Rejection reason (shown to seller):\n\nOptions:\n• Does not meet quality guidelines\n• Prohibited item\n• Duplicate listing\n• Incorrect pricing\n• Missing images\n• Other (type below)', 'Does not meet quality guidelines');
   if(reason===null) return;
   D.products[i].approved=null; D.products[i].approvalStatus='rejected'; D.products[i].rejectionReason=reason;
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
   renderProducts(D.products); renderStats(); toast('✕ Listing rejected');
   _syncListingApproval(p.id||i, p.sellerUid||null, 'rejected', reason);
 }
 function toggleFeature(i){
-  D.products[i].featured=!D.products[i].featured;
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
-  renderProducts(D.products); toast(D.products[i].featured?'★ Featured':'☆ Unfeatured');
+  var p=D.products[i]; if(!p || typeof _invCall!=='function') return;
+  var nv=!p.featured; p.featured=nv;
+  renderProducts(D.products); toast(nv?'★ Featured':'☆ Unfeatured');
+  /* canonical: preserve current status, flip featured (adminUpdateProductStatus writes products/{id}) */
+  _invCall('adminOsDispatch', { op:'adminUpdateProductStatus', productId:String(p.id||''), status:String(p.status||p.approvalStatus||'active'), featured:nv })
+    .catch(function(){ p.featured=!nv; renderProducts(D.products); toast('⚠️ Feature change did not save'); });
 }
 function deleteProduct(i,_c){
-  if(!_c){_skConfirm('Delete "'+D.products[i].name+'"?',()=>deleteProduct(i,true));return;}
-  D.products.splice(i,1);
-  localStorage.setItem('sellerProducts',JSON.stringify(D.products));
-  renderProducts(D.products); renderStats(); toast('🗑️ Product deleted');
+  var p=D.products[i]; if(!p) return;
+  if(!_c){_skConfirm('Remove "'+(p.name||'this product')+'" from the marketplace?',()=>deleteProduct(i,true));return;}
+  if(typeof _invCall!=='function'){ toast('⚠️ Cannot reach server'); return; }
+  D.products.splice(i,1); renderProducts(D.products); renderStats(); toast('🗑️ Removing…');
+  /* canonical unpublish — real backend removal, not a local hide (product leaves the storefront too) */
+  _invCall('adminOsDispatch', { op:'adminUpdateProductStatus', productId:String(p.id||''), status:'removed', reason:'admin_removed' })
+    .then(function(){ toast('🗑️ Product removed'); })
+    .catch(function(){ toast('⚠️ Removal failed — will reappear on refresh'); });
 }
 
 /* ════════════════════════════════
@@ -5146,6 +5157,27 @@ function startProvidersListener(){
   });
 }
 
+/* ── Products listener (Priority 3 — canonical `products`) ──────────────────
+   The catalogue seeded from ls('sellerProducts') — a stale local mirror (and demo
+   seed) that never matched live inventory. Now wired to the canonical `products`
+   collection via SokoniDB.listenProducts (newest-200, __name__ index, no composite),
+   with the same one-listener discipline as Users/Providers. Approval actions already
+   sync to Firestore (_syncListingApproval); this makes the READ canonical too. */
+function startProductsListener(){
+  if (window._productsUnsub) return;              /* exactly one listener */
+  if (!window.SokoniDB || !window.SokoniDB.listenProducts) return;
+  window._productsUnsub = window.SokoniDB.listenProducts({}, function(products){
+    /* Hide canonically-removed docs (admin delete → status:'removed'); everything
+       else the admin should still see, including pending/rejected. */
+    D.products = (products||[]).filter(function(p){
+      var s = String(p.status||'').toLowerCase();
+      return s!=='removed' && s!=='unpublished' && s!=='deleted';
+    });
+    try { renderProducts(D.products); } catch(e){}
+    if (typeof renderStats === 'function') try { renderStats(); } catch(e){}
+  });
+}
+
 /* ── User detail slide-in ──────────────────────────────────────────────────
    #userDetailPanel shipped with a close button, no opener and no renderer:
    #userDetailContent was an orphan container, never written to by anything. It
@@ -6254,6 +6286,7 @@ function _startAdminListeners(){
   SokoniDB.listenPOSOrders(_mergeFirestorePOSOrders);
   if (typeof startUsersListener === 'function') startUsersListener();
   if (typeof startProvidersListener === 'function') startProvidersListener();
+  if (typeof startProductsListener === 'function') startProductsListener();
   if (typeof startPropertiesListeners === 'function') startPropertiesListeners();
 }
 document.addEventListener('sokoniAdminReady', _startAdminListeners);
@@ -7633,7 +7666,9 @@ window.loadSupportQueue = loadSupportQueue;
     var db = window.firebaseDB;
     if (!db) { chart.innerHTML = '<div style="padding:20px;color:#ff6464;">Database not available.</div>'; return; }
     /* Fetch data and render a simple text summary */
-    var colMap = { revenue: 'transactions', users: 'users', orders: 'orders', rides: 'rides', sellers: 'shops', products: 'products' };
+    /* revenue reads canonical `payments` — `transactions` is empty (same stale-collection
+       class the dashboard/finance fixes addressed; docs/CANONICAL_COLLECTIONS.md). */
+    var colMap = { revenue: 'payments', users: 'users', orders: 'orders', rides: 'rides', sellers: 'shops', products: 'products' };
     var col    = colMap[type] || 'transactions';
     var q      = db.collection(col).orderBy('createdAt', 'desc').limit(100);
     q.get().then(function(snap) {
