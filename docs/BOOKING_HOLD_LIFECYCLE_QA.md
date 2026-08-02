@@ -61,6 +61,19 @@ the same event doc). Guaranteed structurally by the transaction guards in `relea
 
 ---
 
+## Event trail (Slice 4) — `bookingEvents` per scenario
+Every transition writes a structured event to `bookingEvents` (query `where bookingId == <id>`), with
+`actor`, `previousStatus → newStatus`, `paymentRef`, `at`. Expected trails:
+
+| Scenario | Event trail (`type`) |
+|---|---|
+| 1 Pay success → confirm → complete | `BOOKING_HELD` → `PAYMENT_CONFIRMED` → `BOOKING_CONFIRMED` (→ completion events) |
+| 2 Close modal | `BOOKING_HELD` → `BOOKING_RELEASED` (actor `customer`) |
+| 3 STK reject | `BOOKING_HELD` → `BOOKING_RELEASED` (actor `intasend-webhook`) |
+| 4 Natural expiry | `BOOKING_HELD` → `BOOKING_EXPIRED` (actor `system`) |
+| 6 Refresh/resume | `BOOKING_HELD` → `BOOKING_RESUMED` (repeatable) → … |
+| 7 Duplicate callback | exactly **one** `BOOKING_RELEASED` doc (`<bookingId>_released`) no matter how many retries |
+
 ## What I verify server-side (from your IDs)
 - Booking state transitions (`status`, `paymentStatus`, `cancelReason`, `cancelledBy`, `expiresAt`).
 - Slot-lock presence/absence at `providerAvailability/{providerId}/slotLocks/{slotKey}`.
