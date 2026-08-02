@@ -437,7 +437,8 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
      Only txToday fetches docs because revenue summation requires the amount field. */
   const [totalUsersCount, newUsersCount, ordersTodayCount, activeOrdersCount,
          txToday, openTicketsCount, openDisputesCount, activeSubsCount,
-         pendingPayoutsCount, activeDeliveriesCount] = await Promise.all([
+         pendingPayoutsCount, activeDeliveriesCount,
+         serviceBookingsTodayCount, activeServiceBookingsCount] = await Promise.all([
     db.collection('users').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
@@ -448,6 +449,10 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('payoutRequests').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),   /* canonical payout source (matches super-admin queue) */
     db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    /* Service bookings live in providerBookings — NEVER inferred from `orders` (canonical rule).
+       Added as NEW fields so the admin.html rendering (other agent's) is never broken. */
+    db.collection('providerBookings').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerBookings').where('status', 'in', ['pending', 'confirmed', 'in_progress']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
 
   const revenueToday    = (txToday.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0);
@@ -460,6 +465,9 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     openTickets: openTicketsCount.data().count, openDisputes: openDisputesCount.data().count,
     activeSubscriptions: activeSubsCount.data().count, pendingPayouts: pendingPayoutsCount.data().count,
     activeDeliveries: activeDeliveriesCount.data().count,
+    /* Canonical service metrics (providerBookings) — new fields for the admin dashboard. */
+    serviceBookingsToday: serviceBookingsTodayCount.data().count,
+    activeServiceBookings: activeServiceBookingsCount.data().count,
   };
 });
 
@@ -523,10 +531,18 @@ exports.adminGetBookings = onCall({ region: 'us-central1', maxInstances: 10, enf
   _requireAdmin(req);
   const { status, limit: lim } = req.data;
   const db = getFirestore();
-  let q = db.collection('bookings').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
-  if (status) q = q.where('status', '==', status);
-  const snap = await q.get();
-  return { bookings: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  /* Service bookings are the canonical providerBookings collection (booking-service.js),
+     NOT the venue `bookings` collection — the admin Bookings view was blind to every
+     service booking (DJ, mechanic, etc.). Single-field query + in-memory sort avoids a
+     status+createdAt composite index. Return shape unchanged ({ bookings: [...] }). */
+  const cap = Math.min(lim || 50, 200);
+  const q = status
+    ? db.collection('providerBookings').where('status', '==', status).limit(cap)
+    : db.collection('providerBookings').orderBy('createdAt', 'desc').limit(cap);
+  const snap = await q.get().catch(() => ({ docs: [] }));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  if (status) rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return { bookings: rows };
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
