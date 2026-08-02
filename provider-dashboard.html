@@ -372,7 +372,7 @@ a{color:var(--acc);text-decoration:none}
           <div id="payoutList"><div class="card-empty">No payouts yet.</div></div>
         </div>
         <div id="reqPayoutWrap" style="display:none">
-          <button class="btn btn-p" onclick="E.requestPayout()">Request Payout →</button>
+          <button class="btn btn-p" onclick="E.requestPayout()">💸 Withdraw to M-Pesa →</button>
         </div>
       </div>
     </div>
@@ -800,7 +800,26 @@ const E={
       return`<div class="payout-row"><div class="pr-ico">${m[p.method]||'💰'}</div><div class="pr-info"><div style="font-weight:600;font-size:.83rem">${_esc(p.reference||'Payout')}</div><div style="font-size:.72rem;color:var(--sub)">${dt?dt.toLocaleDateString('en-KE'):''}</div></div><div class="pr-net">KSh ${_fmt((p.net||0)/100)}</div></div>`;
     }).join('');
   },
-  async requestPayout(){showLoad('Requesting payout…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerRequestPayout'});toast('Payout requested! Processed next Monday.');E.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}}
+  /* Canonical withdraw: earnings settle into wallets.balance (whole shillings), and the
+     ONE withdraw path is requestSellerPayout (wallet.js) -> payoutRequests -> admin approve
+     -> IntaSend B2C. The old providerRequestPayout read the retired providerPayouts-pending
+     model and always said "no pending earnings" even with money in the wallet. */
+  async requestPayout(){
+    let avail=null;
+    try{const b=await firebase.functions().httpsCallable('getWalletBalance')({});avail=Number((b.data||{}).balance||0);}catch(_){}
+    const amtStr=prompt('Withdraw to M-Pesa\n\nWithdrawable balance: KSh '+(avail!=null?_fmt(avail):'—')+'\nMinimum: KSh 100\n\nAmount (KSh):', (avail&&avail>=100)?String(avail):'');
+    if(!amtStr)return;
+    const amount=parseInt(String(amtStr).replace(/[^0-9]/g,''),10);
+    if(!(amount>=100)){toast('Minimum withdrawal is KSh 100.','err');return;}
+    const phone=prompt('M-Pesa number to receive KSh '+amount+' (07XXXXXXXX):','');
+    if(!phone)return;
+    showLoad('Requesting withdrawal…');
+    try{
+      const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone.trim(),idempotencyKey:'po_'+Date.now()});
+      toast('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):''),'ok');
+      E.load();
+    }catch(e){toast(e.message||'Withdrawal failed','err')}finally{hideLoad()}
+  }
 };
 
 /* ── Reviews ─────────────────────────────────────────────────────────────── */
