@@ -2938,6 +2938,7 @@ function setBadge(id,n){
 function renderPane(name){
   /* Invitations load on demand — the list comes from a callable, not from D. */
   if(name==='invitations')  loadInvitations();
+  if(name==='overview')     renderOverview();   /* command-center KPIs from adminGetExecutiveDashboard (canonical) */
   if(name==='attention')    renderAttention();
   if(name==='products')     renderProducts(D.products);
   if(name==='sellers')      renderSellers(D.sellers);
@@ -5208,6 +5209,44 @@ function updateReturn(i,status){
    PAYOUTS
 ════════════════════════════════ */
 var _payoutsUnsub = null;
+/* ════════════════════════════════
+   COMMAND-CENTER OVERVIEW (canonical KPIs)
+   #overviewStats was an empty stub — nothing populated it. Wire it to the
+   canonical adminGetExecutiveDashboard (via adminOsDispatch) so the homepage
+   shows real, live production numbers.
+════════════════════════════════ */
+async function renderOverview(){
+  var stats = document.getElementById('overviewStats');
+  var act   = document.getElementById('overviewActivity');
+  if(!stats) return;
+  stats.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">⏳</div>Loading platform overview…</div>';
+  var tries=0; while(!window.firebaseApp && tries++<40) await new Promise(r=>setTimeout(r,300));
+  try{
+    var d = await _invCall('adminOsDispatch', { op:'adminGetExecutiveDashboard' }) || {};
+    var money=function(n){ return 'KES '+Number(n||0).toLocaleString(); };
+    var C=function(v,l){ return '<div class="adm-stat-card"><div class="adm-stat-val">'+v+'</div><div class="adm-stat-label">'+l+'</div></div>'; };
+    stats.innerHTML =
+      C(d.totalUsers||0,'Users')+
+      C(d.totalProviders||0,'Providers')+
+      C(d.activeProviders||0,'Active Providers')+
+      C(d.newUsersToday||0,'New Today')+
+      C(d.totalOrders||0,'Product Orders')+
+      C(d.totalServiceBookings||0,'Service Bookings')+
+      C(money(d.revenueToday),'Revenue Today')+
+      C(d.pendingPayouts||0,'Pending Payouts')+
+      C(money(d.pendingPayoutAmount),'Payout Liability')+
+      C(d.openDisputes||0,'Open Disputes')+
+      C(d.openTickets||0,'Support Tickets')+
+      C(d.activeServiceBookings||0,'Active Bookings');
+    if(act) act.innerHTML = '<div class="adm-empty" style="opacity:.55">Latest activity feed — coming soon.</div>';
+  }catch(e){
+    stats.innerHTML = '<div class="adm-empty"><div class="adm-empty-icon">⚠️</div>Unable to load overview'+((e&&e.message)?(' — '+e.message):'')+'</div>';
+  }
+}
+window.renderOverview = renderOverview;
+/* Populate the default-active Overview once on load (renderPane fires it on switch). */
+document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ try{ renderOverview(); }catch(_){}}, 1200); });
+
 function renderPayouts(){
   var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
   var statsEl  = document.getElementById('payoutsStats');

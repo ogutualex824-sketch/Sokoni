@@ -438,7 +438,8 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
   const [totalUsersCount, newUsersCount, ordersTodayCount, activeOrdersCount,
          txToday, openTicketsCount, openDisputesCount, activeSubsCount,
          pendingPayoutsCount, activeDeliveriesCount,
-         serviceBookingsTodayCount, activeServiceBookingsCount] = await Promise.all([
+         serviceBookingsTodayCount, activeServiceBookingsCount,
+         totalProvidersCount, activeProvidersCount, totalOrdersCount, totalBookingsCount, pendingPayoutsSnap] = await Promise.all([
     db.collection('users').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
@@ -453,6 +454,12 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
        Added as NEW fields so the admin.html rendering (other agent's) is never broken. */
     db.collection('providerBookings').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('providerBookings').where('status', 'in', ['pending', 'confirmed', 'in_progress']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    /* Canonical platform totals for the command-center overview. */
+    db.collection('providers').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('orders').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerBookings').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('payoutRequests').where('status', '==', 'pending').limit(200).get().catch(() => ({ docs: [] })),
   ]);
 
   const _paidToday      = (txToday.docs || []).filter(d => String(d.data().status || '').toUpperCase() === 'COMPLETE');
@@ -472,6 +479,12 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     /* Canonical service metrics (providerBookings) — new fields for the admin dashboard. */
     serviceBookingsToday: serviceBookingsTodayCount.data().count,
     activeServiceBookings: activeServiceBookingsCount.data().count,
+    /* Command-center platform totals (all canonical sources). */
+    totalProviders: totalProvidersCount.data().count,
+    activeProviders: activeProvidersCount.data().count,
+    totalOrders: totalOrdersCount.data().count,
+    totalServiceBookings: totalBookingsCount.data().count,
+    pendingPayoutAmount: (pendingPayoutsSnap.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0),
   };
 });
 
