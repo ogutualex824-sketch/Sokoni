@@ -1,3 +1,38 @@
+## [2026-08-02] — fix(test-tooling): unblock deploy gate (harness drift) + ship Bug 1 to production
+
+The Bug 1 hosting deploy was blocked by the inventory predeploy gate. The Windows symptom was
+`spawn node scripts\gate-inventory.js ENOENT`, but that message is cross-spawn synthesising over a
+**real** non-zero exit (per the gate's own doc-comment) — not a missing executable. Running the gate
+directly surfaced the true cause: `test-booking-payment-auth` crashed at load with
+`ReferenceError: require is not defined`, so the gate fail-closed correctly.
+
+- **Root cause (test harness, not app code).** `scripts/test-booking-payment-auth.js` extracts the
+  payment-verification block from `functions/booking.js` and runs it in a `new Function(...)` sandbox
+  (so the test can't drift from shipped logic). A convergence change added
+  `require('./shared/constants')` (for `TERMINAL_PAID`) into that block, but the sandbox exposed no
+  `require` → crash → every deploy blocked.
+- **Fix.** Inject a `require` into the sandbox, bound to `functions/booking.js`'s directory via
+  `Module.createRequire`, so `./shared/constants` resolves exactly as at runtime. **`functions/booking.js`
+  unchanged.** 10/10 assertions pass; full gate green (`PASS 65 FAIL 0`, `4a07ce5.json` APPROVED).
+- **Regression guard for the class.** New `scripts/harness-sandbox.js` detects extract-and-eval sandbox
+  drift — if an extracted block references a CommonJS binding (`require`/`module`/`__dirname`/…) the
+  harness doesn't provide, `assertSandboxProvides()` fails early with a clear `HARNESS DRIFT` message
+  naming the missing binding instead of a cryptic `ReferenceError`. `scripts/test-harness-sandbox-parity.js`
+  proves the detector and checks the live booking harness against the current `functions/booking.js`
+  block, so a newly-added import is caught the moment it lands. The booking suite now pre-flights the
+  sandbox. 11/11.
+- **Deployed.** Hosting shipped from `4a07ce5` → live `mysokoni.co.ke` `commit 4a07ce5`,
+  `cacheVersion sokoni-20260802090712-v192`. Verified live: Bug 1 slot renderer now formats times
+  (no `[object Object]`), reads `startTime`, and passes `serviceId`. `version.json`/`service-worker.js`
+  values verified against live before committing back.
+
+Files: `scripts/test-booking-payment-auth.js`, `scripts/harness-sandbox.js` (new),
+`scripts/test-harness-sandbox-parity.js` (new), `version.json`, `service-worker.js`,
+`docs/release-gates/4a07ce5.json` (new). API changes: none. Security changes: none (the gate's
+protection is preserved, not bypassed). Breaking: none.
+
+---
+
 ## [2026-08-02] — fix(booking): P0 QA blockers — [object Object] slots + slot/validation duration mismatch
 
 Live QA exposed two verified defects that stopped a real booking:
