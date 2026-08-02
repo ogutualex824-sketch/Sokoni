@@ -126,3 +126,52 @@ on approval? Required before the Rider Profile can be built correctly under ODPC
 Do **not** start before the landlord suite reaches 26/26. Three authorization defects are open, and a
 new role surface touching wallet and identity should not be built while the authorization model has
 proven holes.
+
+---
+
+## Refined ordering (founder, 2026-08-02)
+
+### P0 — Security. **Scope is wider than the three landlord defects.**
+
+1. Every authorization path derives ownership from **server-side data**, never a client-supplied id.
+2. Every Rider callable checks `request.auth.uid`.
+3. Wallet, payout, vehicle, booking and delivery operations all use **server-derived** ownership.
+
+> **Note on scope.** The three landlord defects were found by a suite that happened to assert those
+> cases. The *pattern* — `request.resource.data.ownerUid == request.auth.uid`, trusting the payload
+> to certify itself — is not landlord-specific. A repo-wide sweep of `firestore.rules` for that shape,
+> and of `functions/` for handlers taking an owner id from `req.data`, is the natural companion to
+> fixing the three known ones. **Fixing only what a test happened to catch leaves the class intact.**
+
+### P1 — Rider Profile convergence: **read-only audit first**
+
+Answer before changing code: does `profile.html` already have a Rider section · is it partially
+implemented · which fields are in Firestore · which are still in `localStorage` · which pages
+duplicate the UI.
+
+Outcome: one Rider Profile; delete the duplicate from `driver.html`; point Delivery Hub at the
+canonical one.
+
+### P2 — Storage migration
+
+```
+users/{uid}                    riderProfiles/{uid}
+providerProfiles/{uid}         driverApplications/{uid}
+driverVehicles/{vehicleId}
+```
+
+**Retention policy drives the implementation, not the reverse.** Rejected applications: licence, ID
+images and insurance deleted after the chosen period. Approved riders: retained only as long as needed
+to operate the account and meet legal obligations.
+
+### P3 — Final UX
+
+```
+Profile → Rider
+   ├── Apply          ├── Application Status
+   ├── Rider Profile  ├── Vehicles
+   └── Open Delivery Hub
+```
+
+Delivery Hub: go online · active · claimable · route · earnings · messages · support. **No profile
+editing.**
