@@ -87,6 +87,13 @@ const CRITICAL = [
   'scheduleAccountDeletion', 'cancelAccountDeletion', 'revokeAllSessions',
   'bootstrapDevice', 'getBusinessConfig', 'getTypesenseSearchKey',
   'sokoniChat', 'bookAppointment',
+  /* Wallet money path — the set was described as "failure would stop money" yet
+     omitted the payout callables; adminProcessPayout/refundToWallet had lost their
+     allUsers invoker and returned HTML 403 (bare "internal" in the browser). */
+  'adminProcessPayout', 'refundToWallet', 'requestSellerPayout', 'walletV2Send',
+  'initiateWalletTopUp', 'confirmWalletTopUp', 'adminGetPendingPayouts',
+  /* Admin OS data hub — every admin read routes through this one callable. */
+  'adminOsDispatch',
 ];
 
 /* ── auth ──────────────────────────────────────────────────────────────────
