@@ -1,3 +1,32 @@
+## [2026-08-02] — fix(booking): provider not notified on paid booking (QA-gate critical fix)
+
+Scenario 1 of the production QA gate surfaced a real operational bug: a provider was **never**
+notified when a booking was paid — they only saw the pre-payment "New booking request". Two causes,
+both fixed; the booking core (hold/slot/payment/settlement/events) was NOT touched.
+
+- **Root cause 1 — unregistered notification type.** `holdServiceBookingPayment` called
+  `notify({ type: 'booking_new' })`, but `booking_new` (and `booking_paid`/`booking_refund`/
+  `booking_released`) were **not in `notify.js` TYPES** — so `notify()` threw "Unknown notification type"
+  and the fire-and-forget `.catch(() => {})` swallowed it. Registered the four booking types
+  (commerce/orders; SMS off). Verified against production: no `notifyLog` entry existed for the paid
+  booking, confirming the throw-and-swallow.
+- **Root cause 2 — fire-and-forget dropped the write.** Even with a valid type, the un-awaited
+  `notify()` promise was orphaned when the webhook `res.send()`+returned. Fixed via a backward-compatible
+  `awaitDelivery` flag on `notify()` (default `true` = unchanged for all existing callers): the webhook now
+  `await`s the **durable in-app write** and runs push/email/SMS in the **background**, so a slow FCM push
+  never adds webhook latency (Option A). Dropped the redundant customer `booking_paid` — the customer is
+  already notified independently by `payment-success.js` (`payment_success`), so sending it here would
+  duplicate.
+
+Result: provider gets an immediate, durable "New paid booking 📅" (deep-links to the dashboard) the moment
+payment is held; webhook stays fast; no duplicate customer notice.
+
+Tests: `scripts/test-notify-booking-types.js` (9/9) — guards that every booking notify type is registered
+(the exact silent-throw class) and that the `awaitDelivery` seam exists. Booking suite regression-clean.
+Deploy: `functions:intasendWebhook, webhookIntasend`. Scope: notification subsystem only. Breaking: none.
+
+---
+
 ## [2026-08-02] — feat(booking): Slice 4 — structured lifecycle events (observability)
 
 Every service-booking transition now emits a structured, append-only event to the canonical

@@ -130,13 +130,23 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
       const { notify } = require('./notify');
       if (res.outcome === 'held') {
         const b = (await bRef.get()).data() || {};
-        if (b.customerUid) notify({ uid: b.customerUid, type: 'booking_paid', title: 'Payment received ✅',
-          body: `Your booking is paid and held. The provider will confirm shortly. Ref ${apiRef}.`, dedupeKey: `booking_paid_${apiRef}` }).catch(() => {});
-        if (b.providerId) notify({ uid: b.providerId, type: 'booking_new', title: 'New paid booking 📅',
-          body: `A customer has paid for a booking${b.service ? ' — ' + b.service : ''}. Ref ${apiRef}.`, dedupeKey: `booking_new_${apiRef}` }).catch(() => {});
+        /* AWAIT the provider's durable in-app notification so it is guaranteed written
+           before the webhook returns — a fire-and-forget call was orphaned when the CF
+           stopped after res.send(). awaitDelivery:false keeps push/email in the background
+           so a slow FCM push never adds webhook latency. The customer's payment notice is
+           already sent independently (payment-success.js → payment_success), so no
+           booking_paid here would duplicate it. */
+        if (b.providerId) {
+          await notify({ uid: b.providerId, type: 'booking_new', title: 'New paid booking 📅',
+            body: `A customer has paid for a booking${b.service ? ' — ' + b.service : ''}. Ref ${apiRef}.`,
+            deepLink: '/provider-dashboard.html', dedupeKey: `booking_new_${apiRef}`, awaitDelivery: false })
+            .catch((e) => console.error('[webhook] provider booking_new notify failed:', e.message));
+        }
       } else if (res.outcome === 'refunded' && res.customerUid) {
-        notify({ uid: res.customerUid, type: 'booking_refund', title: 'Payment refunded ↩',
-          body: `That time slot was no longer available, so your payment has been refunded to your SOKONI wallet. Ref ${apiRef}.`, dedupeKey: `booking_latepay_refund_${apiRef}` }).catch(() => {});
+        await notify({ uid: res.customerUid, type: 'booking_refund', title: 'Payment refunded ↩',
+          body: `That time slot was no longer available, so your payment has been refunded to your SOKONI wallet. Ref ${apiRef}.`,
+          dedupeKey: `booking_latepay_refund_${apiRef}`, awaitDelivery: false })
+          .catch((e) => console.error('[webhook] booking_refund notify failed:', e.message));
       }
     } catch (_) { /* notify optional */ }
 
