@@ -25888,6 +25888,26 @@ Key milestones previously achieved:
 - 8-role RBAC (sokoni-permissions.js)
 - Platform audit 2026 (monitor.html, 4 Cloud Functions, 15+ indexes)
 
+## 2026-08-02 — Delivery: courier layer composes the shared engine (ADR-012)
+
+**delivery-hub.js** computed `base + km*perKm` itself — the fourth implementation of distance
+pricing on the platform. It now composes the merchant delivery engine for that component and keeps
+only the genuinely logistics multipliers (vehicle, weight, urgency). The dependency runs one way:
+logistics composes merchant pricing, never the reverse.
+
+Equivalence proven across **768 combinations** before the change and pinned as a permanent test with
+the old formula as oracle. It holds because `Math.round(n + x) === n + Math.round(x)` for integer
+`n`, so the test also asserts every vehicle `base` IS an integer instead of assuming it.
+
+`_calcFee` returns `null` rather than falling back to a second formula when the engine is absent;
+the caller refuses to create the delivery. An unpriced delivery is not a cheaper delivery — it is a
+broken financial record. The engine is now loaded on `delivery.html`, `delivery-tracking.html` and
+`driver.html`, which previously did not have it.
+
+**Files:** `delivery-hub.js`, `delivery.html`, `delivery-tracking.html`, `driver.html`,
+`functions/test/courier-quote.test.js`.
+**Database:** none. **API:** none. **Security:** none. **Breaking:** none. **Deployed:** no.
+
 ## 2026-08-02 — Server-authoritative delivery pricing; documentation close-out
 
 **Delivery pricing authority (ADR-011).** `functions/index.js` accepted a client-supplied
