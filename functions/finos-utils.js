@@ -778,23 +778,30 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
   const isSandbox = process.env.INTASEND_SANDBOX === 'true';
   const base      = isSandbox ? 'https://sandbox.intasend.com' : 'https://payment.intasend.com';
 
-  const res = await fetch(`${base}/api/v1/payment/mpesa-b2c/initiate/`, {
+  /* CORRECT IntaSend Send-Money (B2C) API — mirrors the proven call in
+     index.js initiateSellerPayout. The previous endpoint/auth/body were all wrong
+     (/payment/mpesa-b2c/initiate/ + Bearer + flat fields) → HTML 404, "internal".
+       · endpoint: /api/v1/send-money/mpesa/
+       · auth:     "Token <key>"  (NOT Bearer)
+       · body:     { currency, transactions:[{ name, account, amount }] } */
+  const account = String(phone).replace(/\D/g, '').replace(/^0/, '254');
+  const res = await fetch(`${base}/api/v1/send-money/mpesa/`, {
     method:  'POST',
-    headers: { 'Authorization': `Bearer ${privKey}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Token ${privKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      currency:  'KES',
-      provider:  'M-PESA',
-      amount:    String(amountKES),
-      phone_number: String(phone).replace(/\D/g, '').replace(/^0/, '254'),
-      name:      remarks   || 'SOKONI Payout',
-      account:   reference || 'payout',
-      narrative: remarks   || 'SOKONI earnings payout',
+      currency: 'KES',
+      transactions: [{
+        name:      remarks || 'SOKONI Payout',
+        account,
+        amount:    Math.round(Number(amountKES)),
+        narrative: remarks || 'SOKONI earnings payout',
+      }],
     }),
   });
 
   if (!res.ok) {
     const err = await res.text().catch(() => 'Unknown error');
-    throw new Error(`IntaSend B2C failed (${res.status}): ${err}`);
+    throw new Error(`IntaSend B2C failed (${res.status}): ${String(err).slice(0, 300)}`);
   }
   return await res.json();
 }
