@@ -540,6 +540,7 @@
       "node scripts/predeploy-syntax-gate.js",
       "node scripts/verify-commission-single-source.js",
       "node scripts/perf-guard.js",
+      "node scripts/audit-base64-writes.js",
       "node scripts/gate-inventory.js"
     ]
   },
