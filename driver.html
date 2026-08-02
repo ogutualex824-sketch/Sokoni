@@ -282,7 +282,7 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🟢 Go Online</button>
         <a href="services.html" style="display:inline-flex;align-items:center;gap:5px;padding:10px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;white-space:nowrap;">🛠️ Services</a>
-        <button type="button" onclick="logoutDriver()" style="padding:10px 14px;background:rgba(255,61,61,0.1);border:1px solid rgba(255,61,61,0.2);color:#ff6b6b;font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Logout</button>
+        <button type="button" onclick="exitDriverWorkspace()" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">← Exit Hub</button>
       </div>
     </div>
 
@@ -945,18 +945,31 @@ function loginDriverWith(phone, pin){
   showDriverDashboard();
 }
 
-function logoutDriver(){
+/* Leave the Delivery Hub WITHOUT signing out — Rider Role Convergence Rule 5.
+ *
+ * This used to call sokoniSignOut() and redirect to login.html, so stepping out
+ * of the Hub destroyed the whole account session: the user had to log in again
+ * and lost their cart, wallet context, notifications and messages. That is what
+ * made Delivery Hub read as a SECOND IDENTITY rather than a workspace.
+ *
+ * Rider is a ROLE on one account. Leaving the workspace ends the SHIFT, not the
+ * session — go offline, stop GPS, drop the driver-workspace key, and return to
+ * the marketplace still authenticated.
+ *
+ * A real sign-out remains available where it belongs: the Profile page. */
+function exitDriverWorkspace(){
   sessionStorage.removeItem("sokoniDriverSession");
-  /* Stop GPS tracking before signing out */
+  /* Stop GPS before leaving: a rider who has left the workspace is not on shift,
+     and continuing to broadcast their location would be both wrong and a privacy
+     problem. */
   if(window.SokoniDB?.stopGPSTracking) window.SokoniDB.stopGPSTracking();
-  if(window.sokoniSignOut){
-    window.sokoniSignOut().finally(()=>{ window.location.href="login.html"; });
-  } else {
-    localStorage.removeItem("loggedIn");
-    localStorage.removeItem("sokoniUser");
-    window.location.href = "login.html";
-  }
+  try { if(typeof setOnlineState === 'function') setOnlineState(false); } catch(e){}
+  window.location.href = "index.html";
 }
+/* Back-compat: older markup may still reference the previous name. It no longer
+   signs out — the behaviour change is the point of the fix. */
+window.logoutDriver = exitDriverWorkspace;
+window.exitDriverWorkspace = exitDriverWorkspace;
 
 /* ── Online toggle ── */
 function toggleOnline(){
