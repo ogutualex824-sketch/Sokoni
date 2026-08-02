@@ -207,6 +207,7 @@ _h.bookingCreateService = async (req) => {
          common case of returning to a payment sheet they closed. Deterministic booking id
          means the lock points at `bookingRef`. Anyone else's hold = a real conflict. */
       const held = await txn.get(bookingRef);
+      let heldBy = 'unknown';
       if (held.exists) {
         const hb = held.data();
         if (hb.customerUid === customerUid && hb.status === 'pending' && (hb.paymentStatus || 'pending') === 'pending') {
@@ -214,8 +215,13 @@ _h.bookingCreateService = async (req) => {
           outcome = { bookingId, status: 'pending', resumed: true, expiresAt: holdExpiresMs };
           return;
         }
+        /* Classify WHY it's taken so the caller can give an accurate reason, not a
+           generic "just taken": someone else PAID (paid_held/settled/confirmed) vs
+           someone else is still COMPLETING an unpaid hold (may free up shortly). */
+        heldBy = (hb.paymentStatus === 'paid_held' || hb.paymentStatus === 'settled' || hb.status === 'confirmed')
+          ? 'paid' : 'pending';
       }
-      outcome = { conflict: 'already-exists' };
+      outcome = { conflict: 'already-exists', heldBy };
       return;
     }
     /* Daily total cap (all bookings that day). */
@@ -265,11 +271,20 @@ _h.bookingCreateService = async (req) => {
   if (outcome && outcome.idempotent) return { success: true, bookingId: outcome.bookingId, idempotent: true };
   /* Owner resumed their own live hold — not a new booking; skip notify/convergence. */
   if (outcome && outcome.resumed) return { success: true, bookingId: outcome.bookingId, status: 'pending', resumed: true, expiresAt: outcome.expiresAt };
+  if (outcome && outcome.conflict === 'already-exists') {
+    /* Accurate, lifecycle-specific reason instead of a blanket "just taken". */
+    const msg = outcome.heldBy === 'paid'
+      ? 'Someone else just booked and paid for this time. Please choose another slot.'
+      : outcome.heldBy === 'pending'
+        ? 'Another customer is completing payment for this time. It may free up in a few minutes — or pick another slot.'
+        : 'That time overlaps another booking. Please choose another slot.';   /* overlap/unknown */
+    throw new HttpsError('already-exists', msg);
+  }
   if (outcome && outcome.conflict) throw new HttpsError(
     outcome.conflict,
     outcome.conflict === 'resource-exhausted' ? 'The provider is fully booked for that time.'
       : outcome.conflict === 'failed-precondition' ? 'You have reached your booking limit with this provider.'
-        : 'That slot was just taken. Please choose another time.');
+        : 'That slot is no longer available. Please choose another time.');
 
   /* Convergence telemetry (WS4a) — a genuinely NEW canonical booking (idempotent
      replays returned above). Best-effort: never affects the booking. */
@@ -298,34 +313,16 @@ _h.bookingCreateService = async (req) => {
        from a beforeunload handler that may fire more than once).
    Deletes the slot lock + cancels the booking in ONE transaction, and cancels any open
    payment intent so a late STK callback can't revive it. */
-const _TERMINAL_STATUSES = ['cancelled', 'declined', 'no_show', 'completed'];
 _h.bookingReleaseHold = async (req) => {
   const uid = _uid(req);
   const bookingId = _san((req.data || {}).bookingId, 256);
   if (!bookingId) throw new HttpsError('invalid-argument', 'bookingId required.');
-  const bRef = db.collection('providerBookings').doc(bookingId);
-
-  const res = await db.runTransaction(async (txn) => {
-    const s = await txn.get(bRef);
-    if (!s.exists) return { released: false, reason: 'not-found' };                 /* already gone → no-op */
-    const b = s.data();
-    if (b.customerUid !== uid) throw new HttpsError('permission-denied', 'Not your reservation.');
-    if ((b.paymentStatus || 'pending') !== 'pending') return { released: false, reason: 'already-paid' };
-    if (_TERMINAL_STATUSES.includes(b.status)) return { released: false, reason: 'already-released' };
-
-    const key = b.slotKey || (b.date && b.startTs && b.endTs ? rc.slotKey(b.date, b.startTs, b.endTs) : null);
-    txn.update(bRef, {
-      status: 'cancelled', cancelReason: 'customer-abandoned', cancelledBy: 'customer',
-      cancelledAt: _ts(), updatedAt: _ts(), expiresAt: admin.firestore.FieldValue.delete(),
-    });
-    if (key) txn.delete(db.collection('providerAvailability').doc(b.providerId).collection('slotLocks').doc(String(key)));
-    return { released: true, paymentRef: b.paymentRef || null };
+  /* Delegate to the ONE canonical release path (shared with the webhook + sweep),
+     scoped to the owner. Ownership failure surfaces as a permission error. */
+  const res = await require('./booking-payment-sweep').releaseServiceHold(db, admin, {
+    bookingId, reason: 'customer-abandoned', by: 'customer', ownerUid: uid,
   });
-
-  if (res.released && res.paymentRef) {
-    await db.collection('paymentIntents').doc(res.paymentRef)
-      .set({ status: 'cancelled', cancelledReason: 'customer-abandoned' }, { merge: true }).catch(() => {});
-  }
+  if (res.reason === 'not-owner') throw new HttpsError('permission-denied', 'Not your reservation.');
   return { success: true, ...res };
 };
 

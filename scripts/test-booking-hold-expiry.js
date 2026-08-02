@@ -36,7 +36,15 @@ t('settled -> not expired',
   isExpired({ status: 'confirmed', paymentStatus: 'settled', expiresAt: ts(NOW - MIN) }, NOW) === false);
 t('cancelled (non-pending status) -> not expired',
   isExpired({ status: 'cancelled', paymentStatus: 'pending', expiresAt: ts(NOW - MIN) }, NOW) === false);
-t('confirmed (autoConfirm) unpaid -> not swept by this predicate',
+
+console.log('\n=== autoConfirm-unpaid holds (Slice 3): a confirmed booking that still owes payment IS swept ===');
+t('confirmed + unpaid + price>0 + expired -> expired',
+  isExpired({ status: 'confirmed', paymentStatus: 'pending', price: 5000, expiresAt: ts(NOW - MIN) }, NOW) === true);
+t('confirmed + unpaid + price>0 + not yet expired -> not expired',
+  isExpired({ status: 'confirmed', paymentStatus: 'pending', price: 5000, expiresAt: ts(NOW + MIN) }, NOW) === false);
+t('confirmed + unpaid + FREE (price 0) -> not expired (nothing to pay)',
+  isExpired({ status: 'confirmed', paymentStatus: 'pending', price: 0, expiresAt: ts(NOW - MIN) }, NOW) === false);
+t('confirmed + unpaid + no price field -> not expired (not a payable hold)',
   isExpired({ status: 'confirmed', paymentStatus: 'pending', expiresAt: ts(NOW - MIN) }, NOW) === false);
 
 console.log('\n=== legacy fallback: no expiresAt -> createdAt + 15-min TTL ===');

@@ -18,13 +18,18 @@ const rc = require('./reservation-core');
 
 const TTL_MS = 15 * 60 * 1000;
 
-/** Pure: an unpaid pending booking past its hold window is expired.
+/** Pure: an unpaid booking that still holds a payable slot, past its hold window, is expired.
+ *  A slot is held by either an unconfirmed `pending` booking OR an auto-confirmed one that
+ *  still owes payment (price > 0) — both strand the slot if never paid. Free bookings
+ *  (price 0) and any non-pending payment state are left untouched.
  *  Prefers the explicit `expiresAt` hold stamp (now = 5 min, set at create); falls back
  *  to createdAt + TTL for legacy bookings written before the hold window existed. */
 function isExpired(booking, nowMs, ttlMs = TTL_MS) {
   if (!booking) return false;
-  if (booking.status !== 'pending') return false;                 /* only pending holds a payable slot */
   if (booking.paymentStatus && booking.paymentStatus !== 'pending') return false; /* paid/settled/refunded */
+  const st = booking.status;
+  const holdsSlot = st === 'pending' || (st === 'confirmed' && Number(booking.price) > 0); /* autoConfirm-unpaid too */
+  if (!holdsSlot) return false;
   const expMs = booking.expiresAt && booking.expiresAt.toMillis ? booking.expiresAt.toMillis() : 0;
   if (expMs > 0) return nowMs >= expMs;                           /* explicit hold window */
   const createdMs = booking.createdAt && booking.createdAt.toMillis ? booking.createdAt.toMillis() : 0;
@@ -174,3 +179,78 @@ async function expireUnpaidServiceBookings(db) {
   return expired;
 }
 exports.expireUnpaidServiceBookings = expireUnpaidServiceBookings;
+
+/* ── Canonical service-booking hold release ───────────────────────────────────
+   ONE release path for an unpaid slot HOLD, reused by every caller: the owner
+   (bookingReleaseHold onCall — customer closed the payment sheet), the IntaSend
+   webhook (terminal non-payment), and callable ad-hoc. Cancels the booking,
+   deletes the slot lock, and cancels the payment intent in a single transaction.
+   NEVER releases a paid hold. `ownerUid`, when given, restricts release to the
+   booking's own customer; omit it for system-initiated release. Idempotent: a
+   missing / paid / already-terminal booking is a clean no-op. */
+const TERMINAL_STATUSES = ['cancelled', 'declined', 'no_show', 'completed'];
+async function releaseServiceHold(db, adminSdk, opts) {
+  db = db || admin.firestore();
+  const FV = adminSdk.firestore.FieldValue;
+  const bookingId = String((opts && opts.bookingId) || '');
+  const { reason = 'released', by = 'system', ownerUid = null } = opts || {};
+  if (!bookingId) return { released: false, reason: 'no-booking' };
+  const bRef = db.collection('providerBookings').doc(bookingId);
+
+  const res = await db.runTransaction(async (txn) => {
+    const s = await txn.get(bRef);
+    if (!s.exists) return { released: false, reason: 'not-found' };
+    const b = s.data();
+    if (ownerUid && b.customerUid !== ownerUid) return { released: false, reason: 'not-owner' };
+    if ((b.paymentStatus || 'pending') !== 'pending') return { released: false, reason: 'already-paid' };
+    if (TERMINAL_STATUSES.includes(b.status)) return { released: false, reason: 'already-released' };
+    txn.update(bRef, {
+      status: 'cancelled', cancelReason: reason, cancelledBy: by,
+      cancelledAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(), expiresAt: FV.delete(),
+    });
+    const lock = _slotLockRef(db, b.providerId, b);
+    if (lock) txn.delete(lock);
+    return { released: true, paymentRef: b.paymentRef || null };
+  });
+
+  if (res.released && res.paymentRef) {
+    await db.collection('paymentIntents').doc(res.paymentRef)
+      .set({ status: 'cancelled', cancelledReason: reason }, { merge: true }).catch(() => {});
+  }
+  return res;
+}
+exports.releaseServiceHold = releaseServiceHold;
+
+/* Called from the IntaSend webhook on a TERMINAL non-payment for a providerBooking
+   intent (FAILED / CANCELLED / EXPIRED / REJECTED / TIMEOUT): free the slot NOW instead
+   of waiting for the sweep. Maps intent → booking (server-minted intent, never client
+   meta), then releases (system-initiated). Returns true when it recognised a booking
+   intent so the webhook caller can ack and skip other logic. Replay-safe via the guards
+   in releaseServiceHold (a paid/terminal booking is a no-op). */
+async function releaseServiceBookingOnTerminalPayment(db, adminSdk, apiRef, intentRef, state) {
+  let bookingId = null;
+  try {
+    const iSnap = await db.collection('paymentIntents').doc(intentRef || apiRef).get();
+    if (iSnap.exists && iSnap.data().resourceType === 'providerBooking') bookingId = iSnap.data().resourceId || null;
+  } catch (_) { return false; }
+  if (!bookingId) return false;
+  try {
+    const res = await releaseServiceHold(db, adminSdk, {
+      bookingId, reason: 'payment-' + String(state || 'failed').toLowerCase(), by: 'intasend-webhook',
+    });
+    console.log(`[webhook] service booking terminal-payment ${state}: ${apiRef} -> ${bookingId} released=${res.released} (${res.reason || 'ok'})`);
+    if (res.released && bookingId) {
+      try {
+        const { notify } = require('./notify');
+        const b = (await db.collection('providerBookings').doc(bookingId).get()).data() || {};
+        if (b.customerUid) notify({ uid: b.customerUid, type: 'booking_released', title: 'Reservation released',
+          body: 'Your payment didn’t go through, so the time slot has been released. You can book again anytime.',
+          dedupeKey: `booking_released_${apiRef}` }).catch(() => {});
+      } catch (_) { /* notify optional */ }
+    }
+  } catch (e) {
+    console.error('[webhook] terminal-payment release failed (recoverable, sweep will retry):', e.message);
+  }
+  return true;   /* recognised a booking intent — caller acks + skips other handling */
+}
+exports.releaseServiceBookingOnTerminalPayment = releaseServiceBookingOnTerminalPayment;

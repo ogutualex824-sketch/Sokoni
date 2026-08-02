@@ -6115,6 +6115,17 @@ exports.intasendWebhook = onRequest(
       return;
     }
 
+    /* Terminal NON-payment for a service booking → release the held slot immediately
+       instead of waiting for the expiry sweep. Keyed off the RAW state, since fsStatus
+       collapses CANCELLED/EXPIRED/REJECTED/TIMEOUT into "PENDING". No-op (returns false)
+       for non-booking intents, so product/wallet failures fall through unchanged. */
+    if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
+      const { releaseServiceBookingOnTerminalPayment } = require('./booking-payment-sweep');
+      if (await releaseServiceBookingOnTerminalPayment(db, admin, apiRef, existing.intentRef, state)) {
+        res.status(200).send("OK"); return;
+      }
+    }
+
     if (fsStatus === "COMPLETE") {
       const payData  = existing;
       /* Phase E: a service-booking payment is HELD (paid_held), never credited here —
@@ -7014,6 +7025,17 @@ exports.webhookIntasend = onRequest(
       console.log(`[webhookIntasend] Already processed (raced): ${apiRef}`);
       res.status(200).send("OK");
       return;
+    }
+
+    /* Terminal NON-payment for a service booking → release the held slot immediately
+       instead of waiting for the expiry sweep. Keyed off the RAW state, since fsStatus
+       collapses CANCELLED/EXPIRED/REJECTED/TIMEOUT into "PENDING". No-op (returns false)
+       for non-booking intents, so product/wallet failures fall through unchanged. */
+    if (["FAILED", "CANCELLED", "EXPIRED", "REJECTED", "TIMEOUT"].includes(state)) {
+      const { releaseServiceBookingOnTerminalPayment } = require('./booking-payment-sweep');
+      if (await releaseServiceBookingOnTerminalPayment(db, admin, apiRef, existing.intentRef, state)) {
+        res.status(200).send("OK"); return;
+      }
     }
 
     if (fsStatus === "COMPLETE") {

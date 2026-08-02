@@ -1,3 +1,33 @@
+## [2026-08-02] — feat(booking): Slice 3 — immediate release on payment failure, autoConfirm sweep, accurate conflicts
+
+Three release-blockers on the hold lifecycle, all reusing Slice 1's idempotent, owner-aware release.
+
+- **One canonical release path (`functions/booking-payment-sweep.js` `releaseServiceHold`).** Cancels the
+  unpaid booking, deletes the slot lock, and cancels the payment intent in a single transaction; never
+  releases a paid hold; `ownerUid` restricts to the booking owner (customer-initiated) or is omitted for
+  system-initiated release. `bookingReleaseHold` (the onCall owner path) now DELEGATES to it — one
+  implementation, three callers (owner, webhook, sweep).
+- **Payment-failure webhook release (Critical) — `functions/index.js`.** BOTH IntaSend webhook handlers
+  (`intasendWebhook`, `webhookIntasend`) now, on a TERMINAL non-payment state
+  (`FAILED/CANCELLED/EXPIRED/REJECTED/TIMEOUT`), call `releaseServiceBookingOnTerminalPayment` → the slot
+  frees the instant the provider reports the outcome, not after the sweep. Keyed off the RAW `state` (the
+  existing `fsStatus` collapses CANCELLED/EXPIRED/… into PENDING). No-op for non-booking intents, so
+  product/wallet payments are unaffected. Notifies the customer the slot was released.
+- **autoConfirm-unpaid sweep (`isExpired`).** A slot is now considered held by an unconfirmed `pending`
+  booking OR an auto-confirmed one that still owes payment (`price > 0`). Free bookings (price 0) and the
+  existing `pending` behavior are untouched — closes the gap where an `autoConfirm` provider's unpaid
+  booking stranded a slot forever (it wasn't `status:'pending'`, so the sweep skipped it).
+- **Accurate conflict messages (`functions/booking-service.js`).** Instead of a blanket "just taken", the
+  create path classifies why the slot is held and returns: *"Someone else just booked and paid for this
+  time…"* (paid/confirmed), *"Another customer is completing payment for this time. It may free up in a
+  few minutes…"* (someone else's live unpaid hold), or *"That time overlaps another booking…"* (overlap).
+
+Tests: `scripts/test-booking-hold-expiry.js` — 15/15 (adds autoConfirm-priced sweep + free-booking guard).
+Booking suite regression-clean. Deploy: `functions:providerDispatch, bookingCleanupHolds, intasendWebhook,
+webhookIntasend`. Breaking: none.
+
+---
+
 ## [2026-08-02] — feat(booking): Slice 2 — server availability truthfulness (only show bookable slots)
 
 `getAvailabilitySlots` is the single source of truth for what's offerable, but it had gaps that let it
