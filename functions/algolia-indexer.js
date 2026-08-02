@@ -1201,6 +1201,11 @@ const COLLECTION_INDEX_MAP = {
   /* ── Services ── */
   services:    { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
   providers:   { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
+  /* providerServices — the BOOKABLE services created via providerAddService (name,
+     category, price, providerId, description). Was unmapped, so enqueue() returned early
+     at algolia-queue.js and no service reached search. Same index + transformer as
+     services/providerProfiles; the services transformer already reads these fields. */
+  providerServices: { index: 'sokoni_services',  transformer: TRANSFORMERS.services,    globalSearch: true  },
   /* providerProfiles is the CANONICAL provider record, written by
      providerPublish (provider-onboarding.js:226) with name, category,
      subcategory, coverage and status:'active'. It was never registered here,
