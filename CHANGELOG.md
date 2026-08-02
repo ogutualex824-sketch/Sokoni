@@ -1,3 +1,51 @@
+## [2026-08-02] — refactor(food): Phase 6 consumer 1/4 — `food-menu.html` on the shared engine
+
+First of four, lowest financial risk, migrated alone.
+
+**`_rest.deliveryFee || 50` appeared twice in the same file** — a duplicate within a duplicate. Both
+call sites now go through `SokoniDeliveryEngine.calculateDelivery()` via one `_foodDeliveryConfig()`.
+
+The literal `50` is preserved exactly, but as a named `FOOD_LEGACY_DEFAULT_FEE` rather than an inline
+number, so it is **visible** when merchants get real delivery configuration instead of hiding in an
+expression.
+
+A fallback keeps the legacy arithmetic if the engine script has not loaded, so a slow script cannot
+block a customer from checking out.
+
+### One deliberate behaviour change — found by testing for equivalence, not assumed
+
+I wrote an equivalence check across six input shapes rather than trusting that the refactor was
+neutral. It failed on one:
+
+| `_rest` | old | new | |
+|---|---|---|---|
+| `{deliveryFee: 120}` | 120 | 120 | match |
+| **`{deliveryFee: 0}`** | **50** | **0** | **differs** |
+| `{}` / `null` / `{deliveryFee: null}` | 50 | 50 | match |
+
+**`0 || 50` is 50.** A restaurant that set delivery to **free** had its customers charged **50 anyway**,
+because zero is falsy. The `!= null` check honours the zero.
+
+**Verified against production before accepting it:** `restaurants`, `foodProviders` and
+`foodRestaurants` all hold **0 documents**, so no existing merchant's pricing changes. Had any
+restaurant carried a `0`, this would have been the founder's decision rather than a silent fix — and
+the reasoning is recorded in the source, not only here.
+
+This is exactly why "produce identical pricing" is tested rather than asserted: the old behaviour was
+a **bug**, and a migration that reproduced it faithfully would have carried it forward invisibly.
+
+**Rollback:** revert this commit. The engine is additive and no other consumer references
+`_foodDeliveryConfig`.
+
+**Tests:** 825 passed · markup balanced 16/16 · predeploy green.
+
+Files: `food-menu.html`. Not deployed.
+
+Remaining consumers: `delivery-hub.js` → `functions/index.js:3303` → `checkout.html` (last, requires
+authenticated end-to-end verification).
+
+---
+
 ## [2026-08-02] — feat(delivery): Phase 6 — one delivery engine (engine + tests; consumers not yet migrated)
 
 **Delivery was being priced in at least four places, each with its own rules:**
