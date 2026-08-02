@@ -446,7 +446,7 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     db.collection('supportTickets').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('disputes').where('status', '==', 'open').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('subscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
-    db.collection('payouts').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('payoutRequests').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),   /* canonical payout source (matches super-admin queue) */
     db.collection('orders').where('deliveryStatus', 'in', ['in_transit', 'picking_up']).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
 
@@ -557,8 +557,14 @@ exports.adminGetDeliveryStats = onCall({ region: 'us-central1', maxInstances: 10
    clash with the global payouts CF. Caller: sokoni-aos.js _call('aosGetPendingPayouts'). */
 exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosGetPendingPayouts = async (req) => {
   _requireAdmin(req);
-  const snap = await getFirestore().collection('payouts').where('status', '==', 'pending').orderBy('createdAt', 'desc').limit(100).get().catch(() => ({ docs: [] }));
-  return { payouts: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  /* Canonical source is `payoutRequests` (what requestSellerPayout writes and
+     super-admin.html reads). Was reading the stale `payouts` collection, so this admin
+     view showed 0 while real withdrawals sat in payoutRequests. Single-field query
+     (sort in memory) mirrors wallet.js adminGetPendingPayouts — no composite index. */
+  const snap = await getFirestore().collection('payoutRequests').where('status', '==', 'pending').limit(100).get().catch(() => ({ docs: [] }));
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  return { payouts: rows };
 });
 
 exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminApprovePayouts = async (req) => {
