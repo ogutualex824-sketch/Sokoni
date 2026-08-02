@@ -508,14 +508,20 @@ exports._h.providerDashboard = _h.providerDashboard = async (req) => {
   const profile = profileSnap.data();
   const sub     = subSnap.exists ? subSnap.data() : null;
 
-  // Aggregate earnings (last 30d)
-  const since = new Date(Date.now() - 30 * 86400000);
-  const earningsSnap = await _db().collection('providerPayouts')
-    .where('providerId', '==', uid)
-    .where('createdAt', '>=', since)
-    .get();
-
-  const earnings30d = earningsSnap.docs.reduce((sum, d) => sum + (d.data().amount || 0), 0);
+  // Aggregate earnings (last 30d) — SECONDARY KPI, must never block the dashboard.
+  // Wrapped so a missing index / slow query degrades to 0 instead of failing the whole
+  // load (the home screen must always render the profile, bookings and pending list).
+  let earnings30d = 0;
+  try {
+    const since = new Date(Date.now() - 30 * 86400000);
+    const earningsSnap = await _db().collection('providerPayouts')
+      .where('providerId', '==', uid)
+      .where('createdAt', '>=', since)
+      .get();
+    earnings30d = earningsSnap.docs.reduce((sum, d) => sum + (d.data().amount || 0), 0);
+  } catch (e) {
+    logger.warn('[providerDashboard] earnings aggregate skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
 
   return {
     profile: {

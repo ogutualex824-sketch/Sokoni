@@ -27,6 +27,14 @@
       ]
     },
     {
+      "collectionGroup": "providerPayouts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "providerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "_sokoniErrors",
       "queryScope": "COLLECTION",
       "fields": [
