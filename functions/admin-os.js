@@ -663,6 +663,158 @@ exports.adminGetPayments = onCall({ region: 'us-central1', maxInstances: 10, enf
   };
 });
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CANONICAL ADMIN READ CONTRACT — the single authenticated server API
+
+   Every admin module reads through one of these callables (via adminOsDispatch),
+   NEVER directly from client Firestore. Each one: _requireAdmin + App Check
+   (enforced on the callable) → canonical collection → normalized JSON in a
+   { source, count, items, generatedAt } envelope for the module's diagnostics.
+
+   Index-safe by construction: a BOUNDED fetch + in-memory sort — never a bare
+   orderBy() on a field some docs may lack (which silently drops them, the exact
+   class of bug that made panes read empty). Caps are generous for the current
+   scale and can move to keyset pagination when a collection outgrows them.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const _iso = (v) => (v && v.toDate ? v.toDate().toISOString() : (v && v._seconds ? new Date(v._seconds * 1000).toISOString() : null));
+const _ms  = (v) => (v && v.toDate ? v.toDate().getTime()  : (v && v._seconds ? v._seconds * 1000 : 0));
+const _env = (source, items, extra) => Object.assign({ source, count: items.length, items, generatedAt: new Date().toISOString() }, extra || {});
+/* Generic bounded fetch → id + raw data + createdAt ISO, newest first. For
+   collections whose schema the UI consumes wholesale (disputes/reviews/etc.). */
+async function _listCanonical(col, { limit: lim, cap = 1000 } = {}) {
+  const db = getFirestore();
+  const snap = await db.collection(col).limit(Math.min(lim || cap, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return Object.assign({ id: d.id }, x, { createdAt: _iso(x.createdAt) || _iso(x.timestamp) || null, _ms: _ms(x.createdAt) || _ms(x.timestamp) }); });
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach(i => { delete i._ms; });
+  return items;
+}
+
+exports.adminGetUsers = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetUsers = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('users').limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    uid: d.id, name: x.name || x.displayName || '', email: x.email || '', phone: x.phoneNumber || x.phone || '',
+    roles: x.roles || [], role: x.role || '', status: x.status || '', disabled: !!x.disabled,
+    createdAt: _iso(x.createdAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  if (search) { const q = String(search).toLowerCase(); items = items.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || String(u.phone || '').includes(q)); }
+  items.forEach(u => { delete u._ms; });
+  return _env('users', items);
+});
+
+exports.adminGetProviders = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetProviders = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, search } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('providers').limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    uid: d.id, name: x.name || x.businessName || '', email: x.email || '', category: x.category || '',
+    location: x.location || '', status: x.status || '', verified: !!x.verified, available: !!x.available,
+    rating: x.rating || 0, jobsCompleted: x.jobsCompleted || 0, acceptsBookings: !!x.acceptsBookings,
+    createdAt: _iso(x.createdAt), updatedAt: _iso(x.updatedAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  if (search) { const q = String(search).toLowerCase(); items = items.filter(p => (p.name || '').toLowerCase().includes(q) || (p.category || '').toLowerCase().includes(q)); }
+  const active = items.filter(p => ['active', 'approved'].includes(String(p.status).toLowerCase())).length;
+  const verified = items.filter(p => p.verified).length;
+  items.forEach(p => { delete p._ms; });
+  return _env('providers', items, { active, verified, pending: items.length - active });
+});
+
+exports.adminGetServices = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetServices = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, providerId } = req.data || {};
+  const db = getFirestore();
+  let ref = db.collection('providerServices');
+  if (providerId) ref = ref.where('providerId', '==', providerId);
+  const snap = await ref.limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    id: d.id, name: x.name || x.title || '', price: Number(x.price) || 0, duration: x.duration || x.durationMinutes || null,
+    category: x.category || '', providerId: x.providerId || x.uid || '', providerName: x.providerName || '',
+    status: x.status || '', active: x.active !== false, createdAt: _iso(x.createdAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  items.forEach(i => { delete i._ms; });
+  return _env('providerServices', items);
+});
+
+exports.adminGetWallets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetWallets = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('wallets').limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    uid: d.id, balance: Number(x.balance) || 0, pendingPayout: Number(x.pendingPayout) || 0,
+    currency: x.currency || 'KES', updatedAt: _iso(x.updatedAt), _bal: Number(x.balance) || 0 }; });
+  items.sort((a, b) => b._bal - a._bal);
+  const totalLiability = items.reduce((s, w) => s + w.balance, 0);
+  items.forEach(w => { delete w._bal; });
+  return _env('wallets', items, { totalLiability: Math.round(totalLiability * 100) / 100 });
+});
+
+exports.adminGetPayoutRequests = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPayoutRequests = async (req) => {
+  _requireAdmin(req);
+  const { status, limit: lim } = req.data || {};
+  const db = getFirestore();
+  const snap = await db.collection('payoutRequests').limit(Math.min(lim || 500, 1000)).get().catch(() => ({ docs: [] }));
+  let items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    id: d.id, amount: Number(x.amount) || 0, status: String(x.status || '').toLowerCase(),
+    sellerUid: x.sellerUid || x.uid || '', sellerName: x.sellerName || x.name || '',
+    phone: x.accountNumber || x.phone || '', reference: x.reference || x.ref || d.id,
+    createdAt: _iso(x.createdAt), _ms: _ms(x.createdAt) }; });
+  items.sort((a, b) => b._ms - a._ms);
+  const byStatus = items.reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});
+  const pendingSet = new Set(['pending', 'approved', 'processing']);
+  const pendingAmount = items.filter(r => pendingSet.has(r.status)).reduce((s, r) => s + r.amount, 0);
+  if (status) items = items.filter(r => r.status === String(status).toLowerCase());
+  items.forEach(r => { delete r._ms; });
+  return _env('payoutRequests', items, { byStatus, pendingAmount: Math.round(pendingAmount * 100) / 100 });
+});
+
+exports.adminGetAnalytics = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAnalytics = async (req) => {
+  _requireAdmin(req);
+  const { limit: lim, providerId } = req.data || {};
+  const db = getFirestore();
+  let ref = db.collection('providerAnalytics');
+  if (providerId) ref = ref.where('providerId', '==', providerId);
+  const snap = await ref.limit(Math.min(lim || 1000, 2000)).get().catch(() => ({ docs: [] }));
+  const items = (snap.docs || []).map(d => { const x = d.data() || {}; return {
+    id: d.id, providerId: x.providerId || (d.id.split('_')[0]) || '', date: x.date || (d.id.split('_')[1]) || '',
+    bookingsCompleted: x.bookingsCompleted || 0, grossCents: x.grossCents || 0, commissionCents: x.commissionCents || 0,
+    netCents: x.netCents || 0 }; });
+  const totals = items.reduce((t, r) => { t.bookingsCompleted += r.bookingsCompleted; t.grossCents += r.grossCents; t.commissionCents += r.commissionCents; t.netCents += r.netCents; return t; }, { bookingsCompleted: 0, grossCents: 0, commissionCents: 0, netCents: 0 });
+  return _env('providerAnalytics', items, { totals });
+});
+
+exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetDisputes = async (req) => {
+  _requireAdmin(req);
+  const items = await _listCanonical('disputes', req.data || {});
+  return _env('disputes', items, { open: items.filter(d => String(d.status || '').toLowerCase() === 'open').length });
+});
+
+exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetReviews = async (req) => {
+  _requireAdmin(req);
+  const items = await _listCanonical('reviews', req.data || {});
+  return _env('reviews', items, { flagged: items.filter(r => r.flagged || r.reported).length });
+});
+
+exports.adminGetNotifications = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetNotifications = async (req) => {
+  _requireAdmin(req);
+  const items = await _listCanonical('notifications', Object.assign({ cap: 200 }, req.data || {}));
+  return _env('notifications', items);
+});
+
+exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSupportTickets = async (req) => {
+  _requireAdmin(req);
+  const items = await _listCanonical('supportTickets', req.data || {});
+  return _env('supportTickets', items, { open: items.filter(t => String(t.status || '').toLowerCase() === 'open').length });
+});
+
+/* Contract aliases — same handler, canonical name the Command Center calls. */
+exports._h.adminGetOverview = exports._h.adminGetExecutiveDashboard;
+exports._h.adminGetReports  = exports._h.adminGetFinance;
+
 /* ─────────────────────────────────────────────────────────────────────────
    Orders
 ──────────────────────────────────────────────────────────────────────────── */
