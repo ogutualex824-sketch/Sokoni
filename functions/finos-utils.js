@@ -778,18 +778,24 @@ async function intasendB2C(privKey, { phone, amountKES, reference, remarks }) {
   const isSandbox = process.env.INTASEND_SANDBOX === 'true';
   const base      = isSandbox ? 'https://sandbox.intasend.com' : 'https://payment.intasend.com';
 
-  /* CORRECT IntaSend Send-Money (B2C) API — mirrors the proven call in
-     index.js initiateSellerPayout. The previous endpoint/auth/body were all wrong
-     (/payment/mpesa-b2c/initiate/ + Bearer + flat fields) → HTML 404, "internal".
-       · endpoint: /api/v1/send-money/mpesa/
-       · auth:     "Token <key>"  (NOT Bearer)
-       · body:     { currency, transactions:[{ name, account, amount }] } */
+  /* CORRECT IntaSend Send-Money (B2C) contract — verified against the official
+     intasend-node SDK (payouts.js + requests.js) AND by probing the live API.
+     The two earlier endpoints (/payment/mpesa-b2c/initiate/ and /send-money/mpesa/)
+     BOTH return HTML 404 — neither exists. index.js's "Token" auth was also wrong.
+       · endpoint:  /api/v1/send-money/initiate/   (send-money/mpesa/ does NOT exist)
+       · auth:      Bearer <secret_key>
+       · provider:  MPESA-B2C
+       · body:      { provider, currency, requires_approval:'NO', transactions:[…] }
+     requires_approval:'NO' auto-approves so this stays single-step; if the account
+     mandates approval, IntaSend returns a JSON error and we add a /approve/ call. */
   const account = String(phone).replace(/\D/g, '').replace(/^0/, '254');
-  const res = await fetch(`${base}/api/v1/send-money/mpesa/`, {
+  const res = await fetch(`${base}/api/v1/send-money/initiate/`, {
     method:  'POST',
-    headers: { 'Authorization': `Token ${privKey}`, 'Content-Type': 'application/json' },
+    headers: { 'Authorization': `Bearer ${privKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
+      provider: 'MPESA-B2C',
       currency: 'KES',
+      requires_approval: 'NO',
       transactions: [{
         name:      remarks || 'SOKONI Payout',
         account,
