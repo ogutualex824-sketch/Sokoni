@@ -1,3 +1,32 @@
+## [2026-08-02] — feat(booking): Slice 4 — structured lifecycle events (observability)
+
+Every service-booking transition now emits a structured, append-only event to the canonical
+`bookingEvents` log (the same collection the resolution engine uses), so an investigation can
+reconstruct exactly what happened — actor, `previousStatus → newStatus`, `paymentRef`, timestamp —
+without grepping logs.
+
+- **`functions/booking-events.js` (new).** `bookingEvent()` builds a `{ ref, payload }` written INSIDE
+  the same transaction as the state change (atomic, never a drifting best-effort write). Canonical types:
+  `BOOKING_HELD`, `BOOKING_RESUMED`, `BOOKING_RELEASED`, `BOOKING_EXPIRED`, `PAYMENT_CONFIRMED`,
+  `BOOKING_CONFIRMED`. Schema denormalises `providerId`/`customerUid` so rules can scope reads.
+- **Idempotent audit (Scenario 7).** Transitions that occur at most once per booking use a deterministic
+  id (`${bookingId}_${key}` for held/released/expired/paid/confirmed), so a retried/duplicate webhook
+  OVERWRITES the same event doc — **no duplicate audit entries**. Repeatable transitions (RESUMED) use a
+  random id. Combined with the transaction guards in `releaseServiceHold`, the release path is idempotent
+  under repeated delivery by construction.
+- **Wired into all six transitions:** create → HELD (`booking-service.js`), owner resume → RESUMED,
+  release → RELEASED (`booking-payment-sweep.js`, actor = customer/system/webhook), expiry sweep → EXPIRED,
+  webhook hold → PAYMENT_CONFIRMED, provider confirm → CONFIRMED (`provider-ops.js`, alongside the existing
+  `providerCalendar` write).
+
+Tests: `scripts/test-booking-events.js` — 16/16 (deterministic vs random ids, schema, defaults). Booking
+suite regression-clean. Note: `test-booking-hold-expiry.js` gained an admin-init line because the sweep
+module now transitively loads `booking-events` (which calls `admin.firestore()` at load) — the exact
+harness-drift class the Slice 1 guard exists for. Deploy: `functions:providerDispatch, bookingCleanupHolds,
+intasendWebhook, webhookIntasend`. Breaking: none.
+
+---
+
 ## [2026-08-02] — feat(booking): Slice 3 — immediate release on payment failure, autoConfirm sweep, accurate conflicts
 
 Three release-blockers on the hold lifecycle, all reusing Slice 1's idempotent, owner-aware release.

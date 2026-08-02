@@ -21,6 +21,7 @@ const logger                       = require('firebase-functions/logger');
 const subCore                      = require('./subscription-core');
 const legal                        = require('./legal-agreements');
 const rc                           = require('./reservation-core');
+const { bookingEvent, TYPES }      = require('./booking-events');
 
 const _db  = () => getFirestore();
 const _ts  = () => FieldValue.serverTimestamp();
@@ -151,6 +152,13 @@ _h.providerConfirmBooking = async (req) => {
     scheduledAt: data.scheduledAt || null, service: _san(data.service, 200),
     customerName: _san(data.customerName, 200), createdAt: _ts(),
   }, { merge: true });
+  const cev = bookingEvent({
+    bookingId: ref.id, type: TYPES.CONFIRMED, actor: 'provider',
+    providerId: uid, customerUid: data.customerUid,
+    previousStatus: data.status, newStatus: 'confirmed', paymentRef: data.paymentRef || null,
+    key: 'confirmed',
+  });
+  batch.set(cev.ref, cev.payload);
   await batch.commit();
   return { success: true, status: 'confirmed' };
 };

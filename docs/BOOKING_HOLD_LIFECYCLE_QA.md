@@ -49,6 +49,16 @@ slot lock deleted; customer notified "Reservation released". **No sweep wait** �
 **Expected:** the existing **unpaid hold resumes** (server returns `resumed:true`, refreshes the 5-min window) —
 **no duplicate** booking is created, no "just taken". The same `bookingId` continues to payment.
 
+## 7. Idempotency under duplicate callbacks
+**Why:** payment providers retry webhooks; the release/hold paths must stay idempotent.
+**Steps:** Force a repeat — reject an STK (Scenario 3) so a terminal webhook fires, then let IntaSend retry
+(or replay the same callback). Equivalently, close the modal twice (double release).
+**Expected:** the **first** delivery changes state; **subsequent** deliveries are clean no-ops
+(`released:false, reason:'already-released'|'already-paid'`) — no errors, no slot corruption, and
+**no duplicate `bookingEvents`** (release/expiry/paid events use deterministic ids, so a retry overwrites
+the same event doc). Guaranteed structurally by the transaction guards in `releaseServiceHold`
+(terminal-status + paid-status early return) — this scenario confirms it end-to-end.
+
 ---
 
 ## What I verify server-side (from your IDs)

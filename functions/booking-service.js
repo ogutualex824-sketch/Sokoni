@@ -17,6 +17,7 @@ const admin = require('firebase-admin');
 const { HttpsError } = require('firebase-functions/v2/https');
 const db = admin.firestore();
 const rc = require('./reservation-core');
+const { bookingEvent, TYPES } = require('./booking-events');
 
 const _uid = (req) => { const u = req.auth && req.auth.uid; if (!u) throw new HttpsError('unauthenticated', 'Sign in required.'); return u; };
 const _ts  = () => admin.firestore.FieldValue.serverTimestamp();
@@ -212,6 +213,11 @@ _h.bookingCreateService = async (req) => {
         const hb = held.data();
         if (hb.customerUid === customerUid && hb.status === 'pending' && (hb.paymentStatus || 'pending') === 'pending') {
           txn.update(bookingRef, { expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs), updatedAt: _ts() });
+          const rev = bookingEvent({
+            bookingId, type: TYPES.RESUMED, actor: 'customer', providerId, customerUid,
+            previousStatus: 'pending', newStatus: 'pending', data: { expiresAt: holdExpiresMs },
+          });
+          txn.set(rev.ref, rev.payload);
           outcome = { bookingId, status: 'pending', resumed: true, expiresAt: holdExpiresMs };
           return;
         }
@@ -265,6 +271,12 @@ _h.bookingCreateService = async (req) => {
     });
     txn.set(slotLockRef, { bookingId, providerId, customerUid, date, startTime, endTime, startTs, endTs, createdAt: _ts(), expiresAt: admin.firestore.Timestamp.fromMillis(holdExpiresMs) });
     if (idemRef) txn.set(idemRef, { bookingId, providerId, customerUid, createdAt: _ts() });
+    const hev = bookingEvent({
+      bookingId, type: TYPES.HELD, actor: 'customer', providerId, customerUid,
+      previousStatus: null, newStatus: status, data: { expiresAt: holdExpiresMs, priceCents: price, serviceId },
+      key: 'held',
+    });
+    txn.set(hev.ref, hev.payload);
     outcome = { bookingId, status, expiresAt: holdExpiresMs };
   });
 

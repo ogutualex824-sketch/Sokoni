@@ -11,6 +11,10 @@
  */
 'use strict';
 const path = require('path');
+/* booking-payment-sweep → booking-events calls admin.firestore() at load; init the
+   SAME firebase-admin instance it resolves (from functions/) first. isExpired is pure. */
+const admin = require(path.resolve('functions/node_modules/firebase-admin'));
+try { admin.initializeApp({ projectId: 'sokoni-test' }); } catch (_) { /* already */ }
 const { isExpired } = require(path.resolve('functions/booking-payment-sweep.js'));
 
 /* Firestore Timestamp stub: only .toMillis() is used by isExpired. */

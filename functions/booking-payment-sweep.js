@@ -15,6 +15,7 @@
    ========================================================================== */
 const admin = require('firebase-admin');
 const rc = require('./reservation-core');
+const { bookingEvent, TYPES } = require('./booking-events');
 
 const TTL_MS = 15 * 60 * 1000;
 
@@ -107,6 +108,14 @@ async function holdServiceBookingPayment(db, adminSdk, apiRef, intentRef, amount
         expiresAt:     FV.delete(),
         updatedAt:     FV.serverTimestamp(),
       });
+      const ev = bookingEvent({
+        bookingId, type: TYPES.PAYMENT_CONFIRMED, actor: 'intasend-webhook',
+        providerId: b.providerId, customerUid: b.customerUid,
+        previousStatus: b.status, newStatus: b.status, paymentRef: apiRef,
+        data: { fromPayment: b.paymentStatus || 'pending', toPayment: 'paid_held', heldAmountCents: Math.round(amountKES * 100) },
+        key: 'paid',
+      });
+      txn.set(ev.ref, ev.payload);
       return { outcome: 'held' };
     });
 
@@ -166,6 +175,13 @@ async function expireUnpaidServiceBookings(db) {
         });
         const lock = _slotLockRef(db, cur.providerId, cur);
         if (lock) t.delete(lock);
+        const ev = bookingEvent({
+          bookingId: doc.id, type: TYPES.EXPIRED, actor: 'system',
+          providerId: cur.providerId, customerUid: cur.customerUid,
+          previousStatus: cur.status, newStatus: 'cancelled', paymentRef: cur.paymentRef || null,
+          data: { reason: 'payment-expired' }, key: 'expired',
+        });
+        t.set(ev.ref, ev.payload);
         return true;
       });
       if (ok) {
@@ -210,6 +226,13 @@ async function releaseServiceHold(db, adminSdk, opts) {
     });
     const lock = _slotLockRef(db, b.providerId, b);
     if (lock) txn.delete(lock);
+    const ev = bookingEvent({
+      bookingId, type: TYPES.RELEASED, actor: by,
+      providerId: b.providerId, customerUid: b.customerUid,
+      previousStatus: b.status, newStatus: 'cancelled', paymentRef: b.paymentRef || null,
+      data: { reason }, key: 'released',
+    });
+    txn.set(ev.ref, ev.payload);
     return { released: true, paymentRef: b.paymentRef || null };
   });
 
