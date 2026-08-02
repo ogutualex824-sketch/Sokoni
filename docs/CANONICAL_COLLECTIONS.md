@@ -21,7 +21,8 @@ Related: [[project_booking_hold_lifecycle]] · [[reference_wallet_balance_model]
 | **Booking lifecycle events** | `bookingEvents` | Append-only audit (HELD/RESUMED/RELEASED/EXPIRED/PAYMENT_CONFIRMED/CONFIRMED). |
 | **Wallet balance** | `wallets/{uid}` | Canonical **withdrawable** balance = `balance` (whole **shillings**). Never duplicate balances. |
 | **Wallet ledger entries** | `walletTransactions` | One row per movement; deterministic ids where at-most-once. |
-| **Withdrawals** | `payoutRequests` | Lifecycle: requested → pending → approving → paid \| rejected. **`payouts` is DEPRECATED.** |
+| **Wallet withdrawals** | `payoutRequests` | Lifecycle: requested → pending → approving → paid \| rejected. Written by `requestSellerPayout`, approved by `adminProcessPayout`. **This is what a provider "Withdraw" uses.** |
+| **FinOS payouts** (separate system) | `payouts` | The FinOS/enterprise settlement payout collection (`finos-router.js`, `finos.js`, `financial-os.js`, `automation-engine.js`). A PARALLEL system to wallet withdrawals — NOT the same as `payoutRequests`. Convergence of the two is tracked tech debt; do not cross-wire them. |
 | **Provider settlements (services)** | `providerPayouts` | Per-booking earnings + commission (gross/commission/net, full audit). Settled at completion. |
 | **Product / marketplace commission** | `commissionLedger` | Written by the IntaSend webhook for product payments. |
 | **Provider analytics** | `providerAnalytics/{uid_YYYY-MM-DD}` | Daily rollup: bookingsCompleted, grossCents, commissionCents, netCents. |
@@ -38,7 +39,7 @@ Related: [[project_booking_hold_lifecycle]] · [[reference_wallet_balance_model]
 
 | Deprecated | Use instead | Why |
 |---|---|---|
-| `payouts` | `payoutRequests` | Withdrawals converge on `payoutRequests`; `payouts` is stale — admin views reading it showed 0. |
+| `payouts` **for wallet withdrawals** | `payoutRequests` | Wallet withdrawals live in `payoutRequests`; admin views reading `payouts` for them showed 0. (`payouts` itself is still the FinOS payout store — see the map — so this is a *domain* rule, not a blanket ban.) |
 | `commission.js requestWithdrawal`, `finos.js requestPayout` | `requestSellerPayout` (wallet.js) | Both retired; earnings converge into `wallets.balance`, withdraw debits it. |
 | Reading `providerPayouts` status==`pending` to withdraw | `wallets.balance` via `requestSellerPayout` | Booking earnings settle **directly to the wallet** and mark the payout `settled`, not `pending`. |
 
