@@ -795,7 +795,9 @@ exports.adminGetPayoutRequests = onCall({ region: 'us-central1', maxInstances: 1
     id: d.id, amount: Number(x.amount) || 0, status: String(x.status || '').toLowerCase(),
     sellerUid: x.sellerUid || x.uid || '', sellerName: x.sellerName || x.name || '',
     phone: x.accountNumber || x.phone || '', reference: x.reference || x.ref || d.id,
-    createdAt: _iso(x.createdAt), _ms: _ms(x.createdAt) }; });
+    reason: x.reason || x.note || '', method: x.method || 'M-Pesa',
+    createdAt: _iso(x.createdAt), processedAt: _iso(x.processedAt) || _iso(x.paidAt) || null,
+    _ms: _ms(x.createdAt) }; });
   items.sort((a, b) => b._ms - a._ms);
   const byStatus = items.reduce((m, r) => { m[r.status] = (m[r.status] || 0) + 1; return m; }, {});
   const pendingSet = new Set(['pending', 'approved', 'processing']);

@@ -5420,74 +5420,64 @@ window.renderOverview = renderOverview;
 /* Populate the default-active Overview once on load (renderPane fires it on switch). */
 document.addEventListener('DOMContentLoaded', function(){ setTimeout(function(){ try{ renderOverview(); }catch(_){}}, 1200); });
 
+/* Withdrawals pane — canonical AdminAPI (adminGetPayoutRequests), NOT a direct
+   Firestore read. The old onSnapshot hung on the super-admin auth-timing (the same
+   failure as the payments pane) and left "Loading withdrawals…" forever. This CF
+   path is the one the Overview's Withdrawals Queue already uses successfully.
+   NOTE: the pane markup is DUPLICATED (two #payoutsBody in the file, from the pane
+   refactor), so we write to ALL matches via querySelectorAll — updating only the
+   first (hidden) copy was itself a way to leave the visible pane stuck. */
 function renderPayouts(){
-  var FS = 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
-  var statsEl  = document.getElementById('payoutsStats');
-  var pendBody = document.getElementById('payoutsBody');
-  var doneBody = document.getElementById('payoutsDoneBody');
-  if (!pendBody) return;
+  var setAll = function(sel, html){ document.querySelectorAll(sel).forEach(function(el){ el.innerHTML = html; }); };
+  var loadingRow = '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">Loading withdrawals…</td></tr>';
+  var errRow = function(msg){ return '<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+h(msg)+' <button class="adm-btn-sm adm-btn-green" style="margin-left:8px;" onclick="renderPayouts()">Retry</button></td></tr>'; };
+  if (!document.getElementById('payoutsBody')) return;
+  if (_payoutsUnsub) { try{ _payoutsUnsub(); }catch(_){} _payoutsUnsub = null; }   /* kill any legacy listener */
+  setAll('#payoutsBody', loadingRow);
+  if (typeof AdminAPI === 'undefined' || !AdminAPI.call) { setAll('#payoutsBody', errRow('Data layer unavailable — reload the page.')); return; }
 
-  if (_payoutsUnsub) { _payoutsUnsub(); _payoutsUnsub = null; }
+  AdminAPI.call('adminGetPayoutRequests').then(function(res){
+    var all = (res && res.items) || [];
+    D.withdrawals = all;
+    var pending = all.filter(function(w){ return w.status==='pending'; });
+    var done    = all.filter(function(w){ return w.status!=='pending'; });
+    var dt = function(iso){ return iso ? new Date(iso).toLocaleDateString('en-KE',{dateStyle:'medium'}) : '—'; };
 
-  import(FS).then(function(m){
-    var db = window.firebaseDB;
-    if (!db) { pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">Firestore not ready</td></tr>'; return; }
-    /* Canonical wallet withdrawals live in payoutRequests (requestSellerPayout), NOT the
-       empty `withdrawals` collection. Normalise fields so the existing render works. */
-    var q = m.query(m.collection(db,'payoutRequests'), m.orderBy('createdAt','desc'), m.limit(60));
-    _payoutsUnsub = m.onSnapshot(q, function(snap){
-      var all = snap.docs.map(function(d){ var x=d.data(); return Object.assign({_id:d.id}, x, { phone:x.accountNumber||x.phone||'', ref:x.reference||x.ref||d.id, name:x.sellerName||x.name||('Seller '+String(x.sellerUid||'').slice(0,6)) }); });
-      D.withdrawals = all;
-      var pending = all.filter(function(w){ return w.status==='pending'; });
-      var done    = all.filter(function(w){ return w.status!=='pending'; });
-      /* badge */
-      var pb = document.getElementById('payouts-badge'); if(pb) pb.textContent = pending.length||'';
-      /* stats */
-      if(statsEl) statsEl.innerHTML =
-        statBox('⏳','b-yellow',pending.length,'Pending')+
-        statBox('✅','b-green',done.filter(function(w){return w.status==='approved';}).length,'Approved')+
-        statBox('❌','b-red',done.filter(function(w){return w.status==='rejected';}).length,'Rejected')+
-        statBox('💰','b-blue','KES '+fmt(pending.reduce(function(s,w){return s+(w.amount||0);},0)),'Pending KES');
-      /* pending table */
-      if (!pending.length) {
-        pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>';
-      } else {
-        pendBody.innerHTML = pending.map(function(w){
-          var ts = w.createdAt && w.createdAt.seconds ? new Date(w.createdAt.seconds*1000).toLocaleDateString('en-KE',{dateStyle:'medium'}) : '—';
-          return '<tr>'
-            +'<td style="font-size:11px;font-weight:800;">'+h(w.ref||w._id)+'</td>'
-            +'<td>'+h(w.name||'—')+'</td>'
-            +'<td>'+h(w.phone||'—')+'</td>'
-            +'<td style="font-weight:900;color:#10b981;">'+fmt(w.amount||0)+'</td>'
-            +'<td style="font-size:11px;max-width:120px;">'+h((w.reason||'—').substring(0,50))+'</td>'
-            +'<td style="font-size:11px;">'+ts+'</td>'
-            +'<td><span class="badge b-yellow">PENDING</span></td>'
-            +'<td style="white-space:nowrap;">'
-              +'<button class="adm-btn-sm adm-btn-green" onclick="approveWithdrawal(\''+w._id+'\',\''+h(w.phone)+'\','+Number(w.amount||0)+',\''+h(w.name||'Seller')+'\',\''+h(w.ref||'—')+'\')">✅ Pay</button> '
-              +'<button class="adm-btn-sm adm-btn-red" onclick="rejectWithdrawal(\''+w._id+'\',\''+h(w.phone)+'\',\''+h(w.name||'Seller')+'\')">❌ Reject</button>'
-            +'</td>'
-          +'</tr>';
-        }).join('');
-      }
-      /* done table */
-      if (!done.length) {
-        doneBody.innerHTML='<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No processed payouts yet</td></tr>';
-      } else {
-        doneBody.innerHTML = done.slice(0,20).map(function(w){
-          var ts = w.processedAt ? new Date(w.processedAt).toLocaleDateString('en-KE',{dateStyle:'medium'}) : (w.createdAt&&w.createdAt.seconds?new Date(w.createdAt.seconds*1000).toLocaleDateString('en-KE',{dateStyle:'medium'}):'—');
-          var sc = w.status==='approved'?'b-green':'b-red';
-          return '<tr>'
-            +'<td style="font-size:11px;">'+h(w.ref||w._id)+'</td>'
-            +'<td>'+h(w.name||'—')+'</td>'
-            +'<td>'+h(w.phone||'—')+'</td>'
-            +'<td style="font-weight:800;">'+fmt(w.amount||0)+'</td>'
-            +'<td><span class="badge '+sc+'">'+h(w.status).toUpperCase()+'</span></td>'
-            +'<td style="font-size:11px;">'+ts+'</td>'
-          +'</tr>';
-        }).join('');
-      }
-    }, function(e){ var _em=String(e&&e.message||'Unknown error').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">'+_em+'</td></tr>'; });
-  }).catch(function(e){ pendBody.innerHTML='<tr><td colspan="8" style="text-align:center;color:#f97316;padding:20px;">Failed to load Firestore</td></tr>'; });
+    document.querySelectorAll('#payouts-badge').forEach(function(pb){ pb.textContent = pending.length||''; });
+    setAll('#payoutsStats',
+      statBox('⏳','b-yellow',pending.length,'Pending')+
+      statBox('✅','b-green',done.filter(function(w){return ['approved','paid','completed','processing'].indexOf(w.status)>=0;}).length,'Approved')+
+      statBox('❌','b-red',done.filter(function(w){return w.status==='rejected';}).length,'Rejected')+
+      statBox('💰','b-blue','KES '+fmt(pending.reduce(function(s,w){return s+(w.amount||0);},0)),'Pending KES'));
+
+    setAll('#payoutsBody', pending.length ? pending.map(function(w){
+      return '<tr>'
+        +'<td style="font-size:11px;font-weight:800;">'+h(w.reference||w.id)+'</td>'
+        +'<td>'+h(w.sellerName||('Seller '+String(w.sellerUid||'').slice(0,6)))+'</td>'
+        +'<td>'+h(w.phone||'—')+'</td>'
+        +'<td style="font-weight:900;color:#10b981;">'+fmt(w.amount||0)+'</td>'
+        +'<td style="font-size:11px;max-width:120px;">'+h((w.reason||'—').substring(0,50))+'</td>'
+        +'<td style="font-size:11px;">'+dt(w.createdAt)+'</td>'
+        +'<td><span class="badge b-yellow">PENDING</span></td>'
+        +'<td style="white-space:nowrap;">'
+          +'<button class="adm-btn-sm adm-btn-green" onclick="approveWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\','+Number(w.amount||0)+',\''+h(w.sellerName||'Seller')+'\',\''+h(w.reference||'—')+'\')">✅ Pay</button> '
+          +'<button class="adm-btn-sm adm-btn-red" onclick="rejectWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\',\''+h(w.sellerName||'Seller')+'\')">❌ Reject</button>'
+        +'</td>'
+      +'</tr>';
+    }).join('') : '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>');
+
+    setAll('#payoutsDoneBody', done.length ? done.slice(0,20).map(function(w){
+      var sc = (w.status==='rejected')?'b-red':'b-green';
+      return '<tr>'
+        +'<td style="font-size:11px;">'+h(w.reference||w.id)+'</td>'
+        +'<td>'+h(w.sellerName||'—')+'</td>'
+        +'<td>'+h(w.phone||'—')+'</td>'
+        +'<td style="font-weight:800;">'+fmt(w.amount||0)+'</td>'
+        +'<td><span class="badge '+sc+'">'+h(String(w.status).toUpperCase())+'</span></td>'
+        +'<td style="font-size:11px;">'+dt(w.processedAt||w.createdAt)+'</td>'
+      +'</tr>';
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:rgba(255,255,255,0.3);padding:20px;">No processed payouts yet</td></tr>');
+  }).catch(function(e){ setAll('#payoutsBody', errRow((e&&e.message)||'Unable to load withdrawals')); });
 }
 
 function approveWithdrawal(id, phone, amount, name, ref, _c){
@@ -5500,6 +5490,7 @@ function approveWithdrawal(id, phone, amount, name, ref, _c){
     toast('✅ Payout approved — B2C processing to '+phone);
     var msg = '✅ *SOKONI Payout Approved*\n\nHi '+name+', your withdrawal of KES '+amount.toLocaleString()+' (Ref: '+ref+') has been approved and is being processed to '+phone+'.\n\nExpect funds within 24h.\n\n— SOKONI Team';
     try { window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
   }).catch(function(e){ toast('Error: '+(e&&e.message||'approval failed')); });
 }
 window.approveWithdrawal = approveWithdrawal;
@@ -5514,6 +5505,7 @@ function rejectWithdrawal(id, phone, name){
     toast('❌ Withdrawal rejected — funds returned to wallet');
     var msg = '❌ *SOKONI Withdrawal Update*\n\nHi '+name+', your withdrawal request was not processed.\n\nReason: '+reason+'\n\nThe funds have been returned to your wallet. — SOKONI Team';
     try { if (phone) window.open('https://wa.me/254'+String(phone).replace(/^0/,'')+'?text='+encodeURIComponent(msg),'_blank','noopener,noreferrer'); } catch(_){}
+    if (typeof renderPayouts==='function') setTimeout(renderPayouts, 1200);   /* refresh list (no live listener) */
   }).catch(function(e){ toast('Error: '+(e&&e.message||'rejection failed')); });
 }
 window.rejectWithdrawal = rejectWithdrawal;

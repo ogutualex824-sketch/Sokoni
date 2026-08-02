@@ -1740,6 +1740,8 @@
     const input = document.getElementById('sk-nav-search');
     const dropdown = document.getElementById('sk-nav-search-dropdown');
     if (!input || !dropdown) return;
+    if (input.dataset.skWired) return;   /* idempotent — never double-wire (no duplicate listeners on re-mount) */
+    input.dataset.skWired = '1';
 
     let _acTimer = null;
     let _focusIdx = -1;
@@ -1980,10 +1982,17 @@
       _acTimer = setTimeout(function() { _query(q); }, 220);
     });
 
-    input.addEventListener('focus', function() {
+    /* Open the recent/trending panel ONLY on an explicit user click — NOT on bare
+       focus. Programmatic focus (or focus restored after a pane re-render) must
+       never pop the dropdown open; that was the "search opens by itself" bug. */
+    input.addEventListener('click', function() {
       if (this.value.trim().length === 0) _renderFocusState();
+    });
+
+    input.addEventListener('focus', function() {
       /* Warm the catalogue on first focus — the user has signalled intent to
-         search, so the data is loading while they type the first character. */
+         search, so the data is loading while they type the first character.
+         (Deliberately does NOT open the dropdown — see the click handler above.) */
       if (!_warmStarted && window.firebaseDB) {
         _warmStarted = true;
         import('/sokoni-firestore-search.js')
