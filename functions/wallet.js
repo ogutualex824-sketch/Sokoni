@@ -35,10 +35,21 @@ function _payoutEvent(status, detail) {
   return { status, detail: detail || null, at: Timestamp.now() };
 }
 
+/**
+ * Calendar-day key in Africa/Nairobi time (product decision: "3 withdrawals per day"
+ * should reset at local midnight 00:00 EAT, not 03:00 EAT / UTC midnight). Kenya is
+ * UTC+3 year-round with no DST, so shifting +3h and reading the UTC date is exact.
+ * All payout "per day" buckets (velocity limit, metrics, analytics) MUST use this so
+ * "today" means one consistent thing across the system. Stored timestamps stay UTC.
+ */
+function _eatDay(d = new Date()) {
+  return new Date(d.getTime() + 3 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
 /** Record a daily payout metric counter (best-effort; never breaks the flow). */
 async function _payoutMetric(db, field, incBy = 1, timingMs = null) {
   try {
-    const day = new Date().toISOString().slice(0, 10);
+    const day = _eatDay();
     const ref = db.collection('payoutMetrics').doc(day);
     const upd = { [field]: FieldValue.increment(incBy), date: day, updatedAt: Timestamp.now() };
     if (timingMs != null) {
@@ -128,7 +139,7 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
     const velRef  = db.collection('payoutVelocity').doc(payout.sellerUid);
     const velSnap = await t.get(velRef);
     const createdDay = (payout.createdAt && payout.createdAt.toDate)
-      ? payout.createdAt.toDate().toISOString().slice(0, 10) : null;
+      ? _eatDay(payout.createdAt.toDate()) : null;
 
     t.update(walletRef, {
       balance:       FieldValue.increment(payout.amount),
@@ -901,7 +912,7 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
   const walletRef   = db.collection('wallets').doc(uid);
   const reqRef      = db.collection('payoutRequests').doc(reqId);
   const velocityRef = db.collection('payoutVelocity').doc(uid);
-  const today       = new Date().toISOString().slice(0, 10);
+  const today       = _eatDay();   // Africa/Nairobi day — resets at 00:00 EAT
 
   /* Atomically dedupe + check velocity + balance, reserve amount, create request */
   let deduplicated = false;
@@ -1441,7 +1452,7 @@ exports.getPayoutAnalytics = onCall({ cors: true, enforceAppCheck: true }, async
   const days = Math.min(Math.max(Number(request.data?.days) || 30, 1), 90);
   const ids  = [];
   for (let i = 0; i < days; i++) {
-    ids.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+    ids.push(_eatDay(new Date(Date.now() - i * 86400000)));   // match EAT metric write keys
   }
 
   const snaps = await db.getAll(...ids.map((d) => db.collection('payoutMetrics').doc(d)));
