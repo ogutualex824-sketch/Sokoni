@@ -223,6 +223,7 @@ window.SokoniWalletV2 = (function () {
 
         await loadDashboard();
         _startBalanceListener();   // live balance — updates instantly on send/claim/top-up/withdraw/webhook
+        _claimPendingTransfers();  // auto-claim any money sent to this user's number before they registered
         await checkSellerStatus();
 
         /* Deep-link from chat's "Send money": open the pay sheet for that contact. */
@@ -335,6 +336,21 @@ window.SokoniWalletV2 = (function () {
   function _setText(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
+  }
+
+  /* Auto-claim money sent to this user's phone BEFORE they registered (send-to-anyone).
+     Runs best-effort on every wallet load — the missing piece that left claimable
+     transfers stuck 'pending' when a recipient signed up normally (walletV2SavePhone's
+     claim hook only fires in the explicit add-phone flow). Idempotent server-side. */
+  async function _claimPendingTransfers() {
+    try {
+      const res = await _callTimed('walletV2ClaimPending', {}, 12000);
+      const d = res && res.data || {};
+      if (d.claimed > 0) {
+        toast('Received KSh ' + _fmt(d.amount) + ' sent to your number', 'success');
+        loadDashboard();   // refresh tx list; balance also updates via the live listener
+      }
+    } catch (_) { /* no pending claims / endpoint busy — safe to ignore */ }
   }
 
   /* ─── LIVE BALANCE (single source of truth) ───
