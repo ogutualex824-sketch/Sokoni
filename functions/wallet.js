@@ -119,10 +119,24 @@ async function _refundPayout(db, rid, newStatus, extra = {}) {
     const payout = reqSnap.data();
     if (['paid', 'rejected', 'failed'].includes(payout.status)) return;   // terminal — idempotent
     const walletRef = db.collection('wallets').doc(payout.sellerUid);
+    /* Release the daily payout-velocity slot this request consumed at reserve time. A
+       failed/rejected payout returned the funds → it must NOT burn the seller's 3-per-day
+       allowance (this was the "Maximum 3 payout requests per day" seen right after a
+       payout: earlier failed attempts had silently eaten the quota). Only decrement when
+       the counter still belongs to the SAME day the request was created (a later day has
+       already reset it) and is > 0. Read BEFORE any write (transaction ordering rule). */
+    const velRef  = db.collection('payoutVelocity').doc(payout.sellerUid);
+    const velSnap = await t.get(velRef);
+    const createdDay = (payout.createdAt && payout.createdAt.toDate)
+      ? payout.createdAt.toDate().toISOString().slice(0, 10) : null;
+
     t.update(walletRef, {
       balance:       FieldValue.increment(payout.amount),
       pendingPayout: FieldValue.increment(-payout.amount),
     });
+    if (velSnap.exists && createdDay && velSnap.data().date === createdDay && (velSnap.data().count || 0) > 0) {
+      t.update(velRef, { count: FieldValue.increment(-1), updatedAt: Timestamp.now() });
+    }
     t.update(reqRef, {
       status: newStatus, processedAt: Timestamp.now(), updatedAt: Timestamp.now(),
       statusHistory: FieldValue.arrayUnion(_payoutEvent(newStatus, extra.detail || 'Payout refunded')),
@@ -557,66 +571,60 @@ exports.initiateWalletTopUp = onCall(
       throw new HttpsError('invalid-argument', 'Phone must be a valid Kenyan number (07XX or 01XX, with or without country code)');
     }
 
-    // Create pending transaction
+    /* Latency profiling — server-side stages only (grep [wallet-latency]). Carrier STK
+       delivery + PIN entry + webhook round-trip are downstream and logged separately. */
+    const _t0  = Date.now();
     const txId = _genId('wtop');
-    const txRef = db.collection('walletTransactions').doc(txId);
-    await txRef.set({
-      uid,
-      type: 'pending',
-      amount: amt,
-      description: 'Wallet top-up via M-Pesa',
-      status: 'pending',
-      mpesaRef: null,
-      invoiceId: null,
-      createdAt: Timestamp.now(),
-    });
+    const _lap = (stage) => { try { console.log('[wallet-latency]', JSON.stringify({ txId, stage, ms: Date.now() - _t0 })); } catch (_) {} };
+    _lap('validated');
 
-    // Flag pending top-up on wallet (creates wallet doc if needed)
+    const txRef     = db.collection('walletTransactions').doc(txId);
     const walletRef = db.collection('wallets').doc(uid);
-    const walletSnap = await walletRef.get();
-    if (!walletSnap.exists) {
-      await walletRef.set({
-        uid,
-        balance: 0,
-        currency: 'KES',
-        lastTopUp: null,
-        pendingTopUp: txId,
-        createdAt: Timestamp.now(),
-      });
-    } else {
-      await walletRef.update({ pendingTopUp: txId });
-    }
+
+    /* LATENCY: fire the STK push as EARLY as possible and overlap the two minimal
+       pre-writes with the gateway network call, instead of the old 3 serial round-trips
+       (write tx → READ wallet → write flag → then STK). The wallet flag is a merge-set:
+       it neither reads first nor clobbers balance/createdAt. Nothing here changes the
+       money path — the pending records still exist before we return, and the webhook/
+       confirm/sweep paths are untouched. */
+    const { getAdapter } = require('./payment-adapters');
+    const useSandbox = process.env.INTASEND_SANDBOX === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
+    const adapter    = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
+
+    const stkPromise = adapter.initiatePayment({
+      phone:     normalizedPhone,
+      amountKES: amt,
+      ref:       txId,
+      narrative: 'SOKONI wallet top-up',
+    });
+    const writesPromise = Promise.all([
+      txRef.set({
+        uid, type: 'pending', amount: amt, description: 'Wallet top-up via M-Pesa',
+        status: 'pending', mpesaRef: null, invoiceId: null, createdAt: Timestamp.now(),
+      }),
+      /* merge-set: creates the wallet if absent, never overwrites balance/createdAt */
+      walletRef.set({ uid, currency: 'KES', pendingTopUp: txId, updatedAt: Timestamp.now() }, { merge: true }),
+    ]);
 
     // Initiate IntaSend STK Push — through the SOKONI Pay adapter (swappable gateway)
     let invoiceId = null;
     try {
-      /* SOKONI Pay convergence — the top-up no longer calls intasend-node directly. It
-         goes through the provider-agnostic adapter (payment-adapters.js initiatePayment),
-         the SAME proven wire contract the SDK used: POST /api/v1/payment/mpesa-stk-push/,
-         Bearer auth, numeric amount. The endpoint that actually pushes the M-Pesa PIN
-         prompt (NOT /checkout/, which mints a hosted invoice but sends no STK). Response
-         carries invoice.invoice_id → surfaced as resp.invoiceId; the confirm/webhook/sweep
-         paths below key off it unchanged. Gateway is now a plugin — swap providers here. */
-      const { getAdapter } = require('./payment-adapters');
-      const useSandbox = process.env.INTASEND_SANDBOX === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
-      const adapter = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
-      const resp = await adapter.initiatePayment({
-        phone:     normalizedPhone,
-        amountKES: amt,
-        ref:       txId,
-        narrative: 'SOKONI wallet top-up',
-      });
+      const resp = await stkPromise;
+      _lap('stk_response');
       if (!resp.success) {
         const e = new Error(resp.error || 'IntaSend STK error');
         e.gateway = resp.rawResponse;
         throw e;
       }
       invoiceId = resp.invoiceId ?? null;
+      await writesPromise;                    // pending records must exist before we return
       await txRef.update({ invoiceId });
+      _lap('persisted');
     } catch (err) {
       // IntaSend failure — mark transaction failed and surface a clean error
-      await txRef.update({ status: 'failed' });
-      await walletRef.update({ pendingTopUp: null });
+      await writesPromise.catch(() => {});    // let the concurrent writes settle first
+      await txRef.set({ status: 'failed' }, { merge: true }).catch(() => {});
+      await walletRef.set({ pendingTopUp: null }, { merge: true }).catch(() => {});
       /* Log whatever the error actually carries (adapter surfaces the gateway body on
          err.gateway), without leaking the credential. */
       console.error('[wallet] IntaSend STK push error:', {

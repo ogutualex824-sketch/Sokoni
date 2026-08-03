@@ -13,6 +13,11 @@
 const https  = require('https');
 const crypto = require('crypto');
 
+/* Shared keep-alive agent — reuse TCP+TLS connections to the gateway across requests
+   instead of a fresh handshake every call (saves ~100–300ms/request under load). Module
+   scope so all adapter instances share the pool for the lifetime of a warm function. */
+const _keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 64, keepAliveMsecs: 15000 });
+
 /* ═══════════════════════════════════════════════════════════════
    Base Adapter — all adapters extend this
 ═══════════════════════════════════════════════════════════════ */
@@ -92,6 +97,7 @@ class IntaSendAdapter extends PaymentAdapter {
         hostname: this._host,
         path,
         method,
+        agent: _keepAliveAgent,
         headers: {
           'Content-Type':   'application/json',
           /* IntaSend authenticates the SECRET key as "Bearer <key>" on BOTH the
