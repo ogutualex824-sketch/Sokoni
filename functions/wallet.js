@@ -270,9 +270,17 @@ async function _disburseB2C(db, rid, payout) {
   const tries  = (payout.retryCount || 0) + 1;
   _plog('b2c_initiate', ctx, { attempt: tries });
   try {
-    const resp = await intasendB2C(INTASEND_KEY.value(), {
-      phone: payout.accountNumber, amountKES: String(payout.amount),
-      reference: rid, remarks: 'SOKONI Earnings Payout',
+    /* SOKONI Pay convergence — the withdrawal no longer calls IntaSend directly. It
+       goes through the provider-agnostic adapter layer (payment-adapters.js), so the
+       gateway is a swappable plugin. Sandbox is config-driven (config/payouts.sandbox
+       or INTASEND_SANDBOX). sendMoneyB2C throws a gateway-tagged Error on failure, which
+       the catch below turns into retry/refund — unchanged behaviour. */
+    const { getAdapter } = require('./payment-adapters');
+    const useSandbox = process.env.INTASEND_SANDBOX === 'true' || !!(payout.sandbox);
+    const adapter = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
+    const resp = await adapter.sendMoneyB2C({
+      phone: payout.accountNumber, amountKES: payout.amount,
+      ref: rid, narrative: 'SOKONI Earnings Payout',
     });
     const ref = resp?.tracking_id || resp?.invoice_id || resp?.file_id || null;
     await reqRef.update({

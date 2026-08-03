@@ -85,7 +85,7 @@ class IntaSendAdapter extends PaymentAdapter {
     this._host = sandbox ? 'sandbox.intasend.com' : 'payment.intasend.com';
   }
 
-  async _request(path, method = 'POST', body = null) {
+  async _request(path, method = 'POST', body = null, authScheme = 'Token') {
     return new Promise((resolve, reject) => {
       const payload = body ? JSON.stringify(body) : '';
       const opts = {
@@ -94,7 +94,8 @@ class IntaSendAdapter extends PaymentAdapter {
         method,
         headers: {
           'Content-Type':   'application/json',
-          'Authorization':  `Token ${this._key}`,
+          /* Collections/STK use "Token"; Send-Money (B2C) requires "Bearer". */
+          'Authorization':  `${authScheme} ${this._key}`,
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
       };
@@ -143,21 +144,44 @@ class IntaSendAdapter extends PaymentAdapter {
     };
   }
 
-  async initiatePayout({ phone, amountKES, ref, reason }) {
-    const res = await this._request('/api/v1/send-money/mpesa/', 'POST', {
-      phone_number: this._normalizeKenyanPhone(phone),
-      amount:       String(Math.round(amountKES)),
-      currency:     'KES',
-      narrative:    reason || `SOKONI Payout ${ref}`,
-      api_ref:      ref,
-    });
+  /* Send-Money (M-Pesa B2C) — the VERIFIED contract (probed against the live API +
+     the official intasend-node SDK): POST /api/v1/send-money/initiate/, Bearer auth,
+     provider MPESA-B2C, transactions[]. The previous /send-money/mpesa/ + Token + flat
+     body returned HTML 404 and NEVER worked. Throws a gateway-tagged Error on failure
+     (so the caller's retry/refund path handles it); returns the raw response on success. */
+  async sendMoneyB2C({ phone, amountKES, ref, narrative }) {
+    const account = this._normalizeKenyanPhone(phone);
+    const amt = Math.round(Number(amountKES));
+    console.log('[IntaSendAdapter.sendMoneyB2C] contract', JSON.stringify({
+      endpoint: `https://${this._host}/api/v1/send-money/initiate/`, auth: 'Bearer',
+      provider: 'MPESA-B2C', currency: 'KES', amount: amt,
+      account: account.length < 6 ? account : account.slice(0, 6) + '****' + account.slice(-2),
+    }));
+    const res = await this._request('/api/v1/send-money/initiate/', 'POST', {
+      provider: 'MPESA-B2C', currency: 'KES', requires_approval: 'NO',
+      transactions: [{ name: narrative || 'SOKONI Payout', account, amount: amt, narrative: narrative || 'SOKONI earnings payout' }],
+    }, 'Bearer');
     const ok = res.status === 200 || res.status === 201;
-    return {
-      success:     ok,
-      payoutId:    res.body?.id || null,
-      rawResponse: res.body,
-      error:       ok ? null : (res.body?.detail || 'IntaSend payout error'),
-    };
+    const b = res.body;
+    console.log('[IntaSendAdapter.sendMoneyB2C] response', JSON.stringify({ http: res.status, ok, body: (typeof b === 'string' ? b.slice(0, 200) : b) }));
+    if (!ok) {
+      const code = (b && (b.errors?.[0]?.code || b.code)) || `HTTP_${res.status}`;
+      const msg  = (b && (b.errors?.[0]?.detail || b.detail || b.message)) || (typeof b === 'string' ? b.slice(0, 160) : JSON.stringify(b).slice(0, 160));
+      const e = new Error(`IntaSend B2C failed (${res.status}): [${code}] ${msg}`);
+      e.gateway = { name: 'IntaSend', http: res.status, code, message: msg };
+      throw e;
+    }
+    return b || {};
+  }
+
+  /* Interface-shape wrapper (never throws) over sendMoneyB2C. */
+  async initiatePayout({ phone, amountKES, ref, reason }) {
+    try {
+      const b = await this.sendMoneyB2C({ phone, amountKES, ref, narrative: reason });
+      return { success: true, payoutId: b?.tracking_id || b?.file_id || b?.invoice_id || null, rawResponse: b, error: null };
+    } catch (e) {
+      return { success: false, payoutId: null, rawResponse: e.gateway || null, error: e.message };
+    }
   }
 
   async initiateRefund({ originalRef, amountKES, reason }) {
