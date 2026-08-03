@@ -605,6 +605,108 @@ exports._h.providerServiceMetrics = _h.providerServiceMetrics = async (req) => {
   return { byService };
 };
 
+/* Booking timestamp (ms) — mirrors the client _schedMs so roster ordering matches. */
+function _bkTs(b) {
+  if (b.startTs) return Number(b.startTs);
+  if (b.scheduledAt?.toDate) return b.scheduledAt.toDate().getTime();
+  if (b.scheduledAt?._seconds) return b.scheduledAt._seconds * 1000;
+  if (b.date) return Date.parse(b.date + 'T' + (b.startTime || '00:00') + ':00') || null;
+  if (b.createdAt?.toDate) return b.createdAt.toDate().getTime();
+  return null;
+}
+
+/* ── providerGetCustomers — lightweight CRM roster + insights aggregated from
+   providerBookings (NO separate customer database). Single-field query (auto-indexed),
+   in-memory grouping → no composite index. Provider-only internal notes are batch-read
+   from providerCustomerNotes. Read-only; touches no money/booking logic. */
+exports._h.providerGetCustomers = _h.providerGetCustomers = async (req) => {
+  const uid = _uid(req);
+  const now = Date.now();
+  const byCust = {};
+  try {
+    const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(1000).get();
+    snap.docs.forEach(d => {
+      const b = d.data();
+      const cid = b.customerUid || ('name:' + (b.customerName || 'Unknown'));
+      const c = byCust[cid] || (byCust[cid] = {
+        id: b.customerUid || null, name: b.customerName || 'Customer',
+        bookings: 0, completed: 0, cancelled: 0, spendKes: 0,
+        firstTs: null, lastTs: null, nextTs: null, services: {},
+      });
+      c.bookings++;
+      if (b.customerName) c.name = b.customerName;
+      const st = b.status;
+      const done = (st === 'completed' || st === 'order_delivered');
+      if (done) c.completed++;
+      if (st === 'cancelled' || st === 'declined' || st === 'no_show') c.cancelled++;
+      if (done) {
+        /* price is CENTS (booking-service); older/order flows carry *Kes in shillings. */
+        const sh = (b.price != null) ? Number(b.price) / 100
+          : (b.amountKes != null ? Number(b.amountKes)
+            : (b.totalKes != null ? Number(b.totalKes)
+              : (b.priceKes != null ? Number(b.priceKes) : 0)));
+        c.spendKes += sh || 0;
+      }
+      const ts = _bkTs(b);
+      if (ts) {
+        if (!c.firstTs || ts < c.firstTs) c.firstTs = ts;
+        if (!c.lastTs || ts > c.lastTs) c.lastTs = ts;
+        if (ts >= now && ['pending', 'confirmed', 'in_progress'].includes(st) && (!c.nextTs || ts < c.nextTs)) c.nextTs = ts;
+      }
+      const sv = b.service || b.serviceId;
+      if (sv) c.services[sv] = (c.services[sv] || 0) + 1;
+    });
+  } catch (e) {
+    logger.warn('[providerGetCustomers] skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
+
+  /* Provider-only notes — one batched getAll, CF-only collection. */
+  const notes = {};
+  try {
+    const ids = Object.values(byCust).map(c => c.id).filter(Boolean).slice(0, 300);
+    if (ids.length) {
+      const snaps = await _db().getAll(...ids.map(cid => _db().collection('providerCustomerNotes').doc(uid + '__' + cid)));
+      snaps.forEach(s => { if (s.exists) notes[s.data().customerUid] = s.data().note || ''; });
+    }
+  } catch (_) { /* best-effort */ }
+
+  const customers = Object.values(byCust).map(c => {
+    const fav = Object.keys(c.services).sort((a, b) => c.services[b] - c.services[a])[0] || null;
+    const repeat = c.bookings >= 2;
+    const daysSince = c.lastTs ? Math.floor((now - c.lastTs) / 86400000) : null;
+    const status = !repeat ? 'New' : ((daysSince != null && daysSince <= 90) ? 'Active' : 'Returning');
+    return {
+      id: c.id, name: c.name, bookings: c.bookings, completed: c.completed, cancelled: c.cancelled,
+      spendKes: Math.round(c.spendKes), avgKes: c.completed ? Math.round(c.spendKes / c.completed) : 0,
+      repeat, favourite: fav, firstTs: c.firstTs, lastTs: c.lastTs, nextTs: c.nextTs, daysSince, status,
+      note: c.id ? (notes[c.id] || null) : null,
+    };
+  }).sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0));
+
+  const returning = customers.filter(c => c.repeat).length;
+  const insights = {
+    total: customers.length,
+    new: customers.length - returning,
+    returning,
+    inactive90: customers.filter(c => c.daysSince != null && c.daysSince > 90).length,
+    topBySpend: customers.slice().sort((a, b) => b.spendKes - a.spendKes).slice(0, 5).map(c => ({ id: c.id, name: c.name, spendKes: c.spendKes })),
+    frequent: customers.slice().sort((a, b) => b.bookings - a.bookings).slice(0, 5).map(c => ({ id: c.id, name: c.name, bookings: c.bookings })),
+  };
+  return { customers: customers.slice(0, 300), insights };
+};
+
+/* ── providerSaveCustomerNote — provider-only note on a customer. CF-only collection
+   (providerCustomerNotes), owner keyed by the doc id prefix. Not money/booking logic. */
+exports._h.providerSaveCustomerNote = _h.providerSaveCustomerNote = async (req) => {
+  const uid = _uid(req);
+  const customerUid = _san(req.data?.customerUid, 128);
+  if (!customerUid) throw new HttpsError('invalid-argument', 'customerUid is required.');
+  const note = _san(req.data?.note, 1000);
+  await _db().collection('providerCustomerNotes').doc(uid + '__' + customerUid)
+    .set({ providerId: uid, customerUid, note, updatedAt: _ts() }, { merge: true });
+  return { success: true, note };
+};
+
 function _calcProfileCompletion(p) {
   const checks = [
     !!p.name, !!p.bio, !!p.category, !!p.subcategory,

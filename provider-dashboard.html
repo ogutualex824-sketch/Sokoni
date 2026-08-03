@@ -164,6 +164,12 @@ a{color:var(--acc);text-decoration:none}
 .cs-paid{background:var(--acc-dim);color:var(--acc)}
 .cs-rejected,.cs-failed,.cs-reversed{background:rgba(255,77,77,.15);color:var(--err)}
 .cs-requested,.cs-scheduled{background:rgba(255,184,0,.15);color:var(--warn)}
+/* Customers (Phase 6) */
+.cu-badge{display:inline-block;font-size:.58rem;font-weight:700;padding:2px 7px;border-radius:99px;margin-left:6px;vertical-align:middle}
+.cu-Active{background:var(--acc-dim);color:var(--acc)}
+.cu-Returning{background:rgba(0,120,255,.15);color:#60aaff}
+.cu-New{background:rgba(255,184,0,.15);color:var(--warn)}
+.cu-repeat{background:rgba(160,120,255,.15);color:#b79aff}
 
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
@@ -281,6 +287,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
+      <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
       <div class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
     </nav>
@@ -512,6 +519,23 @@ a{color:var(--acc);text-decoration:none}
       </div>
     </div>
 
+    <!-- ── Customers (Phase 6 — CRM from providerBookings) ────────────── -->
+    <div class="panel" id="panel-customers">
+      <div class="pg-header"><div><div class="pg-title">Customers</div><div class="pg-sub">Built from your booking history</div></div></div>
+      <div style="padding:14px 20px">
+        <div class="health-grid" id="cuInsights"></div>
+        <input id="cuSearch" class="sk-in" type="search" placeholder="Search customers by name…" oninput="Cu.search(this.value)" aria-label="Search customers" style="margin:12px 0 10px">
+        <div class="ftabs" id="cuTabs">
+          <button class="ftab on" onclick="Cu.filter('all',this)">All</button>
+          <button class="ftab" onclick="Cu.filter('active',this)">Active</button>
+          <button class="ftab" onclick="Cu.filter('returning',this)">Returning</button>
+          <button class="ftab" onclick="Cu.filter('new',this)">New</button>
+          <button class="ftab" onclick="Cu.filter('inactive',this)">Inactive 90d+</button>
+        </div>
+        <div id="cuList"></div>
+      </div>
+    </div>
+
     <!-- ── Reviews ──────────────────────────────────────────────────── -->
     <div class="panel" id="panel-reviews">
       <div class="pg-header"><div><div class="pg-title">Reviews</div></div></div>
@@ -703,6 +727,15 @@ a{color:var(--acc);text-decoration:none}
   </div>
 </div>
 
+<!-- Customer Detail Drawer (Phase 6) -->
+<div id="cuDrawer" class="bk-drawer-wrap" style="display:none">
+  <div class="bk-drawer-backdrop" onclick="Cu.close()"></div>
+  <div class="bk-drawer" role="dialog" aria-modal="true" aria-label="Customer detail">
+    <div class="bk-drawer-hdr"><div style="font-weight:800;font-size:1rem">Customer</div><button class="btn btn-g btn-sm" onclick="Cu.close()" aria-label="Close">✕</button></div>
+    <div class="bk-drawer-body" id="cuDrawerBody"></div>
+  </div>
+</div>
+
 <!-- Reschedule slot picker (Phase 4) — replaces prompt(); slots from getAvailabilitySlots -->
 <div id="rsSheet" class="av-sheet-wrap" style="display:none;z-index:2600">
   <div class="av-sheet-backdrop" onclick="RS.close()"></div>
@@ -760,6 +793,7 @@ const P={
     if(id==='calendar')Cal.open();
     if(id==='bookings'){ if(!_bkDocs.length)B.load(); if(window.SokoniResolution)SokoniResolution.mount({role:'provider',containerId:'skResolution'}); }
     if(id==='earnings')W.load();
+    if(id==='customers')Cu.load();
     if(id==='reviews')Rv.load();
   }
 };
@@ -948,6 +982,7 @@ const RS={
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
   if(_q('wdSheet')&&_q('wdSheet').style.display!=='none')return W.wdClose();
   if(_q('rsSheet')&&_q('rsSheet').style.display!=='none')return RS.close();
+  if(_q('cuDrawer')&&_q('cuDrawer').style.display!=='none')return Cu.close();
   if(_q('bkDrawer')&&_q('bkDrawer').style.display!=='none')return D.close();
   if(_q('avEditor')&&_q('avEditor').style.display!=='none')return AvE.close();
 });
@@ -1287,6 +1322,97 @@ const W={
       W.load();
     }catch(e){W.wdErr(e.message||'Withdrawal failed');}finally{hideLoad();}
   },
+};
+
+/* ── Customers (Phase 6) — lightweight CRM over providerGetCustomers (aggregated from
+   providerBookings). No separate customer DB; reuses the booking drawer for history. */
+const Cu={
+  _all:[],_ins:null,_filter:'all',_search:'',_cur:null,_curBkId:null,
+  async load(){
+    _q('cuList').innerHTML=Array.from({length:4}).map(()=>'<div class="sk-row"></div>').join('');
+    _q('cuInsights').innerHTML='';
+    try{
+      const r=await firebase.functions().httpsCallable('providerDispatch')({op:'providerGetCustomers'});
+      const d=r.data||{};Cu._all=d.customers||[];Cu._ins=d.insights||{};
+      Cu.renderInsights();Cu.render();
+    }catch(e){_q('cuList').innerHTML=`<div class="card-empty" style="padding:24px;text-align:center">Couldn't load customers.<br><button class="btn btn-g btn-sm" style="margin-top:8px" onclick="Cu.load()">Retry</button></div>`;}
+  },
+  renderInsights(){
+    const i=Cu._ins||{},t=i.topBySpend&&i.topBySpend[0],f=i.frequent&&i.frequent[0];
+    const cells=[['Total',i.total||0],['New',i.new||0],['Returning',i.returning||0],['Inactive 90d+',i.inactive90||0],
+      ['Top spender',t?`${_esc(t.name)} · ${_sKsh(t.spendKes)}`:'—'],['Most frequent',f?`${_esc(f.name)} · ${f.bookings}`:'—']];
+    _q('cuInsights').innerHTML=cells.map(([l,v])=>`<div class="h-cell"><div class="h-lbl">${_esc(l)}</div><div class="h-val">${v}</div></div>`).join('');
+  },
+  filter(f,el){Cu._filter=f;document.querySelectorAll('#cuTabs .ftab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');Cu.render();},
+  search(q){Cu._search=(q||'').trim().toLowerCase();Cu.render();},
+  _visible(){
+    let list=Cu._all.slice();const f=Cu._filter;
+    if(f==='active')list=list.filter(c=>c.status==='Active');
+    else if(f==='returning')list=list.filter(c=>c.status==='Returning');
+    else if(f==='new')list=list.filter(c=>c.status==='New');
+    else if(f==='inactive')list=list.filter(c=>c.daysSince!=null&&c.daysSince>90);
+    if(Cu._search){const s=Cu._search;list=list.filter(c=>((c.name||'')+' '+(c.favourite||'')).toLowerCase().includes(s));}
+    return list;
+  },
+  render(){
+    const list=Cu._visible(),host=_q('cuList');
+    if(!list.length){host.innerHTML=`<div class="card-empty" style="padding:30px 16px;text-align:center"><div style="font-size:2rem">👥</div><div style="font-weight:700;color:var(--text);margin-top:6px">${Cu._all.length?'No matching customers':'No customers yet'}</div><div style="margin-top:6px">${Cu._all.length?'Try another filter or search.':'Your customers appear here once you complete bookings.'}</div></div>`;return;}
+    host.innerHTML=list.map(c=>Cu.card(c,Cu._all.indexOf(c))).join('');
+  },
+  card(c,idx){
+    const ini=(c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    return `<div class="booking-item" role="button" tabindex="0" onclick="Cu.open(${idx})" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();Cu.open(${idx})}">
+      <div class="b-ava">${_esc(ini)}</div>
+      <div class="b-info">
+        <div class="b-name">${_esc(c.name||'Customer')}<span class="cu-badge cu-${c.status}">${c.status}</span>${c.repeat?'<span class="cu-badge cu-repeat">Repeat</span>':''}</div>
+        <div class="b-meta">${c.bookings} booking${c.bookings===1?'':'s'} · ${_sKsh(c.spendKes)} spent</div>
+        <div class="b-meta">Last: ${c.lastTs?_dtShort(c.lastTs):'—'}${c.nextTs?' · Next: '+_dtShort(c.nextTs):''}</div>
+      </div>
+      <span style="color:var(--sub);align-self:center;font-size:1.1rem">›</span></div>`;
+  },
+  open(idx){const c=Cu._all[idx];if(!c)return;Cu._cur=c;Cu._curBkId=null;_q('cuDrawer').style.display='flex';document.body.style.overflow='hidden';_q('cuDrawerBody').innerHTML=Cu._html(c);_q('cuDrawer').querySelector('.bk-drawer').scrollTop=0;Cu._loadHistory(c);},
+  close(){_q('cuDrawer').style.display='none';if(_q('bkDrawer').style.display==='none')document.body.style.overflow='';Cu._cur=null;},
+  _html(c){
+    const ini=(c.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const svc=c.favourite?((typeof W!=='undefined'&&W._svcName)?W._svcName(c.favourite):c.favourite):'—';
+    return `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div class="b-ava" style="width:46px;height:46px;font-size:.95rem">${_esc(ini)}</div>
+        <div><div style="font-weight:800;font-size:1.05rem">${_esc(c.name||'Customer')}</div><div style="font-size:.75rem"><span class="cu-badge cu-${c.status}">${c.status}</span>${c.repeat?'<span class="cu-badge cu-repeat">Repeat</span>':''}</div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">
+        ${c.id?`<button class="btn btn-g btn-sm" onclick="Cu.contact()">📞 Contact</button>`:''}
+        <button class="btn btn-p btn-sm" onclick="Cu.bookAgain()">Book again</button>
+      </div>
+      <div class="bk-sec">Overview</div>
+      <div class="bk-row"><span class="k">Total bookings</span><span class="v">${c.bookings}</span></div>
+      <div class="bk-row"><span class="k">Completed</span><span class="v">${c.completed}</span></div>
+      <div class="bk-row"><span class="k">Total spent</span><span class="v">${_sKsh(c.spendKes)}</span></div>
+      <div class="bk-row"><span class="k">Avg booking value</span><span class="v">${_sKsh(c.avgKes)}</span></div>
+      <div class="bk-row"><span class="k">Favourite service</span><span class="v">${_esc(svc)}</span></div>
+      <div class="bk-row"><span class="k">Last booking</span><span class="v">${c.lastTs?_dtShort(c.lastTs):'—'}</span></div>
+      <div class="bk-row"><span class="k">Next booking</span><span class="v">${c.nextTs?_dtShort(c.nextTs):'—'}</span></div>
+      <div class="bk-sec">Booking history</div>
+      <div id="cuHist"><div class="card-empty" style="padding:12px">Loading…</div></div>
+      <div class="bk-sec">Internal note <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--sub)">· private to you</span></div>
+      <textarea id="cuNote" class="sk-in" rows="3" placeholder="e.g. VIP · prefers weekends · referred by …" ${c.id?'':'disabled'}>${_esc(c.note||'')}</textarea>
+      <button class="btn btn-p btn-sm" style="margin-top:8px" ${c.id?'':'disabled style=opacity:.5'} onclick="Cu.saveNote()">Save note</button>
+      ${c.id?'':'<div style="font-size:.7rem;color:var(--sub);margin-top:6px">Notes are available once a customer books with a registered account.</div>'}`;
+  },
+  async _loadHistory(c){
+    const host=_q('cuHist');if(!host)return;
+    try{
+      const res=await _sdk.getBookings({limit:50});
+      const mine=(res.bookings||[]).filter(b=>(c.id&&b.customerUid===c.id)||(!c.id&&b.customerName===c.name)).sort((a,b)=>_schedMs(b)-_schedMs(a));
+      Cu._curBkId=(mine[0]||{}).id||null;
+      if(!mine.length){host.innerHTML='<div class="card-empty" style="padding:12px">No bookings in the most recent page.</div>';return;}
+      const ic={completed:'✅',confirmed:'📘',pending:'🟡',in_progress:'🔵',cancelled:'⚫',no_show:'⚫',declined:'⚫'};
+      host.innerHTML=mine.map(b=>`<div class="tx-row" role="button" tabindex="0" onclick="Cu.close();D.open('${b.id}')"><div class="tx-ico">${ic[b.status]||'•'}</div><div style="flex:1;min-width:0"><div style="font-weight:600">${_esc(b.service||'Booking')}</div><div style="font-size:.7rem;color:var(--sub)">${_esc(_bkWhen(b))} · ${_esc(b.status)}</div></div><div class="tx-amt pos">${b.price?_cKsh(b.price):''}</div></div>`).join('');
+    }catch(e){host.innerHTML='<div class="card-empty" style="padding:12px">Couldn\'t load history.</div>';}
+  },
+  contact(){if(Cu._curBkId){B.contact(Cu._curBkId);}else{toast('Open a booking to contact this customer.','err');}},
+  bookAgain(){if(typeof Sv!=='undefined'&&Sv.share){Sv.share();}else{P.show('settings',null,'services');toast('Share your booking link with '+(Cu._cur?Cu._cur.name:'this customer')+'.');}},
+  async saveNote(){const c=Cu._cur;if(!c||!c.id)return;const note=(_q('cuNote')||{}).value||'';showLoad('Saving…');try{await firebase.functions().httpsCallable('providerDispatch')({op:'providerSaveCustomerNote',customerUid:c.id,note});c.note=note;toast('Note saved.');}catch(e){toast(e.message||'Save failed','err');}finally{hideLoad();}},
 };
 
 /* ── Reviews ─────────────────────────────────────────────────────────────── */
