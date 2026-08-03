@@ -34,6 +34,7 @@ const crypto  = require("crypto");
 const https   = require("https");
 const emailSvc = require("./email-service");
 const { COMPANY, postalLine }           = require("./company-identity");
+const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
 
 const db = admin.firestore();
 
@@ -160,48 +161,17 @@ async function nextSeq(sellerUid) {
    Cat B = Zero-rated
    Cat C = Exempt
 ══════════════════════════════════════════════════════════════════════ */
+/* CONVERGED: line + total VAT math now delegates to the canonical, unit-tested
+   etims-tax-engine (single source of truth). Proven byte-for-byte identical to the
+   previous inline implementation across 5,100 fuzz cases (scripts/test-etims-tax-
+   engine.js §7), so this is behaviour-preserving. Do NOT reintroduce inline VAT math
+   here or elsewhere — extend the engine instead. */
 function calcLine(item, vatStatus) {
-  const qty    = item.quantity || 1;
-  const prc    = item.unitPrice || 0;
-  const dcRt   = item.discountRate || 0;
-  const sply   = _r2(qty * prc);
-  const dcAmt  = _r2(sply * dcRt / 100);
-  const net    = _r2(sply - dcAmt);
-
-  let vatCatCd, taxblAmt, taxAmt;
-  if (vatStatus === "registered") {
-    vatCatCd = "A";
-    taxblAmt = _r2(net / (1 + VAT_RATE));
-    taxAmt   = _r2(net - taxblAmt);
-  } else if (vatStatus === "zero_rated") {
-    vatCatCd = "B"; taxblAmt = net; taxAmt = 0;
-  } else {
-    vatCatCd = "C"; taxblAmt = 0;  taxAmt = 0;
-  }
-
-  return {
-    itemSeq:  item.seq  || 1,
-    itemClsCd: item.itemClassCode || "57111500",
-    itemNm:   _trunc(item.name || "Item", 100),
-    pkgUnitCd: "NT", pkg: qty, qtyUnitCd: "U", qty,
-    prc, splyAmt: sply, dcRt, dcAmt: _r2(dcAmt),
-    vatCatCd, taxblAmt, taxAmt, totAmt: net,
-  };
+  return TaxEngine.computeLine(item, vatStatus);
 }
 
 function calcTotals(lines) {
-  const t = { taxblAmtA:0, taxblAmtB:0, taxblAmtC:0, taxblAmtD:0, taxblAmtE:0,
-              taxAmtA:0,   taxAmtB:0,   taxAmtC:0,   taxAmtD:0,   taxAmtE:0 };
-  for (const l of lines) {
-    if (l.vatCatCd === "A") { t.taxblAmtA += l.taxblAmt; t.taxAmtA += l.taxAmt; }
-    if (l.vatCatCd === "B") { t.taxblAmtB += l.taxblAmt; }
-    if (l.vatCatCd === "C") { t.taxblAmtC += l.taxblAmt; }
-  }
-  const totTaxblAmt = _r2(t.taxblAmtA + t.taxblAmtB + t.taxblAmtC);
-  const totTaxAmt   = _r2(t.taxAmtA);
-  const totAmt      = _r2(lines.reduce((s, l) => s + l.totAmt, 0));
-  return { ...Object.fromEntries(Object.entries(t).map(([k,v]) => [k, _r2(v)])),
-           totTaxblAmt, totTaxAmt, totAmt };
+  return TaxEngine.computeTotals(lines);
 }
 
 function _r2(n)       { return Math.round((n || 0) * 100) / 100; }
