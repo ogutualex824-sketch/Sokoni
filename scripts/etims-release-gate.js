@@ -94,6 +94,7 @@ async function liveChecks() {
   results.push(['Tax engine determinism', runTest('Tax engine determinism (22)', 'test-etims-tax-engine.js')]);
   results.push(['Audit tamper-evidence', runTest('Audit tamper-evidence (6)', 'test-etims-audit.js')]);
   results.push(['Payout idempotency guard', runTest('Payout idempotency guard (11)', 'test-payout-idempotency.js')]);
+  results.push(['Invoice lifecycle model', runTest('Invoice lifecycle model (16)', 'test-etims-lifecycle.js')]);
 
   process.stdout.write('\n▶ Live integrity scan (duplicate invoices / audit completeness + chain)\n');
   const live = await liveChecks();

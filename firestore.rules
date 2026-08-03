@@ -3597,6 +3597,16 @@ service cloud.firestore {
       allow read, write: if false;   // internal chain-head pointers — CF-only
     }
 
+    /* Invoice lifecycle documents (credit/debit notes, cancellations, amendments,
+       reversals). Owner (seller) or admin READ; all writes via Cloud Functions only
+       (etims-lifecycle.js). */
+    match /creditNotes/{id}          { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /debitNotes/{id}           { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /invoiceCancellations/{id} { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /invoiceAmendments/{id}    { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /invoiceReversals/{id}     { allow read: if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin()); allow write: if false; }
+    match /etimsTransmissionQueue/{id} { allow read: if isAdmin(); allow write: if false; }
+
     match /hubs/{hubId} {
       allow read:   if isAuthed();
       allow create: if isAdmin();

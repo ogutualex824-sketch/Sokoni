@@ -9879,6 +9879,7 @@ exports.processScheduledDeliveries = onSchedule(
 const etims = require("./etims");
 
 exports.etimsRegisterSeller    = etims.etimsRegisterSeller;
+exports.etimsInvoiceLifecycle  = etims.etimsInvoiceLifecycle;   // credit/debit/cancel/amend/reversal
 exports.etimsGetProfile        = etims.etimsGetProfile;
 exports.etimsUpdateProfile     = etims.etimsUpdateProfile;
 exports.etimsValidatePin       = etims.etimsValidatePin;

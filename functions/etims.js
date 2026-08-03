@@ -36,6 +36,7 @@ const emailSvc = require("./email-service");
 const { COMPANY, postalLine }           = require("./company-identity");
 const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
 const Audit     = require("./etims-audit");        // immutable, tamper-evident audit trail
+const Lifecycle = require("./etims-lifecycle");    // credit/debit/cancel/amend/reversal (internal model)
 
 const db = admin.firestore();
 
@@ -1207,11 +1208,51 @@ const etimsReconcileDaily = onSchedule(
   }
 );
 
+/* ─ Invoice lifecycle operations (credit note / debit note / cancellation /
+     amendment / reversal). Builds the canonical INTERNAL document, records the
+     immutable audit event, and enqueues for KRA transmission (blocked until the KRA
+     adapter is mapped from the spec). Auth: the invoice's seller or an admin. The KRA
+     payload is isolated in etims-kra-adapter — this CF never touches KRA fields. */
+const etimsInvoiceLifecycle = onCall({ enforceAppCheck: true }, async req => {
+  if (!req.auth) throw new HttpsError("unauthenticated", "Sign in required");
+  const uid = req.auth.uid;
+  const { op, origInvoiceId, items, reason, idempotencyKey } = req.data || {};
+
+  if (!Object.values(Lifecycle.LIFECYCLE_OPS).includes(op))
+    throw new HttpsError("invalid-argument", `op must be one of: ${Object.values(Lifecycle.LIFECYCLE_OPS).join(", ")}`);
+  if (!origInvoiceId) throw new HttpsError("invalid-argument", "origInvoiceId is required");
+  if (['credit_note', 'debit_note', 'amendment'].includes(op) && (!Array.isArray(items) || !items.length))
+    throw new HttpsError("invalid-argument", `${op} requires items[]`);
+
+  // Load the original invoice (seller collection; hub collection as fallback).
+  let snap = await db.collection("etimsInvoices").doc(origInvoiceId).get();
+  if (!snap.exists) snap = await db.collection("hubInvoices").doc(origInvoiceId).get();
+  if (!snap.exists) throw new HttpsError("not-found", "Original invoice not found");
+  const inv = { id: origInvoiceId, ...snap.data() };
+
+  // Authorization: the invoice's seller, or a platform admin.
+  const isOwner = inv.sellerUid && inv.sellerUid === uid;
+  if (!isOwner && !_ac.isAdmin(req.auth)) throw new HttpsError("permission-denied", "Not authorized for this invoice");
+
+  try {
+    const res = await Lifecycle.applyLifecycleOp(db, { op, originalInvoice: inv, items, reason, actor: uid, idempotencyKey });
+    return { success: true, id: res.id, docType: op, deduplicated: !!res.deduplicated,
+             status: res.doc.status, transmittable: !!res.doc.transmittable,
+             note: res.doc.transmittable ? undefined : "Recorded internally; KRA transmission pending official spec mapping." };
+  } catch (e) {
+    if (e.code === 'INVALID_STATE') throw new HttpsError("failed-precondition", e.message);
+    if (e.code === 'INVALID_ARG' || e.code === 'UNKNOWN_OP') throw new HttpsError("invalid-argument", e.message);
+    console.error("[etimsInvoiceLifecycle]", op, origInvoiceId, e.message);
+    throw new HttpsError("internal", "Lifecycle operation failed");
+  }
+});
+
 /* ══════════════════════════════════════════════════════════════════════
    EXPORTS
 ══════════════════════════════════════════════════════════════════════ */
 module.exports = {
   etimsRegisterSeller,
+  etimsInvoiceLifecycle,
   etimsGetProfile,
   etimsUpdateProfile,
   etimsValidatePin,
