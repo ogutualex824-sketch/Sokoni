@@ -310,20 +310,40 @@ a{color:var(--acc);text-decoration:none}
     </div>
 
     <style>
+      /* Today's Command Panel (Increments 4+5) */
+      .cmd-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:14px}
+      .cmd-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+      .cmd-top strong{font-size:.95rem}
+      .cmd-tag{font-size:.72rem;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap}
+      .cmd-bar{height:8px;border-radius:99px;background:var(--surf2);overflow:hidden;margin-bottom:8px}
+      .cmd-bar span{display:block;height:100%;border-radius:99px;transition:width var(--t)}
+      .cmd-stats{font-size:.78rem;color:var(--text);margin-bottom:8px}
+      .cmd-next{font-size:.82rem;margin-bottom:10px}
+      .cmd-actions{display:flex;gap:8px;flex-wrap:wrap}
       .cal-legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:.74rem;color:var(--sub);margin-bottom:10px}
       .cal-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
       .cal-avail{background:transparent;border:1px solid var(--acc)}
       .cal-booked{background:var(--acc)}
       .cal-blocked{background:#555}
       .cal-off{background:var(--border)}
+      /* Increment 3 — consistent overlay palette (matches the legend) */
+      .cal-busy{background:#2f6fed}
+      .cal-pending{background:#ffb020}
+      .cal-emg{background:var(--err)}
+      .cal-blk{background:#666}
+      .cal-vac{background:#14b8a6}
       .cal-week{display:grid;grid-template-columns:repeat(7,minmax(120px,1fr));gap:8px;overflow-x:auto}
       .cal-day{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:8px;min-height:120px}
       .cal-day.off{opacity:.5}
+      .cal-day.t-open{border-left:3px solid var(--acc)}
+      .cal-day.t-vac{border-left:3px solid #14b8a6;opacity:1}
+      .cal-day.t-emg{border-left:3px solid var(--err);opacity:1}
+      .cal-day.t-blk{border-left:3px solid #666;opacity:1}
       .cal-dhead{font-weight:700;font-size:.78rem;margin-bottom:2px}
       .cal-dsub{font-size:.68rem;color:var(--sub);margin-bottom:6px}
       .cal-slot{font-size:.7rem;padding:4px 6px;border-radius:6px;margin-bottom:4px;border:1px solid var(--border)}
       .cal-slot.avail{border:1px dashed var(--acc);color:var(--sub)}
-      .cal-slot.booked{background:var(--acc);color:#04120a;cursor:pointer;font-weight:600;border:none}
+      .cal-slot.booked{background:#2f6fed;color:#fff;cursor:pointer;font-weight:600;border:none}
       .cal-slot.booked.st-pending{background:#ffb020;color:#231400}
       .cal-slot.booked.st-cancelled,.cal-slot.booked.st-declined,.cal-slot.booked.st-no_show{background:#5a5a5a;color:#eee;text-decoration:line-through}
       .cal-slot.brk{background:#444;color:#ccc}
@@ -344,6 +364,8 @@ a{color:var(--acc);text-decoration:none}
         </div>
       </div>
       <div style="padding:12px 20px">
+        <!-- Today's Command Panel (Increments 4+5 — capacity + next action, derived) -->
+        <div id="calCommand"></div>
         <!-- Today's Snapshot strip -->
         <div class="snap-strip" id="snapStripCal"></div>
         <!-- Quick Actions — write directly to the canonical providerAvailability schema -->
@@ -361,9 +383,11 @@ a{color:var(--acc);text-decoration:none}
         </div>
         <div class="cal-legend">
           <span><i class="cal-dot cal-avail"></i>Available</span>
-          <span><i class="cal-dot cal-booked"></i>Booked</span>
-          <span><i class="cal-dot cal-blocked"></i>Break/Blocked</span>
-          <span><i class="cal-dot cal-off"></i>Closed/Unavailable</span>
+          <span><i class="cal-dot cal-busy"></i>Busy</span>
+          <span><i class="cal-dot cal-pending"></i>Pending</span>
+          <span><i class="cal-dot cal-emg"></i>Emergency</span>
+          <span><i class="cal-dot cal-blk"></i>Blocked</span>
+          <span><i class="cal-dot cal-vac"></i>Vacation</span>
           <span id="calLive" style="margin-left:auto;color:var(--sub);font-size:.72rem">● live</span>
         </div>
         <div id="calBody"><div class="card-empty">Loading calendar…</div></div>
@@ -737,17 +761,53 @@ const Cal={
     }catch(e){ this.render(); }
   },
 
-  render(){ this._view==='month'?this._renderMonth():this._renderWeek(); },
+  render(){ this._view==='month'?this._renderMonth():this._renderWeek(); this._renderCommand(); },
+
+  /* Increments 4+5 — Today's Command Panel: next appointment, capacity/utilization
+     insights, pending count, one-tap Open/Close, all derived from loaded state. */
+  _renderCommand(){
+    const host=_q('calCommand'); if(!host) return;
+    const now=Date.now(), p=this._parts(now), todayTs=this._midnight(p.y,p.mo,p.d);
+    const st=this._dayState(todayTs), tc0=this._toneColor(st.tone);
+    const dstr=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][p.dow]+' '+p.d+' '+this.MON[p.mo];
+    const pend=this._bookings.filter(b=>b.status==='pending').length;
+    if(st.off){
+      host.innerHTML=`<div class="cmd-card"><div class="cmd-top"><strong>Today · ${dstr}</strong><span class="cmd-tag" style="background:${tc0}22;color:${tc0}">${st.label}</span></div>
+        ${pend?`<div class="cmd-stats"><span style="color:#ffb020">⚠️ ${pend} pending confirmation${pend===1?'':'s'}</span></div>`:''}
+        <div class="cmd-actions"><button class="btn btn-p btn-sm" onclick="AvQ.openToday()">🟢 Open today</button><button class="btn btn-g btn-sm" onclick="Cal._viewToday()">View today's bookings</button></div></div>`;
+      return;
+    }
+    const slots=this._daySlots(todayTs,st);
+    const booked=slots.filter(s=>s.kind==='booked').length, avail=slots.filter(s=>s.kind==='avail').length, total=booked+avail;
+    const util=total?Math.round(booked/total*100):0;
+    let tag='🟢 Plenty available',tc='var(--acc)';
+    if(total&&booked>=total){tag='🔴 Fully booked';tc='var(--err)';}
+    else if(util>=80){tag='🟠 Nearly full';tc='#ffb020';}
+    const up=this._bookings.filter(b=>Number(b.startTs)>=now&&!['cancelled','declined','no_show','completed'].includes(b.status)).sort((a,b)=>a.startTs-b.startTs)[0];
+    const nextHtml=up
+      ? `<div class="cmd-next">⏰ Next: <strong>${this._hm(this._parts(Number(up.startTs)).hh*60+this._parts(Number(up.startTs)).mi)}</strong> · ${this._esc(up.customerName||'Customer')}${up.service?' — '+this._esc(up.service):''} <button class="btn btn-g btn-sm" style="padding:2px 10px;margin-left:4px" onclick="Cal.openBooking('${this._esc(up.id)}')">View</button></div>`
+      : `<div class="cmd-next" style="color:var(--sub)">No upcoming bookings today</div>`;
+    host.innerHTML=`<div class="cmd-card">
+      <div class="cmd-top"><strong>Today · ${dstr}</strong><span class="cmd-tag" style="background:${tc}22;color:${tc}">${tag}</span></div>
+      <div class="cmd-bar"><span style="width:${util}%;background:${tc}"></span></div>
+      <div class="cmd-stats">${booked}/${total} slots booked · ${util}% used · ${avail} available${pend?` · <span style="color:#ffb020">⚠️ ${pend} pending</span>`:''}</div>
+      ${nextHtml}
+      <div class="cmd-actions"><button class="btn btn-g btn-sm" onclick="Cal._viewToday()">View today's bookings</button><button class="btn btn-g btn-sm" onclick="AvQ.emergencyClose()">🔴 Close today</button></div></div>`;
+  },
+  _viewToday(){ if(typeof _navTo==='function')_navTo('bookings'); else P.show('bookings'); },
 
   _dayState(ts){
     const p=this._parts(ts), ymd=this._ymd(p.y,p.mo,p.d), av=this._avail||{};
-    if(av.isOnVacation===true) return {off:true,label:'On leave'};
-    const ov=this._overrides[ymd]; if(ov&&ov.closed===true) return {off:true,label:'Holiday'+(ov.label?' · '+this._esc(ov.label):'')};
+    if(av.isOnVacation===true) return {off:true,tone:'vac',label:'🌴 On leave'};
+    const ov=this._overrides[ymd];
+    if(ov&&ov.closed===true){ const emg=/emergency/i.test(ov.label||''); return {off:true,tone:emg?'emg':'blk',label:(emg?'🔴 ':'⚫ ')+this._esc(ov.label||(emg?'Emergency closure':'Blocked'))}; }
     const cfg=(av.schedule||{})[this.DOW[p.dow]];
-    if(!cfg||cfg.closed||!(cfg.periods||[]).length) return {off:true,label:'Closed'};
+    if(!cfg||cfg.closed||!(cfg.periods||[]).length) return {off:true,tone:'closed',label:'Closed'};
     const per=(cfg.periods||[]).map(x=>x.open+'–'+x.close).join(', ');
-    return {off:false,label:'Open '+per,cfg};
+    return {off:false,tone:'open',label:'Open '+per,cfg};
   },
+  _toneColor(t){return {vac:'#14b8a6',emg:'var(--err)',blk:'#8a8a8a',open:'var(--acc)'}[t]||'var(--sub)'},
+  _dotClass(st){ if(!st.off) return 'cal-avail'; return {vac:'cal-vac',emg:'cal-emg',blk:'cal-blk'}[st.tone]||'cal-off'; },
   _dayBookings(ts){const lo=ts,hi=ts+86400000;return this._bookings.filter(b=>Number(b.startTs)>=lo&&Number(b.startTs)<hi&&!['cancelled','declined','no_show'].includes(b.status)).sort((a,b)=>a.startTs-b.startTs)},
 
   _daySlots(ts,state){
@@ -790,7 +850,8 @@ const Cal={
       let body;
       if(st.off){ const bk=this._dayBookings(ts); body=bk.length?bk.map(b=>this._slotHtml({t:this._hm(this._parts(Number(b.startTs)).hh*60+this._parts(Number(b.startTs)).mi),kind:'booked',bk:b})).join(''):'<div style="font-size:.7rem;color:var(--sub)">—</div>'; }
       else{ body=this._daySlots(ts,st).map(s=>this._slotHtml(s)).join('')||'<div style="font-size:.7rem;color:var(--sub)">—</div>'; }
-      return `<div class="cal-day${st.off?' off':''}"><div class="cal-dhead"${isToday?' style="color:var(--acc)"':''}>${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][p.dow]} ${p.d}</div><div class="cal-dsub">${st.label}</div>${body}</div>`;
+      const dim=(st.off&&st.tone==='closed')?' off':'';
+      return `<div class="cal-day${dim} t-${st.tone}"><div class="cal-dhead"${isToday?' style="color:var(--acc)"':''}>${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][p.dow]} ${p.d}</div><div class="cal-dsub" style="color:${st.off?this._toneColor(st.tone):'var(--sub)'}">${st.label}</div>${body}</div>`;
     }).join('');
     _q('calBody').innerHTML=`<div class="cal-week">${cols}</div>`;
   },
@@ -807,7 +868,7 @@ const Cal={
       const inMonth=p.mo===p0.mo, st=this._dayState(ts), n=this._dayBookings(ts).length;
       cells+=`<div class="cal-mcell${inMonth?'':' off'}${ymd===todayYmd?' today':''}" onclick="Cal._toWeek(${ts})">
         <div style="font-weight:700">${p.d}</div>
-        <div><i class="cal-dot ${st.off?'cal-off':'cal-avail'}"></i></div>
+        <div><i class="cal-dot ${this._dotClass(st)}"></i></div>
         ${n?`<span class="cal-mcount">${n}</span>`:''}</div>`;
     }
     _q('calBody').innerHTML=`<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;font-size:.68rem;color:var(--sub);margin-bottom:4px">${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div>${d}</div>`).join('')}</div><div class="cal-month">${cells}</div>`;
@@ -1153,7 +1214,7 @@ async function loadHealth(res){
     disp({op:'providerListServices'}).then(r=>r.data||{}).catch(()=>({services:[]})),
   ]);health=h||{};prof=pr||{};services=sv||{services:[]};}catch(_){}
   try{const b=await firebase.functions().httpsCallable('getWalletBalance')({});wallet=Number((b.data||{}).balance||0);}catch(_){}
-  try{const u=firebase.auth().currentUser;if(u){const av=await db.collection('providerAvailability').doc(u.uid).get();availSet=av.exists&&!!(av.data()&&av.data().schedule);}}catch(_){}
+  try{const u=firebase.auth().currentUser;if(u){const av=await firebase.firestore().collection('providerAvailability').doc(u.uid).get();availSet=av.exists&&!!(av.data()&&av.data().schedule);}}catch(_){}
   const activeSvc=(services.services||services.list||[]).filter(s=>s&&s.active!==false).length;
   const pm=prof.paymentMethods||prof.payment||{};
   const payConnected=!!(prof.mpesaPhone||p.mpesaPhone||(pm&&(pm.mpesa||pm.phone||(typeof pm==='object'&&Object.keys(pm).length))));
@@ -1192,20 +1253,30 @@ async function renderSnapshot(targetId,bookings){
   const next=upcoming[0];
   const earnToday=todayBk.filter(b=>b.status==='completed'||b.status==='order_delivered').reduce((s,b)=>s+(b.amountKes||b.totalKes||b.priceKes||0),0);
   let avTxt='Open',avIc='🟢';
-  try{const u=firebase.auth().currentUser;if(u){const av=await db.collection('providerAvailability').doc(u.uid).get();const d=av.exists?av.data():null;
+  try{const u=firebase.auth().currentUser;if(u){const av=await firebase.firestore().collection('providerAvailability').doc(u.uid).get();const d=av.exists?av.data():null;
     if(!d||!d.schedule){avTxt='Offline';avIc='⚪';}
     else{const dow=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][now.getDay()];const day=d.schedule[dow];
       if(!day||day.closed||day.enabled===false)  {avTxt='Closed today';avIc='🔴';}
       if(bookings.some(b=>b.status==='in_progress')){avTxt='Busy';avIc='🟡';}}
   }}catch(_){}
   const chips=[
-    ['📅',todayBk.length,"Today's bookings"],
-    ['⏰',next?next.t.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}):'—','Next'],
-    ['💰',earnToday?('KSh '+_fmt(earnToday)):'—','Earned today'],
-    ['⚠️',pending,'Pending'],
-    [avIc,avTxt,'Availability'],
+    ['📅',todayBk.length,"Today's bookings",'today'],
+    ['⏰',next?next.t.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}):'—','Next',next?('booking:'+(next.b.id||'')):'next'],
+    ['💰',earnToday?('KSh '+_fmt(earnToday)):'—','Earned today','earn'],
+    ['⚠️',pending,'Pending','pending'],
+    [avIc,avTxt,'Availability','avail'],
   ];
-  el.innerHTML=chips.map(([ic,v,l])=>`<div class="snap-chip"><div class="snap-ic">${ic}</div><div><div class="snap-val">${_esc(String(v))}</div><div class="snap-lbl">${_esc(l)}</div></div></div>`).join('');
+  el.innerHTML=chips.map(([ic,v,l,a])=>`<div class="snap-chip tap" role="button" tabindex="0" onclick="snapGo('${a}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();snapGo('${a}')}"><div class="snap-ic">${ic}</div><div><div class="snap-val">${_esc(String(v))}</div><div class="snap-lbl">${_esc(l)}</div></div></div>`).join('');
+}
+/* Capstone — snapshot chips are a control surface: each taps through to its workspace. */
+function _navTo(panel){const el=document.querySelector(`.sb-item[onclick*="show('${panel}'"]`)||document.querySelector(`.bn-item[onclick*="show('${panel}'"]`);P.show(panel,el||null);}
+function snapGo(a){
+  if(!a) return;
+  if(a==='avail') return AvE.open();
+  if(a==='earn')  return _navTo('earnings');
+  if(a.indexOf('booking:')===0){ const id=a.slice(8); _navTo('calendar'); setTimeout(()=>{try{Cal.openBooking(id)}catch(_){}},260); return; }
+  const f={today:'all',next:'confirmed',pending:'pending'}[a];
+  if(f){ _navTo('bookings'); setTimeout(()=>{const tab=document.querySelector(`.ftab[onclick*="filter('${f}'"]`);if(typeof B!=='undefined')B.filter(f,tab);},80); }
 }
 
 /* Availability Quick Actions — write DIRECTLY to the canonical providerAvailability
@@ -1262,7 +1333,7 @@ const AvE={
           </span>
         </div>
         <div class="av-bk" data-day="${d}" style="${closed?'display:none':''};margin-top:4px;padding-left:46px">
-          ${br.map((b,i)=>`<span class="av-brk">${_esc(b.open)}–${_esc(b.close)}<button title="Remove break" onclick="AvE._rmBreak('${d}',${i})">×</button></span>`).join('')}
+          ${br.map((b,i)=>`<span class="av-brk">${_esc(b.start)}–${_esc(b.end)}<button title="Remove break" onclick="AvE._rmBreak('${d}',${i})">×</button></span>`).join('')}
           <button class="btn btn-g btn-sm" style="padding:3px 10px;font-size:.7rem;margin-top:3px" onclick="AvE._addBreak('${d}')">+ break</button>
         </div>
       </div>`;}).join('');
@@ -1288,19 +1359,19 @@ const AvE={
     this._summary();
   },
   _toggle(d,open){const day=this._day(d);day.closed=!open;if(open&&(!day.periods||!day.periods.length))day.periods=[{open:'09:00',close:'17:00'}];this.render();},
-  _addBreak(d){this._sync();const s=(prompt('Break start (HH:MM, 24-hour)')||'').trim();if(!s)return;if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(s)){toast('Use HH:MM (e.g. 13:00).','err');return;}const e=(prompt('Break end (HH:MM, 24-hour)')||'').trim();if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(e)){toast('Use HH:MM (e.g. 14:00).','err');return;}if(e<=s){toast('Break end must be after start.','err');return;}const day=this._day(d);day.breaks=day.breaks||[];day.breaks.push({open:s,close:e});day.breaks.sort((x,y)=>x.open<y.open?-1:1);this.render();},
+  _addBreak(d){this._sync();const s=(prompt('Break start (HH:MM, 24-hour)')||'').trim();if(!s)return;if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(s)){toast('Use HH:MM (e.g. 13:00).','err');return;}const e=(prompt('Break end (HH:MM, 24-hour)')||'').trim();if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(e)){toast('Use HH:MM (e.g. 14:00).','err');return;}if(e<=s){toast('Break end must be after start.','err');return;}const day=this._day(d);day.breaks=day.breaks||[];day.breaks.push({start:s,end:e});day.breaks.sort((x,y)=>x.start<y.start?-1:1);this.render();},
   _rmBreak(d,i){this._sync();const day=this._day(d);(day.breaks||[]).splice(i,1);this.render();},
   _sync(){/* pull the current time inputs back into _cfg before any re-render */this.DAYS.forEach(d=>{const el=document.querySelector(`.av-t[data-day="${d}"]`);if(!el)return;const o=el.querySelector('[data-f="open"]'),cl=el.querySelector('[data-f="close"]');const day=this._day(d);if(o&&cl&&!day.closed)day.periods=[{open:o.value,close:cl.value}];});},
   copyMonday(){this._sync();const mon=JSON.stringify(this._day('monday'));['tuesday','wednesday','thursday','friday'].forEach(d=>{this._cfg.schedule[d]=JSON.parse(mon);});this.render();toast('Monday copied to weekdays.');},
   _vac(on){const f=_q('avVacFields');if(f)f.style.display=on?'':'none';this._summary();},
   _min(t){const m=/^(\d{1,2}):(\d{2})$/.exec(t||'');return m?(+m[1]*60+ +m[2]):0;},
-  _summary(){this._sync();const openDays=this.DAYS.filter(d=>!this._day(d).closed);let mins=0;openDays.forEach(d=>{const day=this._day(d),p=(day.periods||[])[0];if(p)mins+=Math.max(0,this._min(p.close)-this._min(p.open));(day.breaks||[]).forEach(b=>{mins-=Math.max(0,this._min(b.close)-this._min(b.open));});});const slot=parseInt((_q('avSlot')||{}).value)||60,perDay=openDays.length?Math.floor((mins/openDays.length)/slot):0,vac=(_q('avVac')||{}).checked,el=_q('avESummary');
+  _summary(){this._sync();const openDays=this.DAYS.filter(d=>!this._day(d).closed);let mins=0;openDays.forEach(d=>{const day=this._day(d),p=(day.periods||[])[0];if(p)mins+=Math.max(0,this._min(p.close)-this._min(p.open));(day.breaks||[]).forEach(b=>{mins-=Math.max(0,this._min(b.end)-this._min(b.start));});});const slot=parseInt((_q('avSlot')||{}).value)||60,perDay=openDays.length?Math.floor((mins/openDays.length)/slot):0,vac=(_q('avVac')||{}).checked,el=_q('avESummary');
     if(el)el.innerHTML=`${openDays.length} day${openDays.length===1?'':'s'}/wk · ${Math.round(mins/6)/10}h/wk · ${slot}min slots · ~${perDay}/day${vac?' · <span style="color:var(--warn)">🌴 on vacation</span>':''}`;},
   async save(){
     this._sync();const r=this._ref();if(!r){toast('Sign in required.','err');return;}
     // validate each open day has close>open
     for(const d of this.DAYS){const day=this._day(d);if(day.closed)continue;const p=(day.periods||[])[0];if(!p||this._min(p.close)<=this._min(p.open)){toast(`${d[0].toUpperCase()+d.slice(1)}: closing time must be after opening.`,'err');return;}}
-    const schedule={};this.DAYS.forEach(d=>{const day=this._day(d);schedule[d]=day.closed?{closed:true,periods:[],breaks:[]}:{closed:false,periods:[{open:(day.periods[0]||{}).open||'09:00',close:(day.periods[0]||{}).close||'17:00'}],breaks:(day.breaks||[]).map(b=>({open:b.open,close:b.close}))};});
+    const schedule={};this.DAYS.forEach(d=>{const day=this._day(d);schedule[d]=day.closed?{closed:true,periods:[],breaks:[]}:{closed:false,periods:[{open:(day.periods[0]||{}).open||'09:00',close:(day.periods[0]||{}).close||'17:00'}],breaks:(day.breaks||[]).map(b=>({start:b.start,end:b.end}))};});
     const appt=Object.assign({},this._cfg.appt||{},{enabled:true,durationMins:parseInt((_q('avSlot')||{}).value)||60,bufferMins:parseInt((_q('avBuffer')||{}).value)||0,minNoticeHours:parseInt((_q('avNotice')||{}).value)||1,maxDaysAhead:parseInt((_q('avMaxDays')||{}).value)||30,allowSameDay:!!(_q('avSameDay')||{}).checked});
     const vac=!!(_q('avVac')||{}).checked;
     showLoad('Saving availability…');
