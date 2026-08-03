@@ -10,7 +10,9 @@
 > - **B7 admin reads wrong collection → CLOSED.** KASS AI/admin now read canonical `etimsInvoices`.
 > - **B5 zero tests/gates → SUBSTANTIALLY CLOSED.** `etims-release-gate.js` (tax 22 + audit 6 + idempotency 11 + live no-dup-invoice / audit-completeness). GREEN.
 >
-> Still engineering-controlled (in progress): B1 lifecycle-op *structures* (credit/debit/cancel/amend — Phase 2), secret-name fix (E6 provisioning is activation).
+> - **B1 lifecycle-op structures → STRUCTURE DONE.** Canonical `etims-lifecycle.js` (credit/debit note, cancellation, amendment, reversal) reusing tax engine + audit + idempotency + transmission queue; `etimsInvoiceLifecycle` CF; 16/16 tests. **KRA payload isolated in `etims-kra-adapter.js` (the ONE mapping point) — PENDING spec.**
+>
+> Readiness now **~65%** (engineering ceiling nearly reached). Remaining engineering-only: secret-name fix (E6 provisioning is activation), optional SmartPOS/Wallet invoice wiring.
 > Still BLOCKED on KRA (unchanged): **B2** real `cmcKey` auth, **A4** item code-list, **F2** live buyer-PIN, VAT-policy confirmation, sandbox certification. See §7.
 
 **Assessment basis:** full evidence audit of `functions/etims.js`, `functions/hub-etims.js`, root `etims.js`, `functions/index.js`, `firestore.rules`, `firestore.indexes.json`, test scripts. Every claim below is code-cited in the audit log.

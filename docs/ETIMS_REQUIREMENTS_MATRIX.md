@@ -33,11 +33,11 @@ Legend — SOKONI status: ✅ DONE · 🟡 PARTIAL · 🔴 MISSING · 🔒 NEEDS
 
 | ID | Obligation area | Source | SOKONI status | Evidence | Needs KRA? |
 |----|-----------------|--------|---------------|----------|-----------|
-| B1 | Credit note | PUBLIC-DERIVED | 🔴 MISSING | no CF | field semantics PENDING-SPEC |
-| B2 | Debit note | PUBLIC-DERIVED | 🔴 MISSING | no CF | field semantics PENDING-SPEC |
-| B3 | Invoice cancellation | PUBLIC-DERIVED | 🔴 MISSING | payload has null `cnclDt` only | PENDING-SPEC |
-| B4 | Invoice amendment | PUBLIC-DERIVED | 🔴 MISSING | `orgInvcNo:0` hardcoded | PENDING-SPEC |
-| B5 | Reversal after KRA REVERSED | PUBLIC-DERIVED | 🔴 MISSING | — | PENDING-SPEC |
+| B1 | Credit note | PUBLIC-DERIVED | 🟡 STRUCTURE DONE | `etims-lifecycle.js` buildCreditNote (negated sale) + `etimsInvoiceLifecycle` CF + `creditNotes` coll + audit + idempotency | 🔒 KRA payload fields (isolated in etims-kra-adapter) |
+| B2 | Debit note | PUBLIC-DERIVED | 🟡 STRUCTURE DONE | `etims-lifecycle.js` buildDebitNote (+adjustment) | 🔒 KRA fields (adapter) |
+| B3 | Invoice cancellation | PUBLIC-DERIVED | 🟡 STRUCTURE DONE | buildCancellation + state machine | 🔒 KRA fields + timing window (adapter) |
+| B4 | Invoice amendment | PUBLIC-DERIVED | 🟡 STRUCTURE DONE | buildAmendment (recompute) | 🔒 `orgInvcNo` linkage (adapter) |
+| B5 | Reversal after KRA REVERSED | PUBLIC-DERIVED | 🟡 STRUCTURE DONE | buildReversal | 🔒 KRA fields (adapter) |
 
 ## C. Tax computation
 
