@@ -89,6 +89,12 @@ a{color:var(--acc);text-decoration:none}
 .h-cell .h-lbl{font-size:.66rem;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:center;gap:6px}
 .h-cell .h-val{font-size:1rem;font-weight:800;color:var(--text)}
 .h-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
+.snap-strip{display:flex;gap:10px;overflow-x:auto;margin-bottom:16px;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.snap-strip:empty{display:none}
+.snap-chip{flex:0 0 auto;min-width:112px;background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:10px 13px;display:flex;align-items:center;gap:9px}
+.snap-ic{font-size:1.15rem;flex-shrink:0}
+.snap-val{font-size:.95rem;font-weight:800;color:var(--text);line-height:1.15}
+.snap-lbl{font-size:.64rem;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;margin-top:1px}
 
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
@@ -225,6 +231,8 @@ a{color:var(--acc);text-decoration:none}
         <button class="btn btn-p btn-sm" onclick="location.href='provider-onboarding.html'">Edit Profile</button>
       </div>
       <div style="padding:18px 20px">
+        <!-- Today's Snapshot strip -->
+        <div class="snap-strip" id="snapStripHome"></div>
         <!-- KPIs -->
         <div class="kpi-row" id="kpiRow">
           <div class="kpi"><div class="kpi-ico">📅</div><div class="kpi-val" id="kpiTodayBk">—</div><div class="kpi-lbl">Today's Bookings</div><div class="kpi-sub" id="kpiPending">— pending</div></div>
@@ -317,6 +325,8 @@ a{color:var(--acc);text-decoration:none}
         </div>
       </div>
       <div style="padding:12px 20px">
+        <!-- Today's Snapshot strip -->
+        <div class="snap-strip" id="snapStripCal"></div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <button class="btn btn-g btn-sm" onclick="Cal.nav(-1)">‹ Prev</button>
           <button class="btn btn-s btn-sm" onclick="Cal.today()">Today</button>
@@ -1027,6 +1037,8 @@ async function loadDashboard(user){
     const res=await _sdk.getDashboard();_data=res;
     hideLoad();
     loadHealth(res).catch(()=>{});   // Business Health card — parallel, non-blocking
+    const _bks=res.bookings||[];
+    renderSnapshot('snapStripHome',_bks);renderSnapshot('snapStripCal',_bks);   // Today's Snapshot (Home + Calendar)
     // Provider info
     const p=res.profile||{};
     const sub=res.subscription||{};
@@ -1128,6 +1140,35 @@ async function loadHealth(res){
   grid.innerHTML=cells.map(([l,v,ok])=>`<div class="h-cell"><div class="h-lbl"><span class="h-dot" style="background:${dot(ok)}"></span>${_esc(l)}</div><div class="h-val">${_esc(String(v))}</div></div>`).join('');
   const greens=cells.filter(c=>c[2]===true).length, reds=cells.filter(c=>c[2]===false).length;
   const pill=_q('healthPill'); if(pill){pill.textContent=greens+' good'+(reds?(' · '+reds+' to fix'):'');pill.className='sub-badge '+(reds>=3?'sub-expired':reds?'sub-trial':'sub-active');}
+}
+
+/* Today's Snapshot — command-center strip on Home + Calendar. All derived from
+   existing data (bookings + providerAvailability); no new backend. */
+function _bkTime(b){return b.scheduledAt?.toDate?b.scheduledAt.toDate():(b.scheduledAt?new Date(b.scheduledAt):(b.startAt?.toDate?b.startAt.toDate():(b.startAt?new Date(b.startAt):null)));}
+async function renderSnapshot(targetId,bookings){
+  const el=_q(targetId); if(!el) return;
+  bookings=bookings||[]; const now=new Date();
+  const isToday=b=>{const t=_bkTime(b);return t&&t.toDateString()===now.toDateString();};
+  const todayBk=bookings.filter(isToday);
+  const pending=bookings.filter(b=>b.status==='pending').length;
+  const upcoming=bookings.map(b=>({b,t:_bkTime(b)})).filter(x=>x.t&&x.t>=now&&['pending','confirmed','in_progress'].includes(x.b.status)).sort((a,c)=>a.t-c.t);
+  const next=upcoming[0];
+  const earnToday=todayBk.filter(b=>b.status==='completed'||b.status==='order_delivered').reduce((s,b)=>s+(b.amountKes||b.totalKes||b.priceKes||0),0);
+  let avTxt='Open',avIc='🟢';
+  try{const u=firebase.auth().currentUser;if(u){const av=await db.collection('providerAvailability').doc(u.uid).get();const d=av.exists?av.data():null;
+    if(!d||!d.schedule){avTxt='Offline';avIc='⚪';}
+    else{const dow=['sunday','monday','tuesday','wednesday','thursday','friday','saturday'][now.getDay()];const day=d.schedule[dow];
+      if(!day||day.closed||day.enabled===false)  {avTxt='Closed today';avIc='🔴';}
+      if(bookings.some(b=>b.status==='in_progress')){avTxt='Busy';avIc='🟡';}}
+  }}catch(_){}
+  const chips=[
+    ['📅',todayBk.length,"Today's bookings"],
+    ['⏰',next?next.t.toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit'}):'—','Next'],
+    ['💰',earnToday?('KSh '+_fmt(earnToday)):'—','Earned today'],
+    ['⚠️',pending,'Pending'],
+    [avIc,avTxt,'Availability'],
+  ];
+  el.innerHTML=chips.map(([ic,v,l])=>`<div class="snap-chip"><div class="snap-ic">${ic}</div><div><div class="snap-val">${_esc(String(v))}</div><div class="snap-lbl">${_esc(l)}</div></div></div>`).join('');
 }
 
 /* Deep-link support: the profile Business Hub links to #bookings / #calendar / #reviews /
