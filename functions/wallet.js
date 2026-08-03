@@ -1655,8 +1655,10 @@ exports.reconcileB2CPayout = async function (db, rid) {
   const events = Array.isArray(p.webhookEvents) ? p.webhookEvents : [];
   /* Gateway truth: any event that COMPLETED with money actually paid. */
   const completed = events.some((e) => {
-    const s  = String(e.state || '').toUpperCase();
     const pl = e.payload || {};
+    /* the TRUE IntaSend status is in the payload (`status`), not e.state (which was the
+       mis-derived value from the very bug this reconciles). */
+    const s  = String(pl.status || pl.state || e.state || '').toUpperCase();
     const failed = Number(pl.failed_amount) > 0 && Number(pl.paid_amount) === 0;
     return (/COMPLETE/.test(s) || ['SUCCESS', 'PAID', 'SETTLED'].includes(s)) && !failed;
   }) || /complete/i.test(String(p.gatewayStatus || ''));
