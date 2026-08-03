@@ -588,6 +588,18 @@
           });
         window.addEventListener('beforeunload', function() { if (_aosTicketUnsub) _aosTicketUnsub(); });
       } catch(e) {}
+      /* Loading watchdog — if the console never bootstraps (auth/engine failure or
+         offline), turn the perpetual "Loading…" identity into a recoverable retry. */
+      setTimeout(function () {
+        var nm = document.getElementById('aosUserName');
+        if (nm && /loading/i.test(nm.textContent) && !document.getElementById('aosRetryBar')) {
+          var b = document.createElement('div');
+          b.id = 'aosRetryBar'; b.setAttribute('role', 'alert');
+          b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:20px;z-index:99999;margin:0 auto;max-width:440px;background:var(--sur,#141414);border:1px solid var(--bor,rgba(255,255,255,.12));border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt,#fff);box-shadow:0 8px 32px rgba(0,0,0,.5)';
+          b.innerHTML = '<span style="flex:1">Couldn’t load the admin console. Check your connection.</span><button onclick="location.reload()" style="background:var(--g,#71ff00);color:#000;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Try again</button>';
+          document.body.appendChild(b);
+        }
+      }, 10000);
     });
   </script>
 </body>

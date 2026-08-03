@@ -1979,6 +1979,21 @@ document.addEventListener('DOMContentLoaded', function () {
       SokoniWalletV2.init();
     });
   }
+  /* Loading watchdog — if the wallet engine never initialises (offline / blocked
+     script), convert the stuck "—" balance into a recoverable retry instead of a
+     silent hang. Fires only when the engine is truly absent AND nothing rendered. */
+  setTimeout(function () {
+    var bal = document.getElementById('balVal');
+    if (typeof SokoniWalletV2 === 'undefined' && bal && bal.textContent.trim() === '—'
+        && !document.getElementById('walletRetryBar')) {
+      var b = document.createElement('div');
+      b.id = 'walletRetryBar';
+      b.setAttribute('role', 'alert');
+      b.style.cssText = 'position:fixed;left:16px;right:16px;bottom:78px;z-index:9999;margin:0 auto;max-width:420px;background:var(--sur,#141414);border:1px solid var(--bor,rgba(255,255,255,.12));border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:10px;font-size:13px;color:var(--txt,#fff);box-shadow:0 8px 32px rgba(0,0,0,.5)';
+      b.innerHTML = '<span style="flex:1">Couldn’t load your wallet. Check your connection.</span><button onclick="location.reload()" style="background:var(--g,#71ff00);color:#000;border:none;border-radius:8px;padding:7px 12px;font-weight:700;cursor:pointer">Try again</button>';
+      document.body.appendChild(b);
+    }
+  }, 9000);
 });
 
 /* Phone search debounce */
