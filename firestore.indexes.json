@@ -2005,6 +2005,20 @@
       ]
     },
     {
+      "collectionGroup": "hubInvoiceQueue",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "nextRetryAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "inventory_batches",
       "queryScope": "COLLECTION",
       "fields": [

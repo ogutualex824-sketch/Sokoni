@@ -28,7 +28,9 @@ const _ac = require('./admin-claim');
 
 const { onCall, HttpsError, onRequest } = require("firebase-functions/v2/https");
 const { onDocumentWritten }             = require("firebase-functions/v2/firestore");
+const { onSchedule }                    = require("firebase-functions/v2/scheduler");
 const { defineSecret }                  = require("firebase-functions/params");
+const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
 const admin    = require("firebase-admin");
 const crypto   = require("crypto");
 const https    = require("https");
@@ -519,26 +521,34 @@ async function _issueHubInvoice({ hubId, hub, orderId, order, manualBuyerKraPin 
   const prefix        = hub.taxConfig.invoicePrefix || hubId.slice(0, 6).toUpperCase();
   const invoiceNumber = `${prefix}-INV-${new Date().getFullYear()}-${String(seq).padStart(6, "0")}`;
 
-  const vatRate   = hub.taxConfig.vatStatus === "zero_rated" ? 0 : 16;
+  /* CONVERGED: hub VAT now comes from the canonical Tax Engine (single source of
+     truth) — no inline VAT math. Hub uses the EXCLUSIVE policy (VAT added on top),
+     isolated as an engine config point pending KRA confirmation of per-flow rules.
+     Rounding is now round-then-sum (per-line), matching the seller path — a
+     deliberate convergence; may differ from the previous aggregate-round `vat` by
+     ≤1 cent on rare multi-line orders (documented in ETIMS_CERTIFICATION_READINESS). */
+  const engineStatus = hub.taxConfig.vatStatus === "zero_rated" ? "zero_rated" : "registered";
+  const vatRate   = engineStatus === "zero_rated" ? 0 : Math.round(TaxEngine.DEFAULTS.vatRate * 100); // % for KRA payload, sourced from the engine
   const rawItems  = order.items || [];
-  const subtotal  = rawItems.reduce((s, i) => s + ((i.price || 0) * (i.quantity || 1)), 0);
-  const vat       = Math.round(subtotal * (vatRate / 100) * 100) / 100;
-  const total     = subtotal + vat;
   const taxCat    = hub.taxConfig.taxCategory || "A";
+  const engineLines = rawItems.map((i, idx) => TaxEngine.computeLine(
+    { seq: idx + 1, name: i.name || i.title || "Item", quantity: i.quantity || 1, unitPrice: i.price || 0 },
+    engineStatus, { inclusive: false }
+  ));
+  const _tot     = TaxEngine.computeTotals(engineLines);
+  const subtotal = _tot.totTaxblAmt;   // net of VAT
+  const vat      = _tot.totTaxAmt;
+  const total    = _tot.totAmt;        // net + VAT
 
-  const items = rawItems.map(i => {
-    const lineTotal = (i.price || 0) * (i.quantity || 1);
-    const lineVat   = Math.round(lineTotal * (vatRate / 100) * 100) / 100;
-    return {
-      name:        i.name || i.title || "Item",
-      qty:         i.quantity || 1,
-      unitPrice:   i.price || 0,
-      lineTotal,
-      lineVat,
-      taxCategory: taxCat,
-      sku:         i.sku || i.productId || "",
-    };
-  });
+  const items = rawItems.map((i, idx) => ({
+    name:        i.name || i.title || "Item",
+    qty:         i.quantity || 1,
+    unitPrice:   i.price || 0,
+    lineTotal:   engineLines[idx].taxblAmt,
+    lineVat:     engineLines[idx].taxAmt,
+    taxCategory: taxCat,
+    sku:         i.sku || i.productId || "",
+  }));
 
   const buyerUid = order.userId || order.buyerId || null;
   let buyerData  = {};
@@ -578,12 +588,13 @@ async function _issueHubInvoice({ hubId, hub, orderId, order, manualBuyerKraPin 
   await invRef.set(invDoc);
 
   // Attempt immediate KRA submission
+  let kraPayload = null;
   try {
     const client  = new EtimsClient({ tin, bhfId, deviceSerial: serial, taxpayerSecret: secret });
     const salesDt = now.slice(0, 10).replace(/-/g, "");
     const cfmDt   = now.replace("T", " ").slice(0, 19);
 
-    const kraPayload = {
+    kraPayload = {
       tin, bhfId,
       invcNo:    invoiceNumber,
       trdInvcNo: orderId,
@@ -631,56 +642,55 @@ async function _issueHubInvoice({ hubId, hub, orderId, order, manualBuyerKraPin 
     const kraResp = await client.submitInvoice(kraPayload);
 
     if (kraResp.resultCd === "000") {
-      // Generate receipt HTML
-      let sellerData = null;
-      if (order.sellerId) {
-        const ss = await db.doc(`sellers/${order.sellerId}`).get().catch(() => null);
-        if (ss?.exists) sellerData = ss.data();
-      }
-      const html = buildHubInvoiceHtml({
-        invoice: {
-          ...invDoc,
-          kraReceiptNumber: kraResp.data?.rcptNo    || null,
-          verificationUrl:  kraResp.data?.qrCodeUrl || null,
-        },
-        hub:    { hubId, name: hub.name, taxConfig: hub.taxConfig, address: hub.address, region: hub.region },
-        seller: sellerData,
-        buyer:  { name: buyerData.displayName || buyerData.name, phone: buyerData.phone, kraPin: buyerData.kraPin },
-      });
-
-      const storagePath = `hub-invoices/${hubId}/${invRef.id}.html`;
-      const htmlUrl     = await storeHtml(storagePath, html);
-
-      await invRef.update({
-        status:           "accepted",
-        etimsStatus:      "accepted",
-        kraReceiptNumber: kraResp.data?.rcptNo    || null,
-        verificationUrl:  kraResp.data?.qrCodeUrl || null,
-        htmlUrl,
-        storagePath,
-        acceptedAt:       now,
-        updatedAt:        now,
-      });
-
-      console.log(`[hubInvoice] ACCEPTED ${invoiceNumber} hub=${hubId} order=${orderId}`);
-      _emailBuyerHubInvoice({
-        invoice: { ...invDoc, invoiceNumber, status: "accepted", verificationUrl: kraResp.data?.qrCodeUrl || null },
-        hub,
-        buyer: { email: buyerData.email, name: buyerData.displayName || buyerData.name },
-      });
+      await _finalizeHubAccept({ hubId, hub, invRef, invDoc, invoiceNumber, kraResp, buyerData, order });
     } else {
       await _queueHubInvoice(hubId, invRef.id, kraResp.resultMsg, 0);
-      await invRef.update({ lastKraError: kraResp.resultMsg, updatedAt: now });
+      await invRef.update({ lastKraError: kraResp.resultMsg, kraPayload, updatedAt: now });
       _notifyHubManagerFailure(hubId, hub, invRef.id, kraResp.resultMsg);
     }
   } catch (netErr) {
     await _queueHubInvoice(hubId, invRef.id, netErr.message, 0);
-    await invRef.update({ lastKraError: netErr.message, updatedAt: now });
+    await invRef.update({ lastKraError: netErr.message, kraPayload, updatedAt: now });
     console.error(`[hubInvoice] network error for ${invoiceNumber}:`, netErr.message);
     _notifyHubManagerFailure(hubId, hub, invRef.id, netErr.message);
   }
 
   return invRef.id;
+}
+
+/* ─────────────────────────────────────────────────────────────────────
+   Shared accept-finalize (receipt HTML + storage + email + status). ONE
+   canonical accept path used by first-attempt submission AND the retry
+   processor — no duplicated finalize logic.
+───────────────────────────────────────────────────────────────────── */
+async function _finalizeHubAccept({ hubId, hub, invRef, invDoc, invoiceNumber, kraResp, buyerData, order }) {
+  const now = new Date().toISOString();
+  const bd = buyerData || {};
+  let sellerData = null;
+  if (order && order.sellerId) {
+    const ss = await db.doc(`sellers/${order.sellerId}`).get().catch(() => null);
+    if (ss?.exists) sellerData = ss.data();
+  }
+  const html = buildHubInvoiceHtml({
+    invoice: { ...invDoc, invoiceNumber, kraReceiptNumber: kraResp.data?.rcptNo || null, verificationUrl: kraResp.data?.qrCodeUrl || null },
+    hub:    { hubId, name: hub.name, taxConfig: hub.taxConfig, address: hub.address, region: hub.region },
+    seller: sellerData,
+    buyer:  { name: bd.displayName || bd.name, phone: bd.phone, kraPin: bd.kraPin },
+  });
+  const storagePath = `hub-invoices/${hubId}/${invRef.id}.html`;
+  const htmlUrl     = await storeHtml(storagePath, html);
+  await invRef.update({
+    status: "accepted", etimsStatus: "accepted",
+    kraReceiptNumber: kraResp.data?.rcptNo || null,
+    verificationUrl:  kraResp.data?.qrCodeUrl || null,
+    htmlUrl, storagePath, acceptedAt: now, updatedAt: now,
+  });
+  console.log(`[hubInvoice] ACCEPTED ${invoiceNumber} hub=${hubId} order=${invDoc.orderId}`);
+  _emailBuyerHubInvoice({
+    invoice: { ...invDoc, invoiceNumber, status: "accepted", verificationUrl: kraResp.data?.qrCodeUrl || null },
+    hub,
+    buyer: { email: bd.email, name: bd.displayName || bd.name },
+  });
 }
 
 async function _queueHubInvoice(hubId, invoiceId, errorMsg, retryCount) {
@@ -697,6 +707,126 @@ async function _queueHubInvoice(hubId, invoiceId, errorMsg, retryCount) {
     createdAt:  new Date().toISOString(),
   });
 }
+
+const HUB_QUEUE_MAX_RETRIES = 5;
+const HUB_QUEUE_BACKOFF_MIN  = [2, 10, 30, 120, 720];
+
+/* Retry submitter — replays the STORED kraPayload for an existing invoice through
+   the ONE canonical accept path (_finalizeHubAccept). Idempotent: a no-op if the
+   invoice is already accepted or gone; returns a status the queue driver acts on. */
+async function _transmitHubInvoiceById(hubId, invoiceId) {
+  const invRef  = db.collection("hubInvoices").doc(invoiceId);
+  const invSnap = await invRef.get();
+  if (!invSnap.exists) return { status: "gone" };
+  const invDoc = invSnap.data();
+  if (invDoc.status === "accepted") return { status: "accepted" };   // idempotent
+  const kraPayload = invDoc.kraPayload;
+  if (!kraPayload) return { status: "no_payload" };                  // cannot replay
+
+  const hubSnap = await db.doc(`hubs/${hubId}`).get();
+  if (!hubSnap.exists) return { status: "gone" };
+  const hub = hubSnap.data();
+  const credSnap = await db.doc(`hubCredentials/${hubId}`).get();
+  if (!credSnap.exists) return { status: "no_credentials" };
+  const cred   = credSnap.data();
+  const serial = decryptCred(cred.encryptedDeviceSerial);
+  const secret = decryptCred(cred.encryptedTaxpayerSecret);
+  const tin    = hub.taxConfig.kraPin;
+  const bhfId  = hub.taxConfig.branchId || "00";
+
+  let buyerData = {};
+  if (invDoc.buyerUid) { const bs = await db.doc(`users/${invDoc.buyerUid}`).get().catch(() => null); if (bs?.exists) buyerData = bs.data(); }
+  let order = { sellerId: invDoc.sellerUid };
+  if (invDoc.orderId) { const os = await db.doc(`orders/${invDoc.orderId}`).get().catch(() => null); if (os?.exists) order = os.data(); }
+
+  try {
+    const client  = new EtimsClient({ tin, bhfId, deviceSerial: serial, taxpayerSecret: secret });
+    const kraResp = await client.submitInvoice(kraPayload);
+    if (kraResp.resultCd === "000") {
+      await _finalizeHubAccept({ hubId, hub, invRef, invDoc, invoiceNumber: invDoc.invoiceNumber, kraResp, buyerData, order });
+      return { status: "accepted" };
+    }
+    await invRef.update({ lastKraError: kraResp.resultMsg, updatedAt: new Date().toISOString() });
+    return { status: "failed", error: kraResp.resultMsg };
+  } catch (e) {
+    await invRef.update({ lastKraError: e.message, updatedAt: new Date().toISOString() });
+    return { status: "error", error: e.message };
+  }
+}
+
+function _alertHubQueueDeadLetter(hubId, invoiceId, reason) {
+  console.error("[hubProcessQueue] DEAD-LETTER", JSON.stringify({ hubId, invoiceId, reason: String(reason).slice(0, 200) }));
+  db.collection("hubAlerts").add({
+    type: "queue_dead_letter", hubId, invoiceId, reason: String(reason).slice(0, 300), createdAt: new Date().toISOString(),
+  }).catch(() => {});
+}
+
+/* hubProcessQueue — drains hubInvoiceQueue every 5 min. FIXES B4: failed hub invoices
+   were enqueued but never retried (no processor existed) → permanently stuck. Provides
+   exponential backoff, max-retry → dead-letter, idempotent transactional claim (no
+   double-submit), non-replayable → dead-letter, metrics rollup + dead-letter alerting. */
+exports.hubProcessQueue = onSchedule(
+  { schedule: "*/5 * * * *", timeZone: "Africa/Nairobi", secrets: [ETIMS_MASTER_KEY, ...EMAIL_SECRETS] },
+  async () => {
+    const nowIso = new Date().toISOString();
+    const due = await db.collection("hubInvoiceQueue")
+      .where("status", "==", "pending")
+      .where("nextRetryAt", "<=", nowIso)
+      .orderBy("nextRetryAt", "asc")
+      .limit(50).get();
+
+    const m = { scanned: due.size, succeeded: 0, retried: 0, deadLettered: 0, skipped: 0 };
+
+    for (const doc of due.docs) {
+      const entryRef = doc.ref;
+      /* Transactionally CLAIM the entry (pending → processing) so two concurrent runs
+         can never submit the same invoice twice. */
+      const claimed = await db.runTransaction(async (t) => {
+        const s = await t.get(entryRef);
+        if (!s.exists || s.data().status !== "pending") return null;
+        t.update(entryRef, { status: "processing", claimedAt: new Date().toISOString() });
+        return s.data();
+      }).catch(() => null);
+      if (!claimed) { m.skipped++; continue; }
+
+      const { hubId, invoiceId, retryCount = 0 } = claimed;
+      const res = await _transmitHubInvoiceById(hubId, invoiceId);
+
+      if (res.status === "accepted" || res.status === "gone") {
+        await entryRef.update({ status: "done", result: res.status, doneAt: new Date().toISOString() });
+        m.succeeded++;
+      } else if (res.status === "no_payload" || res.status === "no_credentials") {
+        await entryRef.update({ status: "dead_letter", result: res.status, deadAt: new Date().toISOString() });
+        await db.collection("hubInvoices").doc(invoiceId).update({ status: "failed", updatedAt: new Date().toISOString() }).catch(() => {});
+        m.deadLettered++; _alertHubQueueDeadLetter(hubId, invoiceId, res.status);
+      } else {
+        const next = retryCount + 1;
+        if (next >= HUB_QUEUE_MAX_RETRIES) {
+          await entryRef.update({ status: "dead_letter", result: "max_retries", lastError: res.error || null, deadAt: new Date().toISOString() });
+          await db.collection("hubInvoices").doc(invoiceId).update({ status: "failed", updatedAt: new Date().toISOString() }).catch(() => {});
+          m.deadLettered++; _alertHubQueueDeadLetter(hubId, invoiceId, res.error || "max_retries");
+        } else {
+          const delayMin = HUB_QUEUE_BACKOFF_MIN[next] || 720;
+          await entryRef.update({
+            status: "pending", retryCount: next,
+            nextRetryAt: new Date(Date.now() + delayMin * 60000).toISOString(),
+            lastError: res.error || null, priority: 2, retriedAt: new Date().toISOString(),
+          });
+          m.retried++;
+        }
+      }
+    }
+
+    if (m.scanned > 0) {
+      const inc = admin.firestore.FieldValue.increment;
+      await db.collection("hubQueueMetrics").doc(new Date().toISOString().slice(0, 10)).set({
+        scanned: inc(m.scanned), succeeded: inc(m.succeeded), retried: inc(m.retried),
+        deadLettered: inc(m.deadLettered), skipped: inc(m.skipped), updatedAt: new Date().toISOString(),
+      }, { merge: true }).catch(() => {});
+    }
+    console.log("[hubProcessQueue]", JSON.stringify(m));
+  }
+);
 
 /* ══════════════════════════════════════════════════════════════════
    EXPORTED CLOUD FUNCTIONS

@@ -31,6 +31,12 @@ const DEFAULTS = Object.freeze({
   catZero: 'B',
   catExempt: 'C',
   classCodeDefault: '57111500',
+  /* inclusive=true  → prices already contain VAT (seller path, KRA VSCU default).
+     inclusive=false → VAT is added on top of the price (legacy hub path).
+     WHICH ONE KRA REQUIRES PER FLOW IS A KRA-SPEC DECISION — isolated here as a
+     config point so both flows share ONE engine while the policy stays pending
+     official validation. Do not hardcode a choice elsewhere. */
+  inclusive: true,
 });
 
 /* Round half-up to 2dp — EXACTLY the deployed etims.js `_r2` (do not "improve" with
@@ -56,17 +62,23 @@ function computeLine(item, vatStatus, config) {
   const net  = r2(sply - dcAmt);
 
   const cat = vatCategoryFor(vatStatus, cfg);
+  const inclusive = cfg.inclusive !== false;
   let taxblAmt, taxAmt;
-  if (cat === cfg.catStandard)   { taxblAmt = r2(net / (1 + cfg.vatRate)); taxAmt = r2(net - taxblAmt); }
-  else if (cat === cfg.catZero)  { taxblAmt = net; taxAmt = 0; }
-  else                           { taxblAmt = 0;   taxAmt = 0; }
+  if (cat === cfg.catStandard) {
+    if (inclusive) { taxblAmt = r2(net / (1 + cfg.vatRate)); taxAmt = r2(net - taxblAmt); }
+    else           { taxblAmt = net;                          taxAmt = r2(net * cfg.vatRate); }
+  } else if (cat === cfg.catZero) { taxblAmt = net; taxAmt = 0; }
+  else                            { taxblAmt = 0;   taxAmt = 0; }
+  /* Inclusive: the price already holds the VAT, so the line total IS net.
+     Exclusive: VAT is added, so the line total is net + tax. */
+  const totAmt = inclusive ? net : r2(net + taxAmt);
 
   return {
     itemSeq:   item.seq || 1,
     itemClsCd: item.itemClassCode || cfg.classCodeDefault,
     itemNm:    String(item.name || 'Item').slice(0, 100),
     pkgUnitCd: 'NT', pkg: qty, qtyUnitCd: 'U', qty,
-    prc, splyAmt: sply, dcRt, dcAmt, vatCatCd: cat, taxblAmt, taxAmt, totAmt: net,
+    prc, splyAmt: sply, dcRt, dcAmt, vatCatCd: cat, taxblAmt, taxAmt, totAmt,
   };
 }
 

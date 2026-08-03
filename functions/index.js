@@ -9900,6 +9900,7 @@ exports.hubGetDocuments     = hubEtims.hubGetDocuments;
 exports.hubOnOrderCompleted = hubEtims.hubOnOrderCompleted;
 exports.hubGenerateInvoice  = hubEtims.hubGenerateInvoice;
 exports.hubResubmitInvoice  = hubEtims.hubResubmitInvoice;
+exports.hubProcessQueue     = hubEtims.hubProcessQueue;   // B4: scheduled retry-queue drain
 exports.hubGetAuditTrail    = hubEtims.hubGetAuditTrail;
 exports.hubGetStats         = hubEtims.hubGetStats;
 exports.hubAdminGetAllStats = hubEtims.hubAdminGetAllStats;

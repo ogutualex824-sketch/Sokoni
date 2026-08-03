@@ -128,5 +128,32 @@ console.log('\n=== eTIMS canonical Tax Engine — determinism + equivalence guar
   check('7b totals match deployed etims.js', JSON.stringify(E.computeTotals(lines)) === JSON.stringify(deployedCalcTotals(lines)));
 }
 
+/* 8. EXCLUSIVE mode (hub policy) + equivalence to the deployed hub math */
+{
+  // 100 excl @16% → taxable 100, VAT 16, gross 116
+  const l = E.computeLine({ unitPrice: 100, quantity: 1 }, 'registered', { inclusive: false });
+  check('8a exclusive: taxable 100, VAT 16, gross 116', near(l.taxblAmt,100) && near(l.taxAmt,16) && near(l.totAmt,116));
+  const z = E.computeLine({ unitPrice: 100, quantity: 1 }, 'zero_rated', { inclusive: false });
+  check('8b exclusive zero-rated: VAT 0, gross 100', z.taxAmt === 0 && near(z.totAmt,100));
+
+  // Equivalence vs deployed hub-etims.js: lineVat = round(price*qty * vatRate/100)
+  const hubLineVat = (price, qty, vatStatus) => {
+    const vatRate = vatStatus === 'zero_rated' ? 0 : 16;
+    return Math.round((price * qty) * (vatRate / 100) * 100) / 100;
+  };
+  let mism = 0, n = 0;
+  for (let p = 1; p <= 3000; p += 41) {
+    for (let q = 1; q <= 8; q += 3) {
+      for (const s of ['registered', 'zero_rated']) {
+        const eng = E.computeLine({ unitPrice: p + 0.25, quantity: q }, s, { inclusive: false }).taxAmt;
+        const hub = hubLineVat(p + 0.25, q, s);
+        if (!near(eng, hub)) { mism++; if (mism <= 3) console.log('   ↳ hub mismatch', { p: p+0.25, q, s, eng, hub }); }
+        n++;
+      }
+    }
+  }
+  check(`8c line VAT matches deployed hub math across ${n} cases`, mism === 0);
+}
+
 console.log(`\n${fail ? fail + ' FAILED of ' + (pass + fail) : 'ALL ' + pass + ' PASSED'}`);
 process.exitCode = fail ? 1 : 0;
