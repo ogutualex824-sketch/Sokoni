@@ -84,6 +84,11 @@ a{color:var(--acc);text-decoration:none}
 .card{background:var(--surf);border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:14px}
 .card-title{font-size:.9rem;font-weight:700;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between}
 .card-empty{color:var(--sub);font-size:.83rem;padding:20px 0;text-align:center}
+.health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin-top:4px}
+.h-cell{background:var(--surf2);border:1px solid var(--border);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:3px;min-height:56px}
+.h-cell .h-lbl{font-size:.66rem;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;display:flex;align-items:center;gap:6px}
+.h-cell .h-val{font-size:1rem;font-weight:800;color:var(--text)}
+.h-dot{width:7px;height:7px;border-radius:50%;display:inline-block;flex-shrink:0}
 
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
@@ -225,6 +230,12 @@ a{color:var(--acc);text-decoration:none}
           <div class="kpi"><div class="kpi-ico">💰</div><div class="kpi-val" id="kpiEarnings">KSh —</div><div class="kpi-lbl">This Month</div><div class="kpi-sub">Net earnings</div></div>
           <div class="kpi"><div class="kpi-ico">⭐</div><div class="kpi-val" id="kpiRating">—</div><div class="kpi-lbl">Rating</div><div class="kpi-sub" id="kpiRevCount">0 reviews</div></div>
           <div class="kpi"><div class="kpi-ico">👁️</div><div class="kpi-val" id="kpiViews">—</div><div class="kpi-lbl">Profile Views</div><div class="kpi-sub">This week</div></div>
+        </div>
+
+        <!-- Business Health — command center -->
+        <div class="card" id="healthCard">
+          <div class="card-title">Business Health <span id="healthPill" class="sub-badge sub-active" style="font-size:.66rem">—</span></div>
+          <div class="health-grid" id="healthGrid"><div class="card-empty" style="grid-column:1/-1">Loading…</div></div>
         </div>
 
         <!-- Subscription status -->
@@ -976,6 +987,7 @@ async function loadDashboard(user){
   try{
     const res=await _sdk.getDashboard();_data=res;
     hideLoad();
+    loadHealth(res).catch(()=>{});   // Business Health card — parallel, non-blocking
     // Provider info
     const p=res.profile||{};
     const sub=res.subscription||{};
@@ -1036,6 +1048,47 @@ async function loadDashboard(user){
     }
     toast('Failed to load dashboard: '+e.message,'err');
   }
+}
+
+/* Business Health — the provider "command center" card. 10 signals from existing data
+   (dashboard/profile/services/wallet/availability), 3 aggregates from providerGetHealth
+   (completion rate / cancellation rate / response time). Best-effort; degrades to —. */
+async function loadHealth(res){
+  const grid=_q('healthGrid'); if(!grid) return;
+  const p=res.profile||{}, sub=res.subscription||{};
+  const bk=res.bookings||[]; const pending=bk.filter(b=>b.status==='pending').length;
+  const disp=firebase.functions().httpsCallable('providerDispatch');
+  let health={},prof={},services={services:[]},wallet=0,availSet=false;
+  try{const[h,pr,sv]=await Promise.all([
+    disp({op:'providerGetHealth'}).then(r=>r.data||{}).catch(()=>({})),
+    disp({op:'providerGetProfile'}).then(r=>r.data||{}).catch(()=>({})),
+    disp({op:'providerListServices'}).then(r=>r.data||{}).catch(()=>({services:[]})),
+  ]);health=h||{};prof=pr||{};services=sv||{services:[]};}catch(_){}
+  try{const b=await firebase.functions().httpsCallable('getWalletBalance')({});wallet=Number((b.data||{}).balance||0);}catch(_){}
+  try{const u=firebase.auth().currentUser;if(u){const av=await db.collection('providerAvailability').doc(u.uid).get();availSet=av.exists&&!!(av.data()&&av.data().schedule);}}catch(_){}
+  const activeSvc=(services.services||services.list||[]).filter(s=>s&&s.active!==false).length;
+  const pm=prof.paymentMethods||prof.payment||{};
+  const payConnected=!!(prof.mpesaPhone||p.mpesaPhone||(pm&&(pm.mpesa||pm.phone||(typeof pm==='object'&&Object.keys(pm).length))));
+  const _dur=m=>m==null?'—':(m<60?m+'m':(Math.round(m/6)/10)+'h');
+  const cells=[
+    ['Profile',(res.profileCompletion||0)+'%',(res.profileCompletion||0)>=80],
+    ['Verified',p.verified?'Verified':'Unverified',!!p.verified],
+    ['Plan',(sub.plan||'free').replace(/_/g,' '),(sub.plan&&sub.plan!=='free')?true:null],
+    ['Payout account',payConnected?'Connected':'Not set',payConnected],
+    ['Wallet','KSh '+_fmt(wallet),null],
+    ['Active services',activeSvc,activeSvc>0],
+    ['Availability',availSet?'Configured':'Not set',availSet],
+    ['Pending bookings',pending,null],
+    ['Rating',(p.rating>0?p.rating.toFixed(1):'—'),(p.rating||0)>=4?true:((p.rating||0)>0?null:false)],
+    ['Reviews',(p.reviewCount||0),null],
+    ['Completion rate',health.completionRate!=null?health.completionRate+'%':'—',health.completionRate!=null?health.completionRate>=80:null],
+    ['Cancellation rate',health.cancellationRate!=null?health.cancellationRate+'%':'—',health.cancellationRate!=null?health.cancellationRate<=10:null],
+    ['Response time',_dur(health.avgResponseMins),health.avgResponseMins!=null?health.avgResponseMins<=60:null],
+  ];
+  const dot=ok=>ok===true?'var(--ok)':ok===false?'var(--err)':'var(--sub)';
+  grid.innerHTML=cells.map(([l,v,ok])=>`<div class="h-cell"><div class="h-lbl"><span class="h-dot" style="background:${dot(ok)}"></span>${_esc(l)}</div><div class="h-val">${_esc(String(v))}</div></div>`).join('');
+  const greens=cells.filter(c=>c[2]===true).length, reds=cells.filter(c=>c[2]===false).length;
+  const pill=_q('healthPill'); if(pill){pill.textContent=greens+' good'+(reds?(' · '+reds+' to fix'):'');pill.className='sub-badge '+(reds>=3?'sub-expired':reds?'sub-trial':'sub-active');}
 }
 
 /* Deep-link support: the profile Business Hub links to #bookings / #calendar / #reviews /

@@ -547,6 +547,38 @@ exports._h.providerDashboard = _h.providerDashboard = async (req) => {
   };
 };
 
+/* providerGetHealth — the ONLY new aggregation the Business Health card needs:
+   completion rate, cancellation rate, average response time. Everything else on the
+   card comes from existing data (dashboard/profile/reviews/earnings/wallet). Reads
+   providerBookings (single-field where + limit → no composite index) and derives from
+   status + createdAt→confirmedAt. Read-only, degrades to nulls, never throws hard. */
+exports._h.providerGetHealth = _h.providerGetHealth = async (req) => {
+  const uid = _uid(req);
+  let total = 0, completed = 0, cancelled = 0, noShow = 0, respSum = 0, respN = 0;
+  try {
+    const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(500).get();
+    snap.docs.forEach(d => {
+      const b = d.data(); total++;
+      const s = String(b.status || '');
+      if (s === 'completed' || s === 'order_delivered') completed++;
+      else if (s === 'cancelled' || s === 'declined' || s === 'rejected') cancelled++;
+      else if (s === 'no_show') noShow++;
+      const reqAt = b.createdAt?.toDate ? b.createdAt.toDate() : (b.requestedAt?.toDate ? b.requestedAt.toDate() : null);
+      const cfAt  = b.confirmedAt?.toDate ? b.confirmedAt.toDate() : null;
+      if (reqAt && cfAt && cfAt >= reqAt) { respSum += (cfAt - reqAt) / 60000; respN++; }
+    });
+  } catch (e) {
+    logger.warn('[providerGetHealth] aggregate skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
+  const terminal = completed + cancelled + noShow;
+  return {
+    total, completed, cancelled, noShow, sampled: total,
+    completionRate:   terminal ? Math.round((completed / terminal) * 100) : null,
+    cancellationRate: total ? Math.round(((cancelled + noShow) / total) * 100) : null,
+    avgResponseMins:  respN ? Math.round(respSum / respN) : null,
+  };
+};
+
 function _calcProfileCompletion(p) {
   const checks = [
     !!p.name, !!p.bio, !!p.category, !!p.subcategory,
