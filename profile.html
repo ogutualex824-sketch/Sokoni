@@ -4192,8 +4192,23 @@ function loadWallet(){
       if(!snap.exists()) return;
       var data = snap.data();
       var bal = data.balance || 0;
-      document.getElementById('walletBalance').textContent = 'KES ' + Number(bal).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2});
-      document.getElementById('walletSub').textContent = 'Updated ' + timeAgo(data.updatedAt||null);
+      var _f = function(n){ return 'KES ' + Number(n||0).toLocaleString('en-KE',{minimumFractionDigits:2,maximumFractionDigits:2}); };
+      var _wb = document.getElementById('walletBalance'); if(_wb) _wb.textContent = _f(bal);
+      var _ws = document.getElementById('walletSub'); if(_ws) _ws.textContent = 'Updated ' + timeAgo(data.updatedAt||null);
+
+      /* Profile↔Wallet single source of truth (#3): the overview command-center wallet
+         card reads the SAME live wallets/{uid} doc, so Profile and Wallet never drift
+         (this fixes the overview showing "KES 0.00"). Pending withdrawals + frozen
+         status surface here too. */
+      var _cb = document.getElementById('cmdWalletBal'); if(_cb) _cb.textContent = _f(bal);
+      var _cp = document.getElementById('cmdWalletPending');
+      if(_cp){
+        var _pend = Number(data.pendingPayout||0);
+        var _bits = [];
+        if(_pend > 0) _bits.push(_f(_pend) + ' pending withdrawal');
+        if(data.frozen) _bits.push('Wallet frozen');
+        _cp.textContent = _bits.join(' · ');
+      }
 
       /* transactions */
       var txEl = document.getElementById('walletTxPanel');

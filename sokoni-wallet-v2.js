@@ -1301,10 +1301,22 @@ window.SokoniWalletV2 = (function () {
       _setText('anOut', 'KSh ' + _fmt(d.totalOut || 0));
       _drawAnalyticsChart(d.byDay || []);
       _renderCategories(d.byCategory || []);
-    } catch (_) {
-      _setText('anIn', 'KSh 0.00');
-      _setText('anOut', 'KSh 0.00');
-      _renderCategories([]);
+    } catch (err) {
+      /* Never leave users on "Could not load analytics" (#12): friendly state + Retry
+         (retries in place, no page refresh). Log the real cause for diagnostics. */
+      console.error('[WalletV2] analytics load failed', err && err.message);
+      _setText('anIn', '—');
+      _setText('anOut', '—');
+      const cats = document.getElementById('anCategories');
+      if (cats) {
+        cats.innerHTML =
+          '<div style="text-align:center;padding:26px 14px;color:var(--sub)">'
+          + '<div style="font-size:30px;margin-bottom:10px">📊</div>'
+          + '<div style="font-weight:800;color:var(--txt);margin-bottom:4px">We’re fetching your analytics</div>'
+          + '<div style="font-size:13px;margin-bottom:16px">This is taking a moment.</div>'
+          + '<button class="btn btn-secondary" style="padding:9px 22px" onclick="W2.loadAnalytics(\'' + _esc(_anPeriod) + '\')">Retry</button>'
+          + '</div>';
+      }
     }
   }
 
