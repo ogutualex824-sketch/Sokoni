@@ -122,15 +122,32 @@ class IntaSendAdapter extends PaymentAdapter {
      amount. The response carries invoice.invoice_id, which the webhook/confirm/sweep paths
      key off — surfaced as invoiceId (checkoutId kept as an alias for existing callers). */
   async initiatePayment({ phone, amountKES, ref, narrative, currency = 'KES' }) {
+    /* method:'M-PESA' is MANDATORY — the intasend-node SDK's mpesaStkPush injects it
+       (collection.js) and WITHOUT it the endpoint mints an invoice but never pushes the
+       STK popup. Omitting it was the top-up regression. This body is now byte-equivalent
+       to the proven SDK request: { method, currency, amount(number), phone_number,
+       api_ref, narrative } with Bearer auth. */
+    const account = this._normalizeKenyanPhone(phone);
+    console.log('[IntaSendAdapter.initiatePayment] STK contract', JSON.stringify({
+      endpoint: `https://${this._host}/api/v1/payment/mpesa-stk-push/`, auth: 'Bearer',
+      method: 'M-PESA', currency, amount: Math.round(Number(amountKES)), api_ref: ref,
+      phone: account.length < 6 ? account : account.slice(0, 6) + '****' + account.slice(-2),
+    }));
     const res = await this._request('/api/v1/payment/mpesa-stk-push/', 'POST', {
-      phone_number: this._normalizeKenyanPhone(phone),
-      amount:       Math.round(Number(amountKES)),
+      method:       'M-PESA',
       currency,
+      amount:       Math.round(Number(amountKES)),
+      phone_number: account,
       narrative:    narrative || `SOKONI ${ref}`,
       api_ref:      ref,
     });
     const ok = res.status === 200 || res.status === 201;
     const invoiceId = res.body?.invoice?.invoice_id || res.body?.checkout_id || res.body?.id || null;
+    console.log('[IntaSendAdapter.initiatePayment] STK response', JSON.stringify({
+      http: res.status, ok, invoiceId,
+      state: res.body?.invoice?.state || res.body?.state || null,
+      body: (typeof res.body === 'string' ? res.body.slice(0, 200) : res.body),
+    }));
     return {
       success:     ok,
       invoiceId,
