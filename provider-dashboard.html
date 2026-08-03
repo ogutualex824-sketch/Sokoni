@@ -95,6 +95,25 @@ a{color:var(--acc);text-decoration:none}
 .snap-ic{font-size:1.15rem;flex-shrink:0}
 .snap-val{font-size:.95rem;font-weight:800;color:var(--text);line-height:1.15}
 .snap-lbl{font-size:.64rem;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;margin-top:1px}
+.snap-chip.tap{cursor:pointer;transition:border-color var(--t),transform var(--t)}
+.snap-chip.tap:hover{border-color:var(--acc)}
+.snap-chip.tap:active{transform:scale(.97)}
+
+/* Availability Editor bottom sheet (Phase 3 Increment 2) */
+.av-sheet-wrap{position:fixed;inset:0;z-index:2400;display:flex;align-items:flex-end;justify-content:center}
+.av-sheet-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(2px)}
+.av-sheet{position:relative;background:var(--surf);width:100%;max-width:560px;max-height:90vh;border-radius:20px 20px 0 0;border:1px solid var(--border);border-bottom:none;display:flex;flex-direction:column;box-shadow:0 -8px 40px rgba(0,0,0,.5);animation:avUp var(--t)}
+@keyframes avUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.av-sheet-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}
+.av-sheet-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:14px 18px 20px;flex:1}
+.av-sheet-ftr{display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:1px solid var(--border);background:var(--surf)}
+.av-day{padding:9px 0;border-bottom:1px solid var(--border)}
+.av-day:last-child{border-bottom:none}
+.av-brk{display:inline-flex;align-items:center;gap:4px;background:var(--surf2);border:1px solid var(--border);border-radius:99px;padding:3px 4px 3px 10px;font-size:.72rem;margin:3px 5px 0 0;color:var(--text)}
+.av-brk button{background:none;border:none;color:var(--err);cursor:pointer;font-size:.95rem;line-height:1;padding:0 4px}
+.av-sec-title{font-weight:800;font-size:.72rem;margin:18px 0 9px;text-transform:uppercase;letter-spacing:.05em;color:var(--sub)}
+.av-sec-title:first-child{margin-top:2px}
+@media(min-width:560px){.av-sheet-wrap{align-items:center}.av-sheet{border-radius:20px;border-bottom:1px solid var(--border);max-height:84vh}}
 
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
@@ -281,7 +300,7 @@ a{color:var(--acc);text-decoration:none}
           <div class="card-title">Quick Actions</div>
           <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
             <button class="btn btn-s" onclick="P.show('settings',null,'services')" style="display:flex;align-items:center;gap:7px;justify-content:center">🧰 Manage Services</button>
-            <button class="btn btn-s" onclick="P.show('settings',null,'avail')" style="display:flex;align-items:center;gap:7px;justify-content:center">🕐 Update Availability</button>
+            <button class="btn btn-s" onclick="AvE.open()" style="display:flex;align-items:center;gap:7px;justify-content:center">🕐 Update Availability</button>
             <button class="btn btn-s" onclick="P.show('settings',null,'pricing')" style="display:flex;align-items:center;gap:7px;justify-content:center">💳 Update Pricing</button>
             <button class="btn btn-s" onclick="P.show('bookings',null)" style="display:flex;align-items:center;gap:7px;justify-content:center">📅 View All Bookings</button>
             <button class="btn btn-s" onclick="P.show('earnings',null)" style="display:flex;align-items:center;gap:7px;justify-content:center">📊 View Earnings</button>
@@ -333,7 +352,7 @@ a{color:var(--acc);text-decoration:none}
           <button class="btn btn-g btn-sm" onclick="AvQ.emergencyClose()">🔴 Close today</button>
           <button class="btn btn-g btn-sm" onclick="AvQ.blockDate()">📅 Block a date</button>
           <button class="btn btn-g btn-sm" id="avqVac" onclick="AvQ.vacation()">🌴 Vacation</button>
-          <button class="btn btn-g btn-sm" onclick="location.href='availability-manager.html'">⚙️ Full editor</button>
+          <button class="btn btn-p btn-sm" onclick="AvE.open()">✏️ Edit availability</button>
         </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <button class="btn btn-g btn-sm" onclick="Cal.nav(-1)">‹ Prev</button>
@@ -579,6 +598,16 @@ a{color:var(--acc);text-decoration:none}
     <div class="bn-item" onclick="P.show('settings',this)"><span class="bn-icon">⚙️</span>Settings</div>
   </div>
 </div><!-- .app -->
+
+<!-- Availability Editor bottom sheet (Phase 3 Increment 2) -->
+<div id="avEditor" class="av-sheet-wrap" style="display:none">
+  <div class="av-sheet-backdrop" onclick="AvE.close()"></div>
+  <div class="av-sheet">
+    <div class="av-sheet-hdr"><div style="font-weight:800;font-size:1rem">Availability</div><button class="btn btn-g btn-sm" onclick="AvE.close()">✕</button></div>
+    <div class="av-sheet-body" id="avEBody"><div class="card-empty">Loading…</div></div>
+    <div class="av-sheet-ftr"><div id="avESummary" style="flex:1;font-size:.72rem;color:var(--sub)"></div><button class="btn btn-p btn-sm" onclick="AvE.save()">Save changes</button></div>
+  </div>
+</div>
 
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
@@ -892,7 +921,7 @@ const S={
   tab(t,btn){document.querySelectorAll('.stpanel').forEach(p=>p.classList.remove('on'));document.querySelectorAll('.stab').forEach(b=>b.classList.remove('on'));_q(`st-${t}`).classList.add('on');if(btn)btn.classList.add('on');if(t==='sub')S.loadSub();if(t==='verif')S.loadVerif();if(t==='avail')S.loadAvail();if(t==='services')Sv.load()},
   loadAvail(){
     const av=_data?.availability||{};
-    _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><a href="availability-manager.html" class="btn btn-p btn-sm">Manage Availability &amp; Breaks</a></div>`;
+    _q('availContent').innerHTML=`<div style="font-size:.83rem;color:var(--sub)">Days: <strong style="color:var(--text)">${(av.days||[]).join(', ')||'Not set'}</strong><br>Hours: <strong style="color:var(--text)">${av.from||'—'} – ${av.to||'—'}</strong><br>Lead time: <strong style="color:var(--text)">${av.leadTime||'—'}</strong></div><div style="margin-top:10px"><button class="btn btn-p btn-sm" onclick="AvE.open()">Manage Availability &amp; Breaks</button></div>`;
   },
   async saveProfile(){
     showLoad('Saving…');try{
@@ -904,7 +933,7 @@ const S={
   async savePricing(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerUpdatePricing',data:{hourly:parseInt(_q('pHour').value)||0,fixed:parseInt(_q('pFixed').value)||0,inspection:parseInt(_q('pInsp').value)||0,emergency:parseInt(_q('pEmrg').value)||0}});toast('Pricing saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async savePayment(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConnectPayment',method:'mpesa',details:{phone:(_q('pmMpesa')||{}).value}});toast('Payment method saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async saveNotif(){showLoad('Saving…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerUpdateNotifications',sms:_q('nSMS').checked,email:_q('nEmail').checked,push:_q('nPush').checked});toast('Preferences saved!');}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async saveAvail(){window.location.href='availability-manager.html';},
+  async saveAvail(){AvE.open();},
   async loadSub(){
     const sub=_data?.subscription;if(!sub){_q('subDetails').innerHTML='<div class="card-empty">No active subscription found.</div>';return}
     const st={trialing:'sub-trial',active:'sub-active',expired:'sub-expired',cancelled:'sub-expired'};
@@ -1184,7 +1213,7 @@ async function renderSnapshot(targetId,bookings){
    overrides/{YYYY-MM-DD} subcollection {date,label,closed,type,createdAt}; vacation is
    isOnVacation + vacationStartDate/EndDate on the main doc. No duplicate model. */
 const AvQ={
-  _ref(){const u=firebase.auth().currentUser;return u?db.collection('providerAvailability').doc(u.uid):null;},
+  _ref(){const u=firebase.auth().currentUser;return u?firebase.firestore().collection('providerAvailability').doc(u.uid):null;},
   _today(){return new Date().toISOString().slice(0,10);},
   _stamp(){return firebase.firestore.FieldValue.serverTimestamp();},
   async _close(date,label){const r=this._ref();if(!r)throw new Error('Sign in required');await r.collection('overrides').doc(date).set({date,label:String(label).slice(0,80),closed:true,type:'custom',createdAt:this._stamp()});},
@@ -1196,6 +1225,91 @@ const AvQ={
     else{const end=(prompt('Vacation until? (YYYY-MM-DD, optional — leave blank for open-ended)')||'').trim();if(end&&!/^\d{4}-\d{2}-\d{2}$/.test(end)){toast('Use YYYY-MM-DD or leave blank.','err');return}showLoad('…');try{await r.set({isOnVacation:true,vacationStartDate:this._today(),vacationEndDate:end||null,updatedAt:this._stamp()},{merge:true});toast('Vacation mode ON — hidden from search, bookings paused.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}},
   _refresh(){try{if(typeof Cal!=='undefined'&&Cal.today)Cal.today()}catch(_){}try{if(typeof _data!=='undefined'&&_data)renderSnapshot('snapStripCal',_data.bookings||[])}catch(_){}}
 };window.AvQ=AvQ;
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Availability Editor (Phase 3 Increment 2) — a premium bottom sheet that edits
+   the SAME canonical providerAvailability/{uid} doc availability-manager.html owns.
+   NO second scheduling model: schedule{day:{closed,periods:[{open,close}],breaks}} +
+   appt{durationMins,bufferMins,minNoticeHours,maxDaysAhead,allowSameDay} + vacation
+   fields, written back via a merge (never clobbers modes/cap/notify/overrides).
+   ───────────────────────────────────────────────────────────────────────────── */
+const AvE={
+  DAYS:['monday','tuesday','wednesday','thursday','friday','saturday','sunday'],
+  _cfg:null,
+  _ref(){const u=firebase.auth().currentUser;return u?firebase.firestore().collection('providerAvailability').doc(u.uid):null;},
+  _day(d){const s=(this._cfg.schedule||(this._cfg.schedule={}));return s[d]||(s[d]={closed:(d==='saturday'||d==='sunday'),periods:[],breaks:[]});},
+  async open(){
+    const w=_q('avEditor');if(!w)return;w.style.display='flex';document.body.style.overflow='hidden';
+    _q('avEBody').innerHTML='<div class="card-empty">Loading availability…</div>';_q('avESummary').textContent='';
+    try{const r=this._ref();if(!r){throw new Error('Sign in required.');}
+      const s=await r.get();this._cfg=(s.exists?s.data():{})||{};
+      if(!this._cfg.schedule)this._cfg.schedule={};if(!this._cfg.appt)this._cfg.appt={};
+      this.render();
+    }catch(e){_q('avEBody').innerHTML=`<div class="card-empty">Couldn't load availability.<br><button class="btn btn-g btn-sm" style="margin-top:8px" onclick="AvE.open()">Retry</button></div>`;}
+  },
+  close(){const w=_q('avEditor');if(w)w.style.display='none';document.body.style.overflow='';},
+  render(){
+    const a=this._cfg.appt||{},c=this._cfg;
+    const rows=this.DAYS.map(d=>{const day=this._day(d),closed=!!day.closed,per=(day.periods&&day.periods[0])||{open:'09:00',close:'17:00'},br=day.breaks||[];
+      return `<div class="av-day" data-day="${d}">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <label style="width:46px;font-weight:700;font-size:.8rem;text-transform:capitalize">${d.slice(0,3)}</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;font-size:.78rem;color:${closed?'var(--sub)':'var(--text)'}"><input type="checkbox" ${closed?'':'checked'} onchange="AvE._toggle('${d}',this.checked)"> ${closed?'Closed':'Open'}</label>
+          <span class="av-t" data-day="${d}" style="${closed?'display:none':'display:inline-flex'};align-items:center;gap:5px;margin-left:auto">
+            <input type="time" class="sk-in" data-f="open" value="${per.open||'09:00'}" style="width:auto;padding:6px 8px" onchange="AvE._summary()">
+            <span style="color:var(--sub)">–</span>
+            <input type="time" class="sk-in" data-f="close" value="${per.close||'17:00'}" style="width:auto;padding:6px 8px" onchange="AvE._summary()">
+          </span>
+        </div>
+        <div class="av-bk" data-day="${d}" style="${closed?'display:none':''};margin-top:4px;padding-left:46px">
+          ${br.map((b,i)=>`<span class="av-brk">${_esc(b.open)}–${_esc(b.close)}<button title="Remove break" onclick="AvE._rmBreak('${d}',${i})">×</button></span>`).join('')}
+          <button class="btn btn-g btn-sm" style="padding:3px 10px;font-size:.7rem;margin-top:3px" onclick="AvE._addBreak('${d}')">+ break</button>
+        </div>
+      </div>`;}).join('');
+    _q('avEBody').innerHTML=`
+      <div class="av-sec-title">Working hours</div>
+      <div style="margin-bottom:6px"><button class="btn btn-g btn-sm" onclick="AvE.copyMonday()">⧉ Copy Monday → Tue–Fri</button></div>
+      ${rows}
+      <div class="av-sec-title">Booking rules</div>
+      <div class="fgrid">
+        <div class="fg"><label class="sk-lbl">Slot duration (min)</label><input class="sk-in" id="avSlot" type="number" min="5" step="5" value="${Number(a.durationMins)||60}" onchange="AvE._summary()"></div>
+        <div class="fg"><label class="sk-lbl">Buffer between (min)</label><input class="sk-in" id="avBuffer" type="number" min="0" step="5" value="${Number(a.bufferMins)||0}"></div>
+        <div class="fg"><label class="sk-lbl">Min notice (hours)</label><input class="sk-in" id="avNotice" type="number" min="0" value="${Number(a.minNoticeHours)||1}"></div>
+        <div class="fg"><label class="sk-lbl">Max advance (days)</label><input class="sk-in" id="avMaxDays" type="number" min="1" value="${Number(a.maxDaysAhead)||30}"></div>
+      </div>
+      <label style="display:inline-flex;align-items:center;gap:7px;font-size:.8rem;margin-top:10px"><input type="checkbox" id="avSameDay" ${a.allowSameDay?'checked':''}> Allow same-day bookings</label>
+      <div class="av-sec-title">Vacation</div>
+      <label style="display:inline-flex;align-items:center;gap:7px;font-size:.82rem"><input type="checkbox" id="avVac" ${c.isOnVacation?'checked':''} onchange="AvE._vac(this.checked)"> On vacation — hidden from search, new bookings paused</label>
+      <div id="avVacFields" class="fgrid" style="${c.isOnVacation?'':'display:none'};margin-top:9px">
+        <div class="fg"><label class="sk-lbl">From</label><input class="sk-in" id="avVacStart" type="date" value="${_esc(c.vacationStartDate||'')}"></div>
+        <div class="fg"><label class="sk-lbl">Until (optional)</label><input class="sk-in" id="avVacEnd" type="date" value="${_esc(c.vacationEndDate||'')}"></div>
+      </div>
+      <div style="font-size:.72rem;color:var(--sub);margin-top:12px;line-height:1.5">💡 One-off closures &amp; blocked dates → use the calendar Quick Actions (🔴 Close today · 📅 Block a date). This editor sets your <em>recurring weekly</em> schedule.</div>`;
+    this._summary();
+  },
+  _toggle(d,open){const day=this._day(d);day.closed=!open;if(open&&(!day.periods||!day.periods.length))day.periods=[{open:'09:00',close:'17:00'}];this.render();},
+  _addBreak(d){this._sync();const s=(prompt('Break start (HH:MM, 24-hour)')||'').trim();if(!s)return;if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(s)){toast('Use HH:MM (e.g. 13:00).','err');return;}const e=(prompt('Break end (HH:MM, 24-hour)')||'').trim();if(!/^([01]?\d|2[0-3]):[0-5]\d$/.test(e)){toast('Use HH:MM (e.g. 14:00).','err');return;}if(e<=s){toast('Break end must be after start.','err');return;}const day=this._day(d);day.breaks=day.breaks||[];day.breaks.push({open:s,close:e});day.breaks.sort((x,y)=>x.open<y.open?-1:1);this.render();},
+  _rmBreak(d,i){this._sync();const day=this._day(d);(day.breaks||[]).splice(i,1);this.render();},
+  _sync(){/* pull the current time inputs back into _cfg before any re-render */this.DAYS.forEach(d=>{const el=document.querySelector(`.av-t[data-day="${d}"]`);if(!el)return;const o=el.querySelector('[data-f="open"]'),cl=el.querySelector('[data-f="close"]');const day=this._day(d);if(o&&cl&&!day.closed)day.periods=[{open:o.value,close:cl.value}];});},
+  copyMonday(){this._sync();const mon=JSON.stringify(this._day('monday'));['tuesday','wednesday','thursday','friday'].forEach(d=>{this._cfg.schedule[d]=JSON.parse(mon);});this.render();toast('Monday copied to weekdays.');},
+  _vac(on){const f=_q('avVacFields');if(f)f.style.display=on?'':'none';this._summary();},
+  _min(t){const m=/^(\d{1,2}):(\d{2})$/.exec(t||'');return m?(+m[1]*60+ +m[2]):0;},
+  _summary(){this._sync();const openDays=this.DAYS.filter(d=>!this._day(d).closed);let mins=0;openDays.forEach(d=>{const day=this._day(d),p=(day.periods||[])[0];if(p)mins+=Math.max(0,this._min(p.close)-this._min(p.open));(day.breaks||[]).forEach(b=>{mins-=Math.max(0,this._min(b.close)-this._min(b.open));});});const slot=parseInt((_q('avSlot')||{}).value)||60,perDay=openDays.length?Math.floor((mins/openDays.length)/slot):0,vac=(_q('avVac')||{}).checked,el=_q('avESummary');
+    if(el)el.innerHTML=`${openDays.length} day${openDays.length===1?'':'s'}/wk · ${Math.round(mins/6)/10}h/wk · ${slot}min slots · ~${perDay}/day${vac?' · <span style="color:var(--warn)">🌴 on vacation</span>':''}`;},
+  async save(){
+    this._sync();const r=this._ref();if(!r){toast('Sign in required.','err');return;}
+    // validate each open day has close>open
+    for(const d of this.DAYS){const day=this._day(d);if(day.closed)continue;const p=(day.periods||[])[0];if(!p||this._min(p.close)<=this._min(p.open)){toast(`${d[0].toUpperCase()+d.slice(1)}: closing time must be after opening.`,'err');return;}}
+    const schedule={};this.DAYS.forEach(d=>{const day=this._day(d);schedule[d]=day.closed?{closed:true,periods:[],breaks:[]}:{closed:false,periods:[{open:(day.periods[0]||{}).open||'09:00',close:(day.periods[0]||{}).close||'17:00'}],breaks:(day.breaks||[]).map(b=>({open:b.open,close:b.close}))};});
+    const appt=Object.assign({},this._cfg.appt||{},{enabled:true,durationMins:parseInt((_q('avSlot')||{}).value)||60,bufferMins:parseInt((_q('avBuffer')||{}).value)||0,minNoticeHours:parseInt((_q('avNotice')||{}).value)||1,maxDaysAhead:parseInt((_q('avMaxDays')||{}).value)||30,allowSameDay:!!(_q('avSameDay')||{}).checked});
+    const vac=!!(_q('avVac')||{}).checked;
+    showLoad('Saving availability…');
+    try{await r.set({schedule,appt,isOnVacation:vac,vacationStartDate:vac?((_q('avVacStart')||{}).value||new Date().toISOString().slice(0,10)):null,vacationEndDate:vac?((_q('avVacEnd')||{}).value||null):null,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+      toast('Availability saved!');this.close();
+      try{if(typeof AvQ!=='undefined')AvQ._refresh();}catch(_){}
+    }catch(e){toast(e.message||'Save failed','err');}finally{hideLoad();}
+  }
+};window.AvE=AvE;
 
 /* Deep-link support: the profile Business Hub links to #bookings / #calendar / #reviews /
    #services (Rate Cards) / #availability etc. so a provider lands on the right panel. */
