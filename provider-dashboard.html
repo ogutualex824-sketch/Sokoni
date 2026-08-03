@@ -170,6 +170,11 @@ a{color:var(--acc);text-decoration:none}
 .cu-Returning{background:rgba(0,120,255,.15);color:#60aaff}
 .cu-New{background:rgba(255,184,0,.15);color:var(--warn)}
 .cu-repeat{background:rgba(160,120,255,.15);color:#b79aff}
+/* Mobile More menu */
+.more-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.more-item{display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 10px;background:var(--surf2);border:1px solid var(--border);border-radius:14px;color:var(--text);font-size:.82rem;font-weight:600;cursor:pointer;transition:border-color var(--t),transform var(--t)}
+.more-item:hover{border-color:var(--acc)}.more-item:active{transform:scale(.97)}
+.more-item span{font-size:1.5rem}
 
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
@@ -289,6 +294,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('customers',this)"><span class="sb-icon">👥</span>Customers</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
+      <div class="sb-item" onclick="P.show('analytics',this)"><span class="sb-icon">📊</span>Analytics</div>
       <div class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
     </nav>
     <div class="sb-foot">
@@ -550,8 +556,25 @@ a{color:var(--acc);text-decoration:none}
             <div class="rating-bars" id="ratingBars" style="flex:1;min-width:160px"></div>
           </div>
         </div>
+        <div class="health-grid" id="rvStats"></div>
+        <div class="card" id="rvTrendCard" style="display:none">
+          <div class="card-title">Rating trend</div>
+          <div class="chart-wrap"><svg class="chart-svg" id="rvTrend" width="540" height="120" viewBox="0 0 540 120" style="max-width:100%"></svg></div>
+        </div>
+        <div class="ftabs" id="rvTabs">
+          <button class="ftab on" onclick="Rv.filter('recent',this)">Recent</button>
+          <button class="ftab" onclick="Rv.filter('highest',this)">Highest</button>
+          <button class="ftab" onclick="Rv.filter('lowest',this)">Lowest</button>
+          <button class="ftab" onclick="Rv.filter('unanswered',this)">Unanswered</button>
+        </div>
         <div id="reviewsList"><div class="card-empty" style="padding:20px;text-align:center">No reviews yet. Complete your first booking to receive reviews.</div></div>
       </div>
+    </div>
+
+    <!-- ── Analytics (Phase 8 — composed from existing aggregation ops) ── -->
+    <div class="panel" id="panel-analytics">
+      <div class="pg-header"><div><div class="pg-title">Analytics</div><div class="pg-sub">Performance across your business — every figure from existing data</div></div></div>
+      <div style="padding:14px 20px" id="anBody"></div>
     </div>
 
     <!-- ── Settings ─────────────────────────────────────────────────── -->
@@ -704,7 +727,7 @@ a{color:var(--acc);text-decoration:none}
     <div class="bn-item" onclick="P.show('calendar',this)"><span class="bn-icon">📆</span>Calendar</div>
     <div class="bn-item" onclick="P.show('bookings',this)"><span class="bn-icon">📅</span>Bookings</div>
     <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Wallet</div>
-    <div class="bn-item" onclick="P.show('settings',this)"><span class="bn-icon">⚙️</span>Settings</div>
+    <div class="bn-item" onclick="More.open()"><span class="bn-icon">⋯</span>More</div>
   </div>
 </div><!-- .app -->
 
@@ -724,6 +747,24 @@ a{color:var(--acc);text-decoration:none}
   <div class="bk-drawer" role="dialog" aria-modal="true" aria-label="Booking detail">
     <div class="bk-drawer-hdr"><div style="font-weight:800;font-size:1rem">Booking</div><button class="btn btn-g btn-sm" onclick="D.close()" aria-label="Close">✕</button></div>
     <div class="bk-drawer-body" id="bkDrawerBody"></div>
+  </div>
+</div>
+
+<!-- Mobile "More" menu — makes Services/Customers/Reviews/Analytics/Settings reachable on phones -->
+<div id="moreSheet" class="av-sheet-wrap" style="display:none;z-index:2300">
+  <div class="av-sheet-backdrop" onclick="More.close()"></div>
+  <div class="av-sheet">
+    <div class="av-sheet-hdr"><div style="font-weight:800;font-size:1rem">More</div><button class="btn btn-g btn-sm" onclick="More.close()" aria-label="Close">✕</button></div>
+    <div class="av-sheet-body">
+      <div class="more-grid">
+        <button class="more-item" onclick="More.go('services')"><span>🧰</span>Services</button>
+        <button class="more-item" onclick="More.go('customers')"><span>👥</span>Customers</button>
+        <button class="more-item" onclick="More.go('reviews')"><span>⭐</span>Reviews</button>
+        <button class="more-item" onclick="More.go('analytics')"><span>📊</span>Analytics</button>
+        <button class="more-item" onclick="More.go('availability')"><span>🕐</span>Availability</button>
+        <button class="more-item" onclick="More.go('settings')"><span>⚙️</span>Settings</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -794,6 +835,7 @@ const P={
     if(id==='bookings'){ if(!_bkDocs.length)B.load(); if(window.SokoniResolution)SokoniResolution.mount({role:'provider',containerId:'skResolution'}); }
     if(id==='earnings')W.load();
     if(id==='customers')Cu.load();
+    if(id==='analytics')An.load();
     if(id==='reviews')Rv.load();
   }
 };
@@ -978,8 +1020,20 @@ const RS={
     catch(e){toast(e.message||'Reschedule failed','err');}finally{hideLoad();}
   },
 };
+/* Mobile "More" menu — routes to the panels that don't fit the 5-slot bottom nav. */
+const More={
+  open(){_q('moreSheet').style.display='flex';document.body.style.overflow='hidden';},
+  close(){_q('moreSheet').style.display='none';document.body.style.overflow='';},
+  go(key){this.close();
+    if(key==='services')return P.show('settings',null,'services');
+    if(key==='availability')return AvE.open();
+    _navTo(key);
+  }
+};
+
 /* Escape closes the topmost overlay (a11y). */
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if(_q('moreSheet')&&_q('moreSheet').style.display!=='none')return More.close();
   if(_q('wdSheet')&&_q('wdSheet').style.display!=='none')return W.wdClose();
   if(_q('rsSheet')&&_q('rsSheet').style.display!=='none')return RS.close();
   if(_q('cuDrawer')&&_q('cuDrawer').style.display!=='none')return Cu.close();
@@ -1165,6 +1219,7 @@ window.Cal=Cal;
    aggregation), getPayoutHistory (payoutRequests lifecycle), getWalletTransactions
    (unified history), requestSellerPayout (the one withdraw path). All figures are
    server-authoritative; this layer only presents them. */
+function _dur(m){return m==null?'—':(m<60?m+'m':(Math.round(m/6)/10)+'h');}  // minutes → 45m / 1.5h
 function _cKsh(c){return 'KSh '+_fmt((Number(c)||0)/100);}          // cents → display
 function _sKsh(s){return 'KSh '+_fmt(Number(s)||0);}                // shillings → display
 function _maskPhone(a){const s=String(a||'');if(s.length<6)return s||'—';const l=s.startsWith('254')?'0'+s.slice(3):s;return l.slice(0,4)+'****'+l.slice(-3);}
@@ -1417,24 +1472,58 @@ const Cu={
 
 /* ── Reviews ─────────────────────────────────────────────────────────────── */
 const Rv={
+  _reviews:[],_filter:'recent',
   async load(){
+    _q('reviewsList').innerHTML=Array.from({length:3}).map(()=>'<div class="sk-row" style="height:72px"></div>').join('');
     try{
       const fn=firebase.functions().httpsCallable('providerDispatch');
       const res=await fn({op:'providerGetReviews'});const d=res.data||{};
+      Rv._reviews=d.reviews||[];
       const avg=d.averageRating||0;_q('avgRating').textContent=avg>0?avg.toFixed(1):'—';
       _q('ratingStars').innerHTML=Rv.stars(avg);
-      _q('totalRevs').textContent=(d.total||0)+' reviews';
+      _q('totalRevs').textContent=(d.total||0)+' review'+((d.total||0)===1?'':'s');
       Rv.renderBars(d.distribution||{});
-      Rv.renderList(d.reviews||[]);
-    }catch(e){}
+      Rv.renderStats(d);
+      Rv.renderTrend(Rv._reviews);
+      Rv.renderList(Rv._visible());
+    }catch(e){_q('reviewsList').innerHTML=`<div class="card-empty" style="padding:20px;text-align:center">Couldn't load reviews. <button class="btn btn-g btn-sm" onclick="Rv.load()">Retry</button></div>`;}
   },
+  renderStats(d){
+    const revs=Rv._reviews,total=revs.length,replied=revs.filter(r=>r.reply).length;
+    const rr=total?Math.round(replied/total*100):0,now=new Date();
+    const thisMonth=revs.filter(r=>{const m=_tsMs(r.createdAt);if(!m)return false;const dt=new Date(m);return dt.getMonth()===now.getMonth()&&dt.getFullYear()===now.getFullYear();}).length;
+    const last30=revs.filter(r=>{const m=_tsMs(r.createdAt);return m&&m>=Date.now()-30*86400000;});
+    const avg30=last30.length?(last30.reduce((s,r)=>s+(r.rating||0),0)/last30.length):0;
+    _q('rvStats').innerHTML=[['Response rate',rr+'%'],['Replied',replied+' / '+total],['This month',String(thisMonth)],['Avg (30d)',avg30?avg30.toFixed(1)+'★':'—']]
+      .map(([l,v])=>`<div class="h-cell"><div class="h-lbl">${_esc(l)}</div><div class="h-val">${_esc(v)}</div></div>`).join('');
+  },
+  renderTrend(revs){
+    const card=_q('rvTrendCard'),svg=_q('rvTrend'),by={};
+    revs.forEach(r=>{const m=_tsMs(r.createdAt);if(!m)return;const k=new Date(m).toISOString().slice(0,7);(by[k]||(by[k]={s:0,n:0}));by[k].s+=(r.rating||0);by[k].n++;});
+    const keys=Object.keys(by).sort().slice(-6);
+    if(keys.length<2){card.style.display='none';return;}
+    card.style.display='';
+    const vals=keys.map(k=>by[k].s/by[k].n),Wd=540,H=110,pad=26,bw=(Wd-pad*2)/vals.length-6;
+    let out='';
+    vals.forEach((v,i)=>{const h=Math.max(2,(v/5)*(H-pad)),x=pad+i*(bw+6),y=H-pad-h;out+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="2" fill="rgba(113,255,0,.7)"><title>${_esc(keys[i])}: ${v.toFixed(1)}★ (${by[keys[i]].n})</title></rect><text x="${x+bw/2}" y="${y-3}" text-anchor="middle" fill="#888" font-size="9">${v.toFixed(1)}</text><text x="${x+bw/2}" y="${H-4}" text-anchor="middle" fill="#666" font-size="9">${_esc(keys[i].slice(5))}</text>`;});
+    svg.innerHTML=out;
+  },
+  _visible(){
+    let list=Rv._reviews.slice();const f=Rv._filter;
+    if(f==='highest')list.sort((a,b)=>(b.rating||0)-(a.rating||0)||_tsMs(b.createdAt)-_tsMs(a.createdAt));
+    else if(f==='lowest')list.sort((a,b)=>(a.rating||0)-(b.rating||0)||_tsMs(b.createdAt)-_tsMs(a.createdAt));
+    else if(f==='unanswered')list=list.filter(r=>!r.reply).sort((a,b)=>_tsMs(b.createdAt)-_tsMs(a.createdAt));
+    else list.sort((a,b)=>_tsMs(b.createdAt)-_tsMs(a.createdAt));
+    return list;
+  },
+  filter(f,el){Rv._filter=f;document.querySelectorAll('#rvTabs .ftab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');Rv.renderList(Rv._visible());},
   stars(r){let h='';for(let i=1;i<=5;i++)h+=`<span class="${i<=Math.round(r)?'star':'star-e'}">★</span>`;return h},
   renderBars(dist){
     const bars=[5,4,3,2,1].map(s=>{const n=dist[s]||0;const tot=Object.values(dist).reduce((a,b)=>a+b,0)||1;const pct=Math.round((n/tot)*100);return`<div class="rbar-row"><span style="width:12px;text-align:right">${s}★</span><div class="rbar"><div class="rbar-fill" style="width:${pct}%"></div></div><span style="width:28px">${pct}%</span></div>`}).join('');
     _q('ratingBars').innerHTML=bars;
   },
   renderList(reviews){
-    if(!reviews.length){_q('reviewsList').innerHTML='<div class="card-empty" style="padding:20px;text-align:center">No reviews yet.</div>';return}
+    if(!reviews.length){_q('reviewsList').innerHTML=`<div class="card-empty" style="padding:24px;text-align:center">${Rv._reviews.length?(Rv._filter==='unanswered'?'🎉 All reviews answered — great response rate!':'No reviews match this filter.'):'No reviews yet. Complete your first booking to receive reviews.'}</div>`;return}
     _q('reviewsList').innerHTML=reviews.map(rv=>{
       const dt=rv.createdAt?.toDate?new Date(rv.createdAt.toDate()):rv.createdAt?new Date(rv.createdAt):null;
       return`<div class="review-item"><div class="rv-head"><div class="b-ava" style="width:32px;height:32px;font-size:.75rem">${(rv.customerName||'?')[0].toUpperCase()}</div><div><div class="rv-name">${_esc(rv.customerName||'Customer')}</div><div class="rv-date">${dt?dt.toLocaleDateString('en-KE'):''}</div></div></div><div class="rv-stars">${Rv.stars(rv.rating||0)}</div><div class="rv-text">${_esc(rv.text||'')}</div>${rv.reply?`<div class="rv-reply"><strong style="color:var(--acc)">Your reply:</strong> ${_esc(rv.reply)}</div>`:`<div style="margin-top:6px"><button class="btn btn-g btn-sm" onclick="Rv.replyPrompt('${rv.id}',this)">Reply</button></div>`}</div>`;
@@ -1447,6 +1536,80 @@ const Rv={
     const text=(_q(`rvRep_${id}`)||{}).value||'';if(!text.trim())return;
     showLoad('Saving reply…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerReplyReview',reviewId:id,reply:text});toast('Reply saved!');Rv.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}
   }
+};
+
+/* ── Analytics (Phase 8) — composes EXISTING aggregation ops into sectioned views.
+   NO invented metrics: revenue from providerGetEarnings, ops from providerGetHealth
+   (+busyDays/peakHours), services from providerServiceMetrics, customers from
+   providerGetCustomers, reviews from providerGetReviews, totals from providerGetAnalytics. */
+const An={
+  async load(){
+    const host=_q('anBody');host.innerHTML=Array.from({length:5}).map(()=>'<div class="sk-row" style="height:96px;margin-bottom:12px"></div>').join('');
+    const disp=firebase.functions().httpsCallable('providerDispatch');
+    const [an,health,earn,met,cust,rev]=await Promise.all([
+      disp({op:'providerGetAnalytics'}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerGetHealth'}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerGetEarnings',days:90}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerServiceMetrics'}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerGetCustomers'}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerGetReviews'}).then(r=>r.data).catch(()=>null),
+    ]);
+    try{An.render({an:an||{},health:health||{},earn:earn||{},met:(met&&met.byService)||{},ci:(cust&&cust.insights)||{},rev:rev||{}});}
+    catch(e){_q('anBody').innerHTML=`<div class="card-empty" style="padding:24px;text-align:center">Couldn't load analytics. <button class="btn btn-g btn-sm" onclick="An.load()">Retry</button></div>`;}
+  },
+  _tiles(cells){return '<div class="health-grid">'+cells.map(([l,v])=>`<div class="h-cell"><div class="h-lbl">${_esc(l)}</div><div class="h-val">${_esc(String(v))}</div></div>`).join('')+'</div>';},
+  _bars(data,labels,fmt){
+    const W=540,H=120,pad=24,mx=Math.max(...data,1),bw=(W-pad*2)/data.length-4;let out='';
+    data.forEach((v,i)=>{const h=Math.max(v>0?2:0,(v/mx)*(H-pad-10)),x=pad+i*(bw+4),y=H-pad-h;out+=`<rect x="${x}" y="${y}" width="${Math.max(1,bw)}" height="${h}" rx="2" fill="rgba(113,255,0,.7)"><title>${_esc(labels[i]||'')}: ${_esc(fmt?fmt(v):String(v))}</title></rect>`+(labels[i]?`<text x="${x+bw/2}" y="${H-5}" text-anchor="middle" fill="#666" font-size="8">${_esc(labels[i])}</text>`:'');});
+    return `<div class="chart-wrap"><svg class="chart-svg" width="540" height="122" viewBox="0 0 540 122" style="max-width:100%">${out||'<text x="270" y="60" text-anchor="middle" fill="#888" font-size="12">No data yet</text>'}</svg></div>`;
+  },
+  _svcRows(met,order){
+    const arr=Object.keys(met).map(sid=>({name:(typeof W!=='undefined'&&W._svcName?W._svcName(sid):sid),bookings:met[sid].bookings||0,rev:Number(met[sid].revenueKes||0)}));
+    if(!arr.length)return '<div class="card-empty" style="padding:12px">No service data yet.</div>';
+    arr.sort((a,b)=> order==='top' ? (b.rev-a.rev||b.bookings-a.bookings) : (a.rev-b.rev||a.bookings-b.bookings));
+    return arr.slice(0,5).map(s=>`<div class="tx-row"><div style="flex:1;min-width:0"><div style="font-weight:600">${_esc(String(s.name).slice(0,28))}</div><div style="font-size:.7rem;color:var(--sub)">${s.bookings} booking${s.bookings===1?'':'s'}</div></div><div class="tx-amt pos">${_sKsh(s.rev)}</div></div>`).join('');
+  },
+  render(d){
+    const {an,health,earn,met,ci,rev}=d;
+    const dow=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const busy=(Array.isArray(health.busyDays)&&health.busyDays.length===7)?health.busyDays:[0,0,0,0,0,0,0];
+    const peak=(Array.isArray(health.peakHours)&&health.peakHours.length===24)?health.peakHours:new Array(24).fill(0);
+    const peakLabels=peak.map((_,h)=>(h%3===0)?(h===0?'12a':h<12?h+'a':h===12?'12p':(h-12)+'p'):'');
+    const by={};(earn.dailyRevenue||[]).forEach(x=>{by[x.date]=(by[x.date]||0)+(x.net||0)/100;});
+    const revSeries=[],revLabels=[],today=new Date();for(let i=29;i>=0;i--){const dt=new Date(today.getTime()-i*86400000),k=dt.toISOString().slice(5,10);revSeries.push(by[k]||0);revLabels.push(i%6===0?(dt.getDate()+'/'+(dt.getMonth()+1)):'');}
+    const avgBk=(earn.count>0)?_cKsh(earn.gross/earn.count):'—';
+    let topName='—',topRev=0;Object.keys(met).forEach(sid=>{const r=Number(met[sid].revenueKes||0);if(r>topRev){topRev=r;topName=(typeof W!=='undefined'&&W._svcName?W._svcName(sid):sid);}});
+    const total=ci.total||0,returning=ci.returning||0,neu=ci.new||0,repeatRate=total?Math.round(returning/total*100):0;
+    const clv=(total&&earn.lifetimeNet)?_cKsh(earn.lifetimeNet/total):'—';
+    const rby={};(rev.reviews||[]).forEach(r=>{const m=_tsMs(r.createdAt);if(!m)return;const k=new Date(m).toISOString().slice(0,7);(rby[k]||(rby[k]={s:0,n:0}));rby[k].s+=(r.rating||0);rby[k].n++;});
+    const rkeys=Object.keys(rby).sort().slice(-6),rTrend=rkeys.map(k=>+(rby[k].s/rby[k].n).toFixed(1));
+    const respRate=(rev.reviews&&rev.reviews.length)?Math.round(rev.reviews.filter(r=>r.reply).length/rev.reviews.length*100)+'%':'—';
+    _q('anBody').innerHTML=`
+      <div class="card"><div class="card-title">Revenue</div>
+        ${An._tiles([['Net (90d)',_cKsh(earn.net||0)],['Avg booking value',avgBk],['Lifetime',_cKsh(earn.lifetimeNet||0)],['Top service',topRev>0?String(topName).slice(0,16):'—']])}
+        <div style="font-size:.7rem;color:var(--sub);margin:10px 0 4px">Revenue trend · last 30 days</div>${An._bars(revSeries,revLabels,v=>_sKsh(Math.round(v)))}
+      </div>
+      <div class="card"><div class="card-title">Bookings</div>
+        ${An._tiles([['Total',an.totalBookings!=null?an.totalBookings:(health.total||0)],['Completion',health.completionRate!=null?health.completionRate+'%':'—'],['Cancellation',health.cancellationRate!=null?health.cancellationRate+'%':'—'],['Avg response',_dur(health.avgResponseMins)]])}
+        <div style="font-size:.7rem;color:var(--sub);margin:10px 0 4px">Busy days</div>${An._bars(busy,dow,v=>v+' booking'+(v===1?'':'s'))}
+        <div style="font-size:.7rem;color:var(--sub);margin:10px 0 4px">Peak hours</div>${An._bars(peak,peakLabels,v=>v+' booking'+(v===1?'':'s'))}
+      </div>
+      <div class="card"><div class="card-title">Customers</div>
+        ${An._tiles([['Total',total],['New',neu],['Returning',returning],['Repeat rate',repeatRate+'%'],['Avg revenue / customer',clv]])}
+      </div>
+      <div class="card"><div class="card-title">Services</div>
+        <div style="font-size:.72rem;color:var(--sub);margin-bottom:4px">Best performing</div>${An._svcRows(met,'top')}
+        <div style="font-size:.72rem;color:var(--sub);margin:12px 0 4px">Needs attention</div>${An._svcRows(met,'low')}
+      </div>
+      <div class="card"><div class="card-title">Reviews</div>
+        ${An._tiles([['Avg rating',(rev.averageRating||0)>0?rev.averageRating.toFixed(1)+'★':'—'],['Total',rev.total||0],['Response rate',respRate]])}
+        ${rTrend.length>=2?`<div style="font-size:.7rem;color:var(--sub);margin:10px 0 4px">Rating trend</div>${An._bars(rTrend,rkeys.map(k=>k.slice(5)),v=>v+'★')}`:''}
+      </div>
+      <div class="card"><div class="card-title">Business health</div>
+        ${An._tiles([['Completion',health.completionRate!=null?health.completionRate+'%':'—'],['Cancellation',health.cancellationRate!=null?health.cancellationRate+'%':'—'],['Avg response',_dur(health.avgResponseMins)],['Rating',((an.avgRating||rev.averageRating||0)>0)?((an.avgRating||rev.averageRating).toFixed(1)+'★'):'—']])}
+        <div style="font-size:.72rem;color:var(--sub);margin-top:8px">Full setup checklist lives on your <button class="btn btn-g btn-sm" style="padding:2px 8px" onclick="_navTo('overview')">Home dashboard</button>.</div>
+      </div>`;
+  },
 };
 
 /* ── Settings ────────────────────────────────────────────────────────────── */

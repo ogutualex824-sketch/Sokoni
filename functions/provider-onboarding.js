@@ -555,6 +555,8 @@ exports._h.providerDashboard = _h.providerDashboard = async (req) => {
 exports._h.providerGetHealth = _h.providerGetHealth = async (req) => {
   const uid = _uid(req);
   let total = 0, completed = 0, cancelled = 0, noShow = 0, respSum = 0, respN = 0;
+  const byDow = [0, 0, 0, 0, 0, 0, 0];   // Sun..Sat booking counts (busy days)
+  const byHour = new Array(24).fill(0);  // 0..23 booking counts (peak hours)
   try {
     const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(500).get();
     snap.docs.forEach(d => {
@@ -566,6 +568,10 @@ exports._h.providerGetHealth = _h.providerGetHealth = async (req) => {
       const reqAt = b.createdAt?.toDate ? b.createdAt.toDate() : (b.requestedAt?.toDate ? b.requestedAt.toDate() : null);
       const cfAt  = b.confirmedAt?.toDate ? b.confirmedAt.toDate() : null;
       if (reqAt && cfAt && cfAt >= reqAt) { respSum += (cfAt - reqAt) / 60000; respN++; }
+      /* Busy days / peak hours from the appointment day+time (EAT) — derived, no new data. */
+      if (b.date) { const dt = new Date(b.date + 'T00:00:00+03:00'); if (!isNaN(dt)) byDow[dt.getUTCDay()]++; }
+      const hh = (typeof b.startTime === 'string' && /^(\d{1,2}):/.test(b.startTime)) ? parseInt(b.startTime, 10) : null;
+      if (hh != null && hh >= 0 && hh < 24) byHour[hh]++;
     });
   } catch (e) {
     logger.warn('[providerGetHealth] aggregate skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
@@ -576,6 +582,7 @@ exports._h.providerGetHealth = _h.providerGetHealth = async (req) => {
     completionRate:   terminal ? Math.round((completed / terminal) * 100) : null,
     cancellationRate: total ? Math.round(((cancelled + noShow) / total) * 100) : null,
     avgResponseMins:  respN ? Math.round(respSum / respN) : null,
+    busyDays: byDow, peakHours: byHour,
   };
 };
 
