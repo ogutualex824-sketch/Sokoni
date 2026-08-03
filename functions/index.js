@@ -754,15 +754,29 @@ async function executeTool(name, input) {
       }
 
       case "get_etims_submissions": {
-        let q = db.collection("etims_submissions").orderBy("submittedAt", "desc").limit(input.limit || 20);
-        if (input.status && input.status !== "all") q = q.where("status", "==", input.status);
-        const snap = await q.get();
-        const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        /* B7: read the CANONICAL server invoicing collection (etimsInvoices) that the
+           deployed CFs actually write — NOT the legacy client-path etims_submissions,
+           which the server never populates (admin/AI were seeing a disconnected set).
+           Filter by status in memory to avoid a new composite index. */
+        const snap = await db.collection("etimsInvoices").orderBy("createdAt", "desc").limit(Math.min(input.limit || 20, 100)).get();
+        let list = snap.docs.map(d => {
+          const x = d.data();
+          return {
+            id: d.id, invoiceNumber: x.invoiceNumber || null, status: x.status || null,
+            sellerUid: x.sellerUid || null, orderId: x.orderId || null,
+            amount: x.totAmt ?? x.total ?? null,
+            kraReceiptNumber: x.kraReceiptNumber || x.receiptNumber || null,
+            createdAt: x.createdAt || null,
+          };
+        });
+        if (input.status && input.status !== "all") list = list.filter(s => s.status === input.status);
         return {
-          total:    snap.size,
+          total:    list.length,
           accepted: list.filter(s => s.status === "accepted").length,
-          rejected: list.filter(s => s.status === "rejected").length,
+          pending:  list.filter(s => s.status === "pending_submission").length,
+          failed:   list.filter(s => s.status === "failed").length,
           submissions: list,
+          _source: "etimsInvoices (canonical server invoicing)",
         };
       }
 

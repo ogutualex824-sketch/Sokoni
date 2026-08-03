@@ -35,6 +35,7 @@ const https   = require("https");
 const emailSvc = require("./email-service");
 const { COMPANY, postalLine }           = require("./company-identity");
 const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
+const Audit     = require("./etims-audit");        // immutable, tamper-evident audit trail
 
 const db = admin.firestore();
 
@@ -580,6 +581,8 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
     createdAt: now, updatedAt: now, submittedAt: null, acceptedAt: null,
   };
   await invRef.set(invDoc);
+  Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "created",
+    newStatus: "pending_submission", sellerUid, detail: `invoiceNumber=${invNo} order=${orderId || "-"} isPlatform=${!!isPlatform}` });
 
   /* Attempt immediate KRA submission */
   try {
@@ -589,9 +592,11 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
       pmtMethod: order?.paymentMethod, buyer,
       remark: orderId ? `Order ${orderId}` : null,
     });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "submitted", prevStatus: "pending_submission", newStatus: "submitting", sellerUid });
     const kraResult = await submitToKra(client, kraPayload);
 
     await invRef.update({ ...kraResult, updatedAt: new Date().toISOString() });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "accepted", prevStatus: "submitting", newStatus: kraResult.status || "accepted", sellerUid, detail: `rcptNo=${kraResult.receiptNumber || kraResult.rcptNo || ""}` });
     bumpStats(sellerUid, "totalInvoices");
 
     const merged  = { ...invDoc, ...kraResult };
@@ -604,6 +609,7 @@ async function generateForOrder({ sellerUid, orderId, order, buyer, isPlatform =
   } catch (err) {
     await invRef.update({ status: "pending_submission", errorMessage: err.message, updatedAt: new Date().toISOString() });
     await enqueue({ invoiceId: invRef.id, sellerUid, priority: 2 });
+    Audit.auditSafe(db, { entityType: "invoice", entityId: invRef.id, event: "queued", newStatus: "queued", sellerUid, detail: `error=${String(err.message || "").slice(0, 150)}` });
     notifySeller(sellerUid, invRef.id, err.message);
     bumpStats(sellerUid, "pendingInvoices");
     return { invoiceId: invRef.id, invoiceNumber: invNo, status: "queued", error: err.message };
@@ -813,11 +819,13 @@ const etimsProcessQueue = onSchedule(
           remark: inv.orderId ? `Order ${inv.orderId}` : null,
         });
 
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retried", newStatus: "submitting", sellerUid: q.sellerUid, detail: `attempt=${(inv.retryCount||0)+1}` });
         const kraResult = await submitToKra(client, kraPayload);
         await db.collection("etimsInvoices").doc(q.invoiceId).update({
           ...kraResult, retryCount: (inv.retryCount||0)+1, updatedAt: new Date().toISOString(),
         });
         await doc.ref.update({ status:"completed" });
+        Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "accepted", newStatus: kraResult.status || "accepted", sellerUid: q.sellerUid, detail: `rcptNo=${kraResult.receiptNumber || kraResult.rcptNo || ""} (via retry)` });
         bumpStats(q.sellerUid, "totalInvoices");
 
         const merged  = { ...inv, ...kraResult, invoiceId: q.invoiceId };
@@ -830,10 +838,12 @@ const etimsProcessQueue = onSchedule(
         if (retries >= MAX_RETRIES) {
           await doc.ref.update({ status:"failed", retryCount: retries, error: err.message });
           await db.collection("etimsInvoices").doc(q.invoiceId).update({ status:"failed", retryCount: retries, errorMessage: err.message, updatedAt: new Date().toISOString() });
+          Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "dead_lettered", newStatus: "failed", sellerUid: q.sellerUid, detail: `max_retries error=${String(err.message||"").slice(0,120)}` });
           notifySeller(q.sellerUid, q.invoiceId, `Max retries reached: ${err.message}`);
           bumpStats(q.sellerUid, "failedInvoices");
         } else {
           await doc.ref.update({ status:"pending", retryCount: retries, nextRetryAt: retryAt(retries), error: err.message });
+          Audit.auditSafe(db, { entityType: "invoice", entityId: q.invoiceId, event: "retry_scheduled", newStatus: "pending", sellerUid: q.sellerUid, detail: `attempt=${retries} error=${String(err.message||"").slice(0,100)}` });
         }
       }
     }
