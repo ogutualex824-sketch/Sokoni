@@ -327,6 +327,14 @@ a{color:var(--acc);text-decoration:none}
       <div style="padding:12px 20px">
         <!-- Today's Snapshot strip -->
         <div class="snap-strip" id="snapStripCal"></div>
+        <!-- Quick Actions — write directly to the canonical providerAvailability schema -->
+        <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn btn-g btn-sm" onclick="AvQ.openToday()">🟢 Open today</button>
+          <button class="btn btn-g btn-sm" onclick="AvQ.emergencyClose()">🔴 Close today</button>
+          <button class="btn btn-g btn-sm" onclick="AvQ.blockDate()">📅 Block a date</button>
+          <button class="btn btn-g btn-sm" id="avqVac" onclick="AvQ.vacation()">🌴 Vacation</button>
+          <button class="btn btn-g btn-sm" onclick="location.href='availability-manager.html'">⚙️ Full editor</button>
+        </div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <button class="btn btn-g btn-sm" onclick="Cal.nav(-1)">‹ Prev</button>
           <button class="btn btn-s btn-sm" onclick="Cal.today()">Today</button>
@@ -1170,6 +1178,24 @@ async function renderSnapshot(targetId,bookings){
   ];
   el.innerHTML=chips.map(([ic,v,l])=>`<div class="snap-chip"><div class="snap-ic">${ic}</div><div><div class="snap-val">${_esc(String(v))}</div><div class="snap-lbl">${_esc(l)}</div></div></div>`).join('');
 }
+
+/* Availability Quick Actions — write DIRECTLY to the canonical providerAvailability
+   schema (same shape availability-manager.html uses): date closures live in the
+   overrides/{YYYY-MM-DD} subcollection {date,label,closed,type,createdAt}; vacation is
+   isOnVacation + vacationStartDate/EndDate on the main doc. No duplicate model. */
+const AvQ={
+  _ref(){const u=firebase.auth().currentUser;return u?db.collection('providerAvailability').doc(u.uid):null;},
+  _today(){return new Date().toISOString().slice(0,10);},
+  _stamp(){return firebase.firestore.FieldValue.serverTimestamp();},
+  async _close(date,label){const r=this._ref();if(!r)throw new Error('Sign in required');await r.collection('overrides').doc(date).set({date,label:String(label).slice(0,80),closed:true,type:'custom',createdAt:this._stamp()});},
+  async openToday(){const r=this._ref();if(!r)return;showLoad('Opening today…');try{await r.collection('overrides').doc(this._today()).delete().catch(()=>{});await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("You're open today.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
+  async emergencyClose(){if(!confirm('Close TODAY for new bookings? Existing confirmed bookings are unaffected.'))return;showLoad('Closing…');try{await this._close(this._today(),'Emergency closure');toast('Closed for today.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
+  async blockDate(){const d=(prompt('Block which date? (YYYY-MM-DD)')||'').trim();if(!d)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){toast('Use YYYY-MM-DD format.','err');return}showLoad('Blocking…');try{await this._close(d,'Blocked');toast('Date blocked: '+d);this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
+  async vacation(){const r=this._ref();if(!r)return;let on=false;try{const s=await r.get();on=s.exists&&!!s.data().isOnVacation}catch(_){}
+    if(on){if(!confirm('End vacation mode and go back online?'))return;showLoad('…');try{await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("Vacation ended — you're back online.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}
+    else{const end=(prompt('Vacation until? (YYYY-MM-DD, optional — leave blank for open-ended)')||'').trim();if(end&&!/^\d{4}-\d{2}-\d{2}$/.test(end)){toast('Use YYYY-MM-DD or leave blank.','err');return}showLoad('…');try{await r.set({isOnVacation:true,vacationStartDate:this._today(),vacationEndDate:end||null,updatedAt:this._stamp()},{merge:true});toast('Vacation mode ON — hidden from search, bookings paused.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}},
+  _refresh(){try{if(typeof Cal!=='undefined'&&Cal.today)Cal.today()}catch(_){}try{if(typeof _data!=='undefined'&&_data)renderSnapshot('snapStripCal',_data.bookings||[])}catch(_){}}
+};window.AvQ=AvQ;
 
 /* Deep-link support: the profile Business Hub links to #bookings / #calendar / #reviews /
    #services (Rate Cards) / #availability etc. so a provider lands on the right panel. */
