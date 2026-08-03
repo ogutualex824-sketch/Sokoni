@@ -45,6 +45,9 @@ const results = [];
       so ANY mismatch, not only CRITICAL, blocks the freeze. */
 results.push(['payout reconciliation (stuck / orphan / balance / evidence)', step('Reconciliation', 'reconcile-payouts.js')]);
 
+/* 1b) Wallet-side reconciliation — negatives, claimable expiry/drift, orphan/dup transfers. */
+results.push(['wallet reconciliation report (negatives / claimable / transfers)', step('Wallet reconciliation', 'wallet-reconciliation-report.js')]);
+
 /* 2) Classification regression — proves the double-spend can never re-open. */
 results.push(['B2C webhook classification regression (12 cases)', step('Webhook classification', 'test-b2c-webhook-classification.js')]);
 
