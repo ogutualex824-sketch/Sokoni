@@ -1339,6 +1339,34 @@
       ]
     },
     {
+      "collectionGroup": "etimsAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "entityId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "seq",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "etimsAuditLog",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "sellerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "atTs",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "etimsBulkJobs",
       "queryScope": "COLLECTION",
       "fields": [

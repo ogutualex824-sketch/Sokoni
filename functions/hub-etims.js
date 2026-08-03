@@ -31,6 +31,7 @@ const { onDocumentWritten }             = require("firebase-functions/v2/firesto
 const { onSchedule }                    = require("firebase-functions/v2/scheduler");
 const { defineSecret }                  = require("firebase-functions/params");
 const TaxEngine = require("./etims-tax-engine");   // canonical VAT math — single source of truth
+const Audit     = require("./etims-audit");        // immutable, tamper-evident audit trail
 const admin    = require("firebase-admin");
 const crypto   = require("crypto");
 const https    = require("https");
@@ -586,6 +587,9 @@ async function _issueHubInvoice({ hubId, hub, orderId, order, manualBuyerKraPin 
     issuedBy:         "system",
   };
   await invRef.set(invDoc);
+  Audit.auditSafe(db, { entityType: "hubInvoice", entityId: invRef.id, event: "created",
+    newStatus: "pending_submission", hubId, sellerUid: order.sellerId || null,
+    detail: `invoiceNumber=${invoiceNumber} order=${orderId} total=${total}` });
 
   // Attempt immediate KRA submission
   let kraPayload = null;
@@ -646,11 +650,13 @@ async function _issueHubInvoice({ hubId, hub, orderId, order, manualBuyerKraPin 
     } else {
       await _queueHubInvoice(hubId, invRef.id, kraResp.resultMsg, 0);
       await invRef.update({ lastKraError: kraResp.resultMsg, kraPayload, updatedAt: now });
+      Audit.auditSafe(db, { entityType: "hubInvoice", entityId: invRef.id, event: "queued", newStatus: "queued", hubId, sellerUid: order.sellerId || null, detail: `kraError=${String(kraResp.resultMsg || "").slice(0,150)}` });
       _notifyHubManagerFailure(hubId, hub, invRef.id, kraResp.resultMsg);
     }
   } catch (netErr) {
     await _queueHubInvoice(hubId, invRef.id, netErr.message, 0);
     await invRef.update({ lastKraError: netErr.message, kraPayload, updatedAt: now });
+    Audit.auditSafe(db, { entityType: "hubInvoice", entityId: invRef.id, event: "queued", newStatus: "queued", hubId, sellerUid: order.sellerId || null, detail: `netError=${String(netErr.message || "").slice(0,150)}` });
     console.error(`[hubInvoice] network error for ${invoiceNumber}:`, netErr.message);
     _notifyHubManagerFailure(hubId, hub, invRef.id, netErr.message);
   }
@@ -685,6 +691,9 @@ async function _finalizeHubAccept({ hubId, hub, invRef, invDoc, invoiceNumber, k
     verificationUrl:  kraResp.data?.qrCodeUrl || null,
     htmlUrl, storagePath, acceptedAt: now, updatedAt: now,
   });
+  Audit.auditSafe(db, { entityType: "hubInvoice", entityId: invRef.id, event: "accepted",
+    prevStatus: invDoc.status || "pending_submission", newStatus: "accepted", hubId,
+    sellerUid: invDoc.sellerUid || null, detail: `rcptNo=${kraResp.data?.rcptNo || ""}` });
   console.log(`[hubInvoice] ACCEPTED ${invoiceNumber} hub=${hubId} order=${invDoc.orderId}`);
   _emailBuyerHubInvoice({
     invoice: { ...invDoc, invoiceNumber, status: "accepted", verificationUrl: kraResp.data?.qrCodeUrl || null },
@@ -759,6 +768,8 @@ function _alertHubQueueDeadLetter(hubId, invoiceId, reason) {
   db.collection("hubAlerts").add({
     type: "queue_dead_letter", hubId, invoiceId, reason: String(reason).slice(0, 300), createdAt: new Date().toISOString(),
   }).catch(() => {});
+  Audit.auditSafe(db, { entityType: "hubInvoice", entityId: invoiceId, event: "dead_lettered",
+    newStatus: "failed", hubId, detail: `reason=${String(reason).slice(0, 150)}` });
 }
 
 /* hubProcessQueue — drains hubInvoiceQueue every 5 min. FIXES B4: failed hub invoices

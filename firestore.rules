@@ -3585,6 +3585,18 @@ service cloud.firestore {
       allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
     }
 
+    /* Immutable, append-only audit trail. Owner (seller) or admin may READ; NO client
+       writes at all. Records are written once by Cloud Functions (admin SDK) and never
+       updated or deleted — a per-entity hash chain makes any out-of-band tampering
+       detectable (functions/etims-audit.js verifyChain). */
+    match /etimsAuditLog/{eventId} {
+      allow read:  if isAuthed() && (resource.data.sellerUid == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+    match /etimsAuditHeads/{entityId} {
+      allow read, write: if false;   // internal chain-head pointers — CF-only
+    }
+
     match /hubs/{hubId} {
       allow read:   if isAuthed();
       allow create: if isAdmin();
