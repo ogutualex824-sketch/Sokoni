@@ -48,6 +48,9 @@ results.push(['payout reconciliation (stuck / orphan / balance / evidence)', ste
 /* 2) Classification regression — proves the double-spend can never re-open. */
 results.push(['B2C webhook classification regression (12 cases)', step('Webhook classification', 'test-b2c-webhook-classification.js')]);
 
+/* 2b) Claimable-transfer money invariants — exactly-once claim/refund, conservation. */
+results.push(['Claimable Transfers money invariants (16 cases)', step('Claimable invariants', 'test-claimable-transfers.js')]);
+
 /* 3) Real-money E2E proofs — a human confirms each live money path in the manifest. */
 process.stdout.write('\n▶ Money-path proofs (real-money E2E)\n');
 let proofsOk = true;
