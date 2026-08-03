@@ -199,6 +199,7 @@ const PAYOUT_CONFIG_DEFAULTS = {
   holdNewSellersDays: 7,       // accounts younger than this can't get instant
   dailyLimit:         50000,   // KES — max instant total per seller per day
   scheduledAbove:     0,       // KES — amounts >= this route to 'scheduled' (0 = off)
+  maxPayoutsPerDay:   3,       // velocity gate — max payout REQUESTS per seller per EAT day
 };
 
 async function _getPayoutConfig(db) {
@@ -924,11 +925,14 @@ exports.requestSellerPayout = onCall({ cors: true, enforceAppCheck: true, secret
     /* Already submitted with this key — return it without reserving again. */
     if (existingReq.exists) { deduplicated = true; return; }
 
-    /* FRD-1: velocity gate — max 3 payout requests per seller per calendar day */
+    /* FRD-1: velocity gate — max N payout requests per seller per EAT day. N is
+       config-driven (config/payouts.maxPayoutsPerDay, default 3) so ops can tune the
+       throttle without a deploy — the value is NOT a money-movement change. */
+    const maxPerDay = Number(cfg.maxPayoutsPerDay) || 3;
     const vel = velocitySnap.exists ? velocitySnap.data() : null;
     const todayCount = (vel && vel.date === today) ? (vel.count || 0) : 0;
-    if (todayCount >= 3) {
-      throw new HttpsError('resource-exhausted', 'Maximum 3 payout requests per day. Please try again tomorrow.');
+    if (todayCount >= maxPerDay) {
+      throw new HttpsError('resource-exhausted', `Maximum ${maxPerDay} payout requests per day. Please try again tomorrow.`);
     }
 
     const balance = walletSnap.exists ? (walletSnap.data().balance ?? 0) : 0;
