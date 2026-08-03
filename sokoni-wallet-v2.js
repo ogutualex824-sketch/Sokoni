@@ -614,6 +614,10 @@ window.SokoniWalletV2 = (function () {
     document.getElementById('sndAmtInput').value = '0';
     document.getElementById('sndStep2Next').disabled = true;
     document.getElementById('sndNote').value = '';
+    /* Re-enable the confirm button: executeSend() disables it on submit and the success
+       path never re-enables it, so a second send inherited a stuck-disabled ("unpressable")
+       button. Reset it whenever a new send starts. */
+    const _cb = document.getElementById('sndConfirmBtn'); if (_cb) _cb.disabled = false;
     if (document.getElementById('sndAmountDisplay')) document.getElementById('sndAmountDisplay').classList.remove('error');
     sendGoStep(1);
   }
