@@ -26,18 +26,20 @@ Already proven with real money (earlier this cycle):
 
 ---
 
-## 1. Registered wallet → wallet   — Result: ⬜ PENDING
+## 1. Registered wallet → wallet   — Result: ✅ PASS (2026-08-03T12:12:22Z)
 
 | Field | Value |
 |---|---|
-| Live transfer ID (`txOut`) | `____` |
-| Sender UID | `____` |
-| Receiver UID | `____` |
-| Ledger debit ID (`snd_…`) | `____` |
-| Ledger credit ID (`rcv_…`) | `____` |
-| Transfer document ID | `____` |
-| Sender balance before → after | `____ → ____` |
-| Receiver balance before → after | `____ → ____` |
+| Live transfer ID (`txOut`) | `snd_msd6vwtj_14a830b7` |
+| Sender UID | `xrH21J5GFbW8PluCZ2ny5nIuf602` |
+| Receiver UID | `AiJp5yzTnRZZIZKZEepNUKn8NuI2` |
+| Ledger debit ID (`snd_…`) | `snd_msd6vwtj_14a830b7` (out, idemKey b7594c10) |
+| Ledger credit ID (`rcv_…`) | `rcv_msd6vwtk_5456fd5d` (in, idemKey b7594c10) |
+| Transfer document ID | `snd_msd6vwtj_14a830b7` |
+| Sender balance before → after | `124 → 74` (−50 once) |
+| Receiver balance before → after | `160 → 210` (+50 once) |
+
+Both rows share one `idempotencyKey` (linked); each side moved exactly once; no duplication.
 
 ## 2. Claimable transfer (send to unregistered)   — Result: ⬜ PENDING
 
