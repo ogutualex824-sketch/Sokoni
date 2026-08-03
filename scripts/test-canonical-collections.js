@@ -24,7 +24,7 @@ const RULES = [
     canonical: 'payoutRequests',
     domain: 'wallet withdrawals',
     owners: ['finos.js', 'finos-router.js', 'finos-utils.js', 'financial-os.js', 'automation-engine.js', 'email-triggers.js', 'settlement-engine.js'],
-    baseline: ['admin-os.js'],   // legacy adminApprovePayouts — migrate to adminProcessPayout (payoutRequests)
+    baseline: [],   // admin-os.js migrated 2026-08-03: adminApprovePayouts retired → bulk approval routes through canonical adminProcessPayout (payoutRequests). Gate now catches any regression.
   },
 ];
 

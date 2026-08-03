@@ -355,7 +355,7 @@ exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 1
     return (pMap[a.priority] || 2) - (pMap[b.priority] || 2);
   });
 
-  return { tickets };
+  return { tickets, items: tickets, count: tickets.length };
 });
 
 exports.adminResolveSupportTicket = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminResolveSupportTicket = async (req) => {
@@ -861,17 +861,10 @@ exports.adminGetAnalytics = onCall({ region: 'us-central1', maxInstances: 10, en
   return _env('providerAnalytics', items, { totals });
 });
 
-exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetDisputes = async (req) => {
-  _requireAdmin(req);
-  const items = await _listCanonical('disputes', req.data || {});
-  return _env('disputes', items, { open: items.filter(d => String(d.status || '').toLowerCase() === 'open').length });
-});
-
-exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetReviews = async (req) => {
-  _requireAdmin(req);
-  const items = await _listCanonical('reviews', req.data || {});
-  return _env('reviews', items, { flagged: items.filter(r => r.flagged || r.reported).length });
-});
+/* NOTE: the canonical adminGetDisputes / adminGetReviews live below (the filtered
+   versions honouring status/flagged). The earlier `_env`-based duplicates were removed —
+   they ignored the caller's filters and returned only `.items`, shadowed at runtime by
+   the filtered versions. One op → one contract. */
 
 exports.adminGetNotifications = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetNotifications = async (req) => {
   _requireAdmin(req);
@@ -879,11 +872,10 @@ exports.adminGetNotifications = onCall({ region: 'us-central1', maxInstances: 10
   return _env('notifications', items);
 });
 
-exports.adminGetSupportTickets = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSupportTickets = async (req) => {
-  _requireAdmin(req);
-  const items = await _listCanonical('supportTickets', req.data || {});
-  return _env('supportTickets', items, { open: items.filter(t => String(t.status || '').toLowerCase() === 'open').length });
-});
+/* NOTE: canonical adminGetSupportTickets is the filtered version above (status/
+   priority/category + priority sort, returns `.tickets`). This `_env` duplicate was
+   removed — it WON at runtime (later registration) but returned `.items` while the UI
+   reads `.tickets`, and it dropped the priority/category filters → empty Support pane. */
 
 /* Contract aliases — same handler, canonical name the Command Center calls. */
 exports._h.adminGetOverview = exports._h.adminGetExecutiveDashboard;
@@ -1001,17 +993,11 @@ exports.adminGetPendingPayouts = onCall({ region: 'us-central1', maxInstances: 1
   return { payouts: rows };
 });
 
-exports.adminApprovePayouts = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminApprovePayouts = async (req) => {
-  _requireSuperAdmin(req);
-  const { payoutIds } = req.data;
-  if (!Array.isArray(payoutIds) || !payoutIds.length) throw new Error('payoutIds array required');
-  const db = getFirestore();
-  const batch = db.batch();
-  payoutIds.forEach(id => { batch.update(db.collection('payouts').doc(id), { status: 'approved', approvedBy: req.auth.uid, approvedAt: FieldValue.serverTimestamp() }); });
-  await batch.commit();
-  await db.collection('adminAudit').add({ action: 'payouts_approved', count: payoutIds.length, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
-  return { success: true, count: payoutIds.length };
-});
+/* RETIRED: adminApprovePayouts wrote the deprecated `payouts` collection (no engine,
+   no idempotency/reconciliation) — a no-op against the real `payoutRequests` queue.
+   Admin OS now approves (single AND bulk) exclusively through the canonical, frozen
+   wallet engine `adminProcessPayout` (wallet.js), one request at a time. One operation
+   → one contract. See sokoni-aos.js _bulkApprovePayouts + scripts/test-admin-bulk-payout.js. */
 
 /* ─────────────────────────────────────────────────────────────────────────
    Disputes
@@ -1023,7 +1009,8 @@ exports.adminGetDisputes = onCall({ region: 'us-central1', maxInstances: 10, enf
   let q = db.collection('disputes').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
   if (status) q = q.where('status', '==', status);
   const snap = await q.get().catch(() => ({ docs: [] }));
-  return { disputes: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  return { disputes: rows, items: rows, count: rows.length };
 });
 
 exports.adminResolveDispute = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.aosResolveDispute = async (req) => {
@@ -1047,18 +1034,13 @@ exports.adminGetReviews = onCall({ region: 'us-central1', maxInstances: 10, enfo
     ? db.collection('reviews').where('flagged', '==', true).limit(Math.min(lim || 50, 200))
     : db.collection('reviews').orderBy('createdAt', 'desc').limit(Math.min(lim || 50, 200));
   const snap = await q.get().catch(() => ({ docs: [] }));
-  return { reviews: snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null })) };
+  const rows = snap.docs.map(d => ({ id: d.id, ...d.data(), createdAt: d.data().createdAt?.toDate?.()?.toISOString() || null }));
+  return { reviews: rows, items: rows, count: rows.length };
 });
 
-exports.adminRemoveReview = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminRemoveReview = async (req) => {
-  _requireAdmin(req);
-  const { reviewId, reason } = req.data;
-  if (!reviewId) throw new Error('reviewId required');
-  const db = getFirestore();
-  await db.collection('reviews').doc(reviewId).update({ status: 'removed', removedBy: req.auth.uid, removedReason: reason || '', removedAt: FieldValue.serverTimestamp() });
-  await db.collection('adminAudit').add({ action: 'review_removed', reviewId, reason, performedBy: req.auth.uid, createdAt: FieldValue.serverTimestamp() });
-  return { success: true };
-});
+/* RETIRED: adminRemoveReview — zero callers; duplicated review moderation. The one
+   canonical review op is `reviews.adminModerateReview` (approve/reject/restore +
+   summary recalc), which the Admin OS Reviews tab already calls. One op → one contract. */
 
 /* ─────────────────────────────────────────────────────────────────────────
    Push Notifications

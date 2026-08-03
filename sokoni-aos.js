@@ -80,13 +80,13 @@ window.SokoniAOS = (() => {
 
   // Admin-OS ops whitelist — routes through adminOsDispatch to reduce Cloud Run services
   const _ADMIN_OS_OPS = new Set([
-    'adminApprovePayouts','adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
+    'adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
     'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFraudAlerts',
     'adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
     'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
-    'adminGetSearchStats','adminGetSupportTickets','adminGetUser','adminRemoveReview',
+    'adminGetSearchStats','adminGetSupportTickets','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
@@ -123,7 +123,8 @@ window.SokoniAOS = (() => {
     _listen(_db.collection("supportTickets").where("status", "==", "open"),
       snap => _set("kpiOpenTickets", snap.size));
 
-    _listen(_db.collection("payouts").where("status", "==", "pending"),
+    /* Canonical: withdrawals live in `payoutRequests` (was stale `payouts` → KPI read 0). */
+    _listen(_db.collection("payoutRequests").where("status", "==", "pending"),
       snap => _set("kpiPendingPayouts", snap.size));
 
     _listen(_db.collection("disputes").where("status", "==", "open"),
@@ -132,7 +133,8 @@ window.SokoniAOS = (() => {
     _listen(_db.collection("businesses").where("status", "==", "active"),
       snap => _set("kpiActiveBusinesses", _fmt(snap.size)));
 
-    _listen(_db.collection("bookings").where("status", "in", ["confirmed", "pending"]),
+    /* Canonical service bookings = `providerBookings` (was venue `bookings`). */
+    _listen(_db.collection("providerBookings").where("status", "in", ["confirmed", "pending"]),
       snap => _set("kpiActiveBookings", _fmt(snap.size)));
   }
 
@@ -588,14 +590,33 @@ window.SokoniAOS = (() => {
     await _call("markCommissionPaid", { entryId: id }).catch(e => _toast(e.message,"error"));
     _toast("Marked as paid","success"); _financialTab("commissions");
   }
+  /* Bulk approval ORCHESTRATES the canonical single-payout engine — one
+     adminProcessPayout call per request, identical to a single approval. There is NO
+     second payout path: the frozen wallet engine (wallet.js adminProcessPayout) owns
+     all validation, the atomic approving-gate, idempotency, reconciliation, audit,
+     notifications and the IntaSend B2C flow. Admin OS only iterates. callFn is injected
+     so this is unit-testable (scripts/test-admin-bulk-payout.js). */
+  async function _bulkApprovePayouts(ids, callFn) {
+    var ok = 0, failed = [];
+    for (var i = 0; i < ids.length; i++) {
+      try { await callFn("adminProcessPayout", { requestId: ids[i], status: "approved" }); ok++; }
+      catch (e) { failed.push({ id: ids[i], error: (e && e.message) || String(e) }); }
+    }
+    return { ok: ok, failed: failed, total: ids.length };
+  }
   async function approveAllPayouts() {
-    if (!confirm("Approve all pending payouts?")) return;
-    await _call("adminApprovePayouts", { all: true }).catch(e => _toast(e.message,"error"));
-    _toast("All payouts approved","success"); _financialTab("payouts");
+    var data = await _call("aosGetPendingPayouts").catch(function () { return { payouts: [] }; });
+    var ids = (data.payouts || []).map(function (p) { return p.id; }).filter(Boolean);
+    if (!ids.length) { _toast("No pending payouts", "info"); return; }
+    if (!confirm("Approve all " + ids.length + " pending payouts? Each is processed individually by the wallet engine.")) return;
+    var res = await _bulkApprovePayouts(ids, _call);
+    if (res.failed.length) { console.warn("[payouts] bulk failures", res.failed); _toast(res.ok + " approved · " + res.failed.length + " failed (see console)", "error"); }
+    else _toast("All " + res.ok + " payouts approved", "success");
+    _financialTab("payouts");
   }
   async function approvePayout(id) {
-    await _call("adminApprovePayouts", { payoutId: id }).catch(e => _toast(e.message,"error"));
-    _toast("Payout approved","success"); _financialTab("payouts");
+    await _call("adminProcessPayout", { requestId: id, status: "approved" }).catch(e => _toast(e.message, "error"));
+    _toast("Payout approved", "success"); _financialTab("payouts");
   }
   async function rejectPayout(id) {
     const note = prompt("Rejection reason:");
