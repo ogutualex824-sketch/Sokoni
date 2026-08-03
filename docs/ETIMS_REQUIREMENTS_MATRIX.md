@@ -64,7 +64,7 @@ Legend — SOKONI status: ✅ DONE · 🟡 PARTIAL · 🔴 MISSING · 🔒 NEEDS
 
 | ID | Obligation area | Source | SOKONI status | Evidence | Needs KRA? |
 |----|-----------------|--------|---------------|----------|-----------|
-| E1 | Immutable, append-only audit trail | PUBLIC-DERIVED | 🔴 MISSING (Priority 2 in progress) | invoices mutated in place today | no |
+| E1 | Immutable, append-only audit trail | PUBLIC-DERIVED | ✅ DONE | `functions/etims-audit.js` hash-chained `etimsAuditLog`; seller+hub wired; 6/6 tamper tests; rules append-only | no |
 | E2 | Encrypted credential storage | CODE-EVIDENCED | ✅ DONE | AES-256-GCM, Secret Manager master key | no |
 | E3 | CF-only writes; owner/admin reads | CODE-EVIDENCED | ✅ DONE | `firestore.rules` eTIMS blocks | no |
 | E4 | Role-based permissions / least privilege | CODE-EVIDENCED | ✅ DONE | AppCheck + auth + admin/hub-access guards | no |
@@ -84,7 +84,7 @@ Legend — SOKONI status: ✅ DONE · 🟡 PARTIAL · 🔴 MISSING · 🔒 NEEDS
 | ID | Obligation area | Source | SOKONI status | Evidence | Needs KRA? |
 |----|-----------------|--------|---------------|----------|-----------|
 | G1 | Auto-invoice on business events | CODE-EVIDENCED | ✅ DONE | order-completion triggers | no |
-| G2 | Admin/AI/analytics read canonical data | CODE-EVIDENCED | 🔴 MISSING (Priority 3) | reads disconnected `etims_submissions` | no |
+| G2 | Admin/AI/analytics read canonical data | CODE-EVIDENCED | ✅ DONE | KASS AI `get_etims_submissions` now reads canonical `etimsInvoices` (index.js) | no |
 | G3 | SmartPOS / Wallet invoice wiring | CODE-EVIDENCED | 🔴 MISSING | no POS/wallet caller | no |
 
 ---

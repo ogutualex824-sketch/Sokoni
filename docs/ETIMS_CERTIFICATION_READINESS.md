@@ -1,6 +1,18 @@
 # SOKONI eTIMS — KRA Third-Party Integrator Certification Readiness Report
 
-**Status:** BASELINE (v0.1) · **Date:** 2026-08-03 · **Owner:** Platform Engineering / Compliance
+**Status:** v0.2 (Phase 1–2 engineering progress) · **Date:** 2026-08-03 · **Owner:** Platform Engineering / Compliance
+
+> ## Progress update (v0.2) — engineering-controlled blockers closing
+> Overall readiness **~40% → ~60%**. Closed (no KRA spec needed):
+> - **B3 divergent tax engines → CLOSED.** One canonical `etims-tax-engine.js`; seller + hub both delegate. Gate 22/22 incl. 5,544 equivalence cases.
+> - **B4 hub queue no processor → CLOSED.** `hubProcessQueue` (backoff, max-retry→dead-letter, idempotent, metrics/alerts).
+> - **B6 no immutable audit → CLOSED (engineering).** Tamper-evident hash-chained `etimsAuditLog`; seller + hub lifecycle wired; 6/6 tamper tests; rules append-only.
+> - **B7 admin reads wrong collection → CLOSED.** KASS AI/admin now read canonical `etimsInvoices`.
+> - **B5 zero tests/gates → SUBSTANTIALLY CLOSED.** `etims-release-gate.js` (tax 22 + audit 6 + idempotency 11 + live no-dup-invoice / audit-completeness). GREEN.
+>
+> Still engineering-controlled (in progress): B1 lifecycle-op *structures* (credit/debit/cancel/amend — Phase 2), secret-name fix (E6 provisioning is activation).
+> Still BLOCKED on KRA (unchanged): **B2** real `cmcKey` auth, **A4** item code-list, **F2** live buyer-PIN, VAT-policy confirmation, sandbox certification. See §7.
+
 **Assessment basis:** full evidence audit of `functions/etims.js`, `functions/hub-etims.js`, root `etims.js`, `functions/index.js`, `firestore.rules`, `firestore.indexes.json`, test scripts. Every claim below is code-cited in the audit log.
 
 > **Governing rule:** extend, do not rebuild. SOKONI already has an eTIMS v1.0 (28 Cloud Functions). This program converges and hardens it toward certification — it does not replace it.
