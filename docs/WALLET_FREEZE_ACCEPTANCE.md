@@ -41,16 +41,20 @@ Already proven with real money (earlier this cycle):
 
 Both rows share one `idempotencyKey` (linked); each side moved exactly once; no duplication.
 
-## 2. Claimable transfer (send to unregistered)   — Result: ⬜ PENDING
+## 2. Claimable transfer (send to unregistered)   — Result: ✅ ESCROW PASS · ⚠️ SMS not delivered (blacklisted number)
 
 | Field | Value |
 |---|---|
-| claimableTransfer ID (`clm_…`) | `____` |
-| SMS provider message ID | `____` |
-| Escrow amount | `____` |
-| Sender debit ledger ID (`snd_…`, `pending_claim`) | `____` |
-| Recipient wallet unchanged? | `____` |
-| Sender balance before → after | `____ → ____` |
+| claimableTransfer ID (`clm_…`) | `clm_msd8sr28_ea5ad36e` (status `pending`, expiresAt 2026-08-10T13:05:54Z) |
+| SMS provider message ID | `None` — AT `UserInBlacklist`, statusCode 406 for `+254****18`. **Invite NOT delivered** (best-effort; money still escrowed). Re-verify SMS with a non-blacklisted number. |
+| Escrow amount | `50` |
+| Sender debit ledger ID (`snd_…`, `pending_claim`) | `snd_msd8sr28_7c1dd8be` (send/out, status `pending_claim`, balAfter 24) |
+| Recipient wallet unchanged? | `YES` — recipient has no account; nothing credited (money escrowed) |
+| Sender balance before → after | `74 → 24` (−50 once) |
+
+Money path proven end-to-end. SMS invite delivery is best-effort and failed only because
+this specific number is on the provider blacklist — re-run once with a deliverable number
+to close the SMS-delivery line.
 
 ## 3. Claim flow   — Result: ⬜ PENDING
 
