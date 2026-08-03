@@ -439,7 +439,8 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
          txToday, openTicketsCount, openDisputesCount, activeSubsCount,
          pendingPayoutsCount, activeDeliveriesCount,
          serviceBookingsTodayCount, activeServiceBookingsCount,
-         totalProvidersCount, activeProvidersCount, totalOrdersCount, totalBookingsCount, pendingPayoutsSnap] = await Promise.all([
+         totalProvidersCount, activeProvidersCount, totalOrdersCount, totalBookingsCount, pendingPayoutsSnap,
+         activeUsersCount, merchantsCount, pendingVerifCount, pendingAppsCount, reviewsToModerateCount] = await Promise.all([
     db.collection('users').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('users').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('orders').where('createdAt', '>=', todayTs).count().get().catch(() => ({ data: () => ({ count: 0 }) })),
@@ -460,6 +461,12 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     db.collection('orders').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('providerBookings').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
     db.collection('payoutRequests').where('status', '==', 'pending').limit(200).get().catch(() => ({ docs: [] })),
+    /* P1 command-center additions — all canonical counts, catch→0 (never fabricate). */
+    db.collection('users').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('businesses').where('status', '==', 'active').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('providerVerification').where('verificationStatus', '==', 'pending_review').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('applications').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
+    db.collection('reviews').where('status', '==', 'pending').count().get().catch(() => ({ data: () => ({ count: 0 }) })),
   ]);
 
   const _paidToday      = (txToday.docs || []).filter(d => String(d.data().status || '').toUpperCase() === 'COMPLETE');
@@ -485,6 +492,12 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
     totalOrders: totalOrdersCount.data().count,
     totalServiceBookings: totalBookingsCount.data().count,
     pendingPayoutAmount: (pendingPayoutsSnap.docs || []).reduce((s, d) => s + (d.data().amount || 0), 0),
+    /* P1 command-center additions (canonical). */
+    activeUsers: activeUsersCount.data().count,
+    merchants: merchantsCount.data().count,
+    pendingProviderVerification: pendingVerifCount.data().count,
+    pendingMerchantApprovals: pendingAppsCount.data().count,
+    reviewsAwaitingModeration: reviewsToModerateCount.data().count,
   };
 });
 

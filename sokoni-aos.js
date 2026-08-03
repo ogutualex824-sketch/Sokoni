@@ -83,7 +83,7 @@ window.SokoniAOS = (() => {
     'adminCreateSupportTicket','adminDeleteBanner','adminDeleteFaq',
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
-    'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFraudAlerts',
+    'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFinance','adminGetFraudAlerts',
     'adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
     'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
     'adminGetSearchStats','adminGetSupportTickets','adminGetUser',
@@ -144,17 +144,64 @@ window.SokoniAOS = (() => {
   }
 
   // ── Dashboard ────────────────────────────────────────────────────────────────
+  function _kes(v) { return "KES " + _fmt(Math.round(Number(v) || 0)); }
+  function _ecSkeleton() { return '<div class="ec-grid">' + Array.from({ length: 8 }).map(function () { return '<div class="ec-skel"></div>'; }).join('') + '</div>'; }
+  /* P1 Command Center — 4 sections, canonical single entry (adminGetExecutiveDashboard)
+     + reused Finance data (adminGetFinance.reconciliation). No recalculation here. */
+  function _renderExecCommand(x, f) {
+    var ec = document.getElementById("execCommand"); if (!ec) return;
+    function cell(l, v, attn) { return '<div class="ec-cell' + (attn ? ' attn' : '') + '"><div class="l">' + l + '</div><div class="v">' + v + '</div></div>'; }
+    function money(l, v) { return '<div class="ec-cell"><div class="l">' + l + '</div><div class="v money">' + _kes(v) + '</div></div>'; }
+    var kpis = [
+      cell('Total Users', _fmt(x.totalUsers || 0)), cell('Active Users', _fmt(x.activeUsers || 0)),
+      cell('Providers', _fmt(x.totalProviders || 0)), cell('Active Providers', _fmt(x.activeProviders || 0)),
+      cell('Merchants', _fmt(x.merchants || 0)), cell('Product Orders', _fmt(x.totalOrders || 0)),
+      cell('Service Bookings', _fmt(x.totalServiceBookings || 0)),
+      money('GMV · 30d', f.grossRevenue), money('Net Revenue · 30d', f.netPlatformRevenue), money('Wallet Float', f.walletFloat),
+      cell('Pending Payouts', _fmt(x.pendingPayouts || 0) + (x.pendingPayoutAmount ? ' · ' + _kes(x.pendingPayoutAmount) : '')),
+    ].join('');
+    var ops = [
+      cell('Pending Verification', _fmt(x.pendingProviderVerification || 0), (x.pendingProviderVerification || 0) > 0),
+      cell('Merchant Approvals', _fmt(x.pendingMerchantApprovals || 0), (x.pendingMerchantApprovals || 0) > 0),
+      cell('Pending Withdrawals', _fmt(x.pendingPayouts || 0), (x.pendingPayouts || 0) > 0),
+      cell('Support Tickets', _fmt(x.openTickets || 0), (x.openTickets || 0) > 0),
+      cell('Open Disputes', _fmt(x.openDisputes || 0), (x.openDisputes || 0) > 0),
+      cell('Reviews to Moderate', _fmt(x.reviewsAwaitingModeration || 0), (x.reviewsAwaitingModeration || 0) > 0),
+    ].join('');
+    var fin = [
+      money('Revenue Today', x.revenueToday), money('Revenue · 30d', f.grossRevenue), money('Commissions · 30d', f.commission),
+      money('Pending Withdrawals', f.pendingWithdrawals), money('Completed Withdrawals', f.completedWithdrawals), money('Wallet Float', f.walletFloat),
+    ].join('');
+    /* Health strip — P1 SUMMARY. Coarse liveness for the two subsystems whose admin data
+       loaded; the rest are 'unknown' pending the System Health module (P2), never faked. */
+    var svc = [
+      ['Payments', x.revenueToday !== undefined ? 'ok' : 'unknown'], ['Wallet', f.walletFloat !== undefined ? 'ok' : 'unknown'],
+      ['Search', 'unknown'], ['Email', 'unknown'], ['SMS', 'unknown'], ['Notifications', 'unknown'], ['Cloud Functions', 'unknown'], ['eTIMS', 'unknown'],
+    ];
+    var strip = svc.map(function (a) { return '<div class="ec-svc"><span class="ec-dot ' + a[1] + '"></span>' + a[0] + '</div>'; }).join('');
+    ec.innerHTML =
+      '<div class="ec-section"><div class="ec-title">Executive KPIs</div><div class="ec-grid">' + kpis + '</div></div>' +
+      '<div class="ec-section"><div class="ec-title">Operational Status</div><div class="ec-grid">' + ops + '</div></div>' +
+      '<div class="ec-section"><div class="ec-title">Financial Summary · 30-day</div><div class="ec-grid">' + fin + '</div></div>' +
+      '<div class="ec-section"><div class="ec-title">Platform Health <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--aos-sub)">· detail in System Health</span></div><div class="ec-strip">' + strip + '</div></div>';
+  }
+
   async function _loadDashboard() {
+    var _ec = document.getElementById("execCommand"); if (_ec) _ec.innerHTML = _ecSkeleton();
     try {
-      const [metrics, health, daily] = await Promise.allSettled([
+      const [metrics, health, daily, execRes, finRes] = await Promise.allSettled([
         _call("adminGetPlatformOverview"),
         _call("getPlatformHealthScores"),
         _call("getDailyReport"),
+        _call("adminGetExecutiveDashboard"),
+        _call("adminGetFinance"),
       ]);
 
       const m = metrics.value || {};
       const h = health.value  || {};
       const d = daily.value   || {};
+      /* Command center — canonical single entry + reused Finance reconciliation. */
+      _renderExecCommand(execRes.value || {}, (finRes.value && finRes.value.reconciliation) || {});
 
       _set("kpiActiveSellers",    _fmt(m.activeSellers    || 0));
       _set("kpiActiveProviders",  _fmt(m.activeProviders  || 0));
@@ -186,7 +233,11 @@ window.SokoniAOS = (() => {
       // Recent alerts
       _loadAlerts();
 
-    } catch (e) { console.error("[AOS] Dashboard load error:", e); }
+    } catch (e) {
+      console.error("[AOS] Dashboard load error:", e);
+      var ec = document.getElementById("execCommand");
+      if (ec) ec.innerHTML = '<div class="ec-section" style="text-align:center;padding:24px;color:var(--aos-sub)">Couldn’t load the command center. <button class="aos-btn-sm" onclick="SokoniAOS.reloadDashboard()">Try again</button></div>';
+    }
   }
 
   async function _loadAlerts() {
@@ -2027,6 +2078,7 @@ window.SokoniAOS = (() => {
   return {
     init,
     navigate:            _navigate,
+    reloadDashboard:     _loadDashboard,
     // Users
     loadUsers:           _loadUsers,
     viewUser,
