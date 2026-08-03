@@ -30,6 +30,7 @@ const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestor
 const { getAuth } = require('firebase-admin/auth');
 const { defineSecret } = require('firebase-functions/params');
 const sokoniAt = require('./sokoni-at');   // Africa's Talking SMS (claimable-transfer invites)
+const { checkRateLimit } = require('./redis-rate-limiter');   // throttle name-lookup (anti-enumeration)
 const crypto = require('crypto');
 
 // ─── Secrets ──────────────────────────────────────────────────────────────────
@@ -603,6 +604,30 @@ exports.walletV2Send = onCall(_optsWithSecrets(...sokoniAt.secrets), async (requ
     console.error(TAG, 'walletV2Send error:', err);
     throw new HttpsError('internal', 'Transfer failed. Please try again.');
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2·resolve. walletV2ResolveRecipient — READ-ONLY name lookup for the send screen,
+//   so the user sees who they're paying (M-Pesa-style) BEFORE confirming. Moves no
+//   money. Rate-limited to prevent phone→name enumeration. Returns only a display
+//   name (never a uid). Unregistered valid numbers are `registered:false, canReceive:
+//   true` → the client shows "not on SOKONI yet — they'll get an SMS to claim".
+// ═══════════════════════════════════════════════════════════════════════════════
+exports.walletV2ResolveRecipient = onCall(BASE_OPTS, async (request) => {
+  const uid = _requireAuth(request);
+  await checkRateLimit(request, 'wallet_lookup', { maxRequests: 40, windowSeconds: 60 });
+  const db  = _db();
+  const normalizedPhone = _normalizePhone((request.data || {}).phone);
+  if (!normalizedPhone) return { valid: false };
+
+  const resolved = await _resolveRecipientByPhone(db, normalizedPhone);
+  if (!resolved) {
+    // Valid number, not on SOKONI → can still receive via a claimable transfer.
+    return { valid: true, registered: false, canReceive: true, phone: `+${normalizedPhone}` };
+  }
+  if (resolved.uid === uid) return { valid: true, registered: true, self: true, phone: `+${normalizedPhone}` };
+  const name = _san(resolved.data.displayName || resolved.data.name || 'SOKONI User', 60);
+  return { valid: true, registered: true, name, phone: `+${normalizedPhone}` };
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

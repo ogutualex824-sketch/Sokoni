@@ -10378,6 +10378,7 @@ exports.sweepStaleWalletTopUps   = wallet.sweepStaleWalletTopUps;
 const walletEngine = require('./wallet-engine');
 exports.walletV2Dashboard       = walletEngine.walletV2Dashboard;
 exports.walletV2Send            = walletEngine.walletV2Send;
+exports.walletV2ResolveRecipient = walletEngine.walletV2ResolveRecipient;
 exports.walletV2ClaimPending    = walletEngine.walletV2ClaimPending;
 exports.sweepExpiredClaimables  = walletEngine.sweepExpiredClaimables;
 exports.walletV2SavePhone       = walletEngine.walletV2SavePhone;

@@ -650,18 +650,32 @@ window.SokoniWalletV2 = (function () {
        valid Kenyan phone; walletV2Send returns the recipient's real name on
        success, rejects USER_NOT_FOUND, and blocks self-sends. */
     const normPhone = _normalizePhone(phone);
-    document.getElementById('sndStep1Searching').style.display = 'none';
     if (!normPhone) {
+      document.getElementById('sndStep1Searching').style.display = 'none';
       document.getElementById('sndNotFound').style.display = 'block';
       document.getElementById('sndStep1Next').disabled = true;
       _sendRecipient = null;
       return;
     }
-    _sendRecipient = { uid: null, name: '+' + normPhone, phone: normPhone };
+
+    /* Resolve the recipient's NAME server-side before confirming (M-Pesa-style), so the
+       user sees who they're paying. Read-only + rate-limited (walletV2ResolveRecipient).
+       Falls back to the phone number if the lookup is unavailable — the send itself is
+       still validated server-side by walletV2Send, so this only affects the label. */
+    _sendRecipient = { uid: null, name: '+' + normPhone, phone: normPhone, registered: null };
+    let label = '+' + normPhone, sub = 'Confirmed on send';
+    try {
+      const r = (await _callTimed('walletV2ResolveRecipient', { phone: normPhone }, 8000))?.data || {};
+      if (r.self)            { sub = 'This is your own number'; }
+      else if (r.registered) { label = r.name || label; sub = '+' + normPhone; _sendRecipient.name = r.name || _sendRecipient.name; _sendRecipient.registered = true; }
+      else if (r.canReceive) { sub = 'Not on SOKONI yet — they’ll get an SMS to claim'; _sendRecipient.registered = false; }
+    } catch (_) { /* lookup unavailable — keep phone label; server still validates on send */ }
+
+    document.getElementById('sndStep1Searching').style.display = 'none';
     const av = document.getElementById('sndAvatar');
-    if (av) av.textContent = '👤';
-    _setText('sndName', '+' + normPhone);
-    _setText('sndPhoneDisp', 'Recipient name confirmed on send');
+    if (av) av.textContent = (label && label[0] !== '+') ? label[0].toUpperCase() : '👤';
+    _setText('sndName', label);
+    _setText('sndPhoneDisp', sub);
     document.getElementById('sndContactCard').style.display = 'flex';
     document.getElementById('sndStep1Next').disabled = false;
   }
