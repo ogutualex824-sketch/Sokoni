@@ -814,6 +814,38 @@ exports.adminGetPayoutRequests = onCall({ region: 'us-central1', maxInstances: 1
   return _env('payoutRequests', items, { byStatus, pendingAmount: Math.round(pendingAmount * 100) / 100 });
 });
 
+/* Single-payout lifecycle inspector — the whole journey (request → gateway → webhook →
+   settlement → timeline) in one call, so an operator never has to cross-reference
+   Firestore + function logs + IntaSend + the webhook. Read-only. */
+exports.adminGetPayout = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetPayout = async (req) => {
+  _requireAdmin(req);
+  const { id } = req.data || {};
+  if (!id) throw new HttpsError('invalid-argument', 'id required');
+  const db = getFirestore();
+  const snap = await db.collection('payoutRequests').doc(String(id)).get();
+  if (!snap.exists) return { found: false, id };
+  const x = snap.data();
+  const uid = x.sellerUid || x.uid || '';
+  const [walletSnap, txSnap] = await Promise.all([
+    uid ? db.collection('wallets').doc(uid).get().catch(() => null) : Promise.resolve(null),
+    db.collection('walletTransactions').doc(`${uid}_${id}_payout`).get().catch(() => null),
+  ]);
+  const w  = walletSnap && walletSnap.exists ? walletSnap.data() : null;
+  const tx = txSnap && txSnap.exists ? txSnap.data() : null;
+  /* stage: -2 refunded, -1 failed/rejected, 1 pending … 5 paid. Drives the UI progress. */
+  const STAGE = { pending: 1, approved: 2, approving: 3, sending: 3, retry_scheduled: 3, processing: 4, paid: 5, settled_manually: 5, completed: 5, failed: -1, rejected: -1, refunded: -2 };
+  return {
+    found: true,
+    request:   { id, providerName: x.sellerName || x.name || '', sellerUid: uid, amount: Number(x.amount) || 0, phone: x.accountNumber || x.phone || '', method: x.method || 'mpesa', createdAt: _iso(x.createdAt) },
+    status:    { current: String(x.status || ''), stage: STAGE[x.status] || 0, settlementMethod: x.settlementMethod || null, updatedAt: _iso(x.updatedAt) },
+    gateway:   { name: x.gatewayName || 'IntaSend', reference: x.gatewayReference || x.intasendRef || null, gatewayStatus: x.gatewayStatus || null, submittedAt: _iso(x.submittedAt), confirmedAt: _iso(x.confirmedAt) },
+    webhook:   { received: !!(x.webhookReceivedAt || x.lastWebhookState), lastState: x.lastWebhookState || null, receivedAt: _iso(x.webhookReceivedAt), events: (Array.isArray(x.webhookEvents) ? x.webhookEvents : []).map(e => ({ state: e.state, at: _iso(e.at) })) },
+    settlement:{ walletDebited: !!tx, ledgerTxId: tx ? `${uid}_${id}_payout` : null, ledgerStatus: tx ? tx.status : null, settlementType: tx ? tx.settlementType : null, walletBalance: w ? Number(w.balance) || 0 : null, walletPending: w ? Number(w.pendingPayout) || 0 : null, externalReference: x.externalReference || null },
+    errors:    { lastError: x.b2cError || null, retryCount: x.retryCount || 0, gatewayResponse: x.gatewayResponse || x.b2cResponse || null },
+    timeline:  (Array.isArray(x.statusHistory) ? x.statusHistory : []).map(h => ({ status: h.status || '', detail: (h.detail || '').slice(0, 160), at: _iso(h.at) })),
+  };
+});
+
 exports.adminGetAnalytics = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetAnalytics = async (req) => {
   _requireAdmin(req);
   const { limit: lim, providerId } = req.data || {};

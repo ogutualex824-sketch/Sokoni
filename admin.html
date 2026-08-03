@@ -5452,6 +5452,57 @@ function _payoutTimeline(tl){
       return '<span style="white-space:nowrap;color:'+(bad?'#f87171':'rgba(255,255,255,.5)')+'">'+(bad?'✗':'✓')+' '+h(_payoutStatusMeta(e.status).label.replace(/ .*/,''))+'</span>';
     }).join(' <span style="opacity:.3">→</span> ')+'</div>';
 }
+/* ── Single-payout lifecycle inspector (adminGetPayout) — the whole journey in one
+   overlay so an operator never cross-references Firestore + logs + IntaSend + webhook. */
+async function _payoutInspect(id){
+  if(typeof AdminAPI==='undefined'||!AdminAPI.call){ toast('Data layer not ready'); return; }
+  var host=document.getElementById('payoutInspectModal');
+  if(!host){ host=document.createElement('div'); host.id='payoutInspectModal';
+    host.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    host.addEventListener('click',function(e){ if(e.target===host) host.style.display='none'; });
+    document.body.appendChild(host); }
+  host.style.display='flex';
+  host.innerHTML='<div class="pi-box"><div style="text-align:center;color:rgba(255,255,255,.4);padding:24px">Loading payout…</div></div>';
+  if(!document.getElementById('pi-css')){ var s=document.createElement('style'); s.id='pi-css';
+    s.textContent='.pi-box{background:#0b0b0b;border:1px solid rgba(255,255,255,.12);border-radius:16px;max-width:580px;width:100%;max-height:86vh;overflow:auto;padding:20px;color:#fff;font-size:13px}'
+      +'.pi-sec{margin-top:14px}.pi-sec-h{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:rgba(255,255,255,.4);font-weight:700;margin-bottom:6px}'
+      +'.pi-row{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.05)}.pi-row b{color:rgba(255,255,255,.55);font-weight:600}'
+      +'.pi-stages{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}.pi-stage{font-size:10px;padding:4px 8px;border-radius:20px;border:1px solid rgba(255,255,255,.1)}'
+      +'.pi-done{background:rgba(16,185,129,.15);color:#34d399}.pi-fail{background:rgba(239,68,68,.15);color:#f87171}.pi-todo{color:rgba(255,255,255,.3)}';
+    document.head.appendChild(s); }
+  try{
+    var d=await AdminAPI.call('adminGetPayout',{id:id});
+    var box=host.firstChild;
+    if(!d||!d.found){ box.innerHTML='<div style="color:#f87171">Payout not found: '+h(id)+'</div>'; return; }
+    box.innerHTML=_renderPayoutInspector(d);
+  }catch(e){ host.firstChild.innerHTML='<div style="color:#f87171">Error: '+h((e&&e.message)||'failed')+'</div><div style="margin-top:10px"><button class="solid-btn" onclick="document.getElementById(\'payoutInspectModal\').style.display=\'none\'">Close</button></div>'; }
+}
+function _renderPayoutInspector(d){
+  var r=d.request||{}, st=d.status||{}, g=d.gateway||{}, wh=d.webhook||{}, se=d.settlement||{}, er=d.errors||{};
+  var stage=st.stage||0, failed=stage<0;
+  var STAGES=[['Requested',1],['Approved',2],['Sending',3],['Processing',4],['Paid',5]];
+  var stagesHtml=STAGES.map(function(s){
+    var cls = failed ? (s[1]<=(stage===-2?4:3)?'pi-done':'pi-fail') : (stage>=s[1]?'pi-done':'pi-todo');
+    if(failed && s[1]>=4) cls = (s[0]==='Paid')?'pi-fail':cls;
+    return '<span class="pi-stage '+cls+'">'+(cls==='pi-done'?'✓ ':(cls==='pi-fail'?'✗ ':''))+s[0]+'</span>';
+  }).join('');
+  if(failed) stagesHtml+='<span class="pi-stage '+(stage===-2?'pi-done':'pi-fail')+'">'+(stage===-2?'✓ Refunded':'✗ '+st.current.toUpperCase())+'</span>';
+  var row=function(k,v){ return v==null||v===''?'':'<div class="pi-row"><b>'+k+'</b><span>'+h(String(v))+'</span></div>'; };
+  var money=function(n){ return 'KES '+Number(n||0).toLocaleString(); };
+  var out='<div style="display:flex;justify-content:space-between;align-items:center"><div style="font-weight:900;font-size:15px">Withdrawal '+h((r.id||'').slice(0,20))+'</div>'+_payoutBadge(st.current)+'</div>';
+  out+='<div class="pi-stages">'+stagesHtml+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Request</div>'+row('Provider',r.providerName||r.sellerUid)+row('Amount',money(r.amount))+row('Phone',r.phone)+row('Method',r.method)+row('Created',r.createdAt)+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Gateway ('+h(g.name||'')+')</div>'+row('Reference',g.reference||'—')+row('Gateway status',g.gatewayStatus)+row('Submitted',g.submittedAt)+row('Confirmed',g.confirmedAt)+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Webhook</div>'+row('Received',wh.received?'yes':'NO — not yet confirmed')+row('Last state',wh.lastState)+row('Received at',wh.receivedAt)+row('Events',(wh.events||[]).length)+'</div>';
+  out+='<div class="pi-sec"><div class="pi-sec-h">Settlement</div>'+row('Wallet debited',se.walletDebited?'yes':'no')+row('Ledger status',se.ledgerStatus)+row('Type',se.settlementType)+row('Wallet balance',se.walletBalance==null?'':money(se.walletBalance))+row('Wallet pending',se.walletPending==null?'':money(se.walletPending))+row('External ref',se.externalReference)+'</div>';
+  if(er.lastError||er.retryCount){ out+='<div class="pi-sec"><div class="pi-sec-h" style="color:#f87171">Errors</div>'+row('Last error',(er.lastError||'').slice(0,140))+row('Retries',er.retryCount)+'</div>'; }
+  out+='<div class="pi-sec"><div class="pi-sec-h">Timeline</div>'+(d.timeline||[]).map(function(t){ var bad=['failed','rejected','refunded'].indexOf(String(t.status).toLowerCase())>=0;
+    return '<div style="font-size:11px;padding:3px 0"><span style="color:'+(bad?'#f87171':'#34d399')+'">'+(bad?'✗':'✓')+'</span> <b>'+h(t.status)+'</b> <span style="color:rgba(255,255,255,.35)">'+h(t.at||'')+'</span><div style="color:rgba(255,255,255,.4);font-size:10px;padding-left:14px">'+h(t.detail||'')+'</div></div>';
+  }).join('')+'</div>';
+  out+='<div style="margin-top:14px;display:flex;gap:8px"><button class="solid-btn" onclick="_payoutInspect(\''+h(r.id)+'\')">↻ Refresh</button><button class="solid-btn" style="background:rgba(255,255,255,.06)" onclick="document.getElementById(\'payoutInspectModal\').style.display=\'none\'">Close</button></div>';
+  return out;
+}
+window._payoutInspect=_payoutInspect;
 /* Withdrawals pane — canonical AdminAPI (adminGetPayoutRequests), NOT a direct
    Firestore read. The old onSnapshot hung on the super-admin auth-timing (the same
    failure as the payments pane) and left "Loading withdrawals…" forever. This CF
@@ -5494,7 +5545,8 @@ function renderPayouts(){
         +'<td><span class="badge b-yellow">PENDING</span></td>'
         +'<td style="white-space:nowrap;">'
           +'<button class="adm-btn-sm adm-btn-green" onclick="approveWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\','+Number(w.amount||0)+',\''+h(w.sellerName||'Seller')+'\',\''+h(w.reference||'—')+'\')">✅ Pay</button> '
-          +'<button class="adm-btn-sm adm-btn-red" onclick="rejectWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\',\''+h(w.sellerName||'Seller')+'\')">❌ Reject</button>'
+          +'<button class="adm-btn-sm adm-btn-red" onclick="rejectWithdrawal(\''+w.id+'\',\''+h(w.phone)+'\',\''+h(w.sellerName||'Seller')+'\')">❌ Reject</button> '
+          +'<button class="adm-btn-sm" style="background:rgba(255,255,255,.06)" onclick="_payoutInspect(\''+w.id+'\')" title="Inspect lifecycle">🔍</button>'
         +'</td>'
       +'</tr>';
     }).join('') : '<tr><td colspan="8" style="text-align:center;color:rgba(255,255,255,0.3);padding:24px;">No pending withdrawal requests</td></tr>');
@@ -5505,7 +5557,7 @@ function renderPayouts(){
       var evid = w.gatewayReference ? ('<div style="font-size:9px;color:rgba(255,255,255,.35)">ref '+h(w.gatewayReference)+(w.settlementMethod==='manual'?' · manual':'')+'</div>')
                : (w.settlementMethod==='manual' ? '<div style="font-size:9px;color:rgba(255,255,255,.35)">manual · '+h(w.externalReference||'')+'</div>' : '');
       return '<tr>'
-        +'<td style="font-size:11px;">'+h(w.reference||w.id)+'</td>'
+        +'<td style="font-size:11px;cursor:pointer;color:#64b4ff;" onclick="_payoutInspect(\''+w.id+'\')" title="Inspect lifecycle">🔍 '+h(w.reference||w.id)+'</td>'
         +'<td>'+h(w.sellerName||'—')+'</td>'
         +'<td>'+h(w.phone||'—')+'</td>'
         +'<td style="font-weight:800;">'+fmt(w.amount||0)+'</td>'
