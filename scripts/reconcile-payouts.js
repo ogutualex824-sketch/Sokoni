@@ -34,7 +34,9 @@ const GATE = process.argv.includes('--gate');   /* --gate: fail ONLY on CRITICAL
   const snap = await db.collection('payoutRequests').get();
   const now = Date.now();
   const issues = [];
-  const refSeen = new Map();   /* gatewayReference → [ids] for duplicate detection */
+  const refSeen = new Map();          /* gatewayReference → [ids] for duplicate detection */
+  const reservedBySeller = new Map(); /* sellerUid → sum of IN-FLIGHT payout amounts (should == wallet.pendingPayout) */
+  const IN_FLIGHT = new Set(['pending', 'approved', 'approving', 'sending', 'processing', 'retry_scheduled']);
 
   for (const d of snap.docs) {
     const x = d.data();
@@ -49,13 +51,12 @@ const GATE = process.argv.includes('--gate');   /* --gate: fail ONLY on CRITICAL
       const age = now - (ms(x.b2cInitiatedAt) || ms(x.updatedAt) || now);
       if (age > 24 * 3600 * 1000) issues.push({ id, sev: 'HIGH', kind: 'PROCESSING_STUCK', detail: `processing for ${Math.round(age / 3600000)}h — webhook never confirmed` });
     }
-    if (st === 'failed') {
-      const w = await db.collection('wallets').doc(x.sellerUid || '_').get().catch(() => null);
-      // Heuristic: a failed payout should have refunded — a failed-refund shows as a wallet with the amount still held.
-      if (w && w.exists && Number(w.data().pendingPayout || 0) >= Number(x.amount || 0) && Number(x.amount) > 0) {
-        issues.push({ id, sev: 'HIGH', kind: 'FAILED_WITHOUT_REFUND?', detail: `failed but wallet pendingPayout=${w.data().pendingPayout} still ≥ amount ${x.amount}` });
-      }
-    }
+    /* Reservation accounting is checked PER WALLET below (a naive per-payout compare
+       against aggregate wallet.pendingPayout false-positives when a seller has more
+       than one in-flight payout). */
+    /* Accumulate in-flight reservations per seller for the wallet-consistency check. */
+    if (IN_FLIGHT.has(st) && x.sellerUid) reservedBySeller.set(x.sellerUid, (reservedBySeller.get(x.sellerUid) || 0) + (Number(x.amount) || 0));
+
     /* Duplicate gateway reference → the same transfer counted twice (double-pay risk). */
     const gref = x.gatewayReference || x.intasendRef;
     if (gref && (PAID.has(st) || st === 'processing')) {
@@ -65,6 +66,17 @@ const GATE = process.argv.includes('--gate');   /* --gate: fail ONLY on CRITICAL
   }
   for (const [gref, ids] of refSeen) {
     if (ids.length > 1) issues.push({ id: ids.join(','), sev: 'CRITICAL', kind: 'DUPLICATE_GATEWAY_REF', detail: `gatewayReference ${gref} on ${ids.length} payouts` });
+  }
+  /* Wallet reservation consistency: wallet.pendingPayout MUST equal the sum of that
+     seller's in-flight payout reservations. A mismatch = a stuck reservation (failed
+     payout that didn't refund) OR a double-reserve. Correct even with many payouts. */
+  for (const [uid, reserved] of reservedBySeller) {
+    const w = await db.collection('wallets').doc(uid).get().catch(() => null);
+    if (!w || !w.exists) continue;
+    const pending = Number(w.data().pendingPayout) || 0;
+    if (Math.abs(pending - reserved) > 0.5) {
+      issues.push({ id: uid, sev: 'HIGH', kind: 'RESERVATION_MISMATCH', detail: `wallet.pendingPayout=${pending} ≠ in-flight reservations sum=${reserved}` });
+    }
   }
 
   console.log(`\n=== payout reconciliation — ${snap.size} payoutRequests scanned ===`);
