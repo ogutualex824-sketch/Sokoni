@@ -565,6 +565,11 @@
     'dispute.html', 'invoice.html', 'notifications.html',
     'profile.html', 'reviews.html', 'referral.html',
     'subscriptions.html', 'loyalty.html',
+    /* Admin/console pages must NOT get the MARKETPLACE product search — typing an
+       email returned products (Johnnie Walker, MacBook…). Admin searches its own
+       entities within its panes. Both forms because cleanUrls serves prod extensionless
+       (the '.html' entries above silently never match in prod — see the note above). */
+    'admin.html', 'admin', 'super-admin.html', 'super-admin',
   ];
   const showSearch = !_match(NO_SEARCH);
 
