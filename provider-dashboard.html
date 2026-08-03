@@ -202,6 +202,7 @@ a{color:var(--acc);text-decoration:none}
     </div>
     <nav class="sb-nav">
       <div class="sb-item active" onclick="P.show('overview',this)"><span class="sb-icon">🏠</span>Overview</div>
+      <div class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
       <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
       <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Earnings</div>
@@ -271,6 +272,7 @@ a{color:var(--acc);text-decoration:none}
         <div class="card">
           <div class="card-title">Quick Actions</div>
           <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+            <button class="btn btn-s" onclick="P.show('settings',null,'services')" style="display:flex;align-items:center;gap:7px;justify-content:center">🧰 Manage Services</button>
             <button class="btn btn-s" onclick="P.show('settings',null,'avail')" style="display:flex;align-items:center;gap:7px;justify-content:center">🕐 Update Availability</button>
             <button class="btn btn-s" onclick="P.show('settings',null,'pricing')" style="display:flex;align-items:center;gap:7px;justify-content:center">💳 Update Pricing</button>
             <button class="btn btn-s" onclick="P.show('bookings',null)" style="display:flex;align-items:center;gap:7px;justify-content:center">📅 View All Bookings</button>
@@ -911,8 +913,8 @@ const Sv={
   _fn(){return firebase.functions().httpsCallable('providerDispatch')},
   async load(){
     _q('svList').innerHTML='<div class="card-empty">Loading…</div>';
-    try{const r=await this._fn()({op:'providerListServices'});this._svc=(r.data?.services||[]).filter(s=>!s.removedAt);this.render()}
-    catch(e){_q('svList').innerHTML='<div class="card-empty">Could not load your services.</div>'}
+    try{const r=await this._fn()({op:'providerListServices'});this._svc=(r.data?.services||[]).filter(s=>!s.removedAt);this.render();this.loadMetrics()}
+    catch(e){_q('svList').innerHTML='<div class="card-empty">Could not load your services. <button class="btn btn-g btn-sm" onclick="Sv.load()">Retry</button></div>'}
   },
   render(){
     if(!this._svc.length){_q('svList').innerHTML='<div class="card-empty">No rate cards yet. Add your first service so customers can book it.</div>';return}
@@ -923,18 +925,39 @@ const Sv={
       const dur=s.durationMins?(' · '+s.durationMins+' min'):'';
       const extras=[s.fee?('Fee KSh '+this._c2k(s.fee).toLocaleString()):'',s.deposit?('Deposit KSh '+this._c2k(s.deposit).toLocaleString()):''].filter(Boolean).join(' · ');
       const thumb=(Array.isArray(s.images)&&s.images[0])?`<img src="${this._esc(s.images[0])}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;float:right;margin-left:8px">`:'';
-      return `<div class="card" style="padding:12px;margin-bottom:8px;opacity:${on?1:.55}">
+      /* Status: Active (published+visible) / Paused (hidden) / Draft (no price set). */
+      const isDraft=!s.price&&s.priceType!=='quotation';
+      const st=isDraft?['Draft','var(--sub)']:on?['Active','var(--ok)']:['Paused','var(--warn)'];
+      const feat=!!s.featured;
+      const m=(this._metrics&&this._metrics[s.id])||{};
+      const metricPill=(ic,v,l)=>`<span title="${l}" style="font-size:.7rem;color:var(--sub);display:inline-flex;align-items:center;gap:3px">${ic} <strong style="color:var(--text)">${v}</strong></span>`;
+      const _lb=m.lastBooked?(()=>{const d=(Date.now()-new Date(m.lastBooked).getTime())/86400000;return d<1?'today':d<2?'1d ago':Math.floor(d)+'d ago';})():'—';
+      const metricsRow=`<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px">
+        ${metricPill('📅',m.bookings!=null?m.bookings:'—','Bookings')}
+        ${metricPill('💰',m.revenueKes!=null?('KSh '+_fmt(m.revenueKes)):'—','Revenue')}
+        ${metricPill('⭐',(s.rating||m.rating)?Number(s.rating||m.rating).toFixed(1):'—','Rating')}
+        ${metricPill('🕐',_lb,'Last booked')}
+      </div>`;
+      return `<div class="card" style="padding:12px;margin-bottom:8px;opacity:${on?1:.6}">
         ${thumb}
-        <div style="font-weight:700;font-size:.9rem">${this._esc(s.name)}${on?'':' <span style="font-size:.7rem;color:var(--sub)">(hidden)</span>'}</div>
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:.9rem">${this._esc(s.name)}</span>
+          <span class="sub-badge" style="background:${st[1]};color:#000;font-size:.62rem;padding:1px 7px">${st[0]}</span>
+          ${feat?'<span class="sub-badge" style="background:var(--acc);color:#000;font-size:.62rem;padding:1px 7px">★ Featured</span>':''}
+        </div>
         <div style="font-size:.78rem;color:var(--sub);margin-top:2px">${this._esc(s.category||'')} · <strong style="color:var(--text)">${price}</strong>${dur}</div>
         ${extras?`<div style="font-size:.72rem;color:var(--sub);margin-top:2px">${extras}</div>`:''}
         ${s.description?`<div style="font-size:.76rem;color:var(--sub);margin-top:4px">${this._esc(s.description)}</div>`:''}
+        ${metricsRow}
         <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
           <button class="btn btn-g btn-sm" onclick="Sv.openEdit('${s.id}')">Edit</button>
           <button class="btn btn-g btn-sm" style="color:#71ff00" onclick="Sv.pricing('${s.id}')">💰 Pricing</button>
-          <button class="btn btn-g btn-sm" onclick="Sv.toggle('${s.id}',${on?'false':'true'})">${on?'Hide':'Show'}</button>
+          <button class="btn btn-g btn-sm" onclick="Sv.toggle('${s.id}',${on?'false':'true'})">${on?'⏸ Pause':'▶ Activate'}</button>
+          <button class="btn btn-g btn-sm" onclick="Sv.feature('${s.id}',${feat?'false':'true'})">${feat?'☆ Unfeature':'★ Feature'}</button>
           <button class="btn btn-g btn-sm" onclick="Sv.duplicate('${s.id}')">Duplicate</button>
-          <button class="btn btn-g btn-sm" style="color:var(--warn)" onclick="Sv.remove('${s.id}')">Delete</button>
+          <button class="btn btn-g btn-sm" onclick="Sv.share('${s.id}')">🔗 Share</button>
+          <button class="btn btn-g btn-sm" onclick="Sv.qr('${s.id}')">▦ QR</button>
+          <button class="btn btn-g btn-sm" style="color:var(--warn)" onclick="Sv.remove('${s.id}')">Archive</button>
         </div>
       </div>`;
     }).join('');
@@ -976,7 +999,23 @@ const Sv={
   async toggle(id,active){showLoad('Updating…');try{await this._fn()({op:'providerToggleService',serviceId:id,active});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async remove(id){if(!confirm('Delete this rate card? Customers will no longer see it.'))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async duplicate(id){showLoad('Duplicating…');try{await this._fn()({op:'providerDuplicateService',serviceId:id});toast('Service duplicated — edit the copy.');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  pricing(id){const s=this._svc.find(x=>x.id===id);if(!window.SokoniPricingStudio){toast('Pricing Studio loading — try again.','err');return}SokoniPricingStudio.open(id,(s&&s.pricing)||{},()=>Sv.load())}
+  pricing(id){const s=this._svc.find(x=>x.id===id);if(!window.SokoniPricingStudio){toast('Pricing Studio loading — try again.','err');return}SokoniPricingStudio.open(id,(s&&s.pricing)||{},()=>Sv.load())},
+  async feature(id,val){showLoad('Updating…');try{await this._fn()({op:'providerUpdateService',serviceId:id,featured:val});toast(val?'Service featured ★':'Feature removed');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async share(id){
+    const s=this._svc.find(x=>x.id===id);const pid=(_data&&_data.profile&&_data.profile.providerId)||'';
+    const url=location.origin+'/providers'+(pid?('?p='+encodeURIComponent(pid)):'')+(pid&&id?('&s='+encodeURIComponent(id)):'');
+    const text=(s?('Book "'+s.name+'" on SOKONI: '):'Book me on SOKONI: ')+url;
+    try{if(navigator.share){await navigator.share({title:'SOKONI',text,url})}else{await navigator.clipboard.writeText(url);toast('Booking link copied!')}}catch(_){}
+  },
+  async qr(id){
+    showLoad('Generating QR…');
+    try{const r=await this._fn()({op:'providerGenerateQR',serviceId:id});const d=r.data||{};const img=d.qrUrl||d.qrCode||d.url||(_data&&_data.profile&&_data.profile.qrCode);hideLoad();
+      if(img){const w=window.open('','_blank');if(w){w.document.write('<title>Service QR — SOKONI</title><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh"><img src="'+img+'" style="max-width:90vw;max-height:90vh"></body>')}else{toast('QR ready — allow pop-ups to view it.','err')}}
+      else{toast('QR not available for this service yet.','err')}
+    }catch(e){hideLoad();toast(e.message||'QR failed','err')}
+  },
+  _metrics:{},
+  async loadMetrics(){try{const r=await this._fn()({op:'providerServiceMetrics'});this._metrics=(r.data&&r.data.byService)||{};this.render()}catch(_){}},
 };
 window.Sv=Sv;
 

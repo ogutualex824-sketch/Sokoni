@@ -41,6 +41,7 @@ const ROUTES = [
   'providerUpdateProfile',
   'providerDashboard',
   'providerGetHealth',
+  'providerServiceMetrics',
   'providerGetBookings',
   'providerUpdateAvailability',
   'providerUpdatePricing',

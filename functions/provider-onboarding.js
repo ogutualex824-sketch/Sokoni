@@ -579,6 +579,32 @@ exports._h.providerGetHealth = _h.providerGetHealth = async (req) => {
   };
 };
 
+/* providerServiceMetrics — per-service operational metrics from EXISTING booking data
+   (no new tracking): bookings count, revenue (only from explicit KES-named fields to
+   avoid unit ambiguity), last-booked. Views/conversion are omitted — no source exists.
+   Single-field query, no index; read-only, degrades to {}. */
+exports._h.providerServiceMetrics = _h.providerServiceMetrics = async (req) => {
+  const uid = _uid(req);
+  const byService = {};
+  try {
+    const snap = await _db().collection('providerBookings').where('providerId', '==', uid).limit(1000).get();
+    snap.docs.forEach(d => {
+      const b = d.data();
+      const sid = b.serviceId || b.service || null;
+      if (!sid) return;
+      const m = byService[sid] || (byService[sid] = { bookings: 0, revenueKes: null, lastBooked: null });
+      m.bookings++;
+      const amtKes = b.amountKes != null ? b.amountKes : (b.totalKes != null ? b.totalKes : (b.priceKes != null ? b.priceKes : null));
+      if ((b.status === 'completed' || b.status === 'order_delivered') && amtKes != null) m.revenueKes = (m.revenueKes || 0) + Number(amtKes);
+      const t = b.scheduledAt?.toDate ? b.scheduledAt.toDate() : (b.createdAt?.toDate ? b.createdAt.toDate() : null);
+      if (t) { const iso = t.toISOString(); if (!m.lastBooked || iso > m.lastBooked) m.lastBooked = iso; }
+    });
+  } catch (e) {
+    logger.warn('[providerServiceMetrics] skipped', { uid: uid.slice(0, 8), code: e.code, message: e.message });
+  }
+  return { byService };
+};
+
 function _calcProfileCompletion(p) {
   const checks = [
     !!p.name, !!p.bio, !!p.category, !!p.subcategory,
