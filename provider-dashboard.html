@@ -142,6 +142,29 @@ a{color:var(--acc);text-decoration:none}
 .booking-item{cursor:pointer}
 @media(max-width:560px){.bk-drawer-wrap{align-items:flex-end}.bk-drawer{max-width:100%;height:90vh;border-left:none;border-top:1px solid var(--border);border-radius:20px 20px 0 0;animation:avUp var(--t)}}
 
+/* Wallet (Phase 5) */
+.earn-box.tap{cursor:pointer;transition:border-color var(--t),transform var(--t);border:1px solid transparent}
+.earn-box.tap:hover{border-color:var(--acc)}
+.earn-box.tap:active{transform:scale(.98)}
+.tx-row{padding:11px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:11px;font-size:.83rem}
+.tx-row:last-child{border-bottom:none}
+.tx-ico{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:var(--surf2);flex-shrink:0}
+.tx-amt{font-weight:800;margin-left:auto;white-space:nowrap}
+.tx-amt.pos{color:var(--acc)}.tx-amt.neg{color:var(--err)}
+.po-card{border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+.po-steps{display:flex;margin-top:10px}
+.po-step{flex:1;text-align:center;font-size:.6rem;color:var(--sub);position:relative}
+.po-step:before{content:'';display:block;width:10px;height:10px;border-radius:50%;background:var(--border);margin:0 auto 4px;position:relative;z-index:1}
+.po-step.done:before{background:var(--acc)}
+.po-step.fail:before{background:var(--err)}
+.po-step:not(:last-child):after{content:'';position:absolute;top:4px;left:50%;width:100%;height:2px;background:var(--border)}
+.po-step.done:not(:last-child):after{background:var(--acc)}
+.cs-approved{background:var(--acc-dim);color:var(--acc)}
+.cs-processing{background:rgba(0,120,255,.15);color:#60aaff}
+.cs-paid{background:var(--acc-dim);color:var(--acc)}
+.cs-rejected,.cs-failed,.cs-reversed{background:rgba(255,77,77,.15);color:var(--err)}
+.cs-requested,.cs-scheduled{background:rgba(255,184,0,.15);color:var(--warn)}
+
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
 .booking-item:last-child{border-bottom:none}
@@ -257,7 +280,7 @@ a{color:var(--acc);text-decoration:none}
       <div class="sb-item" onclick="P.show('settings',this,'services')"><span class="sb-icon">🧰</span>Services</div>
       <div class="sb-item" onclick="P.show('calendar',this)"><span class="sb-icon">📆</span>Calendar</div>
       <div class="sb-item" onclick="P.show('bookings',this)"><span class="sb-icon">📅</span>Bookings</div>
-      <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Earnings</div>
+      <div class="sb-item" onclick="P.show('earnings',this)"><span class="sb-icon">💰</span>Wallet</div>
       <div class="sb-item" onclick="P.show('reviews',this)"><span class="sb-icon">⭐</span>Reviews</div>
       <div class="sb-item" onclick="P.show('settings',this)"><span class="sb-icon">⚙️</span>Settings</div>
     </nav>
@@ -448,36 +471,43 @@ a{color:var(--acc);text-decoration:none}
 
     <!-- ── Earnings ──────────────────────────────────────────────────── -->
     <div class="panel" id="panel-earnings">
-      <div class="pg-header">
-        <div><div class="pg-title">Earnings</div></div>
-        <select class="sk-in sk-sel" id="earnPeriod" style="width:auto;padding:7px 12px;font-size:.82rem" onchange="E.load()">
-          <option value="7">Last 7 days</option>
-          <option value="30" selected>Last 30 days</option>
-          <option value="90">Last 90 days</option>
-        </select>
-      </div>
+      <div class="pg-header"><div><div class="pg-title">Wallet</div><div class="pg-sub">Live from the wallet engine — every figure is server-authoritative</div></div></div>
       <div style="padding:14px 20px">
-        <div class="earn-row">
-          <div class="earn-box"><div class="eb-val" id="eGross">KSh 0</div><div class="eb-lbl">Gross Earnings</div></div>
-          <div class="earn-box"><div class="eb-val" style="color:var(--err)" id="eComm">KSh 0</div><div class="eb-lbl">Commission</div></div>
-          <div class="earn-box"><div class="eb-val" id="eNet">KSh 0</div><div class="eb-lbl">Net Earnings</div></div>
-          <div class="earn-box"><div class="eb-val" style="color:var(--warn)" id="ePending">KSh 0</div><div class="eb-lbl">Pending Payout</div></div>
-          <div class="earn-box"><div class="eb-val" id="ePaid">KSh 0</div><div class="eb-lbl">Total Paid Out</div></div>
-        </div>
+        <!-- 1. Financial overview (clickable) -->
+        <div class="earn-row" id="walOverview"></div>
+        <!-- 3. Withdraw -->
+        <div class="card" id="walWithdraw"><div class="sk-row" style="height:52px"></div></div>
+        <!-- 2. Trend chart -->
         <div class="card">
-          <div class="card-title">Revenue Trend</div>
-          <div class="chart-wrap" id="chartWrap">
-            <svg class="chart-svg" id="earnChart" width="540" height="120" viewBox="0 0 540 120" style="max-width:100%">
-              <text x="270" y="65" text-anchor="middle" fill="#888" font-size="13">Loading chart…</text>
-            </svg>
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+            <span>Trend</span>
+            <span style="display:flex;gap:6px">
+              <select class="sk-in sk-sel" id="walRange" style="width:auto;padding:6px 10px;font-size:.76rem" onchange="W.renderChart()"><option value="7">7 days</option><option value="30" selected>30 days</option><option value="90">90 days</option></select>
+              <select class="sk-in sk-sel" id="walMetric" style="width:auto;padding:6px 10px;font-size:.76rem" onchange="W.renderChart()"><option value="earnings">Earnings</option><option value="withdrawals">Withdrawals</option><option value="net">Net payouts</option></select>
+            </span>
           </div>
+          <div class="chart-wrap"><svg class="chart-svg" id="earnChart" width="540" height="120" viewBox="0 0 540 120" style="max-width:100%"><text x="270" y="62" text-anchor="middle" fill="#888" font-size="13">Loading…</text></svg></div>
         </div>
+        <!-- 7. Insights -->
+        <div class="card"><div class="card-title">Insights</div><div class="health-grid" id="walInsights"></div></div>
+        <!-- 6. Payout account -->
+        <div class="card"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center"><span>Payout account</span><button class="btn btn-g btn-sm" onclick="W.editAccount()">Update</button></div><div id="walAccount"></div></div>
+        <!-- 4. Withdrawals / settlement timeline -->
+        <div class="card"><div class="card-title">Withdrawals</div><div id="walPayouts"><div class="card-empty">Loading…</div></div></div>
+        <!-- 5. Unified transaction history -->
         <div class="card">
-          <div class="card-title">Payout History</div>
-          <div id="payoutList"><div class="card-empty">No payouts yet.</div></div>
-        </div>
-        <div id="reqPayoutWrap" style="display:none">
-          <button class="btn btn-p" onclick="E.requestPayout()">💸 Withdraw to M-Pesa →</button>
+          <div class="card-title">Transactions</div>
+          <input id="txSearch" class="sk-in" type="search" placeholder="Search reference or description…" oninput="W.txSearch(this.value)" aria-label="Search transactions" style="margin-bottom:10px">
+          <div class="ftabs" id="txTabs">
+            <button class="ftab on" onclick="W.txFilter('all',this)">All</button>
+            <button class="ftab" onclick="W.txFilter('earnings',this)">Earnings</button>
+            <button class="ftab" onclick="W.txFilter('withdrawals',this)">Withdrawals</button>
+            <button class="ftab" onclick="W.txFilter('refunds',this)">Refunds</button>
+            <button class="ftab" onclick="W.txFilter('bonuses',this)">Bonuses</button>
+            <button class="ftab" onclick="W.txFilter('adjustments',this)">Adjustments</button>
+          </div>
+          <div id="walTx"></div>
+          <div id="walTxMore" style="text-align:center;margin-top:12px;display:none"><button class="btn btn-s btn-sm" onclick="W.loadMoreTx()">Load more</button></div>
         </div>
       </div>
     </div>
@@ -649,7 +679,7 @@ a{color:var(--acc);text-decoration:none}
     <div class="bn-item active" onclick="P.show('overview',this)"><span class="bn-icon">🏠</span>Home</div>
     <div class="bn-item" onclick="P.show('calendar',this)"><span class="bn-icon">📆</span>Calendar</div>
     <div class="bn-item" onclick="P.show('bookings',this)"><span class="bn-icon">📅</span>Bookings</div>
-    <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Earnings</div>
+    <div class="bn-item" onclick="P.show('earnings',this)"><span class="bn-icon">💰</span>Wallet</div>
     <div class="bn-item" onclick="P.show('settings',this)"><span class="bn-icon">⚙️</span>Settings</div>
   </div>
 </div><!-- .app -->
@@ -686,6 +716,24 @@ a{color:var(--acc);text-decoration:none}
   </div>
 </div>
 
+<!-- Withdraw sheet (Phase 5) — calls the frozen requestSellerPayout; no balance logic here -->
+<div id="wdSheet" class="av-sheet-wrap" style="display:none;z-index:2600">
+  <div class="av-sheet-backdrop" onclick="W.wdClose()"></div>
+  <div class="av-sheet">
+    <div class="av-sheet-hdr"><div style="font-weight:800;font-size:1rem">Withdraw to M-Pesa</div><button class="btn btn-g btn-sm" onclick="W.wdClose()" aria-label="Close">✕</button></div>
+    <div class="av-sheet-body">
+      <div style="font-size:.72rem;color:var(--sub)">Available to withdraw</div>
+      <div id="wdAvail" style="font-size:1.6rem;font-weight:800;color:var(--acc);margin-bottom:14px">—</div>
+      <label class="sk-lbl">Amount (KSh)</label>
+      <input id="wdAmt" class="sk-in" type="number" min="100" inputmode="numeric" style="margin-bottom:12px" oninput="W.wdErr('')">
+      <label class="sk-lbl">M-Pesa number</label>
+      <input id="wdPhone" class="sk-in" type="tel" inputmode="numeric" placeholder="07XXXXXXXX" style="margin-bottom:6px" oninput="W.wdErr('')">
+      <div id="wdErr" style="font-size:.76rem;color:var(--err);min-height:16px"></div>
+    </div>
+    <div class="av-sheet-ftr"><div style="flex:1;font-size:.7rem;color:var(--sub)">Min KSh 100 · pending admin approval</div><button class="btn btn-p btn-sm" onclick="W.wdSubmit()">Withdraw</button></div>
+  </div>
+</div>
+
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
@@ -711,7 +759,7 @@ const P={
     if(typeof Cal!=='undefined')Cal.close();   // tear down the real-time listener when leaving
     if(id==='calendar')Cal.open();
     if(id==='bookings'){ if(!_bkDocs.length)B.load(); if(window.SokoniResolution)SokoniResolution.mount({role:'provider',containerId:'skResolution'}); }
-    if(id==='earnings')E.load();
+    if(id==='earnings')W.load();
     if(id==='reviews')Rv.load();
   }
 };
@@ -898,6 +946,7 @@ const RS={
 };
 /* Escape closes the topmost overlay (a11y). */
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if(_q('wdSheet')&&_q('wdSheet').style.display!=='none')return W.wdClose();
   if(_q('rsSheet')&&_q('rsSheet').style.display!=='none')return RS.close();
   if(_q('bkDrawer')&&_q('bkDrawer').style.display!=='none')return D.close();
   if(_q('avEditor')&&_q('avEditor').style.display!=='none')return AvE.close();
@@ -1076,64 +1125,168 @@ const Cal={
 window.Cal=Cal;
 
 /* ── Earnings ────────────────────────────────────────────────────────────── */
-const E={
+/* ── Wallet (Phase 5) — CONSUMES the frozen wallet backend only. No ledger/payout/
+   balance logic here: getWalletBalance (shillings), providerGetEarnings (cents, read
+   aggregation), getPayoutHistory (payoutRequests lifecycle), getWalletTransactions
+   (unified history), requestSellerPayout (the one withdraw path). All figures are
+   server-authoritative; this layer only presents them. */
+function _cKsh(c){return 'KSh '+_fmt((Number(c)||0)/100);}          // cents → display
+function _sKsh(s){return 'KSh '+_fmt(Number(s)||0);}                // shillings → display
+function _maskPhone(a){const s=String(a||'');if(s.length<6)return s||'—';const l=s.startsWith('254')?'0'+s.slice(3):s;return l.slice(0,4)+'****'+l.slice(-3);}
+function _dtShort(ts){const m=_tsMs(ts);return m?new Date(m).toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'}):'';}
+const W={
+  _earn:null,_bal:null,_payouts:[],_metrics:null,
+  _tx:[],_txPage:1,_txHasMore:false,_txFilter:'all',_txSearch:'',
   async load(){
-    const days=parseInt(_q('earnPeriod').value)||30;
-    try{
-      const fn=firebase.functions().httpsCallable('providerDispatch');
-      const res=await fn({op:'providerGetEarnings',days});
-      const d=res.data||{};
-      _q('eGross').textContent='KSh '+_fmt((d.gross||0)/100);
-      _q('eComm').textContent='− KSh '+_fmt((d.commission||0)/100);
-      _q('eNet').textContent='KSh '+_fmt((d.net||0)/100);
-      _q('ePending').textContent='KSh '+_fmt((d.pending||0)/100);
-      _q('ePaid').textContent='KSh '+_fmt((d.paid||0)/100);
-      if(d.pending>0)_q('reqPayoutWrap').style.display='block';
-      E.renderChart(d.dailyRevenue||[]);
-      E.renderPayouts(d.payouts||[]);
-    }catch(e){/* earnings not yet loaded */}
+    _q('walOverview').innerHTML=Array.from({length:6}).map(()=>'<div class="sk-row" style="height:66px"></div>').join('');
+    const disp=firebase.functions().httpsCallable('providerDispatch');
+    const [earn,bal,ph,met,svc]=await Promise.all([
+      disp({op:'providerGetEarnings',days:90}).then(r=>r.data).catch(()=>null),
+      firebase.functions().httpsCallable('getWalletBalance')({}).then(r=>r.data).catch(()=>null),
+      firebase.functions().httpsCallable('getPayoutHistory')({}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerServiceMetrics'}).then(r=>r.data).catch(()=>null),
+      disp({op:'providerListServices'}).then(r=>r.data).catch(()=>null),
+    ]);
+    W._earn=earn||{};W._bal=bal||{};W._payouts=(ph&&ph.payouts)||[];W._metrics=(met&&met.byService)||{};
+    W._svcMap={};((svc&&svc.services)||[]).forEach(s=>{W._svcMap[s.id||s.serviceId]=s.name||s.title||s.serviceName;});
+    W.renderOverview();W.renderWithdraw();W.renderChart();W.renderInsights();W.renderAccount();W.renderPayouts();
+    W._txPage=1;W._tx=[];W.loadTx();
   },
-  renderChart(daily){
-    const svg=_q('earnChart');const W=540,H=110,pad=30;
-    if(!daily.length){svg.innerHTML=`<text x="${W/2}" y="${H/2}" text-anchor="middle" fill="#888" font-size="13">No data yet</text>`;return}
-    const vals=daily.map(d=>d.net||0);const mx=Math.max(...vals,1);
-    const bw=(W-pad*2)/vals.length-3;
-    let bars='',labels='';
-    vals.forEach((v,i)=>{
-      const h=Math.max(2,(v/mx)*(H-pad));const x=pad+i*(bw+3);const y=H-pad-h;
-      bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="2" fill="rgba(113,255,0,.7)"/>`;
-      if(i===0||i===vals.length-1){const lbl=daily[i].date||'';labels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" fill="#666" font-size="9">${_esc(lbl)}</text>`;}
-    });
+  _acct(){return (_data&&_data.profile&&(_data.profile.mpesaPhone||_data.profile.payoutPhone))||'';},
+  renderOverview(){
+    const e=W._earn||{},bal=W._bal||{};
+    const cards=[
+      ['Available',_sKsh(bal.balance||0),'var(--acc)','withdraw'],
+      ['Pending',_cKsh(e.pending),'var(--warn)','earnings'],
+      ['Lifetime',_cKsh(e.lifetimeNet),'var(--text)','earnings'],
+      ['Today',_cKsh(e.todayNet),'var(--text)','earnings'],
+      ['This week',_cKsh(e.weekNet),'var(--text)','earnings'],
+      ['This month',_cKsh(e.monthNet),'var(--text)','earnings'],
+    ];
+    _q('walOverview').innerHTML=cards.map(([l,v,c,a])=>`<div class="earn-box tap" role="button" tabindex="0" onclick="W.jump('${a}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();W.jump('${a}')}"><div class="eb-val" style="color:${c}">${v}</div><div class="eb-lbl">${l}</div></div>`).join('');
+  },
+  jump(a){
+    if(a==='withdraw'){const el=_q('walWithdraw');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});return;}
+    const map={earnings:'earnings'};const f=map[a]||'all';
+    const tab=document.querySelector(`#txTabs .ftab[onclick*="txFilter('${f}'"]`);W.txFilter(f,tab);
+    const el=_q('walTx');if(el)el.scrollIntoView({behavior:'smooth',block:'center'});
+  },
+  renderWithdraw(){
+    const avail=Number((W._bal||{}).balance||0),MIN=100,acct=W._acct();
+    const pend=W._payouts.find(p=>['requested','pending','approved','processing','scheduled'].includes(p.status));
+    let reason='';
+    if(!acct)reason='Add a payout M-Pesa number below before withdrawing.';
+    else if(pend)reason=`A withdrawal of ${_sKsh(pend.netAmount||pend.amount)} is ${_esc(pend.status)}. You can withdraw again once it completes.`;
+    else if(avail<MIN)reason=`You need at least ${_sKsh(MIN)} available to withdraw — you have ${_sKsh(avail)}.`;
+    const can=!reason;
+    _q('walWithdraw').innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
+        <div><div style="font-size:.72rem;color:var(--sub)">Available to withdraw</div><div style="font-size:1.6rem;font-weight:800;color:var(--acc)">${_sKsh(avail)}</div></div>
+        <button class="btn btn-p" ${can?'':'disabled style="opacity:.5;cursor:not-allowed"'} onclick="W.withdraw()">💸 Withdraw to M-Pesa →</button>
+      </div>
+      ${reason?`<div style="font-size:.78rem;color:var(--warn);margin-top:8px">ⓘ ${reason}</div>`:`<div style="font-size:.72rem;color:var(--sub);margin-top:6px">Minimum ${_sKsh(MIN)} · to ${_esc(_maskPhone(acct))}</div>`}`;
+  },
+  _daySeries(n,valForKey){const out=[],today=new Date();for(let i=n-1;i>=0;i--){const d=new Date(today.getTime()-i*86400000);const key=d.toISOString().slice(5,10);out.push({label:d.getDate()+'/'+(d.getMonth()+1),v:valForKey(key,d)});}return out;},
+  renderChart(){
+    const n=parseInt((_q('walRange')||{}).value)||30,metric=(_q('walMetric')||{}).value||'earnings';
+    let series;
+    if(metric==='earnings'){const by={};(W._earn.dailyRevenue||[]).forEach(d=>{by[d.date]=(by[d.date]||0)+(d.net||0)/100;});series=W._daySeries(n,k=>by[k]||0);}
+    else{const paidOnly=metric==='net';const by={};(W._payouts||[]).forEach(p=>{if(paidOnly&&p.status!=='paid')return;const m=_tsMs(p.createdAt);if(!m)return;const key=new Date(m).toISOString().slice(5,10);by[key]=(by[key]||0)+Number(p.netAmount||p.amount||0);});series=W._daySeries(n,k=>by[k]||0);}
+    const svg=_q('earnChart'),Wd=540,H=110,pad=26,vals=series.map(s=>s.v),mx=Math.max(...vals,1),tot=vals.reduce((a,b)=>a+b,0);
+    if(!tot){svg.innerHTML=`<text x="${Wd/2}" y="${H/2}" text-anchor="middle" fill="#888" font-size="13">No ${metric==='earnings'?'earnings':'withdrawals'} in this window</text>`;return;}
+    const bw=Math.max(1,(Wd-pad*2)/vals.length-2);let bars='',labels='';
+    vals.forEach((v,i)=>{const h=Math.max(v>0?2:0,(v/mx)*(H-pad));const x=pad+i*(bw+2);const y=H-pad-h;bars+=`<rect x="${x}" y="${y}" width="${bw}" height="${h}" rx="2" fill="rgba(113,255,0,.7)"><title>${_esc(series[i].label)}: ${_sKsh(Math.round(v))}</title></rect>`;if(i===0||i===vals.length-1){labels+=`<text x="${x+bw/2}" y="${H-4}" text-anchor="middle" fill="#666" font-size="9">${_esc(series[i].label)}</text>`;}});
     svg.innerHTML=bars+labels;
   },
-  renderPayouts(payouts){
-    if(!payouts.length){_q('payoutList').innerHTML='<div class="card-empty">No payouts yet.</div>';return}
-    _q('payoutList').innerHTML=payouts.map(p=>{
-      const m={'mpesa':'📱','bank':'🏦','wallet':'👛'};
-      const dt=p.createdAt?.toDate?new Date(p.createdAt.toDate()):p.createdAt?new Date(p.createdAt):null;
-      return`<div class="payout-row"><div class="pr-ico">${m[p.method]||'💰'}</div><div class="pr-info"><div style="font-weight:600;font-size:.83rem">${_esc(p.reference||'Payout')}</div><div style="font-size:.72rem;color:var(--sub)">${dt?dt.toLocaleDateString('en-KE'):''}</div></div><div class="pr-net">KSh ${_fmt((p.net||0)/100)}</div></div>`;
-    }).join('');
+  renderInsights(){
+    const e=W._earn||{},host=_q('walInsights');
+    const avgDay=e.monthNet?Math.round(e.monthNet/30):0;
+    const avgBk=(e.count>0)?Math.round(e.gross/e.count):null;
+    // top service by revenue (metrics revenue in KES/shillings)
+    let topName='—',topRev=0;const m=W._metrics||{};
+    Object.keys(m).forEach(sid=>{const r=Number(m[sid].revenueKes||0);if(r>topRev){topRev=r;topName=W._svcName(sid);}});
+    // best 7-day window from the 90-day earnings series
+    const by={};(e.dailyRevenue||[]).forEach(d=>{by[d.date]=(by[d.date]||0)+(d.net||0)/100;});
+    const ser=W._daySeries(90,k=>by[k]||0).map(s=>s.v);let best=0;for(let i=0;i<ser.length;i++){let s=0;for(let j=i;j<Math.min(i+7,ser.length);j++)s+=ser[j];if(s>best)best=s;}
+    const pendCount=(W._payouts||[]).filter(p=>['requested','pending','approved','processing','scheduled'].includes(p.status)).length;
+    const cells=[
+      ['Avg / day (30d)',_cKsh(avgDay)],
+      ['Avg booking value',avgBk!=null?_cKsh(avgBk):'—'],
+      ['Top service',topRev>0?`${_esc(topName)} · ${_sKsh(topRev)}`:'—'],
+      ['Best week',_sKsh(Math.round(best))],
+      ['Pending settlement',_cKsh(e.pending)+(pendCount?` · ${pendCount} req`:'')],
+    ];
+    host.innerHTML=cells.map(([l,v])=>`<div class="h-cell"><div class="h-lbl">${_esc(l)}</div><div class="h-val">${v}</div></div>`).join('');
   },
-  /* Canonical withdraw: earnings settle into wallets.balance (whole shillings), and the
-     ONE withdraw path is requestSellerPayout (wallet.js) -> payoutRequests -> admin approve
-     -> IntaSend B2C. The old providerRequestPayout read the retired providerPayouts-pending
-     model and always said "no pending earnings" even with money in the wallet. */
-  async requestPayout(){
-    let avail=null;
-    try{const b=await firebase.functions().httpsCallable('getWalletBalance')({});avail=Number((b.data||{}).balance||0);}catch(_){}
-    const amtStr=prompt('Withdraw to M-Pesa\n\nWithdrawable balance: KSh '+(avail!=null?_fmt(avail):'—')+'\nMinimum: KSh 100\n\nAmount (KSh):', (avail&&avail>=100)?String(avail):'');
-    if(!amtStr)return;
-    const amount=parseInt(String(amtStr).replace(/[^0-9]/g,''),10);
-    if(!(amount>=100)){toast('Minimum withdrawal is KSh 100.','err');return;}
-    const phone=prompt('M-Pesa number to receive KSh '+amount+' (07XXXXXXXX):','');
-    if(!phone)return;
+  _svcName(sid){if(W._svcMap&&W._svcMap[sid])return W._svcMap[sid];return String(sid).slice(0,20);},
+  renderAccount(){
+    const acct=W._acct(),last=(W._payouts||[])[0],host=_q('walAccount');
+    if(!acct){host.innerHTML=`<div class="card-empty" style="padding:16px">No payout number connected.<br><button class="btn btn-p btn-sm" style="margin-top:8px" onclick="W.editAccount()">Add M-Pesa number</button></div>`;return;}
+    host.innerHTML=`
+      <div class="bk-row"><span class="k">M-Pesa number</span><span class="v">${_esc(_maskPhone(acct))}</span></div>
+      <div class="bk-row"><span class="k">Status</span><span class="v" style="color:var(--acc)">Connected</span></div>
+      <div class="bk-row"><span class="k">Last payout</span><span class="v">${last?(_sKsh(last.netAmount||last.amount)+' · '+_dtShort(last.createdAt)):'—'}</span></div>
+      <div class="bk-row" style="border-bottom:none"><span class="k">Updated</span><span class="v">${_data&&_data.profile&&_data.profile.updatedAt?_dtShort(_data.profile.updatedAt):'—'}</span></div>`;
+  },
+  editAccount(){P.show('settings',null,'payment');},
+  renderPayouts(){
+    const host=_q('walPayouts');
+    if(!(W._payouts||[]).length){host.innerHTML='<div class="card-empty">No withdrawals yet. When you withdraw, its full lifecycle appears here.</div>';return;}
+    host.innerHTML=W._payouts.map(p=>W._payoutCard(p)).join('');
+  },
+  _payoutCard(p){
+    const steps=['Requested','Approved','Processing','Paid'];
+    const order={requested:0,pending:0,approved:1,scheduled:2,processing:2,retry_scheduled:2,paid:3};
+    const failed=['rejected','failed','reversed','approval_failed'].includes(p.status);
+    const idx=order[p.status]!=null?order[p.status]:0;
+    const sh=Array.isArray(p.statusHistory)?p.statusHistory:[];
+    const receipt=(sh.find(e=>/receipt|mpesa/i.test(String(e.detail||'')))||{}).detail||null;
+    const stepsHtml=steps.map((s,i)=>`<div class="po-step ${i<=idx?'done':''} ${failed&&i===idx+1?'fail':''}">${s}</div>`).join('');
+    return `<div class="po-card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800">${_sKsh(p.netAmount||p.amount)}</div><span class="chip-status cs-${_esc(String(p.status).replace(/[^a-z_]/gi,''))}">${_esc(p.status)}</span></div>
+      <div style="font-size:.72rem;color:var(--sub);margin-top:2px">${_esc(_maskPhone(p.destinationMasked||''))} · ${_dtShort(p.createdAt)}${p.fee?' · fee '+_sKsh(p.fee):''}</div>
+      ${p.intasendRef?`<div style="font-size:.7rem;color:var(--sub)">Gateway ref: ${_esc(p.intasendRef)}</div>`:''}
+      ${receipt?`<div style="font-size:.7rem;color:var(--acc)">M-Pesa: ${_esc(receipt)}</div>`:''}
+      ${failed?`<div class="po-steps"><div class="po-step done">Requested</div><div class="po-step fail">${_esc(p.status)}</div></div>`:`<div class="po-steps">${stepsHtml}</div>`}</div>`;
+  },
+  /* Unified transaction history */
+  _bucket(type){const t=String(type||'').toLowerCase();if(/earn|credit|settle/.test(t))return 'earnings';if(/payout|debit|withdraw/.test(t))return 'withdrawals';if(/refund/.test(t))return 'refunds';if(/bonus|reward/.test(t))return 'bonuses';if(/adjust|correct/.test(t))return 'adjustments';return 'other';},
+  async loadTx(){
+    const host=_q('walTx');if(W._txPage===1)host.innerHTML=Array.from({length:3}).map(()=>'<div class="sk-row" style="height:44px"></div>').join('');
+    try{const r=await firebase.functions().httpsCallable('getWalletTransactions')({page:W._txPage});const d=r.data||{};
+      W._tx=W._txPage===1?(d.transactions||[]):W._tx.concat(d.transactions||[]);W._txHasMore=!!d.hasMore;W.renderTx();
+    }catch(e){host.innerHTML=`<div class="card-empty">Couldn't load transactions. <button class="btn btn-g btn-sm" onclick="W.loadTx()">Retry</button></div>`;}
+  },
+  loadMoreTx(){if(W._txHasMore){W._txPage++;W.loadTx();}},
+  txFilter(f,el){W._txFilter=f;document.querySelectorAll('#txTabs .ftab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');W.renderTx();},
+  txSearch(q){W._txSearch=(q||'').trim().toLowerCase();W.renderTx();},
+  renderTx(){
+    const host=_q('walTx');let list=W._tx.slice();
+    if(W._txFilter!=='all')list=list.filter(t=>W._bucket(t.type)===W._txFilter);
+    if(W._txSearch){const s=W._txSearch;list=list.filter(t=>((t.description||'')+' '+(t.mpesaRef||'')+' '+(t.id||'')+' '+(t.type||'')+' '+(t.orderId||'')).toLowerCase().includes(s));}
+    if(!list.length){host.innerHTML=`<div class="card-empty" style="padding:20px">${W._txSearch||W._txFilter!=='all'?'No matching transactions.':'No transactions yet.'}</div>`;_q('walTxMore').style.display='none';return;}
+    const ic={earnings:'💰',withdrawals:'💸',refunds:'↩️',bonuses:'🎁',adjustments:'⚙️',other:'•'};
+    host.innerHTML=list.map(t=>{const b=W._bucket(t.type),neg=(b==='withdrawals');return `<div class="tx-row"><div class="tx-ico">${ic[b]}</div><div style="min-width:0;flex:1"><div style="font-weight:600">${_esc(t.description||t.type||'Transaction')}</div><div style="font-size:.7rem;color:var(--sub)">${_dtShort(t.createdAt)}${t.mpesaRef?' · '+_esc(t.mpesaRef):''}${t.status?' · '+_esc(t.status):''}</div></div><div class="tx-amt ${neg?'neg':'pos'}">${neg?'−':'+'}${_sKsh(t.amount)}</div></div>`;}).join('');
+    _q('walTxMore').style.display=(W._txHasMore&&W._txFilter==='all'&&!W._txSearch)?'block':'none';
+  },
+  /* Withdraw sheet — the ONE withdraw path, unchanged backend. */
+  withdraw(){const avail=Number((W._bal||{}).balance||0);_q('wdSheet').style.display='flex';document.body.style.overflow='hidden';_q('wdAvail').textContent=_sKsh(avail);_q('wdAmt').value=avail>=100?String(avail):'';_q('wdPhone').value=W._acct()||'';W.wdErr('');},
+  wdClose(){_q('wdSheet').style.display='none';document.body.style.overflow='';},
+  wdErr(m){const el=_q('wdErr');if(el)el.textContent=m||'';},
+  async wdSubmit(){
+    const avail=Number((W._bal||{}).balance||0);
+    const amount=parseInt(String((_q('wdAmt')||{}).value||'').replace(/[^0-9]/g,''),10);
+    const phone=String((_q('wdPhone')||{}).value||'').trim();
+    if(!(amount>=100))return W.wdErr('Minimum withdrawal is KSh 100.');
+    if(amount>avail)return W.wdErr(`That exceeds your available ${_sKsh(avail)}.`);
+    if(!/^(?:\+?254|0)?7\d{8}$/.test(phone.replace(/\s/g,'')))return W.wdErr('Enter a valid Safaricom number (07XXXXXXXX).');
     showLoad('Requesting withdrawal…');
     try{
-      const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone.trim(),idempotencyKey:'po_'+Date.now()});
-      toast('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):''),'ok');
-      E.load();
-    }catch(e){toast(e.message||'Withdrawal failed','err')}finally{hideLoad()}
-  }
+      const r=await firebase.functions().httpsCallable('requestSellerPayout')({amount,method:'mpesa',accountNumber:phone,idempotencyKey:'po_'+Date.now()});
+      W.wdClose();toast('Withdrawal requested — pending approval'+((r.data&&r.data.reference)?(' · '+r.data.reference):''),'ok');
+      W.load();
+    }catch(e){W.wdErr(e.message||'Withdrawal failed');}finally{hideLoad();}
+  },
 };
 
 /* ── Reviews ─────────────────────────────────────────────────────────────── */

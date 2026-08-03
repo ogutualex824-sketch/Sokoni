@@ -574,39 +574,51 @@ _h.providerSaveBookingNote = async (req) => {
 };
 
 /* ── 4. providerGetEarnings ──────────────────────────────────────────────────
-   Aggregates providerPayouts over `days`. All amounts in cents. */
+   READ-ONLY aggregation over providerPayouts. All amounts in cents. Additive fields
+   (count + real-date today/week/month/lifetime nets) power the Wallet overview cards
+   without a second round-trip; NO money/ledger logic — the frozen wallet core is
+   untouched. `days` still bounds the chart/gross window. */
 _h.providerGetEarnings = async (req) => {
   const uid  = _uid(req);
   const days = Math.min(365, Math.max(1, Number(req.data?.days) || 30));
-  const since = new Date(Date.now() - days * 86400000);
+  const now  = Date.now();
+  const since = new Date(now - days * 86400000);
+  const t1 = now - 1 * 86400000, t7 = now - 7 * 86400000, t30 = now - 30 * 86400000;
 
   // Single-field equality (auto-indexed) + in-memory date filter → no composite index.
   const snap = await _db().collection('providerPayouts')
     .where('providerId', '==', uid).limit(2000).get();
 
-  let gross = 0, commission = 0, net = 0, pending = 0, settled = 0, paid = 0;
+  let gross = 0, commission = 0, net = 0, pending = 0, settled = 0, paid = 0, count = 0;
+  let lifetimeNet = 0, todayNet = 0, weekNet = 0, monthNet = 0;
   const byDay = {};
   const payouts = [];
   for (const doc of snap.docs) {
     const p = doc.data();
     const created = p.createdAt?.toDate ? p.createdAt.toDate() : null;
-    if (created && created < since) continue;
-    gross += p.gross || 0; commission += p.commission || 0; net += p.net || 0;
+    const n = p.net || 0;
+    lifetimeNet += n;                                     // all-time (within the 2000 cap)
+    if (created) { const ms = created.getTime();
+      if (ms >= t1) todayNet += n; if (ms >= t7) weekNet += n; if (ms >= t30) monthNet += n; }
+    if (created && created < since) continue;             // `days` window for the rest
+    count += 1;
+    gross += p.gross || 0; commission += p.commission || 0; net += n;
     /* paid = withdrawn to M-Pesa; settled = credited to the withdrawable wallet (Phase C);
        pending = legacy earnings not yet settled (pre-Phase-C completions). */
-    if (p.status === 'paid') paid += p.net || 0;
-    else if (p.status === 'settled') settled += p.net || 0;
-    else pending += p.net || 0;
-    const d = p.createdAt?.toDate ? p.createdAt.toDate() : new Date();
+    if (p.status === 'paid') paid += n;
+    else if (p.status === 'settled') settled += n;
+    else pending += n;
+    const d = created || new Date();
     const k = d.toISOString().slice(5, 10); // MM-DD
-    byDay[k] = (byDay[k] || 0) + (p.net || 0);
+    byDay[k] = (byDay[k] || 0) + n;
     if (p.status !== 'pending') {
-      payouts.push({ id: doc.id, net: p.net || 0, method: p.method || null,
+      payouts.push({ id: doc.id, net: n, method: p.method || null,
         reference: p.reference || null, status: p.status, createdAt: p.createdAt || null });
     }
   }
   const dailyRevenue = Object.keys(byDay).sort().map((date) => ({ date, net: byDay[date] }));
-  return { gross, commission, net, pending, settled, paid, dailyRevenue,
+  return { gross, commission, net, pending, settled, paid, count,
+    lifetimeNet, todayNet, weekNet, monthNet, dailyRevenue,
     payouts: payouts.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).slice(0, 20),
     currency: 'KES', days };
 };
