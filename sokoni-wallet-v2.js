@@ -175,13 +175,27 @@ window.SokoniWalletV2 = (function () {
 
   /* ─── TOAST ─── */
   let _toastTimer;
+  /* Toasts are QUEUED so success/warning/info never stack over each other (#8):
+     one shows at a time, the next appears after the current fades. */
+  let _toastQueue = [];
+  let _toastActive = false;
   function toast(msg, type = 'default', ms = 3000) {
+    _toastQueue.push({ msg, type, ms });
+    if (!_toastActive) _drainToasts();
+  }
+  function _drainToasts() {
     const el = document.getElementById('wal-toast');
-    if (!el) return;
+    if (!el) { _toastQueue = []; _toastActive = false; return; }
+    const next = _toastQueue.shift();
+    if (!next) { _toastActive = false; return; }
+    _toastActive = true;
+    el.textContent = next.msg;
+    el.className = 'show ' + next.type;
     clearTimeout(_toastTimer);
-    el.textContent = msg;
-    el.className = 'show ' + type;
-    _toastTimer = setTimeout(() => { el.className = ''; }, ms);
+    _toastTimer = setTimeout(() => {
+      el.className = '';
+      setTimeout(_drainToasts, 220);   // let it fade out before the next
+    }, next.ms);
   }
 
   /* ─── INIT ─── */
@@ -208,6 +222,7 @@ window.SokoniWalletV2 = (function () {
         if (av) av.textContent = (_userName[0] || '?').toUpperCase();
 
         await loadDashboard();
+        _startBalanceListener();   // live balance — updates instantly on send/claim/top-up/withdraw/webhook
         await checkSellerStatus();
 
         /* Deep-link from chat's "Send money": open the pay sheet for that contact. */
@@ -320,6 +335,47 @@ window.SokoniWalletV2 = (function () {
   function _setText(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = val;
+  }
+
+  /* ─── LIVE BALANCE (single source of truth) ───
+     Subscribe to wallets/{uid} so every money movement — top-up, send, claim,
+     withdraw, and any webhook-driven credit — reflects instantly on every wallet
+     screen with no manual refresh. Read-only (firestore.rules allows reading your
+     own wallet doc). Additive: loadDashboard() still owns the non-balance fields. */
+  let _balanceUnsub = null;
+  async function _startBalanceListener() {
+    if (_balanceUnsub || !_uid) return;
+    try {
+      const db = await _db();
+      const { doc, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      _balanceUnsub = onSnapshot(
+        doc(db, 'wallets', _uid),
+        (snap) => { if (snap.exists()) _applyLiveBalance(snap.data()); },
+        (err) => console.warn('[WalletV2] balance listener error', err && err.message),
+      );
+    } catch (e) {
+      console.warn('[WalletV2] balance listener unavailable (falling back to refresh-on-action)', e && e.message);
+    }
+  }
+
+  function _applyLiveBalance(w) {
+    const bal = Number(w.balance) || 0;
+    const balEl = document.getElementById('balVal'); if (balEl) balEl.textContent = _fmt(bal);
+    _setText('wdrAvail', 'KSh ' + _fmt(bal));
+    if (w.savingsBalance  != null) _setText('savingsTotal', 'KSh ' + _fmtShort(w.savingsBalance  || 0));
+    if (w.cashbackBalance != null) _setText('cashbackVal',  'KSh ' + _fmtShort(w.cashbackBalance || 0));
+    if (w.rewardPoints    != null) _setText('rewardPts',    (w.rewardPoints || 0) + ' pts');
+    if (w.frozen != null) {
+      _frozen = !!w.frozen;
+      const fb = document.getElementById('frozenBadge'); if (fb) fb.style.display = _frozen ? 'flex' : 'none';
+    }
+    if (_dashboard) { _dashboard.balance = bal; if (w.pendingPayout != null) _dashboard.pendingPayout = w.pendingPayout; }
+    try { localStorage.setItem('_walletBal', String(bal)); } catch (_) {}
+    if (typeof _renderPendingPayout === 'function') _renderPendingPayout();
+    /* Broadcast so any other surface on this page (e.g. an embedded Profile balance)
+       can stay in lockstep without its own round-trip. Cross-PAGE Profile sync gets
+       its own wallets/{uid} listener in the Profile↔Wallet slice. */
+    try { window.dispatchEvent(new CustomEvent('sokoni:wallet-balance', { detail: { balance: bal, savingsBalance: w.savingsBalance, pendingPayout: w.pendingPayout, frozen: _frozen } })); } catch (_) {}
   }
 
   /* ─── SELLER CHECK ─── */
@@ -1420,7 +1476,16 @@ window.SokoniWalletV2 = (function () {
   function _promptPin(sub) {
     return new Promise((resolve) => {
       _pinResolve = resolve;
-      const i = document.getElementById('pinVerifyInput'); if (i) i.value = '';
+      const i = document.getElementById('pinVerifyInput');
+      if (i) {
+        i.value = '';
+        /* Auto-submit the instant a valid 4-digit PIN is entered — no extra tap (#13). */
+        i.oninput = () => {
+          const v = (i.value || '').replace(/\D/g, '').slice(0, 4);
+          if (i.value !== v) i.value = v;
+          if (v.length === 4) pinVerifySubmit();
+        };
+      }
       _setText('pinVerifySub', sub || 'Authorize this payment');
       openOverlay('ovlPinVerify');
       setTimeout(() => document.getElementById('pinVerifyInput')?.focus(), 120);
