@@ -560,6 +560,19 @@ _h.providerContactCustomer = async (req) => {
   };
 };
 
+/* ── 3f. providerSaveBookingNote — the provider's PRIVATE note on a booking.
+   Additive metadata only (NOT part of the §-governed booking state machine): it
+   never reads/changes status, price, or payment. Owner-gated via _ownBooking,
+   sanitized + capped by _san. Stored on the booking doc so the Customers phase can
+   surface it later. An empty string clears the note. */
+_h.providerSaveBookingNote = async (req) => {
+  const uid = _uid(req);
+  const { ref } = await _ownBooking(uid, req.data?.bookingId);
+  const note = _san(req.data?.note, 1000);
+  await ref.update({ providerNotes: note, providerNotesAt: _ts(), updatedAt: _ts() });
+  return { success: true, note };
+};
+
 /* ── 4. providerGetEarnings ──────────────────────────────────────────────────
    Aggregates providerPayouts over `days`. All amounts in cents. */
 _h.providerGetEarnings = async (req) => {

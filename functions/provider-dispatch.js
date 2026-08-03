@@ -63,6 +63,7 @@ const ROUTES = [
   'providerMarkNoShow',
   'providerRescheduleBooking',
   'providerContactCustomer',
+  'providerSaveBookingNote',
   'providerGetEarnings',
   'providerRequestPayout',
   'providerGetReviews',

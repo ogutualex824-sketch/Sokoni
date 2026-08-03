@@ -115,6 +115,33 @@ a{color:var(--acc);text-decoration:none}
 .av-sec-title:first-child{margin-top:2px}
 @media(min-width:560px){.av-sheet-wrap{align-items:center}.av-sheet{border-radius:20px;border-bottom:1px solid var(--border);max-height:84vh}}
 
+/* Booking detail drawer + timeline + skeletons (Phase 4) */
+.bk-drawer-wrap{position:fixed;inset:0;z-index:2500;display:flex;justify-content:flex-end}
+.bk-drawer-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.62);backdrop-filter:blur(2px)}
+.bk-drawer{position:relative;background:var(--surf);width:100%;max-width:440px;height:100%;border-left:1px solid var(--border);display:flex;flex-direction:column;box-shadow:-8px 0 40px rgba(0,0,0,.5);animation:bkIn var(--t)}
+@keyframes bkIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.bk-drawer-hdr{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--border)}
+.bk-drawer-body{overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px 18px 28px;flex:1}
+.bk-row{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.85rem}
+.bk-row .k{color:var(--sub)}
+.bk-row .v{text-align:right;font-weight:600}
+.bk-sec{font-weight:800;font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--sub);margin:18px 0 8px}
+.tl{list-style:none;margin:6px 0;padding:0}
+.tl li{position:relative;padding:0 0 15px 22px;font-size:.82rem}
+.tl li:before{content:'';position:absolute;left:3px;top:2px;width:10px;height:10px;border-radius:50%;background:var(--border);border:2px solid var(--surf);z-index:1}
+.tl li.done:before{background:var(--acc)}
+.tl li:not(:last-child):after{content:'';position:absolute;left:7px;top:11px;bottom:1px;width:2px;background:var(--border)}
+.tl li.done:not(:last-child):after{background:var(--acc)}
+.tl .tl-t{font-weight:600}
+.tl li.pending .tl-t{color:var(--sub);font-weight:500}
+.tl .tl-ts{color:var(--sub);font-size:.72rem}
+.rs-slot{display:inline-block;margin:0 6px 6px 0;padding:7px 12px;border:1px solid var(--acc);border-radius:8px;background:transparent;color:var(--acc);font-size:.8rem;cursor:pointer;font-weight:600}
+.rs-slot:hover{background:var(--acc-dim)}
+.sk-row{height:66px;border-radius:10px;background:linear-gradient(90deg,var(--surf) 25%,var(--surf2) 37%,var(--surf) 63%);background-size:400% 100%;animation:sksh 1.2s ease infinite;margin-bottom:10px}
+@keyframes sksh{0%{background-position:100% 50%}100%{background-position:0 50%}}
+.booking-item{cursor:pointer}
+@media(max-width:560px){.bk-drawer-wrap{align-items:flex-end}.bk-drawer{max-width:100%;height:90vh;border-left:none;border-top:1px solid var(--border);border-radius:20px 20px 0 0;animation:avUp var(--t)}}
+
 /* Booking item */
 .booking-item{padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;gap:12px}
 .booking-item:last-child{border-bottom:none}
@@ -400,17 +427,21 @@ a{color:var(--acc);text-decoration:none}
       <div class="pg-header"><div><div class="pg-title">Bookings</div></div></div>
       <div id="skResolution" style="padding:4px 20px;display:none;"></div>
       <div style="padding:14px 20px">
-        <div class="ftabs">
+        <input id="bkSearch" class="sk-in" type="search" placeholder="Search name, service or reference…" oninput="B.search(this.value)" aria-label="Search bookings" style="margin-bottom:10px">
+        <div class="ftabs" id="bkTabs">
           <button class="ftab on" onclick="B.filter('all',this)">All</button>
+          <button class="ftab" onclick="B.filter('today',this)">Today</button>
+          <button class="ftab" onclick="B.filter('upcoming',this)">Upcoming</button>
           <button class="ftab" onclick="B.filter('pending',this)">Pending</button>
           <button class="ftab" onclick="B.filter('confirmed',this)">Confirmed</button>
           <button class="ftab" onclick="B.filter('in_progress',this)">In Progress</button>
           <button class="ftab" onclick="B.filter('completed',this)">Completed</button>
           <button class="ftab" onclick="B.filter('cancelled',this)">Cancelled</button>
+          <button class="ftab" onclick="B.filter('no_show',this)">No-show</button>
         </div>
-        <div id="bkList"><div class="card-empty" style="padding:30px;text-align:center">Loading bookings…</div></div>
+        <div id="bkList"></div>
         <div id="bkMore" style="text-align:center;margin-top:14px;display:none">
-          <button class="btn btn-s" onclick="B.loadMore()">Load More</button>
+          <button class="btn btn-s" onclick="B.loadMore()">Load more</button>
         </div>
       </div>
     </div>
@@ -633,6 +664,28 @@ a{color:var(--acc);text-decoration:none}
   </div>
 </div>
 
+<!-- Booking Detail Drawer (Phase 4) — right drawer on desktop, bottom sheet on mobile -->
+<div id="bkDrawer" class="bk-drawer-wrap" style="display:none">
+  <div class="bk-drawer-backdrop" onclick="D.close()"></div>
+  <div class="bk-drawer" role="dialog" aria-modal="true" aria-label="Booking detail">
+    <div class="bk-drawer-hdr"><div style="font-weight:800;font-size:1rem">Booking</div><button class="btn btn-g btn-sm" onclick="D.close()" aria-label="Close">✕</button></div>
+    <div class="bk-drawer-body" id="bkDrawerBody"></div>
+  </div>
+</div>
+
+<!-- Reschedule slot picker (Phase 4) — replaces prompt(); slots from getAvailabilitySlots -->
+<div id="rsSheet" class="av-sheet-wrap" style="display:none;z-index:2600">
+  <div class="av-sheet-backdrop" onclick="RS.close()"></div>
+  <div class="av-sheet">
+    <div class="av-sheet-hdr"><div style="font-weight:800;font-size:1rem">Reschedule</div><button class="btn btn-g btn-sm" onclick="RS.close()" aria-label="Close">✕</button></div>
+    <div class="av-sheet-body">
+      <label class="sk-lbl">New date</label>
+      <input id="rsDate" class="sk-in" type="date" onchange="RS.loadSlots()" style="margin-bottom:12px">
+      <div id="rsSlots"><div class="card-empty">Pick a date to see open slots.</div></div>
+    </div>
+  </div>
+</div>
+
 <script src="shared-header.js" defer></script>
 <script src="sokoni-provider.js" defer></script>
 <script src="sokoni-booking-resolution.js" defer></script>
@@ -664,51 +717,191 @@ const P={
 };
 
 /* ── Bookings ────────────────────────────────────────────────────────────── */
+/* Shared booking helpers (used by B, D, RS + snapshot/calendar). */
+function _t12(t){if(!t||typeof t!=='string'||t.indexOf(':')<0)return t||'';const p=t.split(':');const h=Number(p[0])||0,mi=Number(p[1])||0;const ap=h<12?'AM':'PM';const h12=((h+11)%12)||12;return h12+':'+String(mi).padStart(2,'0')+' '+ap;}
+function _tsMs(ts){if(!ts)return 0;if(typeof ts==='number')return ts;if(ts._seconds)return ts._seconds*1000;if(ts.seconds)return ts.seconds*1000;const p=Date.parse(ts);return isNaN(p)?0:p;}
+function _schedMs(b){if(!b)return 0;if(b.scheduledAt&&b.scheduledAt._seconds)return b.scheduledAt._seconds*1000;if(b.startTs)return Number(b.startTs);if(b.date)return Date.parse(b.date+'T'+(b.startTime||'00:00')+':00')||0;return 0;}
+function _bkRef(b){return '#'+String((b&&b.id)||'').slice(-6).toUpperCase();}
+function _bkWhen(b){let d='';try{if(b.date)d=new Date(b.date+'T00:00:00').toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'});}catch(_){}const t=b.startTime?_t12(b.startTime)+(b.endTime?' – '+_t12(b.endTime):''):'';return [d,t].filter(Boolean).join(' · ')||'—';}
+function _bkIni(b){return (b.customerName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();}
+const _BK_SC={pending:'cs-pending',confirmed:'cs-confirmed',in_progress:'cs-inprog',completed:'cs-completed',cancelled:'cs-cancelled',declined:'cs-cancelled',no_show:'cs-cancelled'};
+const _BK_SL={pending:'Pending',confirmed:'Confirmed',in_progress:'In Progress',completed:'Completed',cancelled:'Cancelled',declined:'Declined',no_show:'No Show'};
+const _STATUS_TABS={pending:1,confirmed:1,in_progress:1,completed:1,cancelled:1,no_show:1};
+
 const B={
-  filter(f,el){_bkFilter=f;document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');B.load()},
+  _cursor:null,_hasMore:false,_loading:false,_search:'',
+  filter(f,el){_bkFilter=f;this._search='';const s=_q('bkSearch');if(s)s.value='';document.querySelectorAll('#bkTabs .ftab').forEach(t=>t.classList.remove('on'));if(el)el.classList.add('on');B.load()},
+  _serverStatus(){return _STATUS_TABS[_bkFilter]?_bkFilter:'';},
   async load(){
-    _q('bkList').innerHTML='<div class="card-empty" style="padding:30px;text-align:center">Loading…</div>';
+    this._loading=true;this._cursor=null;this._hasMore=false;
+    _q('bkList').innerHTML=Array.from({length:4}).map(()=>'<div class="sk-row"></div>').join('');
+    _q('bkMore').style.display='none';
     try{
-      const opts=_bkFilter!=='all'?{status:_bkFilter}:{};
+      const st=this._serverStatus();const opts={limit:20};if(st)opts.status=st;
       const res=await _sdk.getBookings(opts);_bkDocs=res.bookings||[];
-      B.render();
-    }catch(e){_q('bkList').innerHTML=`<div class="card-empty" style="padding:20px">${_esc(e.message)}</div>`}
+      this._hasMore=!!res.hasMore;this._updateCursor();B.render();
+    }catch(e){_q('bkList').innerHTML=`<div class="card-empty" style="padding:24px;text-align:center">Couldn't load bookings.<br><button class="btn btn-g btn-sm" style="margin-top:8px" onclick="B.load()">Retry</button></div>`}
+    finally{this._loading=false}
+  },
+  async loadMore(){
+    if(this._loading||!this._hasMore||!this._cursor)return;this._loading=true;
+    const host=_q('bkMore');host.innerHTML='<button class="btn btn-s" disabled>Loading…</button>';
+    try{
+      const st=this._serverStatus();const opts={limit:20,startAfter:this._cursor};if(st)opts.status=st;
+      const res=await _sdk.getBookings(opts);const seen=new Set(_bkDocs.map(b=>b.id));
+      (res.bookings||[]).forEach(b=>{if(!seen.has(b.id))_bkDocs.push(b)});
+      this._hasMore=!!res.hasMore;this._updateCursor();B.render();
+    }catch(e){toast(e.message||'Failed to load more','err')}
+    finally{this._loading=false;host.innerHTML='<button class="btn btn-s" onclick="B.loadMore()">Load more</button>'}
+  },
+  _updateCursor(){if(_bkDocs.length){this._cursor=_schedMs(_bkDocs[_bkDocs.length-1])||null;}},
+  search(q){this._search=(q||'').trim().toLowerCase();B.render();},
+  _visible(){
+    let list=_bkDocs.slice();const now=Date.now();
+    if(_bkFilter==='today'){const t=new Date().toDateString();list=list.filter(b=>{const m=_schedMs(b);return m&&new Date(m).toDateString()===t;});}
+    else if(_bkFilter==='upcoming'){list=list.filter(b=>_schedMs(b)>=now&&['pending','confirmed','in_progress'].includes(b.status));}
+    if(this._search){const s=this._search;list=list.filter(b=>((b.customerName||'')+' '+(b.service||'')+' '+_bkRef(b)+' '+(b.date||'')+' '+(b.status||'')).toLowerCase().includes(s));}
+    return list;
   },
   render(){
-    if(!_bkDocs.length){_q('bkList').innerHTML='<div class="card-empty" style="padding:24px;text-align:center">No bookings found.</div>';return}
-    _q('bkList').innerHTML=_bkDocs.map(b=>B.card(b)).join('');
+    const list=this._visible(),host=_q('bkList');
+    if(!list.length){host.innerHTML=B._empty();_q('bkMore').style.display='none';return}
+    host.innerHTML=list.map(b=>B.card(b)).join('');
+    const narrowed=(_bkFilter==='today'||_bkFilter==='upcoming'||!!this._search);
+    _q('bkMore').style.display=(this._hasMore&&!narrowed)?'block':'none';
+  },
+  _empty(){
+    const searching=(!!this._search||_bkFilter==='today'||_bkFilter==='upcoming'||_bkFilter!=='all');
+    return `<div class="card-empty" style="padding:34px 16px;text-align:center">
+      <div style="font-size:2.1rem">📭</div>
+      <div style="font-weight:700;color:var(--text);margin-top:6px">${searching?'No matching bookings':'No bookings yet'}</div>
+      <div style="margin:6px 0 14px">${searching?'Try a different filter or search term.':'Share your booking link so customers can start booking you.'}</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        ${searching?'':`<button class="btn btn-p btn-sm" onclick="(typeof Sv!=='undefined'&&Sv.share)?Sv.share():P.show('settings',null,'services')">🔗 Share booking link</button>`}
+        <button class="btn btn-g btn-sm" onclick="P.show('settings',null,'services')">🧰 Manage services</button>
+      </div></div>`;
   },
   card(b){
-    const sc={pending:'cs-pending',confirmed:'cs-confirmed',in_progress:'cs-inprog',completed:'cs-completed',cancelled:'cs-cancelled',declined:'cs-cancelled',no_show:'cs-cancelled'};
-    const sl={pending:'Pending',confirmed:'Confirmed',in_progress:'In Progress',completed:'Completed',cancelled:'Cancelled',declined:'Declined',no_show:'No Show'};
-    const ini=(b.customerName||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
-    /* Actions gated on the Booking Lifecycle Contract v1.0 quick-reference matrix. */
-    const A=[];
-    if(b.status==='pending'){A.push(`<button class="btn btn-ok btn-sm" onclick="B.confirm('${b.id}')">Confirm</button>`);A.push(`<button class="btn btn-err btn-sm" onclick="B.decline('${b.id}')">Decline</button>`);}
-    if(b.status==='confirmed'){A.push(`<button class="btn btn-p btn-sm" onclick="B.start('${b.id}')">Start</button>`);A.push(`<button class="btn btn-ok btn-sm" onclick="B.complete('${b.id}')">Complete</button>`);A.push(`<button class="btn btn-sm" onclick="B.noShow('${b.id}')">No-show</button>`);}
-    if(b.status==='in_progress'){A.push(`<button class="btn btn-ok btn-sm" onclick="B.complete('${b.id}')">Complete</button>`);}
-    if(b.status==='pending'||b.status==='confirmed')A.push(`<button class="btn btn-sm" onclick="B.reschedule('${b.id}')">Reschedule</button>`);
-    if(b.status==='pending'||b.status==='confirmed'||b.status==='in_progress'){A.push(`<button class="btn btn-sm" onclick="B.cancel('${b.id}')">Cancel</button>`);A.push(`<button class="btn btn-sm" onclick="B.contact('${b.id}')">Contact</button>`);}
-    const acts=A.join('');
-    /* Build date/time from the plain string fields (date=YYYY-MM-DD, startTime/endTime=HH:MM).
-       scheduledAt arrives over the callable wire as a SERIALIZED timestamp ({_seconds,…}),
-       not a Firestore Timestamp, so new Date(it) was "Invalid Date". Strings never lie. */
-    const _t12=t=>{if(!t||typeof t!=='string'||t.indexOf(':')<0)return t||'';const p=t.split(':');const h=Number(p[0])||0,mi=Number(p[1])||0;const ap=h<12?'AM':'PM';const h12=((h+11)%12)||12;return h12+':'+String(mi).padStart(2,'0')+' '+ap;};
-    let dstr='';try{if(b.date)dstr=new Date(b.date+'T00:00:00').toLocaleDateString('en-KE',{day:'numeric',month:'short',year:'numeric'});}catch(_){}
-    const tstr=b.startTime?_t12(b.startTime)+(b.endTime?' – '+_t12(b.endTime):''):'';
-    const when=[dstr,tstr].filter(Boolean).join(' · ')||'—';
-    return`<div class="booking-item"><div class="b-ava">${_esc(ini)}</div><div class="b-info"><div class="b-name">${_esc(b.customerName||'Customer')} <span class="chip-status ${sc[b.status]||''}">${sl[b.status]||b.status}</span></div>${b.service?`<div class="b-meta" style="font-weight:600;color:var(--text)">${_esc(b.service)}</div>`:''}<div class="b-meta">📅 ${_esc(when)}</div>${b.price?`<div class="b-meta" style="color:var(--acc);margin-top:2px;font-weight:700">KSh ${_fmt(b.price/100)}</div>`:''}</div><div class="b-acts">${acts}</div></div>`;
+    const acts=B._cardActions(b);
+    return`<div class="booking-item" role="button" tabindex="0" onclick="D.open('${b.id}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();D.open('${b.id}')}"><div class="b-ava">${_esc(_bkIni(b))}</div><div class="b-info"><div class="b-name">${_esc(b.customerName||'Customer')} <span class="chip-status ${_BK_SC[b.status]||''}">${_BK_SL[b.status]||b.status}</span></div>${b.service?`<div class="b-meta" style="font-weight:600;color:var(--text)">${_esc(b.service)}</div>`:''}<div class="b-meta">📅 ${_esc(_bkWhen(b))}</div>${b.price?`<div class="b-meta" style="color:var(--acc);margin-top:2px;font-weight:700">KSh ${_fmt(b.price/100)}</div>`:''}</div><div class="b-acts">${acts}<span style="color:var(--sub);align-self:center;font-size:1.1rem">›</span></div></div>`;
   },
-  async confirm(id){showLoad('Confirming…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConfirmBooking',bookingId:id});toast('Booking confirmed!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async decline(id){showLoad('Declining…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerDeclineBooking',bookingId:id});toast('Booking declined.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async complete(id){showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCompleteBooking',bookingId:id});toast('Marked as complete!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async start(id){showLoad('Starting…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerStartBooking',bookingId:id});toast('Booking started.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async noShow(id){if(!confirm('Mark this booking as a no-show? This cannot be undone.'))return;showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerMarkNoShow',bookingId:id});toast('Marked as no-show.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async cancel(id){if(!confirm('Cancel this booking? The slot will be freed.'))return;showLoad('Cancelling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCancelBooking',bookingId:id});toast('Booking cancelled.');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async reschedule(id){const date=prompt('Reschedule — new date (YYYY-MM-DD)\n\nNote: a full calendar/slot picker is coming soon; this quick entry is temporary.');if(!date)return;const startTime=prompt('New start time (24-hour HH:MM):');if(!startTime)return;showLoad('Rescheduling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerRescheduleBooking',bookingId:id,date:date.trim(),startTime:startTime.trim()});toast('Booking rescheduled!');B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  /* Compact quick-actions on the card (stopPropagation so they don't open the drawer). */
+  _cardActions(b){
+    const A=[],s=`event.stopPropagation();`;
+    if(b.status==='pending'){A.push(`<button class="btn btn-ok btn-sm" onclick="${s}B.confirm('${b.id}')">Confirm</button>`);A.push(`<button class="btn btn-err btn-sm" onclick="${s}B.decline('${b.id}')">Decline</button>`);}
+    if(b.status==='confirmed'){A.push(`<button class="btn btn-p btn-sm" onclick="${s}B.start('${b.id}')">Start</button>`);A.push(`<button class="btn btn-ok btn-sm" onclick="${s}B.complete('${b.id}')">Complete</button>`);}
+    if(b.status==='in_progress'){A.push(`<button class="btn btn-ok btn-sm" onclick="${s}B.complete('${b.id}')">Complete</button>`);}
+    return A.join('');
+  },
+  async confirm(id){showLoad('Confirming…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerConfirmBooking',bookingId:id});toast('Booking confirmed!');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async decline(id){showLoad('Declining…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerDeclineBooking',bookingId:id});toast('Booking declined.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async complete(id){showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCompleteBooking',bookingId:id});toast('Marked as complete!');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async start(id){showLoad('Starting…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerStartBooking',bookingId:id});toast('Booking started.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async noShow(id){if(!confirm('Mark this booking as a no-show? This cannot be undone.'))return;showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerMarkNoShow',bookingId:id});toast('Marked as no-show.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async cancel(id){if(!confirm('Cancel this booking? The slot will be freed.'))return;showLoad('Cancelling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCancelBooking',bookingId:id});toast('Booking cancelled.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  reschedule(id){const b=(_bkDocs.find(x=>x.id===id))||D._find(id);if(b)RS.open(b);else toast('Booking not found','err');},
   async contact(id){showLoad('…');try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerContactCustomer',bookingId:id});const c=(r.data||{}).customer||{};if(c.phone){if(confirm(`${c.name||'Customer'}\n${c.phone}\n\nCall now?`))window.location.href='tel:'+c.phone;}else{toast('No phone number on file for this customer.','err')}}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  loadMore(){},
 };
+
+/* ── Booking Detail Drawer — reuses every existing backend op; adds no booking logic. */
+const D={
+  _id:null,
+  _find(id){return (_bkDocs&&_bkDocs.find(b=>b.id===id))||(_data&&_data.bookings&&_data.bookings.find(b=>b.id===id))||(typeof Cal!=='undefined'&&Cal._bookings&&Cal._bookings.find(b=>b.id===id))||null;},
+  open(id){const b=this._find(id);if(!b){toast('Booking not found','err');return;}this._id=id;const w=_q('bkDrawer');w.style.display='flex';document.body.style.overflow='hidden';_q('bkDrawerBody').innerHTML=this._html(b);_q('bkDrawer').querySelector('.bk-drawer').scrollTop=0;},
+  close(){const w=_q('bkDrawer');if(w)w.style.display='none';document.body.style.overflow='';this._id=null;},
+  _money(c){return 'KSh '+_fmt((Number(c)||0)/100);},
+  _timeline(b){
+    if(['cancelled','declined','no_show'].includes(b.status)){
+      const lab=b.status==='no_show'?'No-show':b.status==='declined'?'Declined':'Cancelled';
+      return `<li class="done"><span class="tl-t">Requested</span></li><li class="done"><span class="tl-t" style="color:var(--err)">${lab}</span></li>`;
+    }
+    const paid=(b.paymentStatus==='paid_held'||b.paymentStatus==='settled');
+    const fmt=ts=>{const m=_tsMs(ts);return m?new Date(m).toLocaleString('en-KE',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';};
+    const steps=[
+      {t:'Requested',done:true,ts:b.createdAt},
+      {t:'Confirmed',done:!!b.confirmedAt||['confirmed','in_progress','completed'].includes(b.status),ts:b.confirmedAt},
+      {t:'Paid',done:paid,ts:null},
+      {t:'In progress',done:!!b.startedAt||['in_progress','completed'].includes(b.status),ts:b.startedAt},
+      {t:'Completed',done:!!b.completedAt||b.status==='completed',ts:b.completedAt},
+    ];
+    return steps.map(s=>`<li class="${s.done?'done':'pending'}"><span class="tl-t">${s.t}</span>${s.done&&s.ts?` <span class="tl-ts">· ${fmt(s.ts)}</span>`:''}</li>`).join('');
+  },
+  _actions(b){
+    const A=[];
+    if(b.status==='pending'){A.push(`<button class="btn btn-ok btn-sm" onclick="D.act('confirm')">Confirm</button>`);A.push(`<button class="btn btn-err btn-sm" onclick="D.act('decline')">Decline</button>`);}
+    if(b.status==='confirmed'){A.push(`<button class="btn btn-p btn-sm" onclick="D.act('start')">Start</button>`);A.push(`<button class="btn btn-ok btn-sm" onclick="D.act('complete')">Complete</button>`);A.push(`<button class="btn btn-sm" onclick="D.act('noShow')">No-show</button>`);}
+    if(b.status==='in_progress'){A.push(`<button class="btn btn-ok btn-sm" onclick="D.act('complete')">Complete</button>`);}
+    if(b.status==='pending'||b.status==='confirmed'){A.push(`<button class="btn btn-sm" onclick="D.reschedule()">Reschedule</button>`);}
+    if(['pending','confirmed','in_progress'].includes(b.status)){A.push(`<button class="btn btn-sm" onclick="D.act('cancel')">Cancel</button>`);}
+    return A.length?A.join(''):'<span style="font-size:.8rem;color:var(--sub)">No actions available at this stage.</span>';
+  },
+  _html(b){
+    const ps=b.paymentStatus||'pending';
+    const payTxt={pending:'Awaiting payment',paid_held:'Paid · held in escrow',settled:'Settled'}[ps]||ps;
+    const snap=b.pricingSnapshot||{};
+    const dep=(b.deposit||snap.depositCents)?this._money(b.deposit||snap.depositCents):null;
+    const bal=(snap.balanceDue!=null)?this._money(snap.balanceDue):null;
+    return `
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div class="b-ava" style="width:46px;height:46px;font-size:.95rem">${_esc(_bkIni(b))}</div>
+        <div style="min-width:0"><div style="font-weight:800;font-size:1.05rem">${_esc(b.customerName||'Customer')}</div>
+          <div style="font-size:.75rem;color:var(--sub)">${_bkRef(b)} · <span class="chip-status ${_BK_SC[b.status]||''}">${_BK_SL[b.status]||b.status}</span></div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:14px 0">${this._actions(b)}</div>
+      <div class="bk-sec">Details</div>
+      <div class="bk-row"><span class="k">Service</span><span class="v">${_esc(b.service||'—')}</span></div>
+      <div class="bk-row"><span class="k">Date &amp; time</span><span class="v">${_esc(_bkWhen(b))}</span></div>
+      <div class="bk-row"><span class="k">Reference</span><span class="v">${_bkRef(b)}</span></div>
+      <div class="bk-row"><span class="k">Total</span><span class="v">${b.price?this._money(b.price):'—'}</span></div>
+      ${dep?`<div class="bk-row"><span class="k">Deposit</span><span class="v">${dep}</span></div>`:''}
+      ${bal?`<div class="bk-row"><span class="k">Balance due</span><span class="v">${bal}</span></div>`:''}
+      <div class="bk-row"><span class="k">Payment</span><span class="v">${payTxt}</span></div>
+      <div class="bk-sec">Timeline</div>
+      <ul class="tl">${this._timeline(b)}</ul>
+      ${b.note?`<div class="bk-sec">Customer note</div><div style="font-size:.83rem;color:var(--sub);white-space:pre-wrap">${_esc(b.note)}</div>`:''}
+      <div class="bk-sec">Internal note <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--sub)">· private to you</span></div>
+      <textarea id="bkNote" class="sk-in" rows="3" placeholder="e.g. Repeat client · bring ladder · prefers afternoons">${_esc(b.providerNotes||'')}</textarea>
+      <button class="btn btn-p btn-sm" style="margin-top:8px" onclick="D.saveNote()">Save note</button>
+      <button class="btn btn-g btn-sm" style="width:100%;margin-top:16px" onclick="D.contact()">📞 Contact customer</button>`;
+  },
+  async act(which){const id=this._id;if(!id||!B[which])return;await B[which](id);const b=this._find(id);if(b&&_q('bkDrawer').style.display!=='none'){_q('bkDrawerBody').innerHTML=this._html(b);}else{this.close();}},
+  reschedule(){const b=this._find(this._id);if(b)RS.open(b);},
+  contact(){if(this._id)B.contact(this._id);},
+  async saveNote(){const id=this._id;if(!id)return;const note=(_q('bkNote')||{}).value||'';showLoad('Saving note…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerSaveBookingNote',bookingId:id,note});const b=this._find(id);if(b)b.providerNotes=note;toast('Note saved.');}catch(e){toast(e.message||'Save failed','err')}finally{hideLoad()}},
+};
+
+/* ── Reschedule slot picker — authoritative slots from getAvailabilitySlots; the
+   reschedule op re-validates and rejects conflicts, so this is a convenience layer. */
+const RS={
+  _b:null,
+  open(b){this._b=b;const w=_q('rsSheet');w.style.display='flex';document.body.style.overflow='hidden';const d=_q('rsDate'),min=new Date().toISOString().slice(0,10);d.min=min;d.value=(b.date&&b.date>=min)?b.date:min;RS.loadSlots();},
+  close(){const w=_q('rsSheet');if(w)w.style.display='none';if(_q('bkDrawer').style.display==='none')document.body.style.overflow='';},
+  async loadSlots(){
+    const b=this._b;if(!b)return;const date=(_q('rsDate')||{}).value;if(!date)return;
+    _q('rsSlots').innerHTML='<div class="card-empty">Loading open slots…</div>';
+    try{
+      const fn=firebase.functions().httpsCallable('bookingDispatch');
+      const r=await fn({op:'getAvailabilitySlots',providerId:b.providerId,startDate:date,days:1,serviceId:b.serviceId||undefined});
+      const results=(r.data||{}).results||[];const res=results.find(x=>x.date===date)||results[0];
+      const slots=((res&&res.slots)||[]).filter(s=>s.available);
+      if(!res||res.available===false||!slots.length){_q('rsSlots').innerHTML=`<div class="card-empty">No open slots on ${_esc(date)}.${res&&res.closedReason?' ('+_esc(String(res.closedReason))+')':''}<br>Pick another date.</div>`;return;}
+      _q('rsSlots').innerHTML=`<div style="font-size:.75rem;color:var(--sub);margin-bottom:8px">${slots.length} open slot${slots.length===1?'':'s'} · tap to move this booking</div>`+slots.map(s=>`<button class="rs-slot" onclick="RS.pick('${_esc(s.startTime)}')">${_esc(_t12(s.startTime))}</button>`).join('');
+    }catch(e){_q('rsSlots').innerHTML=`<div class="card-empty">Couldn't load slots. <button class="btn btn-g btn-sm" onclick="RS.loadSlots()">Retry</button></div>`;}
+  },
+  async pick(startTime){
+    const b=this._b;if(!b)return;const date=(_q('rsDate')||{}).value;
+    if(!confirm(`Move this booking to ${date} at ${_t12(startTime)}?`))return;
+    showLoad('Rescheduling…');
+    try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerRescheduleBooking',bookingId:b.id,date,startTime});toast('Booking rescheduled!');RS.close();D.close();await B.load();}
+    catch(e){toast(e.message||'Reschedule failed','err');}finally{hideLoad();}
+  },
+};
+/* Escape closes the topmost overlay (a11y). */
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+  if(_q('rsSheet')&&_q('rsSheet').style.display!=='none')return RS.close();
+  if(_q('bkDrawer')&&_q('bkDrawer').style.display!=='none')return D.close();
+  if(_q('avEditor')&&_q('avEditor').style.display!=='none')return AvE.close();
+});
 
 /* ── Calendar (D4) — presentation-only, real-time. Reads the CANONICAL availability
    (providerAvailability) + subscribes to the provider's own bookings via onSnapshot.
