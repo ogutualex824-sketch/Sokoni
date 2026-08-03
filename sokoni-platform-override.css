@@ -487,3 +487,31 @@ pre  { padding: 16px; overflow-x: auto; }
   0%   { background-position: -400px 0; }
   100% { background-position:  400px 0; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   18. PLATFORM POLISH LAYER — v1.1 (2026-08-03)  [additive, no repaint]
+   (a) Honour prefers-reduced-motion for EVERY page — including the inline
+       @keyframes on flagship pages that the shared CSS guard didn't cover.
+   (b) Fill genuinely-undefined semantic aliases so a component that names a
+       token from a different vocabulary resolves the existing canonical value
+       instead of nothing. These map to already-defined tokens (no new colours,
+       no repaint) and are NOT any page's primary token. Canonical hexes and
+       intentionally page-specific tokens (--card glass, category --sc*) are
+       left untouched — the #0a0a0a-vs-#050505 canonical question is a design
+       decision, deliberately not made here.
+══════════════════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:root {
+  --err:     var(--danger, #ff4d4d);
+  --error:   var(--danger, #ff4d4d);
+  --err-bg:  var(--danger-bg, rgba(255,68,68,0.10));
+  --success: var(--ok, #71ff00);
+}
