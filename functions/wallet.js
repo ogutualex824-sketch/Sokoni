@@ -1581,40 +1581,117 @@ exports.finalizeB2CPayoutFromWebhook = async function (db, ref, state, rawPayloa
     reqRef = q.docs[0].ref; snap = q.docs[0];
   }
 
-  const p  = snap.data();
-  const st = String(state || '').toUpperCase();
+  const p   = snap.data();
+  const raw = rawPayload || {};
+  /* IntaSend SEND-MONEY (B2C) reports the true progression in `status`
+     ("Confirming balance" → "Preview and approve" → "Sending payment" → "Processing
+     payment" → "Completed"), NOT `state` (a collection-only field). The old code read
+     `state` and DEFAULTED ABSENT TO "FAILED" — catastrophic: an in-flight transfer was
+     marked failed + refunded, then the money completed anyway (double spend, ref
+     UH36Q1AYSC). Classify from `status` + paid_amount/failed_amount; every non-terminal
+     step stays PROCESSING and NEVER touches money. */
+  const rawStatus = String(raw.status || raw.invoice?.state || state || '').trim();
+  const S         = rawStatus.toUpperCase();
+  const paidAmt   = Number(raw.paid_amount   != null ? raw.paid_amount   : (raw.invoice && raw.invoice.paid_amount))   || 0;
+  const failedAmt = Number(raw.failed_amount != null ? raw.failed_amount : (raw.invoice && raw.invoice.failed_amount)) || 0;
 
-  /* Audit: attach the raw (redacted) webhook payload to the payout record, so if
-     IntaSend changes field names/formats we can see exactly what arrived. */
   await reqRef.update({
     updatedAt: Timestamp.now(),
-    lastWebhookState: st,
-    webhookEvents: FieldValue.arrayUnion({ state: st, at: Timestamp.now(), payload: _redact(rawPayload) }),
+    lastWebhookState: rawStatus || S,
+    gatewayStatus:    rawStatus || p.gatewayStatus || null,
+    webhookEvents: FieldValue.arrayUnion({ state: rawStatus || S, at: Timestamp.now(), payload: _redact(raw) }),
   }).catch(() => {});
-  _plog('webhook_received', { ...p, id: reqRef.id }, { webhookState: st });
+  _plog('webhook_received', { ...p, id: reqRef.id }, { webhookState: rawStatus, paidAmt, failedAmt });
 
-  const COMPLETE = ['COMPLETE', 'COMPLETED', 'SUCCESS', 'PAID', 'SETTLED'];
-  const FAILED   = ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED'];
-  const REVERSED = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'];
+  /* STATE-TRANSITION GUARD — a settled payout is terminal. A later/duplicate webhook can
+     NEVER flip paid → failed/processing (forbidden: Paid→Failed). */
+  if (['paid', 'settled_manually'].includes(p.status)) {
+    _plog('webhook_after_paid', { ...p, id: reqRef.id }, { webhookState: rawStatus });
+    return true;
+  }
 
-  if (COMPLETE.includes(st)) {
-    await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, webhookReceivedAt: Timestamp.now(), detail: `IntaSend B2C confirmed (${st})` });
+  const completedWord = /COMPLETE/.test(S) || ['SUCCESS', 'PAID', 'SETTLED'].includes(S);
+  const explicitFail  = ['FAILED', 'FAILURE', 'CANCELLED', 'CANCELED', 'REJECTED'].includes(S);
+  const hasFailure    = failedAmt > 0 && paidAmt === 0;   // batch "Completed" but this transfer failed
+  const isComplete    = completedWord && !hasFailure;
+  const isReversed    = ['REVERSED', 'REVERSAL', 'REFUNDED', 'CHARGEBACK'].includes(S);
+  const isFailed      = explicitFail || (completedWord && hasFailure);
+
+  if (isComplete) {
+    await _settlePayoutPaid(db, reqRef.id, { intasendRef: p.intasendRef || ref, webhookReceivedAt: Timestamp.now(), detail: `IntaSend B2C completed (${rawStatus})` });
     _plog('paid', { ...p, id: reqRef.id, status: 'paid' });   /* metric+latency inside _settlePayoutPaid */
-  } else if (REVERSED.includes(st)) {
-    await _reversePayout(db, reqRef.id, `IntaSend reversed (${st})`);
+  } else if (isReversed) {
+    await _reversePayout(db, reqRef.id, `IntaSend reversed (${rawStatus})`);
     await _payoutMetric(db, 'reversed');
     _plog('reversed', { ...p, id: reqRef.id, status: 'reversed' });
-  } else if (FAILED.includes(st)) {
-    /* _refundPayout is a no-op if already paid/terminal — never double-pays. */
-    await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${st})` });
+  } else if (isFailed) {
+    /* _refundPayout is a no-op if already terminal — never double-pays. */
+    await _refundPayout(db, reqRef.id, 'failed', { detail: `IntaSend B2C failed (${rawStatus})` });
     await _payoutMetric(db, 'b2cErrors');
-    _plog('failed', { ...p, id: reqRef.id, status: 'failed' }, { webhookState: st });
+    _plog('failed', { ...p, id: reqRef.id, status: 'failed' }, { webhookState: rawStatus });
   } else {
+    /* IN-FLIGHT (Confirming balance / Preview and approve / Sending payment / Processing
+       payment / Pending): NEVER touch money — a terminal webhook will follow. */
     await reqRef.update({
-      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', `IntaSend update: ${st}`)),
+      statusHistory: FieldValue.arrayUnion(_payoutEvent('processing', `Gateway: ${rawStatus}`)),
     }).catch(() => {});
+    _plog('webhook_inflight', { ...p, id: reqRef.id }, { status: rawStatus });
   }
   return true;
+};
+
+/**
+ * reconcileB2CPayout — bring a payout's DB record into agreement with the GATEWAY truth,
+ * through the settlement pipeline (never a hand-edit). Reads the stored webhookEvents to
+ * decide the true outcome. Corrects the class of bug where a premature/mis-read webhook
+ * marked a payout 'failed' (and refunded the seller) while the money actually COMPLETED —
+ * settling to 'paid' AND undoing the erroneous refund (the money did leave). Idempotent.
+ */
+exports.reconcileB2CPayout = async function (db, rid) {
+  const reqRef = db.collection('payoutRequests').doc(String(rid));
+  const snap = await reqRef.get();
+  if (!snap.exists) return { found: false };
+  const p = snap.data();
+  const events = Array.isArray(p.webhookEvents) ? p.webhookEvents : [];
+  /* Gateway truth: any event that COMPLETED with money actually paid. */
+  const completed = events.some((e) => {
+    const s  = String(e.state || '').toUpperCase();
+    const pl = e.payload || {};
+    const failed = Number(pl.failed_amount) > 0 && Number(pl.paid_amount) === 0;
+    return (/COMPLETE/.test(s) || ['SUCCESS', 'PAID', 'SETTLED'].includes(s)) && !failed;
+  }) || /complete/i.test(String(p.gatewayStatus || ''));
+
+  if (['paid', 'settled_manually'].includes(p.status)) return { reconciled: false, status: p.status, note: 'already settled' };
+
+  if (completed) {
+    let result = null;
+    await db.runTransaction(async (t) => {
+      const s = await t.get(reqRef); const x = s.data();
+      if (['paid', 'settled_manually'].includes(x.status)) { result = { reconciled: false, note: 'already settled' }; return; }
+      const walletRef = db.collection('wallets').doc(x.sellerUid);
+      const txRef     = db.collection('walletTransactions').doc(`${x.sellerUid}_${rid}_payout`);
+      const txEx      = await t.get(txRef);
+      /* If it had been wrongly marked 'failed', the refund CREDITED balance + released the
+         hold. The money DID leave → debit that erroneous credit back. If still in-flight
+         (processing), the hold is intact → release it as a normal settle. */
+      if (x.status === 'failed') t.update(walletRef, { balance: FieldValue.increment(-x.amount) });
+      else                       t.update(walletRef, { pendingPayout: FieldValue.increment(-x.amount) });
+      if (!txEx.exists) t.set(txRef, {
+        uid: x.sellerUid, type: 'payout', amount: x.amount,
+        description: `Payout via MPESA — ref ${rid} (gateway-reconciled)`,
+        status: 'completed', settlementType: 'gateway', createdAt: Timestamp.now(),
+      });
+      t.update(reqRef, {
+        status: 'paid', paidAt: Timestamp.now(), confirmedAt: Timestamp.now(),
+        settlementMethod: 'gateway', reconciledAt: Timestamp.now(), reconciledFrom: x.status,
+        statusHistory: FieldValue.arrayUnion(_payoutEvent('paid', `Reconciled from gateway (money confirmed sent) — corrected a premature '${x.status}'`)),
+      });
+      result = { reconciled: true, from: x.status, to: 'paid' };
+    });
+    if (result && result.reconciled) _notifyPayout('paid', p, rid);
+    return result;
+  }
+  return { reconciled: false, status: p.status, gatewayCompleted: false };
 };
 
 // ─── 14. sweepEarningsToWallet — converge ecosystem earnings into ONE
