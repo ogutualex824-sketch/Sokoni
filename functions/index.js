@@ -6065,8 +6065,23 @@ exports.intasendWebhook = onRequest(
     const state      = String(invoice.state    || req.body?.state    || "FAILED").toUpperCase();
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
+    const trackingId = req.body?.tracking_id || invoice.tracking_id || req.body?.file_id || invoice.file_id || null;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
 
+    /* Log the full payload before any guard (B2C field-name visibility). */
+    try { const _rb = { ...(req.body || {}) }; delete _rb.challenge; delete _rb.signature; delete _rb.secret;
+      console.log("[intasendWebhook] raw payload:", JSON.stringify(_rb).slice(0, 4000)); } catch (_) {}
+
+    /* Seller B2C payouts ("pout_…") — settle FIRST, by ANY identifier (api_ref OR
+       tracking_id/file_id). The docs disagreed on which webhook IntaSend hits, so BOTH
+       webhooks now settle B2C — whichever URL is registered, a confirmation reconciles. */
+    try {
+      for (const r of [apiRef, checkoutId, trackingId].filter(Boolean)) {
+        if (await wallet.finalizeB2CPayoutFromWebhook(db, r, state, req.body)) { res.status(200).send("OK"); return; }
+      }
+    } catch (e) { console.error("[intasendWebhook] B2C payout finalize error:", e.message); }
+
+    /* Below (top-up + collection/payment) is keyed on api_ref. */
     if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
     /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
@@ -6960,8 +6975,10 @@ exports.webhookIntasend = onRequest(
     const apiRef     = invoice.api_ref         || req.body?.api_ref;
     const checkoutId = invoice.id              || req.body?.invoice_id;
     const amount     = Number(invoice.net_amount || invoice.amount || req.body?.net_amount || req.body?.value || 0);
-
-    if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
+    /* B2C send-money identifies the transfer by tracking_id/file_id, NOT api_ref. The
+       api_ref guard is DEFERRED to after B2C settlement (below), else B2C confirmations
+       are dropped and the payout sticks at 'processing'. */
+    const trackingId = req.body?.tracking_id || invoice.tracking_id || req.body?.file_id || invoice.file_id || null;
 
     /* First-rollout observability: log the ENTIRE webhook payload (challenge/secret
        stripped) before parsing, so if IntaSend's B2C field names/format differ we can
@@ -6977,18 +6994,22 @@ exports.webhookIntasend = onRequest(
        payload on the payout for audit. No-op for non-payout events, so top-up/payment
        handling below is unaffected. */
     try {
-      if (await wallet.finalizeB2CPayoutFromWebhook(db, apiRef, state, req.body)) {
-        res.status(200).send("OK");
-        return;
-      }
-      if (checkoutId && await wallet.finalizeB2CPayoutFromWebhook(db, checkoutId, state, req.body)) {
-        res.status(200).send("OK");
-        return;
+      /* Try EVERY identifier IntaSend may send for a send-money confirmation:
+         api_ref (== our reqId), invoice.id/invoice_id, tracking_id/file_id. */
+      for (const r of [apiRef, checkoutId, trackingId].filter(Boolean)) {
+        if (await wallet.finalizeB2CPayoutFromWebhook(db, r, state, req.body)) {
+          res.status(200).send("OK");
+          return;
+        }
       }
     } catch (e) {
       console.error("[webhookIntasend] B2C payout finalize error:", e.message);
       /* fall through — don't block other webhook handling */
     }
+
+    /* Everything below (wallet top-up + collection/payment) is keyed on api_ref. A B2C
+       confirmation (no api_ref) has already been handled and returned above. */
+    if (!apiRef) { res.status(400).send("Missing api_ref"); return; }
 
     /* Wallet top-ups ("wtop_…") have no payments/{ref} doc — finalize them via
        the shared idempotent claim before the payments path below. */
