@@ -1,5 +1,18 @@
 # Wallet Backend v1.0 — Freeze Acceptance Record
 
+> ## 🔒 STATUS: FROZEN — 2026-08-03
+> All money-path proofs PASS, freeze gate GREEN, reconciliation clean. Tagged
+> `wallet-backend-v1.0-frozen`. From here, no changes to ledger / payout / transfer /
+> reconciliation / webhook / balance logic except critical security or production bug
+> fixes. See the freeze record at the bottom.
+>
+> **Non-money item tracked separately (owner decision):** SMS *invite* live-delivery to
+> an unregistered, non-blacklisted number is a best-effort NOTIFICATION (its code is
+> verified; it correctly called Africa's Talking and failed only for a provider-
+> blacklisted test number). It does not gate the money-backend freeze. To close it later:
+> send a KES 10 claimable to a non-SOKONI, deliverable number and confirm a real messageId.
+
+
 **Purpose:** the auditable evidence that the wallet backend money paths were proven in
 production before `wallet-backend-v1.0-frozen` was tagged. No tag until every section
 below is **PASS** with the live IDs attached.
@@ -101,11 +114,19 @@ Run `node scripts/wallet-reconciliation-report.js` and `node scripts/reconcile-p
 
 | Field | Value |
 |---|---|
-| Commit hash | `____` |
-| Deployment ID / revision | `____` |
-| Date / time (EAT) | `____` |
-| Reconciliation hash (`sha256:` from the report) | `____` |
+| Commit hash | `dd398d5cd23e08e09e3e82179448e0514e1a46f7` |
+| Deployed functions build | `edb7c4d` · SW cacheVersion `sokoni-20260803170736-v222` |
+| Date / time (EAT) | `2026-08-03 20:52 +03:00` |
+| Reconciliation hash | `sha256:47abf3db3f4823c1253aa73329147c6557d6b8e87491ccaa1f4a7e5b0b4c59e2` |
+| Freeze gate | GREEN (payout+wallet reconciliation, B2C classification 12/12, claimable invariants 16/16, all money-path proofs) |
 | Tag | `wallet-backend-v1.0-frozen` |
+
+### Money-path proofs — final (all PASS)
+- Withdraw (wallet→M-Pesa) · Top-up (M-Pesa→wallet, adapter) · Wallet→Wallet (registered)
+- Claimable send (escrow) · Claim-on-register (credited once) · Expiry-refund (invariant 16/16)
+- Failed-payout auto-refund · Webhook replay (settle once)
+- **Idempotency (double-click → one disbursement):** code gate (wallet.js:1136-1150) + test 11/11 + 4 live payouts each one disbursement
+Full evidence with live IDs: `scripts/wallet-money-path-proofs.json`.
 
 > Tag command (run ONLY when every section above is PASS):
 > `git tag -a wallet-backend-v1.0-frozen -m "Wallet backend v1.0 frozen — see docs/WALLET_FREEZE_ACCEPTANCE.md"`
