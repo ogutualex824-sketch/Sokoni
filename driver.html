@@ -2610,6 +2610,20 @@ window.toggleOnline = async function() {
         status:   onBreak ? 'break' : (online ? 'active' : 'offline'),
         updatedAt:firebase.firestore.FieldValue.serverTimestamp(),
       }).catch(function () {});
+      /* Canonical unified identity — an authenticated account acting as a driver is
+         registered in users/{uid}.roles[] (THE single source per CANONICAL_DATA_MODEL),
+         not localStorage. Additive (arrayUnion, never destructive), so a multi-role
+         account (buyer+driver) keeps every role. Vehicle stays in the dispatch layer
+         (rideDrivers/dispatch) per ADR-012 — only driver IDENTITY/shift lives here. */
+      firebase.firestore().collection('users').doc(_riderUid).set({
+        roles: firebase.firestore.FieldValue.arrayUnion('driver'),
+        isDriver: true, isRider: true,
+        driverProfile: {
+          shiftStatus: onBreak ? 'break' : (online ? 'online' : 'offline'),
+          lastShiftAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(function () {});
     }
 
     function _updateShiftStatus() {
