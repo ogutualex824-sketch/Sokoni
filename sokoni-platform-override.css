@@ -515,3 +515,51 @@ pre  { padding: 16px; overflow-x: auto; }
   --err-bg:  var(--danger-bg, rgba(255,68,68,0.10));
   --success: var(--ok, #71ff00);
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   19. BOTTOM-NAV UNIFICATION FALLBACK — v1.2
+   sokoni-nav-engine.js writes canonical `.bnav-item` tabs into `.bottom-nav`
+   on every non-SKIP page, but only adds the `.sk-nav-injected` class when it
+   CREATES the nav. Pages that ship their OWN `.bottom-nav` (e.g. messages.html)
+   get the canonical items WITHOUT that class, so the engine's
+   `.bottom-nav.sk-nav-injected .bnav-item` rules never match and the tabs render
+   unstyled. This mirrors the engine's BASE item styling at a lower specificity
+   (`.bottom-nav .bnav-item` = one fewer class), so:
+     • pages WITH `.sk-nav-injected` keep the engine's themed rules (they win on
+       specificity — workspace active-colours untouched);
+     • pages WITHOUT it still get the correct canonical look.
+   One nav contract, zero engine/markup edits.
+══════════════════════════════════════════════════════════════════════ */
+.bottom-nav .bnav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 10px 4px 8px;
+  color: rgba(255,255,255,0.35);
+  text-decoration: none;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.18s, transform 0.18s;
+  position: relative;
+}
+.bottom-nav .bnav-item:active { transform: scale(0.92); }
+.bottom-nav .bnav-emoji { font-size: 21px; line-height: 1; transition: filter 0.2s, transform 0.18s; }
+.bottom-nav .active-bnav { color: #71ff00; }
+.bottom-nav .active-bnav::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: #71ff00;
+  box-shadow: 0 1px 8px rgba(113,255,0,0.55);
+}
+.bottom-nav .active-bnav .bnav-emoji { filter: drop-shadow(0 0 7px rgba(113,255,0,0.55)); }

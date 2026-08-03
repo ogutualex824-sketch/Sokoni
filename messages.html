@@ -68,10 +68,8 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 .sk-line{height:13px;margin-bottom:7px;border-radius:4px}
 .sk-line.w80{width:80%}.sk-line.w60{width:60%}.sk-line.w40{width:40%}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:64px;z-index:100}
-.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:10px;color:var(--c-sub);text-decoration:none;border:none;background:none}
-.nav-item.active{color:var(--c-primary)}
-.nav-item .material-icons{font-size:24px}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:64px;z-index:100;padding-bottom:env(safe-area-inset-bottom,0)}
+/* .bnav-item tabs are styled by the canonical fallback in sokoni-platform-override.css */
 
 @media(min-width:769px){
   .bottom-nav{display:none}
@@ -118,11 +116,15 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
   <div class="sk-conv"><div class="skeleton sk-avatar"></div><div class="sk-body"><div class="skeleton sk-line w80"></div><div class="skeleton sk-line w60"></div><div class="skeleton sk-line w40"></div></div></div>
 </div>
 
-<nav class="bottom-nav">
-  <a href="/"    class="nav-item"><span class="material-icons" aria-hidden="true">&#xe88a;</span>Home</a>
-  <a href="services.html" class="nav-item"><span class="material-icons" aria-hidden="true">&#xf100;</span>Services</a>
-  <a href="messages.html" class="nav-item active"><span class="material-icons" aria-hidden="true">&#xe0b7;</span>Messages</a>
-  <a href="profile.html"  class="nav-item"><span class="material-icons" aria-hidden="true">&#xe7fd;</span>Profile</a>
+<!-- Canonical bottom nav — matches sokoni-nav-engine _CANONICAL_TABS so first paint
+     equals the hydrated state (the engine overwrites this at runtime). Styled by the
+     nav-unification fallback in sokoni-platform-override.css. -->
+<nav class="bottom-nav" data-workspace="buyer" aria-label="Primary navigation">
+  <a href="/" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">🏠</span><span>Home</span></a>
+  <a href="category.html?cat=all" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">🛍️</span><span>Shop</span></a>
+  <a href="services.html" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">🛠️</span><span>Services</span></a>
+  <a href="my-orders.html" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">📦</span><span>Orders</span></a>
+  <a href="profile.html" class="bnav-item" role="link"><span class="bnav-emoji" aria-hidden="true">👤</span><span>Profile</span></a>
 </nav>
 
 <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
