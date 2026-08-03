@@ -26,6 +26,7 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
+const { getAuth } = require('firebase-admin/auth');
 const { defineSecret } = require('firebase-functions/params');
 const crypto = require('crypto');
 
@@ -112,6 +113,50 @@ async function _findUserByPhone(db, normalizedPhone) {
   for (const [field, val] of attempts) {
     const snap = await db.collection('users').where(field, '==', val).limit(1).get();
     if (!snap.empty) return snap.docs[0];
+  }
+  return null;
+}
+
+/**
+ * Resolve a recipient by phone across BOTH sources of truth: the Firestore `users`
+ * collection (fast, indexed) AND Firebase Auth (authoritative for phone signups). A
+ * user who signed up by phone but whose users/{uid} doc has no phoneNumber field is
+ * invisible to the Firestore query alone — the exact "Recipient not found on SOKONI"
+ * failure for a VALID user. On an Auth hit we backfill users/{uid}.phoneNumber so the
+ * next lookup resolves from Firestore in one read; the caller's _ensureWallet creates
+ * the wallet doc if the valid user never initialised one.
+ * @returns {{ uid: string, data: object, source: 'firestore'|'auth' } | null}
+ */
+async function _resolveRecipientByPhone(db, normalizedPhone) {
+  if (!normalizedPhone) return null;
+  const fsDoc = await _findUserByPhone(db, normalizedPhone);
+  if (fsDoc) return { uid: fsDoc.id, data: fsDoc.data() || {}, source: 'firestore' };
+
+  /* Firebase Auth fallback — the authoritative phone→uid map (E.164 "+254…"). */
+  const e164 = `+${normalizedPhone}`;
+  try {
+    const authUser = await getAuth().getUserByPhoneNumber(e164);
+    if (authUser && authUser.uid) {
+      const userRef = db.collection('users').doc(authUser.uid);
+      const snap    = await userRef.get();
+      const data    = snap.exists ? (snap.data() || {}) : {};
+      /* Backfill the canonical phone (merge — never clobbers other identity fields). */
+      await userRef.set({
+        phoneNumber: e164,
+        displayName: data.displayName || authUser.displayName || null,
+        updatedAt:   Timestamp.now(),
+      }, { merge: true }).catch(() => {});
+      return {
+        uid:    authUser.uid,
+        data:   { ...data, displayName: data.displayName || authUser.displayName || null },
+        source: 'auth',
+      };
+    }
+  } catch (e) {
+    /* auth/user-not-found is the normal "not a SOKONI number" case — not an error. */
+    if (e && e.code && e.code !== 'auth/user-not-found') {
+      console.error(TAG, '_resolveRecipientByPhone auth lookup error:', e.code || e.message);
+    }
   }
   return null;
 }
@@ -410,20 +455,23 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
     await _assertNotFrozen(db, senderUid);
     await _assertPinOk(db, senderUid, pin);   // authorize the send (no-op if no PIN set)
 
-    // ── Recipient lookup: by uid (QR) or by phone (tolerant of stored formats) ──
-    let recipientDoc;
+    // ── Recipient lookup: by uid (QR) or by phone (Firestore + Firebase Auth) ──
+    let recipientUid, recipientData, resolveSource;
     if (wantsUid) {
       const snap = await db.collection('users').doc(toUid.trim()).get();
-      recipientDoc = snap.exists ? snap : null;
+      if (!snap.exists) {
+        console.warn(TAG, 'send USER_NOT_FOUND', JSON.stringify({ rawPhone: phone || null, toUid: toUid.trim(), matchedUid: null, source: 'uid' }));
+        return { success: false, error: 'USER_NOT_FOUND' };
+      }
+      recipientUid = snap.id; recipientData = snap.data() || {}; resolveSource = 'uid';
     } else {
-      recipientDoc = await _findUserByPhone(db, normalizedPhone);
+      const resolved = await _resolveRecipientByPhone(db, normalizedPhone);
+      if (!resolved) {
+        console.warn(TAG, 'send USER_NOT_FOUND', JSON.stringify({ rawPhone: phone || null, normalizedPhone, matchedUid: null }));
+        return { success: false, error: 'USER_NOT_FOUND' };
+      }
+      recipientUid = resolved.uid; recipientData = resolved.data; resolveSource = resolved.source;
     }
-    if (!recipientDoc) {
-      return { success: false, error: 'USER_NOT_FOUND' };
-    }
-
-    const recipientUid  = recipientDoc.id;
-    const recipientData = recipientDoc.data();
 
     if (recipientUid === senderUid) {
       throw new HttpsError('invalid-argument', 'Cannot send money to yourself');
@@ -432,6 +480,10 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
     const recipientName = _san(
       recipientData.displayName || recipientData.name || 'SOKONI User', 60
     );
+    console.log(TAG, 'send recipient resolved', JSON.stringify({
+      rawPhone: phone || null, normalizedPhone: normalizedPhone || null,
+      matchedUid: recipientUid, source: resolveSource,
+    }));
 
     // ── Idempotency check — dedupe within 5-second window ───────────────────
     const windowStart  = Timestamp.fromMillis(Date.now() - IDEMPOTENCY_WINDOW_MS);
@@ -530,6 +582,10 @@ exports.walletV2Send = onCall(BASE_OPTS, async (request) => {
       });
     });
 
+    console.log(TAG, 'send completed', JSON.stringify({
+      txOutId, txInId, senderUid, recipientUid, walletId: recipientUid,
+      amount: safeAmount, newSenderBalance,
+    }));
     return {
       success:       true,
       recipientName,
