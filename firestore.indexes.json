@@ -5633,6 +5633,20 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "idempotencyKey",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "walletTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "uid",
           "order": "ASCENDING"
         },
