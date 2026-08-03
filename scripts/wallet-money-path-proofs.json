@@ -1,0 +1,9 @@
+{
+  "_comment": "Real-money E2E proofs for the Wallet Freeze Gate. Set confirmed:true ONLY after live verification. The gate blocks the freeze until every path is confirmed.",
+  "withdraw_wallet_to_mpesa": { "confirmed": true,  "evidence": "pout_xrH2…1785746119 → gateway 'Completed' → PAID; M-Pesa ref d5fe8a68; reconciled 0 mismatches" },
+  "topup_mpesa_to_wallet":    { "confirmed": false, "evidence": "RE-VERIFY — top-up now routes through the SOKONI Pay adapter (was the intasend-node SDK). Wire-identical contract (POST /payment/mpesa-stk-push/, Bearer, numeric amount), but the code path changed; needs one live top-up AFTER deploying wallet.js + payment-adapters.js. Prior proof (KES 50, 2026-08-03 08:34) was on the SDK path." },
+  "send_wallet_to_wallet":    { "confirmed": false, "evidence": "PENDING — run one real wallet→wallet transfer (walletV2Send) and confirm both balances + ledger" },
+  "failed_payout_auto_refund":{ "confirmed": true,  "evidence": "insufficient-float payout auto-refunded; reservation returned" },
+  "idempotency_double_click": { "confirmed": false, "evidence": "PENDING — double-click Approve on one payout; must produce exactly one disbursement (approve-gate flips pending→approving atomically)" },
+  "webhook_replay":           { "confirmed": true,  "evidence": "5 duplicate/in-flight webhooks on one payout processed idempotently; only terminal Completed settled" }
+}

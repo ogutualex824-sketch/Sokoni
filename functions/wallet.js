@@ -587,57 +587,42 @@ exports.initiateWalletTopUp = onCall(
       await walletRef.update({ pendingTopUp: txId });
     }
 
-    // Initiate IntaSend STK Push
+    // Initiate IntaSend STK Push — through the SOKONI Pay adapter (swappable gateway)
     let invoiceId = null;
     try {
-      const IntaSend = require('intasend-node');
-      /* intasend-node takes THREE POSITIONAL args:
-             IntaSend(publishable_key, secret_key, test_mode)
-         This was called as IntaSend(key, { testMode }) — so the secret landed in
-         the publishable slot and an OBJECT became secret_key. The client sends
-         `Authorization: Bearer ${secret_key}`, i.e. "Bearer [object Object]",
-         and IntaSend answered HTTP 500 on every STK push. test_mode was also
-         left undefined. Matches the working call in payment-orchestrator.js. */
-      const client = new IntaSend(
-        '',                                        /* publishable key — unused for collection */
-        INTASEND_KEY.value(),                      /* secret key */
-        process.env.FUNCTIONS_EMULATOR === 'true'  /* test mode only under the emulator */
-      );
-
-      /* Use mpesaStkPush (→ /api/v1/payment/mpesa-stk-push/), the endpoint that
-         actually pushes the M-Pesa PIN prompt to the phone — the same one the
-         working subscription flow hits via initiateSTKPush.
-
-         The previous call, collection().charge(), posts to /api/v1/checkout/
-         (see node_modules/intasend-node/dist/collection.js): it mints a hosted-
-         checkout invoice AND blanks the secret key, so it returns 200 with an
-         invoice but never sends an STK. That is the exact divergence — the call
-         "succeeded" server-side while no prompt reached the phone. method and
-         currency are injected by the SDK; the checkout-only name/email/host
-         fields are not part of the STK push. Response still carries
-         invoice.invoice_id, so the invoiceId capture and the confirm/webhook/
-         sweep paths below are unchanged. */
-      const response = await client.collection().mpesaStkPush({
-        amount:       amt,
-        phone_number: normalizedPhone,
-        api_ref:      txId,
-        narrative:    'SOKONI wallet top-up',
+      /* SOKONI Pay convergence — the top-up no longer calls intasend-node directly. It
+         goes through the provider-agnostic adapter (payment-adapters.js initiatePayment),
+         the SAME proven wire contract the SDK used: POST /api/v1/payment/mpesa-stk-push/,
+         Bearer auth, numeric amount. The endpoint that actually pushes the M-Pesa PIN
+         prompt (NOT /checkout/, which mints a hosted invoice but sends no STK). Response
+         carries invoice.invoice_id → surfaced as resp.invoiceId; the confirm/webhook/sweep
+         paths below key off it unchanged. Gateway is now a plugin — swap providers here. */
+      const { getAdapter } = require('./payment-adapters');
+      const useSandbox = process.env.INTASEND_SANDBOX === 'true' || process.env.FUNCTIONS_EMULATOR === 'true';
+      const adapter = getAdapter('intasend', { key: INTASEND_KEY.value(), sandbox: useSandbox });
+      const resp = await adapter.initiatePayment({
+        phone:     normalizedPhone,
+        amountKES: amt,
+        ref:       txId,
+        narrative: 'SOKONI wallet top-up',
       });
-
-      invoiceId = response?.invoice?.invoice_id ?? response?.id ?? null;
+      if (!resp.success) {
+        const e = new Error(resp.error || 'IntaSend STK error');
+        e.gateway = resp.rawResponse;
+        throw e;
+      }
+      invoiceId = resp.invoiceId ?? null;
       await txRef.update({ invoiceId });
     } catch (err) {
       // IntaSend failure — mark transaction failed and surface a clean error
       await txRef.update({ status: 'failed' });
       await walletRef.update({ pendingTopUp: null });
-      /* err.message was `undefined` for IntaSend transport errors, so the real
-         cause (HTTP 500 from a malformed Authorization header) never reached the
-         logs — only a generic "contact support". Log whatever the error actually
-         carries, without leaking the credential. */
+      /* Log whatever the error actually carries (adapter surfaces the gateway body on
+         err.gateway), without leaking the credential. */
       console.error('[wallet] IntaSend STK push error:', {
         message: err && err.message,
         status:  err && (err.status || err.statusCode),
-        body:    (() => { try { return JSON.stringify(err).slice(0, 500); } catch (_) { return String(err); } })(),
+        body:    (() => { try { return JSON.stringify(err.gateway || err).slice(0, 500); } catch (_) { return String(err); } })(),
       });
       throw new HttpsError('unavailable', 'Unable to initiate M-Pesa prompt. Please try again or contact support.');
     }

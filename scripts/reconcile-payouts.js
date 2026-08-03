@@ -79,6 +79,23 @@ const GATE = process.argv.includes('--gate');   /* --gate: fail ONLY on CRITICAL
     }
   }
 
+  /* Orphan ledger entries: every payout ledger row is written with the deterministic id
+     `{uid}_{rid}_payout` (wallet.js _settlePayoutPaid / reconcileB2CPayout). A row whose
+     backing payoutRequests/{rid} no longer exists = money recorded as sent with no request
+     behind it (a settlement that outran its request, or a deleted request). Read-only. */
+  const knownReqIds = new Set(snap.docs.map((d) => d.id));
+  const ledgerSnap = await db.collection('walletTransactions').where('type', '==', 'payout').get();
+  for (const d of ledgerSnap.docs) {
+    const t = d.data();
+    const uid = t.uid || '';
+    let rid = d.id;
+    if (uid && rid.startsWith(uid + '_')) rid = rid.slice(uid.length + 1);
+    if (rid.endsWith('_payout')) rid = rid.slice(0, -'_payout'.length);
+    if (rid && !knownReqIds.has(rid)) {
+      issues.push({ id: d.id, sev: 'HIGH', kind: 'ORPHAN_LEDGER', detail: `payout ledger row for missing payoutRequests/${rid} (amount ${t.amount})` });
+    }
+  }
+
   console.log(`\n=== payout reconciliation — ${snap.size} payoutRequests scanned ===`);
   if (!issues.length) { console.log('  ✅ 0 mismatches — every paid payout has a gateway reference; no stuck/unrefunded payouts.'); process.exit(0); }
   issues.sort((a, b) => (a.sev === 'CRITICAL' ? -1 : 1));

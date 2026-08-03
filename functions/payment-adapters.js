@@ -85,7 +85,7 @@ class IntaSendAdapter extends PaymentAdapter {
     this._host = sandbox ? 'sandbox.intasend.com' : 'payment.intasend.com';
   }
 
-  async _request(path, method = 'POST', body = null, authScheme = 'Token') {
+  async _request(path, method = 'POST', body = null, authScheme = 'Bearer') {
     return new Promise((resolve, reject) => {
       const payload = body ? JSON.stringify(body) : '';
       const opts = {
@@ -94,7 +94,11 @@ class IntaSendAdapter extends PaymentAdapter {
         method,
         headers: {
           'Content-Type':   'application/json',
-          /* Collections/STK use "Token"; Send-Money (B2C) requires "Bearer". */
+          /* IntaSend authenticates the SECRET key as "Bearer <key>" on BOTH the
+             collection/STK endpoints AND send-money (B2C) — empirically proven by the
+             live wallet top-up (Bearer via intasend-node) and the live B2C payout.
+             The default is Bearer; callers no longer need to pass a scheme. A "Token"
+             scheme was assumed for collections but never worked on this account. */
           'Authorization':  `${authScheme} ${this._key}`,
           ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
         },
@@ -113,21 +117,27 @@ class IntaSendAdapter extends PaymentAdapter {
     });
   }
 
+  /* M-Pesa STK push (customer collection). Same wire contract proven by the live wallet
+     top-up via intasend-node: POST /api/v1/payment/mpesa-stk-push/, Bearer auth, numeric
+     amount. The response carries invoice.invoice_id, which the webhook/confirm/sweep paths
+     key off — surfaced as invoiceId (checkoutId kept as an alias for existing callers). */
   async initiatePayment({ phone, amountKES, ref, narrative, currency = 'KES' }) {
     const res = await this._request('/api/v1/payment/mpesa-stk-push/', 'POST', {
       phone_number: this._normalizeKenyanPhone(phone),
-      amount:       String(Math.round(amountKES)),
+      amount:       Math.round(Number(amountKES)),
       currency,
       narrative:    narrative || `SOKONI ${ref}`,
       api_ref:      ref,
     });
     const ok = res.status === 200 || res.status === 201;
+    const invoiceId = res.body?.invoice?.invoice_id || res.body?.checkout_id || res.body?.id || null;
     return {
       success:     ok,
-      checkoutId:  res.body?.checkout_id || res.body?.id || null,
+      invoiceId,
+      checkoutId:  invoiceId,   /* alias — some callers read checkoutId */
       providerRef: ref,
       rawResponse: res.body,
-      error:       ok ? null : (res.body?.detail || 'IntaSend error'),
+      error:       ok ? null : (res.body?.detail || res.body?.errors?.[0]?.detail || 'IntaSend STK error'),
     };
   }
 
