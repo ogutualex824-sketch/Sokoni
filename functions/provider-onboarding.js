@@ -525,10 +525,17 @@ exports._h.providerDashboard = _h.providerDashboard = async (req) => {
 
   return {
     profile: {
-      name: profile.name, category: profile.category, providerId: profile.providerId,
+      name: profile.name, category: profile.category, subcategory: profile.subcategory || null,
+      providerId: profile.providerId,
       status: profile.status, rating: profile.rating, reviewCount: profile.reviewCount,
       bookingCount: profile.bookingCount, verified: profile.verified, featured: profile.featured,
       profilePhotoUrl: profile.profilePhotoUrl || null, qrCode: profile.qrCode || null,
+      /* Fields the dashboard Settings tabs prefill (Profile / Pricing / Payment). Added
+         to the projection so those tabs are not blank on load — additive, read-only. */
+      bio: profile.bio || null, description: profile.description || null,
+      phone: profile.phone || null, email: profile.email || null,
+      hourlyRate: profile.hourlyRate ?? null, fixedPrice: profile.fixedPrice ?? null,
+      mpesaPhone: profile.mpesaPhone || null,
     },
     subscription: sub ? {
       plan: sub.plan, status: sub.status, renewalDate: sub.renewalDate,

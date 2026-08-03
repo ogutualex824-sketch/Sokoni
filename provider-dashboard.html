@@ -980,40 +980,45 @@ async function loadDashboard(user){
     const p=res.profile||{};
     const sub=res.subscription||{};
     _q('sbName').textContent=p.name||user.displayName||'Provider';
-    _q('sbPlan').textContent=(sub.tier||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    _q('sbPlan').textContent=(sub.plan||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
     _q('sbAva').textContent=p.category?'🔧':SokoniProvider?'🔧':'🔧';
     // Greeting
     const hr=new Date().getHours();
     _q('greetTitle').textContent=(hr<12?'Good morning':hr<17?'Good afternoon':'Good evening')+', '+(p.name||user.displayName||'there').split(' ')[0]+'!';
     _q('greetDate').textContent=new Date().toLocaleDateString('en-KE',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-    // KPIs
-    const a=res.analytics||{};
-    _q('kpiTodayBk').textContent=res.todayBookings?.length||0;
-    _q('kpiPending').textContent=(res.pendingRequests?.length||0)+' pending';
-    _q('kpiEarnings').textContent='KSh '+_fmt((a.monthEarnings||0)/100);
+    // KPIs — derive today/pending from the bookings[] the backend returns (it does NOT
+    // emit todayBookings/pendingRequests/analytics; deriving here keeps it truthful).
+    const _bk=res.bookings||[];
+    const _dt=b=>{const t=b.scheduledAt?.toDate?b.scheduledAt.toDate():(b.scheduledAt?new Date(b.scheduledAt):null);return t;};
+    const _today=n=>{const t=_dt(n);return t&&t.toDateString()===new Date().toDateString();};
+    const today=_bk.filter(_today);
+    const pend=_bk.filter(b=>b.status==='pending');
+    _q('kpiTodayBk').textContent=today.length;
+    _q('kpiPending').textContent=pend.length+' pending';
+    _q('kpiEarnings').textContent='KSh '+_fmt(res.earnings?.last30dKes||0);
     _q('kpiRating').textContent=p.rating>0?(p.rating||0).toFixed(1):'—';
     _q('kpiRevCount').textContent=(p.reviewCount||0)+' reviews';
-    _q('kpiViews').textContent=a.weekViews||'—';
+    _q('kpiViews').textContent='—';   // no views signal from backend yet
+    if(_q('kpiEarningsLbl'))_q('kpiEarningsLbl').textContent='Last 30 days';
     // Subscription bar
-    _q('subPlanName').textContent=(sub.tier||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
-    const ren=sub.renewalAt?.toDate?new Date(sub.renewalAt.toDate()):sub.renewalAt?new Date(sub.renewalAt):null;
+    _q('subPlanName').textContent=(sub.plan||'free').replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+    const _rd=sub.renewalDate;const ren=_rd?.toDate?_rd.toDate():(_rd?new Date(_rd):null);
     _q('subRenews').textContent=ren?ren.toLocaleDateString('en-KE'):'—';
     _q('subStatusBadge').textContent=sub.status||'active';
     _q('subStatusBadge').className='sub-badge '+(sub.status==='trialing'?'sub-trial':sub.status==='expired'?'sub-expired':'sub-active');
     // Today's schedule
-    const today=res.todayBookings||[];
     _q('todayList').innerHTML=today.length?today.map(b=>B.card(b)).join(''):'<div class="card-empty">No bookings today. Your profile is live — customers can discover you.</div>';
     // Pending requests
-    const pend=res.pendingRequests||[];
     if(pend.length){_q('pendCount').style.display='inline-block';_q('pendCount').textContent=pend.length;_q('pendList').innerHTML=pend.map(b=>B.card(b)).join('')}
-    // Profile completion
-    const compl=p.completionScore||0;
+    // Profile completion (backend returns top-level profileCompletion)
+    const compl=res.profileCompletion||0;
     if(compl<80){
       _q('profileComplCard').style.display='block';
       _q('complPct').textContent=compl+'%';
       _q('complFill').style.width=compl+'%';
-      const missing=res.missingItems||[];
-      _q('complItems').innerHTML=missing.map(m=>`<div class="ci"><span class="ci-todo">○</span><a href="provider-onboarding.html" style="color:var(--sub);font-size:.8rem">${_esc(m)}</a></div>`).join('');
+      // Derive the to-do list from the profile fields (backend has no missingItems).
+      const _miss=[['name','Add your name',p.name],['photo','Upload a profile photo',p.profilePhotoUrl],['category','Set your category',p.category],['bio','Write a short bio',p.bio||p.description],['pricing','Set your pricing',p.hourlyRate||p.fixedPrice],['verify','Get verified',p.verified]].filter(x=>!x[2]).map(x=>x[1]);
+      _q('complItems').innerHTML=_miss.map(m=>`<div class="ci"><span class="ci-todo">○</span><a href="provider-onboarding.html" style="color:var(--sub);font-size:.8rem">${_esc(m)}</a></div>`).join('');
     }
     // Populate settings fields
     if(_q('sName'))_q('sName').value=p.name||'';
