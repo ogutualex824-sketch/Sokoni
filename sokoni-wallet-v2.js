@@ -423,19 +423,36 @@ window.SokoniWalletV2 = (function () {
     return _esc(tx.description || tx.note || 'Transaction');
   }
 
+  /* Map a raw tx status to a human label + badge colour. */
+  function _txStatusMeta(status) {
+    const s = String(status || 'completed').toLowerCase();
+    if (s === 'completed' || s === 'paid' || s === 'success') return { label: 'Completed', color: 'var(--g)' };
+    if (s === 'pending_claim')                                return { label: 'Unclaimed',  color: '#f5a623' };
+    if (s === 'pending' || s === 'processing')                return { label: 'Pending',    color: '#f5a623' };
+    if (s === 'failed' || s === 'rejected')                   return { label: 'Failed',     color: 'var(--red)' };
+    if (s === 'refunded' || s === 'reversed' || s === 'expired') return { label: s[0].toUpperCase() + s.slice(1), color: 'var(--sub)' };
+    return { label: s[0].toUpperCase() + s.slice(1), color: 'var(--sub)' };
+  }
+
+  /* Cache the rendered rows per target so taps dispatch by INDEX — never embed the
+     tx JSON in an inline onclick (that decodes HTML entities before JS parses it =
+     an XSS vector; see the inline-handler rule). */
+  let _txCache = {};
   function renderTxList(txs, targetId, compact = false) {
     const el = document.getElementById(targetId);
     if (!el) return;
 
     if (!txs || txs.length === 0) {
+      _txCache[targetId] = [];
       el.innerHTML = '<div class="empty-state"><div class="empty-emoji">🧾</div><h4>No transactions</h4><p>Your transaction history will appear here</p></div>';
       return;
     }
 
     const limit = compact ? 5 : txs.length;
     const items = txs.slice(0, limit);
+    _txCache[targetId] = items;
 
-    el.innerHTML = items.map(tx => {
+    el.innerHTML = items.map((tx, i) => {
       const { cls, emoji } = _txIcon(tx);
       const isIn = cls === 'in' || cls === 'save';
       const amt = Math.abs(tx.amount || 0);
@@ -444,11 +461,19 @@ window.SokoniWalletV2 = (function () {
       const time = _relativeTime(tx.createdAt);
       const title = _txTitle(tx);
       const note = tx.note || tx.description || tx.category || '';
-      return `<div class="tx-item" onclick="W2.openTxDetail(${_esc(JSON.stringify(tx))})">
+      const st = _txStatusMeta(tx.status);
+      const ref = String(tx.id || tx.txId || '');
+      const meta = `<div class="tx-desc" style="display:flex;align-items:center;gap:6px;margin-top:2px">
+          <span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:${st.color}">
+            <span style="width:6px;height:6px;border-radius:50%;background:${st.color};display:inline-block"></span>${_esc(st.label)}</span>
+          ${ref ? `<span style="font-size:11px;color:var(--sub);opacity:.7">· ${_esc(ref.slice(0, 16))}</span>` : ''}
+        </div>`;
+      return `<div class="tx-item" onclick="W2.openTxByIndex('${_esc(targetId)}',${i})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')W2.openTxByIndex('${_esc(targetId)}',${i})">
         <div class="tx-icon ${_esc(cls)} emoji">${emoji}</div>
         <div class="tx-info">
           <div class="tx-name">${title}</div>
           ${note ? `<div class="tx-desc">${_esc(note)}</div>` : ''}
+          ${meta}
         </div>
         <div class="tx-right">
           <div class="tx-amount ${_esc(amtCls)}">${sign}${_fmt(amt)}</div>
@@ -456,6 +481,11 @@ window.SokoniWalletV2 = (function () {
         </div>
       </div>`;
     }).join('');
+  }
+
+  function openTxByIndex(targetId, i) {
+    const tx = (_txCache[targetId] || [])[Number(i)];
+    if (tx) openTxDetail(tx);
   }
 
   /* ─── LOAD TRANSACTIONS (HISTORY PANEL) ─── */
@@ -1953,12 +1983,17 @@ window.SokoniWalletV2 = (function () {
 
     const rows = document.getElementById('txdRows');
     if (!rows) return;
+    const st = _txStatusMeta(tx.status);
+    if (statusEl) { statusEl.textContent = st.label; statusEl.style.color = st.color; }
     const fields = [
       ['Type',       tx.type || '—'],
       ['Date',       tx.createdAt ? _relativeTime(tx.createdAt) : '—'],
       ['Reference',  tx.id || tx.txId || '—'],
+      ['Status',     st.label],
+      ...(tx.fee != null ? [['Fee', 'KSh ' + _fmt(tx.fee)]] : []),
       ['Note',       tx.note || tx.description || '—'],
       ...(tx.recipientName ? [['To', tx.recipientName]] : []),
+      ...(tx.toPhone       ? [['To', tx.toPhone]]        : []),
       ...(tx.senderName    ? [['From', tx.senderName]]  : []),
       ...(tx.category      ? [['Category', tx.category]] : []),
     ];
@@ -1966,9 +2001,34 @@ window.SokoniWalletV2 = (function () {
       <div class="info-row">
         <span class="k">${_esc(k)}</span>
         <span class="v" style="font-size:13px">${_esc(v)}</span>
-      </div>`).join('');
+      </div>`).join('') +
+      `<button class="btn btn-secondary" style="margin-top:14px;width:100%;min-height:44px" onclick="W2.shareReceipt()">
+        <i class="fas fa-share-nodes"></i> Share receipt</button>`;
 
+    _currentReceiptTx = tx;
     openOverlay('ovlTxDetail');
+  }
+
+  /* Share a transaction receipt via the native share sheet, falling back to clipboard. */
+  let _currentReceiptTx = null;
+  async function shareReceipt() {
+    const tx = _currentReceiptTx; if (!tx) return;
+    const st = _txStatusMeta(tx.status);
+    const amt = Math.abs(tx.amount || 0);
+    const lines = [
+      'SOKONI Wallet Receipt',
+      `${_txTitle(tx).replace(/<[^>]*>/g, '')}`,
+      `Amount: KSh ${_fmt(amt)}`,
+      `Status: ${st.label}`,
+      `Reference: ${tx.id || tx.txId || '—'}`,
+      `Date: ${tx.createdAt ? _relativeTime(tx.createdAt) : '—'}`,
+    ];
+    const text = lines.join('\n');
+    try {
+      if (navigator.share) { await navigator.share({ title: 'SOKONI Receipt', text }); return; }
+      await navigator.clipboard.writeText(text);
+      toast('Receipt copied to clipboard', 'success');
+    } catch (_) { /* user cancelled share — ignore */ }
   }
 
   /* ─── PUBLIC API ─── */
@@ -2008,7 +2068,7 @@ window.SokoniWalletV2 = (function () {
     /* History */
     loadTransactions, filterTx, setTxFilter, loadMoreTx,
     /* TX detail */
-    openTxDetail,
+    openTxDetail, openTxByIndex, shareReceipt,
   };
 
   /* Notify page script */

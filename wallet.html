@@ -893,13 +893,36 @@ body{
   #wal-nav{max-width:520px;left:50%;transform:translateX(-50%)}
   #wal-top{max-width:520px;left:50%;transform:translateX(-50%)}
 }
+
+/* ─── UI SPRINT: stable balance card (#9) ─── */
+/* Reserve the balance line height so it never jumps from "—" to the value. */
+.bal-amount{min-height:46px;display:flex;align-items:center;justify-content:center;gap:6px}
+#balTier{min-height:22px}
+.bal-hero{contain:layout}
+
+/* ─── UI SPRINT: responsive + accessibility (#15, #16) ─── */
+/* Safe-area insets so the header/nav clear the notch and home indicator. */
+#wal-top{padding-top:env(safe-area-inset-top)}
+#wal-nav{padding-bottom:env(safe-area-inset-bottom)}
+/* No horizontal scroll; long refs/notes wrap instead of overflowing. */
+html,body{overflow-x:hidden}
+.tx-name,.tx-desc{overflow:hidden;text-overflow:ellipsis}
+/* Minimum 44×44 touch targets for interactive controls. */
+.wn-btn{min-height:48px}
+.tx-item{min-height:48px}
+button,.btn,.ovl-close{min-height:44px}
+.ovl-close{min-width:44px;display:inline-flex;align-items:center;justify-content:center}
+/* Visible keyboard focus for accessibility (was invisible). */
+a:focus-visible,button:focus-visible,input:focus-visible,.tx-item:focus-visible,.wn-btn:focus-visible{
+  outline:2px solid var(--g);outline-offset:2px;border-radius:8px
+}
   </style>
 </head>
 <body>
 
 <!-- ═══ TOP BAR ═══ -->
 <header id="wal-top">
-  <a href="/" style="color:var(--sub);font-size:18px;text-decoration:none;padding:4px;flex-shrink:0">
+  <a href="profile.html" aria-label="Back to Profile" title="Back to Profile" onclick="if(history.length>1&&/profile/.test(document.referrer)){history.back();return false;}" style="color:var(--sub);font-size:18px;text-decoration:none;padding:8px;min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0">
     <i class="fas fa-arrow-left"></i>
   </a>
   <a href="/" style="flex:1;display:flex;align-items:center;text-decoration:none;min-width:0">
