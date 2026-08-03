@@ -23,6 +23,7 @@
  * per-subsystem reconcilers agreeing. Those are what this report asserts.
  */
 const path = require('path');
+const crypto = require('crypto');
 const admin = require(path.join(__dirname, '..', 'functions', 'node_modules', 'firebase-admin'));
 admin.initializeApp({ projectId: 'sokoni-aeb26' });
 const db = admin.firestore();
@@ -84,6 +85,17 @@ const ms = (t) => (t && t.toDate ? t.toDate().getTime() : (t && t._seconds ? t._
   const bad = rows.filter((r) => !r.ok).length;
   console.log('\n  Payout-side rows (duplicate payouts / orphan payout ledger / reconciliation');
   console.log('  mismatches) → run `node scripts/reconcile-payouts.js` (also in the freeze gate).');
+
+  /* Reconciliation hash — a deterministic signature of the exact snapshot this report
+     validated (check counts + scanned volumes), for the freeze record. Same DB state →
+     same hash; any drift changes it. Not time-based, so it is reproducible. */
+  const snapshot = {
+    checks: rows.map((r) => ({ check: r.check, count: r.count })),
+    walletsScanned: wSnap.size, transferRowsScanned: txSnap ? txSnap.size : null,
+    claimableTally: tally, negatives: neg, pastExpiry, drift, orphanClaim, dupDir,
+  };
+  const reconHash = crypto.createHash('sha256').update(JSON.stringify(snapshot)).digest('hex');
+  console.log(`\n  RECONCILIATION HASH  sha256:${reconHash}`);
   console.log(bad ? `\n⛔ ${bad} row(s) not clean — DO NOT FREEZE.` : '\n✅ Wallet-side reconciliation clean.');
   process.exit(bad ? 1 : 0);
 })().catch((e) => { console.error('reconciliation report FAILED:', e.message); process.exit(1); });
