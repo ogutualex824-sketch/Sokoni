@@ -29,8 +29,18 @@ if(_urlId && String(product && product.id) !== String(_urlId)){
     _prdFetching = true;
     (async function(){
         try{
+            /* Wait for the app's App-Check'd Firestore (window.firebaseDB). A fresh
+               import + getFirestore() issues the read BEFORE App Check has obtained a
+               reCAPTCHA token — especially in a fresh/incognito session with no cached
+               token — which Firestore rejects as permission-denied, so a public product
+               (rules: read if true) renders as "not found". Wait for the app instance
+               and the App-Check ready signal, then read via window.firebaseDB. */
+            var _wt = 0;
+            while(!window.firebaseDB && _wt++ < 80){ await new Promise(function(r){ setTimeout(r,150); }); }
+            if(window.__sokoniAppCheckReady && typeof window.__sokoniAppCheckReady.then === 'function'){ try{ await window.__sokoniAppCheckReady; }catch(_){} }
             var _m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-            var _snap = await _m.getDoc(_m.doc(_m.getFirestore(), 'products', String(_urlId)));
+            var _db  = window.firebaseDB || _m.getFirestore();
+            var _snap = await _m.getDoc(_m.doc(_db, 'products', String(_urlId)));
             if(_snap.exists()){
                 localStorage.setItem('selectedProduct', JSON.stringify(Object.assign({ id: _snap.id }, _snap.data())));
                 location.reload();  /* the synchronous path above now resolves it from cache */
