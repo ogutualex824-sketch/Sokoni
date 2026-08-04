@@ -467,6 +467,24 @@
       ]
     },
     {
+      "collectionGroup": "auditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "callerUid",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "ts",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "bookingFees",
       "queryScope": "COLLECTION",
       "fields": [
