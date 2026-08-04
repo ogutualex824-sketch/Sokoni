@@ -48,6 +48,16 @@ Note: this is a *storefront/growth + merchant-tooling* capability, **not** a che
 - **Premium UX** consistent with the platform: cards, skeletons, live sync, instant-save feedback, security section (device sessions, login history), legal agreements, privacy controls, notification settings, mobile-first. Part of the platform-wide premium-theme + unified-nav pass.
 This **extends** the existing profile toward the canonical model — not a rewrite. See [[project_identity_integrity]] · [[feedback_provider_roles_login]] · [[reference_shopname_and_analytics_gates]] (role array-vs-string bugs).
 
+**Platform Navigation Framework** (owner spec 08-04; the premium *redesign* is R1.1, but a subset of *correctness* fixes is owner-approved for before-RC-exit — see split below). ONE navigation system every workspace shares:
+- **Top bar:** ☰ menu · Search · Notifications · Messages · Profile. **Bottom nav (never changes):** Home · Explore · Orders · Wallet · Profile.
+- **Workspace switcher lives in Profile** (tap-once instant switch): Customer / Seller / Provider / Rider / Admin — reads canonical `users/{uid}.roles`. Profile becomes the navigation hub (identity + verification % + switch-workspace + My Businesses + Wallets + Legal/Security/Devices/Settings).
+- **Per-workspace sidebar** (only that workspace's tools): Seller = Dashboard/Products/Inventory/Orders/Customers/Wallet/Analytics/Settings · Provider = Dashboard/Services/Calendar/Bookings/Customers/Wallet/Reviews/Analytics/Settings · Rider = Dashboard/Available Jobs/Current Delivery/History/Wallet/Vehicle/Settings · Admin = Executive Dashboard/Merchants/Providers/Riders/Users/Finance/Reports/Settings.
+- **Every page:** working Back, breadcrumb where apt, current-page highlight, consistent icons, desktop keyboard shortcuts, mobile swipe, safe-area, persistent nav state. Premium-consistent (cards/spacing/type/shadows/transitions/skeletons/empty-states/retry).
+
+**Owner-approved split (RC governance):**
+- **Before RC exit (correctness only, owner-authorized 08-04):** fix broken navigation + **dead ends** · guarantee a working **Back** action on every page · Rider (and every real role) appears correctly in Profile [✅ Rider role fix already landed] · all **workspace switches** actually work. These are usability/correctness bugs, NOT the redesign. NOTE: not gate-blocking — confirm scope before a broad sweep (a "every page" audit is large); keep each fix small + isolated, do NOT deploy on a dirty tree.
+- **After RC (R1.1):** the full premium navigation redesign + unified components + workspace-switcher polish + premium refresh of MiniShop/Inventory/Profile/remaining pages. Pairs with the Profile V2 + premium-theme pass. See [[project_nav_engine]] · [[project_mobile_drawer_ux]] · [[reference_design_system]].
+
 ### Release 1.2 — Multi-wallet  ([[project_multiwallet_architecture]])
 Personal · Shop · Service · Rider · Business/Branch wallets on the **existing frozen ledger engine**; internal transfers as balanced source→destination ledger movements. No changes to the proven money paths — additive wallet-scoping only.
 
