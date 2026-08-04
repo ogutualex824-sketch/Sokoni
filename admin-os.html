@@ -78,6 +78,13 @@
     .ec-svc{display:flex;align-items:center;gap:8px;background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:99px;padding:6px 12px;font-size:.78rem}
     .ec-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
     .ec-dot.ok{background:#4caf50}.ec-dot.warn{background:#ffb020}.ec-dot.issue{background:#f44336}.ec-dot.unknown{background:#666}
+    .ec-funnel{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+    @media(max-width:640px){.ec-funnel{grid-template-columns:repeat(3,1fr)}}
+    .ec-stage{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px}
+    .ec-stage-bar{height:6px;border-radius:99px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:8px}
+    .ec-stage-bar span{display:block;height:100%;background:var(--aos-accent);border-radius:99px}
+    .ec-stage-n{font-size:1.25rem;font-weight:800;color:var(--aos-text);line-height:1}
+    .ec-stage-l{font-size:.66rem;color:var(--aos-sub);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
     .ec-skel{height:60px;border-radius:var(--aos-radius);background:linear-gradient(90deg,var(--aos-surface) 25%,rgba(255,255,255,.05) 37%,var(--aos-surface) 63%);background-size:400% 100%;animation:ecsk 1.2s ease infinite}
     @keyframes ecsk{0%{background-position:100% 50%}100%{background-position:0 50%}}
     .health-chip{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px 16px;min-width:130px}

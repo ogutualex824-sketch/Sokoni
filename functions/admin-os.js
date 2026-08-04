@@ -502,6 +502,84 @@ exports.adminGetExecutiveDashboard = onCall({ region: 'us-central1', maxInstance
 });
 
 /* ─────────────────────────────────────────────────────────────────────────
+   System Health (P2) — thin aggregation of REAL signals. Per-service status is
+   ok | warn | issue | unknown. 'unknown' is honest (no fabricated green): services
+   without a cheap server-side signal are reported as unknown, not healthy.
+   Reads: systemHealth/latest (platform rollup), emailQueue/emailLogs, orders (payment
+   liveness), payoutRequests (wallet failures). Read-only; no business logic.
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetSystemHealth = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetSystemHealth = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const { Timestamp } = require('firebase-admin/firestore');
+  const dayAgo  = Timestamp.fromDate(new Date(Date.now() - 86400000));
+  const hourAgo = Timestamp.fromDate(new Date(Date.now() - 3600000));
+  const _c0 = () => ({ data: () => ({ count: 0 }) });
+
+  const [latestSnap, emailQ, emailFails, paidOrders, payoutFails] = await Promise.all([
+    db.collection('systemHealth').doc('latest').get().catch(() => null),
+    db.collection('emailQueue').count().get().catch(_c0),
+    db.collection('emailLogs').where('status', '==', 'failed').where('createdAt', '>=', hourAgo).count().get().catch(_c0),
+    db.collection('orders').where('status', 'in', ['paid', 'completed', 'delivered']).where('createdAt', '>=', dayAgo).limit(1).get().catch(() => ({ empty: true })),
+    db.collection('payoutRequests').where('status', 'in', ['failed', 'approval_failed']).where('createdAt', '>=', dayAgo).count().get().catch(_c0),
+  ]);
+
+  const L = latestSnap && latestSnap.exists ? latestSnap.data() : null;
+  const eq = emailQ.data().count, ef = emailFails.data().count, pf = payoutFails.data().count;
+  const paymentsAlive = !(paidOrders.empty);
+  const s = (status, detail) => ({ status, detail: detail || null });
+
+  const services = {
+    cloudFunctions: L ? (L.firestoreOk ? s(L.overallStatus === 'critical' ? 'issue' : L.overallStatus === 'degraded' ? 'warn' : 'ok', 'async queue ' + (L.asyncQueueDepth != null ? L.asyncQueueDepth : '—') + (L.criticalAlertsUnacked > 0 ? ' · ' + L.criticalAlertsUnacked + ' critical alerts' : '')) : s('issue', 'Firestore probe failing')) : s('unknown', 'no snapshot'),
+    payments:       s(paymentsAlive ? 'ok' : 'warn', paymentsAlive ? 'paid orders in last 24h' : 'no paid orders in 24h'),
+    wallet:         s(pf > 0 ? 'warn' : 'ok', pf > 0 ? pf + ' payout failure(s) in 24h' : 'no recent payout failures'),
+    email:          s(ef > 5 ? 'issue' : (ef > 0 || eq > 100) ? 'warn' : 'ok', ef + ' failures/hr · queue ' + eq),
+    search:         s('unknown', 'detail in search-monitor'),
+    sms:            s('unknown', 'no server signal'),
+    notifications:  s('unknown', 'no server signal'),
+    storage:        s('unknown', 'no server signal'),
+    etims:          s('unknown', 'sandbox — not deployed'),
+  };
+  const ov = L && L.overallStatus;
+  return {
+    services,
+    overall: ov === 'healthy' ? 'ok' : ov === 'degraded' ? 'warn' : ov === 'critical' ? 'issue' : 'unknown',
+    checkedAt:  new Date().toISOString(),
+    snapshotAt: (L && L.ts && L.ts.toDate) ? L.ts.toDate().toISOString() : null,
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Merchant Pipeline (P2) — thin funnel aggregation over canonical collections.
+   Applied → Pending Review → Verified → Published → Subscribed → Active. Every stage
+   is a count()+catch→0. Lets operators spot bottlenecks. Read-only, no business logic.
+──────────────────────────────────────────────────────────────────────────── */
+exports.adminGetMerchantPipeline = onCall({ region: 'us-central1', maxInstances: 10, enforceAppCheck: true }, exports._h.adminGetMerchantPipeline = async (req) => {
+  _requireAdmin(req);
+  const db = getFirestore();
+  const _c0 = () => ({ data: () => ({ count: 0 }) });
+  const [applied, pending, verified, published, subscribed, active] = await Promise.all([
+    db.collection('applications').count().get().catch(_c0),
+    db.collection('applications').where('status', '==', 'pending').count().get().catch(_c0),
+    db.collection('providerVerification').where('verificationStatus', 'in', ['verified', 'approved']).count().get().catch(_c0),
+    db.collection('providers').where('status', 'in', ['active', 'approved']).count().get().catch(_c0),
+    db.collection('providerSubscriptions').where('status', 'in', ['active', 'trialing']).count().get().catch(_c0),
+    db.collection('providers').where('status', '==', 'active').count().get().catch(_c0),
+  ]);
+  return {
+    stages: [
+      { key: 'applied',       label: 'Applied',        count: applied.data().count },
+      { key: 'pendingReview', label: 'Pending Review', count: pending.data().count },
+      { key: 'verified',      label: 'Verified',       count: verified.data().count },
+      { key: 'published',     label: 'Published',      count: published.data().count },
+      { key: 'subscribed',    label: 'Subscribed',     count: subscribed.data().count },
+      { key: 'active',        label: 'Active',         count: active.data().count },
+    ],
+    generatedAt: new Date().toISOString(),
+  };
+});
+
+/* ─────────────────────────────────────────────────────────────────────────
    Unified Finance (Priority 2 — Admin OS Phase 1 canonical sync)
 
    ONE endpoint that aggregates every finance stream from its CANONICAL source

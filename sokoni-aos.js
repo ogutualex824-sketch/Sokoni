@@ -84,9 +84,9 @@ window.SokoniAOS = (() => {
     'adminGetAiStats','adminGetAnnouncements','adminGetAuditLogs','adminGetBanners',
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
     'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFinance','adminGetFraudAlerts',
-    'adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
+    'adminGetMerchantPipeline','adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
     'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
-    'adminGetSearchStats','adminGetSupportTickets','adminGetUser',
+    'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
     'adminUpdatePlatformSettings','adminUpdateProductStatus','adminUpdateUserRole',
@@ -148,7 +148,7 @@ window.SokoniAOS = (() => {
   function _ecSkeleton() { return '<div class="ec-grid">' + Array.from({ length: 8 }).map(function () { return '<div class="ec-skel"></div>'; }).join('') + '</div>'; }
   /* P1 Command Center — 4 sections, canonical single entry (adminGetExecutiveDashboard)
      + reused Finance data (adminGetFinance.reconciliation). No recalculation here. */
-  function _renderExecCommand(x, f) {
+  function _renderExecCommand(x, f, sysHealth, pipeline) {
     var ec = document.getElementById("execCommand"); if (!ec) return;
     function cell(l, v, attn) { return '<div class="ec-cell' + (attn ? ' attn' : '') + '"><div class="l">' + l + '</div><div class="v">' + v + '</div></div>'; }
     function money(l, v) { return '<div class="ec-cell"><div class="l">' + l + '</div><div class="v money">' + _kes(v) + '</div></div>'; }
@@ -172,36 +172,49 @@ window.SokoniAOS = (() => {
       money('Revenue Today', x.revenueToday), money('Revenue · 30d', f.grossRevenue), money('Commissions · 30d', f.commission),
       money('Pending Withdrawals', f.pendingWithdrawals), money('Completed Withdrawals', f.completedWithdrawals), money('Wallet Float', f.walletFloat),
     ].join('');
-    /* Health strip — P1 SUMMARY. Coarse liveness for the two subsystems whose admin data
-       loaded; the rest are 'unknown' pending the System Health module (P2), never faked. */
+    /* Health strip — real per-service status from adminGetSystemHealth (P2). Services
+       without a server-side signal report 'unknown' (never faked green). */
+    var H = (sysHealth && sysHealth.services) || {};
+    function st(key) { return (H[key] && H[key].status) || 'unknown'; }
+    function dt(key) { return (H[key] && H[key].detail) ? ' title="' + String(H[key].detail).replace(/"/g, '') + '"' : ''; }
     var svc = [
-      ['Payments', x.revenueToday !== undefined ? 'ok' : 'unknown'], ['Wallet', f.walletFloat !== undefined ? 'ok' : 'unknown'],
-      ['Search', 'unknown'], ['Email', 'unknown'], ['SMS', 'unknown'], ['Notifications', 'unknown'], ['Cloud Functions', 'unknown'], ['eTIMS', 'unknown'],
+      ['Payments', 'payments'], ['Wallet', 'wallet'], ['Search', 'search'], ['Email', 'email'],
+      ['SMS', 'sms'], ['Notifications', 'notifications'], ['Cloud Functions', 'cloudFunctions'], ['eTIMS', 'etims'],
     ];
-    var strip = svc.map(function (a) { return '<div class="ec-svc"><span class="ec-dot ' + a[1] + '"></span>' + a[0] + '</div>'; }).join('');
+    var strip = svc.map(function (a) { return '<div class="ec-svc"' + dt(a[1]) + '><span class="ec-dot ' + st(a[1]) + '"></span>' + a[0] + '</div>'; }).join('');
+    /* Merchant pipeline funnel — Applied → … → Active. Bar width ∝ stage count. */
+    var stages = (pipeline && pipeline.stages) || [];
+    var mx = stages.reduce(function (a, st2) { return Math.max(a, st2.count || 0); }, 1);
+    var funnel = stages.map(function (st2) {
+      var w = Math.max(6, Math.round((st2.count || 0) / mx * 100));
+      return '<div class="ec-stage"><div class="ec-stage-bar"><span style="width:' + w + '%"></span></div><div class="ec-stage-n">' + _fmt(st2.count || 0) + '</div><div class="ec-stage-l">' + st2.label + '</div></div>';
+    }).join('');
     ec.innerHTML =
       '<div class="ec-section"><div class="ec-title">Executive KPIs</div><div class="ec-grid">' + kpis + '</div></div>' +
       '<div class="ec-section"><div class="ec-title">Operational Status</div><div class="ec-grid">' + ops + '</div></div>' +
       '<div class="ec-section"><div class="ec-title">Financial Summary · 30-day</div><div class="ec-grid">' + fin + '</div></div>' +
-      '<div class="ec-section"><div class="ec-title">Platform Health <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--aos-sub)">· detail in System Health</span></div><div class="ec-strip">' + strip + '</div></div>';
+      (stages.length ? '<div class="ec-section"><div class="ec-title">Merchant Pipeline</div><div class="ec-funnel">' + funnel + '</div></div>' : '') +
+      '<div class="ec-section"><div class="ec-title">Platform Health <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--aos-sub)">· real-time signals</span></div><div class="ec-strip">' + strip + '</div></div>';
   }
 
   async function _loadDashboard() {
     var _ec = document.getElementById("execCommand"); if (_ec) _ec.innerHTML = _ecSkeleton();
     try {
-      const [metrics, health, daily, execRes, finRes] = await Promise.allSettled([
+      const [metrics, health, daily, execRes, finRes, sysRes, pipeRes] = await Promise.allSettled([
         _call("adminGetPlatformOverview"),
         _call("getPlatformHealthScores"),
         _call("getDailyReport"),
         _call("adminGetExecutiveDashboard"),
         _call("adminGetFinance"),
+        _call("adminGetSystemHealth"),
+        _call("adminGetMerchantPipeline"),
       ]);
 
       const m = metrics.value || {};
       const h = health.value  || {};
       const d = daily.value   || {};
-      /* Command center — canonical single entry + reused Finance reconciliation. */
-      _renderExecCommand(execRes.value || {}, (finRes.value && finRes.value.reconciliation) || {});
+      /* Command center — canonical single entry + reused Finance + real health + pipeline. */
+      _renderExecCommand(execRes.value || {}, (finRes.value && finRes.value.reconciliation) || {}, sysRes.value || {}, pipeRes.value || {});
 
       _set("kpiActiveSellers",    _fmt(m.activeSellers    || 0));
       _set("kpiActiveProviders",  _fmt(m.activeProviders  || 0));
