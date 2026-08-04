@@ -1,3 +1,29 @@
+## [2026-08-04] — fix(minishop): shop button + KASS SHOP inventory/ownership reconciliation
+
+**MiniShop admin header (`minishop-admin.html`).**
+- Removed the redundant header "Open MiniShop ↗" button (`#msaViewShop`) — duplicated the hero
+  "Visit Shop" action. Cleaned up its now-dead JS reference.
+- Made "Visit Shop" (`#msaViewShopBtn`) resilient: href now resolves eagerly from
+  `_state.shopUrl || buildShopUrl(_state.handle)`, plus a click handler that resolves the URL at
+  click time — so it opens instantly instead of dead-clicking to `#` before the async handle load,
+  and gracefully prompts "Claim your handle first" when the seller has no MiniShop handle.
+
+**Production data reconciliation — KASS SHOP (`sellers/xrH21J5GFbW8PluCZ2ny5nIuf602`).** Ops-only,
+no schema change. Diagnosed via the documented `SELLER_KEY_MISMATCH` / counter-drift classes
+(`scripts/diagnose-upload.js`). "Empty inventory" was **not lost data** — 10 products were live in
+the buyer catalog, but with a split ownership identity:
+- **Seller-key mismatch fixed.** All 10 products carried `uid = xrH2…` (KASS SHOP) but
+  `sellerUid = D5Ql2…` (a personal account "Kaspa" with no seller profile). Since checkout resolves
+  the owner as `sellerUid || uid`, a real order would have **settled to the wrong account** (no
+  profile, no deliveryConfig). Normalized `sellerUid → xrH2` on all 10 (owner-confirmed), backed up
+  first, audit-stamped (`_ownerNormalizedFrom`). `products.where(sellerUid==KASS)` now returns 10
+  (was 0). **Gate-relevant:** RC step-3 order now attributes/settles to KASS SHOP.
+- **Stale counter reconciled.** `sellers/{KASS}.productCount` was `0` vs live `10` — reconciled to
+  `10` (audit `_productCountWas`).
+
+**Security:** none. **Breaking:** none. **Deploy:** `minishop-admin.html` requires a hosting deploy
+to take effect; data fixes are already live.
+
 ## [2026-08-02] — feat(admin): Admin OS Phase 1 — canonical data synchronization (P1–P3)
 
 Every Admin Console pane/KPI now reads live production data from its **canonical** collection

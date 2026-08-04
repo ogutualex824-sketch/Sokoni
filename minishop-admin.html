@@ -439,7 +439,6 @@
     <a href="seller.html" class="msa-back" aria-label="Back to Seller Dashboard">&#8592; Seller Dashboard</a>
     <h1>My MiniShop</h1>
     <span class="msa-topbar-shop-url" id="msaTopbarUrl"></span>
-    <a href="#" id="msaViewShop" target="_blank" class="msa-btn" style="font-size:12px">Open MiniShop &#8599;</a>
   </div>
 
   <!-- Tabs. The first tab used to repeat "My MiniShop", duplicating the <h1>
@@ -1365,10 +1364,8 @@
     if (urlEl) urlEl.textContent = _state.shopUrl || buildShopUrl(_state.handle);
     var topUrl = document.getElementById('msaTopbarUrl');
     if (topUrl) { topUrl.textContent = 'mysokoni.co.ke/shop/' + _state.handle; topUrl.classList.add('visible'); }
-    var viewShop = document.getElementById('msaViewShop');
     var viewShopBtn = document.getElementById('msaViewShopBtn');
-    if (viewShop && _state.shopUrl) viewShop.href = _state.shopUrl;
-    if (viewShopBtn && _state.shopUrl) viewShopBtn.href = _state.shopUrl;
+    if (viewShopBtn) viewShopBtn.href = _state.shopUrl || buildShopUrl(_state.handle);
     updateHero();
     refreshQr();
   }
@@ -1643,6 +1640,14 @@
     if (copyBtn) copyBtn.addEventListener('click', function(){ copyText(_state.shopUrl || ''); });
     var qrBtn = document.getElementById('msaQrBtn');
     if (qrBtn) qrBtn.addEventListener('click', function(){ switchTab('share'); });
+    /* Visit Shop: resolve the URL at click time so it opens instantly even if the
+       async handle load hasn't set _state.shopUrl yet (never a dead '#' click). */
+    var visitBtn = document.getElementById('msaViewShopBtn');
+    if (visitBtn) visitBtn.addEventListener('click', function(e){
+      var url = _state.shopUrl || (_state.handle ? buildShopUrl(_state.handle) : '');
+      if (!url) { e.preventDefault(); toast('Claim your handle first', 'info'); return; }
+      this.href = url; /* keep native target=_blank behaviour, but guarantee a real URL */
+    });
 
     /* Quick actions. Each one routes to a tab that exists on this page or a
        page that exists on disk — verified, because a dead tile on the primary
