@@ -544,9 +544,9 @@ async function buyNowCat(id){
         }
     }
 
-    const cartData = JSON.parse(localStorage.getItem("cart") || "[]");
-    cartData.push(product);
-    localStorage.setItem("cart", JSON.stringify(cartData));
+    /* Buy Now = express-checkout THIS item only — REPLACE the cart, don't append to
+       stale/accumulated entries (appending charged the whole cart instead of 1 unit). */
+    localStorage.setItem("cart", JSON.stringify([product]));
     window.location.href = "checkout.html";
 }
 

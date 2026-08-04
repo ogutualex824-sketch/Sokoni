@@ -1084,7 +1084,10 @@ function addToCart(){
 
 function buyNowProduct(){
 
-    let cart = JSON.parse(localStorage.getItem("cart")) || [];
+    /* Buy Now = express-checkout THIS item only. Build a FRESH cart instead of
+       appending to whatever was saved — appending made checkout charge for stale/
+       accumulated entries (observed as "the whole stock" instead of 1). */
+    const cart = [];
 
     const item = Object.assign({}, product, {
         selectedSize:  window._selectedSize  || null,
