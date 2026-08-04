@@ -1,3 +1,13 @@
+## [2026-08-04] — chore(rider): temporary owner photo-exception for RC gate rider onboarding
+
+`driver.html` rider application: the standard flow is **unchanged for all riders** (ID + DL
+photos still required). Added a **single-account exception** (owner test account
+`alexochieng3030` / uid `D5Ql2…`) that may onboard without ID/DL photos, so the rider
+dispatch path can be proven via the real UI before the live checkout gate. `readFile` now
+tolerates a missing file (empty string, no crash). **TEMPORARY — remove after v1.0.0.**
+Missing photos still surface as `driverVerification.documentsMissing` (a KYC flag, not a
+provisioning blocker). **Deploy:** requires the gate hosting deploy to take effect on live.
+
 ## [2026-08-04] — fix(nav): RC-safe navigation correctness (audit-driven, Navigation Contract v1)
 
 From the 2026-08-04 navigation audit — correctness only, no redesign, no business logic. Governed by `docs/NAVIGATION_CONTRACT.md`.

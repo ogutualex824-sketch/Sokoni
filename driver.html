@@ -865,8 +865,13 @@ function registerDriver(){
   const idPhotoFile = document.getElementById("drIdPhoto")?.files[0];
   const dlPhotoFile = document.getElementById("drDlPhoto")?.files[0];
   if(!name||!phone||!idNum||!vehicle||!pin){ _regMsg("Please fill all required fields."); return; }
-  if(!idPhotoFile){ _regMsg("Please upload a photo of your National ID."); return; }
-  if(!dlPhotoFile){ _regMsg("Please upload a photo of your Driving Licence."); return; }
+  /* RC gate exception (TEMPORARY — remove after v1.0.0): one owner test account may
+     onboard without ID/DL photos to prove the rider dispatch path before the live gate.
+     Every other rider still must upload both — the standard flow is unchanged. */
+  var _cu = (typeof firebase!=='undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+  var _photoExempt = !!_cu && (_cu.uid==='D5Ql2EYr95bt79IpcGTmOMTK0P83' || (_cu.email||'').toLowerCase()==='alexochieng3030@gmail.com');
+  if(!idPhotoFile && !_photoExempt){ _regMsg("Please upload a photo of your National ID."); return; }
+  if(!dlPhotoFile && !_photoExempt){ _regMsg("Please upload a photo of your Driving Licence."); return; }
 
   const cargoTonne = document.getElementById("drCargoTonne")?.value || "";
   const cargoType  = document.getElementById("drCargoType")?.value  || "";
@@ -874,6 +879,7 @@ function registerDriver(){
 
   /* Read both photos as base64 then save */
   const readFile = (file) => new Promise(res=>{
+    if(!file){ res(''); return; }   /* photo-exempt onboarding: no file → empty string, no crash */
     const r = new FileReader();
     r.onload = e => res(e.target.result);
     r.readAsDataURL(file);
