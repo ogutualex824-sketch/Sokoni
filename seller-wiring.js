@@ -65,10 +65,24 @@
     const db = _getDb();
     if (!db || !product || !product.id) return;
     try {
-      const { doc, setDoc, serverTimestamp } = await import(FS_URL);
+      const { doc, setDoc, getDoc, serverTimestamp } = await import(FS_URL);
+      const ref = doc(db, 'products', String(product.id));
       const payload = _trimPayload(product);
       payload._syncedAt = serverTimestamp();
-      await setDoc(doc(db, 'products', String(product.id)), payload, { merge: true });
+      /* Firestore is AUTHORITATIVE for money / inventory / ownership. A stale local
+         cache must NOT overwrite those on an EXISTING product — this sync was
+         reverting server-set values (observed: price 100 -> cached 2000; sellerUid).
+         For an existing doc, sync only descriptive fields; write everything on first
+         create. Legitimate price/stock/owner edits go through the server edit path. */
+      try {
+        const _snap = await getDoc(ref);
+        if (_snap.exists()) {
+          delete payload.price; delete payload.costPrice; delete payload.deliveryCost;
+          delete payload.stock; delete payload.outOfStock; delete payload.sold;
+          delete payload.sellerUid;
+        }
+      } catch(_) {}
+      await setDoc(ref, payload, { merge: true });
       /* Drop the warm search cache for products, or the seller searches for the
          item they just listed and is served the pre-write scan (up to 10 min
          in-session / 30 min from localStorage) — which reads as "search is
