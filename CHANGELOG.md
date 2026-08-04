@@ -1,3 +1,16 @@
+## [2026-08-04] — fix(rider): prevent duplicate driver applications (re-entrancy lock)
+
+Found during live RC gate provisioning: rapid re-clicks on the driver-registration Submit
+created **3 applications for one uid**. Because the operational `rideDrivers` doc is keyed by
+uid, a later **reject** of one duplicate then ran `projectDriver(approved=false)` and
+**suspended an already-approved rider** + stripped the role. `driver.html` now takes a
+one-in-flight-submission lock (`__driverRegBusy`) so re-clicks can't create duplicates; the
+lock releases on submit failure.
+**Deferred to R1.1 (server-side hardening):** the application lifecycle should also refuse to
+*downgrade* an already-active rider when a **duplicate** application for the same uid is
+rejected (decision should be scoped so a stale duplicate can't clobber a live operational
+record). Tracked with the canonical rider-onboarding work.
+
 ## [2026-08-04] — chore(rider): temporary owner photo-exception for RC gate rider onboarding
 
 `driver.html` rider application: the standard flow is **unchanged for all riders** (ID + DL

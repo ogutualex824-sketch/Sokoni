@@ -850,6 +850,10 @@ window.previewDocPhoto = previewDocPhoto;
 /* ── Registration ── */
 function registerDriver(){
   const _regMsg = (m)=>{ var el=document.getElementById('regMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},4000); } };
+  /* One submission at a time: rapid re-clicks previously created duplicate driver
+     applications for the same uid, and a later reject of a duplicate could suspend an
+     already-approved rider. This lock allows only one in-flight submission per attempt. */
+  if(window.__driverRegBusy){ _regMsg('Submitting… please wait a moment.'); return; }
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_reg', 3, 3600000)){
     _regMsg('Too many registration attempts. Please wait 1 hour.'); return;
   }
@@ -885,6 +889,7 @@ function registerDriver(){
     r.readAsDataURL(file);
   });
 
+  window.__driverRegBusy = true;   /* lock now that validation passed — one application per attempt */
   Promise.all([readFile(idPhotoFile), readFile(dlPhotoFile)]).then(([idPhoto, dlPhoto])=>{
     const driver = { id:"DRV"+Date.now(), name, phone, idNum, vehicle, plate, zone, pin, cargoTonne, cargoType, logbook, idPhoto, dlPhoto, status:"pending", deliveries:[], earnings:0, weeklyEarnings:0, rating:5.0, tripsCompleted:0, createdAt:new Date().toLocaleDateString("en-KE",{day:"numeric",month:"short",year:"numeric"}) };
     let drivers = [];
@@ -926,7 +931,7 @@ function registerDriver(){
     document.body.prepend(banner);
     setTimeout(function(){banner.remove();},6000);
     loginDriverWith(phone, pin);
-  });
+  }).catch(function(){ window.__driverRegBusy=false; _regMsg('Could not submit — please try again.'); });
 }
 
 /* ── Login ── */
