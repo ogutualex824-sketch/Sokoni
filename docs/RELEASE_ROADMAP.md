@@ -37,6 +37,17 @@ Acquisition → Success → Growth → B2B. Activation milestone = **First Succe
 
 Note: this is a *storefront/growth + merchant-tooling* capability, **not** a checkout dependency — RC checkout flows through the normal catalogue → cart → `darajaSTKPush` path and does not touch MiniShop or the inventory page.
 
+**Profile V2 — canonical identity record** (owner spec 08-04; schedule immediately after v1.0.0, alongside canonical inventory + MiniShop provisioning). Treat Profile as a **core platform capability**, not a settings page: `users/{uid}` becomes the ONE identity record every workspace (Customer/Seller/Provider/Rider/Admin) reads; role-specific collections (`sellers`, `providers`, `rideDrivers`/`drivers`) hold ONLY role data — **no duplicated name/email/phone**. Scope:
+- **All fields editable** (edit/save/cancel) except immutable identity: name, display name, business name, email, phone (verified flow), DOB, gender, bio, address, city/county, country, photo, cover, language, notification prefs. No hidden fields.
+- **Email add/change/verify** (real bug today — can't add/verify email): enter → send verification → verify → becomes primary; show "pending verification" until verified.
+- **Legal-doc gating fix:** signing must require ONLY verified phone + verified email + legal name (not unrelated profile fields) — today profile completion never reaches the threshold so users can't accept Terms/Privacy/Merchant/Provider/Rider agreements. Each acceptance stores {doc version, timestamp, user, device/IP where appropriate, acceptance hash} = audit trail. Ties to [[project_legal_release_gate]].
+- **Transparent profile completion** (weighted, itemised "missing" list) — not a mystery %.
+- **Independent verification stages** (phone / email / identity / business / payment) — one incomplete stage must not block the others.
+- **Roles always visible as badges** + **tap-to-switch workspace** (no disappearing Rider role, no hidden nav) — reads canonical `users/{uid}.roles`.
+- **Server-enforced rate limits** on profile updates (e.g. name 5/day, email 2/day + 24h cooldown, phone 2/day + cooldown, address/bio/photos 20/day) — email/phone cooldowns reduce account-takeover risk. Enforce server-side, not client.
+- **Premium UX** consistent with the platform: cards, skeletons, live sync, instant-save feedback, security section (device sessions, login history), legal agreements, privacy controls, notification settings, mobile-first. Part of the platform-wide premium-theme + unified-nav pass.
+This **extends** the existing profile toward the canonical model — not a rewrite. See [[project_identity_integrity]] · [[feedback_provider_roles_login]] · [[reference_shopname_and_analytics_gates]] (role array-vs-string bugs).
+
 ### Release 1.2 — Multi-wallet  ([[project_multiwallet_architecture]])
 Personal · Shop · Service · Rider · Business/Branch wallets on the **existing frozen ledger engine**; internal transfers as balanced source→destination ledger movements. No changes to the proven money paths — additive wallet-scoping only.
 
