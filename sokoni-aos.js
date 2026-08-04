@@ -61,6 +61,8 @@ window.SokoniAOS = (() => {
       services:      () => _loadServices(),
       delivery:      () => _loadDelivery(),
       financial:     () => _loadFinancial(),
+      bookings:      () => _loadBookings(),
+      payments:      () => _loadPayments(),
       support:       () => _loadSupport(),
       comms:         () => _loadComms(),
       content:       () => _loadContent(),
@@ -475,6 +477,57 @@ window.SokoniAOS = (() => {
     }
   }
 
+  // ── Bookings (canonical providerBookings via adminGetBookings) ───────────────
+  async function _loadBookings(status) {
+    const body = document.getElementById("bookingsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    try {
+      const data = await _call("adminGetBookings", status ? { status: status, limit: 60 } : { limit: 60 });
+      const items = data.bookings || data.items || [];
+      const q = ((document.getElementById("bookingsSearch") || {}).value || "").toLowerCase();
+      const list = q ? items.filter(b => ((b.customerName || "") + " " + (b.service || "") + " " + (b.status || "") + " " + (b.id || "")).toLowerCase().indexOf(q) > -1) : items;
+      const rows = list.map(b => `<tr>
+          <td>${_esc(b.customerName||"—")}</td>
+          <td class="aos-muted">${_esc(b.service||"—")}</td>
+          <td>${_esc(((b.date||"")+" "+(b.startTime||"")).trim()||"—")}</td>
+          <td><span class="status-badge st-${_esc(b.status||"")}">${_esc(b.status||"—")}</span></td>
+          <td class="aos-muted">${_esc(b.paymentStatus||"—")}</td>
+          <td>${b.price?("KES "+_fmt(Math.round((b.price||0)/100))):"—"}</td>
+          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${_esc(b.customerUid||"")}')">Customer</button></td>
+        </tr>`);
+      body.innerHTML = rows.length
+        ? `<table class="aos-table"><thead><tr><th>Customer</th><th>Service</th><th>When</th><th>Status</th><th>Payment</th><th>Amount</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+        : _emptyMsg(q ? "No matching bookings" : "No bookings found");
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Couldn't load bookings.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'bookings\')">Try again</button></div>';
+    }
+  }
+
+  // ── Payments — collections (canonical `payments` via adminGetPayments) ────────
+  async function _loadPayments(status) {
+    const body = document.getElementById("paymentsBody");
+    if (!body) return;
+    body.innerHTML = _spinner();
+    try {
+      const data = await _call("adminGetPayments", { limit: 100 });
+      let items = data.payments || data.items || data.rows || [];
+      if (status) items = items.filter(p => String(p.status || "").toLowerCase() === status);
+      const rows = items.map(p => `<tr>
+          <td class="aos-muted" style="font-family:monospace;font-size:.74rem">${_esc(String(p.id||"").slice(0,12))}</td>
+          <td>KES ${_fmt(Math.round(p.amount||0))}</td>
+          <td><span class="status-badge st-${_esc(String(p.status||"").toLowerCase())}">${_esc(p.status||"—")}</span></td>
+          <td>${_esc(p.sellerName||"—")}</td>
+          <td class="aos-muted">${_esc(p.mpesaCode||"—")}</td>
+        </tr>`);
+      body.innerHTML = rows.length
+        ? `<table class="aos-table"><thead><tr><th>Ref</th><th>Amount</th><th>Status</th><th>Seller</th><th>M-Pesa Ref</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+        : _emptyMsg("No payments found");
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Couldn't load payments.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'payments\')">Try again</button></div>';
+    }
+  }
+
   // ── Delivery ─────────────────────────────────────────────────────────────────
   async function _loadDelivery() {
     const body = document.getElementById("deliveryBody");
@@ -622,13 +675,46 @@ window.SokoniAOS = (() => {
             <td><button class="aos-btn-sm success" onclick="SokoniAOS.releaseEscrow('${a.id}')">Release</button></td>
           </tr>`).join("")}</tbody></table>` : _emptyMsg("No held escrow funds");
       } else if (tab === "report") {
-        const data = await _call("getFinancialReport", { period: "monthly" }).catch(() => ({}));
-        const r = data.report || data;
-        body.innerHTML = `<div style="display:flex;gap:8px;margin-bottom:16px">
-          <button class="aos-btn" onclick="SokoniAOS.financialTab('report')">&#x1F504; Refresh</button>
-          <button class="aos-btn" onclick="SokoniAOS.exportFinancialReport()">&#x1F4E5; Export CSV</button>
-        </div>
-        <div class="fin-report">${JSON.stringify(r, null, 2)}</div>`;
+        /* Executive report — reconciled from adminGetFinance (canonical 30-day) +
+           adminGetExecutiveDashboard (booking stats). No recomputation, no raw JSON. */
+        const [finR, execR] = await Promise.all([
+          _call("adminGetFinance").catch(() => ({})),
+          _call("adminGetExecutiveDashboard").catch(() => ({})),
+        ]);
+        const rec = (finR && finR.reconciliation) || {};
+        const x = execR || {};
+        const row = (l, v) => `<div class="rep-row"><span>${l}</span><strong>${v}</strong></div>`;
+        body.innerHTML = `
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="aos-btn" onclick="SokoniAOS.financialTab('report')">&#x1F504; Refresh</button>
+            <button class="aos-btn" onclick="SokoniAOS.exportFinancialReport()">&#x1F4E5; Export CSV</button>
+          </div>
+          <div class="rep-card"><div class="rep-h">Executive Summary &middot; 30-day</div>
+            ${row("GMV (gross revenue)", _kes(rec.grossRevenue))}
+            ${row("Net Platform Revenue", _kes(rec.netPlatformRevenue))}
+            ${row("Wallet Float (liability)", _kes(rec.walletFloat))}
+            ${row("Pending Withdrawals", _kes(rec.pendingWithdrawals))}
+          </div>
+          <div class="rep-card"><div class="rep-h">Revenue Breakdown</div>
+            ${row("Product / Merchant Revenue", _kes(rec.productRevenue))}
+            ${row("Service / Provider Revenue", _kes(rec.serviceRevenue))}
+            ${row("Total Commission", _kes(rec.commission))}
+            ${row("&mdash; Product Commission", _kes(rec.productCommission))}
+            ${row("&mdash; Service Commission", _kes(rec.serviceCommission))}
+            ${row("Gateway Fees (absorbed)", _kes(rec.gatewayFees))}
+            ${row("Refunds", _kes(rec.refunds))}
+          </div>
+          <div class="rep-card"><div class="rep-h">Withdrawals &amp; Settlement</div>
+            ${row("Pending Withdrawals", _kes(rec.pendingWithdrawals))}
+            ${row("Completed Withdrawals", _kes(rec.completedWithdrawals))}
+          </div>
+          <div class="rep-card"><div class="rep-h">Booking Statistics</div>
+            ${row("Total Service Bookings", _fmt(x.totalServiceBookings || 0))}
+            ${row("Active Bookings", _fmt(x.activeServiceBookings || 0))}
+            ${row("Bookings Today", _fmt(x.serviceBookingsToday || 0))}
+            ${row("Total Product Orders", _fmt(x.totalOrders || 0))}
+          </div>
+          <div style="font-size:.72rem;color:var(--aos-sub);margin-top:8px">Reconciled from adminGetFinance (canonical 30-day window) &mdash; no recomputation.</div>`;
       }
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
   }
@@ -2093,6 +2179,8 @@ window.SokoniAOS = (() => {
     init,
     navigate:            _navigate,
     reloadDashboard:     _loadDashboard,
+    loadBookings:        _loadBookings,
+    loadPayments:        _loadPayments,
     // Users
     loadUsers:           _loadUsers,
     viewUser,

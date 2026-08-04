@@ -86,6 +86,15 @@
     .ec-stage-n{font-size:1.25rem;font-weight:800;color:var(--aos-text);line-height:1}
     .ec-stage-l{font-size:.66rem;color:var(--aos-sub);text-transform:uppercase;letter-spacing:.03em;margin-top:3px}
     .ec-skel{height:60px;border-radius:var(--aos-radius);background:linear-gradient(90deg,var(--aos-surface) 25%,rgba(255,255,255,.05) 37%,var(--aos-surface) 63%);background-size:400% 100%;animation:ecsk 1.2s ease infinite}
+    .aos-input{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:8px;color:var(--aos-text);padding:8px 12px;font-size:14px;outline:none;min-width:200px}
+    .aos-input:focus{border-color:var(--aos-accent)}
+    /* Executive report */
+    .rep-card{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:16px;margin-bottom:14px;max-width:560px}
+    .rep-h{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--aos-sub);margin-bottom:10px}
+    .rep-row{display:flex;justify-content:space-between;gap:16px;padding:7px 0;border-bottom:1px solid var(--aos-border);font-size:.86rem}
+    .rep-row:last-child{border-bottom:none}
+    .rep-row span{color:var(--aos-sub)}
+    .rep-row strong{color:var(--aos-text);font-weight:700}
     @keyframes ecsk{0%{background-position:100% 50%}100%{background-position:0 50%}}
     .health-chip{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px 16px;min-width:130px}
     .health-chip span{font-size:11px;color:var(--aos-muted);display:block}
@@ -287,6 +296,8 @@
     <div class="nav-group">
       <div class="nav-group-label">Operations</div>
       <button class="nav-item" data-section="financial" data-label="Financial Center" onclick="SokoniAOS.navigate('financial');_closeSidebar()"><span class="nav-icon">&#x1F4B0;</span>Financial</button>
+      <button class="nav-item" data-section="bookings" data-label="Bookings" onclick="SokoniAOS.navigate('bookings');_closeSidebar()"><span class="nav-icon">&#x1F4C5;</span>Bookings</button>
+      <button class="nav-item" data-section="payments" data-label="Payments" onclick="SokoniAOS.navigate('payments');_closeSidebar()"><span class="nav-icon">&#x1F4B3;</span>Payments</button>
       <button class="nav-item" data-section="support" data-label="Customer Support" onclick="SokoniAOS.navigate('support');_closeSidebar()"><span class="nav-icon">&#x1F3A7;</span>Support<span class="nav-badge" id="sidebarTicketBadge" hidden>0</span></button>
       <button class="nav-item" data-section="comms" data-label="Communications" onclick="SokoniAOS.navigate('comms');_closeSidebar()"><span class="nav-icon">&#x1F4E2;</span>Communications</button>
       <button class="nav-item" data-section="content" data-label="Content Management" onclick="SokoniAOS.navigate('content');_closeSidebar()"><span class="nav-icon">&#x1F4DD;</span>Content</button>
@@ -453,6 +464,25 @@
           <button class="tab-btn" data-tab="report" onclick="SokoniAOS.financialTab('report')">Report</button>
         </div>
         <div id="finBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- Bookings (P2b) — canonical providerBookings via adminGetBookings -->
+      <div class="aos-panel" id="panel-bookings" hidden>
+        <div class="panel-toolbar">
+          <h2>Bookings</h2>
+          <select onchange="SokoniAOS.loadBookings(this.value)"><option value="">All statuses</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="in_progress">In Progress</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option><option value="no_show">No-show</option></select>
+          <input id="bookingsSearch" type="search" placeholder="Search customer / service…" oninput="SokoniAOS.loadBookings()" class="aos-input">
+        </div>
+        <div id="bookingsBody"><div class="aos-spinner"><div></div></div></div>
+      </div>
+
+      <!-- Payments (P2b) — collections via adminGetPayments -->
+      <div class="aos-panel" id="panel-payments" hidden>
+        <div class="panel-toolbar">
+          <h2>Payments</h2>
+          <select onchange="SokoniAOS.loadPayments(this.value)"><option value="">All</option><option value="complete">Complete</option><option value="pending">Pending</option><option value="failed">Failed</option></select>
+        </div>
+        <div id="paymentsBody"><div class="aos-spinner"><div></div></div></div>
       </div>
 
       <div class="aos-panel" id="panel-support" hidden>
