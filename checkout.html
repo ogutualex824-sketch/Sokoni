@@ -1999,12 +1999,12 @@ async function _placeOrderCore(){
       })).filter(i => i.productId);
 
       try {
-        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('sending', 'Creating your order…');
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Creating your order…');
         /* The order MUST exist before the STK so the IntaSend webhook can finalise
            it (mark paid + decrement stock) authoritatively even if this tab closes. */
         await _ckPersistPendingOrder(_ordId, _sUid, _sName, _items);
 
-        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('sending', 'Sending M-PESA prompt…');
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Sending M-PESA prompt…');
         /* Seller + order linkage ride in meta so the webhook credits the right
            seller (meta.sellerUid, since the buyer is the caller) and finalises the
            right order (meta.orderId + meta.items). */
@@ -2018,16 +2018,18 @@ async function _placeOrderCore(){
           serviceDesc: 'SOKONI Order',
         });
 
-        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'M-PESA prompt sent — enter your PIN on your phone…');
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('waiting', 'M-PESA prompt sent — enter your PIN on your phone…');
         await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: orderTotal, phone }, (status) => {
           if (window._checkoutSetTrustStatus && status === 'PENDING') {
-            _checkoutSetTrustStatus('received', 'Waiting for M-PESA confirmation…');
+            _checkoutSetTrustStatus('waiting', 'Waiting for M-PESA confirmation…');
           }
         });
 
         /* Webhook has finalised the order (paid + stock decremented + seller
-           credited). Do NOT re-write it — alreadyPersisted skips the client write. */
-        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'Payment received — completing your order…');
+           credited). Do NOT re-write it — alreadyPersisted skips the client write.
+           Phase is 'completing' (the webhook is updating order/inventory/records);
+           no success text is asserted until the order document is authoritative. */
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('completing', 'Completing your order…');
         saveAndRedirect(phone, 'mpesa', _ordId, null, true, /* alreadyPersisted */ true);
       } catch (e) {
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');

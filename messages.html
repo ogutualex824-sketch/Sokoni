@@ -68,7 +68,7 @@ body{font-family:'Inter',sans-serif;background:var(--c-bg);color:var(--c-text);m
 .sk-line{height:13px;margin-bottom:7px;border-radius:4px}
 .sk-line.w80{width:80%}.sk-line.w60{width:60%}.sk-line.w40{width:40%}
 
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:64px;z-index:100;padding-bottom:env(safe-area-inset-bottom,0)}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--c-surface);border-top:1px solid var(--c-border);display:flex;height:calc(64px + env(safe-area-inset-bottom,0px));z-index:100;padding-bottom:env(safe-area-inset-bottom,0px)}
 /* .bnav-item tabs are styled by the canonical fallback in sokoni-platform-override.css */
 
 @media(min-width:769px){

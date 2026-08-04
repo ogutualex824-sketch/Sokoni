@@ -99,13 +99,30 @@ console.log('\nPayment integrity — the money path\n');
 
 /* ── 4. The one REAL provider still confirms from the provider, not the UI ─ */
 {
-  /onSuccess\s*\(\s*receipt\s*\)/.test(code) && /onFailure\s*\(/.test(code)
-    ? ok('M-Pesa still confirms from the provider callback (onSuccess/onFailure), not from the client')
-    : bad('the M-Pesa provider callback is gone — payment confirmation may no longer be provider-driven');
+  /* Provider-driven confirmation, by either mechanism:
+       legacy Daraja — onSuccess(receipt)/onFailure() callbacks from SokoniMpesa.pay
+       IntaSend      — await SokoniIntaSend.waitForConfirmation(), which resolves
+                       ONLY when the webhook writes payments/{ref} status=COMPLETE.
+     Both derive success from the provider/server, never from client optimism. */
+  const _mpesaProviderDriven =
+    (/onSuccess\s*\(\s*receipt\s*\)/.test(code) && /onFailure\s*\(/.test(code)) ||
+    /await\s+window\.SokoniIntaSend\.waitForConfirmation\s*\(/.test(code);
+  _mpesaProviderDriven
+    ? ok('M-Pesa confirms from the provider (awaited IntaSend webhook confirmation, or legacy onSuccess/onFailure), not from the client')
+    : bad('the M-Pesa provider confirmation is gone — payment confirmation may no longer be provider-driven');
 
-  /* An order created on the M-Pesa path must use the SERVER-issued order id. */
-  /saveAndRedirect\(\s*receipt\.mpesaCode[^\n]*_ordId/.test(code)
-    ? ok('the M-Pesa order uses the server-issued orderId (no client-side order-ID forgery)')
+  /* An order created on the M-Pesa path must use the payment-bound order id — the
+     SAME id used as the STK/payment ref — so the client cannot forge an order id
+     detached from the money.
+       legacy   — saveAndRedirect(receipt.mpesaCode, 'mpesa', _ordId, …)
+       IntaSend — _ordId is the initiateSTKPush ref AND the pre-created order id AND
+                  the id passed to saveAndRedirect, binding order ↔ payment. */
+  const _mpesaOrderIdBound =
+    /saveAndRedirect\(\s*receipt\.mpesaCode[^\n]*_ordId/.test(code) ||
+    (/initiateSTKPush\(\s*phone\s*,\s*orderTotal\s*,\s*_ordId\b/.test(code) &&
+     /saveAndRedirect\([^\n]*\b_ordId\b/.test(code));
+  _mpesaOrderIdBound
+    ? ok('the M-Pesa order uses the payment-bound orderId (no client-side order-ID forgery)')
     : bad('the M-Pesa path no longer passes the server orderId — client could forge an order id');
 }
 
