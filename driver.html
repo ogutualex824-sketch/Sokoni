@@ -985,6 +985,20 @@ window.exitDriverWorkspace = exitDriverWorkspace;
 /* ── Online toggle ── */
 function toggleOnline(){
   isOnline = !isOnline;
+  window.isOnline = isOnline;   /* the module/wrapper layer reads window.isOnline — keep in sync (was undefined there) */
+  /* Reliable dispatch sync: dispatch.js filters rideDrivers where isOnline==true. Write it
+     here in the base handler — always runs, correct scope, no dependency on the DeliveryHub
+     module or the _uid() helper — so the rider is actually discoverable. */
+  try {
+    var _ru = (window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : null;
+    if(_ru && firebase.firestore){
+      firebase.firestore().collection('rideDrivers').doc(_ru).update({
+        isOnline: isOnline,
+        status: isOnline ? 'active' : 'offline',
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).catch(function(){});
+    }
+  } catch(e){}
   const btn = document.getElementById("driverOnlineBtn");
   btn.textContent = isOnline ? "🟢 Online — Taking Orders" : "🔴 Go Offline";
   btn.style.background = isOnline ? "rgba(113,255,0,0.18)" : "rgba(255,61,61,0.1)";
