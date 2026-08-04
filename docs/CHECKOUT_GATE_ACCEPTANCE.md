@@ -43,5 +43,19 @@ _Capture anything observed during the live production run — this makes the rec
 - **UI friction (customer / rider / merchant):** `____`
 - **Anything worth remembering for future releases:** `____`
 
+## Release Baseline (record on Go — this is the certified lineage anchor)
+On a signed **Go**, this becomes the platform **Release Baseline**. Capture:
+
+| Baseline field | Value |
+|---|---|
+| Release Candidate version (SW `cacheVersion`) | `__________` |
+| Production function revision(s) — `darajaSTKPush` (+ others changed) | `__________` |
+| Service Worker version | `__________` |
+| Acceptance date/time (UTC + EAT) | `__________` |
+| Reference transaction (Order ID) | `__________` |
+| Acceptance document version (this file's commit SHA) | `__________` |
+
+**Change-record rule:** every future payment/checkout change MUST reference this baseline in its change record — creating a clear lineage from the certified release to each subsequent update — and MUST re-run `qa-dispatch-settlement-e2e` + re-verify the acceptance rows before deploy.
+
 ## Post-record
-On **Go**, this file is the payment-path baseline: any later checkout/payment change re-runs the `qa-dispatch-settlement-e2e` harness AND re-verifies these rows before deploy. Then the roadmap proceeds — Merchant Growth (first-successful-sale as the primary activation milestone) → Multi-wallet → eTIMS (when the KRA spec lands).
+Then the roadmap proceeds — Merchant Growth (first-successful-sale as the primary activation milestone) → Multi-wallet → eTIMS (when the KRA spec lands).
