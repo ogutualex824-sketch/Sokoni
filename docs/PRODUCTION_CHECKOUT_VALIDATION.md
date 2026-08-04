@@ -1,14 +1,16 @@
 # Production Checkout Validation
 
-**Date:** 2026-08-04 · **Status:** System-property evidence COMPLETE; live human-in-the-loop order PENDING (needs a person at the M-Pesa PIN + rider app).
+**Date:** 2026-08-04 · **Status:** System-property evidence COMPLETE; **(A) authoritative-pricing DEPLOYMENT of `darajaSTKPush` unconfirmed (likely pending — owner go-ahead needed)**; live human-in-the-loop order PENDING (needs a person at the M-Pesa PIN + rider app).
 
 > **Honesty note.** A literal end-to-end order with real money cannot be executed headlessly — the M-Pesa STK PIN and the rider accept/pickup/complete are human actions on physical handsets. This document proves the **system properties** by (a) citing the real deployed execution path, and (b) running the existing exactly-once settlement harness against the **real** `settleOrder`. The final step is a human placing one order against the checklist in §5. Nothing here is fabricated: §D reproduces actual emulator output.
 
 ---
 
-## A. Delivery pricing — authoritative path is DEPLOYED and correct
+## A. Delivery pricing — authoritative path is PRESENT & correct, but its DEPLOYMENT is unconfirmed
 
-Order checkout recomputes delivery **server-side** (`functions/index.js:3313-3374`):
+⚠️ **Gating fact:** the recompute lives inside the **`darajaSTKPush`** checkout callable (`functions/index.js:3203+`, recompute at `3313-3374`). Per memory ([[project_delivery_pricing_authority]]), the commits that added this server-authoritative logic were **NOT deployed** as of 2026-08-02, and this session deployed only `providerDispatch`/`adminOsDispatch`. So the code below is confirmed in the **codebase**, but production `darajaSTKPush` may still run the legacy clamp-only version. **Two gating actions to exercise the authoritative path: (1) deploy `darajaSTKPush` [payment-path change — needs owner go-ahead, currently under a deliberate hold], (2) configure the Kass Shop `deliveryConfig`.** Do not report A as live until both are done and re-verified.
+
+Order checkout recomputes delivery **server-side** (`functions/index.js:3313-3374`, inside `darajaSTKPush`):
 - Reads the merchant's `sellers/{sellerUid}.deliveryConfig` and recomputes via the shared `functions/shared/delivery-engine.js` `calculateDelivery()` — the same module the client uses, so they can't drift.
 - **Client/server mismatch is REJECTED** (not absorbed): logs `delivery_fee_mismatch` to `auditLogs` and throws `failed-precondition` returning the authoritative `serverDeliveryFee` so the client refreshes (`index.js:3342-3360`).
 - `delivery_fee_unverified` is logged **only when the merchant has no `deliveryConfig`** (legacy 0–5000 clamp, `index.js:3361-3373`).
