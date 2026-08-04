@@ -33,5 +33,15 @@
 - **Financial exactly-once** was proven pre-gate empirically (14/14, `qa-dispatch-settlement-e2e` against the real `settleOrder`). This record confirms the SAME properties hold on the live reference transaction, not just the emulator.
 - **No-Go** if any row fails → follow the rollback procedure in `docs/PRODUCTION_CHECKOUT_VALIDATION.md §4b` (revision rebind / git-revert `e02ac98` / restore config), then re-run.
 
+## Lessons / Regression Notes
+_Capture anything observed during the live production run — this makes the record a living operational reference, not just an approval. Note it even if the gate passed._
+
+- **Latency:** STK prompt arrival: `____` · webhook→paid: `____` · settle→wallet: `____`
+- **Delivery timing:** dispatch→accept: `____` · pickup→complete: `____`
+- **Payment timing / retries:** `____`
+- **Operator observations:** `____`
+- **UI friction (customer / rider / merchant):** `____`
+- **Anything worth remembering for future releases:** `____`
+
 ## Post-record
 On **Go**, this file is the payment-path baseline: any later checkout/payment change re-runs the `qa-dispatch-settlement-e2e` harness AND re-verifies these rows before deploy. Then the roadmap proceeds — Merchant Growth (first-successful-sale as the primary activation milestone) → Multi-wallet → eTIMS (when the KRA spec lands).
