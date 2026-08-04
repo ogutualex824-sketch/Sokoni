@@ -2,7 +2,12 @@
 
 **Purpose:** the canonical baseline for the authoritative-checkout + payment path. Complete this the moment the production gate closes (one real end-to-end order). Every future release that touches checkout, delivery pricing, dispatch, settlement, or payments is measured against THIS record.
 
-**Status:** ☐ NOT YET COMPLETED — fill in when the production reference transaction passes.
+**Status:** ☐ NOT YET COMPLETED — fill in when the production reference transaction passes. RC is NOT exited; `v1.0.0` NOT tagged.
+
+### Gate execution log
+- **2026-08-04 — Step 1 DONE:** `darajaSTKPush` deployed to production (`us-central1`, Gen2 callable) from commit `fdb4a8f` — "Successful update operation". Authoritative delivery-pricing path now live; behaviourally inert until a merchant has a `deliveryConfig`. Exact Cloud Run revision not captured from this environment (gcloud unauthed) — **record it from the console** for the fast-rollback row. Rollback available now: tag `gate-authoritative-delivery` + revert `e02ac98` + redeploy.
+- **Step 2 — PENDING:** apply Kass Shop `deliveryConfig` (needs the real seller UID).
+- **Step 3 — PENDING (human-only):** one real order (M-Pesa PIN + rider accept/pickup/deliver) → verify the table below → sign.
 **Related:** `docs/PRODUCTION_CHECKOUT_VALIDATION.md` (evidence + §5 human checklist), [[project_delivery_pricing_authority]], [[project_release_validation_standard]].
 
 ---
