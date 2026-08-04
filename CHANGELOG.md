@@ -1,3 +1,13 @@
+## [2026-08-04] — fix(auth-ui): password-reset modal overflows mobile viewport
+
+`login.html` reset modal box had `max-width:380px;width:100%` but no height bound, so on a
+short mobile viewport (keyboard open) it overflowed and couldn't scroll — reading as
+"oversized / doesn't fit." Added `max-height:90dvh;overflow-y:auto;-webkit-overflow-scrolling:touch`
+so it always fits centered and scrolls internally. Backend auth is unaffected — Firebase
+identifies the account fine; this was purely a UI/viewport bug. (Email-delivery for reset
+links is a separate, config issue — bypass with an admin-generated link on the `mysokoni.co.ke`
+authDomain.)
+
 ## [2026-08-04] — fix(nav+rider): search-box autofill + go-online writes dispatch field
 
 - **Search box email autofill (all pages):** Chrome ignores `autocomplete="off"` on the shared
