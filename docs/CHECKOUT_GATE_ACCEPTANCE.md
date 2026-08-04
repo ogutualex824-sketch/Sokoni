@@ -6,8 +6,8 @@
 
 ### Gate execution log
 - **2026-08-04 — Step 1 DONE:** `darajaSTKPush` deployed to production (`us-central1`, Gen2 callable) from commit `fdb4a8f` — "Successful update operation". Authoritative delivery-pricing path now live; behaviourally inert until a merchant has a `deliveryConfig`. Exact Cloud Run revision not captured from this environment (gcloud unauthed) — **record it from the console** for the fast-rollback row. Rollback available now: tag `gate-authoritative-delivery` + revert `e02ac98` + redeploy.
-- **Step 2 — PENDING:** apply Kass Shop `deliveryConfig` (needs the real seller UID).
-- **Step 3 — PENDING (human-only):** one real order (M-Pesa PIN + rider accept/pickup/deliver) → verify the table below → sign.
+- **2026-08-04 — Step 2 DONE:** Kass Shop `deliveryConfig` applied to **`sellers/xrH21J5GFbW8PluCZ2ny5nIuf602`** ("KASS SHOP", `businesses/SOK-GL58F7`, `ownerId`=same UID) — distance mode, baseFee 100, perKm 20, freeAbove 3000, enabled; read back to confirm. NOTE: the initially-supplied `BIZ-14FBA564CF7A8617` did not exist in `businesses/`; the correct seller was resolved by name match ("KASS SHOP", active) and its Firebase-UID `sellers` doc (what checkout reads). Config-read-at-checkout is confirmed live in Step 3 (the real order).
+- **Step 3 — PENDING (human-only):** one real order (M-Pesa PIN + rider accept/pickup/deliver) → verify the table below → sign. **This is the only remaining RC-exit action; it cannot be automated.**
 **Related:** `docs/PRODUCTION_CHECKOUT_VALIDATION.md` (evidence + §5 human checklist), [[project_delivery_pricing_authority]], [[project_release_validation_standard]].
 
 ---
