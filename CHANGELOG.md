@@ -1,3 +1,15 @@
+## [2026-08-04] — fix(nav): RC-safe navigation correctness (audit-driven, Navigation Contract v1)
+
+From the 2026-08-04 navigation audit — correctness only, no redesign, no business logic. Governed by `docs/NAVIGATION_CONTRACT.md`.
+- **`super-admin.html`** — added a "← Back to Admin" sidebar link (→ `admin-os.html`). Was a genuine **dead end**: `data-no-header` suppressed both injected navs and the only exits were JS auth redirects (Contract rule 2).
+- **`seller-wallet.html`** — added a "← Back" header link (history-back with `seller.html` fallback). Was a near dead end (Contract rule 2).
+- **`sokoni-nav-engine.js`** — Super-Admin sidebar "Search" pointed to **`enterprise-search.html`, which does not exist** (404); repointed to `search.html` (Contract rule 4).
+- **`nav-active.js`** — bottom-nav active highlight matched only `.html` keys; under cleanUrls (prod serves extension-free) it silently never lit up on nav-engine `_SKIP` pages (e.g. Profile). Now also tries the `.html` key (Contract rule 6).
+
+**Deferred (need a canonical decision or are larger than a quick fix):** unify the two admin→super-admin destinations (`admin.html` `superadmin.html` vs `admin-os.html` `super-admin.html`); canonical provider hub (`providers.html` vs `provider-dashboard.html`); `rider-dashboard.html` vs `driver.html` orphan; `inventory.html` AI/Alerts buttons hidden by shared-header CSS (relocate); retire redundant `nav-active.js` in favour of nav-engine; the 3-layer nav consolidation → R1.1.
+
+**Security:** none. **Breaking:** none. **Deploy:** requires a hosting deploy (working tree now clean).
+
 ## [2026-08-04] — fix(minishop): shop button + KASS SHOP inventory/ownership reconciliation
 
 **MiniShop admin header (`minishop-admin.html`).**
