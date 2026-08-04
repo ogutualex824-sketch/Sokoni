@@ -85,7 +85,7 @@ window.SokoniAOS = (() => {
     'adminGetBookings','adminGetCategories','adminGetDeliveryStats','adminGetDisputes',
     'adminGetExecutiveDashboard','adminGetFaqs','adminGetFeatureFlags','adminGetFinance','adminGetFraudAlerts',
     'adminGetMerchantPipeline','adminGetOrders','aosGetPendingPayouts','adminGetPlatformOverview','adminGetPlatformSettings',
-    'adminGetPosDevices','adminGetProducts','adminGetRecentNotifications','adminGetReviews',
+    'adminGetPayments','adminGetPosDevices','adminGetProducts','adminGetProviders','adminGetRecentNotifications','adminGetReviews','adminGetServices',
     'adminGetSearchStats','adminGetSupportTickets','adminGetSystemHealth','adminGetUser',
     'aosResolveDispute','adminResolveSupportTicket','adminSaveAnnouncement','adminSaveBanner',
     'adminSearchUsers','adminSendPushNotification','adminUpdateFeatureFlag','adminUpdateOrderStatus',
@@ -454,24 +454,25 @@ window.SokoniAOS = (() => {
     if (!body) return;
     body.innerHTML = _spinner();
     try {
-      const snap = await _db.collection("providers").where("status", "==", "active")
-        .orderBy("createdAt", "desc").limit(30).get();
-      const rows = snap.docs.map(d => {
-        const p = d.data();
-        return `<tr>
-          <td>${_esc(p.name||p.businessName||"—")}</td>
+      /* Canonical: adminGetProviders (was a direct `providers` Firestore read — a
+         non-canonical-source defect). Wires the deployed, previously-unused op. */
+      const data = await _call("adminGetProviders", { limit: 50 });
+      const items = data.items || data.providers || [];
+      const rows = items.map(p => `<tr>
+          <td>${_esc(p.name||"—")}</td>
           <td class="aos-muted">${_esc(p.category||"—")}</td>
           <td>${_esc(p.location||"—")}</td>
-          <td><span class="status-badge st-${p.status||"active"}">${_esc(p.status||"active")}</span></td>
-          <td>${_fmt(p.bookingCount||0)}</td>
+          <td><span class="status-badge st-${_esc(p.status||"—")}">${_esc(p.status||"—")}${p.verified?" ✓":""}</span></td>
+          <td>${_fmt(p.jobsCompleted||0)}</td>
           <td>${(p.rating||0).toFixed(1)} ⭐</td>
-          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${d.id}')">View</button></td>
-        </tr>`;
-      });
+          <td><button class="aos-btn-sm" onclick="SokoniAOS.viewUser('${_esc(p.uid)}')">View</button></td>
+        </tr>`);
       body.innerHTML = rows.length
-        ? `<table class="aos-table"><thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Status</th><th>Bookings</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
-        : _emptyMsg("No active providers");
-    } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
+        ? `<table class="aos-table"><thead><tr><th>Name</th><th>Category</th><th>Location</th><th>Status</th><th>Jobs</th><th>Rating</th><th>Actions</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+        : _emptyMsg("No providers found");
+    } catch (e) {
+      body.innerHTML = _emptyMsg("Couldn't load providers.") + '<div style="text-align:center;margin-top:8px"><button class="aos-btn-sm" onclick="SokoniAOS.navigate(\'services\')">Try again</button></div>';
+    }
   }
 
   // ── Delivery ─────────────────────────────────────────────────────────────────
