@@ -80,6 +80,22 @@ Reproduce: `bash scripts/qa/run-dispatch-e2e.sh` (needs JDK-17 + the v1.19.8 Fir
 
 ---
 
+## 4b. Rollback point (create BEFORE deploying `darajaSTKPush`)
+
+Because step 1 is a live-payments deploy, establish a fast revert first:
+
+- **Git deploy-candidate tag (done):** `gate-authoritative-delivery` → `cb802d5` (local; `git push origin gate-authoritative-delivery` when you deploy). This marks exactly the tree being deployed.
+- **Record the current live revision (owner — needs gcloud/console):** `gcloud run services describe darajaSTKPush --region us-central1 --format='value(status.latestReadyRevisionName)'` (Functions Gen2 run on Cloud Run). Save that revision name.
+- **Save the current Kass Shop config (owner):** read `sellers/{KASS_SHOP_UID}.deliveryConfig` and save it, or confirm it's absent (so restore is well-defined).
+
+**If the live checkout misbehaves after deploy:**
+1. **Fast (no code change):** rebind traffic to the recorded prior revision —
+   `gcloud run services update-traffic darajaSTKPush --region us-central1 --to-revisions <PRIOR_REVISION>=100`. Instant; affects only this function.
+2. **Code revert:** `git revert e02ac98` (the commit "server becomes the authority for delivery pricing") then `firebase deploy --only functions:darajaSTKPush`.
+3. **Restore config:** re-write the saved `deliveryConfig` (or delete it if none existed).
+
+Nothing else on the platform is touched by either path.
+
 ## 5. Human-only live test checklist (one real order)
 
 Config first: apply §A Kass Shop `deliveryConfig`. Then, as a real customer + the only online rider:
