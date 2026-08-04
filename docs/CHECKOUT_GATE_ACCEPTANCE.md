@@ -29,6 +29,12 @@
 
 ---
 
+## RC exit criteria (all must be true to lift the freeze)
+☐ `darajaSTKPush` deployed · ☐ Kass Shop `deliveryConfig` applied · ☐ one complete live customer order · ☐ acceptance checklist fully passed (table above) · ☐ this record signed · ☐ Release Baseline established (below).
+
+## Exception process (critical issue found during the live run)
+1. **Record** the issue here (Lessons section). 2. **Decide: Go / Rollback / Fix & Restart RC.** 3. If a code change is required, **increment the RC** (RC1 → RC2). 4. **Re-run** the required validation (`qa-dispatch-settlement-e2e` + any harness for the touched area) and **repeat** this acceptance process. This preserves the signed-baseline integrity while allowing a response to real production findings.
+
 ## Verification method
 - **Financial exactly-once** was proven pre-gate empirically (14/14, `qa-dispatch-settlement-e2e` against the real `settleOrder`). This record confirms the SAME properties hold on the live reference transaction, not just the emulator.
 - **No-Go** if any row fails → follow the rollback procedure in `docs/PRODUCTION_CHECKOUT_VALIDATION.md §4b` (revision rebind / git-revert `e02ac98` / restore config), then re-run.
