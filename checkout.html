@@ -1894,6 +1894,7 @@ function _ckOrderId(){
    button stays on "⏳ Processing..." forever and the customer cannot retry
    without reloading — losing their entered delivery details. */
 function _resetPlaceBtn(){
+  clearTimeout(window._placeBtnWatchdog);
   const btn = document.querySelector('.co-place-btn');
   if (!btn) return;
   btn.disabled = false;
@@ -1904,7 +1905,19 @@ function _resetPlaceBtn(){
 function placeOrder(){
   /* Prevent double-tap: capture original label then lock the button */
   const _placeBtn = document.querySelector('.co-place-btn');
-  if (_placeBtn) { window._placeBtnOrigHTML = _placeBtn.innerHTML; _placeBtn.disabled = true; _placeBtn.innerHTML = '⏳ Processing...'; }
+  if (_placeBtn) {
+    window._placeBtnOrigHTML = _placeBtn.innerHTML; _placeBtn.disabled = true; _placeBtn.innerHTML = '⏳ Processing...';
+    /* Watchdog: if any step hangs (e.g. the Zero-Trust guard promise never resolves,
+       or a network call stalls) the button must NEVER stay permanently disabled —
+       a disabled button ignores clicks, so the buyer could not recover without a
+       reload. Re-enable after 25s so a stalled attempt is retryable. Cleared by
+       _resetPlaceBtn on any normal exit; the STK flow re-enables the button itself. */
+    clearTimeout(window._placeBtnWatchdog);
+    window._placeBtnWatchdog = setTimeout(function(){
+      var b = document.querySelector('.co-place-btn');
+      if (b && b.disabled) { b.disabled = false; b.innerHTML = window._placeBtnOrigHTML || '🔒 Place Order'; }
+    }, 25000);
+  }
 
   /* Rate-limit order attempts: max 5 per minute per device */
   if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('place_order', 5, 60000)){
