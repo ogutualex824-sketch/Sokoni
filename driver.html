@@ -2522,6 +2522,16 @@ window.toggleOnline = async function() {
     await DeliveryHub.toggleRiderOnline(uid, false).catch(() => {});
     _stopHub();
   }
+  /* Dispatch (dispatch.js) filters rideDrivers where isOnline==true, but the top
+     toggle previously only wrote DeliveryHub/`online`, never `rideDrivers.isOnline`
+     — so a rider looked online yet was never discoverable. Keep that field in sync
+     here (rules allow the owner to update their own doc; we touch only isOnline). */
+  try {
+    await firebase.firestore().collection('rideDrivers').doc(uid).update({
+      isOnline: !!window.isOnline,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  } catch (_) {}
 };
 
 /* ── Init: restore hub if driver was already online when page loaded ── */

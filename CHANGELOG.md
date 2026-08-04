@@ -1,3 +1,15 @@
+## [2026-08-04] — fix(nav+rider): search-box autofill + go-online writes dispatch field
+
+- **Search box email autofill (all pages):** Chrome ignores `autocomplete="off"` on the shared
+  header search once it has a saved email, popping its autofill dropdown over the box. Added the
+  `readonly`-until-focus guard to `shared-header.js` `#sk-nav-search` (excluded from autofill at
+  load; readonly dropped on first focus/pointer so typing is unaffected). One fix, every page.
+- **Rider go-online didn't make the rider dispatchable:** `driver.html` has two "Go Online"
+  controls; the prominent top toggle wrote DeliveryHub/`online` but **never `rideDrivers.isOnline`**
+  (the field `dispatch.js` filters on), so a rider looked online yet wasn't discoverable. The top
+  toggle now also syncs `rideDrivers.isOnline`. **R1.1:** unify the two controls + the `isOnline`
+  vs `online` field split (logged with dispatch cleanup).
+
 ## [2026-08-04] — fix(rider): prevent duplicate driver applications (re-entrancy lock)
 
 Found during live RC gate provisioning: rapid re-clicks on the driver-registration Submit

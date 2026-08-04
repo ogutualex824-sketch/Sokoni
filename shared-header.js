@@ -1273,6 +1273,11 @@
             '<span id="sk-nav-search-icon" aria-hidden="true">🔍</span>' +
             '<input id="sk-nav-search" type="search" placeholder="Search products, services…" ' +
               'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" ' +
+              /* Chrome ignores autocomplete="off" once it has a saved email for the site and
+                 pops its autofill dropdown over the search box. A field that is readonly at
+                 page-load is excluded from autofill; we drop readonly on first focus/pointer
+                 so typing still works normally. */
+              'readonly onfocus="this.removeAttribute(\'readonly\')" onpointerdown="this.removeAttribute(\'readonly\')" ' +
               'enterkeyhint="search" aria-label="Search SOKONI" ' +
               'onkeydown="if(event.key===\'Enter\'&&this.value.trim()){' +
                 'document.getElementById(\'sk-nav-search-dropdown\').classList.remove(\'open\');' +
