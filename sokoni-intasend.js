@@ -231,6 +231,15 @@
           ...(options.type          ? { type:          options.type }          : {}),
           ...(options.providerId    ? { providerId:    options.providerId }    : {}),
           ...(options.providerPhone ? { providerPhone: options.providerPhone } : {}),
+          /* Marketplace product linkage — the webhook credits the SELLER
+             (meta.sellerUid, since the caller is the BUYER) and finalises the
+             order (meta.orderId → paid + meta.items → stock decrement). Only
+             present for buyer-initiated product checkouts. */
+          ...(options.orderId    ? { orderId:    options.orderId }    : {}),
+          ...(options.sellerUid  ? { sellerUid:  options.sellerUid }  : {}),
+          ...(options.sellerName ? { sellerName: options.sellerName } : {}),
+          ...(options.hub        ? { hub:        options.hub }        : {}),
+          ...(Array.isArray(options.items) ? { items: options.items } : {}),
         },
       });
 

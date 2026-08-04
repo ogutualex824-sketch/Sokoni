@@ -1945,7 +1945,7 @@ function placeOrder(){
   _placeOrderCore();
 }
 
-function _placeOrderCore(){
+async function _placeOrderCore(){
   const name = document.getElementById("coName").value.trim();
   const phone = document.getElementById("coPhone").value.trim();
   const addr = document.getElementById("coAddress").value.trim();
@@ -1976,50 +1976,66 @@ function _placeOrderCore(){
       httpsCallable(getFunctions(undefined, "us-central1"), "recordFunnelEvent")({ step: "paymentAttempted" }).catch(() => {});
     } catch(_) {}
   })();
-  /* M-Pesa: use Daraja direct-to-seller when seller UID is known */
+  /* M-Pesa: keyless collection via SOKONI's IntaSend (Merchant-of-Record).
+     No per-seller Daraja credentials required — the platform collects and the
+     webhook credits the seller's wallet + finalises the order. */
   if (selectedPayment === 'mpesa') {
     const currentCart2 = JSON.parse(localStorage.getItem('cart') || '[]');
     const _sUid = currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerUid
                  || currentCart2.find(i => i.sellerUid || i.sellerId)?.sellerId
                  || null;
-    if (_sUid && window.SokoniMpesa) {
+    if (_sUid && window.SokoniIntaSend) {
       const _sName = currentCart2[0]?.sellerName || 'SOKONI Seller';
       /* Deterministic, so a retry reuses the same order identity instead of
-         minting a new one that defeats the server's duplicate check. */
+         minting a new one that defeats the server's duplicate check. Also used
+         as the payment ref, so payments/{ref} and orders/{ref} share an id and
+         the webhook can link the confirmation straight to the order. */
       const _ordId = _ckOrderId();
 
-      /* Line items let the server price the cart from the catalogue. `amount`
-         is still sent for the mismatch audit trail, but the server discards it
-         as the charge basis — the client is not the pricing authority. */
+      /* {productId, qty} the webhook decrements stock from. */
       const _items = currentCart2.map(i => ({
         productId: i.id || i.productId,
         qty:       Math.max(1, parseInt(i.qty, 10) || 1),
       })).filter(i => i.productId);
 
-      window.SokoniMpesa.pay({
-        sellerUid:   _sUid,
-        amount:      orderTotal,
-        items:       _items,
-        deliveryFee: (typeof deliveryFee === 'number' ? deliveryFee : 0),
-        phone:       phone,
-        orderId:     _ordId,
-        hub:         'marketplace',
-        description: 'SOKONI Order',
-        sellerName:  _sName,
-        onSuccess(receipt) {
-          /* Update payment status bar */
-          if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'Payment received — completing your order…');
-          /* verified: the provider itself called onSuccess with a receipt. */
-          saveAndRedirect(receipt.mpesaCode || receipt.phone, 'mpesa', _ordId, null, true);
-        },
-        onFailure(reason) {
-          if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
-          if (reason !== 'cancelled' && reason !== 'timeout') {
-            /* Graceful fallback: open IntaSend modal */
-            openModal('mpesa');
+      try {
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('sending', 'Creating your order…');
+        /* The order MUST exist before the STK so the IntaSend webhook can finalise
+           it (mark paid + decrement stock) authoritatively even if this tab closes. */
+        await _ckPersistPendingOrder(_ordId, _sUid, _sName, _items);
+
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('sending', 'Sending M-PESA prompt…');
+        /* Seller + order linkage ride in meta so the webhook credits the right
+           seller (meta.sellerUid, since the buyer is the caller) and finalises the
+           right order (meta.orderId + meta.items). */
+        await window.SokoniIntaSend.initiateSTKPush(phone, orderTotal, _ordId, {
+          category:    'product',
+          orderId:     _ordId,
+          sellerUid:   _sUid,
+          sellerName:  _sName,
+          hub:         'marketplace',
+          items:       _items,
+          serviceDesc: 'SOKONI Order',
+        });
+
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'M-PESA prompt sent — enter your PIN on your phone…');
+        await window.SokoniIntaSend.waitForConfirmation(_ordId, { amount: orderTotal, phone }, (status) => {
+          if (window._checkoutSetTrustStatus && status === 'PENDING') {
+            _checkoutSetTrustStatus('received', 'Waiting for M-PESA confirmation…');
           }
-        },
-      });
+        });
+
+        /* Webhook has finalised the order (paid + stock decremented + seller
+           credited). Do NOT re-write it — alreadyPersisted skips the client write. */
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('received', 'Payment received — completing your order…');
+        saveAndRedirect(phone, 'mpesa', _ordId, null, true, /* alreadyPersisted */ true);
+      } catch (e) {
+        if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
+        const _msg = (e && e.message) || 'Payment failed';
+        if (!/cancel/i.test(_msg) && !/timeout/i.test(_msg)) {
+          alert('Payment could not be completed: ' + _msg);
+        }
+      }
       return;
     }
   }
@@ -2619,7 +2635,45 @@ function processPaypalPayment(){
    "pending_payment" and MUST NOT be fulfilled. If we are ever unsure whether the
    money arrived, the safe answer is "not yet" — a delayed order annoys a customer,
    an unpaid-but-shipped order costs a seller their stock. */
-function saveAndRedirect(payRef, method, serverOrderId, verificationToken, paymentVerified){
+/* Persist the order as pending_payment BEFORE payment, so the IntaSend webhook
+   can finalise it authoritatively (mark paid + decrement stock) the instant the
+   money confirms — even if this browser tab is gone. Mirrors saveAndRedirect's
+   order shape; the webhook (Admin SDK) later flips status→paid, which the client
+   never overwrites. Idempotent via the deterministic orderId + { merge:true }. */
+async function _ckPersistPendingOrder(orderId, sellerUid, sellerName, lineItems){
+  const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
+  const _authUser = JSON.parse(localStorage.getItem("sokoniUser")||"null");
+  const _uid = (window.firebaseAuth?.currentUser?.uid) || _authUser?.uid || null;
+  if(!_uid || !window.firebaseDB) throw new Error("Please sign in to pay.");
+  const _coName  = document.getElementById("coName")?.value?.trim()  || "";
+  const _coPhone = document.getElementById("coPhone")?.value?.trim() || "";
+  const _coAddr  = document.getElementById("coAddress")?.value?.trim() || "";
+  const total = (typeof orderTotal === "number" && orderTotal > 0) ? orderTotal : 0;
+  const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+  await setDoc(
+    doc(window.firebaseDB, "orders", orderId),
+    {
+      id: orderId, uid: _uid, buyerUid: _uid, buyerName: _coName, buyerPhone: _coPhone,
+      sellerUid: sellerUid || null, sellerName: sellerName || null,
+      items: currentCart,
+      /* {productId, qty} the webhook decrements stock from — authoritative over
+         whatever display fields the cart objects carry. */
+      lineItems: lineItems,
+      subtotal, deliveryFee, total, orderTotal: total,
+      phone: _coPhone, method: "mpesa", paymentMethod: "mpesa_intasend",
+      name: _coName, address: _coAddr, deliveryAddress: _coAddr,
+      status: "pending_payment", hub: "marketplace",
+      location: window.deliveryLocation || null,
+      pricing: { subtotal, deliveryFee, total },
+      timestamp: Date.now(),
+      createdAt: serverTimestamp(),
+      statusHistory: [{ status: "pending_payment", at: Date.now(), by: _uid }],
+    },
+    { merge: true }
+  );
+}
+
+function saveAndRedirect(payRef, method, serverOrderId, verificationToken, paymentVerified, alreadyPersisted){
   const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
   /* Use the already-computed orderTotal (includes delivery fee, M-Pesa fee, promo discount).
      Fall back to raw subtotal only when orderTotal hasn't been set yet (edge case). */
@@ -2699,8 +2753,11 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
   orders.unshift(newOrder);
   localStorage.setItem("sokoniOrders", JSON.stringify(orders));
 
-  /* Dual-write to Firestore, then advance through the SokoniOrders state machine */
-  if(_uid && window.firebaseDB){
+  /* Dual-write to Firestore, then advance through the SokoniOrders state machine.
+     Skipped when the order was already persisted before payment and finalised
+     server-side by the webhook — re-writing status:pending_payment here would
+     downgrade the webhook's authoritative "paid". */
+  if(_uid && window.firebaseDB && !alreadyPersisted){
     import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js")
       .then(({doc, setDoc, serverTimestamp}) => {
         return setDoc(

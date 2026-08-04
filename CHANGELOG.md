@@ -1,3 +1,36 @@
+## [2026-08-04] — feat(checkout): keyless IntaSend product payments + webhook-authoritative finalisation
+
+Product checkout collected M-Pesa via `darajaSTKPush`, a DIRECT-to-seller Daraja flow that
+reads the seller's own API credentials from `shopSettings/{sellerUid}`. That collection has
+**zero documents**, so every product payment threw "Daraja credentials not configured" before
+any STK — the confirmed cause of "payment failed, no prompt." The KASS shop owner has a till
+but no Daraja API access, so direct-to-till is not available.
+
+Re-pointed product checkout to the **keyless IntaSend** collector (`initiateSTKPush`), which
+uses SOKONI's provisioned platform keys (Merchant-of-Record) — nothing required from the seller.
+The IntaSend webhook already marked payment COMPLETE, recorded commission, and credited the
+seller wallet, but **never finalised the product order or decremented stock** — a paid order
+stayed `pending_payment` and inventory never moved. Completed that pipeline:
+
+- **`functions/index.js`** — new shared `_finalizeMarketplacePayment()` (extracted from
+  `darajaSTKCallback`): one transaction marks the order `paid` AND decrements stock (floored at
+  zero, `inventoryVersion++`, `oversoldAlerts`), idempotent via the order's `inventoryApplied`
+  flag; absent order → `orphanPayments`. Called from `webhookIntasend` for buyer-initiated
+  product payments (`meta.orderId` present, not booking/subscription/top-up), with
+  `settlementStatus:"settled"` so no settlement sweep double-credits the already-credited wallet.
+- **`functions/index.js`** — wallet credit now credits `meta.sellerUid` for buyer-initiated
+  checkouts (payData.uid is the BUYER); POS/other flows without `meta.sellerUid` keep `uid`.
+- **`sokoni-intasend.js`** — `initiateSTKPush` now forwards `orderId/sellerUid/sellerName/hub/items`
+  into `meta` (previously a fixed allowlist dropped them).
+- **`checkout.html`** — M-Pesa branch now: persists the order as `pending_payment` BEFORE the STK
+  (so the webhook can finalise it even if the tab closes) → `initiateSTKPush` → `waitForConfirmation`;
+  `saveAndRedirect` gains an `alreadyPersisted` flag so it no longer re-writes (and downgrades) the
+  webhook's authoritative `paid`. `_placeOrderCore` is now `async`.
+
+Files: `functions/index.js`, `sokoni-intasend.js`, `checkout.html`. Security: server remains the
+pricing/stock authority; stock deduction is transactional and floored. Deploy: functions
+(`webhookIntasend`) FIRST, then hosting — never the reverse.
+
 ## [2026-08-04] — fix(auth-ui): password-reset modal overflows mobile viewport
 
 `login.html` reset modal box had `max-width:380px;width:100%` but no height bound, so on a

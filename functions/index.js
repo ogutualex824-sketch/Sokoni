@@ -3549,6 +3549,140 @@ exports.darajaSTKPush = onCall(
   }
 );
 
+/* ── Shared marketplace payment finaliser ──────────────────────────────────
+   A confirmed product payment must mark its order paid AND decrement stock in
+   ONE transaction, so a verified payment and its inventory movement can never
+   diverge. Extracted here so any collection path (IntaSend webhook today,
+   Daraja callback if it is ever revived) finalises a product order IDENTICALLY
+   and cannot drift.
+
+   Idempotent by construction: the order's `inventoryApplied` flag is read
+   inside the transaction, so a retried/duplicate webhook converges instead of
+   deducting stock twice. All reads precede all writes (Firestore requirement),
+   and stock is floored at zero with `oversoldAlerts` recorded for any shortfall
+   — the payment already happened, so an oversell is flagged, never rejected.
+
+   The order document is expected to already exist (the client writes it as
+   pending_payment BEFORE initiating the STK). If it is absent — the browser
+   died mid-checkout, or the webhook beat the client write — the fact is
+   recorded in orphanPayments for reconciliation rather than lost.
+
+   NOTE ON SETTLEMENT: the money settlement (seller wallet credit) is the
+   CALLER's concern. The IntaSend webhook credits the seller wallet directly and
+   passes settlementStatus:"settled" so no settlement sweep double-credits; a
+   queue-based caller would pass "queued". This function never moves money and
+   never writes a wallet — it owns the ORDER and INVENTORY only. */
+async function _finalizeMarketplacePayment(db, admin, opts) {
+  const {
+    checkoutId, sellerUid, callerUid, orderId, hub, amount, phone,
+    mpesaCode, sellerName, description, items,
+    paymentMethod, pathLabel,
+    settlementStatus = "queued",
+    writeSellerPayment = true,
+  } = opts || {};
+  const ts = admin.firestore.FieldValue.serverTimestamp();
+
+  /* Idempotent seller payment record — one per checkout id (deterministic). Kept
+     optional because the IntaSend path already records the sale via
+     commissionLedger + walletTransactions; only the Daraja path needs this. */
+  if (writeSellerPayment) {
+    await db.collection("sellerPayments").doc(String(checkoutId)).set({
+      checkoutId, sellerUid: sellerUid || null, callerUid: callerUid || null,
+      orderId: orderId || null, hub: hub || "marketplace",
+      amount: amount || 0, phone: phone || null, mpesaCode: mpesaCode || null,
+      sellerName: sellerName || null, description: description || null,
+      status: "completed", paymentMethod: paymentMethod || null, createdAt: ts,
+    }, { merge: true }).catch(() => {});
+  }
+
+  if (!orderId) return { finalised: false, reason: "no_order_id" };
+
+  const orderRef = db.collection("orders").doc(String(orderId));
+  let result = { finalised: false };
+  try {
+    await db.runTransaction(async (txn) => {
+      const orderSnap = await txn.get(orderRef);
+
+      if (!orderSnap.exists) {
+        txn.set(db.collection("orphanPayments").doc(String(checkoutId)), {
+          checkoutId, orderId, sellerUid: sellerUid || null,
+          callerUid: callerUid || null, amount: amount || 0,
+          mpesaCode: mpesaCode || null, path: pathLabel || null,
+          reason: "order_document_absent_at_callback", createdAt: ts,
+        });
+        result = { finalised: false, reason: "order_absent" };
+        return;
+      }
+
+      const o = orderSnap.data();
+      /* Idempotency: a retried webhook must not decrement stock twice. */
+      if (o.inventoryApplied === true) { result = { finalised: true, reason: "already_applied" }; return; }
+
+      /* Prefer server-linked line items over anything the client wrote onto the order. */
+      const lines = Array.isArray(items) && items.length
+        ? items
+        : (Array.isArray(o.items) ? o.items : []);
+
+      /* All reads before any write. */
+      const stockReads = [];
+      for (const line of lines) {
+        const pid = line && (line.productId || line.id);
+        const qty = Math.floor(Number(line && line.qty) || 0);
+        if (!pid || qty < 1) continue;
+        const pRef  = db.collection("products").doc(String(pid));
+        const pSnap = await txn.get(pRef);
+        stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap });
+      }
+
+      txn.update(orderRef, {
+        status:           "paid",
+        paymentStatus:    "paid",
+        paymentVerified:  true,
+        paymentMethod:    paymentMethod || null,
+        mpesaCode:        mpesaCode  || null,
+        paidAmount:       amount     || null,
+        paidPhone:        phone      || null,
+        paidAt:           ts,
+        inventoryApplied: true,
+        settlementStatus: settlementStatus,
+        updatedAt:        ts,
+      });
+
+      for (const { ref, pid, qty, snap } of stockReads) {
+        const pdata = snap.exists ? snap.data() : {};
+        const cur = snap.exists ? pdata.stock : null;
+        const priorVer = Number(pdata.inventoryVersion) || 0;
+        let dec = qty;
+        if (typeof cur === "number" && cur < qty) {
+          dec = Math.max(0, cur);
+          txn.set(db.collection("oversoldAlerts").doc(), {
+            orderId:   orderId || checkoutId || null,
+            productId: pid, requested: qty, available: cur,
+            path:      pathLabel || "marketplace", createdAt: ts,
+          });
+        }
+        txn.update(ref, {
+          stock:            admin.firestore.FieldValue.increment(-dec),
+          updatedAt:        ts,
+          inventoryVersion: admin.firestore.FieldValue.increment(1),
+        });
+        console.log(`[${pathLabel || "mkt"}] stock deduct product=${pid} -${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
+      }
+      result = { finalised: true };
+    });
+  } catch (e) {
+    console.error(`[_finalizeMarketplacePayment] order/inventory txn failed for ${orderId}: ${e.message}`);
+    db.collection("auditLogs").add({
+      type: "order_finalisation_failed", severity: "critical",
+      checkoutId, orderId, sellerUid: sellerUid || null,
+      amount: amount || null, mpesaCode: mpesaCode || null,
+      path: pathLabel || null, error: e.message, ts,
+    }).catch(() => {});
+    result = { finalised: false, reason: "txn_failed", error: e.message };
+  }
+  return result;
+}
+
 /* Safaricom published IP ranges for STK Push callbacks */
 const SAFARICOM_CALLBACK_IPS = new Set([
   "196.201.214.200","196.201.214.206","196.201.213.100","196.201.214.207",
@@ -7150,9 +7284,15 @@ exports.webhookIntasend = onRequest(
           category === "subscription" || payData.meta?.category === "subscription";
         /* For a service booking the earner is the PROVIDER (meta.providerId), not the
            paying customer (payData.uid). Scoped to bookings so marketplace/POS flows,
-           where uid already means the seller, are unaffected. */
+           where uid already means the seller, are unaffected.
+
+           For a BUYER-INITIATED marketplace checkout the earner is neither: payData.uid
+           is the BUYER, and the seller to credit is carried in meta.sellerUid (set by the
+           checkout when it calls initiateSTKPush). POS and other flows where uid already
+           IS the seller set no meta.sellerUid, so they keep payData.uid unchanged. */
         const _isBooking = payData.meta?.type === "booking";
-        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId : payData.uid;
+        const _sellerId  = (_isBooking && payData.meta?.providerId) ? payData.meta.providerId
+                         : (payData.meta?.sellerUid || payData.uid);
         const _netCents = Math.round(Math.max(0, amount - sokoniCut) * 100);
 
         if (_isSubscription) {
@@ -7227,6 +7367,47 @@ exports.webhookIntasend = onRequest(
           reason: "wallet credit failed: " + walletErr.message,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         }).catch(() => {});
+      }
+
+      /* ── Marketplace product order finalisation ──────────────────────────────
+         The seller wallet credit above settles the MONEY; this ships the ORDER.
+         A confirmed product payment must mark its order paid and decrement stock
+         atomically — previously nothing on the IntaSend path did either, so a paid
+         order stayed pending_payment and inventory never moved. Guarded to
+         buyer-initiated product checkouts, which carry meta.orderId; bookings,
+         subscriptions and wallet top-ups carry no orderId (or a different category)
+         and skip this untouched. settlementStatus:"settled" because the wallet was
+         already credited above — a settlement sweep must not double-credit.
+         Idempotent via the order's inventoryApplied flag; never fails the webhook. */
+      try {
+        const _pm  = payData.meta || {};
+        const _cat = String(_pm.category || "").toLowerCase();
+        const _isProductPay = !!_pm.orderId
+          && _pm.type !== "booking"
+          && !["subscription", "wallet_topup", "topup"].includes(_cat);
+        if (_isProductPay) {
+          await _finalizeMarketplacePayment(db, admin, {
+            checkoutId:    apiRef,
+            sellerUid:     _pm.sellerUid || null,
+            callerUid:     payData.uid  || null,
+            orderId:       _pm.orderId,
+            hub:           _pm.hub || "marketplace",
+            amount,
+            phone:         payData.phone || null,
+            mpesaCode:     checkoutId    || null,
+            sellerName:    _pm.sellerName || _pm.providerName || null,
+            description:   _pm.serviceDesc || "SOKONI Order",
+            items:         Array.isArray(_pm.items) ? _pm.items : null,
+            paymentMethod: "mpesa_intasend",
+            pathLabel:     "intasend",
+            settlementStatus:   "settled",
+            writeSellerPayment: false,
+          });
+        }
+      } catch (finErr) {
+        /* Never fail the webhook — payment + wallet credit already stand. */
+        console.error("[webhookIntasend] product order finalisation failed (recoverable):",
+          { ref: apiRef, err: finErr && finErr.message });
       }
 
       /* ── Service bookings: create the booking + notify both parties ──────────
