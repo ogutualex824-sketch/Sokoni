@@ -33,7 +33,9 @@ Acquisition → Success → Growth → B2B. Activation milestone = **First Succe
 - **Backfill existing merchants safely** through the same pipeline — no handcrafted exceptions.
 - Make MiniShop creation a step in the onboarding progress tracker above.
 
-Note: this is a *storefront/growth* capability, **not** a checkout dependency — RC checkout flows through the normal catalogue → cart → `darajaSTKPush` path and does not touch MiniShop.
+**Same root — Canonical seller product/inventory READ path** (also surfaced 08-04). The buyer catalogue + checkout read the canonical Firestore `products` (aligned to the correct `sellerUid`), but **no seller-facing product/inventory view reads it**: `inventory.html`'s list reads **device localStorage** (`SokoniInventory` / `inventory-manager.js`), its enterprise panels read an unprovisioned `tenants/{uid}/…` store (`SokoniInventoryV2`), and the MiniShop count reads the empty `shops` collection. Net effect: a seller whose products are live and buyable still sees an **empty inventory**. R1.1 must give seller inventory a **single canonical source** — read (and write/edit/stock) against Firestore `products where sellerUid == uid` — retiring the localStorage/tenant mirrors (or hydrating them from canonical, one-way) so list + stock + edit + modal all operate on real data. A list-only repoint would be a *healthy-looking failure* (list shows, but click/stock/edit break), so scope it as the full read+write path, not a display patch.
+
+Note: this is a *storefront/growth + merchant-tooling* capability, **not** a checkout dependency — RC checkout flows through the normal catalogue → cart → `darajaSTKPush` path and does not touch MiniShop or the inventory page.
 
 ### Release 1.2 — Multi-wallet  ([[project_multiwallet_architecture]])
 Personal · Shop · Service · Rider · Business/Branch wallets on the **existing frozen ledger engine**; internal transfers as balanced source→destination ledger movements. No changes to the proven money paths — additive wallet-scoping only.
