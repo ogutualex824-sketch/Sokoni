@@ -1620,7 +1620,7 @@ const POINTS_TO_KES = 0.5;  // 1 point = KES 0.50
 const MAX_REDEEM_PCT = 0.25; // max 25% of order total can be paid with points
 const _esc = s => String(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const _itemsHTML = [];
-cart.forEach(item => {
+cart.forEach((item, _idx) => {
   /* Quantity-aware line total — mirrors the server (createCheckoutSession) so the
      displayed subtotal matches the amount actually charged when qty > 1. */
   const qty       = Math.max(1, Math.round(Number(item.qty) || Number(item.quantity) || 1));
@@ -1640,10 +1640,21 @@ cart.forEach(item => {
         <div class="os-item-price">KES ${safePrice}</div>
       </div>
       ${qty > 1 ? `<div class="os-item-qty">×${qty}</div>` : ``}
+      <button type="button" class="os-item-remove" onclick="removeCartItem(${_idx})" aria-label="Remove ${safeName}" title="Remove" style="margin-left:auto;background:rgba(255,61,61,0.12);border:1px solid rgba(255,61,61,0.3);color:#ff6b6b;width:34px;height:34px;min-width:34px;border-radius:9px;cursor:pointer;font-size:18px;line-height:1;display:flex;align-items:center;justify-content:center;flex:0 0 auto;">&times;</button>
     </div>
   `);
 });
 itemsEl.innerHTML = _itemsHTML.join("");
+
+/* Remove a single line item from the cart on the checkout page. Splice localStorage
+   and reload so the item list, subtotal, delivery and total all recompute cleanly. */
+window.removeCartItem = function(idx){
+  try {
+    var c = JSON.parse(localStorage.getItem("cart") || "[]");
+    if(idx >= 0 && idx < c.length){ c.splice(idx, 1); localStorage.setItem("cart", JSON.stringify(c)); }
+  } catch(e){}
+  location.reload();
+};
 
 /* Auto-apply any promo code saved from the cart page */
 (function(){
