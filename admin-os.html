@@ -95,6 +95,12 @@
     .rep-row:last-child{border-bottom:none}
     .rep-row span{color:var(--aos-sub)}
     .rep-row strong{color:var(--aos-text);font-weight:700}
+    /* Key-value display (replaces raw JSON in modals) */
+    .kv{display:flex;flex-direction:column;gap:2px}
+    .kv-row{display:flex;justify-content:space-between;gap:16px;padding:6px 0;border-bottom:1px solid var(--aos-border);font-size:.84rem}
+    .kv-row>span{color:var(--aos-sub)}
+    .kv-row>strong{color:var(--aos-text);text-align:right;word-break:break-word}
+    .kv .kv{margin-left:12px;padding-left:8px;border-left:2px solid var(--aos-border)}
     @keyframes ecsk{0%{background-position:100% 50%}100%{background-position:0 50%}}
     .health-chip{background:var(--aos-surface);border:1px solid var(--aos-border);border-radius:var(--aos-radius);padding:12px 16px;min-width:130px}
     .health-chip span{font-size:11px;color:var(--aos-muted);display:block}

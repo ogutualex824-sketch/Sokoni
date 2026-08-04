@@ -148,6 +148,20 @@ window.SokoniAOS = (() => {
   // ── Dashboard ────────────────────────────────────────────────────────────────
   function _kes(v) { return "KES " + _fmt(Math.round(Number(v) || 0)); }
   function _ecSkeleton() { return '<div class="ec-grid">' + Array.from({ length: 8 }).map(function () { return '<div class="ec-skel"></div>'; }).join('') + '</div>'; }
+  /* Render an object as a readable key-value block (recursive) — never raw JSON to admins. */
+  function _kvHtml(obj) {
+    if (obj == null) return '<div class="aos-muted">No data</div>';
+    if (typeof obj !== "object") return _esc(String(obj));
+    var keys = Object.keys(obj);
+    if (!keys.length) return '<div class="aos-muted">Empty</div>';
+    return '<div class="kv">' + keys.map(function (k) {
+      var v = obj[k], disp;
+      if (Array.isArray(v)) disp = '<strong>' + v.length + ' item' + (v.length === 1 ? '' : 's') + '</strong>';
+      else if (v && typeof v === "object") disp = _kvHtml(v);
+      else disp = '<strong>' + _esc(String(v)) + '</strong>';
+      return '<div class="kv-row"><span>' + _esc(_titleCase(k)) + '</span>' + disp + '</div>';
+    }).join("") + '</div>';
+  }
   /* P1 Command Center — 4 sections, canonical single entry (adminGetExecutiveDashboard)
      + reused Finance data (adminGetFinance.reconciliation). No recalculation here. */
   function _renderExecCommand(x, f, sysHealth, pipeline) {
@@ -1098,6 +1112,18 @@ window.SokoniAOS = (() => {
     await _call("adminSaveBanner", { title, imageUrl: url, position }).catch(e => _toast(e.message,"error"));
     _toast("Banner added","success"); _panelCache.content = false; _contentTab("banners");
   }
+  async function editBanner(id) {
+    const title    = prompt("New banner title (blank = keep current):");
+    const url      = prompt("New image URL (blank = keep current):");
+    const position = prompt("Position (hero/sidebar/footer, blank = keep):");
+    if (!title && !url && !position) return;
+    const patch = { id: id };
+    if (title) patch.title = title;
+    if (url) patch.imageUrl = url;
+    if (position) patch.position = position;
+    await _call("adminSaveBanner", patch).catch(e => _toast(e.message, "error"));
+    _toast("Banner updated", "success"); _panelCache.content = false; _contentTab("banners");
+  }
   async function deleteBanner(id) {
     if (!confirm("Delete banner?")) return;
     await _call("adminDeleteBanner", { bannerId: id }).catch(e => _toast(e.message,"error"));
@@ -1134,12 +1160,19 @@ window.SokoniAOS = (() => {
     if (!body) return;
     body.innerHTML = _spinner();
     try {
-      const [aiStats, aiSubs] = await Promise.all([
+      const [aiStats, aiSubs, flagsRes] = await Promise.all([
         _call("adminGetAiStats").catch(() => ({})),
         _call("getAISubscriptionStats").catch(() => ({})),
+        _call("adminGetFeatureFlags").catch(() => ({})),
       ]);
       const s = aiStats.stats || aiStats;
       const sub = aiSubs.stats || aiSubs;
+      /* Hydrate module toggles from REAL feature-flag state (was hard-coded checked). */
+      const _rawFlags = flagsRes.flags || flagsRes.items || [];
+      const _flagMap = {};
+      (Array.isArray(_rawFlags) ? _rawFlags : Object.keys(_rawFlags).map(k => ({ key: k, enabled: _rawFlags[k] && _rawFlags[k].enabled !== false })))
+        .forEach(fl => { _flagMap[fl.key] = fl.enabled !== false; });
+      const _aiOn = m => { const k = "ai_" + m.toLowerCase().replace(/\s/g, "_"); return _flagMap[k] === undefined ? true : _flagMap[k]; };
       body.innerHTML = `
         <div class="ai-stats-grid">
           <div class="stat-card"><span>Total AI Requests</span><strong>${_fmt(s.totalRequests||0)}</strong></div>
@@ -1154,7 +1187,7 @@ window.SokoniAOS = (() => {
           ${["KASS Chat","AI Recommendations","AI Moderation","AI Search","Price Prediction"].map(m => `
             <div class="toggle-row">
               <span>${m}</span>
-              <label class="toggle-sw"><input type="checkbox" checked onchange="SokoniAOS.toggleAIModule('${m}',this.checked)"><span></span></label>
+              <label class="toggle-sw"><input type="checkbox" ${_aiOn(m)?"checked":""} onchange="SokoniAOS.toggleAIModule('${m}',this.checked)"><span></span></label>
             </div>`).join("")}
         </div>`;
     } catch (e) { body.innerHTML = _emptyMsg("Error: " + e.message); }
@@ -1226,7 +1259,7 @@ window.SokoniAOS = (() => {
   }
   async function searchReport() {
     const data = await _call("searchSystemReport").catch(e => { _toast(e.message,"error"); return null; });
-    if (data) _modal("Search Report", `<pre class="aos-pre">${JSON.stringify(data,null,2)}</pre>`);
+    if (data) _modal("Search Report", _kvHtml(data.report || data));
   }
 
   // ── SmartPOS ──────────────────────────────────────────────────────────────────
@@ -1381,7 +1414,7 @@ window.SokoniAOS = (() => {
 
   async function investigateAlert(id) {
     const data = await _call("evaluateFraudRisk", { alertId: id }).catch(() => null);
-    if (data) _modal("Fraud Investigation", `<pre class="aos-pre">${JSON.stringify(data,null,2)}</pre>`);
+    if (data) _modal("Fraud Investigation", _kvHtml(data.result || data.report || data));
   }
 
   // ── Analytics ─────────────────────────────────────────────────────────────────
@@ -2213,7 +2246,7 @@ window.SokoniAOS = (() => {
     // Content
     contentTab:          _contentTab,
     addBanner,
-    editBanner:          (id) => _toast("Open full editor — banner: "+id,"info"),
+    editBanner,
     deleteBanner,
     addFaq,
     addAnnouncement,
