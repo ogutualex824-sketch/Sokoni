@@ -2062,6 +2062,16 @@ async function _placeOrderCore(){
           }
         });
 
+        /* Clear the cart the MOMENT payment is confirmed — do not rely solely on
+           saveAndRedirect, which the page redirect can interrupt before it runs.
+           This is why the item lingered in the cart after a successful order. */
+        try {
+          localStorage.removeItem('cart');
+          localStorage.removeItem('sokoniAppliedPromo');
+          if (typeof cart !== 'undefined' && Array.isArray(cart)) cart.length = 0;
+          window.dispatchEvent(new Event('sokoni-cart-updated'));
+        } catch (_) {}
+
         /* Webhook has finalised the order (paid + stock decremented + seller
            credited). Do NOT re-write it — alreadyPersisted skips the client write.
            Phase is 'completing' (the webhook is updating order/inventory/records);

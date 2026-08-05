@@ -946,10 +946,34 @@ function loginDriver(){
   loginDriverWith(phone, pin);
 }
 
-function loginDriverWith(phone, pin){
+async function loginDriverWith(phone, pin){
   let drivers = [];
   try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
-  const driver = drivers.find(d => d.phone === phone && d.pin === pin);
+  const _norm = s => String(s||'').replace(/\D/g,'').slice(-9);
+  let driver = drivers.find(d => d.phone === phone && d.pin === pin)
+            || drivers.find(d => _norm(d.phone) === _norm(phone) && d.pin === pin);
+  /* Firestore fallback — the localStorage PIN record is lost on a fresh device /
+     browser (that's why a correct PIN reads as "wrong"). If the SIGNED-IN Firebase
+     user is a registered rider (rideDrivers/{uid}) whose phone matches, log them in:
+     being authenticated as that account is stronger proof than a client-side PIN.
+     Rider is a role on the one account (D5Ql2 = shop + rider here). */
+  if(!driver){
+    try {
+      const u = window.firebaseAuth && window.firebaseAuth.currentUser;
+      if (u && window.firebaseDB) {
+        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const snap = await getDoc(doc(window.firebaseDB, "rideDrivers", u.uid));
+        if (snap.exists()) {
+          const rd = snap.data();
+          if (_norm(rd.phone) === _norm(phone)) {
+            driver = { id: u.uid, ...rd, pin: rd.pin || pin };
+            drivers.push(driver);
+            try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){}
+          }
+        }
+      }
+    } catch(e){ console.warn('[driver] Firestore login fallback:', e.message); }
+  }
   if(!driver){ var _lm=document.getElementById('loginMsg'); if(_lm){_lm.textContent='Driver not found or wrong PIN. Apply first.'; setTimeout(()=>{_lm.textContent='';},4000);} return; }
   currentDriver = driver;
   sessionStorage.setItem("sokoniDriverSession", driver.id);
