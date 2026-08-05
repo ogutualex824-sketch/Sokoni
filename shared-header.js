@@ -224,11 +224,21 @@
      This gives every page: design tokens, toast system, layout manager,
      notification engine, and notification center bell/panel.         */
 
+  /* Absolutize a relative asset path so it resolves to the SITE ROOT, not the current URL.
+     On path-prefixed pages (/shop/**, /@**, /profile/**) a relative "sokoni-x.css" resolves to
+     "/shop/sokoni-x.css" → 404 → the whole design system fails to load and the page looks blank. */
+  function _skAbs(p) {
+    return (typeof p === 'string' && !/^(https?:|\/|data:|blob:)/.test(p)) ? '/' + p : p;
+  }
+
   function _injectAsset(tag, attrs, id) {
     if (document.getElementById(id)) return;
     const el = document.createElement(tag);
     el.id = id;
-    Object.assign(el, attrs);
+    const a = Object.assign({}, attrs);
+    if (a.href) a.href = _skAbs(a.href);
+    if (a.src)  a.src  = _skAbs(a.src);
+    Object.assign(el, a);
     (document.head || document.documentElement).appendChild(el);
   }
 
@@ -302,7 +312,7 @@
       LAZY.forEach(function (m) {
         if (document.getElementById(m[1])) return;
         var s = document.createElement('script');
-        s.src = m[0]; s.async = false; s.id = m[1];   /* ordered exec, parallel download */
+        s.src = _skAbs(m[0]); s.async = false; s.id = m[1];   /* ordered exec, parallel download */
         document.head.appendChild(s);
       });
     }
@@ -340,9 +350,9 @@
     const _forceOffline = location.search.includes('offline=1') || localStorage.getItem('sokoni_force_offline') === '1';
     function _loadMock() {
       if (document.getElementById('sk-mock-data')) return;
-      const d = document.createElement('script'); d.id = 'sk-mock-data'; d.src = 'sokoni-mock-data.js';
+      const d = document.createElement('script'); d.id = 'sk-mock-data'; d.src = _skAbs('sokoni-mock-data.js');
       d.onload = function () {
-        const m = document.createElement('script'); m.id = 'sk-mock-engine'; m.src = 'sokoni-dev-mock.js';
+        const m = document.createElement('script'); m.id = 'sk-mock-engine'; m.src = _skAbs('sokoni-dev-mock.js');
         document.head.appendChild(m);
       };
       document.head.appendChild(d);
@@ -373,7 +383,7 @@
     const polishLink = document.createElement('link');
     polishLink.rel = 'stylesheet';
     polishLink.id = 'sk-polish-link';
-    polishLink.href = 'sokoni-polish.css';
+    polishLink.href = _skAbs('sokoni-polish.css');
     (document.head || document.documentElement).appendChild(polishLink);
   }
 
@@ -382,7 +392,7 @@
     const mfLink = document.createElement('link');
     mfLink.rel = 'stylesheet';
     mfLink.id = 'sk-mobile-fixes-link';
-    mfLink.href = 'sokoni-mobile-fixes.css';
+    mfLink.href = _skAbs('sokoni-mobile-fixes.css');
     (document.head || document.documentElement).appendChild(mfLink);
   }
 
@@ -391,7 +401,7 @@
     const respLink = document.createElement('link');
     respLink.rel = 'stylesheet';
     respLink.id = 'sk-responsive-link';
-    respLink.href = 'sokoni-responsive.css';
+    respLink.href = _skAbs('sokoni-responsive.css');
     (document.head || document.documentElement).appendChild(respLink);
   }
 
@@ -400,7 +410,7 @@
     const premLink = document.createElement('link');
     premLink.rel = 'stylesheet';
     premLink.id = 'sk-premium-link';
-    premLink.href = 'premium.css';
+    premLink.href = _skAbs('premium.css');
     (document.head || document.documentElement).appendChild(premLink);
   }
 
@@ -409,7 +419,7 @@
     const pv2Link = document.createElement('link');
     pv2Link.rel = 'stylesheet';
     pv2Link.id = 'sk-premium-v2-link';
-    pv2Link.href = 'sokoni-premium-v2.css';
+    pv2Link.href = _skAbs('sokoni-premium-v2.css');
     (document.head || document.documentElement).appendChild(pv2Link);
   }
 
@@ -431,13 +441,13 @@
     const drawLink = document.createElement('link');
     drawLink.rel = 'stylesheet';
     drawLink.id = 'sk-drawers-link';
-    drawLink.href = 'sokoni-drawers.css';
+    drawLink.href = _skAbs('sokoni-drawers.css');
     (document.head || document.documentElement).appendChild(drawLink);
   }
   if (!document.getElementById('sk-drawer-script')) {
     const drawScript = document.createElement('script');
     drawScript.id = 'sk-drawer-script';
-    drawScript.src = 'sokoni-drawer.js';
+    drawScript.src = _skAbs('sokoni-drawer.js');
     drawScript.onload = function() {
       if (window._skMenuPending && window.SokoniDrawer) {
         const _pendBtn = window._skMenuPending;
@@ -454,7 +464,7 @@
   if (!document.getElementById('sk-promo-script')) {
     const promoJs = document.createElement('script');
     promoJs.id = 'sk-promo-script';
-    promoJs.src = 'sokoni-promotions.js';
+    promoJs.src = _skAbs('sokoni-promotions.js');
     promoJs.defer = true;
     (document.head || document.documentElement).appendChild(promoJs);
   }
@@ -463,7 +473,7 @@
   if (!document.getElementById('sk-offline-script')) {
     const offlineJs = document.createElement('script');
     offlineJs.id = 'sk-offline-script';
-    offlineJs.src = 'sokoni-offline.js';
+    offlineJs.src = _skAbs('sokoni-offline.js');
     offlineJs.defer = true;
     (document.head || document.documentElement).appendChild(offlineJs);
   }
@@ -472,7 +482,7 @@
   if (!document.getElementById('sk-float-script')) {
     const floatJs = document.createElement('script');
     floatJs.id = 'sk-float-script';
-    floatJs.src = 'sokoni-float.js';
+    floatJs.src = _skAbs('sokoni-float.js');
     floatJs.defer = true;
     (document.head || document.documentElement).appendChild(floatJs);
   }
@@ -482,13 +492,13 @@
     const navCss = document.createElement('link');
     navCss.rel = 'stylesheet';
     navCss.id = 'sk-nav-engine-link';
-    navCss.href = 'sokoni-nav-engine.css';
+    navCss.href = _skAbs('sokoni-nav-engine.css');
     (document.head || document.documentElement).appendChild(navCss);
   }
   if (!document.getElementById('sk-nav-engine-script')) {
     const navJs = document.createElement('script');
     navJs.id = 'sk-nav-engine-script';
-    navJs.src = 'sokoni-nav-engine.js';
+    navJs.src = _skAbs('sokoni-nav-engine.js');
     navJs.defer = true;
     (document.head || document.documentElement).appendChild(navJs);
   }
@@ -498,13 +508,13 @@
     const feLink = document.createElement('link');
     feLink.rel = 'stylesheet';
     feLink.id = 'sk-form-engine-link';
-    feLink.href = 'sokoni-form-engine.css';
+    feLink.href = _skAbs('sokoni-form-engine.css');
     (document.head || document.documentElement).appendChild(feLink);
   }
   if (!document.getElementById('sk-form-engine-script')) {
     const feJs = document.createElement('script');
     feJs.id = 'sk-form-engine-script';
-    feJs.src = 'sokoni-form-engine.js';
+    feJs.src = _skAbs('sokoni-form-engine.js');
     feJs.defer = true;
     (document.head || document.documentElement).appendChild(feJs);
   }
@@ -518,7 +528,7 @@
       const lnk = document.createElement('link');
       lnk.rel  = 'stylesheet';
       lnk.id   = 'sk-platform-override';
-      lnk.href = 'sokoni-platform-override.css';
+      lnk.href = _skAbs('sokoni-platform-override.css');
       document.head.appendChild(lnk);
     }
     if (document.readyState === 'loading') {
