@@ -6741,7 +6741,7 @@ exports.catalogue = onRequest(
         if (HIDDEN.has(st)) return false;
         if (p.isDeleted === true || p.deleted === true) return false;
         if (p.visible === false || p.isVisible === false) return false;
-        if (sellerUid && String(p.uid || p.sellerUid || "") !== sellerUid) return false;
+        if (sellerUid && String(p.sellerUid || "") !== sellerUid && String(p.uid || "") !== sellerUid) return false;
         if (category && String(p.category || "").toLowerCase() !== category) return false;
         return true;
       });
