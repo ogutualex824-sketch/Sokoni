@@ -280,7 +280,7 @@
         <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" id="driverLoginBtn" onclick="openDriverLogin()" style="display:none;padding:10px 18px;background:rgba(113,255,0,0.14);border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🔑 Driver Login</button>
+        <button type="button" id="driverLoginBtn" onclick="driverAuthToggle()" style="display:none;padding:10px 18px;background:rgba(113,255,0,0.14);border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🔑 Driver Login</button>
         <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🟢 Go Online</button>
         <a href="services.html" style="display:inline-flex;align-items:center;gap:5px;padding:10px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;white-space:nowrap;">🛠️ Services</a>
         <button type="button" onclick="exitDriverWorkspace()" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">← Exit Hub</button>
@@ -1109,9 +1109,9 @@ function showDriverDashboard(){
   const _gate = document.getElementById("driverGate");
   if(_gate) _gate.style.display="none";
   document.getElementById("driverDashboard").style.display="block";
-  /* Logged in for real → top action is Go Online (shift management); hide the Login button. */
+  /* Logged in → Go Online (shift management) shows, and the top auth button becomes Logout. */
   var _ob=document.getElementById("driverOnlineBtn"); if(_ob) _ob.style.display="";
-  var _lb=document.getElementById("driverLoginBtn"); if(_lb) _lb.style.display="none";
+  var _lb=document.getElementById("driverLoginBtn"); if(_lb){ _lb.style.display=""; _lb.textContent="🚪 Driver Logout"; }
 
   const v = currentDriver.vehicle;
   const isEbike   = v === "ebike";
@@ -1691,6 +1691,20 @@ function openDriverLogin(){
 }
 window.openDriverLogin = openDriverLogin;
 
+/* Top auth button: Login when logged out, Logout when logged in. */
+function driverAuthToggle(){ if(currentDriver) driverLogout(); else openDriverLogin(); }
+window.driverAuthToggle = driverAuthToggle;
+
+/* End the driver session (distinct from account sign-out): go offline so dispatch stops
+   targeting this rider, drop the session, and return to the clean login view. */
+async function driverLogout(){
+  try { if(window.isOnline && typeof toggleOnline==='function'){ toggleOnline(); await new Promise(r=>setTimeout(r,500)); } } catch(_){}
+  try { sessionStorage.removeItem("sokoniDriverSession"); } catch(_){}
+  currentDriver = null;
+  try { location.reload(); } catch(_){ }
+}
+window.driverLogout = driverLogout;
+
 /* Require a REAL driver login — no demo dashboard. The DRV-DEMO phantom used to let the
    dashboard + "Go Online" show with no real driver, so shift management ran against a fake
    record. Now: a valid saved session opens the dashboard; otherwise the top action is
@@ -1708,7 +1722,7 @@ window.openDriverLogin = openDriverLogin;
     /* Logged out — no demo. Show Driver Login at the top, hide Go Online, open the panel. */
     currentDriver = null;
     var _ob=document.getElementById("driverOnlineBtn"); if(_ob) _ob.style.display="none";
-    var _lb=document.getElementById("driverLoginBtn"); if(_lb) _lb.style.display="";
+    var _lb=document.getElementById("driverLoginBtn"); if(_lb){ _lb.style.display=""; _lb.textContent="🔑 Driver Login"; }
     var _g=document.getElementById("driverGreet"); if(_g) _g.textContent="🔑 Log in to start your shift";
     var _z=document.getElementById("driverZone"); if(_z) _z.textContent="Tap Driver Login to go online and take deliveries.";
     try { openDriverLogin(); } catch(_){}
