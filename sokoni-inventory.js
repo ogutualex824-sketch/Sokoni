@@ -290,7 +290,6 @@ const SokoniInventory = (() => {
       name:        product.name,
       price:       Number(product.sellingPrice != null ? product.sellingPrice : (product.price || 0)) || 0,
       costPrice:   Number(product.buyingPrice != null ? product.buyingPrice : (product.costPrice || 0)) || 0,
-      stock:       Number(product.stockLevel != null ? product.stockLevel : (product.stock || 0)) || 0,
       category:    product.category || '',
       sku:         product.sku || '',
       barcode:     product.barcode || '',
@@ -306,6 +305,11 @@ const SokoniInventory = (() => {
       updatedAt:   nowISO(),
       updatedBy:   currentUid(),
     };
+    /* Stock is set ONLY when explicitly provided — a metadata edit (price/name/…) must never
+       merge-clobber the product's real stock to 0. Stage 2 owns authoritative deductions. */
+    if (product.stockLevel != null || product.stock != null) {
+      out.stock = Number(product.stockLevel != null ? product.stockLevel : product.stock) || 0;
+    }
     const imgs = (Array.isArray(product.images) ? product.images : (product.imageUrl ? [product.imageUrl] : []))
       .filter((u) => u && !_isData(u));
     if (imgs.length) { out.images = imgs; out.image = imgs[0]; }

@@ -1304,7 +1304,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label class="form-label">Opening Stock</label>
+          <label class="form-label">Current Stock</label>
           <input class="form-input" id="pm-qty" type="number" min="0" step="1" placeholder="0">
         </div>
         <div class="form-group">
@@ -2666,7 +2666,7 @@ async function openProductModal(id) {
     document.getElementById('pm-maxstock').value   = p.maxStock   || '';
     document.getElementById('pm-serial').checked   = !!p.trackSerial;
     document.getElementById('pm-batch').checked    = !!p.trackBatch;
-    document.getElementById('pm-qty').value        = '';
+    document.getElementById('pm-qty').value        = (p.stockLevel != null ? p.stockLevel : (p.stock || 0));  /* current stock, editable */
     document.getElementById('pm-desc').value       = p.description || '';
     document.getElementById('pm-tax').value        = p.taxRate != null ? String(p.taxRate) : '16';
     const supEl = document.getElementById('pm-supplier');
@@ -2718,12 +2718,12 @@ async function saveProduct() {
     taxRate:      parseFloat(document.getElementById('pm-tax').value) || 0,
     supplierId:   document.getElementById('pm-supplier').value || null,
   };
-  const qty = parseFloat(document.getElementById('pm-qty').value) || 0;
+  /* Current stock, written directly to the canonical product (Stage 1). Only include it when
+     the field has a value so a blank never zeroes existing stock. */
+  const _qv = document.getElementById('pm-qty').value;
+  if (_qv !== '' && _qv != null) product.stockLevel = parseInt(_qv) || 0;
   try {
     const saved = await SokoniInventory.saveProduct(product);
-    if (qty > 0) {
-      await SokoniInventory.adjustStock({ productId: saved.id, quantity: qty, type: 'opening_stock', reason: 'Opening stock' });
-    }
     showToast(`${product.id ? 'Updated' : 'Added'}: ${name}`);
     closeModal('product-modal');
     loadProducts();
