@@ -936,51 +936,76 @@ function registerDriver(){
 
 /* ── Login ── */
 function loginDriver(){
-  const _lgMsg = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},4000); } };
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 5, 60000)){
+  const _lgMsg = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},6000); } };
+  /* Rate limit raised 5→12/min so debugging a login doesn't lock you out. */
+  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 12, 60000)){
     _lgMsg("Too many login attempts. Wait 1 minute.");
     return;
   }
   const phone = document.getElementById("driverLoginPhone").value.trim();
   const pin   = document.getElementById("driverLoginPin").value.trim();
+  if(!phone || !pin){ _lgMsg("Enter your phone number and PIN."); return; }
   loginDriverWith(phone, pin);
 }
 
+/* Wait up to maxMs for firebase.auth() to resolve a signed-in user. onAuthStateChanged
+   is often slow / not-yet-fired at button-click time, so currentUser reads null and the
+   whole Firestore fallback was skipped → "not found" on a correct PIN. */
+function _waitForFirebaseUser(maxMs){
+  return new Promise(resolve => {
+    try {
+      if (typeof firebase === 'undefined' || !firebase.auth) return resolve(null);
+      const a = firebase.auth();
+      if (a.currentUser) return resolve(a.currentUser);
+      let done = false;
+      const finish = u => { if(done) return; done = true; try{unsub && unsub();}catch(_){}; resolve(u || a.currentUser || null); };
+      const unsub = a.onAuthStateChanged(u => finish(u));
+      setTimeout(() => finish(null), maxMs || 5000);
+    } catch(_) { resolve(null); }
+  });
+}
+
 async function loginDriverWith(phone, pin){
+  const _lm = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},7000); } };
   let drivers = [];
   try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
   const _norm = s => String(s||'').replace(/\D/g,'').slice(-9);
   let driver = drivers.find(d => d.phone === phone && d.pin === pin)
             || drivers.find(d => _norm(d.phone) === _norm(phone) && d.pin === pin);
-  /* Firestore fallback — the localStorage PIN record is lost on a fresh device /
-     browser (that's why a correct PIN reads as "wrong"). If the SIGNED-IN Firebase
-     user is a registered rider (rideDrivers/{uid}) whose phone matches, log them in:
-     being authenticated as that account is stronger proof than a client-side PIN.
-     Rider is a role on the one account (D5Ql2 = shop + rider here). */
+  /* Firestore fallback — the localStorage PIN record is lost on a fresh device / browser.
+     If the SIGNED-IN Firebase user is a registered rider whose phone matches, log them in.
+     Self-diagnosing: on failure the on-screen message states the EXACT reason so it can be
+     fixed instead of guessing. Uses the COMPAT SDK this page already runs on. */
+  let diag = 'local-miss';
   if(!driver){
+    const _fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
+    if(!_fs){ _lm('Login service still loading — wait 3 seconds and tap Login again.'); return; }
+    const _cu = await _waitForFirebaseUser(6000);
+    if(!_cu){
+      console.warn('[driver] login: no Firebase auth session on this page');
+      _lm('Not signed in on this device. Open the app, sign in, then reload /driver.'); return;
+    }
     try {
-      /* Use the COMPAT SDK this page already uses for rider writes (firebase.firestore()
-         / firebase.auth()) — the earlier modular attempt + window.firebaseAuth were the
-         wrong refs, which is why a correct PIN still read "not found". */
-      const _fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
-      const _cu = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
-               || (window.firebaseAuth && window.firebaseAuth.currentUser) || null;
-      if (_fs && _cu) {
-        /* A: the signed-in user's OWN rider record (rideDrivers/{uid}), phone must match. */
-        const own = await _fs.collection('rideDrivers').doc(_cu.uid).get();
-        if (own.exists && _norm((own.data()||{}).phone) === _norm(phone)) {
-          driver = { id: own.id, ...own.data(), pin: (own.data()||{}).pin || pin };
-        }
-        /* B: any rider record whose phone matches (read rule = isAuthed), validate PIN. */
-        if (!driver) {
-          const qs = await _fs.collection('rideDrivers').where('phone','==',phone).limit(3).get();
-          qs.forEach(s => { if (!driver) { const rd = s.data()||{}; if (String(rd.pin||'') === String(pin)) driver = { id: s.id, ...rd }; } });
-        }
+      /* A: the signed-in user's OWN rider record (rideDrivers/{uid}), phone must match. */
+      const own = await _fs.collection('rideDrivers').doc(_cu.uid).get();
+      if (own.exists) {
+        const rd = own.data()||{};
+        if (_norm(rd.phone) === _norm(phone)) { driver = { id: own.id, ...rd, pin: rd.pin||pin }; }
+        else diag = 'phone-mismatch (record '+_norm(rd.phone)+' ≠ entered '+_norm(phone)+')';
+      } else diag = 'no rider record for signed-in account '+_cu.uid.slice(0,6);
+      /* B: any rider whose phone matches (read rule = isAuthed), validate PIN. */
+      if (!driver) {
+        const qs = await _fs.collection('rideDrivers').where('phone','==',phone).limit(5).get();
+        if (qs.empty) diag += ' | no rider with phone '+phone;
+        qs.forEach(s => { const rd=s.data()||{}; if(!driver){ if(String(rd.pin||'')===String(pin)) driver={id:s.id,...rd}; else diag='wrong PIN for '+phone; } });
       }
       if (driver) { drivers.push(driver); try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){} }
-    } catch(e){ console.warn('[driver] Firestore login fallback:', e.message); }
+    } catch(e){
+      console.warn('[driver] login fallback error:', e.code, e.message);
+      _lm('Login check failed: '+(e.code||e.message)+'. Screenshot this.'); return;
+    }
   }
-  if(!driver){ var _lm=document.getElementById('loginMsg'); if(_lm){_lm.textContent='Driver not found or wrong PIN. Apply first.'; setTimeout(()=>{_lm.textContent='';},4000);} return; }
+  if(!driver){ console.warn('[driver] login failed —', diag); _lm('Could not log in — '+diag); return; }
   currentDriver = driver;
   sessionStorage.setItem("sokoniDriverSession", driver.id);
   showDriverDashboard();
