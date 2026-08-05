@@ -2136,7 +2136,13 @@ function renderProducts(products) {
     el.innerHTML = `<div class="empty"><div class="empty-icon">&#128230;</div><div class="empty-text">No products found</div><div class="empty-sub">Add your first product to get started</div></div>`;
     return;
   }
-  el.innerHTML = products.map(p => `
+  el.innerHTML = products.map(p => {
+    /* Canonical stock: the quantity lives on the product (products.stock → p.stockLevel via
+       _toInv). The old row fetched a per-warehouse inventory_levels record that doesn't exist,
+       so every product read 0. Show the product's own stock, matching Shop + Catalogue. */
+    const qty   = Number(p.stockLevel != null ? p.stockLevel : (p.stock || 0)) || 0;
+    const color = qty <= 0 ? 'var(--danger)' : qty <= (p.reorderPoint || 5) ? 'var(--warn)' : 'var(--success)';
+    return `
     <div class="product-item" onclick="openProductModal('${p.id}')">
       <div class="product-thumb">${p.images?.[0] ? `<img src="${escHtml(p.images[0])}" alt="">` : '&#128230;'}</div>
       <div class="product-info">
@@ -2145,21 +2151,11 @@ function renderProducts(products) {
         <div class="product-meta" style="margin-top:1px">KES ${(p.sellingPrice||0).toFixed(2)} sell · KES ${(p.costPrice||0).toFixed(2)} cost</div>
       </div>
       <div class="product-stock">
-        <div class="stock-qty" id="qty-${p.id}">—</div>
+        <div class="stock-qty" id="qty-${p.id}" style="color:${color}">${qty}</div>
         <div class="stock-unit">${escHtml(p.unit||'each')}</div>
       </div>
-    </div>`).join('');
-
-  // Load stock levels asynchronously
-  products.forEach(async p => {
-    try {
-      const sl  = await SokoniInventory.getStockLevel(p.id);
-      const el2 = document.getElementById(`qty-${p.id}`);
-      if (!el2) return;
-      el2.textContent = sl.available;
-      el2.style.color = sl.available <= 0 ? 'var(--danger)' : sl.available <= (p.reorderPoint||5) ? 'var(--warn)' : 'var(--success)';
-    } catch (_) {}
-  });
+    </div>`;
+  }).join('');
 }
 
 function renderCategories() {

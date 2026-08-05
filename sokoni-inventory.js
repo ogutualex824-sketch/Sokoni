@@ -540,17 +540,32 @@ const SokoniInventory = (() => {
     const hit = cacheGet(`sl:${id}`);
     if (hit) return hit;
 
-    let level = null;
+    let level = null, fromDoc = false;
     if (_online && _fs) {
       try {
         const doc = await col('inventory_levels').doc(id).get();
-        level = doc.exists ? { id: doc.id, ...doc.data() } : _emptyLevel(id, productId, warehouseId, variantId);
+        if (doc.exists) { level = { id: doc.id, ...doc.data() }; fromDoc = true; }
+        else level = _emptyLevel(id, productId, warehouseId, variantId);
         await idbPut('stockLevels', level);
       } catch (_) {
         level = (await idbGet('stockLevels', id)) || _emptyLevel(id, productId, warehouseId, variantId);
       }
     } else {
       level = (await idbGet('stockLevels', id)) || _emptyLevel(id, productId, warehouseId, variantId);
+    }
+
+    /* Canonical convergence: no per-warehouse inventory_levels record → the stock lives on the
+       product itself (products.stock, single-stock model until Stage 5 branch inventory). Reflect
+       it so quantities match Shop/Catalogue instead of reading 0. Uses the local product cache
+       (populated by getProducts) — no extra network. */
+    if (!fromDoc) {
+      try {
+        const p = await idbGet('products', productId);
+        if (p && (p.stockLevel != null || p.stock != null)) {
+          const q = Number(p.stockLevel != null ? p.stockLevel : p.stock) || 0;
+          level = { id, productId, warehouseId, variantId, available: q, onHand: q, reserved: 0, _fromProduct: true };
+        }
+      } catch (_) {}
     }
 
     cacheSet(`sl:${id}`, level, 15_000);
