@@ -963,67 +963,77 @@ function loginDriver(ev){
 /* Belt-and-suspenders: expose to global scope in case this block is ever wrapped/moduled. */
 window.loginDriver = loginDriver;
 
-/* Wait up to maxMs for firebase.auth() to resolve a signed-in user. onAuthStateChanged
-   is often slow / not-yet-fired at button-click time, so currentUser reads null and the
-   whole Firestore fallback was skipped → "not found" on a correct PIN. */
+/* Wait up to maxMs for a signed-in user. Uses window.firebaseAuth (the MODULAR Auth
+   instance firebase.js guarantees) — polls currentUser since the modular instance has no
+   .onAuthStateChanged method. Falls back to the compat shim if present. */
 function _waitForFirebaseUser(maxMs){
   return new Promise(resolve => {
-    try {
-      if (typeof firebase === 'undefined' || !firebase.auth) return resolve(null);
-      const a = firebase.auth();
-      if (a.currentUser) return resolve(a.currentUser);
-      let done = false;
-      const finish = u => { if(done) return; done = true; try{unsub && unsub();}catch(_){}; resolve(u || a.currentUser || null); };
-      const unsub = a.onAuthStateChanged(u => finish(u));
-      setTimeout(() => finish(null), maxMs || 5000);
-    } catch(_) { resolve(null); }
+    let a = window.firebaseAuth || null;
+    try { if (!a && typeof firebase !== 'undefined' && firebase.auth) a = firebase.auth(); } catch(_){}
+    if (!a) return resolve(null);
+    if (a.currentUser) return resolve(a.currentUser);
+    let done = false;
+    const finish = u => { if(done) return; done = true; clearInterval(iv); resolve(u || a.currentUser || null); };
+    try { if (typeof a.onAuthStateChanged === 'function') a.onAuthStateChanged(u => finish(u)); } catch(_){}
+    const iv = setInterval(() => { if (a.currentUser) finish(a.currentUser); }, 250);
+    setTimeout(() => finish(null), maxMs || 6000);
   });
 }
 
+/* Reject a hung Firestore read instead of leaving the button on "Signing you in…" forever
+   (a broken compat shim or App-Check stall would otherwise never resolve). */
+function _withTimeout(p, ms, label){
+  return Promise.race([ p, new Promise((_, rej) => setTimeout(() => rej(new Error('timeout:'+label)), ms)) ]);
+}
+
 async function loginDriverWith(phone, pin){
-  const _lm = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},7000); } };
+  const _lm = (m, ok)=>{ var el=document.getElementById('loginMsg'); if(el){ el.style.color = ok ? '#71ff00' : '#ff8080'; el.textContent=m; if(!ok) setTimeout(()=>{ if(el.textContent===m) el.textContent=''; },8000); } };
+  const _norm = s => String(s||'').replace(/\D/g,'').slice(-9);
+  const _finish = (d)=>{ currentDriver = d; try{ sessionStorage.setItem("sokoniDriverSession", d.id); }catch(_){}; showDriverDashboard(); };
+
+  /* 1) localStorage (fast path on a returning device). */
   let drivers = [];
   try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
-  const _norm = s => String(s||'').replace(/\D/g,'').slice(-9);
-  let driver = drivers.find(d => d.phone === phone && d.pin === pin)
-            || drivers.find(d => _norm(d.phone) === _norm(phone) && d.pin === pin);
-  /* Firestore fallback — the localStorage PIN record is lost on a fresh device / browser.
-     If the SIGNED-IN Firebase user is a registered rider whose phone matches, log them in.
-     Self-diagnosing: on failure the on-screen message states the EXACT reason so it can be
-     fixed instead of guessing. Uses the COMPAT SDK this page already runs on. */
-  let diag = 'local-miss';
-  if(!driver){
-    const _fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
-    if(!_fs){ _lm('Login service still loading — wait 3 seconds and tap Login again.'); return; }
-    const _cu = await _waitForFirebaseUser(6000);
-    if(!_cu){
-      console.warn('[driver] login: no Firebase auth session on this page');
-      _lm('Not signed in on this device. Open the app, sign in, then reload /driver.'); return;
+  let driver = drivers.find(d => _norm(d.phone) === _norm(phone) && String(d.pin) === String(pin));
+  if (driver) { _finish(driver); return; }
+
+  /* 2) Need a signed-in session to read the rider record (rules require auth). */
+  const _cu = await _waitForFirebaseUser(6000);
+  if(!_cu){
+    console.warn('[driver] login: no Firebase auth session on this page');
+    _lm('Not signed in on this device. Open the app, sign in, then reload /driver.'); return;
+  }
+
+  /* 3) Read rideDrivers via the MODULAR SDK (window.firebaseDB — guaranteed by firebase.js),
+     with hard timeouts so it can never hang. Self-diagnosing on failure. */
+  _lm('Checking your account…', true);
+  const db = window.firebaseDB;
+  if(!db){ _lm('Database not ready — wait 3 seconds and tap Login again.'); return; }
+  let diag = '';
+  try {
+    const { doc, getDoc, collection, query, where, limit, getDocs } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    /* A: the signed-in user's OWN rider record, phone must match (format-agnostic: last 9 digits). */
+    const own = await _withTimeout(getDoc(doc(db,'rideDrivers',_cu.uid)), 8000, 'own');
+    if (own.exists()) {
+      const rd = own.data()||{};
+      if (_norm(rd.phone) === _norm(phone)) driver = { id: own.id, ...rd, pin: rd.pin||pin };
+      else diag = 'phone-mismatch (record '+_norm(rd.phone)+' ≠ entered '+_norm(phone)+')';
+    } else diag = 'no rider record for account '+_cu.uid.slice(0,6);
+    /* B: any rider whose phone matches, validate PIN. */
+    if (!driver) {
+      const qs = await _withTimeout(getDocs(query(collection(db,'rideDrivers'), where('phone','==',phone), limit(5))), 8000, 'query');
+      if (qs.empty) diag += ' | no rider with phone '+phone;
+      qs.forEach(s => { const rd=s.data()||{}; if(!driver){ if(String(rd.pin||'')===String(pin)) driver={id:s.id,...rd}; else diag='wrong PIN for '+phone; } });
     }
-    try {
-      /* A: the signed-in user's OWN rider record (rideDrivers/{uid}), phone must match. */
-      const own = await _fs.collection('rideDrivers').doc(_cu.uid).get();
-      if (own.exists) {
-        const rd = own.data()||{};
-        if (_norm(rd.phone) === _norm(phone)) { driver = { id: own.id, ...rd, pin: rd.pin||pin }; }
-        else diag = 'phone-mismatch (record '+_norm(rd.phone)+' ≠ entered '+_norm(phone)+')';
-      } else diag = 'no rider record for signed-in account '+_cu.uid.slice(0,6);
-      /* B: any rider whose phone matches (read rule = isAuthed), validate PIN. */
-      if (!driver) {
-        const qs = await _fs.collection('rideDrivers').where('phone','==',phone).limit(5).get();
-        if (qs.empty) diag += ' | no rider with phone '+phone;
-        qs.forEach(s => { const rd=s.data()||{}; if(!driver){ if(String(rd.pin||'')===String(pin)) driver={id:s.id,...rd}; else diag='wrong PIN for '+phone; } });
-      }
-      if (driver) { drivers.push(driver); try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){} }
-    } catch(e){
-      console.warn('[driver] login fallback error:', e.code, e.message);
-      _lm('Login check failed: '+(e.code||e.message)+'. Screenshot this.'); return;
-    }
+    if (driver) { drivers.push(driver); try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){} }
+  } catch(e){
+    console.warn('[driver] login fallback error:', e.code, e.message);
+    if (String(e.message||'').startsWith('timeout')) { _lm('Timed out reading your account (network/App-Check). Check connection and retry.'); return; }
+    _lm('Login check failed: '+(e.code||e.message)); return;
   }
   if(!driver){ console.warn('[driver] login failed —', diag); _lm('Could not log in — '+diag); return; }
-  currentDriver = driver;
-  sessionStorage.setItem("sokoniDriverSession", driver.id);
-  showDriverDashboard();
+  _finish(driver);
 }
 
 /* Leave the Delivery Hub WITHOUT signing out — Rider Role Convergence Rule 5.
