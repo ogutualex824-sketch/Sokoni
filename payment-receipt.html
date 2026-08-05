@@ -319,12 +319,20 @@ hr.rc-div { border: none; border-top: 1px dashed rgba(255,255,255,.08); margin: 
       </div>`
     ).join('');
 
+    const _ff = d.fulfillmentType || 'delivery';
     const totalsHtml = [
-      items.length > 1 ? `<div class="rc-total-row"><span>Subtotal</span><span>${kes(d.subtotal || 0)}</span></div>` : '',
+      `<div class="rc-total-row"><span>Subtotal</span><span>${kes(d.subtotal || 0)}</span></div>`,
+      _ff === 'pickup'
+        ? `<div class="rc-total-row"><span>Pickup</span><span>FREE</span></div>`
+        : ((d.deliveryFee || 0) > 0 ? `<div class="rc-total-row"><span>Delivery</span><span>${kes(d.deliveryFee)}</span></div>` : `<div class="rc-total-row"><span>Delivery</span><span>FREE</span></div>`),
       (d.discount || 0) > 0 ? `<div class="rc-total-row" style="color:#00a651"><span>Discount</span><span>−${kes(d.discount)}</span></div>` : '',
       (d.tax || 0) > 0 ? `<div class="rc-total-row"><span>VAT</span><span>${kes(d.tax)}</span></div>` : '',
       `<div class="rc-total-row grand"><span>TOTAL PAID</span><span class="rt-amt">${kes(d.total || d.grandTotal || 0)}</span></div>`,
     ].join('');
+
+    const ffBanner = _ff === 'pickup'
+      ? `<div class="rc-payment-row" style="background:rgba(56,189,248,0.12);color:#0284c7">🏪 <strong>Pickup Receipt</strong>${d.pickupLocation ? ' · Collect at ' + esc(d.pickupLocation) : ''}</div>`
+      : `<div class="rc-payment-row" style="background:rgba(251,146,60,0.12);color:#c2410c">🛵 <strong>Delivery Receipt</strong>${d.deliveryAddress ? ' · ' + esc(d.deliveryAddress) : ''}</div>`;
 
     content.innerHTML = `
       <div class="rc-header">
@@ -342,6 +350,7 @@ hr.rc-div { border: none; border-top: 1px dashed rgba(255,255,255,.08); margin: 
         <hr class="rc-div">
         <div class="rc-items">${itemsHtml || `<div class="rc-item"><span class="ri-name">Payment</span><span class="ri-price">${kes(d.total || 0)}</span></div>`}</div>
         <div class="rc-totals">${totalsHtml}</div>
+        ${ffBanner}
         <div class="rc-payment-row">✓ Paid via ${esc(method)}${payRef ? ' · Ref: ' + esc(payRef) : ''}</div>
         ${(d.loyaltyEarned || 0) > 0 ? `<div class="rc-loyalty">+${d.loyaltyEarned} loyalty points earned on this transaction</div>` : ''}
         <div class="rc-qr">

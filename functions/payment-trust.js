@@ -353,6 +353,9 @@ exports.verifyTrustReceipt = onCall(cfg, async ({ data, auth }) => {
       gatewayRef:    r.gatewayRef || null,
       customer:      r.customer || null,
       orderStatus:   r.orderStatus || 'paid',
+      fulfillmentType: r.fulfillmentType || 'delivery',
+      deliveryAddress: r.deliveryAddress || null,
+      pickupLocation:  r.pickupLocation || null,
     };
   }
   return thin;

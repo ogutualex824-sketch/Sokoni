@@ -7511,6 +7511,12 @@ exports.webhookIntasend = onRequest(
               tax:            0,
               discount:       0,
               total:          amount,
+              /* Fulfillment on the receipt — pickup (collect at shop) vs delivery
+                 (rider + address). Rider/ETA are assigned later; the receipt shows
+                 what's known at payment time. */
+              fulfillmentType: _pm.fulfillmentType || "delivery",
+              deliveryAddress: (_pm.fulfillmentType === "pickup") ? null : (_pm.address || _pm.deliveryAddress || null),
+              pickupLocation:  (_pm.fulfillmentType === "pickup") ? (_pm.sellerName || "Shop") : null,
               paymentMethod:  "M-PESA",
               paymentRef:     checkoutId || apiRef,
               mpesaCode:      checkoutId || null,

@@ -1030,6 +1030,7 @@ async function _printOrderReceipt(order, manual) {
         enc.text(row('Receipt', String(ref).slice(0, W - 9))).lf();
         enc.text(row('Date', dateStr.slice(0, W - 6))).lf();
         if (order.customerName) enc.text(row('Customer', String(order.customerName).slice(0, W - 10))).lf();
+        enc.text(row('Fulfillment', (order.fulfillmentType === 'pickup') ? 'Pickup' : 'Delivery')).lf();
         enc.text(dash).lf();
         items.forEach(it => {
           const nm  = String(it.name || 'Item');
