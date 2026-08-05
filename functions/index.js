@@ -3689,12 +3689,17 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
            the marketplace path (client-only, in a JS array), so best-selling sorts
            and revenue analytics undercounted every sale. Inside the inventoryApplied
            guard, so a webhook retry cannot double-count. */
-        txn.update(ref, {
+        const _newStock = (typeof cur === "number") ? Math.max(0, cur - dec) : null;
+        const _stockUpd = {
           stock:            admin.firestore.FieldValue.increment(-dec),
           sold:             admin.firestore.FieldValue.increment(dec),
           updatedAt:        ts,
           inventoryVersion: admin.firestore.FieldValue.increment(1),
-        });
+        };
+        /* Sold out → flag unavailable so it stops being buyable (product page /
+           checkout guard on outOfStock). Restock clears it via the seller editor. */
+        if (_newStock === 0) _stockUpd.outOfStock = true;
+        txn.update(ref, _stockUpd);
         /* Inventory movement / history — deterministic id (orderId_pid) so a
            webhook retry overwrites rather than logging a second movement. */
         txn.set(db.collection("inventoryMovements").doc(`${orderId}_${pid}`), {
@@ -7571,6 +7576,40 @@ exports.webhookIntasend = onRequest(
                 }, { merge: true });
             } catch (posErr) {
               console.error("[webhookIntasend] POS signal failed:", posErr.message);
+            }
+          }
+
+          /* ── (2b) Delivery dispatch — for DELIVERY orders, create a packageRequests
+             doc so it appears in riders' "Available Deliveries" to accept + track.
+             Pickup collects in-store and needs no rider. Minimal server-side record
+             (no client OSRM/pricing); rider payout = 80% of the delivery fee.
+             Deterministic id (DEL+ref) → idempotent. */
+          if ((_pm.fulfillmentType || "delivery") !== "pickup" && _pm.sellerUid) {
+            try {
+              const _delRef = "DEL" + apiRef;
+              const _delDoc = db.collection("packageRequests").doc(_delRef);
+              const _exists = await _delDoc.get();
+              if (!_exists.exists) {
+                const _pin = String(Math.floor(1000 + Math.random() * 9000));
+                await _delDoc.set({
+                  ref: _delRef, deliveryRef: _delRef, orderId: _pm.orderId, orderRef: apiRef,
+                  buyerName:  _pm.buyerName || "", buyerPhone: payData.phone || "", buyerUid: payData.uid || null,
+                  sellerName: _pm.sellerName || "SOKONI", sellerUid: _pm.sellerUid, sellerPhone: "",
+                  pickupAddress:   _pm.sellerName || "Shop", pickupCoords: null,
+                  deliveryAddress: _pm.address || _pm.deliveryAddress || "", deliveryCoords: null,
+                  items:      _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty })),
+                  orderTotal: amount, deliveryFee: _delivery,
+                  driverNet:  Math.round(_delivery * 0.8), commissionPct: 5,
+                  vehicleType: "moto", speed: "same_day", category: "general",
+                  status: "order_placed", proofPin: _pin,
+                  timeline: [{ status: "order_placed", at: new Date().toISOString(), by: "system" }],
+                  source: "webhookIntasend",
+                  createdAt: admin.firestore.FieldValue.serverTimestamp(),
+                });
+                await db.collection("orders").doc(_pm.orderId).set({ deliveryRef: _delRef }, { merge: true });
+              }
+            } catch (dErr) {
+              console.error("[webhookIntasend] delivery dispatch failed:", dErr.message);
             }
           }
 
