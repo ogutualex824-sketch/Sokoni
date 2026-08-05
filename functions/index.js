@@ -3575,7 +3575,7 @@ exports.darajaSTKPush = onCall(
 async function _finalizeMarketplacePayment(db, admin, opts) {
   const {
     checkoutId, sellerUid, callerUid, orderId, hub, amount, phone,
-    mpesaCode, sellerName, description, items,
+    mpesaCode, sellerName, description, items, buyerName, address,
     paymentMethod, pathLabel,
     settlementStatus = "queued",
     writeSellerPayment = true,
@@ -3602,26 +3602,18 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
   try {
     await db.runTransaction(async (txn) => {
       const orderSnap = await txn.get(orderRef);
+      const exists = orderSnap.exists;
+      const o = exists ? orderSnap.data() : null;
 
-      if (!orderSnap.exists) {
-        txn.set(db.collection("orphanPayments").doc(String(checkoutId)), {
-          checkoutId, orderId, sellerUid: sellerUid || null,
-          callerUid: callerUid || null, amount: amount || 0,
-          mpesaCode: mpesaCode || null, path: pathLabel || null,
-          reason: "order_document_absent_at_callback", createdAt: ts,
-        });
-        result = { finalised: false, reason: "order_absent" };
-        return;
-      }
-
-      const o = orderSnap.data();
       /* Idempotency: a retried webhook must not decrement stock twice. */
-      if (o.inventoryApplied === true) { result = { finalised: true, reason: "already_applied" }; return; }
+      if (exists && o.inventoryApplied === true) { result = { finalised: true, reason: "already_applied" }; return; }
 
-      /* Prefer server-linked line items over anything the client wrote onto the order. */
+      /* Prefer the server-linked line items (meta.items) over anything the client
+         wrote onto the order. When the client could not write the order at all
+         (Firestore rules on the create), meta.items is the only source. */
       const lines = Array.isArray(items) && items.length
         ? items
-        : (Array.isArray(o.items) ? o.items : []);
+        : (exists && Array.isArray(o.items) ? o.items : []);
 
       /* All reads before any write. */
       const stockReads = [];
@@ -3634,7 +3626,7 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         stockReads.push({ ref: pRef, pid: String(pid), qty, snap: pSnap });
       }
 
-      txn.update(orderRef, {
+      const paidFields = {
         status:           "paid",
         paymentStatus:    "paid",
         paymentVerified:  true,
@@ -3646,7 +3638,35 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         inventoryApplied: true,
         settlementStatus: settlementStatus,
         updatedAt:        ts,
-      });
+      };
+
+      if (exists) {
+        txn.update(orderRef, paidFields);
+      } else {
+        /* Server-authoritative order creation. The buyer-side write is best-effort
+           (client Firestore rules can reject the pre-payment create); the money is
+           real and confirmed, so the order MUST exist. Admin SDK bypasses rules. */
+        txn.set(orderRef, {
+          id:              orderId,
+          uid:             callerUid || null,
+          buyerUid:        callerUid || null,
+          buyerName:       buyerName || null,
+          buyerPhone:      phone     || null,
+          sellerUid:       sellerUid || null,
+          sellerName:      sellerName || null,
+          items:           lines,
+          deliveryAddress: address || null,
+          address:         address || null,
+          hub:             hub || "marketplace",
+          amount:          amount || 0,
+          total:           amount || 0,
+          orderTotal:      amount || 0,
+          currency:        "KES",
+          source:          "webhook_created",
+          createdAt:       ts,
+          ...paidFields,
+        }, { merge: true });
+      }
 
       for (const { ref, pid, qty, snap } of stockReads) {
         const pdata = snap.exists ? snap.data() : {};
@@ -7398,6 +7418,8 @@ exports.webhookIntasend = onRequest(
             sellerName:    _pm.sellerName || _pm.providerName || null,
             description:   _pm.serviceDesc || "SOKONI Order",
             items:         Array.isArray(_pm.items) ? _pm.items : null,
+            buyerName:     _pm.buyerName || null,
+            address:       _pm.address || _pm.deliveryAddress || null,
             paymentMethod: "mpesa_intasend",
             pathLabel:     "intasend",
             settlementStatus:   "settled",

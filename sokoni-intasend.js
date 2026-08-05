@@ -239,6 +239,8 @@
           ...(options.sellerUid  ? { sellerUid:  options.sellerUid }  : {}),
           ...(options.sellerName ? { sellerName: options.sellerName } : {}),
           ...(options.hub        ? { hub:        options.hub }        : {}),
+          ...(options.buyerName  ? { buyerName:  options.buyerName }  : {}),
+          ...(options.address    ? { address:    options.address }    : {}),
           ...(Array.isArray(options.items) ? { items: options.items } : {}),
         },
       });

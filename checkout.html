@@ -2000,14 +2000,19 @@ async function _placeOrderCore(){
 
       try {
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Creating your order…');
-        /* The order MUST exist before the STK so the IntaSend webhook can finalise
-           it (mark paid + decrement stock) authoritatively even if this tab closes. */
-        await _ckPersistPendingOrder(_ordId, _sUid, _sName, _items);
+        /* Best-effort client pre-write. If Firestore rules reject the create (e.g.
+           the auth token is not attached to this Firestore instance), we do NOT
+           block payment — the webhook creates the order server-side (Admin SDK)
+           from the meta below. The money is authoritative; the order must exist. */
+        try { await _ckPersistPendingOrder(_ordId, _sUid, _sName, _items); }
+        catch (persistErr) { console.warn('[checkout] pre-order write skipped, webhook will create it:', persistErr && persistErr.message); }
 
+        const _buyerName = document.getElementById('coName')?.value?.trim() || '';
+        const _buyerAddr = document.getElementById('coAddress')?.value?.trim() || '';
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('preparing', 'Sending M-PESA prompt…');
         /* Seller + order linkage ride in meta so the webhook credits the right
-           seller (meta.sellerUid, since the buyer is the caller) and finalises the
-           right order (meta.orderId + meta.items). */
+           seller (meta.sellerUid, since the buyer is the caller) and creates/finalises
+           the right order (meta.orderId + meta.items + buyer name/address). */
         await window.SokoniIntaSend.initiateSTKPush(phone, orderTotal, _ordId, {
           category:    'product',
           orderId:     _ordId,
@@ -2015,6 +2020,8 @@ async function _placeOrderCore(){
           sellerName:  _sName,
           hub:         'marketplace',
           items:       _items,
+          buyerName:   _buyerName,
+          address:     _buyerAddr,
           serviceDesc: 'SOKONI Order',
         });
 
