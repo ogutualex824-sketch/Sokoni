@@ -3110,6 +3110,59 @@ window.toggleOnline = async function() {
     if(document.readyState!=='loading') _start(); else document.addEventListener('DOMContentLoaded', _start);
   })();
   </script>
+  <!-- Available Deliveries — dispatch-ready jobs (merchant tapped "Ready for Dispatch").
+       App-Check-independent fetch of /api/available-deliveries; Accept via claimAvailableDelivery
+       (Admin-SDK claim, since riders can't read/write unassigned packageRequests client-side). -->
+  <script>
+  (function(){
+    var POLL = 20000, _timer = null;
+    function _riderUid(){
+      try { if (window.firebase && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser.uid; } catch(_){}
+      if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser.uid;
+      try { return (JSON.parse(localStorage.getItem('sokoniUser')||'null')||{}).uid || null; } catch(_){ return null; }
+    }
+    function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function _container(){
+      var el = document.getElementById('availDispatch'); if (el) return el;
+      var anchor = document.getElementById('availableDeliveries') || document.querySelector('#driverDashboard');
+      if (!anchor || !anchor.parentNode) return null;
+      el = document.createElement('div'); el.id = 'availDispatch'; el.style.cssText = 'margin:12px 0;';
+      anchor.parentNode.insertBefore(el, anchor);
+      return el;
+    }
+    function _render(list){
+      var el = _container(); if (!el) return;
+      if (!window.isOnline) { el.innerHTML = ''; return; }
+      if (!list.length) { el.innerHTML = '<div class="section-heading">🛵 Available Deliveries</div><div style="color:rgba(255,255,255,0.3);font-size:13px;padding:10px 0;">No deliveries right now — check back soon.</div>'; return; }
+      el.innerHTML = '<div class="section-heading">🛵 Available Deliveries ('+list.length+')</div>' + list.map(function(d){
+        var net = d.driverNet || Math.round((Number(d.deliveryFee)||0)*0.8);
+        return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">Order '+_esc(String(d.orderId||d.id).slice(0,10))+'</div>'
+          + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryAddress||'—').slice(0,40))+'</div></div>'
+          + '<div><div class="dc-fee">KES '+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
+          + '<div class="dc-info">📦 '+((d.items||[]).length)+' item(s) · 📞 '+_esc(d.buyerPhone||'')+'</div>'
+          + '<div class="dc-actions"><button type="button" class="dc-accept-btn" data-del="'+_esc(d.id)+'">✅ Accept — Earn KES '+net+'</button></div></div>';
+      }).join('');
+      el.querySelectorAll('button[data-del]').forEach(function(b){
+        b.onclick = async function(){
+          var id = b.getAttribute('data-del'); b.disabled = true; b.textContent = 'Accepting…';
+          try {
+            if (!_riderUid()) { b.disabled=false; b.textContent='✅ Accept'; alert('Please sign in first.'); return; }
+            var fn = firebase.functions().httpsCallable('claimAvailableDelivery');
+            var res = await fn({ deliveryRef: id });
+            if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; alert('Delivery accepted! Proof PIN: ' + (res.data.proofPin || '—')); }
+            else { b.disabled=false; b.textContent='✅ Accept'; alert('Could not accept.'); }
+          } catch(e){ b.disabled=false; b.textContent='✅ Accept'; alert((e && e.message) || 'Could not accept — it may have just been taken.'); }
+        };
+      });
+    }
+    async function _poll(){
+      if (!window.isOnline) { var el = document.getElementById('availDispatch'); if (el) el.innerHTML = ''; return; }
+      try { var r = await fetch('/api/available-deliveries?cb='+Date.now(), { cache:'no-store' }); var j = r.ok ? await r.json() : null; if (j && j.ok && Array.isArray(j.deliveries)) _render(j.deliveries); } catch(_){}
+    }
+    function _start(){ _poll(); if (_timer) clearInterval(_timer); _timer = setInterval(_poll, POLL); }
+    if (document.readyState !== 'loading') setTimeout(_start, 1200); else document.addEventListener('DOMContentLoaded', function(){ setTimeout(_start, 1200); });
+  })();
+  </script>
   <script src="/sokoni-delivery-engine.js"></script>
 </body>
 </html>
