@@ -6705,6 +6705,43 @@ exports.recordMetric = onRequest(
 );
 
 /* ══════════════════════════════════════════════════════════════════
+   PUBLIC CATALOGUE — App-Check-independent product feed.
+   The catalogue is public (products rule = `allow read: if true`), but App Check is
+   ENFORCED on client Firestore reads and its reCAPTCHA v3 token exchange 403s
+   intermittently (esp. iOS Safari/ITP), which took the homepage grid down entirely.
+   This server-side endpoint reads via the Admin SDK (no App Check), so the public
+   catalogue always loads; the live Firestore listener still layers real-time updates
+   on top when its token is valid. In-memory sort (ids are Date.now() timestamps) so
+   no composite index is required. Base64 image blobs are stripped to keep the payload
+   light — the client renders Storage URLs and falls back gracefully (sokoni-image.js).
+══════════════════════════════════════════════════════════════════ */
+exports.catalogue = onRequest(
+  { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
+  async (req, res) => {
+    try {
+      const cap = Math.min(Number(req.query.limit) || 200, 300);
+      const snap = await db.collection("products").where("status", "==", "active").limit(cap).get();
+      const _isData = (v) => typeof v === "string" && v.slice(0, 5) === "data:";
+      const products = snap.docs.map((d) => {
+        const v = d.data() || {};
+        delete v._syncedAt;
+        /* Strip heavy base64 image blobs — client uses Storage URLs / placeholder. */
+        if (_isData(v.image)) delete v.image;
+        if (Array.isArray(v.images)) v.images = v.images.filter((u) => !_isData(u));
+        return { id: d.id, ...v };
+      });
+      /* Newest first — product ids are Date.now() timestamps. */
+      products.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      res.set("Cache-Control", "public, max-age=60, s-maxage=120");
+      res.status(200).json({ ok: true, count: products.length, products });
+    } catch (e) {
+      console.error("[catalogue] failed:", e.message);
+      res.status(500).json({ ok: false, error: "catalogue_unavailable" });
+    }
+  }
+);
+
+/* ══════════════════════════════════════════════════════════════════
    PHASE 9 — BACKGROUND: Daily analytics aggregation (01:00 UTC = 04:00 EAT)
 ══════════════════════════════════════════════════════════════════ */
 exports.aggregateAnalytics = onSchedule(

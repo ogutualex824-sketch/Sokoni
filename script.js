@@ -230,6 +230,26 @@ function _renderCatalogueError(container) {
 
 /* Bounded, not indefinite: a spinner that never resolves is the loading-state
    equivalent of a silent failure. */
+/* App-Check-independent catalogue fallback. Client Firestore reads are gated by App
+   Check, whose reCAPTCHA v3 token 403s intermittently on iOS Safari (ITP) and took the
+   homepage grid down. This public server endpoint (Admin SDK, no App Check) fills the
+   grid regardless; the live Firestore listener still layers real-time updates on top
+   when its token is valid. Whichever source answers first wins — _homeMergeFirestore is
+   idempotent (sets __sokoniCatalogueRead + clears the watchdog). */
+function _fetchCatalogueFallback() {
+    try {
+        fetch('/api/catalogue?limit=200', { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+                if (j && j.ok && Array.isArray(j.products) && j.products.length && !window.__sokoniCatalogueRead) {
+                    _catalogueTelemetry('http-fallback-ok', { count: j.products.length });
+                    if (typeof window._homeMergeFirestore === 'function') window._homeMergeFirestore(j.products);
+                }
+            })
+            .catch(function () {});
+    } catch (e) {}
+}
+
 function _armCatalogueWatchdog(container, ms) {
     if (_catalogueWatchdog) clearTimeout(_catalogueWatchdog);
     /* 20s (was 12s): the listener waits up to 12s for the App Check token, then the hardened
@@ -395,6 +415,7 @@ function loadProducts(){
     if(products.length === 0){
         _renderCatalogueLoading(container);
         _armCatalogueWatchdog(container);
+        _fetchCatalogueFallback();      /* App-Check-independent server feed */
         return;
     }
 
