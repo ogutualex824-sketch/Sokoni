@@ -493,7 +493,7 @@
     <div class="section-heading">🛵 Join / Switch Account</div>
     <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
       <button type="button" class="dc-accept-btn" style="flex:1;" onclick="document.getElementById('applySection').style.display=document.getElementById('applySection').style.display==='none'?'block':'none'">📋 Apply to Drive</button>
-      <button type="button" class="dc-update-btn" onclick="document.getElementById('loginSection').style.display=document.getElementById('loginSection').style.display==='none'?'block':'none'">🔑 Driver Login</button>
+      <!-- Driver PIN login retired — the hub uses your one signed-in SOKONI account + driver role (identity refactor). -->
     </div>
 
     <!-- Login form -->
@@ -1109,9 +1109,10 @@ function showDriverDashboard(){
   const _gate = document.getElementById("driverGate");
   if(_gate) _gate.style.display="none";
   document.getElementById("driverDashboard").style.display="block";
-  /* Logged in → Go Online (shift management) shows, and the top auth button becomes Logout. */
+  /* Identity model: the one signed-in SOKONI account = driver mode. No login/logout button;
+     leave via "← Exit Hub" (stays signed in). Go Online drives the shift. */
   var _ob=document.getElementById("driverOnlineBtn"); if(_ob) _ob.style.display="";
-  var _lb=document.getElementById("driverLoginBtn"); if(_lb){ _lb.style.display=""; _lb.textContent="🚪 Driver Logout"; }
+  var _lb=document.getElementById("driverLoginBtn"); if(_lb) _lb.style.display="none";
 
   const v = currentDriver.vehicle;
   const isEbike   = v === "ebike";
@@ -1683,50 +1684,86 @@ window.generateReferral = generateReferral;
 window.acceptDelivery = acceptDelivery;
 window.updateDeliveryStatus = updateDeliveryStatus;
 
-/* Open the Login panel and bring it into view — the top "Driver Login" action. */
-function openDriverLogin(){
-  var ls = document.getElementById("loginSection");
-  if(ls){ ls.style.display="block"; try{ ls.scrollIntoView({behavior:"smooth",block:"center"}); }catch(_){} }
-  var p = document.getElementById("driverLoginPhone"); if(p){ try{ p.focus(); }catch(_){} }
-}
-window.openDriverLogin = openDriverLogin;
+/* ════════════════════════════════════════════════════════════════════════
+   IDENTITY REFACTOR — no separate driver PIN login. The driver hub uses the ONE
+   signed-in SOKONI account + driver role (rideDrivers/{uid}). "Login gates only,
+   keep step-up": one account session unlocks driver mode; sensitive actions
+   (proof-of-delivery PIN, payouts) keep their own confirmation.
+   ════════════════════════════════════════════════════════════════════════ */
 
-/* Top auth button: Login when logged out, Logout when logged in. */
-function driverAuthToggle(){ if(currentDriver) driverLogout(); else openDriverLogin(); }
+/* Account gate shown when we can't auto-enter: sign-in (not signed in) or apply
+   (signed in but not a registered driver). The old phone+PIN form is retired. */
+function _showDriverAccountGate(mode, detail){
+  currentDriver = null;
+  var ob=document.getElementById("driverOnlineBtn"); if(ob) ob.style.display="none";
+  var lb=document.getElementById("driverLoginBtn");
+  var ls=document.getElementById("loginSection");  if(ls) ls.style.display="none";  /* PIN form retired */
+  var g=document.getElementById("driverGreet");
+  var z=document.getElementById("driverZone");
+  var apply=document.getElementById("applySection");
+  if(mode==='apply'){
+    if(lb) lb.style.display="none";
+    if(g) g.textContent="You're signed in — become a driver 🛵";
+    if(z) z.textContent="Complete the quick application below to start delivering.";
+    if(apply){ apply.style.display="block"; try{ apply.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }
+  } else if(mode==='loading'){
+    if(lb) lb.style.display="none";
+    if(g) g.textContent="Loading your driver profile…";
+    if(z) z.textContent=detail||"One moment.";
+  } else { /* signin */
+    if(lb){ lb.style.display=""; lb.textContent="🔑 Sign In"; }
+    if(g) g.textContent="🔑 Sign in to drive";
+    if(z) z.textContent="Use your SOKONI account — one login for everything.";
+  }
+}
+
+/* Top button (only shown as "Sign In" on the sign-in gate) → account sign-in, not a driver PIN. */
+function driverAuthToggle(){
+  location.href = '/login.html?return=' + encodeURIComponent('/driver');
+}
 window.driverAuthToggle = driverAuthToggle;
 
-/* End the driver session (distinct from account sign-out): go offline so dispatch stops
-   targeting this rider, drop the session, and return to the clean login view. */
-async function driverLogout(){
-  try { if(window.isOnline && typeof toggleOnline==='function'){ toggleOnline(); await new Promise(r=>setTimeout(r,500)); } } catch(_){}
-  try { sessionStorage.removeItem("sokoniDriverSession"); } catch(_){}
-  currentDriver = null;
-  try { location.reload(); } catch(_){ }
+/* Identity-based entry: signed-in account → its rideDrivers/{uid} record → dashboard (no PIN).
+   Signed in but no rider record → apply. Not signed in → account sign-in. */
+async function _enterDriverIdentity(){
+  const user = await _waitForFirebaseUser(6000);
+  /* Never clobber a working fast-path dashboard on a flaky/absent read — only GATE when we
+     have no driver yet. A successful account read always refreshes + wins. */
+  if (!user) { if (!currentDriver) _showDriverAccountGate('signin'); return; }
+  const db = window.firebaseDB;
+  if (!db) { if (!currentDriver) _showDriverAccountGate('loading', 'Starting up — one moment.'); setTimeout(_enterDriverIdentity, 1500); return; }
+  try {
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const snap = await _withTimeout(getDoc(doc(db, 'rideDrivers', user.uid)), 8000, 'own');
+    if (snap.exists()) {
+      const rd = snap.data() || {};
+      currentDriver = { id: snap.id, ...rd };
+      try { sessionStorage.setItem("sokoniDriverSession", currentDriver.id); } catch(_){}
+      showDriverDashboard();
+    } else if (!currentDriver) {
+      _showDriverAccountGate('apply');   /* signed in, not yet a driver */
+    }
+  } catch(e){
+    console.warn('[driver] identity entry error:', e && e.message);
+    if (!currentDriver) _showDriverAccountGate('signin', e && e.message);
+  }
 }
-window.driverLogout = driverLogout;
+window._enterDriverIdentity = _enterDriverIdentity;
 
 /* Require a REAL driver login — no demo dashboard. The DRV-DEMO phantom used to let the
    dashboard + "Go Online" show with no real driver, so shift management ran against a fake
    record. Now: a valid saved session opens the dashboard; otherwise the top action is
    "Driver Login", Go Online is hidden, and the login panel opens. */
 (function(){
+  /* Fast-path: a saved session for this device paints the dashboard instantly. */
   const savedId = sessionStorage.getItem("sokoniDriverSession");
   let drivers = [];
   try { drivers = JSON.parse(localStorage.getItem("sokoniDrivers"))||[]; } catch(e){}
   const found = savedId ? drivers.find(d => d.id === savedId) : null;
-
-  if(found && !found.isDemo){
-    currentDriver = found;
-    showDriverDashboard();
-  } else {
-    /* Logged out — no demo. Show Driver Login at the top, hide Go Online, open the panel. */
-    currentDriver = null;
-    var _ob=document.getElementById("driverOnlineBtn"); if(_ob) _ob.style.display="none";
-    var _lb=document.getElementById("driverLoginBtn"); if(_lb){ _lb.style.display=""; _lb.textContent="🔑 Driver Login"; }
-    var _g=document.getElementById("driverGreet"); if(_g) _g.textContent="🔑 Log in to start your shift";
-    var _z=document.getElementById("driverZone"); if(_z) _z.textContent="Tap Driver Login to go online and take deliveries.";
-    try { openDriverLogin(); } catch(_){}
-  }
+  if(found && !found.isDemo){ currentDriver = found; showDriverDashboard(); }
+  /* Authoritative: resolve from the signed-in SOKONI account (identity refactor — no PIN).
+     Enhances/updates the record, or gates to sign-in / apply when appropriate. */
+  try { _enterDriverIdentity(); } catch(_){ }
 })();
 </script>
 <script src="sokoni-commission-rates.js"></script>
