@@ -185,8 +185,17 @@ const SokoniInventory = (() => {
      INIT
   ═══════════════════════════════════════════════════════════════════ */
   async function init({ firestore, auth, tenantId } = {}) {
-    _fs       = firestore || (window.db  || null);
-    _auth     = auth      || (window.auth || null);
+    /* window.db / window.auth are NOT set anywhere in the codebase, so _fs was always null and
+       every read fell back to the empty local cache — the real reason inventory showed nothing.
+       Fall back to the compat firebase shim (backed by the modular SDK in firebase.js). */
+    _fs = firestore || window.db
+       || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null)
+       || (window.firebase && window.firebase.firestore ? window.firebase.firestore() : null)
+       || null;
+    _auth = auth || window.auth
+       || (typeof firebase !== 'undefined' && firebase.auth ? firebase.auth() : null)
+       || (window.firebase && window.firebase.auth ? window.firebase.auth() : null)
+       || null;
     _tenantId = tenantId  || window.SOKONI_TENANT_ID || 'default';
 
     await openIDB();
@@ -228,7 +237,14 @@ const SokoniInventory = (() => {
     if (!_fs) throw new Error('Firestore not initialised — call SokoniInventory.init() first');
     return _fs.collection('products');
   }
-  function _sellerUid() { return (_auth && _auth.currentUser && _auth.currentUser.uid) || _uid || null; }
+  function _sellerUid() {
+    try { if (_auth && _auth.currentUser && _auth.currentUser.uid) return _auth.currentUser.uid; } catch (_) {}
+    try { if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser.uid; } catch (_) {}
+    try { if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser.uid; } catch (_) {}
+    if (_uid) return _uid;
+    try { const u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); if (u && u.uid) return u.uid; } catch (_) {}
+    return null;
+  }
 
   /* products doc → inventory shape (for reads / the inventory UI). */
   function _toInv(id, p) {
@@ -326,19 +342,28 @@ const SokoniInventory = (() => {
     let results = [];
     const seller = _sellerUid();
 
-    if (_online && _fs && seller) {
+    /* PRIMARY read: the App-Check-independent public catalogue endpoint (same canonical
+       `products` data, filtered by owner). Reliable even when the client compat firestore /
+       App Check is flaky — which is exactly what left inventory blank. */
+    if (_online && seller && typeof fetch === 'function') {
       try {
-        /* Canonical convergence (Stage 1): read the ONE `products` collection filtered by
-           owner. Category/active/search sorted in-memory to avoid composite indexes. */
+        const r = await fetch('/api/catalogue?limit=500&sellerUid=' + encodeURIComponent(seller), { cache: 'no-store' });
+        const j = r.ok ? await r.json() : null;
+        if (j && j.ok && Array.isArray(j.products)) {
+          results = j.products.map(p => _toInv(p.id, p));
+          await Promise.all(results.map(p => idbPut('products', p)));
+        }
+      } catch (_) {}
+    }
+    /* FALLBACK: direct Firestore (compat) if the endpoint returned nothing. */
+    if (!results.length && _online && _fs && seller) {
+      try {
         const snap = await productsCol().where('sellerUid', '==', seller).limit(500).get();
         results = snap.docs.map(d => _toInv(d.id, d.data()));
         await Promise.all(results.map(p => idbPut('products', p)));
-      } catch (_) {
-        results = await idbGetAll('products');
-      }
-    } else {
-      results = await idbGetAll('products');
+      } catch (_) {}
     }
+    if (!results.length) results = await idbGetAll('products');
 
     if (active === true || active === false) results = results.filter(p => p.active === active);
     if (category) results = results.filter(p => (p.category || '') === category);
