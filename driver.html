@@ -959,19 +959,25 @@ async function loginDriverWith(phone, pin){
      Rider is a role on the one account (D5Ql2 = shop + rider here). */
   if(!driver){
     try {
-      const u = window.firebaseAuth && window.firebaseAuth.currentUser;
-      if (u && window.firebaseDB) {
-        const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
-        const snap = await getDoc(doc(window.firebaseDB, "rideDrivers", u.uid));
-        if (snap.exists()) {
-          const rd = snap.data();
-          if (_norm(rd.phone) === _norm(phone)) {
-            driver = { id: u.uid, ...rd, pin: rd.pin || pin };
-            drivers.push(driver);
-            try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){}
-          }
+      /* Use the COMPAT SDK this page already uses for rider writes (firebase.firestore()
+         / firebase.auth()) — the earlier modular attempt + window.firebaseAuth were the
+         wrong refs, which is why a correct PIN still read "not found". */
+      const _fs = (typeof firebase !== 'undefined' && firebase.firestore) ? firebase.firestore() : null;
+      const _cu = (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser)
+               || (window.firebaseAuth && window.firebaseAuth.currentUser) || null;
+      if (_fs && _cu) {
+        /* A: the signed-in user's OWN rider record (rideDrivers/{uid}), phone must match. */
+        const own = await _fs.collection('rideDrivers').doc(_cu.uid).get();
+        if (own.exists && _norm((own.data()||{}).phone) === _norm(phone)) {
+          driver = { id: own.id, ...own.data(), pin: (own.data()||{}).pin || pin };
+        }
+        /* B: any rider record whose phone matches (read rule = isAuthed), validate PIN. */
+        if (!driver) {
+          const qs = await _fs.collection('rideDrivers').where('phone','==',phone).limit(3).get();
+          qs.forEach(s => { if (!driver) { const rd = s.data()||{}; if (String(rd.pin||'') === String(pin)) driver = { id: s.id, ...rd }; } });
         }
       }
+      if (driver) { drivers.push(driver); try { localStorage.setItem("sokoniDrivers", JSON.stringify(drivers)); } catch(_){} }
     } catch(e){ console.warn('[driver] Firestore login fallback:', e.message); }
   }
   if(!driver){ var _lm=document.getElementById('loginMsg'); if(_lm){_lm.textContent='Driver not found or wrong PIN. Apply first.'; setTimeout(()=>{_lm.textContent='';},4000);} return; }
