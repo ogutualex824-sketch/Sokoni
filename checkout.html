@@ -2644,9 +2644,20 @@ function processPaypalPayment(){
    never overwrites. Idempotent via the deterministic orderId + { merge:true }. */
 async function _ckPersistPendingOrder(orderId, sellerUid, sellerName, lineItems){
   const currentCart = JSON.parse(localStorage.getItem("cart") || "[]");
-  const _authUser = JSON.parse(localStorage.getItem("sokoniUser")||"null");
-  const _uid = (window.firebaseAuth?.currentUser?.uid) || _authUser?.uid || null;
-  if(!_uid || !window.firebaseDB) throw new Error("Please sign in to pay.");
+  /* The orders CREATE rule requires request.auth.uid === the order's uid
+     (claimsOwner) with a real Firebase Auth token — a localStorage uid does NOT
+     satisfy it. Place Order can fire before Firebase has restored the session, so
+     currentUser may still be null; a localStorage fallback would write a uid that
+     fails the rule ("Missing or insufficient permissions"). Wait for the real
+     authenticated user, then use ITS uid strictly. */
+  if (typeof window.waitForFirebaseReady === 'function') { try { await window.waitForFirebaseReady(); } catch(_){} }
+  const _auth = window.firebaseAuth;
+  if (_auth && typeof _auth.authStateReady === 'function') { try { await _auth.authStateReady(); } catch(_){} }
+  let _cu = _auth && _auth.currentUser;
+  for (let i = 0; !_cu && i < 30; i++) { await new Promise(r => setTimeout(r, 100)); _cu = _auth && _auth.currentUser; }
+  const _uid = _cu && _cu.uid;
+  if(!_uid) throw new Error("Please sign in again to complete payment.");
+  if(!window.firebaseDB) throw new Error("Payment is still loading — please try again.");
   const _coName  = document.getElementById("coName")?.value?.trim()  || "";
   const _coPhone = document.getElementById("coPhone")?.value?.trim() || "";
   const _coAddr  = document.getElementById("coAddress")?.value?.trim() || "";
