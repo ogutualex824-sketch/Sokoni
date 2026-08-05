@@ -4020,6 +4020,31 @@ exports.verifyPaymentStatus = onCall(
 
     const { checkoutId, orderId } = request.data;
 
+    /* IntaSend payments live in `payments/{ref}` (Admin-SDK-written). The buyer's
+       browser cannot read them directly — the payments read rule keys on buyerId
+       while initiateSTKPush writes uid — so the checkout confirms via THIS authed
+       call instead of a denied Firestore listener. Authorised for the buyer
+       (payments.uid), the seller (meta.sellerUid), or an admin. */
+    if (request.data.ref) {
+      const ref = String(request.data.ref);
+      const snap = await db.collection("payments").doc(ref).get();
+      if (!snap.exists) return { status: "PENDING" };
+      const d = snap.data();
+      const uid = request.auth.uid;
+      const _sellerUid = (d.meta && d.meta.sellerUid) || null;
+      if (d.uid !== uid && _sellerUid !== uid) {
+        const userRecord = await admin.auth().getUser(uid).catch(() => null);
+        if (!userRecord?.customClaims?.admin) {
+          throw new HttpsError("permission-denied", "Access denied.");
+        }
+      }
+      return {
+        status:          d.status || "PENDING",
+        confirmedAmount: d.confirmedAmount || d.amount || null,
+        mpesaCode:       d.mpesaCode || null,
+      };
+    }
+
     if (checkoutId) {
       const snap = await db.collection("posPayments").doc(checkoutId).get();
       if (!snap.exists) throw new HttpsError("not-found", "Payment record not found.");

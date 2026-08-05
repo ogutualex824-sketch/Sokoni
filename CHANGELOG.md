@@ -1,3 +1,20 @@
+## [2026-08-05] — fix(checkout): confirm payment via authed CF poll so checkout closes/clears cart
+
+First real gate order (SKN14CIAER) COMPLETED end-to-end: paid → order status=paid
+(source=webhook_created) → stock 2→1 (inventoryVersion++) → commission ledgered → KASS wallet
+credited 87. But the checkout did not close, clear the cart, or show the receipt — all three
+live in saveAndRedirect, which only runs once waitForConfirmation resolves, and it never did:
+the confirmation used a Firestore onSnapshot on payments/{ref}, which the buyer cannot read
+(the payments read rule keys on buyerId while initiateSTKPush writes uid), and the listener's
+"fallback to polling" was a no-op that just waited out a 90s timeout.
+
+- functions/index.js: verifyPaymentStatus gains a `ref` branch reading payments/{ref} (Admin SDK)
+  authorised for the buyer (uid), seller (meta.sellerUid), or admin.
+- sokoni-intasend.js: _waitForPaymentConfirmation now POLLS verifyPaymentStatus over the authed
+  CF channel (which carries the token the Firestore instance does not), resolving on COMPLETE.
+  The realtime listener stays as a fast-path. Fixes checkout-not-closing + cart-not-cleared +
+  receipt-not-shown together (all downstream of saveAndRedirect running).
+
 ## [2026-08-04] — feat(checkout): keyless IntaSend product payments + webhook-authoritative finalisation
 
 Product checkout collected M-Pesa via `darajaSTKPush`, a DIRECT-to-seller Daraja flow that
