@@ -1031,6 +1031,15 @@ async function _printOrderReceipt(order, manual) {
         enc.text(row('Date', dateStr.slice(0, W - 6))).lf();
         if (order.customerName) enc.text(row('Customer', String(order.customerName).slice(0, W - 10))).lf();
         enc.text(row('Fulfillment', (order.fulfillmentType === 'pickup') ? 'Pickup' : 'Delivery')).lf();
+        /* Delivery orders: print drop-off address + phone so the receipt doubles as a rider docket. */
+        if (order.fulfillmentType !== 'pickup') {
+          const _addr = order.deliveryAddress || order.address || order.customerAddress || '';
+          if (_addr) enc.text(row('Deliver to', String(_addr).slice(0, W - 12))).lf();
+          const _ph = order.customerPhone || order.buyerPhone || order.phone || '';
+          if (_ph) enc.text(row('Phone', String(_ph).slice(0, W - 7))).lf();
+        } else if (order.pickupLocation) {
+          enc.text(row('Collect at', String(order.pickupLocation).slice(0, W - 12))).lf();
+        }
         enc.text(dash).lf();
         items.forEach(it => {
           const nm  = String(it.name || 'Item');
