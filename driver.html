@@ -935,18 +935,33 @@ function registerDriver(){
 }
 
 /* ── Login ── */
-function loginDriver(){
-  const _lgMsg = (m)=>{ var el=document.getElementById('loginMsg'); if(el){ el.textContent=m; setTimeout(()=>{el.textContent='';},6000); } };
-  /* Rate limit raised 5→12/min so debugging a login doesn't lock you out. */
-  if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 12, 60000)){
-    _lgMsg("Too many login attempts. Wait 1 minute.");
-    return;
+function loginDriver(ev){
+  console.log('[driver] Login clicked');
+  const btn = (ev && ev.target) || (typeof event!=='undefined' && event && event.target)
+            || document.querySelector('button[onclick^="loginDriver"]');
+  const _lgMsg = (m, ok)=>{ var el=document.getElementById('loginMsg'); if(el){ el.style.color = ok ? '#71ff00' : '#ff8080'; el.textContent=m; if(!ok) setTimeout(()=>{ if(el.textContent===m) el.textContent=''; },7000); } };
+  const _busy  = (b)=>{ if(btn){ btn.disabled=b; btn.textContent = b ? 'Logging in…' : 'Login →'; } };
+  try {
+    /* Rate limit raised 5→12/min so debugging a login doesn't lock you out. */
+    if(typeof SokoniSecurity !== 'undefined' && !SokoniSecurity.persistentRateLimit('driver_login', 12, 60000)){
+      _lgMsg("Too many login attempts. Wait 1 minute."); return;
+    }
+    const phone = (document.getElementById("driverLoginPhone")||{}).value ? document.getElementById("driverLoginPhone").value.trim() : '';
+    const pin   = (document.getElementById("driverLoginPin")||{}).value ? document.getElementById("driverLoginPin").value.trim() : '';
+    if(!phone || !pin){ _lgMsg("Enter your phone number and PIN."); return; }
+    _busy(true);
+    _lgMsg('Signing you in…', true);
+    /* Never silent: loading clears and any error shows, always. */
+    Promise.resolve(loginDriverWith(phone, pin))
+      .catch(e => { console.error('[driver] login error', e); _lgMsg('Login failed: ' + ((e && e.message) || e)); })
+      .finally(() => _busy(false));
+  } catch(e){
+    console.error('[driver] login sync error', e);
+    _lgMsg('Login error: ' + ((e && e.message) || e)); _busy(false);
   }
-  const phone = document.getElementById("driverLoginPhone").value.trim();
-  const pin   = document.getElementById("driverLoginPin").value.trim();
-  if(!phone || !pin){ _lgMsg("Enter your phone number and PIN."); return; }
-  loginDriverWith(phone, pin);
 }
+/* Belt-and-suspenders: expose to global scope in case this block is ever wrapped/moduled. */
+window.loginDriver = loginDriver;
 
 /* Wait up to maxMs for firebase.auth() to resolve a signed-in user. onAuthStateChanged
    is often slow / not-yet-fired at button-click time, so currentUser reads null and the
