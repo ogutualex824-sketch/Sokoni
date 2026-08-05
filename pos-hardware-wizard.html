@@ -1423,7 +1423,19 @@ function renderEnvReport(env) {
     sec('2 · Recommended connection',
         rec ? `<strong>${esc(rec.label)}</strong>${rec.note ? ` <span style="opacity:.7">— ${esc(rec.note)}</span>` : ''}` : none) +
     sec('3 · Configured devices',
-        env.configured.length ? env.configured.map(c => esc(_lbl(c))).join(', ') : none) +
+        env.configured.length
+          ? env.configured.map(c => {
+              if (c === 'printers') {
+                const pr = (env.raw && env.raw.printers) || {};
+                if (pr.btPaired) {
+                  const connected = !!(window.P58EPrinter && window.P58EPrinter.isConnected);
+                  return esc(pr.btPaired.name || 'P58E') + ' · Bluetooth · ' + (connected ? 'Connected' : 'Saved (offline)');
+                }
+                if (pr.savedIP) return 'Network printer · ' + esc(pr.savedIP);
+              }
+              return esc(_lbl(c));
+            }).join(', ')
+          : none) +
     sec('4 · Live devices',
         env.live.length ? env.live.map(c => esc(_lbl(c))).join(', ') : none) +
     (env.transports.unavailable.length
@@ -2024,7 +2036,27 @@ document.getElementById('btnAddManual').addEventListener('click', () => openAddM
   /* Live status straight from the engine's own lifecycle events. */
   P().on('scanning',         ()   => { busy(true, 'Scanning…');   setStatus('Scanning for Bluetooth printers…'); });
   P().on('connecting',       (ev) => { busy(true, 'Connecting…'); setStatus('Connecting to ' + ((ev && ev.name) || 'printer') + '…'); });
-  P().on('connected',        (ev) => { busy(false); setStatus('✓ Connected: ' + ((ev && ev.name) || 'P58E') + ' — reconnects automatically.', 'ok'); showPaired(true); anyLink.style.display = 'none'; });
+  P().on('connected',        (ev) => {
+    busy(false);
+    setStatus('✓ Connected: ' + ((ev && ev.name) || 'P58E') + ' — reconnects automatically.', 'ok');
+    showPaired(true);
+    anyLink.style.display = 'none';
+    /* Bridge the BLE pairing into the hardware registry so it appears under
+       'Configured devices' AND the Test step — a registered receipt_printer's
+       testPrint() routes to P58EPrinter GATT, and registerDevice() persists via
+       saveRegistry() so it survives reloads. Then re-run discovery so both
+       sections reflect the pairing immediately, with no manual re-scan. */
+    try {
+      if (window.SokoniHardware && SokoniHardware.registerDevice) {
+        SokoniHardware.registerDevice({
+          id: 'bt-p58e', category: 'receipt_printer',
+          name: (ev && ev.name) || 'P58E', connectionType: 'bluetooth',
+          modelName: 'P58E', config: { paperWidth: 58 },
+        });
+      }
+    } catch (_) { /* registry optional — pairing itself already succeeded */ }
+    try { var _bd = document.getElementById('btnDiscover'); if (_bd) _bd.click(); } catch (_) {}
+  });
   P().on('reconnecting',     (ev) => { setStatus('Reconnecting… attempt ' + ((ev && ev.attempt) || 1) + '/' + ((ev && ev.max) || '—'), 'warn'); });
   P().on('reconnect_failed', ()   => { busy(false); setStatus('Could not reconnect — power the printer on, then tap Reconnect.', 'err'); });
   P().on('disconnected',     ()   => { busy(false); setStatus('Disconnected. It reconnects when back in range, or tap Reconnect.', 'warn'); });
