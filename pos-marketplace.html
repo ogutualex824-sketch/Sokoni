@@ -882,6 +882,20 @@ function isManager() { return MANAGER_ROLES.has(_role); }
 /* ══════════════════════════════════════
    Auth guard
 ══════════════════════════════════════ */
+let _authGateShown = false;
+/* Safety net: never hang on "Verifying credentials…". If auth has not resolved in
+   12s (token refresh stalled, flaky network), offer a retry/sign-in instead of an
+   infinite spinner. */
+setTimeout(() => {
+  if (_authGateShown) return;
+  const scr = document.getElementById('auth-screen');
+  if (scr && scr.style.display !== 'none') {
+    const msg = scr.querySelector('.auth-msg');
+    if (msg) msg.innerHTML = 'Still verifying… <a href="pos-marketplace.html" style="color:#38bdf8">Retry</a> · ' +
+      '<a href="login.html?redirect=pos-marketplace.html" style="color:#38bdf8">Sign in again</a>';
+  }
+}, 12000);
+
 onAuthStateChanged(auth, async (user) => {
   if (!user) {
     window.location.href = 'login.html?redirect=pos-marketplace.html';
@@ -889,9 +903,15 @@ onAuthStateChanged(auth, async (user) => {
   }
   _uid = user.uid;
 
-  // Read role + sellerId from custom claims or Firestore profile
+  /* Read role + sellerId from custom claims — but NEVER block the UI on it. The
+     token read can stall (refresh, network) and previously left the page stuck on
+     "Verifying credentials…". Race it against a 5s timeout and fall back to
+     defaults (cashier + own uid) so the POS always opens. */
   try {
-    const token = await user.getIdTokenResult();
+    const token = await Promise.race([
+      user.getIdTokenResult(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('token-timeout')), 5000)),
+    ]);
     _role     = token.claims?.role     || 'cashier';
     _sellerId = token.claims?.sellerId || _uid;
   } catch {
@@ -899,6 +919,7 @@ onAuthStateChanged(auth, async (user) => {
     _sellerId = _uid;
   }
 
+  _authGateShown = true;
   // Show UI
   document.getElementById('auth-screen').style.display  = 'none';
   document.getElementById('main-hdr').style.display     = 'flex';
