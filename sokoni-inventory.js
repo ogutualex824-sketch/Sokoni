@@ -389,15 +389,18 @@ const SokoniInventory = (() => {
     const hit = cacheGet(`product:${id}`);
     if (hit) return hit;
 
-    let p = null;
-    if (_online && _fs) {
+    /* Prefer the local cache (populated by getProducts from /api/catalogue) — instant + reliable,
+       so the edit modal always opens even when the compat firestore .get() is slow/hangs. */
+    let p = await idbGet('products', id).catch(() => null);
+    if (!p && _online && _fs) {
       try {
-        const doc = await productsCol().doc(id).get();
+        const doc = await Promise.race([
+          productsCol().doc(id).get(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 6000)),
+        ]);
         p = doc.exists ? _toInv(doc.id, doc.data()) : null;
-        if (p) { await idbPut('products', p); }
-      } catch (_) { p = await idbGet('products', id); }
-    } else {
-      p = await idbGet('products', id);
+        if (p) await idbPut('products', p);
+      } catch (_) {}
     }
 
     if (p) cacheSet(`product:${id}`, p);
@@ -441,7 +444,12 @@ const SokoniInventory = (() => {
     _cache.delete(`product:${product.id}`);
 
     if (_online && _fs) {
-      await productsCol().doc(product.id).set(canonical, { merge: true });
+      /* Timeout so a stalled compat-firestore write surfaces an error instead of hanging the
+         Save button forever. */
+      await Promise.race([
+        productsCol().doc(product.id).set(canonical, { merge: true }),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('Save timed out — check your connection and retry')), 9000)),
+      ]);
     } else {
       await _enqueue({ op: 'save_product', data: { id: product.id, canonical } });
     }

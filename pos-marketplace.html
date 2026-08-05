@@ -1093,10 +1093,14 @@ window.addEventListener('load', () => setTimeout(_setupPrinterFab, 800));
 
 function attachSnapshot(status) {
   const colRef = collection(db, 'sellers', _sellerId, 'clickAndCollect');
-  const q = query(colRef, where('status', '==', status), orderBy('createdAt', 'desc'));
+  /* No orderBy → avoids a missing composite index (status + createdAt) that made this query fail
+     silently and show ZERO orders despite orders existing. Sort newest-first client-side. */
+  const q = query(colRef, where('status', '==', status));
 
   const unsub = onSnapshot(q, (snap) => {
-    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const _ms = (v) => (v && (v.toMillis ? v.toMillis() : (v.seconds ? v.seconds * 1000 : 0))) || 0;
+    const orders = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => _ms(b.createdAt) - _ms(a.createdAt));
     if (status === 'pending') {
       _pendingOrders = orders;
       updateCCBadge('pending', orders.length);
