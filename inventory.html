@@ -1,5 +1,5 @@
 ﻿<!DOCTYPE html>
-<html lang="en" data-require-auth="true">
+<html lang="en" data-require-auth="true" data-no-header="true">
 <head>
   <!-- Auth gate: inventory is an authenticated owner surface. security.js +
        auth-guard.js honour data-require-auth and redirect a signed-out visitor to
@@ -389,12 +389,16 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div id="offline-bar">⚠ You are offline — showing cached data</div>
 
 <!-- ── HEADER ── -->
-<!-- Page header removed per request (redundant with shared-header.js nav; it had no close button).
-     Scan / AI / Alerts moved into the toolbar below so their actions aren't lost. -->
-<div class="header-actions" style="display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;">
-  <button class="icon-btn" onclick="openScannerModal()" title="Scan barcode">&#128247;</button>
-  <button class="icon-btn accent" onclick="openAIModal()" title="AI Assistant">&#129302;</button>
-  <button class="icon-btn" onclick="openNotifModal()" title="Alerts" id="notif-btn">&#128276;</button>
+<!-- Top bar removed (shared header suppressed via data-no-header). Compact toolbar: Back so the
+     user is never stranded + a MiniShop button to open their storefront from Inventory. -->
+<div class="header-actions" style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;">
+  <button class="icon-btn" onclick="if(history.length>1){history.back()}else{location.href='/pos-marketplace.html'}" title="Back" aria-label="Back" style="font-size:18px;">&#8592;</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <a href="minishop-admin.html" class="icon-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:6px;width:auto;padding:0 14px;color:#71ff00;border-color:rgba(113,255,0,0.35);font-weight:800;font-size:13px;" title="Open your MiniShop">&#127978; MiniShop</a>
+    <button class="icon-btn" onclick="openScannerModal()" title="Scan barcode">&#128247;</button>
+    <button class="icon-btn accent" onclick="openAIModal()" title="AI Assistant">&#129302;</button>
+    <button class="icon-btn" onclick="openNotifModal()" title="Alerts" id="notif-btn">&#128276;</button>
+  </div>
 </div>
 
 <!-- ── ALERT BANNER ── -->
