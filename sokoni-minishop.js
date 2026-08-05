@@ -507,9 +507,14 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
 
   // ─── Main Render ─────────────────────────────────────────────────────────────
   function _renderShop(data) {
-    const { shop, config, products, services, reviews, totalProducts } = data;
-    _state.shop = shop || {};
-    _state.config = config || {};
+    data = data || {};
+    /* let + coalesce: config:null (shop with no config doc) otherwise crashed at config.coverUrl
+       and propagated null into _renderBusinessCard/_applyMeta. */
+    let { shop, config, products, services, reviews, totalProducts } = data;
+    shop   = shop   || {};
+    config = config || {};
+    _state.shop = shop;
+    _state.config = config;
     _state.products = products || [];
     _state.services = services || [];
 
@@ -798,7 +803,14 @@ ${config?.contactPhone ? '<a href="tel:' + _esc(config.contactPhone) + '" class=
     });
   }
   function _populateAdminForm(data) {
-    const { shop, config, handle, analytics } = data;
+    /* Null-safe: getMyMinishop can return config:null (freshly-claimed shop with no config doc
+       yet). Destructuring defaults don't fire on null, so coalesce explicitly — config.coverUrl
+       on a null config was the "Failed to load shop data" crash. */
+    data = data || {};
+    const shop      = data.shop   || {};
+    const config    = data.config || {};
+    const handle    = data.handle;
+    const analytics = data.analytics;
     _setEl('msaShopNameDisplay', shop?.name || '');
     if (handle) {
       _setEl('msaHandleDisplay', '@' + handle);
