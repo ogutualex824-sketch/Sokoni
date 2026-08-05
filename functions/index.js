@@ -3668,6 +3668,9 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
         }, { merge: true });
       }
 
+      /* Priced line items (name + unit price) captured here from the product docs
+         we already read, so the caller can build a receipt without re-reading. */
+      const _priced = [];
       for (const { ref, pid, qty, snap } of stockReads) {
         const pdata = snap.exists ? snap.data() : {};
         const cur = snap.exists ? pdata.stock : null;
@@ -3681,14 +3684,40 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
             path:      pathLabel || "marketplace", createdAt: ts,
           });
         }
+        /* Stock + sold + version in ONE atomic write. `sold` was never persisted on
+           the marketplace path (client-only, in a JS array), so best-selling sorts
+           and revenue analytics undercounted every sale. Inside the inventoryApplied
+           guard, so a webhook retry cannot double-count. */
         txn.update(ref, {
           stock:            admin.firestore.FieldValue.increment(-dec),
+          sold:             admin.firestore.FieldValue.increment(dec),
           updatedAt:        ts,
           inventoryVersion: admin.firestore.FieldValue.increment(1),
         });
-        console.log(`[${pathLabel || "mkt"}] stock deduct product=${pid} -${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
+        /* Inventory movement / history — deterministic id (orderId_pid) so a
+           webhook retry overwrites rather than logging a second movement. */
+        txn.set(db.collection("inventoryMovements").doc(`${orderId}_${pid}`), {
+          productId: pid, orderId: orderId || null, ref: checkoutId || null,
+          type: "sale", qty: dec,
+          priorStock: (typeof cur === "number" ? cur : null),
+          newStock:   (typeof cur === "number" ? Math.max(0, cur - dec) : null),
+          path: pathLabel || "marketplace", at: ts,
+        });
+        _priced.push({
+          productId: pid,
+          name:      pdata.name || "Item",
+          qty:       dec,
+          unitPrice: Number(pdata.price) || 0,
+          lineTotal: (Number(pdata.price) || 0) * dec,
+        });
+        console.log(`[${pathLabel || "mkt"}] stock deduct product=${pid} -${dec} sold+${dec} inventoryVersion ${priorVer}->${priorVer + 1}`);
       }
-      result = { finalised: true };
+      result = {
+        finalised: true,
+        created:   !exists,
+        pricedItems: _priced,
+        subtotal:  _priced.reduce((s, i) => s + i.lineTotal, 0),
+      };
     });
   } catch (e) {
     console.error(`[_finalizeMarketplacePayment] order/inventory txn failed for ${orderId}: ${e.message}`);
@@ -7431,7 +7460,7 @@ exports.webhookIntasend = onRequest(
           && _pm.type !== "booking"
           && !["subscription", "wallet_topup", "topup"].includes(_cat);
         if (_isProductPay) {
-          await _finalizeMarketplacePayment(db, admin, {
+          const _fin = await _finalizeMarketplacePayment(db, admin, {
             checkoutId:    apiRef,
             sellerUid:     _pm.sellerUid || null,
             callerUid:     payData.uid  || null,
@@ -7450,6 +7479,114 @@ exports.webhookIntasend = onRequest(
             settlementStatus:   "settled",
             writeSellerPayment: false,
           });
+
+          /* Server-priced line items from the finaliser (name + unit price), falling
+             back to the client-supplied {productId,qty} for unmetered products. */
+          const _lines = (_fin && Array.isArray(_fin.pricedItems) && _fin.pricedItems.length)
+            ? _fin.pricedItems
+            : (Array.isArray(_pm.items) ? _pm.items.map(i => ({
+                productId: i.productId, name: i.name || "Item",
+                qty: i.qty || 1, unitPrice: 0, lineTotal: 0,
+              })) : []);
+          const _subtotal = (_fin && typeof _fin.subtotal === "number") ? _fin.subtotal : amount;
+          const _delivery = Math.max(0, Math.round(amount - _subtotal));
+          const _dateStr  = new Date().toLocaleString("en-KE", { timeZone: "Africa/Nairobi" });
+
+          /* ── (1) Digital receipt — posReceipts/{apiRef}, deterministic + idempotent.
+             ADR-009 canonical field is `receiptNumber`. create() so a webhook replay
+             is a no-op (ALREADY_EXISTS) rather than a second receipt. */
+          try {
+            await db.collection("posReceipts").doc(apiRef).create({
+              receiptNumber:  apiRef,
+              orderId:        _pm.orderId,
+              saleId:         _pm.orderId,
+              merchantId:     _pm.sellerUid || null,
+              merchantName:   _pm.sellerName || "SOKONI",
+              items:          _lines.map(i => ({ productId: i.productId, name: i.name, qty: i.qty, unitPrice: i.unitPrice })),
+              customer:       { id: payData.uid || null, name: _pm.buyerName || "", phone: payData.phone || "", email: "" },
+              subtotal:       _subtotal,
+              deliveryFee:    _delivery,
+              tax:            0,
+              discount:       0,
+              total:          amount,
+              paymentMethod:  "M-PESA",
+              paymentRef:     checkoutId || apiRef,
+              mpesaCode:      checkoutId || null,
+              gatewayRef:     checkoutId || null,
+              orderStatus:    "paid",
+              status:         "valid",
+              date:           _dateStr,
+              createdAt:      admin.firestore.FieldValue.serverTimestamp(),
+              source:         "webhookIntasend",
+            });
+            /* Stamp the order so My Orders can deep-link and a reprint reuses THIS
+               receipt instead of minting a new one. */
+            await db.collection("orders").doc(_pm.orderId).set({
+              receiptNumber: apiRef,
+              receiptGeneratedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+          } catch (rErr) {
+            if (rErr && rErr.code !== 6 /* ALREADY_EXISTS */) {
+              console.error("[webhookIntasend] receipt write failed:", rErr.message);
+            }
+          }
+
+          /* ── (2) POS new-paid-order signal — write the cashier's clickAndCollect
+             doc DIRECTLY (deterministic id apiRef). NOT via createClickAndCollect,
+             which decrements a SEPARATE seller-scoped stock store the buyer never
+             touched (would double-deduct). Cashier UI listens on
+             sellers/{sellerId}/clickAndCollect where status==pending. */
+          if (_pm.sellerUid) {
+            try {
+              await db.collection("sellers").doc(_pm.sellerUid)
+                .collection("clickAndCollect").doc(apiRef).set({
+                  orderId:       _pm.orderId,
+                  sellerId:      _pm.sellerUid,
+                  customerId:    payData.uid || null,
+                  customerName:  _pm.buyerName || "",
+                  customerPhone: payData.phone || "",
+                  customerEmail: "",
+                  items:         _lines.map(i => ({ productId: i.productId, name: i.name, price: i.unitPrice, qty: i.qty, lineTotal: i.lineTotal })),
+                  subtotal:      _subtotal,
+                  total:         amount,
+                  paymentMethod: "M-PESA",
+                  paymentStatus: "paid",
+                  receiptNumber: apiRef,
+                  notes:         "", pickupTime: null,
+                  status:        "pending",
+                  createdAt:     admin.firestore.FieldValue.serverTimestamp(),
+                  readyAt: null, collectedAt: null, cancelledAt: null,
+                  source:        "webhookIntasend",
+                }, { merge: true });
+            } catch (posErr) {
+              console.error("[webhookIntasend] POS signal failed:", posErr.message);
+            }
+          }
+
+          /* ── (3) Notifications — buyer + seller, idempotent via dedupeKey. ── */
+          try {
+            const { notify } = require("./notify");
+            if (payData.uid) {
+              notify({
+                uid: payData.uid, type: "payment_success",
+                title: "Payment received ✅",
+                body: `Your order ${_pm.orderId} is paid — KES ${amount}. Receipt ${apiRef}.`,
+                dedupeKey: `order_paid_${apiRef}`,
+                data: { orderId: _pm.orderId, receiptNumber: apiRef },
+              }).catch(() => {});
+            }
+            if (_pm.sellerUid) {
+              notify({
+                uid: _pm.sellerUid, type: "order_placed",
+                title: "New paid order 🔔",
+                body: `New paid order ${_pm.orderId} — KES ${amount}. Ready to prepare.`,
+                dedupeKey: `order_new_${apiRef}`,
+                data: { orderId: _pm.orderId, receiptNumber: apiRef },
+              }).catch(() => {});
+            }
+          } catch (nErr) {
+            console.error("[webhookIntasend] notify failed:", nErr.message);
+          }
         }
       } catch (finErr) {
         /* Never fail the webhook — payment + wallet credit already stand. */

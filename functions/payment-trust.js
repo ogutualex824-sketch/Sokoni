@@ -299,7 +299,7 @@ exports.emailTrustReceipt = onCall({
 /* ════════════════════════════════════════════════════════════════
    verifyTrustReceipt — check receipt authenticity
 ════════════════════════════════════════════════════════════════ */
-exports.verifyTrustReceipt = onCall(cfg, async ({ data }) => {
+exports.verifyTrustReceipt = onCall(cfg, async ({ data, auth }) => {
   const { receiptNo } = data || {};
   if (!receiptNo) _e('receiptNo required');
 
@@ -319,14 +319,43 @@ exports.verifyTrustReceipt = onCall(cfg, async ({ data }) => {
     createdAt:  FieldValue.serverTimestamp(),
   }).catch(() => {});
 
-  return {
-    valid:        true,
-    receiptNo:    r.receiptNo,
-    merchantName: r.merchantName,
-    date:         r.date,
-    total:        r.total,
+  /* Thin public view — anyone who scans the QR gets only proof-of-validity. */
+  const _num = r.receiptNumber || r.receiptNo || receiptNo;
+  const thin = {
+    valid:         true,
+    receiptNo:     _num,
+    receiptNumber: _num,
+    merchantName:  r.merchantName,
+    date:          r.date,
+    total:         r.total,
     paymentMethod: r.paymentMethod,
   };
+
+  /* Full detail ONLY for the buyer, the merchant, or an admin — so the buyer's
+     own receipt page (and reprint) can render items, unit prices and codes
+     without leaking them to a stranger who scans the QR. */
+  const uid      = auth && auth.uid;
+  const isBuyer  = uid && r.customer && r.customer.id === uid;
+  const isSeller = uid && r.merchantId === uid;
+  const isAdmin  = !!(auth && auth.token && (auth.token.admin || auth.token.superAdmin));
+  if (isBuyer || isSeller || isAdmin) {
+    return {
+      ...thin,
+      full:          true,
+      orderId:       r.orderId || null,
+      merchantPhone: r.merchantPhone || '',
+      items:         r.items || [],
+      subtotal:      r.subtotal != null ? r.subtotal : null,
+      deliveryFee:   r.deliveryFee != null ? r.deliveryFee : 0,
+      tax:           r.tax != null ? r.tax : 0,
+      discount:      r.discount != null ? r.discount : 0,
+      mpesaCode:     r.mpesaCode || null,
+      gatewayRef:    r.gatewayRef || null,
+      customer:      r.customer || null,
+      orderStatus:   r.orderStatus || 'paid',
+    };
+  }
+  return thin;
 });
 
 /* ════════════════════════════════════════════════════════════════
