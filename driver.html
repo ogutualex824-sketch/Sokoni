@@ -990,7 +990,15 @@ function _withTimeout(p, ms, label){
 async function loginDriverWith(phone, pin){
   const _lm = (m, ok)=>{ var el=document.getElementById('loginMsg'); if(el){ el.style.color = ok ? '#71ff00' : '#ff8080'; el.textContent=m; if(!ok) setTimeout(()=>{ if(el.textContent===m) el.textContent=''; },8000); } };
   const _norm = s => String(s||'').replace(/\D/g,'').slice(-9);
-  const _finish = (d)=>{ currentDriver = d; try{ sessionStorage.setItem("sokoniDriverSession", d.id); }catch(_){}; showDriverDashboard(); };
+  const _finish = (d)=>{
+    currentDriver = d;
+    try{ sessionStorage.setItem("sokoniDriverSession", d.id); }catch(_){}
+    /* Hide the login panel + clear its message/button so it never LOOKS stuck after success. */
+    var ls=document.getElementById("loginSection"); if(ls) ls.style.display="none";
+    var lm=document.getElementById("loginMsg"); if(lm) lm.textContent="";
+    var lb=document.querySelector('button[onclick^="loginDriver"]'); if(lb){ lb.disabled=false; lb.textContent="Login →"; }
+    showDriverDashboard();
+  };
 
   /* 1) localStorage (fast path on a returning device). */
   let drivers = [];
@@ -1127,8 +1135,12 @@ function showDriverDashboard(){
     `Welcome, ${currentDriver.name}! ${vEmoji}<span class="vehicle-badge ${vBadgeCls}">${vLabel}</span>`;
   const capacityStr = currentDriver.cargoTonne ? ` · ${currentDriver.cargoTonne}t capacity` : "";
   const cargoTypeStr = currentDriver.cargoType ? ` · ${currentDriver.cargoType}` : "";
+  /* Verified if explicitly approved OR in a working state — toggleOnline writes status
+     'active'/'offline', so keying only on 'approved' left verified riders stuck on "Pending". */
+  const _verified = currentDriver.approved === true
+    || ["approved","active","online","verified"].includes(String(currentDriver.status||"").toLowerCase());
   document.getElementById("driverZone").textContent =
-    `Zone: ${currentDriver.zone||"All"}${capacityStr}${cargoTypeStr} · ${currentDriver.status==="approved"?"✅ Verified":"⏳ Pending Review"}`;
+    `Zone: ${currentDriver.zone||"All"}${capacityStr}${cargoTypeStr} · ${_verified?"✅ Verified":"⏳ Pending Review"}`;
 
   /* Show AI fuel tracker for petrol/diesel vehicles */
   const fuelPanel = document.getElementById("fuelPricePanel");
