@@ -883,34 +883,18 @@ function isManager() { return MANAGER_ROLES.has(_role); }
    Auth guard
 ══════════════════════════════════════ */
 let _authGateShown = false;
-/* Safety net: never hang on "Verifying credentials…". If auth has not resolved in
-   12s (token refresh stalled, flaky network), offer a retry/sign-in instead of an
-   infinite spinner. */
-setTimeout(() => {
-  if (_authGateShown) return;
-  const scr = document.getElementById('auth-screen');
-  if (scr && scr.style.display !== 'none') {
-    const msg = scr.querySelector('.auth-msg');
-    if (msg) msg.innerHTML = 'Still verifying… <a href="pos-marketplace.html" style="color:#38bdf8">Retry</a> · ' +
-      '<a href="login.html?redirect=pos-marketplace.html" style="color:#38bdf8">Sign in again</a>';
-  }
-}, 12000);
 
-onAuthStateChanged(auth, async (user) => {
-  if (!user) {
-    window.location.href = 'login.html?redirect=pos-marketplace.html';
-    return;
-  }
+async function _proceedAuth(user) {
+  if (_authGateShown || !user) return;
+  _authGateShown = true;
   _uid = user.uid;
 
-  /* Read role + sellerId from custom claims — but NEVER block the UI on it. The
-     token read can stall (refresh, network) and previously left the page stuck on
-     "Verifying credentials…". Race it against a 5s timeout and fall back to
-     defaults (cashier + own uid) so the POS always opens. */
+  /* Read role + sellerId from claims, but NEVER block forever — race a 4s timeout
+     and fall back to cashier + own uid so the POS always opens. */
   try {
     const token = await Promise.race([
       user.getIdTokenResult(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('token-timeout')), 5000)),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('token-timeout')), 4000)),
     ]);
     _role     = token.claims?.role     || 'cashier';
     _sellerId = token.claims?.sellerId || _uid;
@@ -919,30 +903,38 @@ onAuthStateChanged(auth, async (user) => {
     _sellerId = _uid;
   }
 
-  _authGateShown = true;
-  // Show UI
   document.getElementById('auth-screen').style.display  = 'none';
   document.getElementById('main-hdr').style.display     = 'flex';
   document.getElementById('main-nav').style.display     = 'flex';
   document.getElementById('main-content').style.display = 'block';
-
-  // Role badge
   document.getElementById('role-badge').textContent = _role.replace('_', ' ').toUpperCase();
-
-  // Manager-only tabs: hide for cashier
-  if (!isManager()) {
-    document.querySelectorAll('.manager-tab').forEach(t => t.style.display = 'none');
-  }
+  if (!isManager()) document.querySelectorAll('.manager-tab').forEach(t => t.style.display = 'none');
 
   startClock();
   initCCOrders();
-  if (isManager()) {
-    loadReport();
-    loadPromotions();
-    // Reserve section loaded on demand but also kickoff auto-refresh
-    startReserveAutoRefresh();
-  }
+  if (isManager()) { loadReport(); loadPromotions(); startReserveAutoRefresh(); }
+}
+
+onAuthStateChanged(auth, (user) => {
+  if (!user) { window.location.href = 'login.html?redirect=pos-marketplace.html'; return; }
+  _proceedAuth(user);
 });
+
+/* Deterministic fallback: onAuthStateChanged can be slow — or, on this named app,
+   occasionally not fire at all — leaving the page stuck on "Verifying credentials…".
+   After 7s, resolve from auth.currentUser directly: proceed if a session exists,
+   otherwise go to login. The page never hangs on an infinite spinner. */
+setTimeout(() => {
+  if (_authGateShown) return;
+  const u = auth.currentUser;
+  if (u) _proceedAuth(u);
+  else {
+    const scr = document.getElementById('auth-screen');
+    const msg = scr && scr.querySelector('.auth-msg');
+    if (msg) msg.innerHTML = 'Session not found. <a href="login.html?redirect=pos-marketplace.html" style="color:#38bdf8">Sign in</a>';
+    setTimeout(() => { if (!_authGateShown) window.location.href = 'login.html?redirect=pos-marketplace.html'; }, 4000);
+  }
+}, 7000);
 
 /* ══════════════════════════════════════
    Section switcher
