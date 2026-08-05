@@ -13,6 +13,12 @@
   <meta name="theme-color" content="#0f172a">
   <title>Marketplace Integration — SOKONI SmartPOS</title>
   <script src="sokoni-config.js"></script>
+  <!-- Printer stack: P58E BLE thermal receipt printing. sokoni-universal-printer.js
+       defines window.SokoniPrinter (transport); sokoni-bluetooth-printer.js defines
+       window.P58EPrinter (P58E engine) and silently auto-reconnects on load to a
+       previously-paired printer, so new paid orders can print automatically. -->
+  <script src="sokoni-universal-printer.js" defer></script>
+  <script src="sokoni-bluetooth-printer.js" defer></script>
   <style>
     /* ── Design tokens ── */
     :root {
@@ -967,6 +973,110 @@ function initCCOrders() {
   attachSnapshot('collected');
 }
 
+/* ══════════════════════════════════════
+   AUTO-PRINT — print each NEW paid order to the connected P58E
+══════════════════════════════════════ */
+const _ccSeen = new Set();   /* order ids already handled (seeds on first snapshot) */
+let _ccPrimed = false;       /* first snapshot seeds without printing existing orders */
+
+function _autoPrintEnabled() {
+  /* Default ON; a merchant can disable with localStorage sokoni_pos_autoprint='off'. */
+  try { return localStorage.getItem('sokoni_pos_autoprint') !== 'off'; } catch (_) { return true; }
+}
+
+async function _printOrderReceipt(order) {
+  try {
+    if (!_autoPrintEnabled()) return;
+    const SP = window.SokoniPrinter, P = window.P58EPrinter;
+    if (!SP || !SP.print) { console.log('[POS] printer stack not loaded'); return; }
+    /* Ensure a live GATT connection — try one silent reconnect if idle. */
+    if (!P || !P.isConnected) {
+      if (P && P.autoConnect) { try { await P.autoConnect(); } catch (_) {} }
+      if (!P || !P.isConnected) {
+        console.log('[POS] printer offline — receipt saved, print later:', order.orderId || order.id);
+        toast('🖨️ Printer offline — receipt saved, reprint later', 'warn');
+        return;
+      }
+    }
+    const items    = Array.isArray(order.items) ? order.items : [];
+    const total    = Math.round(Number(order.total || 0));
+    const subtotal = Math.round(Number(order.subtotal || total));
+    const delivery = Math.max(0, total - subtotal);
+    const shopName = order.sellerName || 'SOKONI';
+    const ref      = order.receiptNumber || order.orderId || order.id || '';
+    const dateStr  = new Date().toLocaleString('en-KE', { hour12: true });
+
+    await SP.print('custom', {
+      build (enc, W) {
+        const dash   = '-'.repeat(W);
+        const center = s => { s = String(s).slice(0, W); return ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s; };
+        const row    = (l, r) => { const rs = String(r).slice(0, W - 1); return String(l).slice(0, W - rs.length - 1).padEnd(W - rs.length - 1) + ' ' + rs; };
+        enc.text(center(shopName)).lf();
+        enc.text(center('SOKONI Receipt')).lf();
+        enc.text(dash).lf();
+        enc.text(row('Receipt', String(ref).slice(0, W - 9))).lf();
+        enc.text(row('Date', dateStr.slice(0, W - 6))).lf();
+        if (order.customerName) enc.text(row('Customer', String(order.customerName).slice(0, W - 10))).lf();
+        enc.text(dash).lf();
+        items.forEach(it => {
+          const nm  = String(it.name || 'Item');
+          const qty = Number(it.qty || 1);
+          enc.text(row(qty + ' x ' + nm.slice(0, W - 13), 'KES ' + Number(it.price || it.unitPrice || 0))).lf();
+        });
+        enc.text(dash).lf();
+        enc.text(row('Subtotal', 'KES ' + subtotal)).lf();
+        if (delivery > 0) enc.text(row('Delivery', 'KES ' + delivery)).lf();
+        enc.text(row('TOTAL PAID', 'KES ' + total)).lf();
+        enc.text(dash).lf();
+        enc.text(center('Paid via M-PESA')).lf();
+        if (order.mpesaCode) enc.text(center('M-PESA: ' + order.mpesaCode)).lf();
+        else if (ref)        enc.text(center('Ref: ' + ref)).lf();
+        enc.text(dash).lf();
+        enc.text(center('Thank you!')).lf();
+        enc.lf(); enc.lf();
+      },
+    });
+    toast('🧾 Receipt printed: ' + ref, 'success');
+  } catch (e) {
+    console.warn('[POS] auto-print failed (recoverable):', e && e.message);
+  }
+}
+
+/* Floating printer control. Web Bluetooth requires a USER GESTURE to (re)connect,
+   so the cashier taps this once per session; afterwards new paid orders print
+   automatically. Colour shows live status: green=ready, orange=paired but offline
+   (tap), grey=none. */
+function _setupPrinterFab() {
+  if (document.getElementById('pos-printer-fab')) return;
+  const fab = document.createElement('button');
+  fab.id = 'pos-printer-fab';
+  fab.type = 'button';
+  fab.style.cssText = 'position:fixed;right:14px;bottom:78px;z-index:9999;padding:10px 14px;border:none;border-radius:24px;font:600 13px/1 system-ui,sans-serif;color:#fff;background:#64748b;box-shadow:0 4px 14px rgba(0,0,0,.35);cursor:pointer';
+  const paint = () => {
+    const P = window.P58EPrinter;
+    const on = !!(P && P.isConnected), paired = !!(P && P.paired);
+    fab.style.background = on ? '#16a34a' : (paired ? '#ea580c' : '#64748b');
+    fab.textContent = on ? '🖨️ Printer ready' : (paired ? '🖨️ Tap to connect' : '🖨️ Set up printer');
+  };
+  fab.addEventListener('click', async () => {
+    const P = window.P58EPrinter;
+    if (!P) { toast('Printer engine still loading — try again', 'warn'); return; }
+    fab.textContent = '🖨️ Connecting…';
+    try {
+      let ok = await P.autoConnect();
+      if (!ok && P.requestAndPair) ok = !!(await P.requestAndPair());
+      paint();
+      toast(ok ? '🖨️ Printer connected — orders will print automatically' : 'Could not connect — power the printer on and retry', ok ? 'success' : 'warn');
+    } catch (e) { paint(); toast('Printer: ' + ((e && e.message) || 'failed'), 'error'); }
+  });
+  document.body.appendChild(fab);
+  paint();
+  const P = window.P58EPrinter;
+  if (P && P.on) ['connected', 'disconnected', 'reconnecting', 'reconnect_failed'].forEach(ev => P.on(ev, paint));
+  if (P && P.autoConnect && !P.isConnected) P.autoConnect().then(paint).catch(() => {});
+}
+window.addEventListener('load', () => setTimeout(_setupPrinterFab, 800));
+
 function attachSnapshot(status) {
   const colRef = collection(db, 'sellers', _sellerId, 'clickAndCollect');
   const q = query(colRef, where('status', '==', status), orderBy('createdAt', 'desc'));
@@ -977,6 +1087,19 @@ function attachSnapshot(status) {
       _pendingOrders = orders;
       updateCCBadge('pending', orders.length);
       updateNavBadge(orders.length);
+      /* Auto-print genuinely-NEW paid orders. The first snapshot seeds _ccSeen
+         without printing existing pending orders; later 'added' changes are new
+         paid orders arriving from the payment webhook (clickAndCollect/{ref}). */
+      try {
+        snap.docChanges().forEach(ch => {
+          if (ch.type !== 'added') return;
+          const o = { id: ch.doc.id, ...ch.doc.data() };
+          if (_ccSeen.has(o.id)) return;
+          _ccSeen.add(o.id);
+          if (_ccPrimed && o.paymentStatus === 'paid') _printOrderReceipt(o);
+        });
+        _ccPrimed = true;
+      } catch (e) { console.warn('[POS] auto-print scan failed', e && e.message); }
     } else if (status === 'ready') {
       _readyOrders = orders;
       updateCCBadge('ready', orders.length);
