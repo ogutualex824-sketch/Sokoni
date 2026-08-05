@@ -1005,9 +1005,9 @@ function _autoPrintEnabled() {
   try { return localStorage.getItem('sokoni_pos_autoprint') !== 'off'; } catch (_) { return true; }
 }
 
-async function _printOrderReceipt(order) {
+async function _printOrderReceipt(order, manual) {
   try {
-    if (!_autoPrintEnabled()) return;
+    if (!manual && !_autoPrintEnabled()) return;
     const SP = window.SokoniPrinter, P = window.P58EPrinter;
     if (!SP || !SP.print) { console.log('[POS] printer stack not loaded'); return; }
     /* Ensure a live GATT connection — try one silent reconnect if idle. */
@@ -1218,6 +1218,9 @@ function renderOrderCard(o, status) {
         <button class="btn btn-green btn-sm" onclick="markOrderReady('${esc(o.id)}')" id="btn-ready-${esc(o.id)}">
           &#10003; Mark Ready
         </button>
+        <button class="btn btn-sm" style="background:#334155;color:#fff" onclick="printOrder('${esc(o.id)}')" id="btn-print-${esc(o.id)}">
+          &#128424; Print
+        </button>
         <button class="btn btn-red-outline btn-sm" onclick="promptCancelOrder('${esc(o.id)}','${esc(o.customerName||'customer')}')">
           Cancel
         </button>
@@ -1289,6 +1292,19 @@ window.promptCancelOrder = function(orderId, customerName) {
   document.getElementById('cancel-modal-msg').textContent =
     'Cancel the order for ' + (customerName || 'this customer') + '? This cannot be undone.';
   openModal('modal-cancel');
+};
+
+/* Manual print / reprint — reuses the SAME receipt data (no regeneration). The
+   click is a user gesture, so it can (re)connect the P58E if idle. */
+window.printOrder = async function(orderId) {
+  const all = (_pendingOrders || []).concat(_readyOrders || [], _collectedOrders || []);
+  const o = all.find(x => x.id === orderId);
+  if (!o) { toast('Order not found', 'warn'); return; }
+  const btn = document.getElementById('btn-print-' + orderId);
+  const t = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Printing…'; }
+  try { await _printOrderReceipt(o, true); }
+  finally { if (btn) { btn.disabled = false; btn.innerHTML = t; } }
 };
 
 window.confirmCancelOrder = async function() {
