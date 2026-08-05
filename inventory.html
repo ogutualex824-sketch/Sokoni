@@ -389,15 +389,13 @@ tr:hover td{background:rgba(255,255,255,.02)}
 <div id="offline-bar">⚠ You are offline — showing cached data</div>
 
 <!-- ── HEADER ── -->
-<header class="header">
-  <span class="header-logo">SOKONI</span>
-  <span class="header-title">Inventory</span>
-  <div class="header-actions">
-    <button class="icon-btn" onclick="openScannerModal()" title="Scan barcode">&#128247;</button>
-    <button class="icon-btn accent" onclick="openAIModal()" title="AI Assistant">&#129302;</button>
-    <button class="icon-btn" onclick="openNotifModal()" title="Alerts" id="notif-btn">&#128276;</button>
-  </div>
-</header>
+<!-- Page header removed per request (redundant with shared-header.js nav; it had no close button).
+     Scan / AI / Alerts moved into the toolbar below so their actions aren't lost. -->
+<div class="header-actions" style="display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;">
+  <button class="icon-btn" onclick="openScannerModal()" title="Scan barcode">&#128247;</button>
+  <button class="icon-btn accent" onclick="openAIModal()" title="AI Assistant">&#129302;</button>
+  <button class="icon-btn" onclick="openNotifModal()" title="Alerts" id="notif-btn">&#128276;</button>
+</div>
 
 <!-- ── ALERT BANNER ── -->
 <div id="alert-bar" class="alert-bar"></div>
@@ -1914,13 +1912,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   await SokoniInventory.init({ firestore: window.db, auth: window.auth });
   SokoniInventory.on('alerts_updated', onAlertsUpdated);
   SokoniInventory.on('sync_complete',  () => showToast('Synced'));
-  await Promise.all([loadKPIs(), loadProducts(), loadWarehouses(), loadSuppliers()]);
-  await loadOverviewData();
+  /* Products first + independent — a slow KPI/warehouse/supplier read (empty tenant collections
+     via the compat shim) must never block the grid. */
+  loadProducts();
+  Promise.all([loadKPIs(), loadWarehouses(), loadSuppliers()]).catch(() => {});
+  loadOverviewData().catch(() => {});
 });
 
-function waitForFirebase(retries = 20) {
+function waitForFirebase(retries = 30) {
   return new Promise(res => {
-    const check = () => { if (window.db || retries-- <= 0) return res(); setTimeout(check, 150); };
+    const ready = () => window.db || window.firebaseDB
+      || (typeof firebase !== 'undefined' && firebase.firestore)
+      || window.__sokoniFirebaseReady;
+    const check = () => { if (ready() || retries-- <= 0) return res(); setTimeout(check, 100); };
     check();
   });
 }
