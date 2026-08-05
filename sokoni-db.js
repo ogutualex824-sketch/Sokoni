@@ -633,6 +633,32 @@ const SokoniDB = {
       try { window.dispatchEvent(new CustomEvent('sokoni:catalogue', { detail: payload })); } catch (_) {}
     };
 
+    /* App-Check-independent fallback for EVERY listenProducts consumer (home, category, …).
+       Client Firestore reads are gated by App Check, whose reCAPTCHA v3 token 403s
+       intermittently on iOS Safari (ITP). If the live listener hasn't delivered within a
+       short grace window, pull the same set from the public /api/catalogue endpoint (Admin
+       SDK, no App Check) so the grid fills. The listener still layers live updates on top
+       when its token is valid; `_delivered` prevents the fallback from clobbering a good
+       real-time read. */
+    let _delivered = false;
+    try {
+      const cap = Number(opts.limit) > 0 ? Number(opts.limit) : 200;
+      const qs  = new URLSearchParams({ limit: String(cap) });
+      if (opts.category)  qs.set('category',  opts.category);
+      if (opts.sellerUid) qs.set('sellerUid', opts.sellerUid);
+      setTimeout(() => {
+        if (_delivered || typeof fetch !== 'function') return;
+        fetch('/api/catalogue?' + qs.toString(), { cache: 'no-store' })
+          .then(r => r.ok ? r.json() : null)
+          .then(j => {
+            if (_delivered || !j || !j.ok || !Array.isArray(j.products)) return;
+            emit('http-fallback-ok', { count: j.products.length });
+            callback(j.products);
+          })
+          .catch(() => {});
+      }, 2000);
+    } catch (_) {}
+
     const attach = (attempt) => {
       let q = collection(db, 'products');
       if (opts.category)  q = query(q, where('category', '==', opts.category));
@@ -680,6 +706,7 @@ const SokoniDB = {
             setTimeout(() => attach(attempt + 1), 1500);
             return;
           }
+          _delivered = true;   /* real-time read landed — the HTTP fallback stands down */
           callback(snap.docs.map(d => { const v = { ...d.data() }; delete v._syncedAt; return v; }));
         },
         err  => {

@@ -6719,19 +6719,35 @@ exports.catalogue = onRequest(
   { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
   async (req, res) => {
     try {
-      const cap = Math.min(Number(req.query.limit) || 200, 300);
-      const snap = await db.collection("products").where("status", "==", "active").limit(cap).get();
+      const cap       = Math.min(Number(req.query.limit) || 200, 300);
+      const category  = (req.query.category  || "").toString().trim().toLowerCase();
+      const sellerUid = (req.query.sellerUid || "").toString().trim();
+      /* Match the client listener: NO status filter. Most legacy products have no `status`
+         field at all (absent = visible per the commerce lifecycle) — filtering on
+         status=='active' wrongly hid 92 of 103 real, previously-visible products. Return
+         everything EXCEPT the explicitly-hidden states. */
+      const snap = await db.collection("products").limit(500).get();
       const _isData = (v) => typeof v === "string" && v.slice(0, 5) === "data:";
-      const products = snap.docs.map((d) => {
+      const HIDDEN = new Set(["deleted", "removed", "hidden", "draft", "archived", "banned", "suspended", "paused", "inactive", "rejected"]);
+      let products = snap.docs.map((d) => {
         const v = d.data() || {};
         delete v._syncedAt;
         /* Strip heavy base64 image blobs — client uses Storage URLs / placeholder. */
         if (_isData(v.image)) delete v.image;
         if (Array.isArray(v.images)) v.images = v.images.filter((u) => !_isData(u));
         return { id: d.id, ...v };
+      }).filter((p) => {
+        const st = String(p.status || "").toLowerCase();
+        if (HIDDEN.has(st)) return false;
+        if (p.isDeleted === true || p.deleted === true) return false;
+        if (p.visible === false || p.isVisible === false) return false;
+        if (sellerUid && String(p.uid || p.sellerUid || "") !== sellerUid) return false;
+        if (category && String(p.category || "").toLowerCase() !== category) return false;
+        return true;
       });
       /* Newest first — product ids are Date.now() timestamps. */
       products.sort((a, b) => String(b.id).localeCompare(String(a.id)));
+      products = products.slice(0, cap);
       res.set("Cache-Control", "public, max-age=60, s-maxage=120");
       res.status(200).json({ ok: true, count: products.length, products });
     } catch (e) {
