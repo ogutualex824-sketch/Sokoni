@@ -769,8 +769,11 @@ const FB_CFG = window.SOKONI_CONFIG || {
   messagingSenderId: '24799054989',
   appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
 };
-const app = getApps().find(a => a.name === 'pos-marketplace')
-  || initializeApp(FB_CFG, 'pos-marketplace');
+/* Use the DEFAULT app so the POS shares the ONE logged-in session that firebase.js established.
+   A separate named app has its own auth-persistence key ('firebase:authUser:{apiKey}:pos-
+   marketplace'), so it never inherited the login → the page hung on "Verifying credentials",
+   especially after the account merge/re-login. The default app's session is shared. */
+const app = getApps().find(a => a.name === '[DEFAULT]') || getApps()[0] || initializeApp(FB_CFG);
 const auth = getAuth(app);
 const db   = getFirestore(app);
 const fns  = getFunctions(app, 'us-central1');
@@ -916,25 +919,35 @@ async function _proceedAuth(user) {
 }
 
 onAuthStateChanged(auth, (user) => {
-  if (!user) { window.location.href = 'login.html?redirect=pos-marketplace.html'; return; }
-  _proceedAuth(user);
+  /* Only proceed on a user. Do NOT redirect on a null fire — onAuthStateChanged often emits
+     null first while the session restores, which would bounce a signed-in user to login. The
+     poll below resolves from any auth ref and only offers sign-in after ~8s. */
+  if (user) _proceedAuth(user);
 });
 
 /* Deterministic fallback: onAuthStateChanged can be slow — or, on this named app,
    occasionally not fire at all — leaving the page stuck on "Verifying credentials…".
    After 7s, resolve from auth.currentUser directly: proceed if a session exists,
    otherwise go to login. The page never hangs on an infinite spinner. */
-setTimeout(() => {
-  if (_authGateShown) return;
-  const u = auth.currentUser;
-  if (u) _proceedAuth(u);
-  else {
+function _resolvePosUser() {
+  try { if (auth.currentUser) return auth.currentUser; } catch (_) {}
+  try { if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser; } catch (_) {}
+  try { if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser; } catch (_) {}
+  return null;
+}
+let _posAuthTries = 0;
+const _posAuthPoll = setInterval(() => {
+  if (_authGateShown) { clearInterval(_posAuthPoll); return; }
+  const u = _resolvePosUser();
+  if (u) { clearInterval(_posAuthPoll); _proceedAuth(u); return; }
+  if (++_posAuthTries >= 16) {   /* ~8s across all auth refs, then offer sign-in */
+    clearInterval(_posAuthPoll);
     const scr = document.getElementById('auth-screen');
     const msg = scr && scr.querySelector('.auth-msg');
     if (msg) msg.innerHTML = 'Session not found. <a href="login.html?redirect=pos-marketplace.html" style="color:#38bdf8">Sign in</a>';
     setTimeout(() => { if (!_authGateShown) window.location.href = 'login.html?redirect=pos-marketplace.html'; }, 4000);
   }
-}, 7000);
+}, 500);
 
 /* ══════════════════════════════════════
    Section switcher
