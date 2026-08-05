@@ -2134,6 +2134,16 @@ async function loadProducts(reset = true) {
     _products = reset ? batch : [..._products, ...batch];
     renderProducts(_products);
     renderCategories();
+    /* TEMP DIAGNOSTIC — shows the resolved owner id + count + category so a blank/short list can
+       be traced (wrong account? category filter? fetch skipped?). Remove after diagnosis. */
+    try {
+      const _s = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+        || (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.uid)
+        || (JSON.parse(localStorage.getItem('sokoniUser') || 'null') || {}).uid || 'NONE';
+      let dbg = document.getElementById('_invDbg');
+      if (!dbg) { dbg = document.createElement('div'); dbg.id = '_invDbg'; dbg.style.cssText = 'position:fixed;bottom:64px;left:8px;right:8px;z-index:99999;background:#111;color:#71ff00;font:11px monospace;padding:8px;border:1px solid #71ff00;border-radius:8px;word-break:break-all;'; document.body.appendChild(dbg); }
+      dbg.textContent = 'DBG · ' + _products.length + ' products · owner ' + String(_s).slice(0, 10) + ' · category "' + (_catFilter || 'all') + '"';
+    } catch (_) {}
     document.getElementById('load-more-btn').style.display = batch.length < 50 ? 'none' : '';
   } catch (e) { showToast('Error loading products'); }
 }
