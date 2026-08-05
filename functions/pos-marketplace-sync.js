@@ -190,6 +190,57 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
     await ref.update(update);
   }
 
+  /* ── Ready-for-Dispatch: decouple dispatch from printing ──────────────────────
+     Marking a DELIVERY order ready creates the rider-visible dispatch job
+     (packageRequests, status awaiting_rider) and notifies the buyer. Pickup just
+     notifies. Best-effort — a dispatch/notify hiccup never blocks the status write. */
+  if (status === 'ready') {
+    try {
+      const isPickup = (order.fulfillmentType || 'delivery') === 'pickup';
+      const buyerUid = order.buyerUid || order.uid || null;
+      const nowIso   = new Date().toISOString();
+
+      if (!isPickup) {
+        const delId  = `DEL${orderId}`;
+        const pin    = String(Math.floor(1000 + Math.random() * 9000));
+        const fee    = Number(order.deliveryFee || order.delivery || 0);
+        await db.doc(`packageRequests/${delId}`).set({
+          ref: delId, deliveryRef: delId, orderId, orderRef: orderId,
+          buyerName:  order.customerName || order.buyerName || '',
+          buyerPhone: order.customerPhone || order.buyerPhone || '', buyerUid,
+          sellerName: order.sellerName || 'SOKONI', sellerUid: sellerId,
+          pickupAddress:   order.sellerName || 'Shop',
+          deliveryAddress: order.deliveryAddress || order.address || '',
+          items: (order.items || []).map(i => ({ productId: i.productId || i.id, name: i.name, qty: i.qty || 1 })),
+          orderTotal: Number(order.total || 0), deliveryFee: fee,
+          driverNet: Math.round(fee * 0.8), commissionPct: 5,
+          vehicleType: 'moto', speed: 'same_day', category: 'general',
+          status: 'awaiting_rider', proofPin: pin,
+          timeline: [{ status: 'awaiting_rider', at: nowIso, by: 'merchant_ready' }],
+          source: 'merchant_ready', createdAt: now,
+        }, { merge: true });
+        await ref.update({ dispatchStatus: 'awaiting_rider', deliveryRef: delId });
+        try { await db.doc(`orders/${orderId}`).set({ status: 'awaiting_rider', deliveryRef: delId, readyAt: now, updatedAt: now }, { merge: true }); } catch (_) {}
+      } else {
+        try { await db.doc(`orders/${orderId}`).set({ status: 'ready_for_pickup', readyAt: now, updatedAt: now }, { merge: true }); } catch (_) {}
+      }
+
+      if (buyerUid) {
+        const { notify } = require('./notify');
+        await notify({
+          uid: buyerUid,
+          type: isPickup ? 'order_ready_pickup' : 'order_dispatching',
+          title: isPickup ? 'Ready for pickup 🏪' : 'Order being dispatched 🛵',
+          body: isPickup
+            ? `Your order ${orderId} is ready — collect it at ${order.sellerName || 'the shop'}.`
+            : `Your order ${orderId} is prepared and awaiting a rider. We'll notify you when one is assigned.`,
+          dedupeKey: `order_ready_${orderId}`,
+          data: { orderId },
+        }).catch(() => {});
+      }
+    } catch (e) { console.error('[C&C ready] dispatch/notify failed (recoverable):', e.message); }
+  }
+
   return { orderId, status };
 });
 

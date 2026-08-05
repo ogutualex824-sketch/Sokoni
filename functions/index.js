@@ -6715,6 +6715,69 @@ exports.recordMetric = onRequest(
    no composite index is required. Base64 image blobs are stripped to keep the payload
    light — the client renders Storage URLs and falls back gracefully (sokoni-image.js).
 ══════════════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════════════════
+   AVAILABLE DELIVERIES — App-Check-independent feed of dispatch-ready jobs.
+   A rider can't read UNASSIGNED packageRequests under the client rules, so this
+   Admin-SDK endpoint lists deliveries the merchant marked "Ready for Dispatch"
+   (status awaiting_rider, no rider yet). Decoupled from printing entirely.
+══════════════════════════════════════════════════════════════════ */
+exports.availableDeliveries = onRequest(
+  { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
+  async (req, res) => {
+    try {
+      const snap = await db.collection("packageRequests").where("status", "==", "awaiting_rider").limit(80).get();
+      const deliveries = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+        .filter((o) => !o.assignedRiderId && !o.riderId && !o.assignedDriverId && !o.assignedDriverUid)
+        .map((o) => ({
+          id: o.id, orderId: o.orderId, sellerName: o.sellerName,
+          pickupAddress: o.pickupAddress, deliveryAddress: o.deliveryAddress,
+          buyerName: o.buyerName, buyerPhone: o.buyerPhone,
+          items: o.items || [], orderTotal: o.orderTotal, deliveryFee: o.deliveryFee,
+          driverNet: o.driverNet, proofPin: o.proofPin,
+        }));
+      res.set("Cache-Control", "no-cache, must-revalidate");
+      res.status(200).json({ ok: true, count: deliveries.length, deliveries });
+    } catch (e) {
+      console.error("[availableDeliveries] failed:", e.message);
+      res.status(500).json({ ok: false, error: "unavailable" });
+    }
+  }
+);
+
+/* Rider accepts an available delivery — atomic first-claim-wins (Admin SDK bypasses the
+   packageRequests write rule that would otherwise block a not-yet-assigned rider). */
+exports.claimAvailableDelivery = onCall(
+  { region: "us-central1", timeoutSeconds: 30, memory: "128MiB", invoker: "public" },
+  async (request) => {
+    const uid = request.auth && request.auth.uid;
+    if (!uid) throw new HttpsError("unauthenticated", "Sign in to accept a delivery.");
+    const { deliveryRef } = request.data || {};
+    if (!deliveryRef) throw new HttpsError("invalid-argument", "deliveryRef required.");
+    const ref = db.collection("packageRequests").doc(String(deliveryRef));
+    let out;
+    await db.runTransaction(async (t) => {
+      const s = await t.get(ref);
+      if (!s.exists) throw new HttpsError("not-found", "Delivery not found.");
+      const d = s.data();
+      if (d.assignedRiderId || d.riderId || d.assignedDriverId) throw new HttpsError("failed-precondition", "Just taken by another rider.");
+      if (d.status !== "awaiting_rider") throw new HttpsError("failed-precondition", "Delivery no longer available.");
+      const riderDoc = await t.get(db.collection("rideDrivers").doc(uid));
+      const rider = riderDoc.exists ? (riderDoc.data() || {}) : {};
+      const nowTs = admin.firestore.FieldValue.serverTimestamp();
+      t.update(ref, {
+        status: "driver_accepted", assignedRiderId: uid, riderId: uid,
+        assignedDriverId: uid, assignedDriverUid: uid,
+        riderName: rider.name || "Rider", riderPhone: rider.phone || "",
+        riderAcceptedAt: nowTs, updatedAt: nowTs,
+      });
+      if (d.orderId) t.set(db.collection("orders").doc(String(d.orderId)),
+        { status: "rider_assigned", assignedDriverUid: uid, riderAssignedAt: nowTs, updatedAt: nowTs }, { merge: true });
+      out = { ok: true, deliveryRef, orderId: d.orderId, proofPin: d.proofPin };
+    });
+    return out;
+  }
+);
+
 exports.catalogue = onRequest(
   { cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], timeoutSeconds: 15, invoker: "public", memory: "256MiB" },
   async (req, res) => {

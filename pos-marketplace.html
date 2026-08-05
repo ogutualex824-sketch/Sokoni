@@ -1222,12 +1222,13 @@ function renderOrderCard(o, status) {
   const pickupHtml = o.pickupTime
     ? `<div class="order-pickup">&#128336; Pickup: ${esc(o.pickupTime)}</div>` : '';
 
+  const _readyLabel = (_ff === 'pickup') ? '&#127978; Ready for Pickup' : '&#128666; Ready for Dispatch';
   let actionsHtml = '';
   if (status === 'pending') {
     actionsHtml = `
       <div class="order-actions">
         <button class="btn btn-green btn-sm" onclick="markOrderReady('${esc(o.id)}')" id="btn-ready-${esc(o.id)}">
-          &#10003; Mark Ready
+          ${_readyLabel}
         </button>
         <button class="btn btn-sm" style="background:#334155;color:#fff" onclick="printOrder('${esc(o.id)}')" id="btn-print-${esc(o.id)}">
           &#128424; Print
@@ -1277,11 +1278,16 @@ window.markOrderReady = async function(orderId) {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Updating…'; }
   try {
     await CF('updateClickAndCollectStatus')({ sellerId: _sellerId, orderId, status: 'ready' });
-    toast('Order marked ready for pickup', 'success');
+    /* Server now creates the rider dispatch job (delivery) + notifies the buyer — printing is
+       optional and never gates dispatch. */
+    const _o = (_pendingOrders || []).find(x => x.id === orderId) || {};
+    toast((_o.fulfillmentType === 'pickup')
+      ? '🏪 Marked ready — customer notified for pickup'
+      : '🛵 Ready for dispatch — sent to riders + customer notified', 'success');
   } catch (err) {
     console.error('markOrderReady', err);
     toast('Failed: ' + esc(err.message), 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = '&#10003; Mark Ready'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128666; Ready for Dispatch'; }
   }
 };
 
