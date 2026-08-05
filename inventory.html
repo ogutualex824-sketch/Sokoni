@@ -1981,17 +1981,28 @@ async function loadKPIs() {
       SokoniInventory.getAlerts().catch(() => []),
     ]);
 
+    /* Compute Value / Low / Out-of-stock straight from the canonical products (each carries
+       sellingPrice + stockLevel). getAnalytics() reads the empty inventory_levels store, so it
+       reported KES 0 / no records even with 103 stocked products. */
+    const _num = v => Number(v) || 0;
+    const invValue = products.reduce((s, p) => s + _num(p.sellingPrice) * _num(p.stockLevel), 0);
+    const lowCount = products.filter(p => _num(p.stockLevel) > 0 && _num(p.stockLevel) <= (_num(p.reorderPoint) || 5)).length;
+    const oosCount = products.filter(p => _num(p.stockLevel) <= 0).length;
+
     // Legacy KPI strip (top row)
     const qryKpi = id => document.querySelector(`#${id} .kpi-val`);
     if (qryKpi('kpi-skus')) qryKpi('kpi-skus').textContent = products.length;
-    if (qryKpi('kpi-val'))  qryKpi('kpi-val').textContent  = fmt(analytics.inventoryValue || 0);
-    if (qryKpi('kpi-low'))  qryKpi('kpi-low').textContent  = analytics.lowStockCount  || 0;
-    if (qryKpi('kpi-oos'))  qryKpi('kpi-oos').textContent  = analytics.outOfStockCount|| 0;
+    if (qryKpi('kpi-val'))  qryKpi('kpi-val').textContent  = fmt(invValue);
+    if (qryKpi('kpi-low'))  qryKpi('kpi-low').textContent  = lowCount;
+    if (qryKpi('kpi-oos'))  qryKpi('kpi-oos').textContent  = oosCount;
+    // Summary cards
+    const _setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    _setTxt('sumTotal', products.length); _setTxt('sumLow', lowCount); _setTxt('sumOut', oosCount);
 
     // Health score KPI grid
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     set('kpi-products',  products.length);
-    set('kpi-value',     fmt(analytics.inventoryValue || 0));
+    set('kpi-value',     fmt(invValue));
     set('kpi-alerts',    alerts.length || '✓');
     set('kpi-suppliers', suppliers.length);
     set('kpi-low-hs',    analytics.lowStockCount || 0);
@@ -2212,14 +2223,23 @@ function onSearch(q) {
 
 // ── STOCK LEVELS ──────────────────────────────────────────
 async function loadStockLevels() {
-  const wh  = document.getElementById('warehouse-filter')?.value;
   const flt = document.getElementById('stock-filter')?.value;
   try {
-    const levels = await SokoniInventory.getAllStockLevels({ warehouseId: wh || undefined });
+    /* Derive stock levels from the canonical products — getAllStockLevels() reads the empty
+       inventory_levels store, which showed "No stock records" despite 103 stocked products.
+       One level per product using its own stock (single-stock model until branch inventory). */
+    const products = await SokoniInventory.getProducts({ active: true });
+    const levels = products.map(p => ({
+      id: p.id, productId: p.name || p.id, warehouseId: 'main',
+      available: Number(p.stockLevel) || 0, onHand: Number(p.stockLevel) || 0,
+      reserved: 0, incoming: 0,
+      reorderPoint: Number(p.reorderPoint) || 5, maxStock: Number(p.maxStock) || 0,
+    }));
     _stockLevels = levels;
-    const filtered = flt === 'low' ? levels.filter(l => l.available > 0 && l.available <= 10)
+    const rp = l => (l.reorderPoint || 10);
+    const filtered = flt === 'low' ? levels.filter(l => l.available > 0 && l.available <= rp(l))
                    : flt === 'out' ? levels.filter(l => l.available <= 0)
-                   : flt === 'ok'  ? levels.filter(l => l.available > 10)
+                   : flt === 'ok'  ? levels.filter(l => l.available > rp(l))
                    : levels;
     renderStockList(filtered);
     loadMovementHistory();
