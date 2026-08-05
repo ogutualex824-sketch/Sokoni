@@ -217,6 +217,85 @@ const SokoniInventory = (() => {
     return _fs.collection(`tenants/${_tenantId}/${path}`);
   }
 
+  /* ── CANONICAL CONVERGENCE (Stage 1) ────────────────────────────────────
+     The ONE product engine lives in the top-level `products` collection (same
+     docs the Shop, Catalogue, MiniShop, Profile and POS read). Inventory used to
+     read/write a separate empty `tenants/{uid}/inventory_products` store, so the
+     merchant's real catalogue never appeared here. These helpers repoint every
+     read/write at `products` and map field names in both directions:
+       price ↔ sellingPrice · costPrice ↔ buyingPrice · stock ↔ stockLevel/stockQty */
+  function productsCol() {
+    if (!_fs) throw new Error('Firestore not initialised — call SokoniInventory.init() first');
+    return _fs.collection('products');
+  }
+  function _sellerUid() { return (_auth && _auth.currentUser && _auth.currentUser.uid) || _uid || null; }
+
+  /* products doc → inventory shape (for reads / the inventory UI). */
+  function _toInv(id, p) {
+    p = p || {};
+    const st = String(p.status || '').toLowerCase();
+    const active = p.status
+      ? (st !== 'inactive' && st !== 'deleted' && st !== 'hidden' && st !== 'archived' && st !== 'draft')
+      : (p.active !== false);
+    const img = p.imageUrl || p.image || (Array.isArray(p.images) && p.images[0]) || '';
+    return {
+      id,
+      name:         p.name || p.title || '',
+      sellingPrice: Number(p.price != null ? p.price : (p.sellingPrice || 0)) || 0,
+      buyingPrice:  Number(p.costPrice != null ? p.costPrice : (p.buyingPrice != null ? p.buyingPrice : (p.cost || 0))) || 0,
+      stockLevel:   Number(p.stock != null ? p.stock : (p.stockLevel != null ? p.stockLevel : (p.stockQty != null ? p.stockQty : (p.quantity || 0)))) || 0,
+      category:     p.category || '',
+      sku:          p.sku || '',
+      barcode:      p.barcode || '',
+      unit:         p.unit || 'pcs',
+      brand:        p.brand || '',
+      taxRate:      Number(p.taxRate != null ? p.taxRate : (p.vatRate || 0)) || 0,
+      reorderPoint: Number(p.reorderPoint != null ? p.reorderPoint : (p.minStock != null ? p.minStock : 10)) || 10,
+      imageUrl:     img,
+      images:       Array.isArray(p.images) ? p.images : (p.image ? [p.image] : []),
+      description:  p.description || '',
+      active,
+      status:       p.status || 'active',
+      sellerUid:    p.sellerUid || p.uid || '',
+      shopId:       p.shopId || '',
+      /* keep canonical fields too so any consumer reading them still works */
+      price: p.price, stock: p.stock, costPrice: p.costPrice,
+      createdAt: p.createdAt, updatedAt: p.updatedAt,
+      tenantId: _tenantId,
+    };
+  }
+
+  /* inventory shape → products doc (for writes). Rule-safe: sellerUid==uid, valid price,
+     no base64 images, no admin fields. */
+  function _toCanonical(product) {
+    const uid = _sellerUid();
+    const _isData = (v) => typeof v === 'string' && v.slice(0, 5) === 'data:';
+    const out = {
+      name:        product.name,
+      price:       Number(product.sellingPrice != null ? product.sellingPrice : (product.price || 0)) || 0,
+      costPrice:   Number(product.buyingPrice != null ? product.buyingPrice : (product.costPrice || 0)) || 0,
+      stock:       Number(product.stockLevel != null ? product.stockLevel : (product.stock || 0)) || 0,
+      category:    product.category || '',
+      sku:         product.sku || '',
+      barcode:     product.barcode || '',
+      unit:        product.unit || 'pcs',
+      brand:       product.brand || '',
+      taxRate:     Number(product.taxRate || 0) || 0,
+      reorderPoint:Number(product.reorderPoint || 10) || 10,
+      description: product.description || '',
+      sellerUid:   uid,
+      uid,
+      shopId:      product.shopId || uid,   /* ensure shopId present (pre-empts Stage 3) */
+      status:      product.active === false ? 'inactive' : 'active',
+      updatedAt:   nowISO(),
+      updatedBy:   currentUid(),
+    };
+    const imgs = (Array.isArray(product.images) ? product.images : (product.imageUrl ? [product.imageUrl] : []))
+      .filter((u) => u && !_isData(u));
+    if (imgs.length) { out.images = imgs; out.image = imgs[0]; }
+    return out;
+  }
+
   function nowISO()    { return new Date().toISOString(); }
   function currentUid(){ return _uid || 'anonymous'; }
 
@@ -245,14 +324,14 @@ const SokoniInventory = (() => {
     if (hit) return hit;
 
     let results = [];
+    const seller = _sellerUid();
 
-    if (_online && _fs) {
+    if (_online && _fs && seller) {
       try {
-        let q = col('inventory_products').where('active', '==', active);
-        if (category) q = q.where('category', '==', category);
-        q = q.orderBy('name', 'asc').limit(PAGE_SIZE);
-        const snap = await q.get();
-        results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        /* Canonical convergence (Stage 1): read the ONE `products` collection filtered by
+           owner. Category/active/search sorted in-memory to avoid composite indexes. */
+        const snap = await productsCol().where('sellerUid', '==', seller).limit(500).get();
+        results = snap.docs.map(d => _toInv(d.id, d.data()));
         await Promise.all(results.map(p => idbPut('products', p)));
       } catch (_) {
         results = await idbGetAll('products');
@@ -261,6 +340,8 @@ const SokoniInventory = (() => {
       results = await idbGetAll('products');
     }
 
+    if (active === true || active === false) results = results.filter(p => p.active === active);
+    if (category) results = results.filter(p => (p.category || '') === category);
     if (search) {
       const q = search.toLowerCase();
       results = results.filter(p =>
@@ -269,6 +350,7 @@ const SokoniInventory = (() => {
         (p.barcode|| '').includes(q)
       );
     }
+    results.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
     cacheSet(cKey, results);
     return results;
@@ -281,8 +363,8 @@ const SokoniInventory = (() => {
     let p = null;
     if (_online && _fs) {
       try {
-        const doc = await col('inventory_products').doc(id).get();
-        p = doc.exists ? { id: doc.id, ...doc.data() } : null;
+        const doc = await productsCol().doc(id).get();
+        p = doc.exists ? _toInv(doc.id, doc.data()) : null;
         if (p) { await idbPut('products', p); }
       } catch (_) { p = await idbGet('products', id); }
     } else {
@@ -296,13 +378,11 @@ const SokoniInventory = (() => {
   async function getProductByBarcode(barcode) {
     if (_online && _fs) {
       try {
-        const snap = await col('inventory_products')
-          .where('barcode', '==', barcode).limit(1).get();
-        if (!snap.empty) {
-          const p = { id: snap.docs[0].id, ...snap.docs[0].data() };
-          await idbPut('products', p);
-          return p;
-        }
+        const seller = _sellerUid();
+        const snap = await productsCol().where('barcode', '==', barcode).limit(5).get();
+        const match = snap.docs.map(d => _toInv(d.id, d.data()))
+          .find(pp => !seller || pp.sellerUid === seller);
+        if (match) { await idbPut('products', match); return match; }
       } catch (_) {}
     }
     const local = await idbGetAll('products', 'barcode', IDBKeyRange.only(barcode));
@@ -325,39 +405,16 @@ const SokoniInventory = (() => {
     product.tenantId  = _tenantId;
     product.active    = product.active !== false;
 
-    await idbPut('products', product);
+    /* Canonical convergence (Stage 1): the ONE product engine is `products` — no secondary
+       collections. Cache the inventory view; write the canonical doc. */
+    const canonical = _toCanonical(product);
+    await idbPut('products', _toInv(product.id, canonical));
     _cache.delete(`product:${product.id}`);
 
     if (_online && _fs) {
-      await col('inventory_products').doc(product.id).set(product, { merge: true });
-
-      // Mirror to posProducts so the product is immediately visible at POS checkout.
-      // posProducts rules require sellerId == request.auth.uid.
-      const posUid = (_auth && _auth.currentUser) ? _auth.currentUser.uid : _uid;
-      if (posUid) {
-        const posDoc = {
-          name:         product.name,
-          price:        product.sellingPrice || 0,
-          cost:         product.buyingPrice  || 0,
-          category:     product.category     || '',
-          sku:          product.sku          || '',
-          barcode:      product.barcode      || '',
-          unit:         product.unit         || 'pcs',
-          brand:        product.brand        || '',
-          taxRate:      product.taxRate      || 0,
-          stockLevel:   product.stockLevel   || 0,
-          reorderPoint: product.reorderPoint || 10,
-          imageUrl:     product.imageUrl     || '',
-          description:  product.description  || '',
-          sellerId:     posUid,
-          status:       product.active === false ? 'inactive' : 'active',
-          updatedAt:    now,
-          tenantId:     _tenantId,
-        };
-        await _fs.collection('posProducts').doc(product.id).set(posDoc, { merge: true }).catch(() => {});
-      }
+      await productsCol().doc(product.id).set(canonical, { merge: true });
     } else {
-      await _enqueue({ op: 'save_product', data: product });
+      await _enqueue({ op: 'save_product', data: { id: product.id, canonical } });
     }
 
     emit('product_saved', { product, isNew });
@@ -407,7 +464,8 @@ const SokoniInventory = (() => {
     await idbDelete('products', id);
     _cache.delete(`product:${id}`);
     if (_online && _fs) {
-      await col('inventory_products').doc(id).update({ active: false, deletedAt: nowISO() });
+      /* Soft-delete on the canonical product: status inactive hides it from catalogue + inventory. */
+      await productsCol().doc(id).update({ status: 'inactive', active: false, deletedAt: nowISO(), updatedAt: nowISO() });
     } else {
       await _enqueue({ op: 'delete_product', data: { id } });
     }
@@ -982,9 +1040,9 @@ const SokoniInventory = (() => {
   async function _processQueuedOp(op) {
     switch (op.op) {
       case 'save_product':
-        return col('inventory_products').doc(op.data.id).set(op.data, { merge: true });
+        return productsCol().doc(op.data.id).set(op.data.canonical || op.data, { merge: true });
       case 'delete_product':
-        return col('inventory_products').doc(op.data.id).update({ active: false, deletedAt: nowISO() });
+        return productsCol().doc(op.data.id).update({ status: 'inactive', active: false, deletedAt: nowISO(), updatedAt: nowISO() });
       case 'movement':
         return _callCF('inventoryAdjustStock', op.data);
       case 'create_po':
