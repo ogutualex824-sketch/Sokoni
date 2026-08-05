@@ -3575,7 +3575,7 @@ exports.darajaSTKPush = onCall(
 async function _finalizeMarketplacePayment(db, admin, opts) {
   const {
     checkoutId, sellerUid, callerUid, orderId, hub, amount, phone,
-    mpesaCode, sellerName, description, items, buyerName, address,
+    mpesaCode, sellerName, description, items, buyerName, address, fulfillmentType,
     paymentMethod, pathLabel,
     settlementStatus = "queued",
     writeSellerPayment = true,
@@ -3658,6 +3658,7 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
           deliveryAddress: address || null,
           address:         address || null,
           hub:             hub || "marketplace",
+          fulfillmentType: fulfillmentType || "delivery",
           amount:          amount || 0,
           total:           amount || 0,
           orderTotal:      amount || 0,
@@ -7474,6 +7475,7 @@ exports.webhookIntasend = onRequest(
             items:         Array.isArray(_pm.items) ? _pm.items : null,
             buyerName:     _pm.buyerName || null,
             address:       _pm.address || _pm.deliveryAddress || null,
+            fulfillmentType: _pm.fulfillmentType || "delivery",
             paymentMethod: "mpesa_intasend",
             pathLabel:     "intasend",
             settlementStatus:   "settled",
@@ -7552,6 +7554,9 @@ exports.webhookIntasend = onRequest(
                   paymentMethod: "M-PESA",
                   paymentStatus: "paid",
                   receiptNumber: apiRef,
+                  /* pickup → in-store collection (Ready for Pickup); delivery → rider
+                     (Awaiting Rider). Drives the POS status label + rider path. */
+                  fulfillmentType: _pm.fulfillmentType || "delivery",
                   notes:         "", pickupTime: null,
                   status:        "pending",
                   createdAt:     admin.firestore.FieldValue.serverTimestamp(),

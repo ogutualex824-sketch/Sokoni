@@ -1051,9 +1051,16 @@
       </div>
 
 
-      <!-- Delivery Calculator -->
+      <!-- Fulfillment: Pickup vs Delivery -->
       <div class="co-card">
-        <div class="co-card-title">🚛 Delivery Cost Estimator</div>
+        <div class="co-card-title">📦 Fulfillment</div>
+        <div style="display:flex;gap:10px;margin-bottom:14px;">
+          <button type="button" id="ff-delivery" onclick="setFulfillment('delivery')" style="flex:1;padding:12px;border-radius:12px;border:2px solid #71ff00;background:rgba(113,255,0,0.1);color:#fff;font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">🚚 Delivery</button>
+          <button type="button" id="ff-pickup" onclick="setFulfillment('pickup')" style="flex:1;padding:12px;border-radius:12px;border:2px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7);font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;">🏪 Pickup · Free</button>
+        </div>
+        <div id="pickup-note" style="display:none;background:rgba(113,255,0,0.06);border:1px solid rgba(113,255,0,0.2);border-radius:12px;padding:12px 14px;font-size:12.5px;color:rgba(255,255,255,0.78);line-height:1.5;">✅ <strong>Pick up from the shop.</strong> No delivery fee, no rider — the shop marks your order <strong>Ready for Pickup</strong>.</div>
+        <div id="delivery-estimator">
+        <div style="font-size:12px;color:rgba(255,255,255,0.4);font-weight:700;margin-bottom:8px;">🚛 Delivery Cost Estimator</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
           <div>
             <label style="font-size:11px;color:rgba(255,255,255,0.4);font-weight:700;display:block;margin-bottom:4px;">To Zone</label>
@@ -1096,6 +1103,7 @@
         <div id="deliveryEtaResult" style="font-size:12px;color:rgba(255,255,255,0.45);margin-top:2px;min-height:16px;"></div>
         <!-- Surge notice -->
         <div id="deliverySurge" style="display:none;font-size:11px;color:rgba(251,191,36,0.85);font-weight:700;margin-top:6px;padding:6px 10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:8px;"></div>
+        </div><!-- /delivery-estimator -->
       </div>
 
       <!-- Installment Option -->
@@ -1614,6 +1622,27 @@ const btnTotalEl = document.getElementById("btnTotal");
 let subtotal = 0;
 let promoDiscount = 0;
 let deliveryFee = 0;
+let fulfillmentType = 'delivery';   /* 'delivery' (rider + fee) | 'pickup' (free, no rider) */
+
+/* Buyer chooses Delivery vs Pickup. Pickup → fee 0, no rider dispatch, order marked
+   for in-store collection ("Ready for Pickup"). Delivery → server-priced fee + rider. */
+window.setFulfillment = function(type){
+  fulfillmentType = (type === 'pickup') ? 'pickup' : 'delivery';
+  const del = document.getElementById('ff-delivery');
+  const pk  = document.getElementById('ff-pickup');
+  const est = document.getElementById('delivery-estimator');
+  const note= document.getElementById('pickup-note');
+  const on  = (el, active) => { if(!el) return;
+    el.style.borderColor = active ? '#71ff00' : 'rgba(255,255,255,0.12)';
+    el.style.background   = active ? 'rgba(113,255,0,0.1)' : 'transparent';
+    el.style.color        = active ? '#fff' : 'rgba(255,255,255,0.7)'; };
+  on(del, fulfillmentType === 'delivery');
+  on(pk,  fulfillmentType === 'pickup');
+  if (est)  est.style.display  = fulfillmentType === 'pickup' ? 'none'  : '';
+  if (note) note.style.display = fulfillmentType === 'pickup' ? 'block' : 'none';
+  if (fulfillmentType === 'pickup') { deliveryFee = 0; if (typeof updateTotals === 'function') updateTotals(); }
+  else if (typeof calcDelivery === 'function') { calcDelivery(); }
+};
 let _loyaltyBalance = 0;    // user's raw point balance
 let _loyaltyRedeeming = false; // toggle state
 const POINTS_TO_KES = 0.5;  // 1 point = KES 0.50
@@ -2022,6 +2051,7 @@ async function _placeOrderCore(){
           items:       _items,
           buyerName:   _buyerName,
           address:     _buyerAddr,
+          fulfillmentType: fulfillmentType,
           serviceDesc: 'SOKONI Order',
         });
 
@@ -2683,6 +2713,7 @@ async function _ckPersistPendingOrder(orderId, sellerUid, sellerName, lineItems)
       phone: _coPhone, method: "mpesa", paymentMethod: "mpesa_intasend",
       name: _coName, address: _coAddr, deliveryAddress: _coAddr,
       status: "pending_payment", hub: "marketplace",
+      fulfillmentType: fulfillmentType, deliveryMethod: fulfillmentType,
       location: window.deliveryLocation || null,
       pricing: { subtotal, deliveryFee, total },
       timestamp: Date.now(),
@@ -3072,6 +3103,7 @@ function saveAndRedirect(payRef, method, serverOrderId, verificationToken, payme
 
   /* ── Delivery: create via SokoniDelivery after overlay shows ── */
   (async function _createDelivery(){
+    if (fulfillmentType === 'pickup') return;   /* pickup: in-store collection, no rider dispatch */
     try {
       if(typeof window.SokoniDelivery === 'undefined'){
         /* Module may still be initialising — wait up to 4s */

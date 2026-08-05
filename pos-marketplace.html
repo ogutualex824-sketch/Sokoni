@@ -1186,6 +1186,11 @@ function renderOrderCard(o, status) {
   const payBadge  = isPrepaid
     ? '<span class="pay-badge prepaid">&#10003; Prepaid</span>'
     : '<span class="pay-badge counter">&#9679; Counter Payment</span>';
+  /* Fulfillment: pickup = in-store collection, delivery = rider. */
+  const _ff = o.fulfillmentType || 'delivery';
+  const ffBadge = _ff === 'pickup'
+    ? '<span class="pay-badge" style="background:rgba(56,189,248,0.15);color:#38bdf8">&#127978; Ready for Pickup</span>'
+    : '<span class="pay-badge" style="background:rgba(251,146,60,0.15);color:#fb923c">&#128676; Awaiting Rider</span>';
 
   const items = Array.isArray(o.items) ? o.items : [];
   const itemsHtml = items.length
@@ -1240,7 +1245,7 @@ function renderOrderCard(o, status) {
           ${o.customerPhone ? `<div class="order-phone">&#128222; ${esc(o.customerPhone)}</div>` : ''}
         </div>
         <div style="text-align:right">
-          ${payBadge}
+          ${payBadge}<br>${ffBadge}
           <div class="order-time" id="order-time-${esc(o.id)}">${esc(relTime(o.createdAt))}</div>
         </div>
       </div>
