@@ -313,7 +313,13 @@
     _overlay.setAttribute('aria-modal', 'true');
     _overlay.setAttribute('aria-label', 'Payment Receipt');
     _overlay.innerHTML = `<div class="st-receipt-modal" id="st-receipt-modal"></div>`;
+    /* Close paths: tap the backdrop, the ✕ button (hideReceipt), or ESC on desktop.
+       ESC is attached once to document and only acts while the overlay is visible,
+       so it never swallows keystrokes for the rest of the page. */
     _overlay.addEventListener('click', e => { if (e.target === _overlay) hideReceipt(); });
+    document.addEventListener('keydown', e => {
+      if ((e.key === 'Escape' || e.key === 'Esc') && _overlay && _overlay.classList.contains('visible')) hideReceipt();
+    });
     document.body.appendChild(_overlay);
     return _overlay;
   }
