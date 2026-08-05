@@ -636,6 +636,23 @@ window.SokoniHardware = (function () {
       }
     } catch (e) { /* ignore */ }
 
+    // 8. Previously PAIRED Bluetooth printer (P58E). The printer lib persists a
+    //    serialisable DESCRIPTOR (name/id/serviceUUID) to `p58e_paired_device` — a
+    //    live BluetoothDevice cannot be stored, and only navigator.bluetooth
+    //    .getDevices() returns the granted handle on later visits. Section 3 was
+    //    fed ONLY by the network-IP path, so a Bluetooth-only pair never appeared;
+    //    read the descriptor here so a configured BLE printer is listed too.
+    try {
+      var btPaired = (window.P58EPrinter && window.P58EPrinter.paired) ||
+                     JSON.parse(localStorage.getItem('p58e_paired_device') || 'null');
+      if (btPaired && (btPaired.name || btPaired.id)) {
+        summary.printers.found = true;
+        summary.printers.count++;
+        if (!summary.printers.types.includes('bluetooth')) summary.printers.types.push('bluetooth');
+        summary.printers.btPaired = btPaired;
+      }
+    } catch (e) { /* ignore */ }
+
     /* Structured diagnostics so a null result is never silent. Without this the
        page could only say "Not Found", which reads as a hardware fault when the
        real answer is that the browser has no such API, or that nothing has been
@@ -657,7 +674,7 @@ window.SokoniHardware = (function () {
       if (!v || typeof v !== 'object' || v.found !== true || !Array.isArray(v.types)) return;
       if (k === 'biometric') { summary.classify.capability.push(k); return; }
       if (v.types.indexOf('camera') !== -1 && v.types.length === 1) { summary.classify.builtin.push(k); return; }
-      if (k === 'printers' && v.savedIP) { summary.classify.configured.push(k); return; }
+      if (k === 'printers' && (v.savedIP || v.btPaired)) { summary.classify.configured.push(k); return; }
       if (v.types.some(function (t) { return PERIPHERAL_TYPES.indexOf(t) !== -1; })) {
         summary.classify.peripheral.push(k); return;
       }
