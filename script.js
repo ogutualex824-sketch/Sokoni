@@ -232,12 +232,16 @@ function _renderCatalogueError(container) {
    equivalent of a silent failure. */
 function _armCatalogueWatchdog(container, ms) {
     if (_catalogueWatchdog) clearTimeout(_catalogueWatchdog);
+    /* 20s (was 12s): the listener waits up to 12s for the App Check token, then the hardened
+       retry does up to 5 attempts with backoff + a forced token refresh. 12s fired while
+       those retries were still in flight, showing the error over a load that was about to
+       succeed. Still bounded — a genuine outage surfaces, just not prematurely. */
     _catalogueWatchdog = setTimeout(function () {
         if (window.__sokoniCatalogueRead) return;              /* a read landed; nothing to do */
         if (Array.isArray(products) && products.length > 0) return;
-        _catalogueTelemetry('load-failed', { timeoutMs: ms || 12000 });
+        _catalogueTelemetry('load-failed', { timeoutMs: ms || 20000 });
         _renderCatalogueError(container);
-    }, ms || 12000);
+    }, ms || 20000);
 }
 
 /* Hardcoded fallback — shown whenever localStorage has no products.

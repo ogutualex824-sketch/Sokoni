@@ -167,6 +167,18 @@ window.__sokoniAppCheckReady = _appCheck
     })
   : Promise.resolve('disabled');
 
+/* Force a fresh App Check token exchange (re-runs reCAPTCHA v3). Consumers call this on a
+   permission-denied/403 read — App Check 403s intermittently on this project (esp. iOS Safari
+   under ITP) and a forced refresh usually yields a valid token so the retried read succeeds.
+   Resolves true/false, never rejects, so callers can always chain a retry. */
+window.__sokoniRefreshAppCheckToken = function () {
+  try {
+    return _appCheck
+      ? getAppCheckToken(_appCheck, true).then(() => true).catch(() => false)
+      : Promise.resolve(true);
+  } catch (_) { return Promise.resolve(false); }
+};
+
 window.__sokoniAuthReady = false;
 window.__sokoniAuthReadyDetail = null;
 let _sokoniAuthReadyResolve = null;

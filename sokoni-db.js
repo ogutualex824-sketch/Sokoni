@@ -711,9 +711,16 @@ const SokoniDB = {
              than retried into a loop. App Check is not weakened — the client just
              stops treating a transient 403 as permanent. */
           const transient = /unavailable|deadline-exceeded|internal|permission-denied|unauthenticated/.test(code);
-          if (transient && attempt < 2) {
-            _log.warn('[SokoniDB] retrying products listener (App Check token likely not ready)', { code, attempt });
-            setTimeout(() => attach(attempt + 1), 1500);
+          /* Up to 5 attempts with backoff, and FORCE a fresh App Check token before each retry
+             — an intermittent 403 (common on iOS Safari/ITP) clears once a valid token is
+             re-exchanged. A single 1.5s retry gave up far too early and left the grid stuck. */
+          if (transient && attempt < 5) {
+            const delay = Math.min(1200 * attempt, 4000);
+            _log.warn('[SokoniDB] retrying products listener (forcing App Check token)', { code, attempt, delay });
+            Promise.resolve(
+              (typeof window !== 'undefined' && window.__sokoniRefreshAppCheckToken)
+                ? window.__sokoniRefreshAppCheckToken() : true
+            ).catch(() => false).then(() => setTimeout(() => attach(attempt + 1), delay));
           }
         }
       );
