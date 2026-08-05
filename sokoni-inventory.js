@@ -344,7 +344,11 @@ const SokoniInventory = (() => {
     if (hit) return hit;
 
     let results = [];
-    const seller = _sellerUid();
+    /* Wait briefly for the signed-in owner id — at first paint auth may not be restored yet, so
+       _sellerUid() returns null, the endpoint fetch below is skipped, and inventory falls back to
+       the (empty/stale) cache = "no stock". Wait up to ~4s for it to resolve. */
+    let seller = _sellerUid();
+    for (let i = 0; i < 16 && !seller; i++) { await new Promise(r => setTimeout(r, 250)); seller = _sellerUid(); }
 
     /* PRIMARY read: the App-Check-independent public catalogue endpoint (same canonical
        `products` data, filtered by owner). Reliable even when the client compat firestore /
