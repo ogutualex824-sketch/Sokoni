@@ -581,12 +581,14 @@ const SokoniOrders = {
     let q = query(
       collection(db, 'orders'),
       where('sellerUid', '==', sellerUid),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(200)
     );
     if (statusFilter) q = query(collection(db, 'orders'),
       where('sellerUid', '==', sellerUid),
       where('status', '==', statusFilter),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(200)
     );
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
@@ -669,8 +671,8 @@ const SokoniOrders = {
   },
 
   listenDisputes(callback, statusFilter) {
-    let q = query(collection(db, 'disputes'), orderBy('createdAt', 'desc'));
-    if (statusFilter) q = query(collection(db, 'disputes'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'));
+    let q = query(collection(db, 'disputes'), orderBy('createdAt', 'desc'), limit(200));
+    if (statusFilter) q = query(collection(db, 'disputes'), where('status', '==', statusFilter), orderBy('createdAt', 'desc'), limit(200));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => console.warn('[SokoniOrders] disputes:', err.message)

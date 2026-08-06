@@ -368,7 +368,7 @@ const SokoniDB = {
       callback(list);
     };
     const sub = (field) => onSnapshot(
-      query(collection(db, 'orders'), where(field, '==', uid), orderBy('createdAt', 'desc')),
+      query(collection(db, 'orders'), where(field, '==', uid), orderBy('createdAt', 'desc'), limit(200)),
       snap => { snap.docs.forEach(d => byId.set(d.id, { _fsId: d.id, ...d.data() })); emit(); },
       err  => _log.warn('[SokoniDB] userOrders ' + field + ':', err.message)
     );
@@ -381,7 +381,8 @@ const SokoniDB = {
     const q = query(
       collection(db, 'orders'),
       where('type', '==', 'pos'),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(200)
     );
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
@@ -440,7 +441,7 @@ const SokoniDB = {
   },
 
   listenUnboxingReviews(callback) {
-    const q = query(collection(db, 'unboxingReviews'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'unboxingReviews'), orderBy('createdAt', 'desc'), limit(100));
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
       err  => _log.warn('[SokoniDB] unboxingReviews:', err.message)
@@ -535,7 +536,8 @@ const SokoniDB = {
     const q = query(
       collection(db, 'notifications'),
       where('targetUid', 'in', [uid, 'broadcast']),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(100)
     );
     return onSnapshot(q,
       snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
@@ -1048,13 +1050,15 @@ const SokoniDB = {
         collection(db, 'orders'),
         where('sellerUid', '==', sellerUid),
         where('status', '==', statusFilter),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(200)
       );
     } else {
       q = query(
         collection(db, 'orders'),
         where('sellerUid', '==', sellerUid),
-        orderBy('createdAt', 'desc')
+        orderBy('createdAt', 'desc'),
+        limit(200)
       );
     }
     return onSnapshot(q,
