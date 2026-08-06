@@ -352,15 +352,29 @@ const SokoniDB = {
   },
 
   listenUserOrders(uid, callback) {
-    const q = query(
-      collection(db, 'orders'),
-      where('uid', '==', uid),
-      orderBy('createdAt', 'desc')
+    /* An order attributes its buyer on EITHER `uid` OR `buyerUid`. Account merges (e.g. a phone
+       account folded into a Google account) can leave older orders with uid=<old account> and
+       buyerUid=<merged account>, so a single `where uid ==` query silently misses them and the
+       buyer sees an empty list. Listen on BOTH fields and merge by id so none are hidden. Both
+       composite indexes (uid|buyerUid + createdAt) exist. Additive merge is correct here — a
+       buyer's orders are not deleted. */
+    const byId = new Map();
+    const emit = () => {
+      const list = [...byId.values()].sort((a, b) => {
+        const as = (a.createdAt && (a.createdAt.seconds || a.createdAt._seconds)) || 0;
+        const bs = (b.createdAt && (b.createdAt.seconds || b.createdAt._seconds)) || 0;
+        return bs - as;
+      });
+      callback(list);
+    };
+    const sub = (field) => onSnapshot(
+      query(collection(db, 'orders'), where(field, '==', uid), orderBy('createdAt', 'desc')),
+      snap => { snap.docs.forEach(d => byId.set(d.id, { _fsId: d.id, ...d.data() })); emit(); },
+      err  => _log.warn('[SokoniDB] userOrders ' + field + ':', err.message)
     );
-    return onSnapshot(q,
-      snap => callback(snap.docs.map(d => ({ _fsId: d.id, ...d.data() }))),
-      err  => _log.warn('[SokoniDB] userOrders:', err.message)
-    );
+    const unsubUid   = sub('uid');
+    const unsubBuyer = sub('buyerUid');
+    return () => { try { unsubUid(); } catch (_) {} try { unsubBuyer(); } catch (_) {} };
   },
 
   listenPOSOrders(callback) {

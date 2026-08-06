@@ -1,3 +1,27 @@
+## [2026-08-06] — fix(orders): buyer my-orders empty after account merge — match uid OR buyerUid
+
+Evidence (scripts/qa/inspect-orders.js): the buyer's 4 KASS orders (phone 254705726803) carry
+`uid: xrH21J5GFb…` (the OLD phone account) but `buyerUid: D5Ql2EYr…` (the merged Google account
+the founder now signs in as). `SokoniDB.listenUserOrders` queried only `where uid == <viewer>`, so
+it matched nothing and my-orders rendered empty — despite `buyerUid` being correct.
+
+- sokoni-db.js: `listenUserOrders` now runs TWO listeners (`uid` and `buyerUid`), merging by doc id
+  (additive; buyer orders aren't deleted). Both composite indexes (uid|buyerUid + createdAt) already
+  exist. A merge-induced uid/buyerUid split can no longer hide a buyer's orders.
+- scripts/qa/inspect-orders.js: read-only order diagnostic (buyer-field presence + spotlight).
+
+Follow-up (pending owner OK): backfill `orders.uid` xrH→D5Ql2 to complete the merge canonically.
+Files: sokoni-db.js, scripts/qa/inspect-orders.js. DB/API: none (read path). Breaking: none.
+
+## [2026-08-06] — feat(pos): self-diagnosing POS startup gate — never hangs on 'Verifying credentials'
+
+pos-marketplace auth gate now reports each real startup step (Firebase engine, Merchant session,
+Access & role, POS ready) with ✓/✗, hard-fails the blocking step after ~14s, and surfaces Retry +
+Sign out instead of an infinite spinner; a render/listener failure re-reveals the gate with the
+error. Also: pos-marketplace + pos-v2 bind to firebase.js's warm 10.12.2 app (was importing 11.0.1,
+a separate SDK copy → private app that cold-read the session and hung). Files: pos-marketplace.html,
+pos-v2.html.
+
 ## [2026-08-06] — feat(sync): real-time inventory across devices (slice 1) + orders verified live
 
 Cross-device convergence, slice 1 of the platform program. Goal: a change on one device
