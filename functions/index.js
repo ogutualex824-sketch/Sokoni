@@ -6836,6 +6836,15 @@ exports.claimAvailableDelivery = onCall(
       if (d.status !== "awaiting_rider") throw new HttpsError("failed-precondition", "Delivery no longer available.");
       const riderDoc = await t.get(db.collection("rideDrivers").doc(uid));
       const rider = riderDoc.exists ? (riderDoc.data() || {}) : {};
+      /* SECURITY (backend-enforced — never trust the UI): only an APPROVED, non-suspended rider
+         may accept a job. Without this, any signed-in user could claim a delivery by calling the
+         function directly. */
+      const _st = String(rider.status || "").toLowerCase();
+      const _approved = rider.approved === true || ["approved", "active", "online", "verified"].includes(_st);
+      const _blocked  = ["suspended", "rejected", "banned", "deactivated"].includes(_st);
+      if (!riderDoc.exists || !_approved || _blocked) {
+        throw new HttpsError("permission-denied", "Your rider account is not approved to accept deliveries.");
+      }
       const nowTs = admin.firestore.FieldValue.serverTimestamp();
       t.update(ref, {
         status: "driver_accepted", assignedRiderId: uid, riderId: uid,

@@ -1489,6 +1489,10 @@ function renderDeliveries(){
   const avEl = document.getElementById("availableDeliveries");
   const myEl = document.getElementById("myDeliveries");
   const veh  = currentDriver && currentDriver.vehicle;
+  /* Available Deliveries is an ONLINE-only surface — hide the whole section header when offline so
+     the hub stays clean; a rider only sees the job pool after going online. */
+  const _hdr = document.getElementById("deliveriesHeader");
+  if(_hdr) _hdr.style.display = isOnline ? "" : "none";
 
   let orders = [];
   try { orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
@@ -1529,7 +1533,9 @@ function renderDeliveries(){
         <button type="button" class="dc-decline-btn" onclick="this.closest('.delivery-card').remove()">Decline</button>
       </div>
     </div>`;
-  }).join("") : `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">${isOnline?`No ${CARGO_NAME[CARGO_CAPACITY[veh]]||"matching"} deliveries right now. Check back soon.`:"Go online to see available deliveries."}</div>`;
+  }).join("") : (isOnline
+    ? `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">No ${CARGO_NAME[CARGO_CAPACITY[veh]]||"matching"} deliveries right now. Check back soon.</div>`
+    : `<div style="color:rgba(255,255,255,0.4);font-size:13px;padding:20px 14px;text-align:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">😴 You're offline.<br><span style="color:rgba(255,255,255,0.3)">Go online to start receiving delivery requests.</span></div>`);
 
   const statusMap = { picked:"📦 Picked Up", transit:"🛵 In Transit", arrived:"🏠 Arrived", delivered:"✅ Delivered" };
   myEl.innerHTML = myDeliveries.length ? myDeliveries.map(d=>`
