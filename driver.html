@@ -1739,7 +1739,7 @@ function _showDriverAccountGate(mode, detail){
     if(av){ av.style.display="flex"; if(/^https?:\/\/[^'")\s]+$/.test(acct.photo)){ av.style.backgroundImage="url('"+acct.photo+"')"; av.textContent=""; } else { av.style.backgroundImage=""; av.textContent=_riderInitials(acct.name); } }
     if(chip) chip.style.display="";
     if(g) g.textContent="Hello "+(String(acct.name||'there').split(/\s+/)[0])+" 👋";
-    if(z) z.textContent="You're signed in — become a rider to start delivering.";
+    if(z) z.textContent=detail||"You're signed in — become a rider to start delivering.";
     if(apply){ apply.style.display="block"; }
   } else if(mode==='loading'){
     if(lb) lb.style.display="none";
@@ -1750,7 +1750,7 @@ function _showDriverAccountGate(mode, detail){
     if(lb){ lb.style.display=""; lb.textContent="🔑 Sign In"; }
     if(av) av.style.display="none"; if(chip) chip.style.display="none";
     if(g) g.textContent="🔑 Sign in to drive";
-    if(z) z.textContent="Use your SOKONI account — one login for everything.";
+    if(z) z.textContent=detail||"Use your SOKONI account — one login for everything.";
   }
 }
 
@@ -1842,27 +1842,29 @@ async function _fetchRiderProfile(user){
 }
 
 async function _enterDriverIdentity(){
-  const user = await _waitForFirebaseUser(6000);
-  /* Never clobber a working fast-path dashboard on a flaky/absent read — only GATE when we
-     have no driver yet. A successful account read always refreshes + wins. */
-  if (!user) { if (!currentDriver) _showDriverAccountGate('signin'); return; }
+  /* More patient on iOS (App Check + session restore can take ~10s). */
+  const user = await _waitForFirebaseUser(12000);
+  if (!user) { if (!currentDriver) _showDriverAccountGate('signin', 'No signed-in session detected on this device — tap Sign In.'); return; }
+  const _u10 = String(user.uid).slice(0,10);
 
-  /* PRIMARY: App-Check-independent endpoint. On iOS the direct Firestore read below 403s on App
-     Check and drops an approved rider to the guest gate — this path avoids that entirely. */
+  /* PRIMARY: App-Check-independent endpoint (works on iOS where the direct Firestore read 403s). */
   try {
     const prof = await _fetchRiderProfile(user);
     if (prof && prof.signedIn) {
       if (prof.rider && prof.rider.exists) {
-        currentDriver = { id: user.uid, ...prof.rider };
+        currentDriver = { id: prof.rider.id || user.uid, ...prof.rider };
         try { sessionStorage.setItem("sokoniDriverSession", currentDriver.id); } catch(_){}
         showDriverDashboard();
       } else if (!currentDriver) {
-        _showDriverAccountGate('apply');
+        /* On-screen reason (no console needed): signed in, but no rider on this account. */
+        _showDriverAccountGate('apply', 'Signed in ✓ (uid '+_u10+'…) — no rider record found for this account. Apply below, or sign in with the account that has your rider profile.');
       }
-      return;
+      return;   /* authoritative answer without App Check */
     }
+    _showDriverAccountGate('loading', 'Signed in (uid '+_u10+'…) — checking rider profile…');
   } catch(_){}
 
+  /* Fallback only if the endpoint was unreachable. */
   const db = window.firebaseDB;
   if (!db) { if (!currentDriver) _showDriverAccountGate('loading', 'Starting up — one moment.'); setTimeout(_enterDriverIdentity, 1500); return; }
   try {
@@ -1874,11 +1876,11 @@ async function _enterDriverIdentity(){
       try { sessionStorage.setItem("sokoniDriverSession", currentDriver.id); } catch(_){}
       showDriverDashboard();
     } else if (!currentDriver) {
-      _showDriverAccountGate('apply');   /* signed in, not yet a driver */
+      _showDriverAccountGate('apply', 'Signed in ✓ (uid '+_u10+'…) — no rider record found. Apply below.');
     }
   } catch(e){
     console.warn('[driver] identity entry error:', e && e.message);
-    if (!currentDriver) _showDriverAccountGate('signin', e && e.message);
+    if (!currentDriver) _showDriverAccountGate('signin', 'Signed in (uid '+_u10+'…) but rider lookup failed: '+((e&&e.message)||'error'));
   }
 }
 window._enterDriverIdentity = _enterDriverIdentity;
