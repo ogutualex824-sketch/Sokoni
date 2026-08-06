@@ -293,14 +293,19 @@
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" id="driverLoginBtn" onclick="driverAuthToggle()" style="display:none;padding:10px 18px;background:rgba(113,255,0,0.14);border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🔑 Driver Login</button>
-        <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="padding:10px 18px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🟢 Go Online</button>
         <a href="services.html" style="display:inline-flex;align-items:center;gap:5px;padding:10px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;white-space:nowrap;">🛠️ Services</a>
         <button type="button" onclick="exitDriverWorkspace()" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">← Exit Hub</button>
       </div>
-      <!-- Apply-to-Driver — immediately below the Sign In / Services / Exit Hub row; shown only
-           when the account is signed in but not yet a registered driver. -->
-      <button type="button" id="applyDriverTopBtn" onclick="_gotoApply()" style="display:none;margin-top:8px;width:100%;padding:12px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;color:#04120a;font-weight:900;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;">🛵 Apply to Become a Driver</button>
     </div>
+
+    <!-- ── ONE authoritative shift control ──
+         Go Online / Go Offline is the SINGLE switch for online state + GPS tracking + delivery-job
+         availability. It replaces the separate "Shift Management" card, which duplicated this and
+         could drift out of sync (two controls writing the same field independently). -->
+    <button type="button" id="driverOnlineBtn" onclick="toggleOnline()" style="width:100%;padding:16px;background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:900;font-size:16px;border-radius:14px;cursor:pointer;font-family:inherit;margin-bottom:12px;">🟢 Go Online</button>
+
+    <!-- Apply-to-Driver — shown only when signed in but not yet a registered driver. -->
+    <button type="button" id="applyDriverTopBtn" onclick="_gotoApply()" style="display:none;width:100%;padding:12px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;color:#04120a;font-weight:900;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;margin-bottom:12px;">🛵 Apply to Become a Driver</button>
 
     <!-- Stats row -->
     <div class="driver-stat-row" id="driverStats"></div>
@@ -376,22 +381,9 @@
     <div class="section-heading" id="claimableHeader" style="display:none">🙋 Claimable Now — no rider assigned yet</div>
     <div id="claimableOrders"></div>
 
-    <!-- ── Shift Control ── -->
-    <div class="section-heading">🟢 Shift Management</div>
-    <div id="shiftControl" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:18px;padding:18px;margin-bottom:16px;">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
-        <div>
-          <div style="font-size:15px;font-weight:800;color:white;" id="shiftStatusLabel">Status: Offline</div>
-          <div style="font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px;" id="shiftDuration">Shift not started</div>
-        </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" id="btnGoOnline" onclick="shiftGoOnline()" style="padding:10px 16px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Go Online</button>
-          <button type="button" id="btnBreak" onclick="shiftBreak()" style="padding:10px 16px;background:rgba(255,140,0,0.1);border:1px solid rgba(255,140,0,0.2);color:#ff8c00;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">Take Break</button>
-          <button type="button" id="btnEndShift" onclick="shiftEnd()" style="padding:10px 16px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.18);color:#ff6b6b;font-weight:800;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">End Shift</button>
-        </div>
-      </div>
-      <div id="shiftStats" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;"></div>
-    </div>
+    <!-- Shift Management card REMOVED — the single "Go Online / Go Offline" button above is now the
+         one authoritative shift control (online state + GPS + job availability). Shift duration/stats
+         are derived from that online state, not a separate toggle that could drift. -->
 
     <!-- ── Batch Delivery / Route ── -->
     <div class="section-heading">🗺️ Multi-Stop Route</div>
@@ -799,6 +791,13 @@ function chargingCost(km){ return runningCostForTrip("ebike", km); }
 function _drvToast(msg,isErr){var t=document.getElementById('_drvToastEl');if(!t){t=document.createElement('div');t.id='_drvToastEl';t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:rgba(10,10,10,.92);border:1px solid rgba(113,255,0,.3);color:#71ff00;padding:10px 18px;border-radius:10px;font-size:13px;z-index:9999;max-width:90vw;text-align:center;transition:opacity .3s;pointer-events:none;';document.body.appendChild(t);}if(isErr){t.style.borderColor='rgba(255,80,80,.4)';t.style.color='#ff8080';}else{t.style.borderColor='rgba(113,255,0,.3)';t.style.color='#71ff00';}t.textContent=msg;t.style.opacity='1';clearTimeout(t._to);t._to=setTimeout(()=>{t.style.opacity='0';},3200);}
 
 /* ── Registration toggle ── */
+/* window.toast was never defined on this page — ~18 rider actions called window.toast?.() (silent
+   no-ops giving no feedback), and TWO called it unguarded (_drvCompleteDelivery lines ~2231/2273),
+   which THREW: the "Mark Delivered" success threw AFTER the delivered write, so the completed card
+   stayed stuck. Alias to the real helper. Call convention on this page: 2nd arg === false means an
+   ERROR (red); otherwise success (green). */
+window.toast = window.toast || function(msg, arg){ try { _drvToast(String(msg), arg === false); } catch(_){} };
+
 function showDriverLogin(){ document.getElementById("driverLoginForm").style.display="block"; document.getElementById("driverRegForm").style.display="none"; }
 function showDriverRegForm(){ document.getElementById("driverRegForm").style.display="block"; document.getElementById("driverLoginForm").style.display="none"; }
 
@@ -1101,6 +1100,18 @@ function toggleOnline(){
         status: isOnline ? 'active' : 'offline',
         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
       }).catch(function(){});
+      /* Derive the shift/identity state from the ONE online switch (single source of truth) —
+         mirror to users/{uid}.driverProfile so `shiftStatus` is never an independent, drift-prone
+         toggle. Additive (arrayUnion) so a multi-role account keeps every role. */
+      firebase.firestore().collection('users').doc(_ru).set({
+        roles: firebase.firestore.FieldValue.arrayUnion('driver'),
+        isDriver: true, isRider: true,
+        driverProfile: {
+          shiftStatus: isOnline ? 'online' : 'offline',
+          lastShiftAt: firebase.firestore.FieldValue.serverTimestamp()
+        },
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }, { merge: true }).catch(function(){});
     }
   } catch(e){}
   _syncOnlineButtons();
@@ -3319,7 +3330,7 @@ window.toggleOnline = async function() {
       if (!window.isOnline) { el.innerHTML = ''; return; }
       if (!list.length) { el.innerHTML = '<div class="section-heading">🛵 Available Deliveries</div><div style="color:rgba(255,255,255,0.3);font-size:13px;padding:10px 0;">No deliveries right now — check back soon.</div>'; return; }
       el.innerHTML = '<div class="section-heading">🛵 Available Deliveries ('+list.length+')</div>' + list.map(function(d){
-        var net = d.driverNet || Math.round((Number(d.deliveryFee)||0)*0.8);
+        var net = d.driverNet || Math.round((Number(d.deliveryFee)||0)*0.88);
         return '<div class="delivery-card"><div class="dc-top"><div><div class="dc-id">Order '+_esc(String(d.orderId||d.id).slice(0,10))+'</div>'
           + '<div class="dc-date">'+_esc(d.sellerName||'Shop')+' → '+_esc(String(d.deliveryAddress||'—').slice(0,40))+'</div></div>'
           + '<div><div class="dc-fee">KES '+net+' <span style="font-size:11px;color:rgba(255,255,255,0.35)">to you</span></div></div></div>'
@@ -3328,14 +3339,27 @@ window.toggleOnline = async function() {
       }).join('');
       el.querySelectorAll('button[data-del]').forEach(function(b){
         b.onclick = async function(){
-          var id = b.getAttribute('data-del'); b.disabled = true; b.textContent = 'Accepting…';
+          var id = b.getAttribute('data-del'); var _orig = b.textContent;
+          b.disabled = true; b.textContent = 'Accepting…';
           try {
-            if (!_riderUid()) { b.disabled=false; b.textContent='✅ Accept'; alert('Please sign in first.'); return; }
+            if (!_riderUid()) { b.disabled=false; b.textContent=_orig; alert('Please sign in first.'); return; }
             var fn = firebase.functions().httpsCallable('claimAvailableDelivery');
             var res = await fn({ deliveryRef: id });
             if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; alert('Delivery accepted! Proof PIN: ' + (res.data.proofPin || '—')); }
-            else { b.disabled=false; b.textContent='✅ Accept'; alert('Could not accept.'); }
-          } catch(e){ b.disabled=false; b.textContent='✅ Accept'; alert((e && e.message) || 'Could not accept — it may have just been taken.'); }
+            else { b.disabled=false; b.textContent=_orig; alert('Could not accept — please try again.'); }
+          } catch(e){
+            /* Full diagnostics to console; friendly, code-aware message to the rider. */
+            console.error('[Accept delivery] failed:', e);
+            console.error('[Accept delivery] code:', e && e.code, '| message:', e && e.message, '| details:', e && e.details);
+            b.disabled=false; b.textContent=_orig;
+            var code = (e && e.code) || '';
+            var msg = (code === 'permission-denied') ? (e.message || 'Your rider account is not approved yet.')
+                    : (code === 'failed-precondition') ? (e.message || 'This delivery was just taken.')
+                    : (code === 'unauthenticated') ? 'Please sign in again.'
+                    : (code === 'internal') ? 'Server is starting up — please tap Accept again in a moment.'
+                    : (e && e.message) || 'Unable to accept delivery. Please try again.';
+            alert(msg);
+          }
         };
       });
     }
