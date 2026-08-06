@@ -1,3 +1,19 @@
+## [2026-08-06] — chore(hardening): production validation instruments (Phase 2 + 4 + launch checklist)
+
+Feature freeze → hardening phase. Evidence-based validation, no fabricated "done".
+
+- scripts/qa/consistency-audit.js: read-only Phase-2 audit of a merchant's canonical sources.
+  Production result (KASS D5Ql2): identity one doc + unique roles; sellers/{uid} shop; 103 products
+  no owner-mismatch, all have stock; posProducts empty; orders 0 on deprecated uid (backfill holds).
+  One gap: posTerminals/{uid}_hardware not saved yet — run wizard Save once.
+- Phase 4 audit-coverage analysis: dispatch/FinOS/device/admin covered; refund, stock-adjust,
+  price-change, receipt-reprint are GAPS to close before onboarding.
+- docs/LAUNCH_READINESS.md: living checklist — every flow marked PROVEN / ENG (needs device test) /
+  GAP with evidence + test steps, a device matrix (with the iOS Web-Bluetooth caveat), and Go/No-Go.
+
+Files: scripts/qa/consistency-audit.js, docs/LAUNCH_READINESS.md, CHANGELOG.md. No production code
+change. No DB/API/security change.
+
 ## [2026-08-06] — fix(orders): buyer my-orders empty after account merge — match uid OR buyerUid
 
 Evidence (scripts/qa/inspect-orders.js): the buyer's 4 KASS orders (phone 254705726803) carry
