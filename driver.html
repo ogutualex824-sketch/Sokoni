@@ -1719,7 +1719,9 @@ function _showDriverAccountGate(mode, detail){
 
 /* Top button (only shown as "Sign In" on the sign-in gate) → account sign-in, not a driver PIN. */
 function driverAuthToggle(){
-  location.href = '/login.html?return=' + encodeURIComponent('/driver');
+  /* auth.js (login handler) reads `redirect`/`next`, NOT `return` — sending `return` was ignored,
+     so after sign-in the rider landed on Home instead of back in the Delivery Hub. */
+  location.href = '/login.html?redirect=' + encodeURIComponent('/driver');
 }
 window.driverAuthToggle = driverAuthToggle;
 
