@@ -2958,10 +2958,26 @@ function upToast(msg, ok){
   }, 2800);
 }
 
+/* Roles must be a UNIQUE, lowercased set. Account merges concatenated arrays, leaving duplicates
+   like ['buyer','buyer','seller'] that rendered as "Buyer Buyer Seller". Normalize on every read
+   and write so every consumer (chips, role switcher, hub gates) sees one of each, order preserved. */
+function _dedupeRoles(arr){
+  var seen = {}, out = [];
+  (Array.isArray(arr) ? arr : []).forEach(function(r){
+    var k = String(r == null ? '' : r).trim().toLowerCase();
+    if (k && !seen[k]) { seen[k] = 1; out.push(k); }
+  });
+  return out.length ? out : ['buyer'];
+}
 function getUser(){
-  try{ return JSON.parse(localStorage.getItem('sokoniUser') || 'null'); }catch(e){ return null; }
+  try{
+    var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null');
+    if (u && Array.isArray(u.roles)) u.roles = _dedupeRoles(u.roles);
+    return u;
+  }catch(e){ return null; }
 }
 function setUser(u){
+  try{ if (u && Array.isArray(u.roles)) u.roles = _dedupeRoles(u.roles); }catch(_){}
   localStorage.setItem('sokoniUser', JSON.stringify(u));
 }
 
@@ -3418,11 +3434,27 @@ function _renderProfileCompletion(u){
   hint.textContent = 'Add: ' + missing.slice(0,3).join(', ') + (missing.length > 3 ? ' + ' + (missing.length-3) + ' more' : '');
 }
 
+/* One-time canonical self-heal: if the STORED roles array had duplicates (merge artifact),
+   write the deduped set back to Firestore so every server-side consumer is corrected too. */
+function _healRolesOnce(){
+  if(window.__rolesHealed) return;
+  try{
+    var raw = JSON.parse(localStorage.getItem('sokoniUser')||'null');
+    if(!raw || !Array.isArray(raw.roles) || !raw.uid) return;
+    var clean = _dedupeRoles(raw.roles);
+    if(clean.length !== raw.roles.length){
+      window.__rolesHealed = true;
+      raw.roles = clean; setUser(raw);
+      if(typeof saveToFirestore==='function'){ saveToFirestore({roles:clean}).catch(function(){}); }
+    }
+  }catch(_){}
+}
 function renderRoleChips(){
   _user = getUser();
   var container = document.getElementById('upRoleChips');
   if(!container) return;
-  var roles = _user.roles || ['buyer'];
+  _healRolesOnce();
+  var roles = _dedupeRoles(_user.roles || ['buyer']);
   container.innerHTML = roles.map(function(rk){
     var rd = getRoleDef(rk);
     return '<span class="up-role-chip '+escHtml(rd.chipClass)+'" title="'+escHtml(rd.hubLabel)+'">'+rd.emoji+' '+escHtml(rd.label)+'</span>';
