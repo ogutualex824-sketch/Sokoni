@@ -306,6 +306,24 @@ Never expose internal implementation details to end users.
 
 ---
 
+# UI Data Integrity
+
+**No UI component may fabricate business metrics.**
+
+Revenue, orders, balances, counts, and any financial or operational figure must come from a
+canonical source (a Firestore aggregate or an authoritative `/api` endpoint) — never from a
+client-side computation over `localStorage`, listing prices, magic multipliers, or unrelated
+local state.
+
+When canonical data is unavailable, show a neutral state — `—`, `No data yet`, `Calculating…` —
+**not** `0` and **not** an extrapolated guess. A real canonical `0` is fine; an *unknown* rendered
+as `0` (or as an invented number) is a defect.
+
+No demo/seed fallback on production data paths. Pair with: never show a success toast/banner until
+the canonical backend operation has completed.
+
+---
+
 # Testing
 
 For every significant feature:
