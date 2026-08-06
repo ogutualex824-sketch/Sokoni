@@ -1031,11 +1031,18 @@ const SPos = (function () {
       const receiptRecord = { transactionId: txn.id, receiptNo: txn.receiptNo, data: receiptData, ts: Date.now() };
       await PosDB.receipts.save(receiptRecord).catch(() => {});
 
-      /* Print receipt — use SokoniPrint (enhanced: logo + QR) if available */
+      /* Print receipt — route through the single public print API (PosPrintService),
+         which owns transport selection, queue, telemetry and the legacy fallback.
+         Fire-and-forget: a print failure must never interrupt order completion. */
       if (state.settings.autoPrint || payInfo.method === 'card') {
-        if (window.SokoniPrint) {
+        if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
+          PosPrintService.printReceipt(receiptData, { method: payInfo.method, payments: txn.payments })
+            .catch(() => { /* service already falls back internally; last-ditch guard below */
+              if (window.SokoniPrint) SokoniPrint.print('receipt', receiptData).catch(() => window.PosPrinter && PosPrinter.printBrowser(receiptData));
+            });
+        } else if (window.SokoniPrint) {
           SokoniPrint.print('receipt', receiptData).catch(() => PosPrinter.printBrowser(receiptData));
-        } else {
+        } else if (window.PosPrinter) {
           PosPrinter.print(receiptData).catch(() => {});
         }
       }

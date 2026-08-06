@@ -402,9 +402,15 @@ const PosBoss = (() => {
     const pBtn = document.getElementById('suc-print-btn');
     if (pBtn) pBtn.onclick = () => {
       const d = { ...txn, ...bizSettings };
-      if (window.SokoniPrint) {
+      /* Route through the single public print API (PosPrintService); fall back to the
+         legacy chain if the service is absent. Fire-and-forget. */
+      if (window.PosPrintService && typeof PosPrintService.printReceipt === 'function') {
+        PosPrintService.printReceipt(d, {}).catch(() => {
+          if (window.SokoniPrint) SokoniPrint.print('receipt', d).catch(() => window.PosPrinter && PosPrinter.printBrowser(d));
+        });
+      } else if (window.SokoniPrint) {
         SokoniPrint.print('receipt', d).catch(() => PosPrinter.printBrowser(d));
-      } else {
+      } else if (window.PosPrinter) {
         PosPrinter.print(d).catch(() => PosPrinter.printBrowser(d));
       }
     };

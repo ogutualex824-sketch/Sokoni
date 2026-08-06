@@ -788,7 +788,9 @@ class PosPrintService {
   /* ── PUBLIC: Print after sale (primary checkout integration) ─ */
   async printAfterSale (receipt, context = {}) {
     const s = this.settings.get();
-    if (!s.autoAfterSale) return { skipped: true };
+    /* `force` lets printReceipt() — where the caller has already decided to print —
+       bypass the auto-after-sale preference without changing that preference. */
+    if (!s.autoAfterSale && !context.force) return { skipped: true };
 
     /* iOS / Safari: Web Bluetooth / Serial / USB not available — route to HTML receipt */
     if (window.SokoniIOSPrint) {
@@ -831,6 +833,82 @@ class PosPrintService {
     }
 
     return result;
+  }
+
+  /* ── PUBLIC: the ONE receipt entry point for the sale flow ─────
+     Everything that prints a sale receipt calls this — nothing else may touch a
+     transport directly. It gives every receipt a stable Job ID, drives an explicit
+     lifecycle (queued → preparing → sending → success | offline-queued, or
+     retry → fallback → completed), emits one telemetry event, and keeps the
+     pre-consolidation legacy chain as an AUTOMATIC fallback until on-hardware parity
+     is proven. It never throws — a failed receipt must never interrupt order completion.
+     The Job ID is derived from the receipt number, so a retry can never duplicate a
+     sale (printing is already decoupled from settlement, which happened before this). */
+  async printReceipt (order = {}, context = {}) {
+    const jobId = 'rcpt_' + String(order.receiptNo || order.receiptNumber || order.id || order.transactionId || Date.now());
+    const _now  = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    const t0    = _now();
+    const dur   = () => Math.round(_now() - t0);
+    const pm    = _pm();
+    const emit  = (state, extra) => { try { this._emit('lifecycle', { jobId, state, at: Date.now(), ...(extra || {}) }); } catch (_) {} };
+
+    emit('queued', { receiptId: order.receiptNo || order.receiptNumber || null });
+
+    /* If neither the enterprise transport service nor the iOS HTML path is present,
+       there is no drain path for the offline queue — go straight to the legacy chain. */
+    const enterpriseAvailable = !!pm || !!window.SokoniIOSPrint;
+    if (!enterpriseAvailable) {
+      emit('fallback', { reason: 'no PrinterManager/iOS path' });
+      const ok = await this._legacyFallback(order);
+      const status = ok ? 'fallback_success' : 'failed';
+      emit(status);
+      this._telemetry({ jobId, transport: 'legacy', printer: null, durationMs: dur(), retries: 1, status, fallback: true });
+      return { jobId, status, fallback: true };
+    }
+
+    try {
+      emit('preparing');
+      emit('sending', { transport: pm ? pm._activeTransport : 'ios/browser' });
+      const result = await this.printAfterSale(order, { ...context, force: true, jobId });
+      const state  = result && result.skipped ? 'skipped'
+                   : result && result.queued  ? 'queued_offline'   /* success of the enterprise path — will drain on reconnect */
+                   :                             'success';
+      emit(state, { transport: pm ? pm._activeTransport : 'ios/browser' });
+      this._telemetry({
+        jobId,
+        transport: (pm && pm._activeTransport) || (result && result.queued ? 'queue' : 'ios/browser'),
+        printer:   (pm && pm.profile && pm.profile.model) || null,
+        durationMs: dur(), retries: 0, status: state,
+      });
+      return { jobId, ...result };
+    } catch (err) {
+      /* Enterprise path failed hard — fall back to the legacy chain (kept until parity proven). */
+      emit('retry', { error: err && err.message });
+      const ok = await this._legacyFallback(order);
+      const status = ok ? 'fallback_success' : 'failed';
+      emit(status);
+      this._telemetry({ jobId, transport: 'legacy', printer: null, durationMs: dur(), retries: 1, status, fallback: true });
+      return { jobId, status, fallback: true };
+    }
+  }
+
+  /* The pre-consolidation print chain, preserved verbatim (SokoniPrint → PosPrinter.printBrowser
+     → PosPrinter.print) so behaviour on fallback is identical to before this migration. */
+  async _legacyFallback (order) {
+    try { if (window.SokoniPrint) { await SokoniPrint.print('receipt', order); return true; } } catch (_) {
+      try { if (window.PosPrinter) { await PosPrinter.printBrowser(order); return true; } } catch (_) {}
+    }
+    try { if (window.PosPrinter && !window.SokoniPrint) { await PosPrinter.print(order); return true; } } catch (_) {}
+    return false;
+  }
+
+  /* One lightweight telemetry event per print — Transport / Printer / Duration / Retries / Status.
+     Rides the existing emitter (+ optional analytics + a console breadcrumb); durable storage
+     stays in history/metrics so this adds no new persistence. */
+  _telemetry (evt) {
+    try { this._emit('telemetry', evt); } catch (_) {}
+    try { if (window.SokoniAnalytics && typeof SokoniAnalytics.track === 'function') SokoniAnalytics.track('pos_receipt_print', evt); } catch (_) {}
+    try { console.info('[PosPrintService] receipt', evt.status, '·', evt.transport, '·', evt.durationMs + 'ms', '· retries', evt.retries); } catch (_) {}
   }
 
   /* ── Cash drawer ───────────────────────────────────────────── */
