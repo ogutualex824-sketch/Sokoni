@@ -39,14 +39,41 @@ Sensitive actions must write `auditLogs` with `{ actor, ts, action, object, outc
 | Financial (payouts, WHT/VAT, settlements) | ✅ | FinOS `writeAuditLog` |
 | Device register / lock / logout / decommission | ✅ | `device-manager.js` |
 | Admin invitations, subscriptions, incidents | ✅ | admin-invitations, ai-subscriptions, ecc |
-| **Refund** (`posProcessRefund`) | ❌ **GAP** | — |
-| **Inventory adjustment** | ❌ **GAP** | verify CF name |
-| **Price change** (product edit) | ❌ **GAP** | — |
-| **Receipt reprint** | ❌ **GAP** | — |
+| **Refund** (`posProcessRefund`) | ✅ `pos.refund` | order, amount, reason, prev→new status |
+| **Inventory adjustment** (`inventoryAdjustStock`) | ✅ `inventory.stock_adjust` | product, prev→new available, delta, reason |
+| **Price change** (`indexProductUpdate` trigger) | ✅ `product.price_change` | prev→new price, delta, actor=updatedBy |
+| **Receipt reprint** (`posLogReprint`) | ✅ `pos.receipt_reprint` | order, type, printer, server reprint count |
 | **Role change** (`grantAdmin`/`setUserRole`) | ⚠️ verify | index.js |
 
-**Action:** close the 4 gaps (refund, stock-adjust, price, reprint) with the same fire-and-forget
-`auditLogs.add` pattern before onboarding merchants.
+All four written through **one canonical schema** (`functions/pos-audit.js` → `writeAudit`):
+`{ schema, action, actorUid, actorRole, branchId, objectType, objectId, before, after, delta,
+reason, outcome, metadata, ts }`. Dispatch audit migrated to the same schema. Deployed `2026-08-06`.
+**Remaining:** confirm role-change (`grantAdmin`/`setUserRole`) writes an audit entry.
+
+---
+
+## Phase 6 — Operational Resilience (VERIFIED with evidence)
+
+**Firestore backups** (`gcloud firestore ...`, `2026-08-06`):
+- ✅ Daily backup schedule, **98-day retention** (8467200s), since 2026-06-25.
+- ✅ **Point-in-Time Recovery ENABLED**.
+- ✅ Alert **"Backup Not Run in 26 Hours"** (enabled) — catches backup failures.
+- ☐ **Restore drill** not yet performed — do one test restore before launch to prove restorability.
+
+**Monitoring & alerting** (Cloud Monitoring API, `2026-08-06`): **20 alert policies, all enabled**,
+**2 email channels** (SOKONI Ops Alerts, Kaspa):
+
+| Requested | Covered by |
+|---|---|
+| Cloud Function failures | ✅ CF Error Rate >5%, CF P95 Latency >10s |
+| Firestore errors | ✅ Firestore Read Latency P99 >2s |
+| Payment failures | ✅ Payment Verification Failure >10%, Idempotency Replay Spike |
+| High error rates | ✅ HTTP 5xx >1%, SLO Order Success <99%, Checkout Session Error |
+| Backup failures | ✅ Backup Not Run in 26h |
+| Authentication failures | ⚠️ **GAP** — no explicit auth-failure policy |
+| Dispatch failures | ⚠️ partial (Order Success SLO); no explicit dispatch policy |
+
+**Action:** add auth-failure + dispatch-failure alert policies; run one backup restore drill.
 
 ---
 
@@ -73,7 +100,7 @@ Legend: **PROVEN** (evidence) · **ENG** (built, needs device test) · **GAP** (
 | 15 | Analytics updates | ENG | verify KPI/analytics after a real sale |
 | 16 | Cross-device sync | ENG | live indicator (v322); test A↔B within seconds |
 | 17 | Offline cash sale recovery | ENG | idempotent queue live (v324); test airplane-mode → reconnect |
-| 18 | Backup + monitoring | GAP | confirm Firestore backups + an ops alert exist |
+| 18 | Backup + monitoring | PROVEN | daily backups + 98-day retention + PITR; 20 alert policies enabled + email channels (see Phase 6). Pending: restore drill + auth/dispatch alerts |
 
 ---
 

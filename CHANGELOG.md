@@ -1,3 +1,20 @@
+## [2026-08-06] — feat(audit)+chore(hardening): canonical audit schema + operational-resilience evidence
+
+Audit gaps CLOSED via one schema (functions/pos-audit.js `writeAudit`): pos.refund,
+inventory.stock_adjust, product.price_change, pos.receipt_reprint (new posLogReprint callable,
+invoker=allUsers), dispatch migrated. Fields: schema/action/actorUid/actorRole/branchId/objectType/
+objectId/before/after/delta/reason/outcome/metadata/ts. Deployed 5 CFs.
+
+Operational resilience VERIFIED with evidence (not assumption):
+- Firestore: daily backup schedule, 98-day retention, PITR ENABLED, "Backup Not Run in 26h" alert.
+- Monitoring: 20 alert policies enabled (CF error rate, Firestore latency, payment failure, 5xx,
+  SLOs, backup-not-run, fraud, rate-limit) + 2 email channels. Gaps: explicit auth-failure +
+  dispatch-failure policies; a restore drill.
+docs/LAUNCH_READINESS.md updated with all evidence + Go/No-Go.
+
+Files: functions/pos-audit.js (new), pos-zero-friction.js, inventory-engine.js, index.js,
+pos-marketplace-sync.js, pos-v2.html, docs/LAUNCH_READINESS.md.
+
 ## [2026-08-06] — chore(hardening): production validation instruments (Phase 2 + 4 + launch checklist)
 
 Feature freeze → hardening phase. Evidence-based validation, no fabricated "done".
