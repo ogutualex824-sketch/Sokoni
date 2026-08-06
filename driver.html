@@ -1491,17 +1491,18 @@ function renderDeliveries(){
   const veh  = currentDriver && currentDriver.vehicle;
   /* Available Deliveries is an ONLINE-only surface — hide the whole section header when offline so
      the hub stays clean; a rider only sees the job pool after going online. */
+  /* The endpoint loader (#availDispatch) renders its own "🛵 Available Deliveries" heading, so hide
+     this legacy one to avoid a duplicate. */
   const _hdr = document.getElementById("deliveriesHeader");
-  if(_hdr) _hdr.style.display = isOnline ? "" : "none";
+  if(_hdr) _hdr.style.display = "none";
 
-  let orders = [];
-  try { orders = JSON.parse(localStorage.getItem("sokoniOrders"))||[]; } catch(e){}
   const myDeliveries = (currentDriver && currentDriver.deliveries) || [];
-  const myOrderIds = new Set(myDeliveries.map(d=>d.orderId));
-  /* Filter orders by cargo capacity match */
-  const filtered = isOnline
-    ? orders.filter(o => ["processing","shipped"].includes(o.status) && !myOrderIds.has(o.id) && vehicleCanHandleOrder(veh, o))
-    : [];
+  /* Available deliveries are owned by the ENDPOINT loader (#availDispatch → /api/available-deliveries
+     → packageRequests awaiting_rider — the real dispatch queue). The legacy localStorage path read
+     BUYER orders (sokoniOrders), never the rider jobs, so nothing ever showed. Retired: keep this
+     empty and trigger the endpoint refresh below. */
+  const filtered = [];
+  if(isOnline && window._refreshAvailDeliveries){ try{ window._refreshAvailDeliveries(); }catch(_){} }
 
   const CARGO_ICON = { parcel:"📦", medium:"🛋️", large:"🧱", freight:"🏗️" };
   const CARGO_NAME = { parcel:"Parcel", medium:"Bulk Goods", large:"Large Cargo", freight:"Freight" };
@@ -1534,7 +1535,7 @@ function renderDeliveries(){
       </div>
     </div>`;
   }).join("") : (isOnline
-    ? `<div style="color:rgba(255,255,255,0.25);font-size:13px;padding:16px 0;">No ${CARGO_NAME[CARGO_CAPACITY[veh]]||"matching"} deliveries right now. Check back soon.</div>`
+    ? ``   /* the endpoint loader (#availDispatch) renders the live packageRequests jobs above */
     : `<div style="color:rgba(255,255,255,0.4);font-size:13px;padding:20px 14px;text-align:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;">😴 You're offline.<br><span style="color:rgba(255,255,255,0.3)">Go online to start receiving delivery requests.</span></div>`);
 
   const statusMap = { picked:"📦 Picked Up", transit:"🛵 In Transit", arrived:"🏠 Arrived", delivered:"✅ Delivered" };
@@ -3343,7 +3344,9 @@ window.toggleOnline = async function() {
       try { var r = await fetch('/api/available-deliveries?cb='+Date.now(), { cache:'no-store' }); var j = r.ok ? await r.json() : null; if (j && j.ok && Array.isArray(j.deliveries)) _render(j.deliveries); } catch(_){}
     }
     function _start(){ _poll(); if (_timer) clearInterval(_timer); _timer = setInterval(_poll, POLL); }
-    if (document.readyState !== 'loading') setTimeout(_start, 1200); else document.addEventListener('DOMContentLoaded', function(){ setTimeout(_start, 1200); });
+    /* Exposed so going online refreshes the job list IMMEDIATELY (no 20s wait). */
+    window._refreshAvailDeliveries = _poll;
+    if (document.readyState !== 'loading') setTimeout(_start, 800); else document.addEventListener('DOMContentLoaded', function(){ setTimeout(_start, 800); });
   })();
   </script>
   <script src="/sokoni-delivery-engine.js"></script>
