@@ -3358,18 +3358,17 @@ function renderHeaderCard(){
   var avatarEl = document.getElementById('upAvatar');
   if(avatarEl) window.SokoniAvatar.bind(avatarEl, _user);
 
-  /* Cover — a real uploaded cover fills the area; otherwise every new profile defaults to the
-     SOKONI logo (centered/contained on the dark brand area), matching the logo avatar default. */
-  var coverImg = document.getElementById('upCoverImg');
-  if(coverImg){
-    if(_user.coverUrl){
-      coverImg.src = _user.coverUrl; coverImg.style.display='block';
-      coverImg.style.objectFit='cover'; coverImg.style.background=''; coverImg.style.padding='';
-    } else {
-      coverImg.src = '/assets/logosokoni.png'; coverImg.style.display='block';
-      coverImg.style.objectFit='contain'; coverImg.style.background='#050505'; coverImg.style.padding='22px';
-      coverImg.onerror = function(){ this.style.display='none'; };
-    }
+  /* Cover — a real uploaded cover fills the area via the <img>; otherwise every new profile shows
+     the SOKONI logo painted as the AREA BACKGROUND. Using a background (not an <img>) for the
+     default means it can't error-hide or flash off on a re-render — fixes "shows then disappears". */
+  var coverImg  = document.getElementById('upCoverImg');
+  var coverArea = document.getElementById('upCoverArea');
+  if(_user.coverUrl){
+    if(coverImg){ coverImg.src=_user.coverUrl; coverImg.style.display='block'; coverImg.style.objectFit='cover'; }
+    if(coverArea){ coverArea.style.background=''; }
+  } else {
+    if(coverImg){ coverImg.style.display='none'; }
+    if(coverArea){ coverArea.style.background = "#050505 url('/assets/logosokoni.png') center/auto 62% no-repeat"; }
   }
 
   /* Verified */
