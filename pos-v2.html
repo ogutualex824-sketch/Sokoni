@@ -216,6 +216,7 @@
 <!-- Printer stack (reused, verified working) -->
 <script src="/sokoni-universal-printer.js" defer></script>
 <script src="/sokoni-bluetooth-printer.js" defer></script>
+<script src="/sokoni-receipt.js" defer></script>
 
 <script type="module">
 /* Import the SAME SDK version firebase.js uses (10.12.2) so the browser DEDUPES this module onto
@@ -347,7 +348,18 @@ async function testPrint(){
   if(!SP||!SP.print){ toast('Printer stack loading — try again','warn'); return; }
   if(!P||!P.isConnected){ try{ if(P&&P.requestAndPair) await P.requestAndPair(); else if(P&&P.autoConnect) await P.autoConnect(); }catch(_){} }
   if(!P||!P.isConnected){ toast('Printer not connected — tap Reconnect','warn'); _refreshPrinter(); return; }
-  try{ await SP.print('custom',{ build(enc,W){ const c=s=>{s=String(s).slice(0,W);return ' '.repeat(Math.max(0,Math.floor((W-s.length)/2)))+s;}; enc.text(c('KASS SHOP')).lf(); enc.text(c('POS Test Print')).lf(); enc.text('-'.repeat(W)).lf(); enc.text(c(new Date().toLocaleString('en-KE'))).lf(); enc.text(c('Printer OK ✓')).lf(); enc.lf();enc.lf(); } }); toast('🧾 Test printed'); }
+  if(!window.SokoniReceipt){ toast('Receipt engine loading — try again','warn'); return; }
+  try{
+    const doc=SokoniReceipt.doc()
+      .center('KASS SHOP',{bold:true,size:'big'})
+      .center('POS Test Print')
+      .rule()
+      .center(new Date().toLocaleString('en-KE'))
+      .center('Printer OK')
+      .feed(2);
+    await SP.print('custom',{ build(enc){ doc.renderTo(enc); } });
+    toast('🧾 Test printed');
+  }
   catch(e){ toast('Print failed: '+(e.message||e),'err'); }
   _refreshPrinter();
 }
@@ -358,16 +370,31 @@ async function printReceipt(orderId){
   const SP=window.SokoniPrinter, P=_P();
   if(!SP||!SP.print){ toast('Printer stack loading','warn'); return; }
   if(!P||!P.isConnected){ toast('Printer offline — receipt saved','warn'); return; }
+  if(!window.SokoniReceipt){ toast('Receipt engine loading — try again','warn'); return; }
   const items=Array.isArray(o.items)?o.items:[], total=Math.round(Number(o.total)||0), sub=Math.round(Number(o.subtotal||total)), del=Math.max(0,total-sub), ff=o.fulfillmentType||'delivery';
-  try{ await SP.print('custom',{ build(enc,W){ const dash='-'.repeat(W), c=s=>{s=String(s).slice(0,W);return ' '.repeat(Math.max(0,Math.floor((W-s.length)/2)))+s;}, row=(l,r)=>{r=String(r).slice(0,W-1);return String(l).slice(0,W-r.length-1).padEnd(W-r.length-1)+' '+r;};
-    enc.text(c('KASS SHOP')).lf(); enc.text(c('SOKONI Receipt')).lf(); enc.text(dash).lf();
-    enc.text(row('Receipt',String(o.id).slice(0,W-9))).lf(); enc.text(row('Fulfillment',ff==='pickup'?'Pickup':'Delivery')).lf();
-    if(ff!=='pickup'&&o.deliveryAddress) enc.text(row('Deliver to',String(o.deliveryAddress).slice(0,W-12))).lf();
-    if(ff!=='pickup'&&(o.customerPhone||o.buyerPhone)) enc.text(row('Phone',String(o.customerPhone||o.buyerPhone))).lf();
-    enc.text(dash).lf(); items.forEach(it=>enc.text(row((it.qty||1)+' x '+String(it.name||'Item').slice(0,W-13),'KES '+Number(it.price||it.unitPrice||0))).lf());
-    enc.text(dash).lf(); enc.text(row('Subtotal','KES '+sub)).lf(); if(del>0) enc.text(row('Delivery','KES '+del)).lf(); enc.text(row('TOTAL PAID','KES '+total)).lf();
-    enc.text(dash).lf(); enc.text(c('Paid via M-PESA')).lf(); enc.text(c('Thank you!')).lf(); enc.lf();enc.lf(); } }); toast('🧾 Printed '+String(o.id).slice(0,10)); }
+  try{
+    const doc=_orderDoc(o,items,total,sub,del,ff);
+    await SP.print('custom',{ build(enc){ doc.renderTo(enc); } });
+    toast('🧾 Printed '+String(o.id).slice(0,10));
+  }
   catch(e){ toast('Print failed: '+(e.message||e),'err'); }
+}
+/* Shared order/dispatch receipt document — same layout engine, used for print AND preview. */
+function _orderDoc(o,items,total,sub,del,ff){
+  const doc=SokoniReceipt.doc()
+    .center('KASS SHOP',{bold:true,size:'big'})
+    .center('SOKONI Receipt')
+    .rule()
+    .row('Receipt',String(o.id))
+    .row('Fulfillment',ff==='pickup'?'Pickup':'Delivery');
+  if(ff!=='pickup'&&o.deliveryAddress){ doc.left('Deliver to:'); doc.left(String(o.deliveryAddress)); }
+  if(ff!=='pickup'&&(o.customerPhone||o.buyerPhone)) doc.row('Phone',String(o.customerPhone||o.buyerPhone));
+  doc.rule();
+  items.forEach(it=>doc.row((it.qty||1)+' x '+String(it.name||'Item'),'KES '+Math.round(Number(it.price||it.unitPrice||0))));
+  doc.rule().row('Subtotal','KES '+sub);
+  if(del>0) doc.row('Delivery','KES '+del);
+  doc.row('TOTAL PAID','KES '+total).rule().center('Paid via M-PESA').center('Thank you!').feed(2);
+  return doc;
 }
 function _refreshPrinter(){
   const P=_P(); const on=!!(P&&P.isConnected);
@@ -521,7 +548,12 @@ async function doCheckout(){
     });
     const saleId=(res&&res.data&&(res.data.saleId||res.data.id))||'';
     toast('✅ Sale complete'+(cashGiven>total?(' · change '+kes(cashGiven-total)):''));
-    try{ _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }catch(_){}
+    /* Show the exact receipt as a preview; the merchant taps Print (WYSIWYG). Falls back to
+       direct print if the engine isn't loaded. Sale is already recorded either way. */
+    try{
+      if(window.SokoniReceipt){ showReceiptPreview(_saleDoc(items,total,'CASH',saleId,cashGiven), function(){ _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }); }
+      else { _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }
+    }catch(_){}
     _clearCart(); closeSheet();
     /* reflect the stock we just deducted in the local grid so counts stay honest */
     items.forEach(it=>{ const p=_catalogue.find(x=>x.id===it.id); if(p&&p.stock!=null) p.stock=Math.max(0,p.stock-it.qty); });
@@ -532,25 +564,48 @@ async function doCheckout(){
   }finally{ _checkoutBusy=false; if(btn){ btn.disabled=false; btn.textContent='Charge '+kes(total); } }
 }
 
+/* Sale receipt document — shared by print + preview. */
+function _saleDoc(items,total,method,saleId,cashGiven){
+  const change=(cashGiven&&cashGiven>total)?(cashGiven-total):0;
+  const doc=SokoniReceipt.doc()
+    .center('KASS SHOP',{bold:true,size:'big'})
+    .center('SOKONI Sale Receipt')
+    .rule();
+  if(saleId) doc.row('Sale',String(saleId));
+  doc.row('Date',new Date().toLocaleString('en-KE')).rule();
+  items.forEach(it=>doc.row((it.qty)+' x '+String(it.name),'KES '+Math.round(it.price*it.qty)));
+  doc.rule().row('TOTAL','KES '+Math.round(total))
+     .row('Paid ('+method+')','KES '+Math.round(cashGiven||total));
+  if(change>0) doc.row('Change','KES '+Math.round(change));
+  doc.rule().center('Thank you!').feed(2);
+  return doc;
+}
 async function _printSaleReceipt(items,total,method,saleId,cashGiven){
   const SP=window.SokoniPrinter, P=_P();
-  if(!SP||!SP.print||!P||!P.isConnected) return;   /* receipt is optional; sale already recorded */
-  const change=(cashGiven&&cashGiven>total)?(cashGiven-total):0;
-  await SP.print('custom',{ build(enc,W){
-    const dash='-'.repeat(W),
-      c=s=>{s=String(s).slice(0,W);return ' '.repeat(Math.max(0,Math.floor((W-s.length)/2)))+s;},
-      row=(l,r)=>{r=String(r).slice(0,W-1);return String(l).slice(0,W-r.length-1).padEnd(W-r.length-1)+' '+r;};
-    enc.text(c('KASS SHOP')).lf(); enc.text(c('SOKONI Sale Receipt')).lf(); enc.text(dash).lf();
-    if(saleId) enc.text(row('Sale',String(saleId).slice(0,W-6))).lf();
-    enc.text(row('Date',new Date().toLocaleString('en-KE'))).lf(); enc.text(dash).lf();
-    items.forEach(it=>enc.text(row((it.qty)+' x '+String(it.name).slice(0,W-13),'KES '+Math.round(it.price*it.qty))).lf());
-    enc.text(dash).lf(); enc.text(row('TOTAL','KES '+Math.round(total))).lf();
-    enc.text(row('Paid ('+method+')','KES '+Math.round(cashGiven||total))).lf();
-    if(change>0) enc.text(row('Change','KES '+Math.round(change))).lf();
-    enc.text(dash).lf(); enc.text(c('Thank you!')).lf(); enc.lf();enc.lf();
-  }});
+  if(!SP||!SP.print||!P||!P.isConnected||!window.SokoniReceipt) return;   /* receipt optional; sale already recorded */
+  await SP.print('custom',{ build(enc){ _saleDoc(items,total,method,saleId,cashGiven).renderTo(enc); } });
   toast('🧾 Receipt printed');
 }
+/* On-screen WYSIWYG preview of the exact receipt (same engine → same output). */
+function showReceiptPreview(doc,onPrint){
+  if(!doc){ return; }
+  var ov=document.getElementById('rcptPv');
+  if(!ov){
+    ov=document.createElement('div'); ov.id='rcptPv';
+    ov.style.cssText='position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.7);display:flex;align-items:flex-end;';
+    ov.innerHTML='<div style="background:var(--card);width:100%;max-height:90vh;border-radius:20px 20px 0 0;padding:16px 14px calc(16px + var(--sab));overflow-y:auto">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><strong style="font-size:15px">🧾 Receipt preview</strong>'
+      +'<button onclick="document.getElementById(\'rcptPv\').style.display=\'none\'" style="background:none;border:none;color:var(--muted);font-size:20px;min-height:44px;min-width:44px">✕</button></div>'
+      +'<pre id="rcptPvText" style="background:#fff;color:#000;font:12px/1.35 \'Courier New\',monospace;padding:14px 10px;border-radius:10px;white-space:pre;overflow-x:auto;margin:0;text-align:left"></pre>'
+      +'<button id="rcptPvPrint" class="cb-btn" style="width:100%;margin-top:12px">🖨 Print receipt</button>'
+      +'<div style="height:6px"></div></div>';
+    document.body.appendChild(ov);
+  }
+  ov.style.display='flex';
+  document.getElementById('rcptPvText').textContent=doc.toText();
+  document.getElementById('rcptPvPrint').onclick=function(){ ov.style.display='none'; if(onPrint) onPrint(); };
+}
+window.showReceiptPreview=showReceiptPreview;
 
 window.openSell=openSell; window.closeSell=closeSell; window.loadCatalogue=loadCatalogue;
 window.filterGrid=filterGrid; window.addToCart=addToCart; window.setQty=setQty;
