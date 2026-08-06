@@ -1794,6 +1794,7 @@ async function _runDriverDiag(){
     var user=(window.firebaseAuth&&window.firebaseAuth.currentUser)||null;
     L.push('AUTH: '+(user?'Signed In ✓':'NOT signed in ✗'));
     L.push('UID: '+(user?user.uid:'—'));
+    L.push('REDIRECT RESULT: '+(_redirectDiag||'(not run yet)'));
     if(user){
       var prof=await _fetchRiderProfile(user);
       if(prof && prof.signedIn){
@@ -1841,10 +1842,29 @@ async function _fetchRiderProfile(user){
   }catch(e){ console.warn('[rider] fetchRiderProfile error', e && e.message); return null; }
 }
 
+let _redirectFinalized = false, _redirectDiag = '';
+/* Finalise a pending Google-redirect sign-in. On mobile Safari the browser returns to /driver
+   but the session is NOT live until getRedirectResult() runs — without this the page sees no user
+   and shows the guest gate even though Google authenticated the rider. Idempotent + best-effort;
+   records the outcome for the on-screen diagnostics. */
+async function _finalizeRedirect(){
+  if (_redirectFinalized) return;
+  _redirectFinalized = true;
+  try{
+    for (let i=0;i<50 && !window.firebaseAuth;i++){ await new Promise(r=>setTimeout(r,150)); }
+    if (!window.firebaseAuth) { _redirectDiag = 'no firebaseAuth'; return; }
+    const m = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const res = await m.getRedirectResult(window.firebaseAuth).catch(function(e){ _redirectDiag = 'error ' + (e && e.code); console.warn('[rider] getRedirectResult:', e && e.code); return null; });
+    if (res && res.user) { _redirectDiag = 'finalized uid ' + res.user.uid.slice(0,10); console.log('[rider] redirect sign-in finalized:', res.user.uid); }
+    else if (!_redirectDiag) _redirectDiag = window.firebaseAuth.currentUser ? ('already signed-in ' + window.firebaseAuth.currentUser.uid.slice(0,10)) : 'no pending redirect / no session';
+  }catch(e){ _redirectDiag = 'exception ' + (e && e.message); }
+}
+
 async function _enterDriverIdentity(){
+  await _finalizeRedirect();   /* complete any pending Google-redirect sign-in FIRST */
   /* More patient on iOS (App Check + session restore can take ~10s). */
   const user = await _waitForFirebaseUser(12000);
-  if (!user) { if (!currentDriver) _showDriverAccountGate('signin', 'No signed-in session detected on this device — tap Sign In.'); return; }
+  if (!user) { if (!currentDriver) _showDriverAccountGate('signin', 'No signed-in session detected — tap Sign In. [redirect: '+(_redirectDiag||'—')+']'); return; }
   const _u10 = String(user.uid).slice(0,10);
 
   /* PRIMARY: App-Check-independent endpoint (works on iOS where the direct Firestore read 403s). */
