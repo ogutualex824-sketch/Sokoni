@@ -88,6 +88,38 @@
     .toast.err{border-left-color:var(--danger)} .toast.warn{border-left-color:var(--warn)}
     @keyframes slideup{from{transform:translateY(10px);opacity:0}}
     .section-title{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 2px 8px}
+    /* ── Sell (New Sale) overlay ── */
+    .sell{position:fixed;inset:0;z-index:70;background:var(--bg);display:none;flex-direction:column;padding-top:var(--sat)}
+    .sell.open{display:flex}
+    .sell-top{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);background:rgba(5,5,5,0.95)}
+    .sell-top input{flex:1;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;color:var(--text);font-size:16px;outline:none;min-width:0}
+    .sell-grid{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 14px 150px;display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px;align-content:start}
+    .pcard{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;cursor:pointer;position:relative;display:flex;flex-direction:column;gap:4px;min-height:100px}
+    .pcard:active{transform:scale(0.97)}
+    .pcard .pname{font-size:12px;font-weight:700;line-height:1.25;max-height:2.5em;overflow:hidden}
+    .pcard .price{font-size:14px;font-weight:900;color:var(--accent);margin-top:auto}
+    .pcard .stk{font-size:10px;color:var(--muted)}
+    .pcard .stk.low{color:var(--warn)} .pcard .stk.out{color:var(--danger)}
+    .pcard.oos{opacity:.45}
+    .pcard .qbadge{position:absolute;top:-6px;right:-6px;background:var(--accent);color:#04120a;font-size:11px;font-weight:900;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    .cartbar{position:fixed;left:0;right:0;bottom:0;z-index:75;background:var(--card);border-top:1px solid var(--border);padding:12px 14px calc(12px + var(--sab));display:none}
+    .cartbar.show{display:block}
+    .cb-row{display:flex;align-items:center;gap:12px}
+    .cb-info{flex:1}.cb-info .n{font-size:11px;color:var(--muted)}.cb-info .t{font-size:20px;font-weight:900}
+    .cb-btn{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04120a;border:none;border-radius:14px;padding:14px 20px;font-size:15px;font-weight:900;min-height:52px;cursor:pointer}
+    .cb-view{background:none;border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 14px;min-height:48px;font-weight:700;cursor:pointer}
+    .sheet{position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.6);display:none;align-items:flex-end}
+    .sheet.open{display:flex}
+    .sheet-inner{background:var(--card);width:100%;max-height:88vh;border-radius:20px 20px 0 0;padding:16px 14px calc(16px + var(--sab));overflow-y:auto}
+    .li{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+    .li .ln{flex:1;font-size:14px;font-weight:600}
+    .li .lp{font-size:13px;color:var(--muted);min-width:74px;text-align:right;font-weight:700}
+    .qstep{display:flex;align-items:center;gap:8px}
+    .qbtn{width:34px;height:34px;border-radius:10px;background:var(--card2);border:1px solid var(--border);color:var(--text);font-size:18px;font-weight:800;cursor:pointer}
+    .pay-methods{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+    .pm{background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:14px;font-size:14px;font-weight:800;cursor:pointer;text-align:center;color:var(--text)}
+    .pm.sel{border-color:var(--accent);background:rgba(113,255,0,.1);color:var(--accent)}
+    .field{width:100%;background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:13px 14px;color:var(--text);font-size:16px;outline:none;margin-top:8px}
   </style>
 </head>
 
@@ -118,7 +150,7 @@
   <button class="act" onclick="openScanner()"><span class="ico">&#128247;</span>Scan</button>
   <button class="act" onclick="switchTab('awaiting')"><span class="ico">&#128230;</span>Dispatch</button>
   <button class="act" onclick="location.href='/inventory'"><span class="ico">&#10133;</span>Add Product</button>
-  <button class="act" onclick="location.href='/pos-checkout'"><span class="ico">&#128179;</span>New Sale</button>
+  <button class="act accent" onclick="openSell()"><span class="ico">&#128179;</span>New Sale</button>
 </div>
 
 <!-- Tabs -->
@@ -151,13 +183,33 @@
 
 <!-- Bottom nav -->
 <nav class="bottomnav">
-  <a class="bn active" href="/pos-v2"><span class="ico">&#128722;</span>POS</a>
+  <a class="bn active" href="#" onclick="openSell();return false"><span class="ico">&#128722;</span>Sell</a>
   <a class="bn" href="#" onclick="switchTab('pending');return false"><span class="ico">&#128220;</span>Orders</a>
   <a class="bn" href="#" onclick="switchTab('awaiting');return false"><span class="ico">&#128666;</span>Dispatch</a>
   <a class="bn" href="/inventory"><span class="ico">&#128230;</span>Inventory</a>
   <a class="bn" href="/pos-crm-pro"><span class="ico">&#128101;</span>Customers</a>
   <a class="bn" href="/pos-reports"><span class="ico">&#128202;</span>More</a>
 </nav>
+
+<!-- ── Sell (New Sale) overlay ── -->
+<div class="sell" id="sell">
+  <div class="sell-top">
+    <button class="tb-back" onclick="closeSell()" aria-label="Close">&#10005;</button>
+    <input id="sellSearch" placeholder="Search products…" oninput="filterGrid(this.value)" autocomplete="off">
+    <button class="scan-inline" onclick="openScanner()" aria-label="Scan">&#128247;</button>
+  </div>
+  <div class="sell-grid" id="sellGrid"><div class="empty" style="grid-column:1/-1"><div class="spinner"></div></div></div>
+</div>
+<!-- Cart bar (in Sell view) -->
+<div class="cartbar" id="cartbar">
+  <div class="cb-row">
+    <button class="cb-view" onclick="openCart()"><span id="cbCount">0</span> items</button>
+    <div class="cb-info"><div class="n">Total</div><div class="t" id="cbTotal">KES 0</div></div>
+    <button class="cb-btn" onclick="openCart()">Charge &#8594;</button>
+  </div>
+</div>
+<!-- Cart + payment sheet -->
+<div class="sheet" id="sheet"><div class="sheet-inner" id="sheetInner"></div></div>
 
 <div id="toast"></div>
 
@@ -316,6 +368,176 @@ function switchTab(t){ _tab=t; document.querySelectorAll('.tab').forEach(x=>x.cl
 function filterOrders(v){ _search=v||''; render(); }
 function togglePrinterPanel(){ document.getElementById('printerPanel').classList.toggle('open'); _refreshPrinter(); }
 function toast(msg,kind){ const box=document.getElementById('toast'); const t=document.createElement('div'); t.className='toast'+(kind==='err'?' err':kind==='warn'?' warn':''); t.textContent=msg; box.appendChild(t); setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3200); }
+
+/* ══ Selling flow (Stage 3) — product grid + cart + checkout ══════════════════
+   Cash → posCompleteCheckout (synchronous, proven, now reads canonical `products`).
+   M-Pesa → hands the cart to the proven /pos-checkout STK flow (no parallel money path). */
+let _catalogue=[], _cart={}, _payMethod='cash', _checkoutBusy=false, _gridSearch='';
+
+function openSell(){
+  document.getElementById('sell').classList.add('open');
+  if(!_catalogue.length) loadCatalogue(); else renderGrid();
+  _renderCartBar();
+  try{ document.getElementById('sellSearch').focus(); }catch(_){}
+}
+function closeSell(){ document.getElementById('sell').classList.remove('open'); document.getElementById('cartbar').classList.remove('show'); }
+
+async function loadCatalogue(){
+  const grid=document.getElementById('sellGrid');
+  grid.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="spinner"></div><div class="auth-msg" style="margin-top:10px">Loading products…</div></div>';
+  try{
+    const r=await fetch('/api/catalogue?sellerUid='+encodeURIComponent(_sellerId||_uid)+'&limit=500',{cache:'no-store'});
+    const j=await r.json();
+    const raw=j.products||j.items||j.data||(Array.isArray(j)?j:[]);
+    _catalogue=raw.map(p=>({
+      id:p.id||p.productId||p._id,
+      name:p.name||p.title||'Item',
+      price:Number(p.price||p.sellingPrice||p.salePrice||0),
+      stock:(p.stock!=null?p.stock:(p.stockLevel!=null?p.stockLevel:(p.stockQty!=null?p.stockQty:null))),
+      track:p.trackInventory!==false
+    })).filter(p=>p.id);
+    renderGrid();
+  }catch(e){ console.error('catalogue',e); grid.innerHTML='<div class="empty" style="grid-column:1/-1">Couldn\'t load products.<br><button class="cb-view" style="margin-top:12px" onclick="loadCatalogue()">Retry</button></div>'; }
+}
+function _stk(p){
+  if(!p.track||p.stock==null) return {t:'',c:''};
+  if(p.stock<=0) return {t:'Out of stock',c:'out'};
+  if(p.stock<=5) return {t:p.stock+' left',c:'low'};
+  return {t:'In stock',c:''};
+}
+function renderGrid(){
+  const grid=document.getElementById('sellGrid');
+  let list=_catalogue; const q=(_gridSearch||'').toLowerCase();
+  if(q) list=list.filter(p=>p.name.toLowerCase().includes(q));
+  if(!list.length){ grid.innerHTML='<div class="empty" style="grid-column:1/-1">'+(_catalogue.length?'No match.':'No products yet.')+'</div>'; return; }
+  grid.innerHTML=list.map(p=>{
+    const s=_stk(p), oos=p.track&&p.stock!=null&&p.stock<=0, q=_cart[p.id]?_cart[p.id].qty:0;
+    return '<div class="pcard'+(oos?' oos':'')+'" data-add="'+_esc(p.id)+'">'+
+      (q?'<span class="qbadge">'+q+'</span>':'')+
+      '<div class="pname">'+_esc(p.name)+'</div>'+
+      '<div class="price">'+kes(p.price)+'</div>'+
+      '<div class="stk '+s.c+'">'+_esc(s.t)+'</div></div>';
+  }).join('');
+  grid.querySelectorAll('[data-add]').forEach(el=>el.onclick=()=>addToCart(el.getAttribute('data-add')));
+}
+function filterGrid(v){ _gridSearch=v||''; renderGrid(); }
+function addToCart(pid){
+  const p=_catalogue.find(x=>x.id===pid); if(!p) return;
+  const cur=_cart[pid]?_cart[pid].qty:0;
+  if(p.track&&p.stock!=null&&cur+1>p.stock){ toast('Only '+p.stock+' in stock','warn'); return; }
+  _cart[pid]=_cart[pid]||{id:p.id,name:p.name,price:p.price,track:p.track,stock:p.stock,qty:0};
+  _cart[pid].qty=cur+1;
+  renderGrid(); _renderCartBar();
+  if(document.getElementById('sheet').classList.contains('open')) _renderCartSheet();
+}
+function setQty(pid,delta){
+  const it=_cart[pid]; if(!it) return;
+  const nq=it.qty+delta;
+  if(nq<=0){ delete _cart[pid]; }
+  else{ if(it.track&&it.stock!=null&&nq>it.stock){ toast('Only '+it.stock+' in stock','warn'); return; } it.qty=nq; }
+  renderGrid(); _renderCartBar();
+  if(_cartCount()) _renderCartSheet(); else closeSheet();
+}
+const _cartArr=()=>Object.values(_cart);
+const _cartTotal=()=>_cartArr().reduce((s,it)=>s+it.price*it.qty,0);
+const _cartCount=()=>_cartArr().reduce((s,it)=>s+it.qty,0);
+function _renderCartBar(){
+  const n=_cartCount(), inSell=document.getElementById('sell').classList.contains('open');
+  document.getElementById('cartbar').classList.toggle('show', n>0 && inSell);
+  set('cbCount',n); set('cbTotal',kes(_cartTotal()));
+}
+function _clearCart(){ _cart={}; _renderCartBar(); renderGrid(); }
+function openCart(){ if(!_cartCount()){ toast('Cart is empty','warn'); return; } _renderCartSheet(); document.getElementById('sheet').classList.add('open'); }
+function closeSheet(){ document.getElementById('sheet').classList.remove('open'); }
+function _renderCartSheet(){
+  const el=document.getElementById('sheetInner'), items=_cartArr(), total=_cartTotal();
+  el.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'+
+      '<strong style="font-size:16px">Cart</strong>'+
+      '<button onclick="closeSheet()" style="background:none;border:none;color:var(--muted);font-size:20px;min-height:44px;min-width:44px">&#10005;</button></div>'+
+    items.map(it=>'<div class="li">'+
+      '<div class="ln">'+_esc(it.name)+'<div style="font-size:12px;color:var(--muted)">'+kes(it.price)+' each</div></div>'+
+      '<div class="qstep"><button class="qbtn" onclick="setQty(\''+_esc(it.id)+'\',-1)">&#8722;</button>'+
+        '<span style="min-width:22px;text-align:center;font-weight:800">'+it.qty+'</span>'+
+        '<button class="qbtn" onclick="setQty(\''+_esc(it.id)+'\',1)">&#43;</button></div>'+
+      '<div class="lp">'+kes(it.price*it.qty)+'</div></div>').join('')+
+    '<div style="display:flex;justify-content:space-between;margin:14px 2px 4px;font-size:20px;font-weight:900"><span>Total</span><span>'+kes(total)+'</span></div>'+
+    '<div class="section-title">Payment</div>'+
+    '<div class="pay-methods">'+
+      '<div class="pm" data-pm="cash" onclick="selPay(\'cash\')">&#128176; Cash</div>'+
+      '<div class="pm" data-pm="mpesa" onclick="selPay(\'mpesa\')">&#128241; M-Pesa</div></div>'+
+    '<div id="payExtra"></div>'+
+    '<button class="cb-btn" style="width:100%;margin-top:14px" id="chargeBtn" onclick="doCheckout()">Charge '+kes(total)+'</button>'+
+    '<div style="height:8px"></div>';
+  selPay(_payMethod);
+}
+function selPay(m){
+  _payMethod=m;
+  document.querySelectorAll('.pm').forEach(x=>x.classList.toggle('sel',x.getAttribute('data-pm')===m));
+  const ex=document.getElementById('payExtra'); if(!ex) return;
+  if(m==='cash') ex.innerHTML='<input class="field" id="cashGiven" type="number" inputmode="numeric" placeholder="Cash given (optional — for change)" oninput="_calcChange()"><div id="changeOut" style="margin-top:6px;color:var(--muted);font-size:13px"></div>';
+  else ex.innerHTML='<div style="margin-top:8px;color:var(--muted);font-size:13px">Opens the secure M-Pesa checkout — an STK prompt is sent to the customer to approve. Your cart carries over.</div>';
+}
+function _calcChange(){ const g=Number((document.getElementById('cashGiven')||{}).value||0), t=_cartTotal(), o=document.getElementById('changeOut'); if(!o) return; o.textContent=g>0?(g>=t?('Change: '+kes(g-t)):('Short by '+kes(t-g))):''; }
+function _idem(){ return 'posv2_'+(_uid||'x')+'_'+Date.now()+'_'+Math.random().toString(36).slice(2,8); }
+
+async function doCheckout(){
+  const items=_cartArr(); if(!items.length){ toast('Cart empty','warn'); return; }
+  const total=_cartTotal();
+  if(_payMethod==='mpesa'){
+    /* Hand the cart to the proven /pos-checkout STK flow — no parallel money path here. */
+    try{ sessionStorage.setItem('posv2_cart', JSON.stringify({ items:items.map(it=>({productId:it.id,name:it.name,qty:it.qty,unitPrice:it.price})), total, ts:Date.now() })); }catch(_){}
+    toast('Opening secure M-Pesa checkout…');
+    location.href='/pos-checkout?src=posv2';
+    return;
+  }
+  if(_checkoutBusy) return; _checkoutBusy=true;
+  const btn=document.getElementById('chargeBtn'); if(btn){ btn.disabled=true; btn.textContent='Processing…'; }
+  const cashGiven=Number((document.getElementById('cashGiven')||{}).value||0);
+  try{
+    const res=await CF('posCompleteCheckout')({
+      idempotencyKey:_idem(), merchantId:_sellerId,
+      items:items.map(it=>({ productId:it.id, qty:it.qty, unitPrice:it.price })),
+      payments:[{ method:'cash', amount:total }],
+      subtotal:total, grandTotal:total,
+      metadata:{ source:'pos-v2', channel:'till' }
+    });
+    const saleId=(res&&res.data&&(res.data.saleId||res.data.id))||'';
+    toast('✅ Sale complete'+(cashGiven>total?(' · change '+kes(cashGiven-total)):''));
+    try{ _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }catch(_){}
+    _clearCart(); closeSheet();
+    /* reflect the stock we just deducted in the local grid so counts stay honest */
+    items.forEach(it=>{ const p=_catalogue.find(x=>x.id===it.id); if(p&&p.stock!=null) p.stock=Math.max(0,p.stock-it.qty); });
+    renderGrid();
+  }catch(e){
+    console.error('checkout',e);
+    toast('Checkout failed: '+(e&&e.message?e.message:e),'err');
+  }finally{ _checkoutBusy=false; if(btn){ btn.disabled=false; btn.textContent='Charge '+kes(total); } }
+}
+
+async function _printSaleReceipt(items,total,method,saleId,cashGiven){
+  const SP=window.SokoniPrinter, P=_P();
+  if(!SP||!SP.print||!P||!P.isConnected) return;   /* receipt is optional; sale already recorded */
+  const change=(cashGiven&&cashGiven>total)?(cashGiven-total):0;
+  await SP.print('custom',{ build(enc,W){
+    const dash='-'.repeat(W),
+      c=s=>{s=String(s).slice(0,W);return ' '.repeat(Math.max(0,Math.floor((W-s.length)/2)))+s;},
+      row=(l,r)=>{r=String(r).slice(0,W-1);return String(l).slice(0,W-r.length-1).padEnd(W-r.length-1)+' '+r;};
+    enc.text(c('KASS SHOP')).lf(); enc.text(c('SOKONI Sale Receipt')).lf(); enc.text(dash).lf();
+    if(saleId) enc.text(row('Sale',String(saleId).slice(0,W-6))).lf();
+    enc.text(row('Date',new Date().toLocaleString('en-KE'))).lf(); enc.text(dash).lf();
+    items.forEach(it=>enc.text(row((it.qty)+' x '+String(it.name).slice(0,W-13),'KES '+Math.round(it.price*it.qty))).lf());
+    enc.text(dash).lf(); enc.text(row('TOTAL','KES '+Math.round(total))).lf();
+    enc.text(row('Paid ('+method+')','KES '+Math.round(cashGiven||total))).lf();
+    if(change>0) enc.text(row('Change','KES '+Math.round(change))).lf();
+    enc.text(dash).lf(); enc.text(c('Thank you!')).lf(); enc.lf();enc.lf();
+  }});
+  toast('🧾 Receipt printed');
+}
+
+window.openSell=openSell; window.closeSell=closeSell; window.loadCatalogue=loadCatalogue;
+window.filterGrid=filterGrid; window.addToCart=addToCart; window.setQty=setQty;
+window.openCart=openCart; window.closeSheet=closeSheet; window.selPay=selPay; window._calcChange=_calcChange; window.doCheckout=doCheckout;
 
 window.switchTab=switchTab; window.filterOrders=filterOrders; window.togglePrinterPanel=togglePrinterPanel;
 window.testPrint=testPrint; window.reconnectPrinter=reconnectPrinter; window.openScanner=openScanner;

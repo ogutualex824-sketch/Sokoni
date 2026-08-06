@@ -10,7 +10,7 @@ Each stage ships and verifies independently on the `pos-v2.html` foundation. Reu
 |---|---|---|
 | **1 — Foundation** (`/pos-v2`) | §1 header + status chips · §2 search/scan bar · §9 **Dispatch Center** (Ready for Dispatch / Pickup) · §11 pickup · §14 Printer panel (status/test/reconnect) · §15 quick actions · §16 bottom nav · §18 safe-area + 48px | ✅ **BUILT** |
 | **2 — Dashboard & links** | §3 Smart Dashboard KPI cards (Sales/Orders/Pending Dispatch/Stock/Cash) · deep-links to §12 Inventory + §13 Analytics | ⏳ |
-| **3 — Selling flow** | §4 Product grid (image/stock/price/discount/loyalty) · §5 Cart (qty/discount/tax/notes/serial/warranty) · §7 Payment (Cash/M-Pesa/Card/Wallet + **split**) · post-payment action screen | ⏳ (today `/pos-checkout`) |
+| **3 — Selling flow** | §4 Product grid (live `/api/catalogue`, stock/price) · §5 Cart (qty ±) · §7 Payment: **Cash LIVE** via `posCompleteCheckout` (canonical `products`), **M-Pesa** hands cart to proven `/pos-checkout` STK · auto-print receipt | ✅ **Cash BUILT** · M-Pesa handoff · split/card ⏳ |
 | **4 — Customer & receipts** | §6 Customer panel (wallet/points/history/credit) · §8 Receipt center (Print/Reprint/Email/SMS/WhatsApp/PDF) | ⏳ |
 | **5 — Rider assignment** | §10 assign specific rider (distance/ETA/vehicle/rating) + live track — extends the current pull-accept | ⏳ |
 | **6 — Governance** | §17 **RBAC** (cashier/store-mgr/branch-mgr/owner/admin) + **audit log** on every sensitive action (refund/discount/stock-adj/dispatch-override/price) | ⏳ (do LAST — backend-enforced) |

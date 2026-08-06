@@ -1,3 +1,28 @@
+## [2026-08-06] — feat(pos): POS v2 selling flow (Cash) + till money-path convergence to canonical products
+
+**Money-path fix (correctness-critical).** `posCompleteCheckout` and `posProcessRefund`
+(functions/pos-zero-friction.js) validated the cart and deducted/returned stock from the
+**`posProducts`** collection, which is **empty** for real merchants (products live in the
+canonical `products`). Every till sale therefore failed `"Product <id> not found"` — the POS
+could not sell at all. Both now read/write `products`: price via `salePrice||price`, stock via
+`stock ?? stockQty ?? quantity`, and on sale/refund mutate the **canonical `stock`** field
+symmetrically (sale decrements, refund increments) plus `inventoryVersion: increment(1)` +
+`updatedAt`. A till sale is now immediately reflected in inventory, catalogue and dispatch — one
+stock source. All reads-before-writes + idempotency claims preserved.
+
+- functions/pos-zero-friction.js: posCompleteCheckout + posProcessRefund → canonical `products`.
+- pos-v2.html: Stage 3 selling flow — product grid (live `/api/catalogue?sellerUid=`), tap-to-add
+  cart with qty ±, cart+payment sheet. **Cash** checks out via `posCompleteCheckout` (records
+  sale, deducts canonical stock, auto-prints receipt on the connected P58E). **M-Pesa** stashes
+  the cart in sessionStorage and hands off to the proven `/pos-checkout` STK flow — no parallel
+  money path. "New Sale" + bottom "Sell" open the in-page flow (was a redirect).
+- docs/POS_V2_SPEC.md: Stage 3 marked Cash-built.
+
+Files: functions/pos-zero-friction.js, functions/index.js (exports unchanged), pos-v2.html,
+docs/POS_V2_SPEC.md. DB: writes canonical `products.stock`/`inventoryVersion`/`sold`. API: none.
+Security: server-authoritative stock + idempotency unchanged. Breaking: none (posProducts
+analytics readers unaffected; they converge in a follow-up).
+
 ## [2026-08-05] — fix(checkout): confirm payment via authed CF poll so checkout closes/clears cart
 
 First real gate order (SKN14CIAER) COMPLETED end-to-end: paid → order status=paid

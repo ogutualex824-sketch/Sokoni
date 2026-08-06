@@ -93,8 +93,11 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   }
 
   try {
-    /* ── 2. Validate cart totals server-side — batch fetch all products ── */
-    const productRefs  = items.map(item => db.collection('posProducts').doc(item.productId));
+    /* ── 2. Validate cart totals server-side — batch fetch all products ──
+       Reads the CANONICAL `products` collection (Stage 2 convergence). posProducts was empty for
+       most merchants, so the till failed "product not found" on every sale; and it deducted a
+       separate stock counter from the one inventory/catalogue/dispatch use. One source now. */
+    const productRefs  = items.map(item => db.collection('products').doc(item.productId));
     const productSnaps = await Promise.all(productRefs.map(r => r.get()));
 
     let serverSubtotal = 0;
@@ -108,7 +111,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
       const serverPrice = prod.salePrice || prod.price || 0;
       const diff = Math.abs(serverPrice - (item.unitPrice || 0));
       if (diff > 1) _e(`Price mismatch for ${prod.name}: expected ${serverPrice}, got ${item.unitPrice}`);
-      enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, categoryId: prod.categoryId });
+      enrichedItems.push({ ...item, name: _sanitize(prod.name), unitPrice: serverPrice, categoryId: prod.category || prod.categoryId || null });
       serverSubtotal += serverPrice * (item.qty || 1);
     }
 
@@ -161,7 +164,7 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
     const { loyaltyAwarded } = await db.runTransaction(async txn => {
 
       /* ── PHASE 1: ALL READS (parallel) ── */
-      const productRefs = enrichedItems.map(item => db.collection('posProducts').doc(item.productId));
+      const productRefs = enrichedItems.map(item => db.collection('products').doc(item.productId));
       const custRef = customer?.id ? db.collection('posCustomers').doc(customer.id) : null;
       const progRef = customer?.id ? db.collection('loyaltyPrograms').doc(merchantId) : null;
 
@@ -187,7 +190,8 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         const item = enrichedItems[i];
         if (!snap.exists) throw new Error(`Product ${item.productId} disappeared`);
         const prod  = snap.data();
-        const stock = prod.stockQty ?? prod.quantity ?? 9999;
+        /* Canonical stock field is `stock`; fall back to legacy names for older docs. */
+        const stock = prod.stock ?? prod.stockQty ?? prod.quantity ?? 9999;
         if (stock < (item.qty || 1) && prod.trackInventory !== false)
           throw new Error(`Insufficient stock for ${prod.name}`);
       });
@@ -213,10 +217,16 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
         const item = enrichedItems[i];
         if (snap.data().trackInventory !== false) {
           txn.update(productRefs[i], {
-            stockQty:       FieldValue.increment(-(item.qty || 1)),
-            lastSoldAt:     FieldValue.serverTimestamp(),
-            totalUnitsSold: FieldValue.increment(item.qty || 1),
-            totalRevenue:   FieldValue.increment(item.unitPrice * (item.qty || 1)),
+            /* Deduct the CANONICAL `stock` — the same field inventory, catalogue and dispatch
+               read, so a till sale is immediately reflected everywhere. inventoryVersion bumps
+               so client caches invalidate. Pre-check above guarantees stock ≥ qty. */
+            stock:            FieldValue.increment(-(item.qty || 1)),
+            inventoryVersion: FieldValue.increment(1),
+            sold:             FieldValue.increment(item.qty || 1),
+            lastSoldAt:       FieldValue.serverTimestamp(),
+            totalUnitsSold:   FieldValue.increment(item.qty || 1),
+            totalRevenue:     FieldValue.increment(item.unitPrice * (item.qty || 1)),
+            updatedAt:        FieldValue.serverTimestamp(),
           });
         }
       });
@@ -506,7 +516,7 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     /* ── ALL READS FIRST ──
        The original read each product INSIDE the write loop (txn.get after txn.update), which
        Firestore rejects — every multi-item refund threw at runtime. */
-    const prodRefs = items.map(it => db.collection('posProducts').doc(it.productId));
+    const prodRefs = items.map(it => db.collection('products').doc(it.productId));   /* canonical — symmetric with sale deduction */
     const [refundSnap, ...prodSnaps] = await Promise.all([
       txn.get(refundRef),
       ...prodRefs.map(r => txn.get(r)),
@@ -530,9 +540,12 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     plan.forEach(pItem => {
       if (pItem.snap.exists && pItem.snap.data().trackInventory !== false) {
         txn.update(pItem.ref, {
-          stockQty:       FieldValue.increment(pItem.qty),
-          totalUnitsSold: FieldValue.increment(-pItem.qty),
-          totalRevenue:   FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
+          stock:            FieldValue.increment(pItem.qty),   /* return canonical stock */
+          inventoryVersion: FieldValue.increment(1),
+          sold:             FieldValue.increment(-pItem.qty),
+          totalUnitsSold:   FieldValue.increment(-pItem.qty),
+          totalRevenue:     FieldValue.increment(-(pItem.orig.unitPrice * pItem.qty)),
+          updatedAt:        FieldValue.serverTimestamp(),
         });
       }
     });
