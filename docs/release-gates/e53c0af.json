@@ -1,12 +1,12 @@
 {
-  "commit": "unknown",
-  "timestamp": "2026-08-06T13:13:50.276Z",
+  "commit": "e53c0af",
+  "timestamp": "2026-08-06T13:19:36.331Z",
   "gate": {
-    "pass": 72,
-    "fail": 7,
+    "pass": 78,
+    "fail": 0,
     "quarantine": 3,
     "stale": 0,
-    "env": 10,
+    "env": 11,
     "timeout": 0
   },
   "blocking": [
@@ -81,7 +81,13 @@
     "test-safe-area",
     "test-search-pipeline",
     "test-seller-board",
-    "test-seller-dashboard"
+    "test-seller-dashboard",
+    "test-sheet",
+    "test-sokoni-image",
+    "test-subscription-consistency",
+    "test-user-bootstrap",
+    "test-users-render",
+    "test-validation"
   ],
   "notBlocking": {
     "quarantine": [
@@ -100,9 +106,10 @@
       "test-pos-provision-diag",
       "test-pos-seller-authz",
       "test-seller-products",
+      "test-sms",
       "test-workspace-rules"
     ],
     "timeout": []
   },
-  "verdict": "BLOCKED"
+  "verdict": "APPROVED"
 }
