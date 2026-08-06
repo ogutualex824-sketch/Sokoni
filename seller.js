@@ -35,7 +35,7 @@ function initEmployeeSession(){
   /* Apply employee restrictions based on role */
   const ROLE_PERMS = {
     cashier: {
-      tabs: ["orders-section","buyer-orders-section","seller-dms","seller-stats","customers-section","receipts-section"],
+      tabs: ["buyer-orders-section","seller-dms","seller-stats","customers-section","receipts-section"],
       hideSections: ["wallet-section","expense-section","analytics-section","sales-analytics-section","profit-section","employees-section","verify-section","ads-section","tax-section"],
       label: "💰 Cashier"
     },
@@ -51,7 +51,7 @@ function initEmployeeSession(){
     },
     inventory: {
       tabs: ["upload-section","products-section","bulk-upload-section","restock-section","inventory-section","qa-section"],
-      hideSections: ["wallet-section","expense-section","analytics-section","profit-section","employees-section","orders-section","seller-dms","tax-section"],
+      hideSections: ["wallet-section","expense-section","analytics-section","profit-section","employees-section","seller-dms","tax-section"],
       label: "📦 Inventory Clerk"
     },
     support: {
@@ -5217,7 +5217,7 @@ renderMyStories();
 
 const DASH_PAGES = {
   overview: [
-    "upload-section","seller-stats","analytics-section","orders-section",
+    "upload-section","seller-stats","analytics-section",
     "products-section","flash-section","ads-section","buyer-orders-section"
   ],
   products: [
@@ -5229,7 +5229,7 @@ const DASH_PAGES = {
     "seller-ratings-section","profit-section"
   ],
   orders: [
-    "orders-section","buyer-orders-section","returns-section","offers-section"
+    "buyer-orders-section","returns-section","offers-section"
   ],
   customers: [
     "customers-section"
@@ -5276,7 +5276,7 @@ const DASH_PAGES = {
 };
 
 const ALL_DASH_SECTIONS = [
-  "upload-section","seller-stats","analytics-section","orders-section","products-section",
+  "upload-section","seller-stats","analytics-section","products-section",
   "flash-section","tax-section","ads-section","buyer-orders-section","seller-dms",
   "marketing-section","verify-section","bulk-upload-section","customer-analytics-section",
   "qa-section","employees-section","ai-desc-section","ministore-section","stories-section",
