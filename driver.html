@@ -272,6 +272,11 @@
   <!-- ══════════════════════════════════════════
        DASHBOARD — shown after login
   ══════════════════════════════════════════ -->
+  <!-- Temporary on-device diagnostics — append ?diag=1 to the URL to reveal. Proves which BUILD
+       the browser actually loaded + the auth/rider-lookup state, so "stale cache" vs "code bug"
+       is unambiguous. Remove after verification. -->
+  <div id="driverDiag" style="display:none;position:fixed;top:8px;left:8px;right:8px;z-index:99999;background:#000;color:#71ff00;font:11px/1.5 monospace;padding:10px 12px;border:1px solid #71ff00;border-radius:10px;white-space:pre-wrap;word-break:break-all;max-height:60vh;overflow:auto;"></div>
+
   <div id="driverDashboard">
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
@@ -1761,6 +1766,38 @@ function _gotoApply(){
 }
 window._gotoApply = _gotoApply;
 
+/* Build marker embedded in THIS file — if the device shows an older value (or no diag panel at
+   all when ?diag=1), the browser is running a stale cached build, not this deploy. */
+var _DRIVER_BUILD = 'v330 · a53c92c · 2026-08-06';
+async function _runDriverDiag(){
+  try{
+    if(new URLSearchParams(location.search).get('diag')!=='1') return;
+    var el=document.getElementById('driverDiag'); if(!el) return;
+    el.style.display='block';
+    var L=[];
+    L.push('BUILD (this page): '+_DRIVER_BUILD);
+    try{ var v=await fetch('/version.json?cb='+Date.now(),{cache:'no-store'}).then(r=>r.json()); L.push('BUILD (server now): '+v.cacheVersion+' · '+v.commitShort); }catch(_){ L.push('BUILD (server): fetch failed'); }
+    try{ var reg=navigator.serviceWorker&&await navigator.serviceWorker.getRegistration(); L.push('SW: '+(reg?('reg; active='+(reg.active?reg.active.state:'no')+(reg.waiting?' · UPDATE WAITING':'')):'none')); }catch(_){ L.push('SW: n/a'); }
+    var user=(window.firebaseAuth&&window.firebaseAuth.currentUser)||null;
+    L.push('AUTH: '+(user?'Signed In ✓':'NOT signed in ✗'));
+    L.push('UID: '+(user?user.uid:'—'));
+    if(user){
+      try{
+        var m=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var db=window.firebaseDB;
+        var rd=await m.getDoc(m.doc(db,'rideDrivers',user.uid));
+        L.push('RIDER PROFILE: '+(rd.exists()?('Found ✓ · status='+((rd.data()||{}).status||'?')+' · approved='+((rd.data()||{}).approved)):'✗ NOT FOUND'));
+        var ud=await m.getDoc(m.doc(db,'users',user.uid));
+        L.push('ROLES: '+JSON.stringify(((ud.exists()&&ud.data().roles)||[])));
+        L.push('VIEW: '+(rd.exists()?'should show DASHBOARD':'should show APPLY gate'));
+      }catch(e){ L.push('LOOKUP ERROR: '+(e&&e.message)); }
+    }
+    L.push('currentDriver: '+(currentDriver?('set ('+(currentDriver.name||'?')+')'):'null'));
+    el.textContent=L.join('\n');
+  }catch(_){}
+}
+window._runDriverDiag=_runDriverDiag;
+
 /* Avatar initials from a name (fallback when there's no photo). */
 function _riderInitials(name){
   var p=String(name||'R').trim().split(/\s+/).filter(Boolean);
@@ -1814,6 +1851,8 @@ window._enterDriverIdentity = _enterDriverIdentity;
   /* Authoritative: resolve from the signed-in SOKONI account (identity refactor — no PIN).
      Enhances/updates the record, or gates to sign-in / apply when appropriate. */
   try { _enterDriverIdentity(); } catch(_){ }
+  /* On-device diagnostics (?diag=1). Run a few times as auth + firebase resolve. */
+  try { _runDriverDiag(); setTimeout(_runDriverDiag, 1800); setTimeout(_runDriverDiag, 4000); } catch(_){ }
 })();
 </script>
 <script src="sokoni-commission-rates.js"></script>
