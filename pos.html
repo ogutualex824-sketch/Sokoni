@@ -1929,15 +1929,17 @@ var SPosBranch = (function(){
 <script>
 /* Auto-init universal print engine after POS loads */
 document.addEventListener('DOMContentLoaded', function() {
-  if (window.SokoniPosprint) {
-    SokoniPosprint.init().catch(function() {});
-    SokoniPosprint.on('printer:connected', function(d) {
+  /* Keep initialising the v2 engine (queue/transport plumbing) but DO NOT read printer
+     status from it — status now has exactly one source: PosPrintService's canonical state. */
+  if (window.SokoniPosprint) { SokoniPosprint.init().catch(function() {}); }
+
+  /* Single status source (Phase 2): subscribe #printer-status-txt to the ONE printer-state
+     machine. Fires immediately with the current state, then on every change. No polling,
+     no competing calculation. */
+  if (window.PosPrintService && typeof PosPrintService.onState === 'function') {
+    PosPrintService.onState(function(m) {
       const el = document.getElementById('printer-status-txt');
-      if (el) el.textContent = '✅ ' + (d.name || 'Connected');
-    });
-    SokoniPosprint.on('printer:disconnected', function() {
-      const el = document.getElementById('printer-status-txt');
-      if (el) el.textContent = 'Disconnected';
+      if (el) el.textContent = m.icon + ' ' + (m.name || m.text);
     });
   }
 

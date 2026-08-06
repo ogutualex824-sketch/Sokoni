@@ -427,26 +427,12 @@ class PrintHealth {
   stop () { clearInterval(this._timer); this._timer = null; }
 
   async _check () {
-    const pm  = window.PrinterManager;
-    const sp  = window.SokoniPrinter;
-    const was = this._status;
-
-    const connected = !!(pm?.connected || sp?.connected);
-    const queueLen  = pm ? pm.getQueue()?.length || 0 : 0;
-
-    this._status = connected ? 'connected' : 'disconnected';
-    const health = {
-      connected,
-      status:        this._status,
-      transport:     pm?._activeTransport || 'none',
-      profile:       pm?.profile,
-      queueLength:   queueLen,
-      lastPrint:     this._lastPrint,
-      errorRate:     pm?.stats?.get?.()?.errors ?? 0,
-    };
-
-    _updateHeaderWidget(health);
-    if (was !== this._status) this._listeners.forEach(fn => { try { fn(health); } catch(_) {} });
+    /* Not a competing status calc: nudge the ONE canonical state to reconcile with the
+       transport truth (safety net for any BLE/transport event that was missed), then let
+       the state machine's subscribers (chip + status text) re-render. */
+    try { _printerState.reconcile(); } catch (_) {}
+    this._status = _printerState.get();   /* mirror for back-compat getStatus() */
+    try { _updateHeaderWidget(); } catch (_) {}
   }
 
   on (fn)      { this._listeners.push(fn); return this; }
@@ -454,6 +440,87 @@ class PrintHealth {
   getStatus () { return this._status; }
   markPrinted (id) { this._lastPrint = { id, at: new Date().toISOString() }; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   CANONICAL PRINTER STATE — the SINGLE source of truth for printer state.
+   Event-driven (no polling): derived from PrinterManager transport events, the
+   printReceipt lifecycle, and browser online/offline. Every status surface
+   (the header light, diagnostics, future settings) subscribes HERE — there is no
+   other status calculation. Emits only on change.
+═══════════════════════════════════════════════════════════════════ */
+const PRINTER_STATES = {
+  disconnected: { icon: '○',   text: 'No printer' },
+  searching:    { icon: '🔍',  text: 'Searching…' },
+  connecting:   { icon: '…',   text: 'Connecting…' },
+  connected:    { icon: '✅',  text: 'Connected' },
+  printing:     { icon: '🖨️',  text: 'Printing…' },
+  retrying:     { icon: '↻',   text: 'Reconnecting…' },
+  offline:      { icon: '📴',  text: 'Offline — queued' },
+};
+
+class PrinterStateMachine {
+  constructor () { this._state = 'disconnected'; this._meta = {}; this._subs = []; this._wired = false; }
+
+  get ()   { return this._state; }
+  meta ()  { const d = PRINTER_STATES[this._state] || PRINTER_STATES.disconnected; return { state: this._state, icon: d.icon, text: d.text, ...this._meta }; }
+
+  /* subscribe returns an unsubscribe fn and fires once with the current state. */
+  subscribe (fn) {
+    if (typeof fn !== 'function') return () => {};
+    this._subs.push(fn);
+    try { fn(this.meta()); } catch (_) {}
+    return () => { this._subs = this._subs.filter(f => f !== fn); };
+  }
+
+  set (stateKey, meta) {
+    const next = PRINTER_STATES[stateKey] ? stateKey : 'disconnected';
+    const changed = next !== this._state || (meta && meta.name && meta.name !== this._meta.name);
+    this._state = next;
+    this._meta  = meta || {};
+    if (changed) { const m = this.meta(); this._subs.forEach(fn => { try { fn(m); } catch (_) {} }); }
+  }
+
+  /* Resting state from the transport truth — used on wire + as a reconciliation nudge. */
+  reconcile () {
+    const pm = window.PrinterManager, sp = window.SokoniPrinter;
+    const connected = !!(pm && pm.connected) || !!(sp && sp.connected);
+    if (connected) { if (this._state !== 'printing') this.set('connected', { name: (pm && pm.profile && pm.profile.model) || undefined }); return; }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) { this.set('offline'); return; }
+    if (this._state !== 'retrying') this.set('disconnected');
+  }
+
+  /* Attach to PrinterManager transport events + browser connectivity. Idempotent. */
+  wire () {
+    if (this._wired) return; this._wired = true;
+    const pm = window.PrinterManager;
+    if (pm && typeof pm.on === 'function') {
+      pm.on('connected',         d  => this.set('connected', { name: d && (d.name || d.model) }));
+      pm.on('disconnected',      () => this.reconcile());
+      pm.on('printed',           () => { if (this._state === 'printing') this.set('connected', this._meta); });
+      pm.on('error',             () => { if (this._state !== 'retrying') this.reconcile(); });
+      pm.on('p58e:connected',        d  => this.set('connected', { name: d && d.name }));
+      pm.on('p58e:disconnected',     () => this.reconcile());
+      pm.on('p58e:reconnecting',     () => this.set('retrying'));
+      pm.on('p58e:reconnect_failed', () => this.set('disconnected'));
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online',  () => this.reconcile());
+      window.addEventListener('offline', () => this.set('offline'));
+    }
+    this.reconcile();
+  }
+
+  /* Fed by the printReceipt lifecycle so the light reflects an in-progress print/retry. */
+  onPrintLifecycle (state) {
+    if (state === 'sending' || state === 'printing')       this.set('printing');
+    else if (state === 'retry')                            this.set('retrying');
+    else if (state === 'queued_offline')                   this.set('offline');
+    else if (state === 'success' || state === 'fallback_success' || state === 'skipped') this.reconcile();
+  }
+}
+
+/* Module singleton — the one instance everything shares. */
+const _printerState = new PrinterStateMachine();
 
 /* ═══════════════════════════════════════════════════════════════════
    TILL PRINTER CONFIG  (per-register settings, persistent)
@@ -568,12 +635,17 @@ function _updateHeaderWidget (health) {
     else target.appendChild(chip);
   }
 
-  const dot   = health.connected ? '🟢' : '⚪';
-  const queue = health.queueLength > 0 ? ` (${health.queueLength})` : '';
+  /* Render from the ONE canonical state (arg ignored — kept for call-site compat). */
+  const m  = _printerState.meta();
+  const pm = window.PrinterManager;
+  const qn = pm ? (pm.getQueue()?.length || 0) : 0;
+  const connected = m.state === 'connected' || m.state === 'printing';
+  const dot   = connected ? '🟢' : (m.state === 'retrying' ? '🟡' : (m.state === 'offline' ? '📴' : '⚪'));
+  const queue = qn > 0 ? ` (${qn})` : '';
   chip.innerHTML = dot + ' 🖨️' + queue;
-  chip.title = health.connected
-    ? `Printer connected${health.transport ? ' via ' + health.transport : ''}${queue ? ' — ' + health.queueLength + ' queued' : ''}`
-    : 'Printer not connected — click to set up';
+  chip.title = (m.name || m.text)
+    + (connected && pm && pm._activeTransport ? ' via ' + pm._activeTransport : '')
+    + (queue ? ' — ' + qn + ' queued' : '');
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -615,7 +687,11 @@ class PosPrintService {
 
     /* Auto-drain queue when printer reconnects */
     this._wireReconnect();
-    /* Start health monitor */
+    /* Canonical printer-state machine — attach to PrinterManager transport events, and
+       drive the header chip reactively from that one state (re-render on every change). */
+    _printerState.wire();
+    _printerState.subscribe(() => { try { _updateHeaderWidget(); } catch (_) {} });
+    /* Health monitor now only RECONCILES the one state + gathers queue metrics (no competing calc). */
     this.health.start(30000);
   }
 
@@ -623,6 +699,13 @@ class PosPrintService {
   on   (ev, fn) { (this._listeners[ev] = this._listeners[ev] || []).push(fn); return this; }
   off  (ev, fn) { if (this._listeners[ev]) this._listeners[ev] = this._listeners[ev].filter(f => f !== fn); }
   _emit (ev, d) { (this._listeners[ev] || []).forEach(fn => { try { fn(d); } catch(_) {} }); }
+
+  /* ── Canonical printer state (Phase 2 — the SINGLE status source) ──
+     Every status surface subscribes here; nothing else computes printer state. */
+  onState (fn) { return _printerState.subscribe(fn); }   /* returns unsubscribe; fires once with current */
+  getState ()  { return _printerState.get(); }
+  stateMeta () { return _printerState.meta(); }
+  get state () { return _printerState; }
 
   _wireReconnect () {
     const drain = () => this.drainQueue();
@@ -850,7 +933,10 @@ class PosPrintService {
     const t0    = _now();
     const dur   = () => Math.round(_now() - t0);
     const pm    = _pm();
-    const emit  = (state, extra) => { try { this._emit('lifecycle', { jobId, state, at: Date.now(), ...(extra || {}) }); } catch (_) {} };
+    const emit  = (state, extra) => {
+      try { this._emit('lifecycle', { jobId, state, at: Date.now(), ...(extra || {}) }); } catch (_) {}
+      try { _printerState.onPrintLifecycle(state); } catch (_) {}   /* feed the one canonical state */
+    };
 
     emit('queued', { receiptId: order.receiptNo || order.receiptNumber || null });
 
