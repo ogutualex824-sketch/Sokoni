@@ -273,6 +273,13 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    /* Per-user analytics (RBAC) — a user reads only their OWN summary (rider earnings/CLV, buyer
+       spend); admins read any. Maintained ONLY by Cloud Functions. */
+    match /users/{uid}/analytics/{doc} {
+      allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+      allow write: if false;
+    }
+
     /* ── Applications: the onboarding request for every role ───────────────────
        Providers, riders, businesses, professionals and healthcare facilities all
        submit here, and `applicationLifecycle` projects an approved applicant onto
@@ -1410,7 +1417,27 @@ service cloud.firestore {
                                        'hours','openingHours','returnPolicy','returnText',
                                        'packagingNote','delMethod','delTime','zones','updatedAt']));
       allow delete: if isAdmin();
+
+      /* Canonical per-shop analytics — maintained ONLY by Cloud Functions (analytics-aggregator).
+         The shop owner + admins may read their own numbers; clients never write. */
+      match /analytics/{doc} {
+        allow read:  if isAdmin() || (isAuthed() && request.auth.uid == uid);
+        allow write: if false;
+      }
     }
+
+    /* Canonical platform-wide analytics (analytics/global, analytics/daily_*) — the ONE source
+       every admin/finance dashboard reads. Admin-read only; written only by Cloud Functions. */
+    match /analytics/{doc} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
+    /* Dimensional analytics (RBAC) — platform-wide product/category stats + the cutover
+       parity log are admin-only; written only by Cloud Functions. */
+    match /productAnalytics/{productId}  { allow read: if isAdmin(); allow write: if false; }
+    match /categoryAnalytics/{categoryId}{ allow read: if isAdmin(); allow write: if false; }
+    match /analyticsParityLog/{entryId}  { allow read: if isAdmin(); allow write: if false; }
 
     /* ── orderEvents/{orderId}/events — the sale's audit trail / timeline ──
        Had no rule block, so `sokoni-orders.js::listenOrderEvents` and the
@@ -2475,6 +2502,16 @@ service cloud.firestore {
                               .data.ownerId == request.auth.uid)
                      || isAdmin());
       allow write: if false;
+
+      /* Per-branch analytics (RBAC) — maintained ONLY by Cloud Functions. The branch owner
+         (parent branch's sellerId) + admins may read their own branch's numbers; no client writes. */
+      match /analytics/{doc} {
+        allow read:  if isAdmin()
+                     || (isAuthed()
+                         && exists(/databases/$(database)/documents/branches/$(branchId))
+                         && get(/databases/$(database)/documents/branches/$(branchId)).data.sellerId == request.auth.uid);
+        allow write: if false;
+      }
     }
 
     match /posRefunds/{refundId} {
