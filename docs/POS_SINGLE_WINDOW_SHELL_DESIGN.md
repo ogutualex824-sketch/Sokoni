@@ -94,11 +94,34 @@ Each phase is independently shippable, browser-verified before the next, and rev
 |---|---|---|---|
 | **0. Map** | Enumerate every `window.open`/`_blank`/cross-`pos-*` link; map each to an existing panel, a new view, or a kept-popup. (Design artifact — done here.) | none | RC-safe |
 | **1. Converge popouts with existing panels** | Reports, Customers, Inventory, Full Reports → replace `window.open('pos-X.html','_blank')` with `SPos.ui.switchTab('X')`. Immediate single-window win, no new code paths. | LOW (revert onclick) | **Defect fix** — eliminates tab-sprawl/duplicate sessions; RC-appropriate |
-| **2. Add missing cashier views** | Suppliers, Cash/Till, Daily Ops as new `.pos-panel`s, lazy-loaded on first `switchTab` (Finance pattern). Standalone pages become the module source or a redirect. | MED | R1.1 (flag & confirm) |
+| **2. Panel Registry + missing views** | Introduce a **PanelRegistry** (see §5.1) so panels self-declare; then add Suppliers, Cash/Till, Daily Ops through it (not scattered `switchTab` edits). | MED | R1.1 (flag & confirm) |
 | **3. Persistent cart/session** | sessionStorage save/restore of `cartItems` + `currentTab`; resume-on-boot; hash-based deep-link + back/forward. | MED | R1.1 |
 | **4. Standalone → deep-link redirects** | `pos-reports/customers/inventory/suppliers.html` become thin redirects to `pos.html#<view>` so external launchers land in the shell. | LOW–MED | R1.1 |
 
 **Per-phase verification** (browser-automation): after Phase 1, tapping "Full Reports/Manager/Inventory" opens **no new tab** and shows the correct panel; after Phase 3, a reload mid-sale restores the cart; no console errors; `test-seller-dashboard`-style gate for POS routes if added.
+
+### 5.1 Phase 2 — Panel Registry (refinement)
+
+Rather than teaching `switchTab` about every panel (its current shape: a chain of `if (tab === 'x')` loaders), invert it: each panel **self-declares** into a `PanelRegistry`, and NavigationService becomes a pure orchestrator that reads the registry — no per-panel knowledge scattered through the router.
+
+Each panel registers a descriptor:
+
+```
+SPos.nav.register({
+  id:        'suppliers',
+  hash:      '#suppliers',          // deep-link route
+  panelEl:   'panel-suppliers',     // DOM node to show
+  load:      async () => { … },     // lazy init (idempotent; guarded like dataset.loaded)
+  teardown:  () => { … },           // release listeners/timers on leave (registerTeardown, formalized)
+  shortcuts: [{ key: 'F3', run: … }],// optional per-panel keyboard shortcuts
+  permission:'pos.suppliers.view',  // optional RBAC gate (hide/deny if absent)
+  preload:   'idle',                // 'eager' | 'idle' | 'onDemand'
+});
+```
+
+NavigationService then owns the generic pipeline for ALL panels: resolve descriptor → permission check → teardown previous → lazy `load()` (once) → show panel → bind panel shortcuts / unbind on leave → push hash → analytics. Adding a module becomes one `register()` call plus its `<section id="panel-…">` — no router edits, no scattered `switchTab` branches. The existing hardcoded loaders migrate into descriptors incrementally (back-compat: `switchTab` keeps working for unregistered tabs during migration).
+
+Benefits: single extension point, uniform lifecycle (teardown guaranteed, not per-panel discipline), RBAC and preload become declarative, and Phase 4 redirects map cleanly to `hash`. This is the structural payoff that makes Phases 2–4 cheap.
 
 ---
 
