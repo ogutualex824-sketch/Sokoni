@@ -892,9 +892,9 @@
   <!-- ── STEP 5: DONE ─────────────────────────────────────── -->
   <div class="step-content" id="step-5">
     <div class="done-screen">
-      <div class="done-checkmark">&#9989;</div>
-      <h2>Hardware Setup Complete!</h2>
-      <p>Your SOKONI SmartPOS terminal hardware has been configured successfully.</p>
+      <div class="done-checkmark">&#127881;</div>
+      <h2>Your POS is Ready</h2>
+      <p><strong>&#9989; POS Certified.</strong> Setup is a one-time step — from now on the POS opens straight to selling and your printer reconnects automatically. You won&#39;t see this wizard again unless you choose <em>Manage Devices</em>.</p>
       <div class="done-stats">
         <div class="done-stat blue">
           <div class="done-stat__num" id="doneTotal">0</div>
@@ -910,8 +910,8 @@
         </div>
       </div>
       <div class="done-actions">
-        <a href="pos.html"           class="btn-primary btn-lg">&#128241; Return to POS</a>
-        <a href="pos-workspace.html" class="btn-ghost   btn-lg">&#128187; Open Workspace</a>
+        <a href="pos-v2"    class="btn-primary btn-lg">&#128722; Start Selling</a>
+        <a href="#" onclick="goToStep(1);return false" class="btn-ghost btn-lg">&#128295; Manage Devices</a>
       </div>
     </div>
   </div>
@@ -1911,12 +1911,29 @@ document.getElementById('btnSaveConfig').addEventListener('click', async () => {
             testResult: (_testResults[id] || {}).status || 'not_tested',
           }];
         })),
+        /* One-time onboarding gate (Sprint 1): mark the POS certified so daily launches skip the
+           wizard and go straight to selling. The cloud copy lets another device restore preferences. */
+        setupComplete: true,
+        setupVersion: 1,
+        branchId:   (function(){ try { return localStorage.getItem('sokoniBranchId') || 'default'; } catch(_) { return 'default'; } })(),
+        terminalId: sellerId + '_pos1',
+        paperWidth: 58,
       };
       try {
         await setDoc(docRef, payload, { merge: true });
+        /* Persist the setup-complete flag + printer profile locally (fast path for every launch). */
+        try {
+          var _prn = allDevs.map(function(e){ return e[1].getInfo ? e[1].getInfo() : {}; })
+                            .find(function(i){ return (i.category || '').indexOf('printer') > -1; }) || {};
+          localStorage.setItem('posSetupComplete', JSON.stringify({
+            v: 1, at: Date.now(), sellerId: sellerId, branchId: payload.branchId, terminalId: payload.terminalId,
+            printer: { name: _prn.name || 'P58E', model: _prn.model || 'P58E', width: 58 },
+          }));
+          localStorage.setItem('posReceiptWidth', '32');   /* 58mm ≈ 32 chars — receipt engine reads this */
+        } catch (_) {}
         icon.textContent = '✅';
         msg.innerHTML = _saveBreakdown(allDevs.length, true, null, null);
-        toast('Hardware configuration saved', 'success');
+        toast('POS certified — you\'re ready to sell', 'success');
         _showSaveActions(false);
         HW.startHealthMonitor(30000); renderHealthBar();
         setTimeout(() => goToStep(5), 1200);

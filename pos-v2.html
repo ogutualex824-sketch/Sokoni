@@ -251,6 +251,7 @@ async function _proceed(user){
   try{ const u=JSON.parse(localStorage.getItem('sokoniUser')||'null'); document.getElementById('shopName').textContent=(u&&(u.shopName||u.name))||'My Shop'; }catch(_){ document.getElementById('shopName').textContent='My Shop'; }
   document.getElementById('auth-screen').style.display='none';
   _startClock(); _attach();
+  setTimeout(_checkFirstRun, 2500);   /* one-time onboarding prompt if the POS isn't set up yet */
 }
 /* Bind to firebase.js's warm app (wait for it to finish init), then attach the auth listener
    + a forgiving poll. Same-version SDK → window.firebase* instances interoperate with the
@@ -438,6 +439,34 @@ setInterval(_tryReconnect, 15000);           /* background reconnect while offli
 window.addEventListener('load', ()=>{ setTimeout(_tryReconnect, 1200); });
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _tryReconnect(); });
 window.addEventListener('online', _tryReconnect);
+
+/* ── One-time onboarding gate (Sprint 1) ──────────────────────────────────
+   The POS opens straight to selling. If setup was never completed (no posSetupComplete flag and
+   no paired printer), we show ONE dismissible prompt to finish setup — never a hard block, never
+   the full wizard forced on the merchant. A paired printer is treated as already set up. */
+function _checkFirstRun(){
+  try{
+    var done=!!localStorage.getItem('posSetupComplete');
+    var P=_P(), paired=!!(P&&P.paired);
+    if(done) return;
+    if(paired){ try{ localStorage.setItem('posSetupComplete', JSON.stringify({v:1,at:Date.now(),inferred:true})); }catch(_){} return; }
+    if(sessionStorage.getItem('posSetupPromptDismissed')) return;
+    _showSetupPrompt();
+  }catch(_){}
+}
+function _showSetupPrompt(){
+  var b=document.getElementById('setupPrompt');
+  if(b){ b.style.display='flex'; return; }
+  b=document.createElement('div'); b.id='setupPrompt';
+  b.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(var(--nav-h) + var(--sab) + 12px);z-index:65;background:var(--card2);border:1px solid rgba(113,255,0,.3);border-radius:14px;padding:14px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.5)';
+  b.innerHTML='<div style="flex:1;font-size:13px"><strong>Finish setting up your POS</strong>'
+    +'<div style="color:var(--muted);margin-top:2px">Pair your printer once — then it just works.</div></div>'
+    +'<a href="/pos-hardware-wizard" style="background:var(--accent);color:#04120a;border-radius:10px;padding:11px 14px;font-weight:800;text-decoration:none;font-size:13px;min-height:44px;display:flex;align-items:center">Set up</a>'
+    +'<button onclick="_dismissSetup()" aria-label="Dismiss" style="background:none;border:none;color:var(--muted);font-size:18px;min-width:40px;min-height:44px">&#10005;</button>';
+  document.body.appendChild(b);
+}
+function _dismissSetup(){ try{ sessionStorage.setItem('posSetupPromptDismissed','1'); }catch(_){} var b=document.getElementById('setupPrompt'); if(b) b.style.display='none'; }
+window._dismissSetup=_dismissSetup;
 
 /* ── Scanner ── */
 function openScanner(){ if(window.SokoniPrinter&&window.P58EPrinter){} toast('Scanner: point the camera at a barcode in New Sale','warn'); location.href='/pos-checkout#scan'; }
