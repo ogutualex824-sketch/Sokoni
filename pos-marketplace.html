@@ -883,6 +883,21 @@ let _reserveTimer   = null;
 
 const MANAGER_ROLES = new Set(['manager', 'owner', 'admin', 'super_admin']);
 
+/* Custom claims are inconsistent across the platform: some accounts carry `role` as a STRING,
+   others `roles` as an ARRAY, and a few an object. `_role` must ALWAYS be a plain string — a
+   non-string here crashed startup at `_role.replace(...)` ("POS Ready" step). Normalize once at
+   the source so every consumer (isManager, badge, tab gating) is safe. When given an array we
+   keep the HIGHEST privilege present so a manager is never silently downgraded to cashier. */
+function _normalizeRole(r) {
+  if (typeof r === 'string' && r) return r;
+  if (Array.isArray(r)) {
+    const mgr = r.find(x => MANAGER_ROLES.has(String(x)));
+    return String(mgr || r[0] || 'cashier');
+  }
+  if (r && typeof r === 'object') return String(r.role || r.name || 'cashier');
+  return 'cashier';
+}
+
 function isManager() { return MANAGER_ROLES.has(_role); }
 
 /* ══════════════════════════════════════
@@ -909,7 +924,7 @@ function _renderSteps() {
   box.innerHTML = _STEPS.map(([k, label]) => {
     const st = _stepState[k] || 'idle';
     const dim = st === 'idle' ? 'opacity:.45' : '';
-    const note = (st === 'fail' && _stepState['_' + k]) ? ' — <span style="color:#ff8a8a">' + esc(_stepState['_' + k]) + '</span>' : '';
+    const note = _stepState['_' + k] ? ' — <span style="color:' + (st === 'fail' ? '#ff8a8a' : 'rgba(255,255,255,.55)') + '">' + esc(_stepState['_' + k]) + '</span>' : '';
     return '<div style="display:flex;gap:9px;align-items:center;' + dim + '">' + ico(st) + '<span>' + esc(label) + note + '</span></div>';
   }).join('');
 }
@@ -946,14 +961,14 @@ async function _proceedAuth(user) {
       user.getIdTokenResult(),
       new Promise((_, rej) => setTimeout(() => rej(new Error('token-timeout')), 4000)),
     ]);
-    _role     = token.claims?.role     || 'cashier';
+    _role     = _normalizeRole(token.claims?.role ?? token.claims?.roles);
     _sellerId = token.claims?.sellerId || _uid;
   } catch {
     /* Claims slow/unavailable — open as cashier on the own uid rather than block. Non-fatal. */
     _role     = 'cashier';
     _sellerId = _uid;
   }
-  _diag('access', 'ok');
+  _diag('access', 'ok', 'role: ' + _role);
   _diag('ready', 'pending');
 
   try {
@@ -961,7 +976,8 @@ async function _proceedAuth(user) {
     document.getElementById('main-hdr').style.display     = 'flex';
     document.getElementById('main-nav').style.display     = 'flex';
     document.getElementById('main-content').style.display = 'block';
-    document.getElementById('role-badge').textContent = _role.replace('_', ' ').toUpperCase();
+    /* String() guard: even if a future path leaves _role non-string, the badge never crashes. */
+    document.getElementById('role-badge').textContent = String(_role || 'cashier').replace(/_/g, ' ').toUpperCase();
     if (!isManager()) document.querySelectorAll('.manager-tab').forEach(t => t.style.display = 'none');
 
     startClock();
