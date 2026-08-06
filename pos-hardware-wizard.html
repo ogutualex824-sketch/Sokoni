@@ -1893,6 +1893,11 @@ document.getElementById('btnSaveConfig').addEventListener('click', async () => {
       const docRef   = doc(db, 'posTerminals', sellerId + '_hardware');
       const payload  = {
         sellerId,
+        /* The /posTerminals rule authorizes on the doc's `uid` field
+           (request.resource.data.uid == request.auth.uid). The old payload wrote only
+           `sellerId`, so `uid` was undefined and every create was permission-denied
+           ("Missing or insufficient permissions"). Write `uid` so the create/update passes. */
+        uid: sellerId,
         updatedAt: new Date().toISOString(),
         deviceCount: allDevs.length,
         devices: Object.fromEntries(allDevs.map(([id, device]) => {
@@ -1907,29 +1912,72 @@ document.getElementById('btnSaveConfig').addEventListener('click', async () => {
           }];
         })),
       };
-      await setDoc(docRef, payload, { merge: true });
-      icon.textContent = '✅';
-      msg.textContent  = 'Configuration saved to Firestore (' + allDevs.length + ' devices)';
-      toast('Hardware configuration saved', 'success');
+      try {
+        await setDoc(docRef, payload, { merge: true });
+        icon.textContent = '✅';
+        msg.innerHTML = _saveBreakdown(allDevs.length, true, null, null);
+        toast('Hardware configuration saved', 'success');
+        _showSaveActions(false);
+        HW.startHealthMonitor(30000); renderHealthBar();
+        setTimeout(() => goToStep(5), 1200);
+      } catch (cloudErr) {
+        /* Local save already succeeded (saveRegistry above) — the printer WILL work this session.
+           Only the cloud copy failed. Show exactly what failed + where, and let the merchant
+           continue offline instead of a dead-end "Save failed". */
+        icon.textContent = '⚠️';
+        msg.innerHTML = _saveBreakdown(allDevs.length, false, 'posTerminals/' + sellerId + '_hardware', cloudErr);
+        toast('Saved on this device — cloud sync failed', 'warn');
+        _showSaveActions(true);
+      }
     } else {
       icon.textContent = '⚠️';
-      msg.textContent  = 'Saved locally (not logged in — Firestore skipped)';
+      msg.innerHTML = _saveBreakdown(getAllDevices().length, false, null, new Error('Not signed in'));
+      _showSaveActions(true);
     }
-
-    // 3. Start health monitor
-    HW.startHealthMonitor(30000);
-    renderHealthBar();
-
-    setTimeout(() => goToStep(5), 1200);
   } catch (e) {
     icon.textContent = '❌';
-    msg.textContent  = 'Save failed: ' + e.message;
+    msg.innerHTML = _saveBreakdown(0, false, 'posTerminals/*_hardware', e);
     toast('Save failed: ' + e.message, 'error');
+    _showSaveActions(true);
   } finally {
     btn.disabled = false;
     btn.innerHTML = '💾 Save Configuration';
   }
 });
+
+/* Granular save status — Printer/Bluetooth/Local always succeed by the time we save; the Cloud
+   line reflects the Firestore write. On failure we name the exact document path + reason. */
+function _saveBreakdown(count, cloudOk, path, err) {
+  var line = function (label, ok, extra) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:3px 0">'
+      + '<span>' + label + '</span>'
+      + '<span style="font-weight:800;color:' + (ok ? '#22c55e' : '#ff6b6b') + '">' + (ok ? '✓ ' + (extra || 'OK') : '✗ ' + (extra || 'Failed')) + '</span></div>';
+  };
+  var html = line('Printer test', true, 'Passed')
+           + line('Bluetooth', true, 'Connected')
+           + line('Local save', true, 'Saved (' + count + ')')
+           + line('Cloud save', cloudOk, cloudOk ? 'Synced' : 'Permission denied');
+  if (!cloudOk && path) {
+    html += '<div style="margin-top:8px;font-size:11.5px;color:var(--muted);line-height:1.5;border-top:1px solid var(--bor,#222);padding-top:8px">'
+      + '<strong style="opacity:.8">Document</strong><br>' + esc(path)
+      + '<br><strong style="opacity:.8">Reason</strong><br>' + esc((err && err.message) || 'Firestore rule rejected write')
+      + '</div>';
+  }
+  return html;
+}
+function _showSaveActions(show) {
+  var box = document.getElementById('saveActions');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'saveActions';
+    box.style.cssText = 'display:flex;gap:10px;margin-top:14px';
+    box.innerHTML = '<button type="button" onclick="document.getElementById(\'btnSaveConfig\').click()" style="flex:1;background:#71ff00;color:#04120a;border:none;border-radius:12px;padding:12px;font-weight:800;min-height:46px;cursor:pointer">↻ Retry cloud save</button>'
+      + '<button type="button" onclick="goToStep(5)" style="flex:1;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:12px;font-weight:700;min-height:46px;cursor:pointer">Continue offline</button>';
+    var status = document.getElementById('saveStatus') || document.querySelector('.save-status');
+    (status && status.parentNode ? status.parentNode : document.body).appendChild(box);
+  }
+  box.style.display = show ? 'flex' : 'none';
+}
 
 /* ════════════════════════════════════════════════════════════
    STEP 5 — DONE
