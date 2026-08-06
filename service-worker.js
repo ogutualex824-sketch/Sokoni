@@ -31,7 +31,7 @@
    + double-tap guards, emoji/close-button/logo UI, and the More page never
    reached already-installed clients — hard-refresh can't beat Cache-First. This
    bump invalidates the old cache so every client re-fetches current assets. */
-const CACHE_VERSION = "sokoni-20260806005917-v308";
+const CACHE_VERSION = "sokoni-20260806072901-v310";
 
 /* ══════════════════════════════════════════════════════════════════════════════
    APP SHELL — the ONLY assets fetched during install.
