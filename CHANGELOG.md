@@ -1,3 +1,26 @@
+## [2026-08-06] — feat(sync): real-time inventory across devices (slice 1) + orders verified live
+
+Cross-device convergence, slice 1 of the platform program. Goal: a change on one device
+(a till sale, a price edit, a stock adjustment) appears on every other signed-in device within
+seconds, no refresh.
+
+- sokoni-inventory.js: new `subscribeProducts(cb)` — live listener on this seller's canonical
+  `products` via the firebase.js compat shim (modular onSnapshot under the hood → the warm
+  App-Checked session). Because the shim wires no error callback, an iOS App-Check-blocked
+  listener simply never emits, so a visibility-aware **poll fallback** (the App-Check-independent
+  `/api/catalogue`) starts if no snapshot lands in 8s. cb returns the full inventory-shaped list;
+  returns an unsubscribe.
+- inventory.html: subscribes on load — list, category chips, KPI cards and stock levels now
+  update live (debounced) instead of one-shot; localStorage stays a cold-start paint only.
+  Removed the temporary `_invDbg` diagnostic banner.
+- Orders were already real-time and are now verified: buyer `my-orders.html` via
+  `SokoniDB.listenUserOrders` (onSnapshot + cold cache), merchant via `sellers/{uid}/clickAndCollect`
+  onSnapshot in pos-marketplace / pos-v2. No change needed.
+
+Builds on today's till convergence: a POS sale writes `products.stock` + `inventoryVersion++`,
+which is exactly the event these listeners push. Files: sokoni-inventory.js, inventory.html.
+DB/API: none. Security: read-only listeners scoped to the seller's own products. Breaking: none.
+
 ## [2026-08-06] — feat(pos): POS v2 selling flow (Cash) + till money-path convergence to canonical products
 
 **Money-path fix (correctness-critical).** `posCompleteCheckout` and `posProcessRefund`

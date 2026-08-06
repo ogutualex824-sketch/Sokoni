@@ -2145,19 +2145,35 @@ async function loadProducts(reset = true) {
     _products = reset ? batch : [..._products, ...batch];
     renderProducts(_products);
     renderCategories();
-    /* TEMP DIAGNOSTIC — shows the resolved owner id + count + category so a blank/short list can
-       be traced (wrong account? category filter? fetch skipped?). Remove after diagnosis. */
-    try {
-      const _s = (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
-        || (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.uid)
-        || (JSON.parse(localStorage.getItem('sokoniUser') || 'null') || {}).uid || 'NONE';
-      let dbg = document.getElementById('_invDbg');
-      if (!dbg) { dbg = document.createElement('div'); dbg.id = '_invDbg'; dbg.style.cssText = 'position:fixed;bottom:64px;left:8px;right:8px;z-index:99999;background:#111;color:#71ff00;font:11px monospace;padding:8px;border:1px solid #71ff00;border-radius:8px;word-break:break-all;'; document.body.appendChild(dbg); }
-      dbg.textContent = 'DBG · ' + _products.length + ' products · owner ' + String(_s).slice(0, 10) + ' · category "' + (_catFilter || 'all') + '"';
-    } catch (_) {}
     document.getElementById('load-more-btn').style.display = batch.length < 50 ? 'none' : '';
+    _startProductLive();   /* attach the cross-device live listener (idempotent) */
   } catch (e) { showToast('Error loading products'); }
 }
+
+/* ── Live cross-device products ──────────────────────────────────────────
+   One subscription pushes the seller's full canonical product list on every change (a till sale,
+   a price edit on another device, an adjustment) so this screen — list, KPIs and stock — stays
+   current WITHOUT a refresh. Respects the active category filter and debounces KPI refreshes. */
+let _liveUnsub = null, _allProducts = [], _kpiTimer = null;
+function _debouncedKpis() {
+  if (_kpiTimer) return;
+  _kpiTimer = setTimeout(() => { _kpiTimer = null; loadKPIs().catch(() => {}); if (_currentPage === 'stock') loadStockLevels().catch(() => {}); }, 1200);
+}
+function _startProductLive() {
+  if (_liveUnsub || !window.SokoniInventory || !SokoniInventory.subscribeProducts) return;
+  _liveUnsub = SokoniInventory.subscribeProducts((all) => {
+    _allProducts = all || [];
+    if (_currentPage === 'products' || !_currentPage) {
+      _products = _allProducts;                 /* full list → category chips stay complete */
+      renderCategories();
+      _products = _catFilter ? _allProducts.filter(p => (p.category || '') === _catFilter) : _allProducts;
+      renderProducts(_products);
+      const lm = document.getElementById('load-more-btn'); if (lm) lm.style.display = 'none';  /* full list is live; paging retired */
+    }
+    _debouncedKpis();
+  });
+}
+window.addEventListener('beforeunload', () => { try { _liveUnsub && _liveUnsub(); } catch (_) {} });
 
 function renderProducts(products) {
   const el = document.getElementById('products-list');

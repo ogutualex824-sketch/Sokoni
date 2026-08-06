@@ -389,6 +389,65 @@ const SokoniInventory = (() => {
     return results;
   }
 
+  /* ── Real-time products (cross-device sync) ──────────────────────────
+     Subscribe to THIS seller's canonical `products` and receive the full list on every change
+     — a sale on the till, a price edit on the web dashboard, or an adjustment on another phone
+     all push here within seconds, so no surface has to refresh.
+
+     Transport strategy (honours the iOS App-Check reality):
+       1. Instant cold paint from getProducts() (the App-Check-independent /api/catalogue read).
+       2. A live onSnapshot via the firebase.js compat shim (modular SDK under the hood → the warm
+          App-Checked session). Where the listener works (Android/web/most sessions) updates are
+          truly push.
+       3. The compat shim wires no error callback, so a listener that App-Check-403s simply never
+          emits. A watchdog therefore starts a visibility-aware poll if no snapshot arrives, and
+          the poll also covers silent listener stalls. Either way the surface converges.
+
+     cb receives an array of inventory-shaped products (same shape as getProducts()).
+     Returns an unsubscribe function. */
+  function subscribeProducts(cb, { pollMs = 15000 } = {}) {
+    let stopped = false, unsub = null, pollTimer = null, gotLive = false;
+    const emit = (arr) => { if (!stopped && Array.isArray(arr)) { try { cb(arr); } catch (_) {} } };
+    const compatDb = () => {
+      try { if (window.firebase && typeof window.firebase.firestore === 'function') return window.firebase.firestore(); } catch (_) {}
+      return (_fs && typeof _fs.collection === 'function') ? _fs : null;
+    };
+    const startPoll = (ms) => {
+      if (pollTimer || stopped) return;
+      pollTimer = setInterval(async () => {
+        if (stopped || (typeof document !== 'undefined' && document.hidden)) return;
+        try { _cache.delete(`products:undefined:undefined:true:0`); } catch (_) {}
+        try { emit(await getProducts({ active: true })); } catch (_) {}
+      }, ms);
+    };
+    (async () => {
+      let seller = _sellerUid();
+      for (let i = 0; i < 24 && !seller; i++) { await new Promise(r => setTimeout(r, 250)); seller = _sellerUid(); }
+      if (stopped) return;
+      try { emit(await getProducts({ active: true })); } catch (_) {}   /* cold paint */
+      if (!seller) { startPoll(pollMs); return; }
+      try {
+        const db = compatDb();
+        if (db && db.collection) {
+          unsub = db.collection('products').where('sellerUid', '==', seller).limit(500)
+            .onSnapshot((snap) => {
+              if (stopped) return;
+              gotLive = true;
+              const docs = (snap && snap.docs) || [];
+              const products = docs.map(d => _toInv(d.id, d.data()))
+                .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+              try { products.forEach(p => idbPut('products', p)); } catch (_) {}
+              try { _cache.clear ? _cache.clear() : _cache.delete(`products:undefined:undefined:true:0`); } catch (_) {}
+              emit(products);
+            });
+        } else { startPoll(pollMs); }
+      } catch (_) { startPoll(pollMs); }
+      /* Watchdog: if the listener produced nothing in 8s (App-Check block / stall), poll too. */
+      setTimeout(() => { if (!gotLive && !stopped) startPoll(pollMs); }, 8000);
+    })();
+    return function stop() { stopped = true; try { unsub && unsub(); } catch (_) {} if (pollTimer) clearInterval(pollTimer); };
+  }
+
   async function getProduct(id) {
     const hit = cacheGet(`product:${id}`);
     if (hit) return hit;
@@ -1272,7 +1331,7 @@ const SokoniInventory = (() => {
     init, on, emit,
 
     // Products
-    getProducts, getProduct, getProductByBarcode,
+    getProducts, subscribeProducts, getProduct, getProductByBarcode,
     saveProduct, addProduct, updateProduct, deleteProduct, importProducts, searchProducts,
     getCategories,
 
