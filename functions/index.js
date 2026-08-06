@@ -21,6 +21,15 @@ function _getAnthropicClient() {
 }
 const db = admin.firestore();
 const { writeAudit: _writeAudit } = require('./pos-audit');
+/* Canonical analytics — ONE aggregate every dashboard reads; fed only from exactly-once events. */
+const { bumpAnalytics: _bumpAnalytics, claimPaidCount: _claimPaidCount, grossShillings: _grossShillings, bumpOrderDimensions: _bumpDims, bumpDeliveryHour: _bumpDelHour } = require('./analytics-aggregator');
+/* Analytics reconciliation (R1.x Phase 5) — canonical truth vs live aggregate; the parity gate. */
+const { computeReconciliation: _reconcileAnalytics, backfillAnalytics: _backfillAnalytics } = require('./analytics-reconcile');
+/* Analytics rollup (R1.x Phase 3) + BI (Phase 4) — period buckets + derived ratios. */
+const { rollupGlobal: _rollupAnalytics, computeBI: _computeBI, computeTopLists: _computeTopLists } = require('./analytics-rollup');
+/* Analytics monitoring (R1.x Phase 6) — health/integrity checks → analytics/health + alerts;
+   cutover readiness gate (Milestone B prep) → analytics/cutover_readiness. */
+const { runHealthChecks: _analyticsHealth, computeCutoverReadiness: _cutoverReadiness } = require('./analytics-monitor');
 
 const ANTHROPIC_API_KEY    = defineSecret("ANTHROPIC_API_KEY");
 const INTASEND_PRIVATE_KEY       = defineSecret("INTASEND_PRIVATE_KEY");
@@ -2894,8 +2903,11 @@ exports.onOrderStatusChange = onDocumentUpdated(
       );
     }
 
-    /* ── Delivery platform fee on order completion ── */
-    if (toStatus === "delivered" && after.sellerUid) {
+    /* ── Delivery fee split + rider payout on delivery ──
+       Fires exactly on the transition INTO `delivered` (the `before` guard makes a
+       re-emitted update — same status again — a no-op, so the deliveryFees record and the
+       rider credit are written once). */
+    if (toStatus === "delivered" && before.status !== "delivered" && after.sellerUid) {
       const deliveryFee = Number(after.deliveryFee || 0);
       /* Delivery-fee split — priced by the ONE Commission Engine (category: hub).
          The rate was already correct (it came from the single config), but the calculation
@@ -2913,17 +2925,66 @@ exports.onOrderStatusChange = onDocumentUpdated(
       }) : null;
       const platformFee = _delComm ? _delComm.commissionCents / 100 : 0;
       const riderFee    = Math.round((deliveryFee - platformFee) * 100) / 100;
+      const riderUid    = after.assignedDriverUid || after.riderId || null;
+
+      /* ── Rider payout — credit the ONE canonical withdrawable wallet (shillings),
+         exactly-once. The delivery fee is NOT escrowed (unlike the seller's product
+         earnings, which settle at `completed`): the rider did the job, so they are paid
+         on proof-of-delivery. Mirrors settleOrder's seller-credit pattern —
+         deterministic walletTransactions id (`{rider}_{order}_delivery`) is the
+         exactly-once guard against a re-fired trigger or a manual re-transition.
+         Was previously MISSING: onOrderStatusChange only wrote a `pending` deliveryFees
+         record, and its sole consumer is a read-only admin report — so riders were never
+         actually credited. Best-effort: a wallet hiccup never blocks the status write. */
+      const riderShillings = Math.max(0, Math.round(riderFee));
+      let riderCredited = false;
+      if (riderUid && riderShillings > 0) {
+        try {
+          riderCredited = await db.runTransaction(async (t) => {
+            const txnRef = db.collection("walletTransactions").doc(`${riderUid}_${orderId}_delivery`);
+            const ex = await t.get(txnRef);
+            if (ex.exists) return false; /* already credited — replay no-op */
+            t.set(db.collection("wallets").doc(riderUid), {
+              balance:   admin.firestore.FieldValue.increment(riderShillings),
+              updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            }, { merge: true });
+            t.set(txnRef, {
+              uid:        riderUid,
+              type:       "delivery_earning",
+              amount:     riderShillings,
+              currency:   "KES",
+              orderId,
+              sourceType: "delivery",
+              sourceId:   orderId,
+              deliveryRef: after.deliveryRef || null,
+              createdAt:  admin.firestore.FieldValue.serverTimestamp(),
+            });
+            return true;
+          });
+        } catch (e) {
+          console.error("[onOrderStatusChange] rider payout failed (recoverable):", e.message);
+        }
+      }
+
       db.collection("deliveryFees").add({
         orderId,
         sellerUid:      after.sellerUid,
-        riderUid:       after.assignedDriverUid || null,
+        riderUid:       riderUid,
         platformFeeKES: platformFee,
         riderFeeKES:    riderFee,
         totalFeeKES:    deliveryFee,
         grossOrderKES:  Number(after.orderTotal || 0),
-        status:         "pending",
+        status:         riderCredited ? "credited" : (riderUid ? "pending" : "no-rider"),
+        creditedAt:     riderCredited ? admin.firestore.FieldValue.serverTimestamp() : null,
         createdAt:      admin.firestore.FieldValue.serverTimestamp(),
       }).catch(() => {});
+
+      /* Canonical analytics — one completed delivery + rider earnings (rider credited exactly
+         once above, so this counts once) + peak-delivery-hour bucket (Phase 4b). */
+      if (riderCredited) {
+        _bumpAnalytics(db, { shopId: after.sellerUid, branchId: after.branchId || null, incr: { deliveries: 1, riderEarningsShillings: riderShillings } });
+        _bumpDelHour(db).catch(() => {});
+      }
     }
 
     /* ── Product Settlement Convergence — settle the seller ONCE on fulfillment ──
@@ -2933,8 +2994,42 @@ exports.onOrderStatusChange = onDocumentUpdated(
        best-effort so a settlement hiccup never blocks the status write. */
     if (toStatus === "completed" && before.status !== "completed" && after.sellerUid) {
       try {
-        await require("./order-settlement").settleOrder(db, admin, orderId);
+        const _settle = await require("./order-settlement").settleOrder(db, admin, orderId);
+        /* Canonical analytics — settled order + platform revenue (= the CANONICAL commission from
+           the settlement engine, NOT a hardcoded dashboard %) + seller earnings, exactly once
+           (settleOrder returns 'settled' only on the first settlement of this order). */
+        if (_settle && _settle.outcome === "settled") {
+          _bumpAnalytics(db, { shopId: after.sellerUid, branchId: after.branchId || null, incr: {
+            settledOrders:            1,
+            gmvSettledShillings:      _grossShillings(after),
+            platformRevenueShillings: Math.round((_settle.commissionCents || 0) / 100),
+            sellerEarningsShillings:  _settle.netShillings || 0,
+          }});
+        }
       } catch (e) { console.error("[onOrderStatusChange] order settlement failed (recoverable):", e.message); }
+    }
+
+    /* ── Canonical analytics: a pending→paid transition counts the order + GMV. Marker-guarded
+       (claimPaidCount) so the created-at-paid path in onNewOrderCreated can't also count it. ── */
+    if (toStatus === "paid" && before.status !== "paid") {
+      _claimPaidCount(db, orderId).then((d) => {
+        if (d) {
+          _bumpAnalytics(db, { shopId: d.sellerUid || d.sellerId || null, branchId: d.branchId || null, incr: { paidOrders: 1, gmvShillings: _grossShillings(d) } });
+          _bumpDims(db, d).catch(() => {});   /* Phase 4b dimensional fan-out (exactly-once with the count) */
+        }
+      }).catch(() => {});
+    }
+
+    /* ── Canonical analytics (R1.x Phase 2): cancellation — count it, and reverse the paid-order +
+       GMV only if this order had actually been counted as paid (marker set), so a cancel-after-paid
+       leaves gross figures honest. Exactly-once via the before-status transition guard. ── */
+    if (toStatus === "cancelled" && before.status !== "cancelled") {
+      const _cIncr = { cancellations: 1 };
+      if (after._apPaidCounted === true) {
+        _cIncr.paidOrders   = -1;
+        _cIncr.gmvShillings  = -_grossShillings(after);
+      }
+      _bumpAnalytics(db, { shopId: after.sellerUid || after.sellerId || null, branchId: after.branchId || null, incr: _cIncr });
     }
   }
 );
@@ -3094,6 +3189,16 @@ exports.onNewOrderCreated = onDocumentCreated(
       console.warn("[onNewOrderCreated] No sellerUid on order", orderId);
       return;
     }
+
+    /* ── Canonical analytics: count this PAID order + GMV exactly once. The marker guard in
+       claimPaidCount makes this safe even though an order can reach 'paid' via creation-at-paid
+       (here) OR a later pending→paid transition (onOrderStatusChange) — only the first wins. */
+    _claimPaidCount(db, orderId).then((d) => {
+      if (d) {
+        _bumpAnalytics(db, { shopId: sellerUid, branchId: d.branchId || null, incr: { paidOrders: 1, gmvShillings: _grossShillings(d) } });
+        _bumpDims(db, d).catch(() => {});   /* Phase 4b dimensional fan-out (exactly-once with the count) */
+      }
+    }).catch(() => {});
 
     const tasks = [];
 
@@ -3709,20 +3814,19 @@ async function _finalizeMarketplacePayment(db, admin, opts) {
           sold:             admin.firestore.FieldValue.increment(dec),
           updatedAt:        ts,
           inventoryVersion: admin.firestore.FieldValue.increment(1),
+          /* Order/source attribution for the canonical inventoryMovements audit trail —
+             the `indexProductUpdate` trigger records the movement from ONE place and reads
+             these (only when this write changed them, so a later POS sale can't inherit them). */
+          lastSaleOrderId:  orderId || null,
+          lastStockSource:  pathLabel || "marketplace",
         };
         /* Sold out → flag unavailable so it stops being buyable (product page /
            checkout guard on outOfStock). Restock clears it via the seller editor. */
         if (_newStock === 0) _stockUpd.outOfStock = true;
         txn.update(ref, _stockUpd);
-        /* Inventory movement / history — deterministic id (orderId_pid) so a
-           webhook retry overwrites rather than logging a second movement. */
-        txn.set(db.collection("inventoryMovements").doc(`${orderId}_${pid}`), {
-          productId: pid, orderId: orderId || null, ref: checkoutId || null,
-          type: "sale", qty: dec,
-          priorStock: (typeof cur === "number" ? cur : null),
-          newStock:   (typeof cur === "number" ? Math.max(0, cur - dec) : null),
-          path: pathLabel || "marketplace", at: ts,
-        });
+        /* Inventory movement is now recorded centrally by the indexProductUpdate trigger
+           (keyed `${pid}_v${version}`, exactly-once) rather than written here — one audit
+           path for ALL stock-mutating flows, not just this one. */
         _priced.push({
           productId: pid,
           name:      pdata.name || "Item",
@@ -6820,7 +6924,7 @@ exports.availableDeliveries = onRequest(
 /* Rider accepts an available delivery — atomic first-claim-wins (Admin SDK bypasses the
    packageRequests write rule that would otherwise block a not-yet-assigned rider). */
 exports.claimAvailableDelivery = onCall(
-  { region: "us-central1", timeoutSeconds: 30, memory: "128MiB", invoker: "public" },
+  { region: "us-central1", timeoutSeconds: 30, memory: "256MiB", invoker: "public" },
   async (request) => {
     const uid = request.auth && request.auth.uid;
     if (!uid) throw new HttpsError("unauthenticated", "Sign in to accept a delivery.");
@@ -8422,7 +8526,30 @@ exports.initiateRefund = onCall({ timeoutSeconds: 30 }, async (request) => {
      it REFUNDED so a pending settlement becomes a no-op. Best-effort + exactly-once; the refund
      record above stands regardless. */
   if (orderId) {
-    try { await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason, refundRef }); }
+    try {
+      const _ref = await require("./order-settlement").handleOrderRefund(db, admin, String(orderId), { reason: refundReason, refundRef });
+      /* Canonical analytics (R1.x Phase 2) — count the refund once and keep the reconcilable
+         fields in parity. handleOrderRefund returns a first-time outcome ('reversed' after a
+         settled order, 'marked-refunded' before settlement) exactly once (replays return
+         'already-*'), so this counts once. When the settlement was REVERSED its doc flips to
+         status:'reversed' — excluded from reconciliation's `status==settled` truth — so we
+         reverse the settled revenue/seller-earnings/settledOrders to match. */
+      if (_ref && (_ref.outcome === "reversed" || _ref.outcome === "marked-refunded")) {
+        try {
+          const _oSnap = await db.doc(`orders/${orderId}`).get();
+          const _o = _oSnap.exists ? (_oSnap.data() || {}) : {};
+          const _incr = { refunds: 1, refundAmountShillings: Math.round(Number(refundAmt) || _grossShillings(_o)) };
+          if (_ref.outcome === "reversed") {
+            const _sSnap = await db.doc(`settlements/${orderId}`).get();
+            const _s = _sSnap.exists ? (_sSnap.data() || {}) : {};
+            _incr.settledOrders            = -1;
+            _incr.platformRevenueShillings = -Math.round((Number(_s.commissionCents) || 0) / 100);
+            _incr.sellerEarningsShillings  = -(Number(_s.netShillingsCredited) || Number(_ref.netShillings) || 0);
+          }
+          _bumpAnalytics(db, { shopId: _o.sellerUid || _o.sellerId || null, branchId: _o.branchId || null, incr: _incr });
+        } catch (_) {}
+      }
+    }
     catch (e) { console.error("[initiateRefund] settlement-state update failed (recoverable):", e.message); }
   }
 
@@ -8782,6 +8909,45 @@ exports.indexProductUpdate = onDocumentUpdated("products/{productId}", async (ev
     }
   } catch (_) {}
 
+  /* ── Inventory movement / audit trail (single source) ──
+     Record EVERY stock change to `inventoryMovements` from ONE place, so all stock-mutating
+     paths (order settlement, POS checkout/refund, B2B, click-and-collect, manual edits) get a
+     uniform, complete history without each site writing its own record. Deterministic id
+     `${pid}_v${version}` → exactly-once per authoritative change (every canonical deduction
+     bumps inventoryVersion); the trigger's own searchableTerms write-back below never changes
+     stock, so this block no-ops on that re-fire. Fire-and-forget: an audit hiccup never blocks
+     the write. Order/source attribution is trusted ONLY when THIS write set it (compared vs
+     `before`), so a later POS sale can't inherit a stale orderId. */
+  try {
+    const _sb = Number(_before.stock ?? _before.stockQty ?? _before.quantity);
+    const _sa = Number(after.stock   ?? after.stockQty   ?? after.quantity);
+    if (Number.isFinite(_sa) && _sb !== _sa) {
+      const _ver     = Number(after.inventoryVersion)   || 0;
+      const _prevVer = Number(_before.inventoryVersion) || 0;
+      const _movId   = _ver !== _prevVer
+        ? `${event.params.productId}_v${_ver}`
+        : `${event.params.productId}_s${_sa}_p${Number.isFinite(_sb) ? _sb : "x"}`;
+      const _delta   = _sa - (Number.isFinite(_sb) ? _sb : 0);
+      const _freshOrderId = (after.lastSaleOrderId && after.lastSaleOrderId !== _before.lastSaleOrderId)
+        ? after.lastSaleOrderId : null;
+      const _freshSource  = (after.lastStockSource && after.lastStockSource !== _before.lastStockSource)
+        ? after.lastStockSource : (_delta < 0 ? "deduction" : "restock");
+      db.collection("inventoryMovements").doc(_movId).set({
+        productId:        event.params.productId,
+        sellerUid:        after.sellerUid || after.uid || null,
+        type:             _delta < 0 ? "deduction" : "restock",
+        qty:              Math.abs(_delta),
+        delta:            _delta,
+        priorStock:       Number.isFinite(_sb) ? _sb : null,
+        newStock:         _sa,
+        inventoryVersion: _ver,
+        orderId:          _freshOrderId,
+        source:           _freshSource,
+        at:               admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true }).catch(() => {});
+    }
+  } catch (_) {}
+
   /* Guard: write only when the generated index actually differs from what is
      stored. This replaced a fixed TEXT_FIELDS list compared with !==, which was
      wrong in both directions: array fields (tags, and now the variant
@@ -8875,6 +9041,41 @@ exports.indexBusinessUpdate = onDocumentUpdated("businesses/{bizId}", async (eve
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
    OBSERVABILITY & HEALTH ENDPOINTS
 â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+
+/* R1.x PHASE 5 — Analytics reconciliation (parity gate). Daily: compare canonical truth
+   (settlements / deliveryFees / orders) vs analytics/global; flag drift to reconciliationAlerts.
+   Admin callable for on-demand reconcile + explicit backfill. */
+exports.scheduledAnalyticsReconcile = onSchedule(
+  { schedule: "30 2 * * *", timeZone: "UTC", timeoutSeconds: 300 },  /* 05:30 EAT daily */
+  async () => {
+    /* Roll daily buckets into periods (Phase 3), compute BI ratios (Phase 4), then reconcile. */
+    try { await _rollupAnalytics(db); } catch (e) { console.error("[analytics-rollup] failed:", e.message); }
+    try { await _computeBI(db); } catch (e) { console.error("[analytics-bi] failed:", e.message); }
+    try { await _computeTopLists(db); } catch (e) { console.error("[analytics-toplists] failed:", e.message); }
+    const r = await _reconcileAnalytics(db);
+    console.log("[analytics-reconcile]", JSON.stringify({ ok: r.ok, mismatches: r.mismatches, maxDriftPct: r.maxDriftPct, capped: r.capped }));
+    try { const h = await _analyticsHealth(db); console.log("[analytics-health]", JSON.stringify({ ok: h.ok, issues: h.issues.map(i => i.type) })); }
+    catch (e) { console.error("[analytics-health] failed:", e.message); }
+    try { const g = await _cutoverReadiness(db); console.log("[cutover-readiness]", JSON.stringify({ ready: g.overallReady, failing: g.failing })); }
+    catch (e) { console.error("[cutover-readiness] failed:", e.message); }
+  }
+);
+
+exports.adminReconcileAnalytics = onCall(
+  { region: "us-central1", enforceAppCheck: true, timeoutSeconds: 120, invoker: "public" },
+  async (request) => {
+    if (!request.auth || request.auth.token.admin !== true)
+      throw new HttpsError("permission-denied", "Admin only.");
+    const d = request.data || {};
+    if (d.backfill === true) return { backfilled: true, ...(await _backfillAnalytics(db)) };
+    if (d.rollup === true)   return { rolledUp: true, ...(await _rollupAnalytics(db)) };
+    if (d.bi === true)       return { bi: await _computeBI(db) };
+    if (d.health === true)   return { health: await _analyticsHealth(db) };
+    if (d.toplists === true) return { topLists: await _computeTopLists(db) };
+    if (d.readiness === true) return { readiness: await _cutoverReadiness(db) };
+    return await _reconcileAnalytics(db);
+  }
+);
 
 exports.platformHealth = onRequest(
   { timeoutSeconds: 10, cors: ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app", "https://sokoni-aeb26.firebaseapp.com", "http://localhost", "http://127.0.0.1"], invoker: "public" },
