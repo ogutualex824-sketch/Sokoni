@@ -260,6 +260,12 @@ exports.grantAdminClaim = onCall(
     );
 
     await db.collection("auditLogs").add({ action: "grantAdminClaim", targetUid, grantedBy: request.auth.uid, ts: admin.firestore.FieldValue.serverTimestamp() });
+    _writeAudit(db, {
+      action: 'role.change', actorUid: request.auth.uid, actorRole: 'superAdmin',
+      objectType: 'user', objectId: targetUid,
+      before: { admin: !!existClaims.admin }, after: { admin: true },
+      metadata: { grant: 'admin' },
+    });
     return { success: true, uid: targetUid, message: "Admin claim granted. User must sign out and back in." };
   }
 );
@@ -282,6 +288,7 @@ exports.revokeAdminClaim = onCall(
 
     /* Preserve other claims — only delete admin key */
     const existClaims = await admin.auth().getUser(targetUid).then(u => u.customClaims || {}).catch(() => ({}));
+    const _wasAdmin = !!existClaims.admin;
     delete existClaims.admin;
     await admin.auth().setCustomUserClaims(targetUid, existClaims);
     await admin.auth().revokeRefreshTokens(targetUid);
@@ -291,6 +298,12 @@ exports.revokeAdminClaim = onCall(
     );
 
     await db.collection("auditLogs").add({ action: "revokeAdminClaim", targetUid, revokedBy: request.auth.uid, ts: admin.firestore.FieldValue.serverTimestamp() });
+    _writeAudit(db, {
+      action: 'role.change', actorUid: request.auth.uid, actorRole: 'superAdmin',
+      objectType: 'user', objectId: targetUid,
+      before: { admin: _wasAdmin }, after: { admin: false },
+      metadata: { revoke: 'admin' },
+    });
     return { success: true, uid: targetUid };
   }
 );
