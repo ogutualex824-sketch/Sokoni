@@ -6,6 +6,7 @@ const admin = require('firebase-admin');
 const CF_OPTIONS = { region: 'us-central1', enforceAppCheck: true };
 const db = admin.firestore();
 const FieldValue = admin.firestore.FieldValue;
+const { writeAudit } = require('./pos-audit');
 
 function _requireAuth(auth) {
   if (!auth) throw new HttpsError('unauthenticated', 'Sign in required.');
@@ -190,19 +191,19 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
     await ref.update(update);
   }
 
-  /* ── Audit log (Sprint 7) — authoritative, server-written record of this sensitive dispatch
-     action. Fire-and-forget: an audit hiccup must never block the operation. RBAC is already
-     enforced above (_requireRole + _ownerOrAdmin); this is the tamper-evident trail. */
-  db.collection('auditLogs').add({
-    action:    'pos.dispatch.status',
-    actorUid:  auth.uid,
-    actorRole: (auth.token && auth.token.role) || 'unknown',
-    sellerId,
-    orderId,
-    from:      order.status,
-    to:        status,
-    ts:        FieldValue.serverTimestamp(),
-  }).catch((e) => console.error('[audit] dispatch log failed (non-blocking):', e.message));
+  /* ── Audit (canonical schema) — authoritative, server-written record of this dispatch action.
+     RBAC is already enforced above (_requireRole + _ownerOrAdmin); this is the tamper-evident trail. */
+  writeAudit(db, {
+    action:     'pos.dispatch.status',
+    actorUid:   auth.uid,
+    actorRole:  (auth.token && auth.token.role) || null,
+    branchId:   order.branchId || 'default',
+    objectType: 'order',
+    objectId:   orderId,
+    before:     { status: order.status },
+    after:      { status },
+    metadata:   { sellerId, fulfillmentType: order.fulfillmentType || 'delivery' },
+  });
 
   /* ── Ready-for-Dispatch: decouple dispatch from printing ──────────────────────
      Marking a DELIVERY order ready creates the rider-visible dispatch job

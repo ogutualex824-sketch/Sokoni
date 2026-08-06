@@ -13,6 +13,7 @@ const admin = require('firebase-admin');
 
 if (!admin.apps.length) admin.initializeApp();
 const db = admin.firestore();
+const { writeAudit } = require('./pos-audit');
 
 /* ─── HELPERS ────────────────────────────────────────────────────── */
 function nowISO() { return new Date().toISOString(); }
@@ -99,7 +100,7 @@ exports.inventoryAdjustStock = onCall({ timeoutSeconds: 30, memory: '256MiB' }, 
   const mvRef    = tenantCol(tenantId, 'inventory_movements').doc(data.id || db.collection('_').doc().id);
   const prodRef  = tenantCol(tenantId, 'inventory_products').doc(data.productId);
 
-  let resultLevel;
+  let resultLevel, _apPrev = 0, _apNew = 0;
 
   await db.runTransaction(async tx => {
     const levelSnap = await tx.get(levelRef);
@@ -171,10 +172,26 @@ exports.inventoryAdjustStock = onCall({ timeoutSeconds: 30, memory: '256MiB' }, 
     tx.set(prodRef,     { lastStockUpdate: nowISO() }, { merge: true });
 
     resultLevel = updatedLevel;
+    _apPrev = prevAvailable; _apNew = newAvailable;
   });
 
   // Update analytics counters (non-blocking)
   updateAnalyticsCounters(tenantId, data.type, qty).catch(() => {});
+
+  /* Audit (canonical schema) — authoritative record of a stock adjustment. */
+  writeAudit(db, {
+    action:     'inventory.stock_adjust',
+    actorUid:   uid,
+    actorRole:  (req.auth && req.auth.token && req.auth.token.role) || null,
+    branchId:   data.warehouseId || data.branchId || 'default',
+    objectType: 'product',
+    objectId:   data.productId,
+    before:     { available: _apPrev },
+    after:      { available: _apNew },
+    delta:      qty,
+    reason:     data.reason || data.type || null,
+    metadata:   { type: data.type, warehouseId: data.warehouseId, variantId: data.variantId || null, tenantId, movementId: mvRef.id, sku: data.sku || null },
+  });
 
   return { success: true, level: resultLevel };
 });

@@ -465,6 +465,8 @@ async function printReceipt(orderId){
     const doc=_orderDoc(o,items,total,sub,del,ff);
     await SP.print('custom',{ build(enc){ doc.renderTo(enc); } });
     toast('🧾 Printed '+String(o.id).slice(0,10));
+    /* Audit the (re)print — authoritative, server-counted. Fire-and-forget. */
+    try{ CF('posLogReprint')({ orderId:o.id, receiptType:'order', printerName:(_P()&&_P().paired&&_P().paired.name)||'P58E', merchantId:_sellerId }); }catch(_){}
   }
   catch(e){ toast('Print failed: '+(e.message||e),'err'); }
 }

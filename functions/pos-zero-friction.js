@@ -8,6 +8,7 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule }         = require('firebase-functions/v2/scheduler');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const { writeAudit } = require('./pos-audit');
 
 const db      = getFirestore();
 const REGION  = 'us-central1';
@@ -565,7 +566,55 @@ exports.posProcessRefund = onCall(cfgHeavy, async ({ data, auth }) => {
     return false;
   });
 
+  /* Audit (canonical schema) — only on a real refund, not an idempotent replay. */
+  if (!alreadyDone) {
+    writeAudit(db, {
+      action:     'pos.refund',
+      actorUid:   managerId,
+      actorRole:  (auth && auth.token && auth.token.role) || null,
+      branchId:   sale.branchId || 'default',
+      objectType: 'order',
+      objectId:   saleId,
+      before:     { paymentStatus: 'paid' },
+      after:      { paymentStatus: 'refunded' },
+      delta:      -refundTotal,
+      reason:     reason || null,
+      metadata:   { refundId, refundTotal, refundMethod, merchantId, items: (items || []).map(i => ({ productId: i.productId, qty: i.qty })) },
+    });
+  }
+
   return { refundId, refundTotal, idempotent: alreadyDone };
+});
+
+/* ════════════════════════════════════════════════════════════════
+   posLogReprint — audit a receipt reprint (client-initiated, so logged via a callable).
+   Increments an authoritative per-order reprint counter and writes the canonical audit entry.
+════════════════════════════════════════════════════════════════ */
+exports.posLogReprint = onCall(cfg, async ({ data, auth }) => {
+  await _assertAuth(auth);
+  const { orderId, receiptType = 'sale', printerName = null, branchId = 'default', merchantId = null } = data || {};
+  if (!orderId) _e('orderId required');
+
+  const cntRef = db.collection('posReprintCounters').doc(String(orderId));
+  let count = 1;
+  try {
+    await db.runTransaction(async (txn) => {
+      const s = await txn.get(cntRef);
+      count = (((s.exists && s.data().count) || 0)) + 1;
+      txn.set(cntRef, { orderId: String(orderId), count, lastAt: FieldValue.serverTimestamp() }, { merge: true });
+    });
+  } catch (_) { /* counter is best-effort; the audit below is the record of truth */ }
+
+  writeAudit(db, {
+    action:     'pos.receipt_reprint',
+    actorUid:   auth.uid,
+    actorRole:  (auth.token && auth.token.role) || null,
+    branchId,
+    objectType: 'receipt',
+    objectId:   String(orderId),
+    metadata:   { receiptType, printerName, reprintCount: count, merchantId },
+  });
+  return { ok: true, reprintCount: count };
 });
 
 /* ════════════════════════════════════════════════════════════════

@@ -20,6 +20,7 @@ function _getAnthropicClient() {
   return _anthropicInstance;
 }
 const db = admin.firestore();
+const { writeAudit: _writeAudit } = require('./pos-audit');
 
 const ANTHROPIC_API_KEY    = defineSecret("ANTHROPIC_API_KEY");
 const INTASEND_PRIVATE_KEY       = defineSecret("INTASEND_PRIVATE_KEY");
@@ -8677,6 +8678,28 @@ exports.indexProductCreate = onDocumentCreated("products/{productId}", async (ev
 exports.indexProductUpdate = onDocumentUpdated("products/{productId}", async (event) => {
   if (!event.data || !event.data.after) return;
   const after = event.data.after.data() || {};
+  const _before = (event.data.before && event.data.before.data()) || {};
+
+  /* Audit price changes (canonical schema). A trigger observes the write, so the actor is
+     after.updatedBy (set by the client on product edits). Runs BEFORE the search-terms early
+     return so a price-only edit is still recorded. Fire-and-forget. */
+  try {
+    const _pb = Number(_before.price), _pa = Number(after.price);
+    if (isFinite(_pb) && isFinite(_pa) && _pb !== _pa) {
+      _writeAudit(db, {
+        action:     'product.price_change',
+        actorUid:   after.updatedBy || after.sellerUid || after.uid || null,
+        branchId:   after.branchId || 'default',
+        objectType: 'product',
+        objectId:   event.params.productId,
+        before:     { price: _pb },
+        after:      { price: _pa },
+        delta:      _pa - _pb,
+        reason:     after.priceChangeReason || null,
+        metadata:   { name: after.name || null, sellerUid: after.sellerUid || after.uid || null },
+      });
+    }
+  } catch (_) {}
 
   /* Guard: write only when the generated index actually differs from what is
      stored. This replaced a fixed TEXT_FIELDS list compared with !==, which was
@@ -10705,6 +10728,7 @@ exports.posCompleteCheckout    = posZF.posCompleteCheckout;
 exports.posValidateCoupon      = posZF.posValidateCoupon;
 exports.posLookupCustomer      = posZF.posLookupCustomer;
 exports.posProcessRefund       = posZF.posProcessRefund;
+exports.posLogReprint          = posZF.posLogReprint;
 exports.posGetQueueMetrics     = posZF.posGetQueueMetrics;
 exports.posCleanupIdempotency  = posZF.posCleanupIdempotency;
 exports.posCheckPaymentStatus  = posZF.posCheckPaymentStatus;
