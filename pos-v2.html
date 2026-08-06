@@ -123,8 +123,12 @@
   </style>
 </head>
 
-<!-- Auth gate -->
-<div id="auth-screen"><div class="spinner"></div><div class="auth-msg">Opening your POS…</div></div>
+<!-- Auth gate + startup checklist -->
+<div id="auth-screen">
+  <div class="spinner" id="auth-spinner"></div>
+  <div class="auth-msg" id="auth-msg">Opening your POS…</div>
+  <div id="auth-steps" style="margin-top:16px;display:flex;flex-direction:column;gap:8px;font-size:13px;min-width:210px;text-align:left"></div>
+</div>
 
 <!-- Top bar -->
 <div class="topbar">
@@ -244,13 +248,45 @@ function _resolveUser(){
   try{ if(typeof firebase!=='undefined'&&firebase.auth&&firebase.auth().currentUser) return firebase.auth().currentUser; }catch(_){}
   return null;
 }
+/* ── Startup checklist (Sprint 3) — honest per-step readiness, never a blank spinner ──
+   Only steps the POS actually performs at launch are shown (no fabricated ✓). Reveal is gated on
+   Session + the first Orders snapshot (or a 2.5s cap), so a slow/failed feed never hangs startup. */
+const _GSTEPS=[['session','Session'],['merchant','Merchant'],['orders','Orders'],['printer','Printer']];
+const _gstate={};
+function _grender(){
+  const box=document.getElementById('auth-steps'); if(!box) return;
+  const ico=s=> s==='ok'?'<span style="color:var(--ok)">✓</span>' : s==='warn'?'<span style="color:var(--warn)">!</span>' : s==='pending'?'<span style="color:rgba(255,255,255,.4)">◌</span>' : '<span style="color:rgba(255,255,255,.25)">◌</span>';
+  box.innerHTML=_GSTEPS.map(([k,label])=>{
+    const st=_gstate[k]||'idle', note=_gstate['_'+k]?' <span style="color:rgba(255,255,255,.5)">'+_esc(_gstate['_'+k])+'</span>':'';
+    return '<div style="display:flex;gap:9px;align-items:center;'+(st==='idle'?'opacity:.4':'')+'">'+ico(st)+'<span>'+_esc(label)+note+'</span></div>';
+  }).join('');
+}
+function _gstep(k,s,note){ _gstate[k]=s; if(note!=null) _gstate['_'+k]=note; _grender(); }
+let _ordersSeen=false, _gateDone=false;
+function _finishGate(){
+  if(_gateDone) return; _gateDone=true;
+  const msg=document.getElementById('auth-msg'); if(msg) msg.textContent='Ready to sell';
+  const sp=document.getElementById('auth-spinner'); if(sp) sp.style.display='none';
+  setTimeout(()=>{ const s=document.getElementById('auth-screen'); if(s) s.style.display='none'; }, 450);
+}
+function _revealWhenReady(){
+  const start=Date.now();
+  const t=setInterval(()=>{
+    if(_ordersSeen || Date.now()-start>2500){ clearInterval(t); if(!_ordersSeen) _gstep('orders','warn','slow'); _finishGate(); }
+  }, 150);
+}
+
 async function _proceed(user){
   if(_gate||!user) return; _gate=true; _uid=user.uid;
+  _gstep('session','ok'); _gstep('merchant','pending'); _gstep('orders','pending'); _gstep('printer','pending');
   try{ const t=await Promise.race([user.getIdTokenResult(), new Promise((_,r)=>setTimeout(()=>r(0),4000))]); _sellerId=t.claims?.sellerId||_uid; }
   catch{ _sellerId=_uid; }
-  try{ const u=JSON.parse(localStorage.getItem('sokoniUser')||'null'); document.getElementById('shopName').textContent=(u&&(u.shopName||u.name))||'My Shop'; }catch(_){ document.getElementById('shopName').textContent='My Shop'; }
-  document.getElementById('auth-screen').style.display='none';
+  let _shop='My Shop';
+  try{ const u=JSON.parse(localStorage.getItem('sokoniUser')||'null'); _shop=(u&&(u.shopName||u.name))||'My Shop'; }catch(_){}
+  document.getElementById('shopName').textContent=_shop;
+  _gstep('merchant','ok',_shop.length>16?'':_shop);
   _startClock(); _attach();
+  _revealWhenReady();
   setTimeout(_checkFirstRun, 2500);   /* one-time onboarding prompt if the POS isn't set up yet */
 }
 /* Bind to firebase.js's warm app (wait for it to finish init), then attach the auth listener
@@ -279,9 +315,10 @@ function _attach(){
   ['pending','ready','collected'].forEach(st=>{
     const q=query(collection(db,'sellers',_sellerId,'clickAndCollect'), where('status','==',st));
     onSnapshot(q, snap=>{
+      if(!_ordersSeen){ _ordersSeen=true; try{ _gstep('orders','ok'); }catch(_){} }
       _byStatus[st]=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>_ms(b.createdAt)-_ms(a.createdAt));
       _recount(); render();
-    }, err=>{ console.error('orders',st,err); toast('Feed error: '+(err.message||err),'err'); });
+    }, err=>{ console.error('orders',st,err); try{ _gstep('orders','warn'); }catch(_){} toast('Feed error: '+(err.message||err),'err'); });
   });
 }
 const _ms=v=>(v&&(v.toMillis?v.toMillis():(v.seconds?v.seconds*1000:0)))||0;
@@ -420,6 +457,7 @@ function _setPrnState(s){
   }
   if(s==='on' && prev!=='on' && _prnEver) toast('🟢 Printer reconnected');
   if(s==='on') _prnEver=true;
+  try{ if(typeof _gstep==='function') _gstep('printer', s==='on'?'ok':s==='recon'?'pending':'warn'); }catch(_){}
 }
 function _refreshPrinter(){
   const P=_P();
