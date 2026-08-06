@@ -1765,30 +1765,57 @@ function previewImage(event){
    SELLER STATS + COMMISSION
 ========================= */
 
-function updateSellerStats(){
+/* Seller dashboard headline stats — CANONICAL single source.
+   Previously these were FABRICATED: revenue = Σ(product listing prices), orders =
+   products × 3.2, all read from an empty-on-a-fresh-device localStorage array, which
+   is why a shop with real activity showed KES 0 / 0 orders. Now every business metric
+   is read from the Analytics Engine aggregate shops/{uid}/analytics/summary
+   (paidOrders / gmvShillings / platformRevenueShillings / sellerEarningsShillings),
+   maintained exactly-once server-side on every paid/settled order. Product count is a
+   server-side count of canonical products. On a read failure we show "—", NEVER a
+   fabricated number and never a misleading 0. */
+async function updateSellerStats(){
+    const set = (id, val) => { const el = document.getElementById(id); if(el) el.innerText = val; };
+    const moneyIds = ["totalRevenue","commissionAmount","netEarnings"];
 
-    let sellerProducts;
-    try {
-        sellerProducts = JSON.parse(localStorage.getItem("sellerProducts")) || [];
-    } catch(e) {
-        sellerProducts = [];
+    const u = JSON.parse(localStorage.getItem("sokoniUser") || "null");
+    const sellerUid = (u ? (u.uid || u.id || null) : null)
+                   || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null;
+
+    if (!sellerUid || !window.firebaseDB) {
+        /* Not connected/signed in yet — neutral placeholders, never fabricated data. */
+        set("totalOrders", "—"); moneyIds.forEach(id => set(id, "KES —"));
+        return;
     }
 
-    const count = sellerProducts.length;
-    const totalRevenue = sellerProducts.reduce((sum, p) => sum + Number(p.price || 0), 0);
-    const commission = Math.round(totalRevenue * (SokoniCommission.pct("marketplace") / 100));
-    const netEarnings = totalRevenue - commission;
+    try {
+        const m  = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const db = window.firebaseDB;
 
-    const set = (id, val) => {
-        const el = document.getElementById(id);
-        if(el) el.innerText = val;
-    };
+        /* Canonical business metrics — the single source every dashboard must agree on. */
+        const snap = await m.getDoc(m.doc(db, "shops", sellerUid, "analytics", "summary"));
+        const a    = snap.exists() ? (snap.data() || {}) : {};
+        const gmv    = Number(a.gmvShillings || 0);
+        const orders = Number(a.paidOrders || 0);
+        const fee    = Number(a.platformRevenueShillings || 0);
+        const net    = Number.isFinite(Number(a.sellerEarningsShillings)) && a.sellerEarningsShillings != null
+                         ? Number(a.sellerEarningsShillings) : (gmv - fee);
 
-    set("totalProducts", count);
-    set("totalOrders", count > 0 ? Math.floor(count * 3.2) : 0);
-    set("totalRevenue", "KES " + totalRevenue.toLocaleString());
-    set("commissionAmount", "KES " + commission.toLocaleString());
-    set("netEarnings", "KES " + netEarnings.toLocaleString());
+        set("totalOrders",      orders.toLocaleString());
+        set("totalRevenue",     "KES " + gmv.toLocaleString());
+        set("commissionAmount", "KES " + fee.toLocaleString());
+        set("netEarnings",      "KES " + net.toLocaleString());
+
+        /* Product count — canonical server-side count (not the localStorage array). */
+        try {
+            const c = await m.getCountFromServer(m.query(m.collection(db, "products"), m.where("uid", "==", sellerUid)));
+            set("totalProducts", Number(c.data().count || 0).toLocaleString());
+        } catch(_) { /* leave the existing product-count widget rather than fabricate */ }
+    } catch (e) {
+        console.warn("[sellerStats] canonical analytics read failed:", e && e.message);
+        /* Read failed (e.g. transient App Check) — show unknown, NEVER fabricated numbers. */
+        set("totalOrders", "—"); moneyIds.forEach(id => set(id, "KES —"));
+    }
 }
 
 /* =========================

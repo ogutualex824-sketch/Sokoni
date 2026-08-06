@@ -1,3 +1,26 @@
+## [2026-08-07] — fix(seller): dashboard reads canonical analytics (was fabricated) + per-shop backfill
+
+Fixed the merchant dashboard headline stats, which were FABRICATED, not aggregated.
+
+- **Root cause (proven):** seller.js updateSellerStats computed revenue = Σ(product listing
+  prices) and orders = products × 3.2, read from an empty-on-a-fresh-device localStorage array
+  — so a shop showed KES 0 / 0 orders regardless of real sales. Now every business metric reads
+  the canonical Analytics Engine aggregate shops/{uid}/analytics/summary (paidOrders / gmvShillings
+  / platformRevenueShillings / sellerEarningsShillings) + a server-side count of canonical products.
+  On a read failure it shows "—", NEVER a fabricated number or a misleading 0.
+- **Gap found + closed:** the reconciliation path only rebuilt analytics/global, never the per-shop
+  summaries. Added scripts/backfill-shop-analytics.js (dry-run default, --commit, --shop) which SETs
+  each shop's paidOrders + gmvShillings from canonical orders (paid = reached PAID or downstream;
+  gmv = Σ merchandise ex-delivery). Idempotent; live increments compose on top.
+- **Evidence (production, read-only diagnostic):** the whole orders collection is 5 orders, all KASS,
+  ~KES 485 — the "0" was the fabrication, not hidden data; both analytics/global and the KASS shop
+  summary were empty. Backfilled shops/{KASS}/analytics/summary = {paidOrders:5, gmvShillings:485}.
+- **Functions:** firebase deploy --only functions confirmed PARITY (all unchanged = committed source
+  is live; no invoker resets). Flagged a stray live function foundationScheduledRecurring (not in
+  source) — NOT deleted (destructive; left for an explicit decision).
+
+Files: seller.js, scripts/backfill-shop-analytics.js.
+
 ## [2026-08-07] — perf+feat+fix: MED-cluster (bounded listeners, rider nav, fake-order removal, POS keyboard, feature-shop)
 
 Phase-3 follow-through on the audit's deferred MED items, each committed + deployed + live-verified
