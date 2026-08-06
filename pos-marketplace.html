@@ -749,14 +749,14 @@
 <script type="module">
 'use strict';
 
-import { initializeApp, getApps }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getApp, getApps, initializeApp }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFunctions, httpsCallable }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 import { getFirestore, collection, query, where, orderBy, onSnapshot }
-  from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ══════════════════════════════════════
    Firebase init
@@ -769,14 +769,12 @@ const FB_CFG = window.SOKONI_CONFIG || {
   messagingSenderId: '24799054989',
   appId:             '1:24799054989:web:e1cf6ca8c281bf1abf26c4',
 };
-/* Use the DEFAULT app so the POS shares the ONE logged-in session that firebase.js established.
-   A separate named app has its own auth-persistence key ('firebase:authUser:{apiKey}:pos-
-   marketplace'), so it never inherited the login → the page hung on "Verifying credentials",
-   especially after the account merge/re-login. The default app's session is shared. */
-const app = getApps().find(a => a.name === '[DEFAULT]') || getApps()[0] || initializeApp(FB_CFG);
-const auth = getAuth(app);
-const db   = getFirestore(app);
-const fns  = getFunctions(app, 'us-central1');
+/* Bind to firebase.js's ALREADY-initialised app. firebase.js loads the 10.12.2 SDK; importing the
+   SAME version here makes the browser DEDUPE the module so getApps() returns that app — the one
+   holding the ONE warm logged-in session + App Check. The old 11.0.1 import was a SEPARATE SDK copy
+   whose registry never saw it, so getApps() was empty and it built a private app that cold-read the
+   session and hung on "Verifying credentials". Assigned in _bootstrapAuth() once firebase.js exists. */
+let app, auth, db, fns;
 
 /* ══════════════════════════════════════
    Helpers
@@ -918,36 +916,41 @@ async function _proceedAuth(user) {
   if (isManager()) { loadReport(); loadPromotions(); startReserveAutoRefresh(); }
 }
 
-onAuthStateChanged(auth, (user) => {
-  /* Only proceed on a user. Do NOT redirect on a null fire — onAuthStateChanged often emits
-     null first while the session restores, which would bounce a signed-in user to login. The
-     poll below resolves from any auth ref and only offers sign-in after ~8s. */
-  if (user) _proceedAuth(user);
-});
-
-/* Deterministic fallback: onAuthStateChanged can be slow — or, on this named app,
-   occasionally not fire at all — leaving the page stuck on "Verifying credentials…".
-   After 7s, resolve from auth.currentUser directly: proceed if a session exists,
-   otherwise go to login. The page never hangs on an infinite spinner. */
+/* Resolve the signed-in user from any available auth ref (the bound `auth`, or firebase.js's
+   warm globals) — robust even if onAuthStateChanged is slow to fire. */
 function _resolvePosUser() {
-  try { if (auth.currentUser) return auth.currentUser; } catch (_) {}
+  try { if (auth && auth.currentUser) return auth.currentUser; } catch (_) {}
   try { if (window.firebaseAuth && window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser; } catch (_) {}
   try { if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) return firebase.auth().currentUser; } catch (_) {}
   return null;
 }
-let _posAuthTries = 0;
-const _posAuthPoll = setInterval(() => {
-  if (_authGateShown) { clearInterval(_posAuthPoll); return; }
-  const u = _resolvePosUser();
-  if (u) { clearInterval(_posAuthPoll); _proceedAuth(u); return; }
-  if (++_posAuthTries >= 16) {   /* ~8s across all auth refs, then offer sign-in */
-    clearInterval(_posAuthPoll);
-    const scr = document.getElementById('auth-screen');
-    const msg = scr && scr.querySelector('.auth-msg');
-    if (msg) msg.innerHTML = 'Session not found. <a href="login.html?redirect=pos-marketplace.html" style="color:#38bdf8">Sign in</a>';
-    setTimeout(() => { if (!_authGateShown) window.location.href = 'login.html?redirect=pos-marketplace.html'; }, 4000);
-  }
-}, 500);
+
+/* Wait for firebase.js's warm app, bind the shared instances, THEN attach the auth listener + a
+   forgiving poll. Same-version SDK → window.firebase* interoperate with the modular helpers above.
+   No forced redirect — a signed-in user is never bounced; sign-in is only OFFERED after ~20s. */
+async function _bootstrapAuth() {
+  for (let i = 0; i < 80 && !window.firebaseApp && !getApps().length; i++) { await new Promise(r => setTimeout(r, 150)); }
+  app  = window.firebaseApp || (getApps().length ? getApp() : initializeApp(FB_CFG));
+  auth = window.firebaseAuth || getAuth(app);
+  db   = window.firebaseDB || getFirestore(app);
+  fns  = window.firebaseFunctions || getFunctions(app, 'us-central1');
+
+  try { onAuthStateChanged(auth, (user) => { if (user) _proceedAuth(user); }); } catch (_) {}
+
+  let _posAuthTries = 0;
+  const _posAuthPoll = setInterval(() => {
+    if (_authGateShown) { clearInterval(_posAuthPoll); return; }
+    const u = _resolvePosUser();
+    if (u) { clearInterval(_posAuthPoll); _proceedAuth(u); return; }
+    if (++_posAuthTries >= 40) {   /* ~20s across all auth refs, then OFFER sign-in (no auto-bounce) */
+      clearInterval(_posAuthPoll);
+      const scr = document.getElementById('auth-screen');
+      const msg = scr && scr.querySelector('.auth-msg');
+      if (msg) msg.innerHTML = 'Session not found. <a href="login.html?redirect=pos-marketplace.html" style="color:#38bdf8">Sign in</a>';
+    }
+  }, 500);
+}
+_bootstrapAuth();
 
 /* ══════════════════════════════════════
    Section switcher
