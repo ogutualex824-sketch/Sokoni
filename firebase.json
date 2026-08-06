@@ -78,6 +78,11 @@
         "region": "us-central1"
       },
       {
+        "source": "/api/rider-profile",
+        "function": "riderProfile",
+        "region": "us-central1"
+      },
+      {
         "source": "/api/chat",
         "function": "sokoniChat",
         "region": "us-central1"

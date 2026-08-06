@@ -1825,11 +1825,39 @@ function _signedInAccount(){
 
 /* Identity-based entry: signed-in account → its rideDrivers/{uid} record → dashboard (no PIN).
    Signed in but no rider record → apply. Not signed in → account sign-in. */
+/* App-Check-INDEPENDENT rider lookup — verifies the Firebase ID token server-side (App Check does
+   NOT gate token minting), so it works on iOS Safari where the direct Firestore read 403s. */
+async function _fetchRiderProfile(user){
+  try{
+    const tok = await user.getIdToken();
+    const r = await fetch('/api/rider-profile', { headers: { Authorization: 'Bearer '+tok }, cache:'no-store' });
+    if(!r.ok) return null;
+    return await r.json();
+  }catch(_){ return null; }
+}
+
 async function _enterDriverIdentity(){
   const user = await _waitForFirebaseUser(6000);
   /* Never clobber a working fast-path dashboard on a flaky/absent read — only GATE when we
      have no driver yet. A successful account read always refreshes + wins. */
   if (!user) { if (!currentDriver) _showDriverAccountGate('signin'); return; }
+
+  /* PRIMARY: App-Check-independent endpoint. On iOS the direct Firestore read below 403s on App
+     Check and drops an approved rider to the guest gate — this path avoids that entirely. */
+  try {
+    const prof = await _fetchRiderProfile(user);
+    if (prof && prof.signedIn) {
+      if (prof.rider && prof.rider.exists) {
+        currentDriver = { id: user.uid, ...prof.rider };
+        try { sessionStorage.setItem("sokoniDriverSession", currentDriver.id); } catch(_){}
+        showDriverDashboard();
+      } else if (!currentDriver) {
+        _showDriverAccountGate('apply');
+      }
+      return;
+    }
+  } catch(_){}
+
   const db = window.firebaseDB;
   if (!db) { if (!currentDriver) _showDriverAccountGate('loading', 'Starting up — one moment.'); setTimeout(_enterDriverIdentity, 1500); return; }
   try {

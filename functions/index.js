@@ -5705,6 +5705,53 @@ exports.posCancelTerminalPaymentV1 = onCall({ timeoutSeconds: 15 }, async (reque
    - Maximum payload: 64 KB (typical full receipt < 4 KB).
    - Print job stored in Firestore for audit and retry.
 ══════════════════════════════════════════════════════════════════ */
+/* ── Rider profile (App-Check-INDEPENDENT) ─────────────────────────────────
+   Firestore has App Check enforced, and on iOS Safari the App Check token often 403s, so the
+   client's direct rideDrivers read fails and the Rider Hub falls back to the guest gate even for
+   an approved rider. This endpoint verifies the Firebase ID token (which App Check does NOT gate)
+   with the Admin SDK and returns the rider record + roles — so rider recognition works regardless
+   of App Check. Reads only the CALLER's own rideDrivers/{uid} + users/{uid}. */
+exports.riderProfile = onRequest(
+  {
+    timeoutSeconds: 20,
+    memory:         "256MiB",
+    cors:           ["https://mysokoni.co.ke", "https://sokoni-aeb26.web.app"],
+    invoker:        "public",
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      res.set("Access-Control-Allow-Origin",  req.headers.origin || "*");
+      res.set("Access-Control-Allow-Methods", "GET, POST");
+      res.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
+      res.status(204).send("");
+      return;
+    }
+    res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
+    const authHeader = req.headers.authorization || "";
+    if (!authHeader.startsWith("Bearer ")) { res.status(401).json({ ok: false, signedIn: false, error: "Bearer token required" }); return; }
+    let uid;
+    try { uid = (await admin.auth().verifyIdToken(authHeader.replace("Bearer ", "").slice(0, 4096))).uid; }
+    catch (_) { res.status(401).json({ ok: false, signedIn: false, error: "Invalid or expired token" }); return; }
+    try {
+      const [rd, u] = await Promise.all([
+        db.collection("rideDrivers").doc(uid).get(),
+        db.collection("users").doc(uid).get(),
+      ]);
+      const r = rd.exists ? (rd.data() || {}) : null;
+      res.json({
+        ok: true, signedIn: true, uid,
+        rider: r ? {
+          id: uid, exists: true, status: r.status || null, approved: r.approved === true,
+          name: r.name || null, zone: r.zone || null, rating: r.rating || null,
+          vehicle: r.vehicle || null, cargoTonne: r.cargoTonne || null, cargoType: r.cargoType || null,
+          photo: r.photo || r.avatar || r.photoURL || null,
+        } : { exists: false },
+        roles: (u.exists && u.data().roles) || [],
+      });
+    } catch (e) { res.status(500).json({ ok: false, signedIn: true, uid, error: e.message }); }
+  }
+);
+
 exports.posPrint = onRequest(
   {
     timeoutSeconds: 30,
