@@ -285,6 +285,9 @@
         <a href="services.html" style="display:inline-flex;align-items:center;gap:5px;padding:10px 14px;background:rgba(0,170,255,0.1);border:1px solid rgba(0,170,255,0.25);color:#00aaff;font-weight:700;font-size:13px;border-radius:10px;text-decoration:none;white-space:nowrap;">🛠️ Services</a>
         <button type="button" onclick="exitDriverWorkspace()" style="padding:10px 14px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.75);font-weight:700;font-size:12px;border-radius:10px;cursor:pointer;font-family:inherit;">← Exit Hub</button>
       </div>
+      <!-- Apply-to-Driver — immediately below the Sign In / Services / Exit Hub row; shown only
+           when the account is signed in but not yet a registered driver. -->
+      <button type="button" id="applyDriverTopBtn" onclick="_gotoApply()" style="display:none;margin-top:8px;width:100%;padding:12px 18px;background:linear-gradient(135deg,#71ff00,#4fc800);border:none;color:#04120a;font-weight:900;font-size:14px;border-radius:12px;cursor:pointer;font-family:inherit;">🛵 Apply to Become a Driver</button>
     </div>
 
     <!-- Stats row -->
@@ -1701,11 +1704,13 @@ function _showDriverAccountGate(mode, detail){
   var g=document.getElementById("driverGreet");
   var z=document.getElementById("driverZone");
   var apply=document.getElementById("applySection");
+  var topApply=document.getElementById("applyDriverTopBtn");
+  if(topApply) topApply.style.display = (mode==='apply') ? "" : "none";
   if(mode==='apply'){
     if(lb) lb.style.display="none";
     if(g) g.textContent="You're signed in — become a driver 🛵";
-    if(z) z.textContent="Complete the quick application below to start delivering.";
-    if(apply){ apply.style.display="block"; try{ apply.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }
+    if(z) z.textContent="Tap “Apply to Become a Driver” to start delivering.";
+    if(apply){ apply.style.display="block"; }
   } else if(mode==='loading'){
     if(lb) lb.style.display="none";
     if(g) g.textContent="Loading your driver profile…";
@@ -1724,6 +1729,13 @@ function driverAuthToggle(){
   location.href = '/login.html?redirect=' + encodeURIComponent('/driver');
 }
 window.driverAuthToggle = driverAuthToggle;
+
+/* Reveal + scroll to the driver application form (from the top "Apply to Become a Driver" button). */
+function _gotoApply(){
+  var a=document.getElementById('applySection');
+  if(a){ a.style.display='block'; try{ a.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }
+}
+window._gotoApply = _gotoApply;
 
 /* Identity-based entry: signed-in account → its rideDrivers/{uid} record → dashboard (no PIN).
    Signed in but no rider record → apply. Not signed in → account sign-in. */
