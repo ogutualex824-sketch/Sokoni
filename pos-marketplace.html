@@ -19,6 +19,7 @@
        previously-paired printer, so new paid orders can print automatically. -->
   <script src="sokoni-universal-printer.js" defer></script>
   <script src="sokoni-bluetooth-printer.js" defer></script>
+  <script src="sokoni-receipt.js" defer></script>
   <style>
     /* ── Design tokens ── */
     :root {
@@ -1123,42 +1124,44 @@ async function _printOrderReceipt(order, manual) {
 
     await SP.print('custom', {
       build (enc, W) {
+        /* Canonical layout engine — ASCII-sanitized (no "?"), wrapped at the real 58mm width,
+           native alignment. Falls back to the legacy manual build only if the engine isn't loaded. */
+        if (window.SokoniReceipt) {
+          const doc = SokoniReceipt.doc()
+            .center(shopName, { bold: true, size: 'big' })
+            .center('SOKONI Receipt')
+            .rule()
+            .row('Receipt', String(ref))
+            .row('Date', dateStr);
+          if (order.customerName) doc.row('Customer', String(order.customerName));
+          doc.row('Fulfillment', (order.fulfillmentType === 'pickup') ? 'Pickup' : 'Delivery');
+          if (order.fulfillmentType !== 'pickup') {
+            const _addr = order.deliveryAddress || order.address || order.customerAddress || '';
+            if (_addr) { doc.left('Deliver to:'); doc.left(String(_addr)); }
+            const _ph = order.customerPhone || order.buyerPhone || order.phone || '';
+            if (_ph) doc.row('Phone', String(_ph));
+          } else if (order.pickupLocation) {
+            doc.left('Collect at:'); doc.left(String(order.pickupLocation));
+          }
+          doc.rule();
+          items.forEach(it => doc.row(Number(it.qty || 1) + ' x ' + String(it.name || 'Item'), 'KES ' + Math.round(Number(it.price || it.unitPrice || 0))));
+          doc.rule().row('Subtotal', 'KES ' + subtotal);
+          if (delivery > 0) doc.row('Delivery', 'KES ' + delivery);
+          doc.row('TOTAL PAID', 'KES ' + total).rule().center('Paid via M-PESA');
+          if (order.mpesaCode) doc.center('M-PESA: ' + order.mpesaCode);
+          else if (ref) doc.center('Ref: ' + ref);
+          doc.rule().center('Thank you!').feed(2);
+          doc.renderTo(enc);
+          return;
+        }
+        /* ── legacy fallback (engine not yet loaded) ── */
         const dash   = '-'.repeat(W);
         const center = s => { s = String(s).slice(0, W); return ' '.repeat(Math.max(0, Math.floor((W - s.length) / 2))) + s; };
         const row    = (l, r) => { const rs = String(r).slice(0, W - 1); return String(l).slice(0, W - rs.length - 1).padEnd(W - rs.length - 1) + ' ' + rs; };
-        enc.text(center(shopName)).lf();
-        enc.text(center('SOKONI Receipt')).lf();
-        enc.text(dash).lf();
+        enc.text(center(shopName)).lf(); enc.text(center('SOKONI Receipt')).lf(); enc.text(dash).lf();
         enc.text(row('Receipt', String(ref).slice(0, W - 9))).lf();
-        enc.text(row('Date', dateStr.slice(0, W - 6))).lf();
-        if (order.customerName) enc.text(row('Customer', String(order.customerName).slice(0, W - 10))).lf();
-        enc.text(row('Fulfillment', (order.fulfillmentType === 'pickup') ? 'Pickup' : 'Delivery')).lf();
-        /* Delivery orders: print drop-off address + phone so the receipt doubles as a rider docket. */
-        if (order.fulfillmentType !== 'pickup') {
-          const _addr = order.deliveryAddress || order.address || order.customerAddress || '';
-          if (_addr) enc.text(row('Deliver to', String(_addr).slice(0, W - 12))).lf();
-          const _ph = order.customerPhone || order.buyerPhone || order.phone || '';
-          if (_ph) enc.text(row('Phone', String(_ph).slice(0, W - 7))).lf();
-        } else if (order.pickupLocation) {
-          enc.text(row('Collect at', String(order.pickupLocation).slice(0, W - 12))).lf();
-        }
-        enc.text(dash).lf();
-        items.forEach(it => {
-          const nm  = String(it.name || 'Item');
-          const qty = Number(it.qty || 1);
-          enc.text(row(qty + ' x ' + nm.slice(0, W - 13), 'KES ' + Number(it.price || it.unitPrice || 0))).lf();
-        });
-        enc.text(dash).lf();
-        enc.text(row('Subtotal', 'KES ' + subtotal)).lf();
-        if (delivery > 0) enc.text(row('Delivery', 'KES ' + delivery)).lf();
-        enc.text(row('TOTAL PAID', 'KES ' + total)).lf();
-        enc.text(dash).lf();
-        enc.text(center('Paid via M-PESA')).lf();
-        if (order.mpesaCode) enc.text(center('M-PESA: ' + order.mpesaCode)).lf();
-        else if (ref)        enc.text(center('Ref: ' + ref)).lf();
-        enc.text(dash).lf();
-        enc.text(center('Thank you!')).lf();
-        enc.lf(); enc.lf();
+        enc.text(row('TOTAL PAID', 'KES ' + total)).lf(); enc.text(dash).lf();
+        enc.text(center('Thank you!')).lf(); enc.lf(); enc.lf();
       },
     });
     toast('🧾 Receipt printed: ' + ref, 'success');

@@ -18,6 +18,9 @@
        scripts run during parse, so both globals exist before the deferred
        wizard bundle executes. universal-printer first — the P58E adapter
        composes its ESC/POS encoder. -->
+  <!-- firebase.js provides the ONE warm app WITH App Check — required so the config save to
+       Firestore (App-Check enforced) is accepted. Without it the wizard had no App Check token. -->
+  <script type="module" src="firebase.js"></script>
   <script src="sokoni-universal-printer.js"></script>
   <script src="sokoni-bluetooth-printer.js"></script>
   <script defer src="pos-hardware-wizard.js"></script>
@@ -1021,36 +1024,33 @@
 
 import { firebaseConfig } from './sokoni-firebase-config.js';
 
-import { initializeApp }       from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getAuth, onAuthStateChanged }
-                               from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
-import { getFirestore, doc, setDoc, getDoc }
-                               from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged }     from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-/* ── Firebase init ── */
-const app  = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db   = getFirestore(app);
-
-/* ── Auth guard ── */
+/* ── Firebase init ──
+   Bind to firebase.js's ALREADY-initialised app, which has APP CHECK configured. The old code did
+   a bare initializeApp() here with NO App Check — and Firestore is App-Check-enforced, so every
+   config save to posTerminals was rejected ("Missing or insufficient permissions") no matter what
+   the security rule said. Same SDK version (10.12.2) → the module dedupes onto firebase.js's app,
+   so the setDoc below carries a valid App Check token. */
+let app, auth, db;
 let _currentUser = null;
-onAuthStateChanged(auth, function (user) {
-  if (!user) {
-    window.location.href = 'login.html?next=' + encodeURIComponent(window.location.pathname);
-    return;
-  }
-  _currentUser = user;
-  const avatarEl = document.getElementById('authAvatar');
-  const nameEl   = document.getElementById('authName');
-  if (avatarEl) {
-    const initials = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
-    avatarEl.textContent = initials;
-  }
-  if (nameEl) {
-    nameEl.textContent = user.displayName || user.email;
-    nameEl.style.display = '';
-  }
-});
+async function _bindFirebase() {
+  for (let i = 0; i < 80 && !window.firebaseApp && !getApps().length; i++) { await new Promise(r => setTimeout(r, 150)); }
+  app  = window.firebaseApp || (getApps().length ? getApp() : initializeApp(window.SOKONI_CONFIG || {}));
+  auth = window.firebaseAuth || getAuth(app);
+  db   = window.firebaseDB || getFirestore(app);
+  onAuthStateChanged(auth, function (user) {
+    if (!user) { window.location.href = 'login.html?next=' + encodeURIComponent(window.location.pathname); return; }
+    _currentUser = user;
+    const avatarEl = document.getElementById('authAvatar');
+    const nameEl   = document.getElementById('authName');
+    if (avatarEl) avatarEl.textContent = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+    if (nameEl) { nameEl.textContent = user.displayName || user.email; nameEl.style.display = ''; }
+  });
+}
+_bindFirebase();
 
 /* ════════════════════════════════════════════════════════════
    WIZARD STATE
