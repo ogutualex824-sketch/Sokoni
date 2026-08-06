@@ -1057,195 +1057,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
    <!-- ORDERS -->
 
-<section class="orders-section" id="orders-section" data-sdtab="orders">
 
-    <div class="orders-header">
-
-        <h2>📦 Recent Orders</h2>
-
-    </div>
-
-
-
-    <div class="orders-grid">
-
-
-
-        <!-- ORDER -->
-
-        <div class="order-card">
-
-            <div class="order-top">
-
-                <h3>
-
-                    #1021
-
-                </h3>
-
-
-
-                <span class="delivered-status">
-
-                    Delivered
-
-                </span>
-
-            </div>
-
-
-
-            <p>
-
-                Product: Nike Air Max
-
-            </p>
-
-
-
-            <p>
-
-                Customer: Brian
-
-            </p>
-
-
-
-            <h4>
-
-                KES 10,500
-
-            </h4>
-
-
-
-            <button type="button" class="view-order-btn">
-
-                View Details
-
-            </button>
-
-        </div>
-
-
-
-        <!-- ORDER -->
-
-        <div class="order-card">
-
-            <div class="order-top">
-
-                <h3>
-
-                    #1022
-
-                </h3>
-
-
-
-                <span class="pending-status">
-
-                    Pending
-
-                </span>
-
-            </div>
-
-
-
-            <p>
-
-                Product: Custom Hoodie
-
-            </p>
-
-
-
-            <p>
-
-                Customer: Kevin
-
-            </p>
-
-
-
-            <h4>
-
-                KES 2,500
-
-            </h4>
-
-
-
-            <button type="button" class="view-order-btn">
-
-                Update Status
-
-            </button>
-
-        </div>
-
-
-
-        <!-- ORDER -->
-
-        <div class="order-card">
-
-            <div class="order-top">
-
-                <h3>
-
-                    #1023
-
-                </h3>
-
-
-
-                <span class="shipping-status">
-
-                    Shipping
-
-                </span>
-
-            </div>
-
-
-
-            <p>
-
-                Product: Sokoni Cap
-
-            </p>
-
-
-
-            <p>
-
-                Customer: Alex
-
-            </p>
-
-
-
-            <h4>
-
-                KES 1,000
-
-            </h4>
-
-
-
-            <button type="button" class="view-order-btn">
-
-                Track Order
-
-            </button>
-
-        </div>
-
-    </div>
-
-</section>
 
     <!-- PRODUCTS -->
 
@@ -4009,10 +3821,10 @@ window.mobilePhotoZoneUpdate = mobilePhotoZoneUpdate;
 if(typeof window.showDashPage !== 'function') {
   (function(){
     var PAGES = {
-      overview:  ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','ads-section','buyer-orders-section'],
+      overview:  ['upload-section','seller-stats','analytics-section','products-section','flash-section','ads-section','buyer-orders-section'],
       products:  ['upload-section','products-section','inventory-section','bulk-upload-section','ai-desc-section'],
       analytics: ['seller-stats','analytics-section','sales-analytics-section','customer-analytics-section','delivery-performance-section','seller-ratings-section','profit-section'],
-      orders:    ['orders-section','buyer-orders-section','returns-section','offers-section'],
+      orders:    ['buyer-orders-section','returns-section','offers-section'],
       customers: ['customers-section'],
       receipts:  ['receipts-section'],
       messages:  ['seller-dms','qa-section'],
@@ -4026,7 +3838,7 @@ if(typeof window.showDashPage !== 'function') {
       pos:       ['pos-section'],
       flash:     ['flash-section'],
     };
-    var ALL = ['upload-section','seller-stats','analytics-section','orders-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','disputes-section','pos-section'];
+    var ALL = ['upload-section','seller-stats','analytics-section','products-section','flash-section','tax-section','ads-section','buyer-orders-section','seller-dms','marketing-section','verify-section','bulk-upload-section','customer-analytics-section','qa-section','employees-section','ai-desc-section','ministore-section','stories-section','wallet-section','expense-section','restock-section','sales-history-section','delivery-performance-section','seller-ratings-section','profit-section','sales-analytics-section','offers-section','returns-section','mpesa-insights-section','premium-section','inventory-section','customers-section','receipts-section','disputes-section','pos-section'];
     window.showDashPage = function(page, navEl) {
       var show = PAGES[page] || PAGES.overview;
       ALL.forEach(function(id){
@@ -4964,7 +4776,7 @@ class="notification-container"
   var TABS = {
     home:     ['home','seller-stats'],
     products: ['products','upload-section','products-section'],
-    orders:   ['orders','orders-section','buyer-orders-section'],
+    orders:   ['orders','buyer-orders-section'],
     analyse:  ['analyse','analytics-section','customer-analytics-section','sales-analytics-section'],
     market:   ['market','ads-section','marketing-section'],
     kra:      ['kra','tax-section'],
@@ -5342,10 +5154,8 @@ window.deleteSellerAccount=deleteSellerAccount;
       else if(t.type==='out') withdrawn += t.amount;
       else if(t.type==='pending') pending += t.amount;
     });
-    /* Add demo data if empty */
-    if(!earned && !txs.length){
-      earned = 28400; withdrawn = 5000; pending = 3200;
-    }
+    /* Fabricated demo balance REMOVED — never show money that isn't real. An empty wallet reads 0;
+       the real balance + withdrawals live on the CF-backed seller-wallet.html. */
     var balance = earned - withdrawn;
 
     var wb = document.getElementById('walletBalance');
@@ -5393,7 +5203,7 @@ window.deleteSellerAccount=deleteSellerAccount;
       return '<tr>'
         +'<td style="color:rgba(255,255,255,0.5);white-space:nowrap;">'+t.date+'</td>'
         +'<td>'+t.desc+'</td>'
-        +'<td><span style="background:rgba('+( t.type==='in'?'113,255,0':'t.type==="out"?255+",68,68":"255,170,0"')+',0.12);color:'+clr+';padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">'+typeLabel+'</span></td>'
+        +'<td><span style="background:rgba('+( t.type==='in'?'113,255,0':(t.type==='out'?'255,68,68':'255,170,0') )+',0.12);color:'+clr+';padding:3px 10px;border-radius:6px;font-size:11px;font-weight:700;">'+typeLabel+'</span></td>'
         +'<td style="color:'+clr+';font-weight:800;">'+sign+' KES '+t.amount.toLocaleString()+'</td>'
         +'<td style="color:rgba(255,255,255,0.6);">KES '+(t.runBal||0).toLocaleString()+'</td>'
         +'</tr>';
@@ -5409,37 +5219,11 @@ window.deleteSellerAccount=deleteSellerAccount;
     renderWalletTx(window._walletTxs||[], f);
   };
 
-  window.openWithdrawModal = function(){
-    var m = document.getElementById('withdrawModal');
-    if(m){ m.style.display='flex'; }
-    var avail = document.getElementById('withdrawAvailLabel');
-    if(avail) avail.textContent = 'Available: KES '+(window._walletBalance||0).toLocaleString();
-  };
-
-  window.confirmWithdraw = function(){
-    var phone = (document.getElementById('withdrawPhone')||{}).value||'';
-    var amt = Number((document.getElementById('withdrawAmt')||{}).value)||0;
-    if(!phone.match(/^0[17]\d{8}$/)){ (window._skToast||alert)('Enter a valid Safaricom/Airtel number (07... or 01...)'); return; }
-    if(amt < 100){ (window._skToast||alert)('Minimum withdrawal is KES 100'); return; }
-    if(amt > (window._walletBalance||0)){ (window._skToast||alert)('Amount exceeds available balance'); return; }
-
-    /* Record withdrawal */
-    var txs = window._walletTxs||[];
-    txs.unshift({
-      date: new Date().toISOString().slice(0,10),
-      desc: 'M-Pesa withdrawal to '+phone,
-      type: 'out',
-      amount: amt,
-      src: 'withdrawal',
-      ref: 'WD'+(Date.now())
-    });
-    saveWalletTx(txs);
-    window._walletBalance = (window._walletBalance||0) - amt;
-
-    document.getElementById('withdrawModal').style.display='none';
-    (window._skToast||alert)('✅ Withdrawal of KES '+amt.toLocaleString()+' initiated to '+phone+'\nFunds arrive in 5 minutes.');
-    loadWallet();
-  };
+  /* Withdrawals go to the CF-backed wallet page (requestWithdrawal → payoutRequests, gated IntaSend
+     B2C, success only after M-Pesa settles). The old in-page modal faked the send (localStorage
+     decrement + "Funds arrive in 5 minutes") with NO backend — removed. */
+  window.openWithdrawModal = function(){ window.location.href = 'seller-wallet.html'; };
+  window.confirmWithdraw   = function(){ window.location.href = 'seller-wallet.html'; };
 
   document.addEventListener('DOMContentLoaded', loadWallet);
   window.loadWallet = loadWallet;
