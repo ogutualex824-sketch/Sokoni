@@ -190,6 +190,20 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
     await ref.update(update);
   }
 
+  /* ── Audit log (Sprint 7) — authoritative, server-written record of this sensitive dispatch
+     action. Fire-and-forget: an audit hiccup must never block the operation. RBAC is already
+     enforced above (_requireRole + _ownerOrAdmin); this is the tamper-evident trail. */
+  db.collection('auditLogs').add({
+    action:    'pos.dispatch.status',
+    actorUid:  auth.uid,
+    actorRole: (auth.token && auth.token.role) || 'unknown',
+    sellerId,
+    orderId,
+    from:      order.status,
+    to:        status,
+    ts:        FieldValue.serverTimestamp(),
+  }).catch((e) => console.error('[audit] dispatch log failed (non-blocking):', e.message));
+
   /* ── Ready-for-Dispatch: decouple dispatch from printing ──────────────────────
      Marking a DELIVERY order ready creates the rider-visible dispatch job
      (packageRequests, status awaiting_rider) and notifies the buyer. Pickup just
