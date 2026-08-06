@@ -43,12 +43,12 @@ Sensitive actions must write `auditLogs` with `{ actor, ts, action, object, outc
 | **Inventory adjustment** (`inventoryAdjustStock`) | ✅ `inventory.stock_adjust` | product, prev→new available, delta, reason |
 | **Price change** (`indexProductUpdate` trigger) | ✅ `product.price_change` | prev→new price, delta, actor=updatedBy |
 | **Receipt reprint** (`posLogReprint`) | ✅ `pos.receipt_reprint` | order, type, printer, server reprint count |
-| **Role change** (`grantAdmin`/`setUserRole`) | ⚠️ verify | index.js |
+| **Role change** (`setUserRole`, `grantAdminClaim`, `revokeAdminClaim`) | ✅ `role.change` | actor, target, **previous→new role**, ts, outcome |
 
 All four written through **one canonical schema** (`functions/pos-audit.js` → `writeAudit`):
 `{ schema, action, actorUid, actorRole, branchId, objectType, objectId, before, after, delta,
-reason, outcome, metadata, ts }`. Dispatch audit migrated to the same schema. Deployed `2026-08-06`.
-**Remaining:** confirm role-change (`grantAdmin`/`setUserRole`) writes an audit entry.
+reason, outcome, metadata, ts }`. Dispatch + role-change audits migrated to the same schema.
+Deployed `2026-08-06`. **All Phase-4 sensitive actions now emit a canonical audit entry.**
 
 ---
 
@@ -70,10 +70,26 @@ reason, outcome, metadata, ts }`. Dispatch audit migrated to the same schema. De
 | Payment failures | ✅ Payment Verification Failure >10%, Idempotency Replay Spike |
 | High error rates | ✅ HTTP 5xx >1%, SLO Order Success <99%, Checkout Session Error |
 | Backup failures | ✅ Backup Not Run in 26h |
-| Authentication failures | ⚠️ **GAP** — no explicit auth-failure policy |
-| Dispatch failures | ⚠️ partial (Order Success SLO); no explicit dispatch policy |
+| Authentication failures | ✅ **"Auth Failure Spike (>10/5min)"** — log-metric `auth_failures`, wired to SOKONI Ops Alerts |
+| Dispatch failures | ✅ **"Dispatch Failure (>3/5min)"** — log-metric `dispatch_failures`, order id in CF logs for correlation |
 
-**Action:** add auth-failure + dispatch-failure alert policies; run one backup restore drill.
+Both created + enabled `2026-08-06` (22 policies total). **Controlled trigger-test** is a manual
+runbook step (see below) — generating real auth/dispatch failures on production is deliberate, not
+automated.
+
+### Alert trigger-test runbook (manual acceptance)
+1. **Auth:** from a test client, make >10 authenticated CF calls in 5 min with an invalid/expired
+   token (or App Check off) → each logs `unauthenticated`. Confirm the alert fires + email arrives,
+   then stop → confirm it auto-resolves within a window.
+2. **Dispatch:** temporarily point a test order's dispatch at a bad ref (or observe a real failure)
+   so `dispatch/notify failed` logs >3× in 5 min → confirm alert + correlation id in logs → recover
+   → confirm auto-resolve.
+
+### Backup restore drill (Task 3)
+- Latest backup `fe8bdbea…` (snapshot `2026-08-05T12:36:49Z`) restored to a **new** `restore-drill`
+  database (non-destructive) on `2026-08-06`. Duration + doc-count verification:
+  `node scripts/qa/verify-restore-drill.js`. **[results filled below once verified]**
+- Cleanup: `gcloud firestore databases delete restore-drill` after verification.
 
 ---
 
