@@ -2380,6 +2380,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
             <div class="pi-sec-sub" id="piSecId">National ID or Passport</div>
           </div>
           <span id="piSecIdStatus"></span>
+          <a href="account-centre.html#verification" class="pi-sec-action">Verify</a>
         </div>
         <div class="pi-sec-item">
           <div class="pi-sec-icon">&#128274;</div>
@@ -2404,6 +2405,7 @@ textarea.pi-edit-field{resize:vertical;min-height:80px;line-height:1.6;}
             <div class="pi-sec-sub" id="piSecLegal">Terms &amp; Privacy Policy</div>
           </div>
           <span id="piSecLegalStatus"></span>
+          <a href="account-centre.html#legal" class="pi-sec-action">Review</a>
         </div>
       </div>
     </div>
@@ -4798,15 +4800,23 @@ window.logoutUser = logoutUser;
       ];
       var grid = document.getElementById('piVerifGrid');
       if (grid && data.verifications) {
+        /* Each badge is a TAP TARGET into its verification flow — a pending badge that does
+           nothing is a dead-end. All identity/KYC verifications live in the Verification Center. */
+        var VERIF_HREF = {
+          email:'account-centre.html#verification', phone:'account-centre.html#verification',
+          identity:'account-centre.html#verification', business:'account-centre.html#verification',
+          kra:'account-centre.html#verification', bank:'account-centre.html#verification',
+        };
         grid.innerHTML = VERIF_MAP.map(function(v) {
           var done = data.verifications[v.k];
-          return '<div class="pi-verif-item' + (done ? ' done' : '') + '">'
+          var href = VERIF_HREF[v.k] || 'account-centre.html#verification';
+          return '<a href="' + href + '" class="pi-verif-item' + (done ? ' done' : '') + '" style="text-decoration:none;color:inherit;cursor:pointer;">'
                + '<span class="pi-verif-icon">' + v.icon + '</span>'
                + '<span class="pi-verif-label">' + v.label + '</span>'
                + '<span class="pi-verif-status ' + (done ? 'pi-vs-yes' : 'pi-vs-no') + '">'
-               + (done ? '✓ Verified' : 'Pending')
+               + (done ? '✓ Verified' : 'Tap to verify')
                + '</span>'
-               + '</div>';
+               + '</a>';
         }).join('');
       }
 
@@ -4839,23 +4849,31 @@ window.logoutUser = logoutUser;
       if (pctEl) pctEl.textContent = pct + '%';
       if (doneEl) doneEl.textContent = done + ' of ' + total + ' steps complete';
 
+      /* Every actionable step needs a destination. Photo/cover/bio/name/location edit on THIS page
+         (toggleInlineEdit); the rest route to the relevant flow. No step should be a dead-end. */
       var HREFS = {
-        photo:'', bio:'professional-profile.html', email:'account-centre.html',
-        phone:'account-centre.html', identity:'account-centre.html',
-        address:'', skills:'professional-profile.html', cert:'professional-profile.html',
-        bank:'account-centre.html', kra:'account-centre.html',
+        photo:'#edit', cover:'#edit', bio:'#edit', name:'#edit', location:'#edit',
+        email:'account-centre.html#verification', phone:'account-centre.html#verification',
+        identity:'account-centre.html#verification', bank:'account-centre.html#verification',
+        kra:'account-centre.html#verification', business:'account-centre.html#verification',
+        merchant:'account-centre.html#verification', legal:'account-centre.html#legal',
+        address:'account-centre.html', role:'#edit',
+        skills:'professional-profile.html', cert:'professional-profile.html',
       };
 
       var list = document.getElementById('piStepsList');
       if (list) {
         list.innerHTML = steps.map(function(s) {
-          var linkHtml = (!s.done && HREFS[s.id]) ?
-            '<a href="' + HREFS[s.id] + '" class="pi-step-link">Fix</a>' : '';
-          return '<div class="pi-step' + (s.done ? ' done' : '') + '">'
-               + '<div class="pi-step-check">' + (s.done ? '✓' : '') + '</div>'
-               + '<div class="pi-step-lbl">' + _esc(s.label) + '</div>'
-               + linkHtml
-               + '</div>';
+          var target = (!s.done && (HREFS[s.id] || HREFS[slugify(s.label)])) || '';
+          var inner = '<div class="pi-step-check">' + (s.done ? '✓' : '') + '</div>'
+                    + '<div class="pi-step-lbl">' + _esc(s.label) + '</div>'
+                    + (target ? '<span class="pi-step-link">Fix</span>' : '');
+          if (!target) return '<div class="pi-step' + (s.done ? ' done' : '') + '">' + inner + '</div>';
+          /* On-page edits open the inline editor; off-page steps navigate. Whole row is tappable. */
+          if (target === '#edit') {
+            return '<div class="pi-step" role="button" tabindex="0" style="cursor:pointer;" onclick="toggleInlineEdit()">' + inner + '</div>';
+          }
+          return '<a href="' + target + '" class="pi-step" style="text-decoration:none;color:inherit;cursor:pointer;">' + inner + '</a>';
         }).join('');
       }
 
