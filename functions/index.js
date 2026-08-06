@@ -5752,6 +5752,7 @@ exports.riderProfile = onRequest(
         ok: true, signedIn: true, uid, matchedBy,
         rider: r ? {
           id: riderId, exists: true, status: r.status || null, approved: r.approved === true,
+          isOnline: r.isOnline === true || r.online === true, online: r.online === true,
           name: r.name || null, email: r.email || decoded.email || null,
           zone: r.zone || null, rating: r.rating || null,
           vehicle: r.vehicle || r.vehicleType || null, cargoTonne: r.cargoTonne || null, cargoType: r.cargoType || null,

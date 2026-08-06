@@ -1103,11 +1103,7 @@ function toggleOnline(){
       }).catch(function(){});
     }
   } catch(e){}
-  const btn = document.getElementById("driverOnlineBtn");
-  btn.textContent = isOnline ? "🟢 Online — Taking Orders" : "🔴 Go Offline";
-  btn.style.background = isOnline ? "rgba(113,255,0,0.18)" : "rgba(255,61,61,0.1)";
-  btn.style.borderColor = isOnline ? "rgba(113,255,0,0.4)" : "rgba(255,61,61,0.25)";
-  btn.style.color = isOnline ? "#71ff00" : "#ff6b6b";
+  _syncOnlineButtons();
   if(isOnline){
     if(window.SokoniDB?.startGPSTracking && currentDriver){
       window.SokoniDB.startGPSTracking(currentDriver.id);
@@ -1118,12 +1114,36 @@ function toggleOnline(){
   renderDeliveries();
 }
 
+/* Keep EVERY online toggle in sync — both the top-row button and the dashboard button reflect the
+   one `isOnline` state. Previously btnGoOnline called shiftGoOnline() (undefined) → did nothing and
+   the two buttons diverged. */
+function _syncOnlineButtons(){
+  var online = !!isOnline;
+  [{id:'driverOnlineBtn', on:'🟢 Online — Taking Orders'},
+   {id:'btnGoOnline',     on:'🟢 Online'}].forEach(function(b){
+    var el=document.getElementById(b.id); if(!el) return;
+    el.textContent      = online ? b.on : '🔴 Go Offline';
+    el.style.background  = online ? 'rgba(113,255,0,0.18)' : 'rgba(255,61,61,0.1)';
+    el.style.borderColor = online ? 'rgba(113,255,0,0.4)'  : 'rgba(255,61,61,0.25)';
+    el.style.color       = online ? '#71ff00'              : '#ff6b6b';
+  });
+}
+window.toggleOnline = toggleOnline;
+/* Back-compat: the dashboard button called shiftGoOnline() which never existed — route it to the
+   single canonical toggle so both buttons drive the same state. */
+window.shiftGoOnline = toggleOnline;
+function shiftGoOnline(){ return toggleOnline(); }
+
 /* ── Dashboard ── */
 function showDriverDashboard(){
   if(!currentDriver) return;
   const _gate = document.getElementById("driverGate");
   if(_gate) _gate.style.display="none";
   document.getElementById("driverDashboard").style.display="block";
+  /* Reflect the rider's ACTUAL online state so both Go-Online buttons match the record on load. */
+  isOnline = !!(currentDriver.isOnline || currentDriver.online || String(currentDriver.status||'').toLowerCase()==='active' || String(currentDriver.status||'').toLowerCase()==='online');
+  window.isOnline = isOnline;
+  try{ _syncOnlineButtons(); }catch(_){}
   /* Identity model: the one signed-in SOKONI account = driver mode. No login/logout button;
      leave via "← Exit Hub" (stays signed in). Go Online drives the shift. */
   var _ob=document.getElementById("driverOnlineBtn"); if(_ob) _ob.style.display="";
