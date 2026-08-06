@@ -1179,22 +1179,16 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
       </div>
       <div id="activeBoostedProducts" style="margin-top:18px;"></div>
 
-      <!-- Feature Shop on Home Page -->
+      <!-- Featured Shop Placement — curated by Sokoni (admin-awarded via featuredShops/{uid}); NOT self-serve.
+           The old self-serve button only wrote per-device localStorage and falsely claimed platform-wide
+           placement. Disabled until a real seller-facing promotion backend is wired. -->
       <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,0.07);padding-top:20px;">
-        <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">🏠 Feature My Shop on Home Page</div>
-        <div style="font-size:12px;color:rgba(255,255,255,0.4);margin-bottom:14px;">Your store card appears in the Featured Shops section on the Sokoni home page — seen by all visitors.</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-          <select id="shopFeatureDuration" class="flash-select" style="flex:1;min-width:140px;">
-            <option value="24">Featured for 24 hours</option>
-            <option value="48">Featured for 48 hours</option>
-            <option value="72">Featured for 72 hours</option>
-            <option value="168">Featured for 1 week</option>
-          </select>
-          <div style="background:rgba(113,255,0,0.07);border:1px solid rgba(113,255,0,0.15);border-radius:10px;padding:8px 14px;font-size:12px;color:#71ff00;font-weight:800;white-space:nowrap;">FREE during Beta</div>
+        <div style="font-size:14px;font-weight:800;color:white;margin-bottom:4px;">🏠 Featured Shop Placement</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.45);margin-bottom:14px;line-height:1.7;">Featured placement on the Sokoni home page is <strong>curated by the Sokoni team</strong> and awarded to high-performing, verified shops. Keep your ratings strong, your orders flowing and your verification complete to be considered — there's nothing to buy.</div>
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 14px;font-size:12px;color:rgba(255,255,255,0.55);display:flex;align-items:center;gap:10px;">
+          <span style="font-size:18px;">✨</span>
+          <span>Chosen shops appear on the home page automatically — no action needed here.</span>
         </div>
-        <button type="button" class="boost-go-btn" style="margin-top:12px;background:linear-gradient(135deg,#71ff00,#4fc800);color:black;" onclick="featureShopOnHome()">
-          🏠 Feature My Shop
-        </button>
         <div id="featuredShopStatus" style="margin-top:10px;font-size:12px;"></div>
       </div>
     </section>
