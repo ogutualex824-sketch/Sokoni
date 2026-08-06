@@ -227,7 +227,7 @@
    ("stuck on sign in"). Now we bind directly to firebase.js's warm auth/db/functions. */
 import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, collection, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFirestore, collection, query, where, onSnapshot, doc, getDoc } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 
 const FB_CFG = window.SOKONI_CONFIG || { apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'auth.mysokoni.co.ke', projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.firebasestorage.app', messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4' };
@@ -444,12 +444,32 @@ window.addEventListener('online', _tryReconnect);
    The POS opens straight to selling. If setup was never completed (no posSetupComplete flag and
    no paired printer), we show ONE dismissible prompt to finish setup — never a hard block, never
    the full wizard forced on the merchant. A paired printer is treated as already set up. */
-function _checkFirstRun(){
+/* Sprint 2 — Cloud Restore: another authorized device already set this merchant up. Read the
+   canonical posTerminals profile and restore preferences (paper width, printer model/name, setup
+   flag) so THIS device skips the wizard. The OS still owns the one-time Bluetooth pairing. */
+async function _cloudRestore(){
   try{
-    var done=!!localStorage.getItem('posSetupComplete');
-    var P=_P(), paired=!!(P&&P.paired);
-    if(done) return;
-    if(paired){ try{ localStorage.setItem('posSetupComplete', JSON.stringify({v:1,at:Date.now(),inferred:true})); }catch(_){} return; }
+    if(!db||!_sellerId||!doc||!getDoc) return false;
+    const snap=await getDoc(doc(db,'posTerminals',_sellerId+'_hardware'));
+    if(!snap.exists() ) return false;
+    const d=snap.data()||{};
+    if(!d.setupComplete) return false;
+    const chars = Number(d.paperWidth)>=80 ? 48 : 32;           /* 58mm≈32, 80mm≈48 */
+    let prn={name:'P58E',model:'P58E'};
+    try{ const first=Object.values(d.devices||{}).find(x=>((x&&x.category)||'').indexOf('printer')>-1); if(first) prn={name:first.name||'P58E',model:first.model||'P58E'}; }catch(_){}
+    try{
+      localStorage.setItem('posReceiptWidth', String(chars));
+      localStorage.setItem('posSetupComplete', JSON.stringify({ v:d.setupVersion||1, at:Date.now(), sellerId:_sellerId, branchId:d.branchId||'default', terminalId:d.terminalId||(_sellerId+'_pos1'), printer:{...prn,width:d.paperWidth||58}, restored:true }));
+    }catch(_){}
+    return true;
+  }catch(_){ return false; }   /* App Check / offline → no restore; the setup prompt covers it */
+}
+async function _checkFirstRun(){
+  try{
+    if(localStorage.getItem('posSetupComplete')) return;
+    var P=_P();
+    if(P&&P.paired){ try{ localStorage.setItem('posSetupComplete', JSON.stringify({v:1,at:Date.now(),inferred:true})); }catch(_){} return; }
+    if(await _cloudRestore()){ toast('☁️ Restored your POS setup — pair your printer to print'); _refreshPrinter(); return; }
     if(sessionStorage.getItem('posSetupPromptDismissed')) return;
     _showSetupPrompt();
   }catch(_){}
