@@ -179,6 +179,7 @@
     <button class="btn btn-dispatch" onclick="testPrint()">&#129514; Test Print</button>
     <button class="btn btn-print" onclick="reconnectPrinter()">&#128257; Reconnect</button>
   </div>
+  <div id="prnHint" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5;text-align:center"></div>
 </div>
 
 <!-- Bottom nav -->
@@ -396,13 +397,47 @@ function _orderDoc(o,items,total,sub,del,ff){
   doc.row('TOTAL PAID','KES '+total).rule().center('Paid via M-PESA').center('Thank you!').feed(2);
   return doc;
 }
-function _refreshPrinter(){
-  const P=_P(); const on=!!(P&&P.isConnected);
-  const dot=document.getElementById('prnDot'); if(dot) dot.style.background=on?'var(--ok)':'var(--danger)';
-  set('prnStatus',on?'🟢 Connected':'🔴 Offline'); set('prnPaper',on?'OK':'—');
+/* ── Printer lifecycle: configure once, then auto-reconnect in the background ──
+   Three states — 🟢 Connected / 🟡 Reconnecting / 🔴 Offline. When the printer drops but a
+   pairing is saved (P.paired), we retry autoConnect() periodically WITHOUT blocking selling, and
+   also on app-resume / network-online. Recovery from a drop toasts once. If nothing is paired yet
+   we show a one-time "Set up printer" hint — never force the wizard mid-shift. */
+let _prnState='off', _prnBusy=false, _prnEver=false;
+function _setPrnState(s){
+  const prev=_prnState; _prnState=s;
+  const dot=document.getElementById('prnDot');
+  if(dot) dot.style.background = s==='on'?'var(--ok)':s==='recon'?'var(--warn)':'var(--danger)';
+  const P=_P(), paired=!!(P&&P.paired);
+  set('prnStatus', s==='on'?'🟢 Connected':s==='recon'?'🟡 Reconnecting…':(paired?'🔴 Offline':'🔴 Not set up'));
+  set('prnPaper', s==='on'?'OK':'—');
+  const hint=document.getElementById('prnHint');
+  if(hint){
+    hint.innerHTML = s==='on' ? ''
+      : s==='recon' ? 'Trying to reconnect to your printer…'
+      : paired ? 'P58E is offline. Turn it on or move it closer — it reconnects automatically.'
+      : 'No printer set up yet. <a href="/pos-hardware-wizard" style="color:var(--accent)">Set up printer →</a>';
+  }
+  if(s==='on' && prev!=='on' && _prnEver) toast('🟢 Printer reconnected');
+  if(s==='on') _prnEver=true;
 }
-setInterval(_refreshPrinter, 3000);
-window.addEventListener('load', ()=>{ setTimeout(()=>{ const P=_P(); if(P&&P.autoConnect&&!P.isConnected){ P.autoConnect().then(_refreshPrinter).catch(()=>{}); } _refreshPrinter(); }, 1500); });
+function _refreshPrinter(){
+  const P=_P();
+  if(P&&P.isConnected){ _setPrnState('on'); return; }
+  if(_prnState!=='recon') _setPrnState('off');   /* leave the amber state alone while a try is in flight */
+}
+async function _tryReconnect(){
+  const P=_P();
+  if(!P||P.isConnected||_prnBusy||!P.paired) return;   /* nothing to reconnect to → don't nag */
+  _prnBusy=true; _setPrnState('recon');
+  try{ const ok=await P.autoConnect(); _setPrnState((ok||P.isConnected)?'on':'off'); }
+  catch(_){ _setPrnState('off'); }
+  finally{ _prnBusy=false; }
+}
+setInterval(_refreshPrinter, 3000);          /* fast status poll */
+setInterval(_tryReconnect, 15000);           /* background reconnect while offline */
+window.addEventListener('load', ()=>{ setTimeout(_tryReconnect, 1200); });
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) _tryReconnect(); });
+window.addEventListener('online', _tryReconnect);
 
 /* ── Scanner ── */
 function openScanner(){ if(window.SokoniPrinter&&window.P58EPrinter){} toast('Scanner: point the camera at a barcode in New Sale','warn'); location.href='/pos-checkout#scan'; }
