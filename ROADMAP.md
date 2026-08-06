@@ -419,6 +419,38 @@ Evidence from real users determines what gets built next, not assumptions.
 
 ---
 
+## Legacy Surface Audit
+
+Tracks user-facing surfaces by data authority. The recurring, highest-value defect class
+found in the read-only audit is **false success**: a legacy localStorage-only path reports
+success (toast/banner/status) without ever writing the canonical Firestore backend — the
+user believes something happened platform-wide when it only touched their own device.
+
+**Legend** — 🟢 **Canonical** (reads/writes Firestore or an authoritative `/api/*`; works on any device) ·
+🟡 **Needs migration** (works but is localStorage-first / device-local; convergence planned) ·
+🔴 **Legacy / false-success** (claims success with no backing backend — fix or disable on sight).
+
+**Governing rule:** no success toast/banner/dialog until the canonical backend operation has
+completed successfully. A surface may not be marked 🟢 without live evidence (real consumer
+query or browser check), per the Release Validation Standard.
+
+| Surface | State | Authority / Evidence |
+|---|---|---|
+| `seller-public.html` shop page | 🟢 Canonical | Migrated to `/api/catalogue?sellerUid=` — 103 products render on a fresh headless browser (no localStorage). |
+| `seller.html` Incoming Orders (`sellerFsOrders`) | 🟢 Canonical | `SokoniOrders.listenSellerOrders` (Firestore), full lifecycle + escrow. |
+| `seller.html` static "Recent Orders" demo | 🟢 Removed | Deleted 3 hardcoded fake cards (#1021/1022/1023); router drift caught by `test-seller-dashboard` and fixed. |
+| `seller.html` "Feature My Shop" (self-serve) | 🟢 Disabled | Was 🔴 false-success (localStorage-only, claimed platform-wide). Real featuring is admin-curated `featuredShops/{uid}`. Now honest copy, no fake toast. |
+| POS terminal stock (`posCompleteCheckout`) | 🟢 Canonical | Reads/writes canonical `products.stock` inside a transaction. |
+| History listeners (orders/notifications/disputes) | 🟢 Bounded | `limit()` added to all previously-unbounded `onSnapshot` (perf, not authority). |
+| `seller.html` legacy delivery feed (`buyerOrdersList`) | 🟡 Needs migration | Live `SokoniDelivery.listenSellerDeliveries` feed running alongside the canonical Incoming Orders panel — two dispatch models on one screen. Converge to the canonical panel (see Rider Order Visibility). Backend-wired confirm path → not a quick removal. |
+| Home page "Featured Shops" (`displayFeaturedShops`) | 🟡 Needs migration | Reads `localStorage.sokoniFeaturedShops` (seeded by `demo-seed.js`) instead of the canonical `featuredShops` collection. Needs a public read path (`/api/featured` or authenticated query) so admin-curated features actually show. |
+| `food-rider.html` earnings / history | 🟡 Needs migration | `localStorage.rider_today_earn_*` / `rider_history` are device-local; authoritative earnings live in wallet/`deliveryFees`. Converge to the canonical rider-payout ledger. |
+| POS refund modal keyboard workflow | 🟡 Deferred | Enter-to-confirm added to sale checkout; the refund modal lives on a separate surface (`posProcessRefund` UI) — apply the same keyboard treatment there. |
+
+_Process: when a 🔴 is found, fix or disable it in the same change (never leave a live false-success path). When a 🟡 is migrated, flip it to 🟢 only after live evidence._
+
+---
+
 ## Known Limitations (v1.0.0 Production)
 
 All previous blockers (secrets, DNS, monitoring, deployments) resolved as of 2026-06-25.

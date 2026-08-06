@@ -1,3 +1,125 @@
+## [2026-08-07] — perf+feat+fix: MED-cluster (bounded listeners, rider nav, fake-order removal, POS keyboard, feature-shop)
+
+Phase-3 follow-through on the audit's deferred MED items, each committed + deployed + live-verified
+in order. Continues the "no success UI until the backend confirms" rule and the merge policy
+(defect fix / measurable perf / planned capability only).
+
+- **MED-1 bounded history listeners (perf):** added `limit()` to all previously-unbounded realtime
+  `onSnapshot` — sokoni-db.js (userOrders 200, listenPOSOrders 200, listenUnboxingReviews 100,
+  listenNotifications 100, listenSellerOrders 200) + sokoni-orders.js (listenSellerOrders 200,
+  listenDisputes 200). Keeps `orderBy(createdAt,desc)` so caps retain newest; no new index. Bounds
+  client memory/bandwidth as history grows. Deployed ba0a558; caps live, modules load clean.
+- **MED-2 rider Open-in-Maps (feat):** food-rider.html active-delivery card gains a native-maps
+  turn-by-turn deep link (`openRiderNav`) — restaurant while picking up, customer while delivering;
+  prefers real coords, falls back to address, guards empty destination.
+- **MED-3 fake demo orders (fix, false-success):** removed the static "Recent Orders" block in
+  seller.html (3 hardcoded #1021/1022/1023 "Delivered" cards, never populated) that duplicated the
+  canonical Incoming Orders panel. The inventory gate's `test-seller-dashboard` caught a router/section
+  drift (seller.js `DASH_PAGES` still referenced the deleted `orders-section`) → fixed; now 22/22.
+- **MED-4 POS keyboard (feat):** pos-v2.html — Enter in product search adds first in-stock match
+  (`_addFirstMatch`, reads live input to beat the debounce) + Enter in cash field confirms sale;
+  `enterkeyhint=done`. No change to the idempotent `posCompleteCheckout` path.
+- **MED-5 Feature-My-Shop (fix, false-success):** the self-serve button wrote only per-device
+  localStorage yet claimed platform-wide featuring. Disabled + honest copy; `featureShopOnHome`
+  neutered (no localStorage write, no fake toast). Real featuring is admin-curated `featuredShops/{uid}`.
+- **ROADMAP.md:** added the **Legacy Surface Audit** section (🟢 Canonical / 🟡 Needs migration /
+  🔴 Legacy-false-success) tracking each surface by data authority, incl. the 🟡 items intentionally
+  deferred (legacy delivery feed, home Featured Shops localStorage, rider earnings, POS refund keyboard).
+
+Deployed 04fa7d2. Files: sokoni-db.js, sokoni-orders.js, food-rider.html, seller.html, seller.js,
+pos-v2.html, ROADMAP.md. Verified: markers live behind cleanUrls, seller/pos load with no JS errors,
+test-seller-dashboard 22/22. Interactive exercise of auth-gated POS/rider actions bounded by login gate.
+
+## [2026-08-06] — fix(seller+perf+rider): eliminate false-success + OOM regression (evidence-based audit)
+
+Read-only 4-area defect audit (Performance/Seller/Rider/POS) → fixed the verified high-impact defects,
+each confirmed at file:line. Dominant pattern: legacy localStorage-only UI paths reporting success
+without touching the canonical backend. Adopted rule: no success UI until the backend confirms.
+
+- **Wallet false-success (P0):** seller.js `renderWallet` fabricated balance from localStorage orders +
+  `withdrawWallet` faked "KES X sent to M-PESA"; seller.html `loadWallet` injected a demo balance and
+  `confirmWithdraw` faked "Funds arrive in 5 minutes" — all with NO Cloud Function. Now: real
+  `wallets/{uid}.balance` read + all withdrawal actions route to the CF-backed seller-wallet.html
+  (`requestWithdrawal`). No client can claim money was sent.
+- **Bulk upload (P0):** `confirmBulkUpload` wrote localStorage only → 0 products published. Now batch-writes
+  canonical `products` (chunks of 400, status:'active', uid/sellerUid, server ts); success only after commit.
+- **Stock edits (P0):** `saveStock`/`markOutOfStock`/`restoreStock` were localStorage-only (oversell/stale).
+  Now write canonical `products.stock` + inventoryVersion:increment(1) (auto-fires inventoryMovements audit),
+  optimistic UI + rollback + honest error on failure.
+- **realtime.js OOM (HIGH):** unbounded products onSnapshot (duplicate of the already-fixed anti-pattern) →
+  bounded newest-200 (orderBy documentId desc + limit(200); category = filter+cap) + base64 stripped before
+  the localStorage cache. Closes the documented mobile-renderer OOM / quota bomb.
+- **Rider window.toast (HIGH):** undefined on driver.html → ~18 actions silent + 2 unguarded calls THREW
+  (Mark-Delivered threw after the delivered write, card stuck). Aliased to `_drvToast` (correct inverted
+  convention). All rider actions now give feedback; no throw.
+
+Deferred (Phase 3, documented): seller-public.html localStorage, pos-v2 grid re-render, duplicate order list,
+feature-shop no-op, rider nav button, POS Enter-to-add/confirm, bounded history listeners, minor cosmetics.
+Files: seller.js, seller.html, realtime.js, driver.html.
+
+## [2026-08-06] — feat(analytics): R1.x engine phases 5/2/3/4/6 (reconciliation, coverage, buckets, BI, monitoring)
+
+Built + verified (self-cleaning production tests) atop the RC analytics foundation. New modules:
+functions/analytics-reconcile.js, analytics-rollup.js, analytics-monitor.js. Daily job
+`scheduledAnalyticsReconcile` runs rollup → BI → reconcile → health; `adminReconcileAnalytics`
+callable modes: {} reconcile · {backfill} · {rollup} · {bi} · {health}.
+
+- **Phase 5 Reconciliation (parity gate):** canonical truth (settlements/deliveryFees/orders) vs
+  analytics/global → analytics/reconciliation + reconciliationAlerts on drift. VERIFIED: injected a
+  settled order with no analytics increment → flagged settledOrders/platformRevenue/sellerEarnings drift.
+- **Phase 2 Trigger coverage:** refund (initiateRefund→handleOrderRefund) counts refunds+amount once and
+  REVERSES settled revenue when the settlement flips to 'reversed' (kept in parity with reconciliation
+  truth); cancellation (onOrderStatusChange) counts + reverses paid/gmv if counted. VERIFIED both.
+- **Phase 3 Historical buckets:** analytics-rollup folds daily buckets → window_7d/30d, month, quarter,
+  year. VERIFIED window boundaries (7d excludes day-20, 30d includes).
+- **Phase 4 BI ratios:** analytics/bi lifetime + last30d (AOV, refund/cancel/settlement rate, gross/net
+  revenue, merchant/rider earnings). VERIFIED ratios.
+- **Phase 6 Monitoring:** analytics/health + monitoringAlerts — stale analytics, negative-value integrity,
+  reconciliation drift, oversold/negative-stock. VERIFIED negative-value detection.
+
+Remaining R1.x: Phase 1 dashboards (BLOCKED on the stuck rules release), Phase 7 gate execution (load/DR/
+offline tests), Phase 4b dimensional BI (top products/peak hours/CLV) + enterprise items. See
+docs/ANALYTICS_ENGINE_ROADMAP.md.
+
+Files: functions/index.js, analytics-reconcile.js (new), analytics-rollup.js (new), analytics-monitor.js
+(new), docs/ANALYTICS_ENGINE_ROADMAP.md, CHANGELOG.md.
+
+## [2026-08-06] — feat(dispatch+commerce+analytics): rider payout, single-source money/inventory/analytics
+
+Dispatch delivery E2E hardened + single-source convergence, all proven with self-cleaning production tests.
+
+- **Accept "internal"**: claimAvailableDelivery had no `allUsers` invoker (Cloud Run IAM denial → SDK
+  reports `internal`) + 128MiB OOM that stopped the container booting. Re-bound invoker, bumped 256MiB.
+- **RIDER PAYOUT (was NEVER credited)**: traced the money path — `deliveryFees` was written `pending`
+  on delivery but its only consumer is a read-only admin report; `settleOrder` credits seller-only;
+  finos credits riders at payment (riderId null for marketplace). Added exactly-once rider credit to
+  canonical `wallets/{uid}.balance` in `onOrderStatusChange` delivered branch (deterministic
+  `walletTransactions/{rider}_{order}_delivery` + `before.status` guard). VERIFIED KES88 exactly-once.
+- **Rider-share reconcile → 88%/12%** (owner decision): `commission-config.js` `hub: 8%→12%` (was
+  paying 92%, contradicting the app's 88% promise). Regenerated client snapshot `sokoni-commission-rates.js`
+  (predeploy single-source guard). Seller settlement VERIFIED exactly-once (KES970/KES1000).
+- **Driver Hub v2** (driver.html): removed the duplicate Shift-Management card (ran a separate online
+  system that drifted); one full-width Go Online/Offline toggle is the single authority
+  (rideDrivers.isOnline + GPS + job availability; shift derived from online).
+- **inventoryMovements audit trail — single trigger**: `indexProductUpdate` now records EVERY
+  products.stock change (all 9 deduction sites + manual edits), deterministic `${pid}_v${version}`,
+  order/source attributed only when THIS write set it. Removed the redundant per-order explicit write.
+- **Click-and-collect converged**: create/cancel/reserve-status read+wrote the EMPTY
+  sellers/{uid}/products subcollection (C&C was silently broken + a separate stock pool) → repointed to
+  canonical `products` with ownership check + TOCTOU-safe in-txn re-read + version/source stamps.
+- **Canonical Analytics ENGINE (foundation)**: `analytics-aggregator.js` + hooks maintain
+  `analytics/global` / `analytics/daily_*` / `shops/{id}/analytics/*` atomically from exactly-once
+  events; platform fee = canonical commission (never a `%`). Client `sokoni-analytics.js`. Firestore
+  read-rules added. VERIFIED all 8 metrics exact + exactly-once. Full buildout → docs/ANALYTICS_ENGINE_ROADMAP.md.
+
+Known issue: default-DB `firestore.rules` release stuck (409 on CLI 15.24+15.26; REST update rejects
+all shapes) — deployment/tooling, NOT app logic. Non-blocking (engine writes via Admin SDK). Needs a
+clean CI runner or a scheduled maintenance window; do NOT force delete on the live app.
+
+Files: functions/index.js, order-settlement.js (read), commission-config.js, analytics-aggregator.js
+(new), pos-marketplace-sync.js, dispatch.js (read), driver.html, sokoni-commission-rates.js,
+sokoni-analytics.js (new), firestore.rules, docs/ANALYTICS_ENGINE_ROADMAP.md (new).
+
 ## [2026-08-06] — feat(audit)+chore(hardening): canonical audit schema + operational-resilience evidence
 
 Audit gaps CLOSED via one schema (functions/pos-audit.js `writeAudit`): pos.refund,
