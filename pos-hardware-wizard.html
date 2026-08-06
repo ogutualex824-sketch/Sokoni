@@ -2056,23 +2056,31 @@ setInterval(renderHealthBar, 30000);
 let _modalCategoryPreset = null;
 
 function openAddModal(categoryPreset) {
-  _modalCategoryPreset = categoryPreset || null;
-  const modal   = document.getElementById('addDeviceModal');
-  const catSel  = document.getElementById('modalCategory');
-  const vendSel = document.getElementById('modalVendor');
-
-  // Populate vendor dropdown
-  if (window.SokoniHardware) {
-    const adapters = window.SokoniHardware.listAdapters();
-    vendSel.innerHTML = '<option value="">Select a vendor...</option>' +
-      adapters.map(a =>
-        `<option value="${a.vendorId}">${a.adapterName} [${a.category.replace(/_/g,' ')}]</option>`
-      ).join('');
+  /* Hardened: the modal must ALWAYS open. A failure populating the vendor dropdown (listAdapters
+     throwing, or a missing sub-element) used to abort before modal.classList.add('open'), so the
+     button appeared to "do nothing". Now the vendor list is best-effort and any error surfaces as
+     a toast + console log instead of silently killing the whole action. */
+  try {
+    _modalCategoryPreset = categoryPreset || null;
+    const modal = document.getElementById('addDeviceModal');
+    if (!modal) { try { toast('Add-device dialog not found', 'error'); } catch(_){} return; }
+    const catSel  = document.getElementById('modalCategory');
+    const vendSel = document.getElementById('modalVendor');
+    try {
+      if (vendSel && window.SokoniHardware && typeof window.SokoniHardware.listAdapters === 'function') {
+        const adapters = window.SokoniHardware.listAdapters() || [];
+        vendSel.innerHTML = '<option value="">Select a vendor...</option>' +
+          adapters.map(a => `<option value="${a.vendorId}">${a.adapterName} [${String(a.category||'').replace(/_/g,' ')}]</option>`).join('');
+      }
+    } catch (e) { console.warn('[wizard] vendor list failed (modal still opens):', e && e.message); }
+    if (categoryPreset && catSel) catSel.value = categoryPreset;
+    modal.classList.add('open');
+  } catch (e) {
+    console.error('[wizard] openAddModal failed:', e);
+    try { toast('Could not open Add Device: ' + (e && e.message || e), 'error'); } catch(_){}
   }
-
-  if (categoryPreset) catSel.value = categoryPreset;
-  modal.classList.add('open');
 }
+window.openAddModal = openAddModal;
 
 document.getElementById('btnAddManual').addEventListener('click', () => openAddModal(null));
 
