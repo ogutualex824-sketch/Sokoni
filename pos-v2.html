@@ -303,6 +303,8 @@ async function _proceed(user){
   _startClock(); _attach();
   _revealWhenReady();
   setTimeout(_checkFirstRun, 2500);   /* one-time onboarding prompt if the POS isn't set up yet */
+  setTimeout(_flushOffline, 3000);    /* replay any cash sales queued while offline (idempotent) */
+  _updateQueueBadge();
 }
 /* Bind to firebase.js's warm app (wait for it to finish init), then attach the auth listener
    + a forgiving poll. Same-version SDK → window.firebase* instances interoperate with the
@@ -708,31 +710,69 @@ async function doCheckout(){
   if(_checkoutBusy) return; _checkoutBusy=true;
   const btn=document.getElementById('chargeBtn'); if(btn){ btn.disabled=true; btn.textContent='Processing…'; }
   const cashGiven=Number((document.getElementById('cashGiven')||{}).value||0);
-  try{
-    const res=await CF('posCompleteCheckout')({
-      idempotencyKey:_idem(), merchantId:_sellerId,
-      items:items.map(it=>({ productId:it.id, qty:it.qty, unitPrice:it.price })),
-      payments:[{ method:'cash', amount:total }],
-      subtotal:total, grandTotal:total,
-      metadata:{ source:'pos-v2', channel:'till' }
-    });
-    const saleId=(res&&res.data&&(res.data.saleId||res.data.id))||'';
-    toast('✅ Sale complete'+(cashGiven>total?(' · change '+kes(cashGiven-total)):''));
-    /* Show the exact receipt as a preview; the merchant taps Print (WYSIWYG). Falls back to
-       direct print if the engine isn't loaded. Sale is already recorded either way. */
+  /* ONE idempotencyKey per sale — reused by any offline retry so posCompleteCheckout treats the
+     replay as the same transaction (exactly-once; a replay can never create a second sale). */
+  const payload={
+    idempotencyKey:_idem(), merchantId:_sellerId,
+    items:items.map(it=>({ productId:it.id, qty:it.qty, unitPrice:it.price })),
+    payments:[{ method:'cash', amount:total }],
+    subtotal:total, grandTotal:total,
+    metadata:{ source:'pos-v2', channel:'till' }
+  };
+  const _finishSale=(saleId,offline)=>{
+    toast((offline?'📴 Saved offline — will sync':'✅ Sale complete')+(cashGiven>total?(' · change '+kes(cashGiven-total)):''), offline?'warn':undefined);
     try{
       if(window.SokoniReceipt){ showReceiptPreview(_saleDoc(items,total,'CASH',saleId,cashGiven), function(){ _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }); }
       else { _printSaleReceipt(items,total,'CASH',saleId,cashGiven); }
     }catch(_){}
     _clearCart(); closeSheet();
-    /* reflect the stock we just deducted in the local grid so counts stay honest */
     items.forEach(it=>{ const p=_catalogue.find(x=>x.id===it.id); if(p&&p.stock!=null) p.stock=Math.max(0,p.stock-it.qty); });
     renderGrid();
+  };
+  try{
+    const res=await CF('posCompleteCheckout')(payload);
+    _finishSale((res&&res.data&&(res.data.saleId||res.data.id))||'', false);
   }catch(e){
     console.error('checkout',e);
-    toast('Checkout failed: '+(e&&e.message?e.message:e),'err');
+    if(_isNetworkErr(e)){
+      /* Cash is physically in hand — provisionally complete + queue the record for replay. */
+      _queueOffline(payload); _finishSale('(offline)', true);
+    } else {
+      toast('Checkout failed: '+(e&&e.message?e.message:e),'err');   /* real rejection — do NOT queue */
+    }
   }finally{ _checkoutBusy=false; if(btn){ btn.disabled=false; btn.textContent='Charge '+kes(total); } }
 }
+/* ── Offline queue (Sprint 8) — cash only; safe because posCompleteCheckout is idempotent ──
+   Only NETWORK errors queue; a real rejection (stock/price/precondition) never does. Replays reuse
+   the original idempotencyKey, so a sale that actually landed server-side returns its cached result
+   instead of creating a duplicate. */
+function _isNetworkErr(e){
+  if(typeof navigator!=='undefined' && navigator.onLine===false) return true;
+  const s=(((e&&e.code)||'')+' '+((e&&e.message)||'')).toLowerCase();
+  return /unavailable|deadline|internal|network|failed to fetch|timeout|fetch/.test(s);
+}
+function _queueOffline(payload){
+  try{ const q=JSON.parse(localStorage.getItem('posOfflineQueue')||'[]'); q.push({payload,ts:Date.now()}); localStorage.setItem('posOfflineQueue',JSON.stringify(q)); }catch(_){}
+  _updateQueueBadge();
+}
+async function _flushOffline(){
+  let q; try{ q=JSON.parse(localStorage.getItem('posOfflineQueue')||'[]'); }catch(_){ q=[]; }
+  if(!q.length||!_sellerId) return;
+  const remain=[];
+  for(const it of q){
+    try{ await CF('posCompleteCheckout')(it.payload); }                 /* success OR idempotent replay → settled */
+    catch(e){ if(_isNetworkErr(e)) remain.push(it); /* still offline — keep; else permanent → drop */ }
+  }
+  try{ localStorage.setItem('posOfflineQueue',JSON.stringify(remain)); }catch(_){}
+  _updateQueueBadge();
+  if(q.length && !remain.length) toast('☁️ '+q.length+' offline sale(s) synced');
+}
+function _updateQueueBadge(){
+  let n=0; try{ n=(JSON.parse(localStorage.getItem('posOfflineQueue')||'[]')||[]).length; }catch(_){}
+  const d=document.getElementById('liveDot');
+  if(d && n>0){ d.style.background='var(--warn)'; d.title=n+' sale(s) queued offline — syncing'; }
+}
+window.addEventListener('online', _flushOffline);
 
 /* Sale receipt document — shared by print + preview. */
 function _saleDoc(items,total,method,saleId,cashGiven){
