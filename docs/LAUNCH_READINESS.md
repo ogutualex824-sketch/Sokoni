@@ -8,6 +8,9 @@
 Owner-driven hardening phase (feature freeze). Update the status column as each flow is exercised
 with **real transactions over several days** on Android + iPhone + Desktop.
 
+> **Record device-test results in [[VALIDATION_EVIDENCE]]** — a fillable per-transaction log. Verify
+> the "Auditable" criterion live with `node scripts/qa/tail-audit.js [action]`.
+
 ---
 
 ## Phase 2 — Data Consistency (automated, evidence-based)
