@@ -218,18 +218,19 @@
 <script src="/sokoni-bluetooth-printer.js" defer></script>
 
 <script type="module">
-import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
-import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
-import { getFirestore, collection, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+/* Import the SAME SDK version firebase.js uses (10.12.2) so the browser DEDUPES this module onto
+   firebase.js's already-initialised app — the one holding the warm logged-in session + App Check
+   token. The previous 11.0.1 import loaded a SEPARATE SDK copy whose registry never saw that app,
+   so it built its own instance that had to cold-read the session and timed out on Safari
+   ("stuck on sign in"). Now we bind directly to firebase.js's warm auth/db/functions. */
+import { getApp, getApps, initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js';
 
 const FB_CFG = window.SOKONI_CONFIG || { apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'auth.mysokoni.co.ke', projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.firebasestorage.app', messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4' };
-/* Shared DEFAULT app → shares the ONE logged-in session (fixes the named-app "verifying" hang). */
-const app  = getApps().find(a=>a.name==='[DEFAULT]') || getApps()[0] || initializeApp(FB_CFG);
-const auth = getAuth(app);
-const db   = getFirestore(app);
-const fns  = getFunctions(app, 'us-central1');
-const CF   = (n) => httpsCallable(fns, n);
+let app, auth, db, fns;                 /* bound in _bootstrap() once firebase.js is ready */
+const CF = (n) => httpsCallable(fns, n);
 
 let _uid=null, _sellerId=null, _gate=false;
 let _byStatus={ pending:[], ready:[], collected:[] };
@@ -249,8 +250,24 @@ async function _proceed(user){
   document.getElementById('auth-screen').style.display='none';
   _startClock(); _attach();
 }
-onAuthStateChanged(auth, u=>{ if(u) _proceed(u); });
-let _tries=0; const _poll=setInterval(()=>{ if(_gate){clearInterval(_poll);return;} const u=_resolveUser(); if(u){clearInterval(_poll);_proceed(u);} else if(++_tries>=16){ clearInterval(_poll); const m=document.querySelector('.auth-msg'); if(m) m.innerHTML='Session not found. <a href="/login.html?redirect=pos-v2.html" style="color:var(--info)">Sign in</a>'; } }, 500);
+/* Bind to firebase.js's warm app (wait for it to finish init), then attach the auth listener
+   + a forgiving poll. Same-version SDK → window.firebase* instances interoperate with the
+   modular helpers imported above. */
+async function _bootstrap(){
+  for(let i=0;i<80 && !window.firebaseApp && !getApps().length;i++){ await new Promise(r=>setTimeout(r,150)); }
+  app  = window.firebaseApp || (getApps().length ? getApp() : initializeApp(FB_CFG));
+  auth = window.firebaseAuth || getAuth(app);
+  db   = window.firebaseDB || getFirestore(app);
+  fns  = window.firebaseFunctions || getFunctions(app, 'us-central1');
+  try{ onAuthStateChanged(auth, u=>{ if(u) _proceed(u); }); }catch(_){}
+  let _tries=0; const _poll=setInterval(()=>{
+    if(_gate){ clearInterval(_poll); return; }
+    const u=_resolveUser();
+    if(u){ clearInterval(_poll); _proceed(u); }
+    else if(++_tries>=40){ clearInterval(_poll); const m=document.querySelector('.auth-msg'); if(m) m.innerHTML='Session not found. <a href="/login.html?redirect=pos-v2.html" style="color:var(--info)">Sign in</a>'; }
+  }, 500);
+}
+_bootstrap();
 
 function _startClock(){ const el=document.getElementById('shiftClock'); const tick=()=>{ try{ el.textContent='Shift '+new Date().toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit',hour12:false}); }catch(_){} }; tick(); setInterval(tick,30000); }
 
