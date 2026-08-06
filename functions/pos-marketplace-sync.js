@@ -46,27 +46,30 @@ exports.createClickAndCollect = onCall(CF_OPTIONS, async ({ auth, data }) => {
   if (!['counter', 'prepaid'].includes(paymentMethod))
     throw new HttpsError('invalid-argument', "paymentMethod must be 'counter' or 'prepaid'.");
 
-  // Validate products and build line items
+  // Validate against the ONE canonical `products` collection. This previously read the
+  // sellers/{uid}/products SUBCOLLECTION, which is empty — so C&C always failed AND would have
+  // kept a stock pool separate from marketplace/POS. Now C&C shares the single products.stock.
+  // Ownership is enforced so a shop can only sell its own items.
   const lineItems = [];
   let subtotal = 0;
 
   for (const { productId, qty } of items) {
     if (!productId || !qty || qty < 1) throw new HttpsError('invalid-argument', 'Invalid item entry.');
-    const prodSnap = await db.doc(`sellers/${sellerId}/products/${productId}`).get();
+    const prodSnap = await db.collection('products').doc(String(productId)).get();
     if (!prodSnap.exists) throw new HttpsError('not-found', `Product ${productId} not found.`);
     const pd = prodSnap.data();
-    if (pd.active === false)
+    if (String(pd.sellerUid || pd.uid || '') !== String(sellerId))
+      throw new HttpsError('permission-denied', `Product ${productId} does not belong to this shop.`);
+    if (pd.active === false || String(pd.status || '').toLowerCase() === 'inactive')
       throw new HttpsError('failed-precondition', `${pd.name} is not currently available.`);
-    if ((pd.stock ?? 0) < qty)
-      throw new HttpsError(
-        'failed-precondition',
-        `Insufficient stock for ${pd.name}. Available: ${pd.stock ?? 0}`
-      );
+    const _stk = Number(pd.stock ?? pd.stockQty ?? pd.quantity ?? 0);
+    if (_stk < qty)
+      throw new HttpsError('failed-precondition', `Insufficient stock for ${pd.name}. Available: ${_stk}`);
     lineItems.push({
-      productId,
+      productId: String(productId),
       name: pd.name,
       price: pd.price,
-      imageUrl: pd.imageUrl || null,
+      imageUrl: pd.imageUrl || pd.image || null,
       qty,
       lineTotal: pd.price * qty,
     });
@@ -76,9 +79,28 @@ exports.createClickAndCollect = onCall(CF_OPTIONS, async ({ auth, data }) => {
   const orderId = db.collection('_').doc().id;
 
   await db.runTransaction(async (t) => {
-    for (const item of lineItems) {
-      t.update(db.doc(`sellers/${sellerId}/products/${item.productId}`), {
-        stock: FieldValue.increment(-item.qty),
+    // TOCTOU-safe: re-read canonical stock inside the txn (all reads before any writes), floor
+    // at zero, reject if a concurrent sale emptied it. Bumps inventoryVersion + stamps source so
+    // the indexProductUpdate trigger records the movement to inventoryMovements.
+    const refs  = lineItems.map((li) => db.collection('products').doc(li.productId));
+    const snaps = await Promise.all(refs.map((r) => t.get(r)));
+    for (let i = 0; i < lineItems.length; i++) {
+      if (!snaps[i].exists) throw new HttpsError('not-found', `Product ${lineItems[i].productId} not found.`);
+      const d = snaps[i].data();
+      const cur = Number(d.stock ?? d.stockQty ?? d.quantity ?? 0);
+      if (cur < lineItems[i].qty)
+        throw new HttpsError('failed-precondition', `Insufficient stock for ${lineItems[i].name}. Available: ${cur}`);
+    }
+    for (let i = 0; i < lineItems.length; i++) {
+      const d = snaps[i].data();
+      const cur = Number(d.stock ?? d.stockQty ?? d.quantity ?? 0);
+      t.update(refs[i], {
+        stock:            Math.max(0, cur - lineItems[i].qty),
+        sold:             FieldValue.increment(lineItems[i].qty),
+        inventoryVersion: FieldValue.increment(1),
+        updatedAt:        FieldValue.serverTimestamp(),
+        lastSaleOrderId:  orderId,
+        lastStockSource:  'click-and-collect',
       });
     }
     t.set(db.doc(`sellers/${sellerId}/clickAndCollect/${orderId}`), {
@@ -180,9 +202,15 @@ exports.updateClickAndCollectStatus = onCall(CF_OPTIONS, async ({ auth, data }) 
 
   if (status === 'cancelled') {
     await db.runTransaction(async (t) => {
+      // Restore stock to the SAME canonical products.stock the order deducted (was the empty
+      // sellers/{uid}/products subcollection). Bumps inventoryVersion + stamps source so the
+      // indexProductUpdate trigger records a 'restock' movement.
       for (const item of order.items ?? []) {
-        t.update(db.doc(`sellers/${sellerId}/products/${item.productId}`), {
-          stock: FieldValue.increment(item.qty),
+        t.update(db.collection('products').doc(String(item.productId)), {
+          stock:            FieldValue.increment(item.qty),
+          inventoryVersion: FieldValue.increment(1),
+          updatedAt:        FieldValue.serverTimestamp(),
+          lastStockSource:  'click-and-collect-cancel',
         });
       }
       t.update(ref, update);
@@ -466,7 +494,7 @@ exports.getInventoryReserveStatus = onCall(CF_OPTIONS, async ({ auth, data }) =>
     return { reserves: [], totalReservedValue: 0, pendingCount: 0 };
 
   const refs = Object.keys(reservedMap).map((pid) =>
-    db.doc(`sellers/${sellerId}/products/${pid}`)
+    db.collection('products').doc(pid)   /* canonical products — the same stock C&C now reserves */
   );
   const productSnaps = await db.getAll(...refs);
 
@@ -480,7 +508,7 @@ exports.getInventoryReserveStatus = onCall(CF_OPTIONS, async ({ auth, data }) =>
     return {
       productId:     pid,
       name:          info.name,
-      currentStock:  pd.stock ?? 0,
+      currentStock:  Number(pd.stock ?? pd.stockQty ?? pd.quantity ?? 0),
       reserved:      info.reserved,
       reservedValue,
       orders:        info.orderRefs,
