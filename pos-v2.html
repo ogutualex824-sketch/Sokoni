@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en" data-no-header="true" data-require-auth="true">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>SOKONI POS</title>
+  <script type="module" src="firebase.js"></script>
+  <style>
+    :root{
+      --bg:#050505; --card:#0f0f10; --card2:#161618; --border:rgba(255,255,255,0.08);
+      --text:#f5f5f5; --muted:rgba(255,255,255,0.45); --accent:#71ff00; --accent2:#4fc800;
+      --danger:#ff4d4d; --warn:#fb923c; --info:#38bdf8; --ok:#22c55e;
+      --nav-h:64px; --sab:env(safe-area-inset-bottom,0px); --sat:env(safe-area-inset-top,0px);
+    }
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{margin:0;background:var(--bg);color:var(--text);font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:15px}
+    body{padding-top:var(--sat);padding-bottom:calc(var(--nav-h) + var(--sab));min-height:100vh}
+    button{font-family:inherit}
+    /* ── Auth gate ── */
+    #auth-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:9999}
+    .spinner{width:34px;height:34px;border:3px solid rgba(113,255,0,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .auth-msg{color:var(--muted);font-size:14px}
+    /* ── Top bar ── */
+    .topbar{position:sticky;top:0;z-index:40;background:rgba(5,5,5,0.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);
+      display:flex;align-items:center;gap:10px;padding:10px 14px;min-height:52px}
+    .tb-back{background:none;border:none;color:var(--muted);font-size:22px;padding:6px;cursor:pointer;min-width:44px;min-height:44px}
+    .tb-title{font-weight:800;font-size:16px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .tb-shift{font-size:11px;color:var(--muted);font-weight:600;white-space:nowrap}
+    .tb-icon{background:none;border:none;color:var(--text);font-size:18px;min-width:44px;min-height:44px;cursor:pointer;position:relative}
+    /* ── Search / scan ── */
+    .searchwrap{padding:12px 14px 4px;position:relative}
+    .searchbar{display:flex;align-items:center;gap:10px;background:var(--card2);border:1px solid var(--border);border-radius:14px;padding:12px 14px}
+    .searchbar input{flex:1;background:none;border:none;color:var(--text);font-size:16px;outline:none;min-width:0}
+    .scan-inline{background:rgba(113,255,0,0.12);border:1px solid rgba(113,255,0,0.3);color:var(--accent);border-radius:10px;min-width:44px;min-height:40px;font-size:18px;cursor:pointer}
+    /* ── Primary action bar (always visible) ── */
+    .actionbar{display:flex;gap:8px;overflow-x:auto;padding:10px 14px;scrollbar-width:none}
+    .actionbar::-webkit-scrollbar{display:none}
+    .act{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:4px;background:var(--card);border:1px solid var(--border);
+      border-radius:14px;padding:10px 14px;min-width:72px;min-height:64px;color:var(--text);cursor:pointer;font-size:11px;font-weight:700}
+    .act .ico{font-size:20px}
+    .act.accent{background:rgba(113,255,0,0.1);border-color:rgba(113,255,0,0.3);color:var(--accent)}
+    .act .dot{position:absolute;top:8px;right:14px;width:8px;height:8px;border-radius:50%}
+    /* ── Tabs ── */
+    .tabs{display:flex;gap:6px;padding:6px 14px;overflow-x:auto;scrollbar-width:none}
+    .tabs::-webkit-scrollbar{display:none}
+    .tab{flex:0 0 auto;background:var(--card);border:1px solid var(--border);border-radius:20px;padding:9px 16px;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;min-height:40px}
+    .tab.active{background:var(--accent);border-color:var(--accent);color:#04120a}
+    .tab .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:6px;background:rgba(255,255,255,0.15);border-radius:9px;font-size:11px;text-align:center}
+    .tab.active .badge{background:rgba(0,0,0,0.25)}
+    /* ── Content ── */
+    .content{padding:8px 14px 24px}
+    .empty{text-align:center;padding:48px 20px;color:var(--muted)}
+    .empty .big{font-size:48px;margin-bottom:12px}
+    /* ── Order card ── */
+    .ordercard{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;margin-bottom:12px}
+    .oc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+    .oc-id{font-weight:800;font-size:15px}
+    .oc-sub{font-size:12px;color:var(--muted);margin-top:2px}
+    .oc-total{font-weight:900;font-size:17px;color:var(--accent)}
+    .oc-badge{display:inline-block;padding:4px 10px;border-radius:8px;font-size:11px;font-weight:800}
+    .oc-items{margin:8px 0;font-size:13px;color:rgba(255,255,255,0.75)}
+    .oc-item{display:flex;justify-content:space-between;padding:3px 0}
+    .oc-meta{font-size:12px;color:var(--muted);margin:6px 0}
+    .oc-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+    .btn{border:none;border-radius:12px;padding:12px 16px;font-size:14px;font-weight:800;cursor:pointer;min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:6px;flex:1;min-width:130px}
+    .btn-dispatch{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#04120a}
+    .btn-print{background:var(--card2);border:1px solid var(--border);color:var(--text)}
+    .btn-ghost{background:none;border:1px solid rgba(255,77,77,0.3);color:var(--danger);flex:0 0 auto;min-width:90px}
+    /* ── Printer panel ── */
+    .printer-panel{position:fixed;left:0;right:0;bottom:calc(var(--nav-h) + var(--sab));background:var(--card);border-top:1px solid var(--border);
+      transform:translateY(110%);transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:45;padding:16px 14px calc(16px + var(--sab));border-radius:20px 20px 0 0}
+    .printer-panel.open{transform:translateY(0)}
+    .pp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}
+    .pp-stat{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:12px;text-align:center}
+    .pp-stat .v{font-size:16px;font-weight:800}
+    .pp-stat .l{font-size:10px;color:var(--muted);margin-top:2px}
+    .pp-actions{display:flex;gap:10px}
+    /* ── Bottom nav ── */
+    .bottomnav{position:fixed;left:0;right:0;bottom:0;height:calc(var(--nav-h) + var(--sab));padding-bottom:var(--sab);
+      background:rgba(10,10,11,0.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;z-index:50}
+    .bn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);text-decoration:none;font-size:10px;font-weight:600;min-height:48px}
+    .bn .ico{font-size:19px}
+    .bn.active{color:var(--accent)}
+    /* ── Toast ── */
+    #toast{position:fixed;left:14px;right:14px;bottom:calc(var(--nav-h) + var(--sab) + 14px);z-index:60;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+    .toast{background:var(--card2);border:1px solid var(--border);border-left:4px solid var(--accent);border-radius:12px;padding:14px;font-size:14px;font-weight:600;box-shadow:0 8px 30px rgba(0,0,0,0.5);animation:slideup .25s}
+    .toast.err{border-left-color:var(--danger)} .toast.warn{border-left-color:var(--warn)}
+    @keyframes slideup{from{transform:translateY(10px);opacity:0}}
+    .section-title{font-size:13px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 2px 8px}
+  </style>
+</head>
+
+<!-- Auth gate -->
+<div id="auth-screen"><div class="spinner"></div><div class="auth-msg">Opening your POS…</div></div>
+
+<!-- Top bar -->
+<div class="topbar">
+  <button class="tb-back" onclick="history.length>1?history.back():location.href='/pos-marketplace'" aria-label="Back">&#8592;</button>
+  <div class="tb-title" id="shopName">Loading…</div>
+  <span class="tb-shift" id="shiftClock">--:--</span>
+  <button class="tb-icon" onclick="location.href='/notifications'" aria-label="Notifications">&#128276;</button>
+  <button class="tb-icon" onclick="location.href='/profile'" aria-label="Profile">&#128100;</button>
+</div>
+
+<!-- Search / scan -->
+<div class="searchwrap">
+  <div class="searchbar">
+    <span style="color:var(--muted)">&#128269;</span>
+    <input id="search" placeholder="Search orders, customer, ref…" oninput="filterOrders(this.value)" autocomplete="off">
+    <button class="scan-inline" onclick="openScanner()" aria-label="Scan barcode">&#128247;</button>
+  </div>
+</div>
+
+<!-- Primary action bar (always visible) -->
+<div class="actionbar">
+  <button class="act accent" onclick="togglePrinterPanel()"><span class="ico">&#128424;</span>Printer<span class="dot" id="prnDot" style="background:var(--muted)"></span></button>
+  <button class="act" onclick="openScanner()"><span class="ico">&#128247;</span>Scan</button>
+  <button class="act" onclick="switchTab('awaiting')"><span class="ico">&#128230;</span>Dispatch</button>
+  <button class="act" onclick="location.href='/inventory'"><span class="ico">&#10133;</span>Add Product</button>
+  <button class="act" onclick="location.href='/pos-checkout'"><span class="ico">&#128179;</span>New Sale</button>
+</div>
+
+<!-- Tabs -->
+<div class="tabs" id="tabs">
+  <button class="tab active" data-tab="pending" onclick="switchTab('pending')">New <span class="badge" id="cnt-pending">0</span></button>
+  <button class="tab" data-tab="awaiting" onclick="switchTab('awaiting')">Awaiting Rider <span class="badge" id="cnt-awaiting">0</span></button>
+  <button class="tab" data-tab="ready" onclick="switchTab('ready')">Ready/Pickup <span class="badge" id="cnt-ready">0</span></button>
+  <button class="tab" data-tab="collected" onclick="switchTab('collected')">Done <span class="badge" id="cnt-collected">0</span></button>
+</div>
+
+<!-- Content -->
+<div class="content" id="orders"><div class="empty"><div class="big">&#128230;</div>Loading orders…</div></div>
+
+<!-- Printer panel -->
+<div class="printer-panel" id="printerPanel">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <strong style="font-size:15px">&#128424; Printer</strong>
+    <button onclick="togglePrinterPanel()" style="background:none;border:none;color:var(--muted);font-size:20px;min-height:44px;min-width:44px">&#10005;</button>
+  </div>
+  <div class="pp-grid">
+    <div class="pp-stat"><div class="v" id="prnStatus">—</div><div class="l">Status</div></div>
+    <div class="pp-stat"><div class="v" id="prnPaper">—</div><div class="l">Paper</div></div>
+    <div class="pp-stat"><div class="v" id="prnModel">P58E</div><div class="l">Model</div></div>
+  </div>
+  <div class="pp-actions">
+    <button class="btn btn-dispatch" onclick="testPrint()">&#129514; Test Print</button>
+    <button class="btn btn-print" onclick="reconnectPrinter()">&#128257; Reconnect</button>
+  </div>
+</div>
+
+<!-- Bottom nav -->
+<nav class="bottomnav">
+  <a class="bn active" href="/pos-v2"><span class="ico">&#128722;</span>POS</a>
+  <a class="bn" href="#" onclick="switchTab('pending');return false"><span class="ico">&#128220;</span>Orders</a>
+  <a class="bn" href="#" onclick="switchTab('awaiting');return false"><span class="ico">&#128666;</span>Dispatch</a>
+  <a class="bn" href="/inventory"><span class="ico">&#128230;</span>Inventory</a>
+  <a class="bn" href="/pos-crm-pro"><span class="ico">&#128101;</span>Customers</a>
+  <a class="bn" href="/pos-reports"><span class="ico">&#128202;</span>More</a>
+</nav>
+
+<div id="toast"></div>
+
+<!-- Printer stack (reused, verified working) -->
+<script src="/sokoni-universal-printer.js" defer></script>
+<script src="/sokoni-bluetooth-printer.js" defer></script>
+
+<script type="module">
+import { initializeApp, getApps } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
+import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
+import { getFirestore, collection, query, where, onSnapshot } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js';
+import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
+
+const FB_CFG = window.SOKONI_CONFIG || { apiKey:'AIzaSyDt_FRoTdE5OpfPhLB0DApIm7p-I45hzVE', authDomain:'auth.mysokoni.co.ke', projectId:'sokoni-aeb26', storageBucket:'sokoni-aeb26.firebasestorage.app', messagingSenderId:'24799054989', appId:'1:24799054989:web:e1cf6ca8c281bf1abf26c4' };
+/* Shared DEFAULT app → shares the ONE logged-in session (fixes the named-app "verifying" hang). */
+const app  = getApps().find(a=>a.name==='[DEFAULT]') || getApps()[0] || initializeApp(FB_CFG);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+const fns  = getFunctions(app, 'us-central1');
+const CF   = (n) => httpsCallable(fns, n);
+
+let _uid=null, _sellerId=null, _gate=false;
+let _byStatus={ pending:[], ready:[], collected:[] };
+let _tab='pending', _search='';
+
+function _resolveUser(){
+  try{ if(auth.currentUser) return auth.currentUser; }catch(_){}
+  try{ if(window.firebaseAuth&&window.firebaseAuth.currentUser) return window.firebaseAuth.currentUser; }catch(_){}
+  try{ if(typeof firebase!=='undefined'&&firebase.auth&&firebase.auth().currentUser) return firebase.auth().currentUser; }catch(_){}
+  return null;
+}
+async function _proceed(user){
+  if(_gate||!user) return; _gate=true; _uid=user.uid;
+  try{ const t=await Promise.race([user.getIdTokenResult(), new Promise((_,r)=>setTimeout(()=>r(0),4000))]); _sellerId=t.claims?.sellerId||_uid; }
+  catch{ _sellerId=_uid; }
+  try{ const u=JSON.parse(localStorage.getItem('sokoniUser')||'null'); document.getElementById('shopName').textContent=(u&&(u.shopName||u.name))||'My Shop'; }catch(_){ document.getElementById('shopName').textContent='My Shop'; }
+  document.getElementById('auth-screen').style.display='none';
+  _startClock(); _attach();
+}
+onAuthStateChanged(auth, u=>{ if(u) _proceed(u); });
+let _tries=0; const _poll=setInterval(()=>{ if(_gate){clearInterval(_poll);return;} const u=_resolveUser(); if(u){clearInterval(_poll);_proceed(u);} else if(++_tries>=16){ clearInterval(_poll); const m=document.querySelector('.auth-msg'); if(m) m.innerHTML='Session not found. <a href="/login.html?redirect=pos-v2.html" style="color:var(--info)">Sign in</a>'; } }, 500);
+
+function _startClock(){ const el=document.getElementById('shiftClock'); const tick=()=>{ try{ el.textContent='Shift '+new Date().toLocaleTimeString('en-KE',{hour:'2-digit',minute:'2-digit',hour12:false}); }catch(_){} }; tick(); setInterval(tick,30000); }
+
+/* Orders: same source as the merchant POS — sellers/{id}/clickAndCollect, no orderBy (index-free). */
+function _attach(){
+  ['pending','ready','collected'].forEach(st=>{
+    const q=query(collection(db,'sellers',_sellerId,'clickAndCollect'), where('status','==',st));
+    onSnapshot(q, snap=>{
+      _byStatus[st]=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>_ms(b.createdAt)-_ms(a.createdAt));
+      _recount(); render();
+    }, err=>{ console.error('orders',st,err); toast('Feed error: '+(err.message||err),'err'); });
+  });
+}
+const _ms=v=>(v&&(v.toMillis?v.toMillis():(v.seconds?v.seconds*1000:0)))||0;
+function _recount(){
+  const pend=_byStatus.pending, ready=_byStatus.ready;
+  const awaiting=ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
+  const pickup=ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
+  set('cnt-pending',pend.length); set('cnt-awaiting',awaiting.length); set('cnt-ready',pickup.length); set('cnt-collected',_byStatus.collected.length);
+}
+function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
+function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+const kes=n=>'KES '+Math.round(Number(n)||0).toLocaleString();
+
+function _listFor(tab){
+  if(tab==='pending') return _byStatus.pending;
+  if(tab==='awaiting') return _byStatus.ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
+  if(tab==='ready') return _byStatus.ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
+  return _byStatus.collected;
+}
+function render(){
+  const el=document.getElementById('orders'); let list=_listFor(_tab);
+  if(_search){ const q=_search.toLowerCase(); list=list.filter(o=>((o.id||'')+ (o.customerName||o.buyerName||'')+(o.customerPhone||'')).toLowerCase().includes(q)); }
+  if(!list.length){ el.innerHTML='<div class="empty"><div class="big">&#128230;</div>No orders here yet.</div>'; return; }
+  el.innerHTML=list.map(o=>_card(o)).join('');
+  el.querySelectorAll('[data-ready]').forEach(b=>b.onclick=()=>markReady(b.getAttribute('data-ready'),b));
+  el.querySelectorAll('[data-print]').forEach(b=>b.onclick=()=>printReceipt(b.getAttribute('data-print')));
+  el.querySelectorAll('[data-collect]').forEach(b=>b.onclick=()=>markCollected(b.getAttribute('data-collect'),b));
+}
+function _card(o){
+  const ff=o.fulfillmentType||'delivery';
+  const items=Array.isArray(o.items)?o.items:[];
+  const badge = o.status==='pending' ? '<span class="oc-badge" style="background:rgba(56,189,248,0.15);color:var(--info)">&#9679; Paid</span>'
+    : o.status==='ready' ? (ff==='pickup' ? '<span class="oc-badge" style="background:rgba(56,189,248,0.15);color:var(--info)">&#127978; Ready for Pickup</span>' : '<span class="oc-badge" style="background:rgba(251,146,60,0.15);color:var(--warn)">&#128666; Awaiting Rider</span>')
+    : '<span class="oc-badge" style="background:rgba(34,197,94,0.15);color:var(--ok)">&#10003; Done</span>';
+  const readyLabel = ff==='pickup' ? '&#127978; Ready for Pickup' : '&#128666; Ready for Dispatch';
+  let actions='';
+  if(o.status==='pending') actions=`<button class="btn btn-dispatch" data-ready="${_esc(o.id)}">${readyLabel}</button><button class="btn btn-print" data-print="${_esc(o.id)}">&#128424; Print</button>`;
+  else if(o.status==='ready') actions=`<button class="btn btn-print" data-print="${_esc(o.id)}">&#128424; Print Docket</button>`+(ff==='pickup'?`<button class="btn btn-dispatch" data-collect="${_esc(o.id)}">&#10003; Collected</button>`:'');
+  else actions=`<button class="btn btn-print" data-print="${_esc(o.id)}">&#128424; Reprint</button>`;
+  return `<div class="ordercard">
+    <div class="oc-top"><div><div class="oc-id">${_esc(String(o.id).slice(0,12))}</div><div class="oc-sub">${_esc(o.customerName||o.buyerName||'Customer')} · ${badge}</div></div><div class="oc-total">${kes(o.total)}</div></div>
+    <div class="oc-items">${items.length?items.map(it=>`<div class="oc-item"><span>${_esc(it.name||'Item')} ×${_esc(it.qty||1)}</span><span>${kes(it.price||it.unitPrice||0)}</span></div>`).join(''):'<div class="oc-sub">No item details</div>'}</div>
+    ${ff!=='pickup'&&o.deliveryAddress?`<div class="oc-meta">&#128205; ${_esc(String(o.deliveryAddress).slice(0,60))}</div>`:''}
+    <div class="oc-actions">${actions}</div></div>`;
+}
+
+/* ── Ready for Dispatch / Pickup (server creates dispatch job + notifies buyer; print is separate) ── */
+async function markReady(orderId, btn){
+  if(btn){ btn.disabled=true; btn.innerHTML='<span class="spinner" style="width:16px;height:16px;border-width:2px"></span> Working…'; }
+  try{
+    await CF('updateClickAndCollectStatus')({ sellerId:_sellerId, orderId, status:'ready' });
+    const o=(_byStatus.pending||[]).find(x=>x.id===orderId)||{};
+    toast((o.fulfillmentType==='pickup')?'🏪 Ready for pickup — customer notified':'🛵 Sent to riders + customer notified');
+  }catch(e){ console.error(e); toast('Failed: '+(e.message||e),'err'); if(btn){ btn.disabled=false; btn.innerHTML='&#128666; Ready for Dispatch'; } }
+}
+async function markCollected(orderId, btn){
+  if(btn){ btn.disabled=true; btn.textContent='…'; }
+  try{ await CF('updateClickAndCollectStatus')({ sellerId:_sellerId, orderId, status:'collected' }); toast('✅ Marked collected'); }
+  catch(e){ toast('Failed: '+(e.message||e),'err'); if(btn){ btn.disabled=false; btn.textContent='✓ Collected'; } }
+}
+
+/* ── Printer (reused stack) ── */
+function _P(){ return window.P58EPrinter; }
+async function testPrint(){
+  const SP=window.SokoniPrinter, P=_P();
+  if(!SP||!SP.print){ toast('Printer stack loading — try again','warn'); return; }
+  if(!P||!P.isConnected){ try{ if(P&&P.requestAndPair) await P.requestAndPair(); else if(P&&P.autoConnect) await P.autoConnect(); }catch(_){} }
+  if(!P||!P.isConnected){ toast('Printer not connected — tap Reconnect','warn'); _refreshPrinter(); return; }
+  try{ await SP.print('custom',{ build(enc,W){ const c=s=>{s=String(s).slice(0,W);return ' '.repeat(Math.max(0,Math.floor((W-s.length)/2)))+s;}; enc.text(c('KASS SHOP')).lf(); enc.text(c('POS Test Print')).lf(); enc.text('-'.repeat(W)).lf(); enc.text(c(new Date().toLocaleString('en-KE'))).lf(); enc.text(c('Printer OK ✓')).lf(); enc.lf();enc.lf(); } }); toast('🧾 Test printed'); }
+  catch(e){ toast('Print failed: '+(e.message||e),'err'); }
+  _refreshPrinter();
+}
+async function reconnectPrinter(){ const P=_P(); try{ if(P&&P.requestAndPair) await P.requestAndPair(); else if(P&&P.autoConnect) await P.autoConnect(); toast('Printer connection attempted'); }catch(e){ toast('Reconnect failed: '+(e.message||e),'err'); } _refreshPrinter(); }
+async function printReceipt(orderId){
+  var all=[].concat(_byStatus.pending,_byStatus.ready,_byStatus.collected); var o=all.find(x=>x.id===orderId);
+  if(!o){ toast('Order not found','err'); return; }
+  const SP=window.SokoniPrinter, P=_P();
+  if(!SP||!SP.print){ toast('Printer stack loading','warn'); return; }
+  if(!P||!P.isConnected){ toast('Printer offline — receipt saved','warn'); return; }
+  const items=Array.isArray(o.items)?o.items:[], total=Math.round(Number(o.total)||0), sub=Math.round(Number(o.subtotal||total)), del=Math.max(0,total-sub), ff=o.fulfillmentType||'delivery';
+  try{ await SP.print('custom',{ build(enc,W){ const dash='-'.repeat(W), c=s=>{s=String(s).slice(0,W);return ' '.repeat(Math.max(0,Math.floor((W-s.length)/2)))+s;}, row=(l,r)=>{r=String(r).slice(0,W-1);return String(l).slice(0,W-r.length-1).padEnd(W-r.length-1)+' '+r;};
+    enc.text(c('KASS SHOP')).lf(); enc.text(c('SOKONI Receipt')).lf(); enc.text(dash).lf();
+    enc.text(row('Receipt',String(o.id).slice(0,W-9))).lf(); enc.text(row('Fulfillment',ff==='pickup'?'Pickup':'Delivery')).lf();
+    if(ff!=='pickup'&&o.deliveryAddress) enc.text(row('Deliver to',String(o.deliveryAddress).slice(0,W-12))).lf();
+    if(ff!=='pickup'&&(o.customerPhone||o.buyerPhone)) enc.text(row('Phone',String(o.customerPhone||o.buyerPhone))).lf();
+    enc.text(dash).lf(); items.forEach(it=>enc.text(row((it.qty||1)+' x '+String(it.name||'Item').slice(0,W-13),'KES '+Number(it.price||it.unitPrice||0))).lf());
+    enc.text(dash).lf(); enc.text(row('Subtotal','KES '+sub)).lf(); if(del>0) enc.text(row('Delivery','KES '+del)).lf(); enc.text(row('TOTAL PAID','KES '+total)).lf();
+    enc.text(dash).lf(); enc.text(c('Paid via M-PESA')).lf(); enc.text(c('Thank you!')).lf(); enc.lf();enc.lf(); } }); toast('🧾 Printed '+String(o.id).slice(0,10)); }
+  catch(e){ toast('Print failed: '+(e.message||e),'err'); }
+}
+function _refreshPrinter(){
+  const P=_P(); const on=!!(P&&P.isConnected);
+  const dot=document.getElementById('prnDot'); if(dot) dot.style.background=on?'var(--ok)':'var(--danger)';
+  set('prnStatus',on?'🟢 Connected':'🔴 Offline'); set('prnPaper',on?'OK':'—');
+}
+setInterval(_refreshPrinter, 3000);
+window.addEventListener('load', ()=>{ setTimeout(()=>{ const P=_P(); if(P&&P.autoConnect&&!P.isConnected){ P.autoConnect().then(_refreshPrinter).catch(()=>{}); } _refreshPrinter(); }, 1500); });
+
+/* ── Scanner ── */
+function openScanner(){ if(window.SokoniPrinter&&window.P58EPrinter){} toast('Scanner: point the camera at a barcode in New Sale','warn'); location.href='/pos-checkout#scan'; }
+
+/* ── UI plumbing ── */
+function switchTab(t){ _tab=t; document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.getAttribute('data-tab')===t)); render(); window.scrollTo({top:0,behavior:'smooth'}); }
+function filterOrders(v){ _search=v||''; render(); }
+function togglePrinterPanel(){ document.getElementById('printerPanel').classList.toggle('open'); _refreshPrinter(); }
+function toast(msg,kind){ const box=document.getElementById('toast'); const t=document.createElement('div'); t.className='toast'+(kind==='err'?' err':kind==='warn'?' warn':''); t.textContent=msg; box.appendChild(t); setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); }, 3200); }
+
+window.switchTab=switchTab; window.filterOrders=filterOrders; window.togglePrinterPanel=togglePrinterPanel;
+window.testPrint=testPrint; window.reconnectPrinter=reconnectPrinter; window.openScanner=openScanner;
+</script>
+<script src="/sw-register.js" defer></script>
+</body>
+</html>
