@@ -463,7 +463,7 @@
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('today')">Today</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('week')">Week</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.reports.setRange('month')">Month</button>
-        <button class="inv-btn inv-btn-outline" onclick="window.open('pos-reports.html','_blank')" title="Full Analytics Dashboard">📊 Full Dashboard</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab('reports')" title="Full Analytics Dashboard">📊 Full Dashboard</button>
       </div>
       <div class="inv-tabs" style="margin:0;padding:0 12px;border-bottom:1px solid var(--border)">
         <button class="inv-tab rep-subtab active" data-subtab="summary" onclick="SPos.reports.switchSubTab('summary')">Summary</button>
@@ -478,7 +478,7 @@
         <input class="inv-search" id="cust-search" placeholder="Search customers..." oninput="SPos._debouncedCustSearch(this.value)">
         <button class="inv-btn inv-btn-green" onclick="SPos.customers.addDialog()">+ Add Customer</button>
         <button class="inv-btn inv-btn-outline" onclick="SPos.customers.exportCSV()">Export</button>
-        <button class="inv-btn inv-btn-outline" onclick="window.open('pos-customers.html','_blank')" title="Full Customer Manager">👥 Full Manager</button>
+        <button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab('customers')" title="Full Customer Manager">👥 Full Manager</button>
       </div>
       <div class="inv-body" id="customers-body"><div class="pos-empty"><div class="empty-icon">👤</div><p>No customers yet</p></div></div>
     </div>
@@ -1964,10 +1964,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const shortcutBar = document.createElement('div');
     shortcutBar.style.cssText = 'display:flex;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap';
     shortcutBar.innerHTML = [
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-inventory.html\',\'_blank\')">📦 Full Inventory Manager</button>',
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-inventory-intelligence.html\',\'_blank\')" style="border-color:rgba(113,255,0,0.4);color:#71ff00">🧠 Inventory Intelligence</button>',
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-suppliers.html\',\'_blank\')">🏭 Suppliers &amp; POs</button>',
-      '<button class="inv-btn inv-btn-outline" onclick="window.open(\'pos-reports.html\',\'_blank\')">📊 Full Reports</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab(\'inventory\')">📦 Full Inventory Manager</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="location.href=\'pos-inventory-intelligence\'" style="border-color:rgba(113,255,0,0.4);color:#71ff00">🧠 Inventory Intelligence</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab(\'inventory\');SPos.inv.showTab(\'suppliers\')">🏭 Suppliers &amp; POs</button>',
+      '<button class="inv-btn inv-btn-outline" onclick="SPos.ui.switchTab(\'reports\')">📊 Full Reports</button>',
     ].join('');
     invPanel.insertBefore(shortcutBar, invPanel.firstChild);
   }

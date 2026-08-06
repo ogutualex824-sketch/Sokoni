@@ -162,6 +162,9 @@ const SPos = (function () {
     /* Boot terminal management */
     if (window.PosTerminals) await PosTerminals.init();
 
+    /* Wire the navigation service: URL-hash deep-linking + Back/Forward. */
+    nav.init();
+
     state.ready = true;
     if (window.PosPlugins) PosPlugins.emit('boot:after', { settings: state.settings });
   }
@@ -353,7 +356,17 @@ const SPos = (function () {
      UI
   ═══════════════════════════════════════════════════════════ */
   const ui = {
-    switchTab(tab) {
+    switchTab(tab, opts) {
+      opts = opts || {};
+      if (!tab) return;
+      const prev = state.currentTab;
+      /* No-op guard: re-selecting the active view does no work — prevents redundant
+         re-renders, listener churn and history spam on repeated switching. */
+      if (prev === tab && !opts.force) return;
+      /* Tear down the view being left. One-shot IndexedDB readers register nothing;
+         any future view that opens a live listener MUST SPos.nav.registerTeardown()
+         its unsub here so repeated switching can never accumulate listeners. */
+      if (prev && prev !== tab) nav._runTeardown(prev);
       state.currentTab = tab;
       document.querySelectorAll('.pos-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
       document.querySelectorAll('.pos-panel').forEach(p => p.classList.remove('active'));
@@ -377,7 +390,13 @@ const SPos = (function () {
       if (tab === 'audit' && window.PosAudit) {
         PosAudit.renderHub('audit-hub-body');
       }
+      /* Deep-link + predictable Back/Forward. pushState (not location.hash=) so this
+         never re-enters via hashchange; popstate restores the view on Back/Forward. */
+      if (!opts.fromHistory) {
+        try { const h = '#' + tab; if (location.hash !== h) history.pushState({ tab }, '', h); } catch (_) {}
+      }
       if (window.PosPlugins) PosPlugins.emit('tab:switch', { tab });
+      nav._analytics(tab, prev);
     },
 
     async loadCategories() {
@@ -3087,8 +3106,47 @@ const SPos = (function () {
   /* ═══════════════════════════════════════════════════════════
      PUBLIC API
   ═══════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════
+     NAVIGATION SERVICE — the single path for all in-shell POS navigation.
+     ui.switchTab() is the router; `nav` owns view lifecycle: teardown of the
+     view being left, URL-hash deep-linking, Back/Forward, and a nav analytics
+     event. Every future POS surface should be a lazily-loaded panel reached via
+     this service — never a new window/tab.
+  ═══════════════════════════════════════════════════════════ */
+  const nav = {
+    KNOWN: ['pos', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'],
+    _teardowns: {},
+    /* A panel that opens a live listener registers its unsub here so leaving the
+       panel releases it — the structural guarantee against listener/memory growth. */
+    registerTeardown(tab, fn) {
+      if (typeof fn !== 'function') return;
+      (this._teardowns[tab] = this._teardowns[tab] || []).push(fn);
+    },
+    _runTeardown(tab) {
+      const fns = this._teardowns[tab];
+      if (!fns || !fns.length) return;
+      this._teardowns[tab] = [];
+      fns.forEach(fn => { try { fn(); } catch (_) {} });
+    },
+    _analytics(tab, from) {
+      try { if (window.SokoniAnalytics && typeof SokoniAnalytics.track === 'function') SokoniAnalytics.track('pos_nav', { tab, from }); } catch (_) {}
+    },
+    /* Semantic alias for switchTab — the single navigate entry-point. */
+    go(tab) { ui.switchTab(tab); },
+    init() {
+      /* Back/Forward: restore the view named in the URL, without pushing a new entry. */
+      window.addEventListener('popstate', () => {
+        const t = (location.hash || '').replace(/^#/, '') || 'pos';
+        if (nav.KNOWN.includes(t)) ui.switchTab(t, { fromHistory: true });
+      });
+      /* Deep-link on boot: honour an incoming #view (Phase-4 standalone→shell redirects rely on this). */
+      const boot = (location.hash || '').replace(/^#/, '');
+      if (boot && nav.KNOWN.includes(boot) && boot !== 'pos') ui.switchTab(boot, { fromHistory: true });
+    },
+  };
+
   return {
-    state, wizard, ui, products, cart, payment, mpesa,
+    state, wizard, ui, nav, products, cart, payment, mpesa,
     barcode, inv, reports, customers, cashier, shift,
     settings, profile, sync, data, modal, printerSetup, bos,
     sales, po, cats, split,
