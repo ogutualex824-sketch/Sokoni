@@ -275,9 +275,13 @@
   <div id="driverDashboard">
 
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;">
-      <div>
-        <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back, Driver! 🛵</h2>
-        <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
+      <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+        <div id="driverAvatar" style="display:none;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#71ff00,#4fc800);color:#04120a;font-weight:900;font-size:20px;align-items:center;justify-content:center;flex:0 0 auto;background-size:cover;background-position:center;"></div>
+        <div style="min-width:0;">
+          <div id="driverSignedChip" style="display:none;font-size:11px;font-weight:800;color:#71ff00;margin-bottom:2px;">🟢 Signed in</div>
+          <h2 style="font-size:20px;font-weight:900;color:white;" id="driverGreet">Welcome back, Driver! 🛵</h2>
+          <p style="color:rgba(255,255,255,0.4);font-size:13px;" id="driverZone"></p>
+        </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         <button type="button" id="driverLoginBtn" onclick="driverAuthToggle()" style="display:none;padding:10px 18px;background:rgba(113,255,0,0.14);border:1px solid rgba(113,255,0,0.35);color:#71ff00;font-weight:800;font-size:13px;border-radius:10px;cursor:pointer;font-family:inherit;">🔑 Driver Login</button>
@@ -1135,16 +1139,29 @@ function showDriverDashboard(){
     pickup:"Pickup 🛻", canter:"Canter 🚛", lorry:"Lorry 🚚"
   }[v] || v;
 
+  /* ── Signed-in identity card — avatar + "Signed in" chip + name so the hub never reads as guest ── */
+  const _esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const _firstName = String(currentDriver.name||'Rider').trim().split(/\s+/)[0] || 'Rider';
+  const _rating = Number(currentDriver.rating||5.0);
+  const _av = document.getElementById("driverAvatar");
+  if(_av){
+    _av.style.display="flex";
+    const ph = currentDriver.photo || currentDriver.avatar || currentDriver.photoURL || "";
+    if(/^https?:\/\/[^'")\s]+$/.test(ph)){ _av.style.backgroundImage="url('"+ph+"')"; _av.textContent=""; }
+    else { _av.style.backgroundImage=""; _av.textContent=_riderInitials(currentDriver.name); }
+  }
+  const _chip=document.getElementById("driverSignedChip"); if(_chip) _chip.style.display="";
+
   document.getElementById("driverGreet").innerHTML =
-    `Welcome, ${currentDriver.name}! ${vEmoji}<span class="vehicle-badge ${vBadgeCls}">${vLabel}</span>`;
+    `Hello ${_esc(_firstName)} 👋 ${vEmoji}<span class="vehicle-badge ${vBadgeCls}">${vLabel}</span>`;
   const capacityStr = currentDriver.cargoTonne ? ` · ${currentDriver.cargoTonne}t capacity` : "";
   const cargoTypeStr = currentDriver.cargoType ? ` · ${currentDriver.cargoType}` : "";
   /* Verified if explicitly approved OR in a working state — toggleOnline writes status
      'active'/'offline', so keying only on 'approved' left verified riders stuck on "Pending". */
   const _verified = currentDriver.approved === true
     || ["approved","active","online","verified"].includes(String(currentDriver.status||"").toLowerCase());
-  document.getElementById("driverZone").textContent =
-    `Zone: ${currentDriver.zone||"All"}${capacityStr}${cargoTypeStr} · ${_verified?"✅ Verified":"⏳ Pending Review"}`;
+  document.getElementById("driverZone").innerHTML =
+    `<strong style="color:${_verified?'#71ff00':'#fbbf24'}">${_verified?"✅ Verified Rider":"⏳ Pending Review"}</strong> · 📍 ${_esc(currentDriver.zone||"All")}${capacityStr}${cargoTypeStr} · ⭐ ${_rating.toFixed(1)}`;
 
   /* Show AI fuel tracker for petrol/diesel vehicles */
   const fuelPanel = document.getElementById("fuelPricePanel");
@@ -1705,18 +1722,25 @@ function _showDriverAccountGate(mode, detail){
   var z=document.getElementById("driverZone");
   var apply=document.getElementById("applySection");
   var topApply=document.getElementById("applyDriverTopBtn");
+  var av=document.getElementById("driverAvatar"), chip=document.getElementById("driverSignedChip");
   if(topApply) topApply.style.display = (mode==='apply') ? "" : "none";
   if(mode==='apply'){
     if(lb) lb.style.display="none";
-    if(g) g.textContent="You're signed in — become a driver 🛵";
-    if(z) z.textContent="Tap “Apply to Become a Driver” to start delivering.";
+    /* Signed in, not yet a rider — SHOW the account identity so it never reads as a guest. */
+    var acct=_signedInAccount();
+    if(av){ av.style.display="flex"; if(/^https?:\/\/[^'")\s]+$/.test(acct.photo)){ av.style.backgroundImage="url('"+acct.photo+"')"; av.textContent=""; } else { av.style.backgroundImage=""; av.textContent=_riderInitials(acct.name); } }
+    if(chip) chip.style.display="";
+    if(g) g.textContent="Hello "+(String(acct.name||'there').split(/\s+/)[0])+" 👋";
+    if(z) z.textContent="You're signed in — become a rider to start delivering.";
     if(apply){ apply.style.display="block"; }
   } else if(mode==='loading'){
     if(lb) lb.style.display="none";
+    if(av) av.style.display="none"; if(chip) chip.style.display="none";
     if(g) g.textContent="Loading your driver profile…";
     if(z) z.textContent=detail||"One moment.";
-  } else { /* signin */
+  } else { /* signin — genuine guest */
     if(lb){ lb.style.display=""; lb.textContent="🔑 Sign In"; }
+    if(av) av.style.display="none"; if(chip) chip.style.display="none";
     if(g) g.textContent="🔑 Sign in to drive";
     if(z) z.textContent="Use your SOKONI account — one login for everything.";
   }
@@ -1736,6 +1760,18 @@ function _gotoApply(){
   if(a){ a.style.display='block'; try{ a.scrollIntoView({behavior:'smooth',block:'center'}); }catch(_){} }
 }
 window._gotoApply = _gotoApply;
+
+/* Avatar initials from a name (fallback when there's no photo). */
+function _riderInitials(name){
+  var p=String(name||'R').trim().split(/\s+/).filter(Boolean);
+  return ((p[0]||'R').charAt(0)+(p.length>1?p[p.length-1].charAt(0):'')).toUpperCase();
+}
+/* The signed-in account identity (name/photo) — used to show a non-rider they ARE signed in. */
+function _signedInAccount(){
+  try{ var u=(window.firebaseAuth&&window.firebaseAuth.currentUser)||null; if(u) return {name:u.displayName||u.email||'You',photo:u.photoURL||''}; }catch(_){}
+  try{ var s=JSON.parse(localStorage.getItem('sokoniUser')||'null'); if(s) return {name:s.name||s.displayName||s.email||'You',photo:s.photoURL||s.avatar||''}; }catch(_){}
+  return {name:'You',photo:''};
+}
 
 /* Identity-based entry: signed-in account → its rideDrivers/{uid} record → dashboard (no PIN).
    Signed in but no rider record → apply. Not signed in → account sign-in. */

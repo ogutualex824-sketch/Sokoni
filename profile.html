@@ -3358,10 +3358,18 @@ function renderHeaderCard(){
   var avatarEl = document.getElementById('upAvatar');
   if(avatarEl) window.SokoniAvatar.bind(avatarEl, _user);
 
-  /* Cover */
-  if(_user.coverUrl){
-    var coverImg = document.getElementById('upCoverImg');
-    if(coverImg){ coverImg.src = _user.coverUrl; coverImg.style.display='block'; }
+  /* Cover — a real uploaded cover fills the area; otherwise every new profile defaults to the
+     SOKONI logo (centered/contained on the dark brand area), matching the logo avatar default. */
+  var coverImg = document.getElementById('upCoverImg');
+  if(coverImg){
+    if(_user.coverUrl){
+      coverImg.src = _user.coverUrl; coverImg.style.display='block';
+      coverImg.style.objectFit='cover'; coverImg.style.background=''; coverImg.style.padding='';
+    } else {
+      coverImg.src = '/assets/logosokoni.png'; coverImg.style.display='block';
+      coverImg.style.objectFit='contain'; coverImg.style.background='#050505'; coverImg.style.padding='22px';
+      coverImg.onerror = function(){ this.style.display='none'; };
+    }
   }
 
   /* Verified */
