@@ -134,6 +134,7 @@
 <div class="topbar">
   <button class="tb-back" onclick="history.length>1?history.back():location.href='/pos-marketplace'" aria-label="Back">&#8592;</button>
   <div class="tb-title" id="shopName">Loading…</div>
+  <span id="liveDot" title="Live sync" style="width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto;transition:transform .2s,background .3s"></span>
   <span class="tb-shift" id="shiftClock">--:--</span>
   <button class="tb-icon" onclick="location.href='/notifications'" aria-label="Notifications">&#128276;</button>
   <button class="tb-icon" onclick="location.href='/profile'" aria-label="Profile">&#128100;</button>
@@ -184,6 +185,7 @@
     <button class="btn btn-print" onclick="reconnectPrinter()">&#128257; Reconnect</button>
   </div>
   <div id="prnHint" style="margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5;text-align:center"></div>
+  <a href="/pos-hardware-wizard" style="display:block;margin-top:12px;text-align:center;font-size:13px;font-weight:700;color:var(--muted);text-decoration:none">&#128295; Manage devices — printer, scanner, drawer &rsaquo;</a>
 </div>
 
 <!-- Bottom nav -->
@@ -316,12 +318,22 @@ function _attach(){
     const q=query(collection(db,'sellers',_sellerId,'clickAndCollect'), where('status','==',st));
     onSnapshot(q, snap=>{
       if(!_ordersSeen){ _ordersSeen=true; try{ _gstep('orders','ok'); }catch(_){} }
+      _pulseLive(true);
       _byStatus[st]=snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>_ms(b.createdAt)-_ms(a.createdAt));
       _recount(); render();
-    }, err=>{ console.error('orders',st,err); try{ _gstep('orders','warn'); }catch(_){} toast('Feed error: '+(err.message||err),'err'); });
+    }, err=>{ console.error('orders',st,err); _pulseLive(false); try{ _gstep('orders','warn'); }catch(_){} toast('Feed error: '+(err.message||err),'err'); });
   });
 }
 const _ms=v=>(v&&(v.toMillis?v.toMillis():(v.seconds?v.seconds*1000:0)))||0;
+/* Live-sync indicator (Sprint 4): green + a quick pulse on every real-time order update; red if
+   the feed drops. Makes the "changes appear within seconds" guarantee visible to the merchant. */
+let _liveTimer=null;
+function _pulseLive(ok){
+  const d=document.getElementById('liveDot'); if(!d) return;
+  d.style.background = ok===false ? 'var(--danger)' : 'var(--ok)';
+  d.title = ok===false ? 'Sync offline — reconnecting' : 'Live — synced just now';
+  if(ok!==false){ d.style.transform='scale(1.9)'; clearTimeout(_liveTimer); _liveTimer=setTimeout(()=>{ d.style.transform='scale(1)'; }, 220); }
+}
 function _recount(){
   const pend=_byStatus.pending, ready=_byStatus.ready;
   const awaiting=ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
