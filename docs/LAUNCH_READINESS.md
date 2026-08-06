@@ -85,11 +85,30 @@ automated.
    so `dispatch/notify failed` logs >3× in 5 min → confirm alert + correlation id in logs → recover
    → confirm auto-resolve.
 
-### Backup restore drill (Task 3)
-- Latest backup `fe8bdbea…` (snapshot `2026-08-05T12:36:49Z`) restored to a **new** `restore-drill`
-  database (non-destructive) on `2026-08-06`. Duration + doc-count verification:
-  `node scripts/qa/verify-restore-drill.js`. **[results filled below once verified]**
-- Cleanup: `gcloud firestore databases delete restore-drill` after verification.
+### Backup restore drill (Task 3) — ✅ PASSED `2026-08-06`
+- Backup `fe8bdbea…` (snapshot `2026-08-05T12:36:49Z`) restored to a **new** `restore-drill`
+  database (non-destructive; production untouched).
+- **Restore duration: ~51.8 minutes** (10:07:30Z → 10:59:19Z). *Restore is slow — factor into any
+  real recovery RTO.*
+- **Integrity (`scripts/qa/verify-restore-drill.js`, restored vs production):**
+
+  | Collection | Production | Restored | Note |
+  |---|---|---|---|
+  | products | 103 | 103 | exact |
+  | orders | 5 | 5 | exact |
+  | sellers | 7 | 7 | exact |
+  | providerBookings | 4 | 4 | exact |
+  | commissionLedger | 7 | 7 | exact |
+  | users | 65 | 64 | +1 in prod since snapshot (expected) |
+  | auditLogs | 27 | 25 | +2 in prod since snapshot (expected) |
+
+  Spot check: KASS product query (`sellerUid==…`) returned results in the restored DB — **indexes +
+  queries usable**. Collections restored, data integrity matches expectations, counts reasonable.
+- Cleanup: `restore-drill` database deleted after verification.
+- **Runbook to restore for real:** `gcloud firestore backups list --location=nam5` → pick backup →
+  `gcloud firestore databases restore --source-backup=<name> --destination-database=<new-db>` →
+  wait (~50 min) → verify with the script → repoint the app or promote the DB. **Never restore over
+  `(default)` — always to a new database, then cut over.**
 
 ---
 
