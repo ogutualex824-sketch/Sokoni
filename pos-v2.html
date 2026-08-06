@@ -215,7 +215,7 @@
 <div class="sell" id="sell">
   <div class="sell-top">
     <button class="tb-back" onclick="closeSell()" aria-label="Close">&#10005;</button>
-    <input id="sellSearch" placeholder="Search products…" oninput="filterGrid(this.value)" autocomplete="off">
+    <input id="sellSearch" placeholder="Search products…" oninput="filterGrid(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();_addFirstMatch();}" autocomplete="off" enterkeyhint="done">
     <button class="scan-inline" onclick="openScanner()" aria-label="Scan">&#128247;</button>
   </div>
   <div class="sell-grid" id="sellGrid"><div class="empty" style="grid-column:1/-1"><div class="spinner"></div></div></div>
@@ -638,14 +638,42 @@ function renderGrid(){
   }).join('');
   grid.querySelectorAll('[data-add]').forEach(el=>el.onclick=()=>addToCart(el.getAttribute('data-add')));
 }
-function filterGrid(v){ _gridSearch=v||''; renderGrid(); }
+/* Debounce search (was: full grid filter+rebuild on EVERY keystroke → per-key lag). */
+let _filterT;
+function filterGrid(v){ _gridSearch=v||''; clearTimeout(_filterT); _filterT=setTimeout(renderGrid, 120); }
+/* Keyboard workflow: Enter in the product search adds the first (in-stock) match to
+   the cart, then clears + refocuses the box for rapid keyboard-only entry. Reads the
+   input value directly so a fast Enter beats the 120ms search debounce. */
+function _addFirstMatch(){
+  const inp=document.getElementById('sellSearch');
+  const q=((inp&&inp.value)||'').trim().toLowerCase();
+  if(!q) return;                                   /* nothing typed → no-op */
+  const list=_catalogue.filter(p=>p.name.toLowerCase().includes(q));
+  const pick=list.find(p=>!(p.track&&p.stock!=null&&p.stock<=0))||list[0];
+  if(!pick){ toast('No match','warn'); return; }
+  addToCart(pick.id);
+  if(inp){ inp.value=''; inp.focus(); }
+  _gridSearch=''; clearTimeout(_filterT); renderGrid();
+}
+/* Update ONLY the tapped card's qty badge instead of rebuilding the whole grid (was: full
+   renderGrid() on every product tap — tore down + re-bound every card to bump one badge). */
+function _updateCardQty(pid){
+  const grid=document.getElementById('sellGrid'); if(!grid) return;
+  let card=null; const cards=grid.querySelectorAll('.pcard[data-add]');
+  for(const c of cards){ if(c.getAttribute('data-add')===String(pid)){ card=c; break; } }
+  if(!card){ renderGrid(); return; }   /* filtered out / not present → fall back */
+  const q=_cart[pid]?_cart[pid].qty:0;
+  let badge=card.querySelector('.qbadge');
+  if(q>0){ if(!badge){ badge=document.createElement('span'); badge.className='qbadge'; card.insertBefore(badge, card.firstChild); } badge.textContent=q; }
+  else if(badge){ badge.remove(); }
+}
 function addToCart(pid){
   const p=_catalogue.find(x=>x.id===pid); if(!p) return;
   const cur=_cart[pid]?_cart[pid].qty:0;
   if(p.track&&p.stock!=null&&cur+1>p.stock){ toast('Only '+p.stock+' in stock','warn'); return; }
   _cart[pid]=_cart[pid]||{id:p.id,name:p.name,price:p.price,track:p.track,stock:p.stock,qty:0};
   _cart[pid].qty=cur+1;
-  renderGrid(); _renderCartBar();
+  _updateCardQty(pid); _renderCartBar();
   if(document.getElementById('sheet').classList.contains('open')) _renderCartSheet();
 }
 function setQty(pid,delta){
@@ -653,7 +681,7 @@ function setQty(pid,delta){
   const nq=it.qty+delta;
   if(nq<=0){ delete _cart[pid]; }
   else{ if(it.track&&it.stock!=null&&nq>it.stock){ toast('Only '+it.stock+' in stock','warn'); return; } it.qty=nq; }
-  renderGrid(); _renderCartBar();
+  _updateCardQty(pid); _renderCartBar();
   if(_cartCount()) _renderCartSheet(); else closeSheet();
 }
 const _cartArr=()=>Object.values(_cart);
@@ -693,7 +721,7 @@ function selPay(m){
   _payMethod=m;
   document.querySelectorAll('.pm').forEach(x=>x.classList.toggle('sel',x.getAttribute('data-pm')===m));
   const ex=document.getElementById('payExtra'); if(!ex) return;
-  if(m==='cash') ex.innerHTML='<input class="field" id="cashGiven" type="number" inputmode="numeric" placeholder="Cash given (optional — for change)" oninput="_calcChange()"><div id="changeOut" style="margin-top:6px;color:var(--muted);font-size:13px"></div>';
+  if(m==='cash') ex.innerHTML='<input class="field" id="cashGiven" type="number" inputmode="numeric" placeholder="Cash given (optional — for change)" oninput="_calcChange()" onkeydown="if(event.key===\'Enter\'){event.preventDefault();doCheckout();}" enterkeyhint="done"><div id="changeOut" style="margin-top:6px;color:var(--muted);font-size:13px"></div>';
   else ex.innerHTML='<div style="margin-top:8px;color:var(--muted);font-size:13px">Opens the secure M-Pesa checkout — an STK prompt is sent to the customer to approve. Your cart carries over.</div>';
 }
 function _calcChange(){ const g=Number((document.getElementById('cashGiven')||{}).value||0), t=_cartTotal(), o=document.getElementById('changeOut'); if(!o) return; o.textContent=g>0?(g>=t?('Change: '+kes(g-t)):('Short by '+kes(t-g))):''; }
@@ -820,7 +848,7 @@ function showReceiptPreview(doc,onPrint){
 window.showReceiptPreview=showReceiptPreview;
 
 window.openSell=openSell; window.closeSell=closeSell; window.loadCatalogue=loadCatalogue;
-window.filterGrid=filterGrid; window.addToCart=addToCart; window.setQty=setQty;
+window.filterGrid=filterGrid; window.addToCart=addToCart; window.setQty=setQty; window._addFirstMatch=_addFirstMatch;
 window.openCart=openCart; window.closeSheet=closeSheet; window.selPay=selPay; window._calcChange=_calcChange; window.doCheckout=doCheckout;
 
 window.switchTab=switchTab; window.filterOrders=filterOrders; window.togglePrinterPanel=togglePrinterPanel;
