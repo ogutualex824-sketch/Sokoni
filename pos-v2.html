@@ -102,6 +102,11 @@
     .pcard .stk.low{color:var(--warn)} .pcard .stk.out{color:var(--danger)}
     .pcard.oos{opacity:.45}
     .pcard .qbadge{position:absolute;top:-6px;right:-6px;background:var(--accent);color:#04120a;font-size:11px;font-weight:900;min-width:20px;height:20px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px}
+    .kpi{flex:0 0 auto;min-width:98px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:9px 12px}
+    .kpi .kv{font-size:20px;font-weight:900;line-height:1.1}
+    .kpi .kl{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:2px}
+    .kpi .ks{font-size:11px;color:var(--accent);font-weight:800;margin-top:3px}
+    #kpiStrip::-webkit-scrollbar{display:none}
     .cartbar{position:fixed;left:0;right:0;bottom:0;z-index:75;background:var(--card);border-top:1px solid var(--border);padding:12px 14px calc(12px + var(--sab));display:none}
     .cartbar.show{display:block}
     .cb-row{display:flex;align-items:center;gap:12px}
@@ -156,6 +161,14 @@
   <button class="act" onclick="switchTab('awaiting')"><span class="ico">&#128230;</span>Dispatch</button>
   <button class="act" onclick="location.href='/inventory'"><span class="ico">&#10133;</span>Add Product</button>
   <button class="act accent" onclick="openSell()"><span class="ico">&#128179;</span>New Sale</button>
+</div>
+
+<!-- Command Center: live KPI strip -->
+<div id="kpiStrip" style="display:flex;gap:8px;overflow-x:auto;padding:4px 14px 2px;scrollbar-width:none">
+  <div class="kpi"><div class="kv" id="kpiPipe">0</div><div class="kl">In pipeline</div><div class="ks" id="kpiPipeVal">KES 0</div></div>
+  <div class="kpi"><div class="kv" id="kpiAwait" style="color:var(--warn)">0</div><div class="kl">Awaiting rider</div></div>
+  <div class="kpi"><div class="kv" id="kpiReady" style="color:var(--info)">0</div><div class="kl">Ready/pickup</div></div>
+  <div class="kpi"><div class="kv" id="kpiDone" style="color:var(--ok)">0</div><div class="kl">Done</div></div>
 </div>
 
 <!-- Tabs -->
@@ -339,6 +352,17 @@ function _recount(){
   const awaiting=ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
   const pickup=ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
   set('cnt-pending',pend.length); set('cnt-awaiting',awaiting.length); set('cnt-ready',pickup.length); set('cnt-collected',_byStatus.collected.length);
+  _renderKpis();
+}
+/* Command Center KPIs — computed live from the order feed (honest: reflects the dispatch pipeline
+   currently on this device, not a fabricated all-channel total). */
+function _renderKpis(){
+  const pend=_byStatus.pending||[], ready=_byStatus.ready||[], done=_byStatus.collected||[];
+  const awaiting=ready.filter(o=>(o.fulfillmentType||'delivery')!=='pickup');
+  const pickup=ready.filter(o=>(o.fulfillmentType||'delivery')==='pickup');
+  const pipe=pend.concat(ready);
+  set('kpiPipe',pipe.length); set('kpiPipeVal',kes(pipe.reduce((s,o)=>s+(Number(o.total)||0),0)));
+  set('kpiAwait',awaiting.length); set('kpiReady',pickup.length); set('kpiDone',done.length);
 }
 function set(id,v){ const el=document.getElementById(id); if(el) el.textContent=v; }
 function _esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -374,7 +398,19 @@ function _card(o){
     <div class="oc-top"><div><div class="oc-id">${_esc(String(o.id).slice(0,12))}</div><div class="oc-sub">${_esc(o.customerName||o.buyerName||'Customer')} · ${badge}</div></div><div class="oc-total">${kes(o.total)}</div></div>
     <div class="oc-items">${items.length?items.map(it=>`<div class="oc-item"><span>${_esc(it.name||'Item')} ×${_esc(it.qty||1)}</span><span>${kes(it.price||it.unitPrice||0)}</span></div>`).join(''):'<div class="oc-sub">No item details</div>'}</div>
     ${ff!=='pickup'&&o.deliveryAddress?`<div class="oc-meta">&#128205; ${_esc(String(o.deliveryAddress).slice(0,60))}</div>`:''}
+    ${_timeline(o)}
     <div class="oc-actions">${actions}</div></div>`;
+}
+/* Sprint 9 — one fulfillment timeline every participant shares. Stage derived from the order's
+   real status; delivery and pickup follow their own tracks. */
+function _timeline(o){
+  const ff=o.fulfillmentType||'delivery';
+  const stages = ff==='pickup' ? ['Paid','Preparing','Ready','Collected'] : ['Paid','Preparing','Awaiting Rider','Delivered'];
+  const idx = o.status==='collected'?3 : o.status==='ready'?2 : o.status==='pending'?1 : 0;
+  return '<div style="display:flex;gap:4px;margin:8px 0 2px;flex-wrap:wrap">'+stages.map((s,i)=>{
+    const on=i<=idx, cur=i===idx;
+    return '<span style="font-size:9px;font-weight:800;padding:3px 7px;border-radius:8px;'+(on?'background:rgba(113,255,0,.14);color:var(--accent)':'background:var(--card2);color:var(--muted)')+'">'+(cur?'● ':'')+_esc(s)+'</span>';
+  }).join('')+'</div>';
 }
 
 /* ── Ready for Dispatch / Pickup (server creates dispatch job + notifies buyer; print is separate) ── */
