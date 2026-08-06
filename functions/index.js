@@ -5729,21 +5729,32 @@ exports.riderProfile = onRequest(
     res.set("Access-Control-Allow-Origin", req.headers.origin || "*");
     const authHeader = req.headers.authorization || "";
     if (!authHeader.startsWith("Bearer ")) { res.status(401).json({ ok: false, signedIn: false, error: "Bearer token required" }); return; }
-    let uid;
-    try { uid = (await admin.auth().verifyIdToken(authHeader.replace("Bearer ", "").slice(0, 4096))).uid; }
+    let decoded;
+    try { decoded = await admin.auth().verifyIdToken(authHeader.replace("Bearer ", "").slice(0, 4096)); }
     catch (_) { res.status(401).json({ ok: false, signedIn: false, error: "Invalid or expired token" }); return; }
+    const uid = decoded.uid;
     try {
-      const [rd, u] = await Promise.all([
-        db.collection("rideDrivers").doc(uid).get(),
-        db.collection("users").doc(uid).get(),
-      ]);
+      let rd = await db.collection("rideDrivers").doc(uid).get();
+      let riderId = uid, matchedBy = "uid";
+      /* Account-split resilience: the rider record may live on the caller's OTHER account (e.g. the
+         rider registered on the Google account but signed in with the phone account). If there's no
+         rideDrivers/{uid}, fall back to the caller's OWN verified phone — same person, safe. */
+      if (!rd.exists) {
+        const phone = decoded.phone_number || null;
+        if (phone) {
+          const q = await db.collection("rideDrivers").where("phoneNumber", "==", phone).limit(1).get();
+          if (!q.empty) { rd = q.docs[0]; riderId = q.docs[0].id; matchedBy = "phone"; }
+        }
+      }
+      const u = await db.collection("users").doc(uid).get();
       const r = rd.exists ? (rd.data() || {}) : null;
       res.json({
-        ok: true, signedIn: true, uid,
+        ok: true, signedIn: true, uid, matchedBy,
         rider: r ? {
-          id: uid, exists: true, status: r.status || null, approved: r.approved === true,
-          name: r.name || null, zone: r.zone || null, rating: r.rating || null,
-          vehicle: r.vehicle || null, cargoTonne: r.cargoTonne || null, cargoType: r.cargoType || null,
+          id: riderId, exists: true, status: r.status || null, approved: r.approved === true,
+          name: r.name || null, email: r.email || decoded.email || null,
+          zone: r.zone || null, rating: r.rating || null,
+          vehicle: r.vehicle || r.vehicleType || null, cargoTonne: r.cargoTonne || null, cargoType: r.cargoType || null,
           photo: r.photo || r.avatar || r.photoURL || null,
         } : { exists: false },
         roles: (u.exists && u.data().roles) || [],

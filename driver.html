@@ -1795,15 +1795,16 @@ async function _runDriverDiag(){
     L.push('AUTH: '+(user?'Signed In ✓':'NOT signed in ✗'));
     L.push('UID: '+(user?user.uid:'—'));
     if(user){
-      try{
-        var m=await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-        var db=window.firebaseDB;
-        var rd=await m.getDoc(m.doc(db,'rideDrivers',user.uid));
-        L.push('RIDER PROFILE: '+(rd.exists()?('Found ✓ · status='+((rd.data()||{}).status||'?')+' · approved='+((rd.data()||{}).approved)):'✗ NOT FOUND'));
-        var ud=await m.getDoc(m.doc(db,'users',user.uid));
-        L.push('ROLES: '+JSON.stringify(((ud.exists()&&ud.data().roles)||[])));
-        L.push('VIEW: '+(rd.exists()?'should show DASHBOARD':'should show APPLY gate'));
-      }catch(e){ L.push('LOOKUP ERROR: '+(e&&e.message)); }
+      var prof=await _fetchRiderProfile(user);
+      if(prof && prof.signedIn){
+        var ex=prof.rider && prof.rider.exists;
+        L.push('ENDPOINT: HTTP 200 · matchedBy='+(prof.matchedBy||'?'));
+        L.push('RIDER PROFILE: '+(ex?('Found ✓ · status='+prof.rider.status+' · approved='+prof.rider.approved+' · id='+String(prof.rider.id).slice(0,10)):'✗ NOT FOUND'));
+        L.push('ROLES: '+JSON.stringify(prof.roles||[]));
+        L.push('VIEW: '+(ex?'DASHBOARD (identity card)':'APPLY gate'));
+      } else {
+        L.push('ENDPOINT: unreachable/failed → falling back to direct Firestore (App-Check-gated)');
+      }
     }
     L.push('currentDriver: '+(currentDriver?('set ('+(currentDriver.name||'?')+')'):'null'));
     el.textContent=L.join('\n');
@@ -1830,10 +1831,14 @@ function _signedInAccount(){
 async function _fetchRiderProfile(user){
   try{
     const tok = await user.getIdToken();
+    console.log('[rider] AUTH UID', user.uid, '· email', user.email||'(none)');
     const r = await fetch('/api/rider-profile', { headers: { Authorization: 'Bearer '+tok }, cache:'no-store' });
-    if(!r.ok) return null;
-    return await r.json();
-  }catch(_){ return null; }
+    console.log('[rider] /api/rider-profile HTTP', r.status);
+    if(!r.ok){ console.warn('[rider] endpoint not ok'); return null; }
+    const j = await r.json();
+    console.log('[rider] PROFILE', j);
+    return j;
+  }catch(e){ console.warn('[rider] fetchRiderProfile error', e && e.message); return null; }
 }
 
 async function _enterDriverIdentity(){
