@@ -13,7 +13,7 @@ The canonical library already exists — `window.SK` (sokoni-ds.js) delegating t
 | Component | Canonical | Legacy / custom | Adoption | Priority |
 |---|---|---|---|---|
 | **Dialogs** | `SK.dialog` — **0 uses** | `alert()` 237 · `confirm()` 159 (**396** across ~90 files) | **~0%** | 🔴 High |
-| **Toasts** | `SK.toast`/`SokoniUI.toast` — 17 | `showToast`/`showNotification` **535** (helper family → `window._sokoniToast`) · custom markup 114 files | **helper: high, but 2 renderers** | 🔴 High |
+| **Toasts** | `SK.toast`/`SokoniUI.toast` — 17 | `showToast`/`showNotification` **535** (helper family → `window._sokoniToast`) · custom markup 114 files | ✅ **Slice A DONE (27abae9): ONE renderer** — `_sokoniToast` now delegates to `SokoniUI.toast`, so all ~552 helper calls render through one engine (call sites unchanged, per Wrap). 2 renderers → 1. | 🔴 High |
 | **Status chips** | `SK.statusChip`/`.sk-status` — 1 (just added) | `.badge-*` / `status-*` — **127** across 37 files | **~0%** | 🔴 High |
 | **Empty states** | `SK.empty`/`.sk-empty`/`.empty-state` — 33 files | hand-rolled "No X yet" — 78 files | **~30%** | 🔴 High |
 | **Loading overlays** | `SK.loading` — 1 file | spinner / "Loading…" — 110 files | **~1%** | 🔴 High |
