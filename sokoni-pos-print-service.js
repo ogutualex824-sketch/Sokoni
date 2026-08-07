@@ -792,7 +792,21 @@ function _ppsWireMenu (panel) {
   if (q('pps-remember')) q('pps-remember').onchange = e => localStorage.setItem('pps_remember', e.target.checked ? '1' : '0');
   if (q('pps-advanced')) q('pps-advanced').onclick = () => { _ppsCloseMenu(); try { (window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html'); } catch (_) {} };
   if (q('pps-test'))     q('pps-test').onclick     = () => { try { pm && pm.testPrint && pm.testPrint(); } catch (_) {} };
-  if (q('pps-forget'))   q('pps-forget').onclick   = () => { try { localStorage.removeItem('spp_profile'); pm && pm.disconnect && pm.disconnect(); } catch (_) {} _ppsRenderMenu(panel); };
+  if (q('pps-forget'))   q('pps-forget').onclick   = () => {
+    _ppsRenderMenu(panel, spin('Forgetting printer…'));
+    /* Complete Forget: revoke the browser grant + clear the engine profile (pm.forget), then
+       wipe every app-side remembered-printer key across engines, and reset the canonical state
+       so the chip goes Not Connected. Next connect will show the browser's Bluetooth chooser. */
+    Promise.resolve((pm && pm.forget) ? pm.forget() : (pm && pm.disconnect && pm.disconnect()))
+      .catch(() => {})
+      .finally(() => {
+        ['spp_profile', 'pps_store_profile', 'sokoni_printer_last_print'].forEach(k => {
+          try { localStorage.removeItem(k); } catch (_) {}
+        });
+        try { _printerState.set('disconnected'); } catch (_) {}
+        _ppsRenderMenu(panel);
+      });
+  };
   if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
     const connectedBody = '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Back online — printing is ready.</div>';
     _ppsRenderMenu(panel, spin('Reconnecting to your printer…'));

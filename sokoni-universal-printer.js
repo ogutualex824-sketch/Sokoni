@@ -1470,6 +1470,35 @@ class SPEngine {
     this.emit('disconnected', null);
   }
 
+  /* Fully FORGET the remembered printer: disconnect, revoke the browser's Bluetooth grant so
+     getDevices() no longer returns it (next connect shows the chooser), and wipe the saved
+     device identity + reconnect metadata from the profile. App-side localStorage keys owned by
+     other layers are cleared by the caller. */
+  async forget () {
+    const last = this._profile.lastDevice;
+    /* Revoke the OS/browser permission for the device(s) we know about (Chrome 101+ exposes
+       BluetoothDevice.forget()). Covers both the actively-connected device and a saved-but-
+       disconnected one still present in getDevices(). */
+    try {
+      const dev = this._active && this._active._dev;
+      if (dev && typeof dev.forget === 'function') await dev.forget();
+    } catch (_) {}
+    try {
+      if (navigator.bluetooth && navigator.bluetooth.getDevices) {
+        const grants = await navigator.bluetooth.getDevices();
+        for (const d of grants) {
+          const match = last && (d.name === last.name || d.id === last.id);
+          if ((match || !last) && typeof d.forget === 'function') { try { await d.forget(); } catch (_) {} }
+        }
+      }
+    } catch (_) {}
+    await this.disconnect();
+    this._profile.lastDevice     = null;
+    this._profile.connectionType = null;
+    this._saveProfile();
+    this.emit('forgotten', null);
+  }
+
   get connected () { return !!(this._active?.ok); }
 
   /* ── Capability detection ────────────────────────────────── */
@@ -1793,6 +1822,7 @@ const api = {
   /* Connection */
   connect:            (...a) => getInstance().connect(...a),
   disconnect:         (...a) => getInstance().disconnect(...a),
+  forget:             (...a) => getInstance().forget(...a),
   autoReconnect:      (...a) => getInstance().autoReconnect(...a),
   openSetup:          (opts) => _openPrinterSetup(opts),
   get connected ()          { return getInstance().connected; },

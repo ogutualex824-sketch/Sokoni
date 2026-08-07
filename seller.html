@@ -3759,6 +3759,12 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     /* Reopen the desktop sidebar (clears the persistent-closed state). */
     document.body.classList.remove('slp-closed');
     try { localStorage.removeItem('sellerLiveClosed'); } catch (_) {}
+    /* Desktop: the panel is an always-on fixed sidebar — just un-collapsing it is enough.
+       Skip the mobile-drawer machinery (backdrop dim + body scroll-lock), which would wrongly
+       dim and lock the whole desktop. */
+    try {
+      if (window.matchMedia && window.matchMedia('(min-width:1280px)').matches) return;
+    } catch (_) {}
     panel.classList.add('slp-active');
     panel.setAttribute('aria-hidden', 'false');
     if (backdrop) backdrop.classList.add('slp-active');
@@ -4516,8 +4522,44 @@ class="notification-container"
   }
 }
 @media (min-width: 1280px) {
-  /* On desktop: hide the new header, show old slp-header */
-  .slp-drawer-header { display: none !important; }
+  /* P0 FIX: the desktop Live Dashboard previously had NO close button — this block hid the
+     panel header (which holds the ✕) to "show an old slp-header" that no longer exists in the
+     markup. The panel is a fixed right column on desktop, so render the header + a visible ✕
+     here (the mobile header styles live under max-width:1279px and don't apply). The ✕ / back
+     both call closeLivePanel() → body.slp-closed collapses the panel and reveals #slpTrigger. */
+  #slpDrawerHeader.slp-drawer-header {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 10px 0 12px;
+    background: rgba(8,8,8,0.99);
+    border-bottom: 1px solid rgba(113,255,0,0.12);
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    flex-shrink: 0;
+  }
+  .slp-drawer-back { display: none !important; }          /* no mobile back arrow on desktop */
+  .slp-drawer-title {
+    flex: 1;
+    font-size: 12px; font-weight: 800; color: #71ff00;
+    letter-spacing: .06em; text-transform: uppercase;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .slp-drawer-close {
+    display: inline-flex !important;
+    align-items: center; justify-content: center;
+    width: 30px; height: 30px; min-width: 30px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.75);
+    font-size: 14px; line-height: 1; cursor: pointer;
+    transition: background .15s, border-color .15s, color .15s;
+  }
+  .slp-drawer-close:hover { background: rgba(255,60,60,0.12); border-color: rgba(255,60,60,0.35); color: #ff6464; }
   #slpCloseBtn { display: none !important; }
 }
 
