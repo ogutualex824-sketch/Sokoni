@@ -136,13 +136,18 @@
     { id:'customers', label:'Customers', icon:'👥', kind:'pos', tab:'customers' },
     { id:'reports',   label:'Reports',   icon:'📊', kind:'pos', tab:'reports' },
     { sep:true },
-    { id:'shop',      label:'Shop Dashboard', icon:'🏪', kind:'seller', sec:'home' },
+    /* Seller-app sections — keys MUST match DASH_PAGES / showDashPage() exactly, or the
+       dashboard silently falls back to Overview (the "opens the wrong module" bug). Verified
+       against seller.js DASH_PAGES: overview, analytics, marketing, tax, team, products, … */
+    { id:'shop',      label:'Shop Dashboard', icon:'🏪', kind:'seller', sec:'overview' },
+    { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
     { id:'finance',   label:'Finance',   icon:'💰', kind:'seller', sec:'tax' },
-    { id:'analytics', label:'Analytics', icon:'📈', kind:'seller', sec:'analyse' },
-    { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'market' },
+    { id:'analytics', label:'Analytics', icon:'📈', kind:'seller', sec:'analytics' },
+    { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'marketing' },
     { id:'team',      label:'Staff',     icon:'👨‍🔧', kind:'seller', sec:'team' },
     { sep:true },
-    { id:'devices',   label:'Devices',   icon:'🖨️', kind:'pos', tab:'settings' },
+    /* Devices opens the POS peripherals hub specifically (distinct from Settings). */
+    { id:'devices',   label:'Devices',   icon:'🖨️', kind:'pos', tab:'settings', action:'devices' },
     { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos', tab:'settings' },
   ];
   var byId = {};
@@ -210,6 +215,11 @@
     var f = document.getElementById('mfx-pos');
     try { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: 'switchTab', tab: tab }, location.origin); } catch (_) {}
   }
+  function posAction (act) {
+    var f = document.getElementById('mfx-pos');
+    /* Small delay so the tab switch settles before the sub-action fires. */
+    try { setTimeout(function () { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: act }, location.origin); }, 250); } catch (_) {}
+  }
   function sellerSwitch (sec) {
     var f = document.getElementById('mfx-seller');
     try { f && f.contentWindow && f.contentWindow.postMessage({ __sokoniShell: true, action: 'showSection', section: sec }, location.origin); } catch (_) {}
@@ -225,8 +235,8 @@
     if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
 
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
-    if (m.kind === 'pos')    { var p = posPanel(); showOnly(p); posSwitch(m.tab || 'pos'); return; }
-    if (m.kind === 'seller') { var s = sellerPanel(); showOnly(s); sellerSwitch(m.sec || 'home'); return; }
+    if (m.kind === 'pos')    { var p = posPanel(); showOnly(p); posSwitch(m.tab || 'pos'); if (m.action === 'devices') posAction('devices'); return; }
+    if (m.kind === 'seller') { var s = sellerPanel(); showOnly(s); sellerSwitch(m.sec || 'overview'); return; }
   }
 
   /* ── Native modules ── */

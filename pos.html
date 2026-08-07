@@ -2922,6 +2922,8 @@ window.SPosCustomer = (function () {
     if (!d.__sokoniShell) return;
     try {
       if (d.action === 'switchTab' && window.SPos && SPos.ui && SPos.ui.switchTab) SPos.ui.switchTab(d.tab || 'pos');
+      else if (d.action === 'devices') { if (window.SPos && SPos.deviceHub && SPos.deviceHub.showPanel) SPos.deviceHub.showPanel(); }
+      else if (d.action === 'printer')  { if (window.openPrinterMenu) window.openPrinterMenu(); }
     } catch (_) {}
   });
   /* Push printer + user status to the shell (poll — cheap, no listener churn). */
