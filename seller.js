@@ -1795,11 +1795,31 @@ async function updateSellerStats(){
         /* Canonical business metrics — the single source every dashboard must agree on. */
         const snap = await m.getDoc(m.doc(db, "shops", sellerUid, "analytics", "summary"));
         const a    = snap.exists() ? (snap.data() || {}) : {};
-        const gmv    = Number(a.gmvShillings || 0);
-        const orders = Number(a.paidOrders || 0);
+        let   gmv    = Number(a.gmvShillings || 0);
+        let   orders = Number(a.paidOrders || 0);
         const fee    = Number(a.platformRevenueShillings || 0);
-        const net    = Number.isFinite(Number(a.sellerEarningsShillings)) && a.sellerEarningsShillings != null
+        let   net    = Number.isFinite(Number(a.sellerEarningsShillings)) && a.sellerEarningsShillings != null
                          ? Number(a.sellerEarningsShillings) : (gmv - fee);
+
+        /* Safety net: if this shop has no per-shop analytics summary yet (e.g. not backfilled
+           for this uid, or a freshly-active seller), derive REAL figures from the canonical
+           orders so the dashboard never shows a false 0 when orders actually exist. Bounded
+           read, still canonical (never localStorage). */
+        if (!snap.exists() || (orders === 0 && gmv === 0)) {
+            try {
+                const NOT_PAID = ["pending_payment","pending","awaiting_payment","cancelled","refunded","failed","expired"];
+                const os = await m.getDocs(m.query(m.collection(db, "orders"), m.where("sellerUid", "==", sellerUid), m.limit(500)));
+                let oCount = 0, oGmv = 0;
+                os.forEach(d => {
+                    const o = d.data() || {};
+                    if (o._apPaidCounted === true || !NOT_PAID.includes(String(o.status || ""))) {
+                        oCount++;
+                        oGmv += Math.max(0, Math.round(Number(o.orderTotal ?? o.total ?? 0) - Number(o.deliveryFee ?? 0)));
+                    }
+                });
+                if (oCount > 0) { orders = oCount; gmv = oGmv; net = gmv - fee; }
+            } catch(_) { /* keep the summary values on failure — never fabricate */ }
+        }
 
         set("totalOrders",      orders.toLocaleString());
         set("totalRevenue",     "KES " + gmv.toLocaleString());
