@@ -281,8 +281,8 @@
       </button>
       <!-- Printer health chip — injected by PosPrintService at runtime; fallback static button -->
       <button class="pos-header-btn" id="pps-printer-chip"
-        onclick="(window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html')"
-        title="Printer not connected — click to set up" style="font-size:13px">
+        onclick="(window.openPrinterMenu?window.openPrinterMenu(this):(window.openPrinterSetup&&window.openPrinterSetup()))"
+        title="Printer — click to connect" style="font-size:13px">
         ⚪ 🖨️
       </button>
       <!-- SmartPOS 2.0: device hub status -->
@@ -559,7 +559,7 @@
         </script>
         <div class="settings-section">
           <div class="settings-section-title">PRINTER</div>
-          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="(window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html')">&#9881;&#65039; Printer Setup</button><button class="inv-btn inv-btn-outline" onclick="SokoniPosprint&&SokoniPosprint.printTest().catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="(window.openPrinterMenu?window.openPrinterMenu(this):(window.openPrinterSetup&&window.openPrinterSetup()))">&#128295; Connect Printer</button><button class="inv-btn inv-btn-outline" onclick="SokoniPosprint&&SokoniPosprint.printTest().catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Paper Width</strong></div><select class="settings-input" id="s-paper-width" onchange="SPos.settings.savePaperWidth(this.value)"><option value="58">58mm</option><option value="80">80mm</option></select></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Auto-print receipts</strong><span>After every sale</span></div><label class="toggle"><input type="checkbox" id="s-auto-print" onchange="SPos.settings.saveToggle('autoPrint',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Open Cash Drawer</strong><span>After cash payment</span></div><label class="toggle"><input type="checkbox" id="s-cash-drawer" onchange="SPos.settings.saveToggle('openCashDrawer',this.checked)"><div class="toggle-track"></div><div class="toggle-thumb"></div></label></div>

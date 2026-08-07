@@ -697,11 +697,30 @@ function _ppsTogglePrinterMenu (anchor) {
     'box-shadow:0 14px 46px rgba(0,0,0,0.65)', 'padding:14px', 'font-family:inherit', 'color:#fff',
   ].join(';');
   document.body.appendChild(panel);
-  const r = anchor.getBoundingClientRect();
-  panel.style.top  = (r.bottom + 8) + 'px';
-  panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 282)) + 'px';
+  /* Anchor to the element's rect when one is given (POS header chip). When opened from a
+     button with no meaningful rect (Settings row, off-screen), or no anchor at all, centre
+     the panel so it never renders off the viewport. */
+  const r = anchor && anchor.getBoundingClientRect ? anchor.getBoundingClientRect() : null;
+  if (r && r.width && r.height) {
+    panel.style.top  = (r.bottom + 8) + 'px';
+    panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 282)) + 'px';
+  } else {
+    panel.style.top  = '50%';
+    panel.style.left = '50%';
+    panel.style.transform = 'translate(-50%,-50%)';
+  }
   _ppsRenderMenu(panel);
   setTimeout(() => document.addEventListener('pointerdown', _ppsMenuOutside, true), 0);
+}
+
+/* Canonical IN-PAGE printer opener — every ordinary printer button (POS header, Settings)
+   calls this to open the dropdown in place; NOTHING navigates to another page. Only the
+   dropdown's own "Advanced options" opens the full setup page (firmware/USB/serial). */
+if (typeof window !== 'undefined') {
+  window.openPrinterMenu = function (anchor) {
+    try { _ppsTogglePrinterMenu(anchor || document.getElementById('pps-printer-chip') || null); }
+    catch (_) {}
+  };
 }
 
 function _ppsRenderMenu (panel, override) {

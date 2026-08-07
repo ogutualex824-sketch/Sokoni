@@ -924,31 +924,38 @@ class BtAdapter {
 
   async discover () {
     if (!this.avail) return [];
-    const filters = [
-      { services: ['0000ff00-0000-1000-8000-00805f9b34fb'] }, // P58E / Goojprt / Chinese BLE printers
-      { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
-      { services: ['e7810a71-73ae-499d-8c15-faa9aef0c3f2'] },
-      { services: ['0000ffe0-0000-1000-8000-00805f9b34fb'] },
-      { namePrefix: 'P58'  }, { namePrefix: 'P80'   }, { namePrefix: 'PT-'  },
-      { namePrefix: 'BTP'  }, { namePrefix: 'HOP'   }, { namePrefix: 'SP-'  },
-      { namePrefix: 'MTP'  }, { namePrefix: 'Rongta'}, { namePrefix: 'Xprinter' },
-      { namePrefix: 'EPSON'}, { namePrefix: 'Star'  }, { namePrefix: 'POS'  },
-      { namePrefix: 'BP-'  }, { namePrefix: 'RPP'   }, { namePrefix: 'BTPT' },
-      { namePrefix: 'Printer'}, { namePrefix: 'TM-' }, { namePrefix: 'iDPRT'},
-      { namePrefix: 'Cashino'}, { namePrefix: 'GT'  },
+    /* Every service UUID a thermal printer might expose — used both as optionalServices
+       (so getPrimaryService() works post-connect) AND as advertisement filters below. */
+    const printerServices = [
+      '0000ff00-0000-1000-8000-00805f9b34fb', // P58E / Goojprt / Chinese BLE printers
+      '000018f0-0000-1000-8000-00805f9b34fb', // ESC/POS over BLE (common)
+      'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // Serial Port Profile emulation
+      '0000ffe0-0000-1000-8000-00805f9b34fb', // HM-10 / CC254x UART bridge
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455', // Microchip transparent UART (ISSC)
+      '0000ff12-0000-1000-8000-00805f9b34fb',
+      '0000fee7-0000-1000-8000-00805f9b34fb',
     ];
+    /* Why acceptAllDevices instead of tight filters:
+       A P58E only appears in the Web-Bluetooth chooser if its *advertisement packet*
+       carries one of our filtered service UUIDs or name prefixes. Many P58E units (and
+       the countless clones) advertise NEITHER — so a filtered requestDevice() shows an
+       EMPTY chooser and the user concludes "scanning can't find my printer". Accepting
+       all devices guarantees the printer is listed; optionalServices still grants access
+       to the print service after the user picks it. requestDevice() can only run once per
+       user gesture, so we cannot filter-then-fallback in a single tap. */
     try {
       const d = await navigator.bluetooth.requestDevice({
-        filters,
-        optionalServices: [
-          '0000ff00-0000-1000-8000-00805f9b34fb',
-          '000018f0-0000-1000-8000-00805f9b34fb',
-          'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-          '0000ffe0-0000-1000-8000-00805f9b34fb',
-        ],
+        acceptAllDevices: true,
+        optionalServices: printerServices,
       });
       return [{ id: d.id, name: d.name || 'Bluetooth Printer', type: 'bluetooth', _dev: d }];
-    } catch(e) { return []; }
+    } catch(e) {
+      /* NotFoundError is thrown both when the user cancels the chooser AND when zero
+         devices matched. With acceptAllDevices the latter is effectively impossible, so a
+         throw here means the user dismissed the picker — return empty, no error surfaced. */
+      console.log('[BtAdapter] discover cancelled/empty:', e && e.name);
+      return [];
+    }
   }
 
   async connect (info) {
