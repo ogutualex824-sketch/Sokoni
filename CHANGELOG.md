@@ -1,3 +1,26 @@
+## [2026-08-07] — feat(delivery): Secure Delivery Authorization Phase 0 (shadow instrumentation)
+
+Security telemetry with ZERO money-path change (owner: "freeze payments except security
+instrumentation"). Escrow/wallet/seller/rider payout logic untouched.
+
+- **New isolated module** `functions/delivery-pin.js` (live):
+  - `deliveryPinOnAccept` (trigger): on `packageRequests` → `driver_accepted`, generate a 6-digit
+    PIN, store a keyed HMAC hash on the packageRequest (safe to expose) + `deliveryVerificationStatus`
+    `'pending'`; deliver the PLAINTEXT PIN to the buyer's order doc only (riders read deliveries via
+    CF endpoints, not orders). The live `claimAvailableDelivery` accept CF is NOT modified.
+  - `deliveryVerifyShadow` (onCall, public): rider submits PIN → HMAC compare → record a
+    `deliveryAuditLog` attempt (`verificationMethod`, result, geo) + bump status/attempt counter.
+    SHADOW — does NOT complete the delivery or release funds; existing proofPin/OTP +
+    `captureProofOfDelivery` stays authoritative.
+- **Buyer PIN display** on `track.html` — shows the 6-digit PIN (from the buyer's order doc) until
+  delivered; rider never sees it.
+- Deployed: both functions created (401 = reachable); hosting `2509923`. node --check + parse clean.
+- **Next (Phase 0b):** rider shadow PIN-entry UI (feeds `deliveryVerifyShadow` telemetry). Phases 1+
+  (enforcement/geofence/instant-hold) remain frozen-path, sign-off + shadow-parity gated.
+- **Files:** functions/delivery-pin.js, functions/index.js, track.html.
+
+---
+
 ## [2026-08-07] — verify(money): funded free-delivery invariant traced end-to-end
 
 Evidence trace before further delivery work. Verdict: rider-safety core PASSES; the fuller
