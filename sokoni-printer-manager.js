@@ -638,6 +638,18 @@ class PrinterManager {
     return this.autoReconnect();
   }
 
+  /* Single canonical Forget — clears the remembered printer across BOTH underlying engines and
+     every storage key, and revokes the browser grant where supported. Every "Forget" button in
+     the app calls this, so nothing keeps auto-reconnecting a printer the merchant forgot. */
+  async forget () {
+    try { if (window.SokoniPrinter && window.SokoniPrinter.forget) await window.SokoniPrinter.forget(); } catch (_) {}
+    try { if (window.P58EPrinter && window.P58EPrinter.forget)    await window.P58EPrinter.forget(); } catch (_) {}
+    ['spp_profile', 'pps_store_profile', 'sokoni_printer_last_print', 'p58e_paired_device', 'pps_remember']
+      .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+    this._activeTransport = null;
+    this._emit('disconnected', null);
+  }
+
   async autoReconnect () {
     /* 1. SokoniPrinter handles last-used serial / network / BLE */
     try {
