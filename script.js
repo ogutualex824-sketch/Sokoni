@@ -842,6 +842,7 @@ function buildProductCard(product, size = "normal"){
             <span class="pcard-ov-price">KES ${price}</span>
             ${rating ? `<span class="pcard-ov-stars">${ratingStarsHtml(rating.avg)} <span class="pcard-ov-rcount">${rating.count}</span></span>` : ''}
         </div>
+        ${product.sellerName ? `<span class="pcard-ov-seller">🏪 ${_escHtml(String(product.sellerName).slice(0, 24))}</span>` : ''}
     </div>`;
 
     const _soldCnt  = Number(product.soldCount  || 0);
