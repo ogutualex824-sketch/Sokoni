@@ -2507,6 +2507,7 @@ const SPos = (function () {
       const css = `
         .ord-wrap{padding:12px 14px 90px;max-width:820px;margin:0 auto}
         .ord-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+        .ord-summary-wide{grid-template-columns:repeat(auto-fill,minmax(94px,1fr))}
         .ord-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center}
         .ord-stat-n{font-size:19px;font-weight:900;color:#71ff00;line-height:1.1}
         .ord-stat-l{font-size:10.5px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
@@ -2553,6 +2554,17 @@ const SPos = (function () {
       orders._inStore = (txns || [])
         .filter(t => t.status === 'completed' || t.status === 'refunded' || t.refunded || t.voided)
         .sort((a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0));
+      /* Low-stock count from canonical inventory (one read, no listener — perf-safe). */
+      let lowStock = null;
+      try {
+        const prods = await PosDB.products.getAll();
+        lowStock = (prods || []).filter(p => {
+          const s = Number(p.stock != null ? p.stock : (p.quantity || 0));
+          const thr = Number(p.lowStockThreshold != null ? p.lowStockThreshold : (p.reorderLevel != null ? p.reorderLevel : 5));
+          return p.trackStock !== false && s <= thr;
+        }).length;
+      } catch (_) { lowStock = null; }
+      orders._lowStock = lowStock;
       orders._paint();
     },
 
@@ -2566,11 +2578,24 @@ const SPos = (function () {
     _summary() {
       const sold = orders._inStore.filter(t => !t.voided);
       const revenue = sold.reduce((s, t) => s + Number(t.total || 0), 0);
-      /* Online figures are not loaded in Phase 1 → neutral "—" (never fabricate a metric). */
-      return `<div class="ord-summary">
-        <div class="ord-stat"><div class="ord-stat-n">${sold.length}</div><div class="ord-stat-l">In-Store Sales</div></div>
-        <div class="ord-stat"><div class="ord-stat-n">KES ${_fmt(revenue)}</div><div class="ord-stat-l">Revenue Today</div></div>
-        <div class="ord-stat"><div class="ord-stat-n" style="color:var(--txt3)">—</div><div class="ord-stat-l">Online Orders</div></div>
+      const refunds = orders._inStore.filter(t => t.refunded && !t.voided).length;
+      const low = orders._lowStock;
+      /* Live device/connectivity chips — read once (no listener). Online-only metrics
+         (Online Orders, Awaiting Rider, Ready Pickup) render "—" until Phase 2 wires the
+         marketplace feed — never a fabricated 0. */
+      let printerOn = false;
+      try { printerOn = !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected)); } catch (_) {}
+      const online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
+      const dash = (val, label, accent) =>
+        `<div class="ord-stat"><div class="ord-stat-n"${accent ? ` style="color:${accent}"` : ''}>${val}</div><div class="ord-stat-l">${label}</div></div>`;
+      return `<div class="ord-summary ord-summary-wide">
+        ${dash('KES ' + _fmt(revenue), 'Revenue Today')}
+        ${dash(String(sold.length), 'Walk-in Sales')}
+        ${dash('<span style="color:var(--txt3)">—</span>', 'Online Orders')}
+        ${dash(low == null ? '<span style="color:var(--txt3)">—</span>' : String(low), 'Low Stock', low ? '#ffb400' : null)}
+        ${dash(String(refunds), 'Refunds Today', refunds ? '#ffb400' : null)}
+        ${dash(printerOn ? '🟢' : '⚪', 'Printer', printerOn ? '#71ff00' : null)}
+        ${dash(online ? '🟢' : '🔴', 'Sync', online ? '#71ff00' : '#ff6464')}
       </div>`;
     },
 
