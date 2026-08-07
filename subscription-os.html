@@ -447,7 +447,7 @@ async function checkAdmin() {
   const auth = window.firebaseAuth;
   if (!auth?.currentUser) { location.href='/login.html?redirect='+encodeURIComponent(location.pathname); return false; }
   const tok = await auth.currentUser.getIdTokenResult(true).catch(()=>null);
-  if (!tok?.claims?.admin && !tok?.claims?.superAdmin) { alert('Super admin access required.'); history.back(); return false; }
+  if (!tok?.claims?.admin && !tok?.claims?.superAdmin) { SK.dialog.alert('Super admin access required.'); history.back(); return false; }
   return true;
 }
 
@@ -628,37 +628,37 @@ async function loadApprovals() {
 }
 
 async function approveProposal(id) {
-  if (!confirm('Approve this financial change?')) return;
+  if (!(await SK.dialog.confirm('Approve this financial change?'))) return;
   try {
     const r = await callFn('approveFinancialChange', { proposalId: id });
-    alert(r.status === 'approved_and_applied' ? 'Change approved and applied!' : `Partial approval (${r.approvals.length}/${r.approvals.length+1} done)`);
+    SK.dialog.alert(r.status === 'approved_and_applied' ? 'Change approved and applied!' : `Partial approval (${r.approvals.length}/${r.approvals.length+1} done)`);
     loadApprovals();
-  } catch(e) { alert('Failed: '+e.message); }
+  } catch(e) { SK.dialog.alert('Failed: '+e.message); }
 }
 
 async function rejectProposal(id) {
-  if (!confirm('Reject this proposal?')) return;
+  if (!(await SK.dialog.confirm('Reject this proposal?'))) return;
   try {
     const { doc, updateDoc } = await fs();
     await updateDoc(doc(db(),'financialProposals',id), { status:'rejected', rejectedAt:Date.now() });
     loadApprovals();
-  } catch(e) { alert('Failed: '+e.message); }
+  } catch(e) { SK.dialog.alert('Failed: '+e.message); }
 }
 
 document.getElementById('fc-propose-btn').addEventListener('click', async () => {
   const type    = document.getElementById('fc-type').value;
   const summary = document.getElementById('fc-summary').value.trim();
   const payloadStr = document.getElementById('fc-payload').value.trim();
-  if (!summary) { alert('Please enter a summary.'); return; }
+  if (!summary) { SK.dialog.alert('Please enter a summary.'); return; }
   let payload = {};
-  if (payloadStr) { try { payload = JSON.parse(payloadStr); } catch { alert('Payload must be valid JSON.'); return; } }
+  if (payloadStr) { try { payload = JSON.parse(payloadStr); } catch { SK.dialog.alert('Payload must be valid JSON.'); return; } }
   try {
     const r = await callFn('proposeFinancialChange', { type, payload, summary });
-    alert(`Proposal created (ID: ${r.proposalId}). Awaiting ${r.required} approval(s).`);
+    SK.dialog.alert(`Proposal created (ID: ${r.proposalId}). Awaiting ${r.required} approval(s).`);
     document.getElementById('fc-summary').value = '';
     document.getElementById('fc-payload').value = '';
     loadApprovals();
-  } catch(e) { alert('Failed: '+e.message); }
+  } catch(e) { SK.dialog.alert('Failed: '+e.message); }
 });
 
 /* ── Entitlements ─────────────────────────────────────────────── */
@@ -713,14 +713,14 @@ async function lookupEntitlement() {
 
 async function suspendUser() {
   if (!_lookedUpUid) return;
-  if (!confirm(`Suspend user ${_lookedUpUid}? They will lose access to all features immediately.`)) return;
+  if (!(await SK.dialog.confirm(`Suspend user ${_lookedUpUid}? They will lose access to all features immediately.`, null, null, { title: 'Suspend user', variant: 'danger', confirmLabel: 'Suspend' }))) return;
   try {
     const { doc, updateDoc } = await fs();
     await updateDoc(doc(db(),'entitlements',_lookedUpUid), { suspended: true, suspendedAt: Date.now() });
     await updateDoc(doc(db(),'aiSubscriptions',_lookedUpUid), { status:'suspended' }).catch(()=>{});
-    alert('User suspended.');
+    SK.dialog.alert('User suspended.');
     lookupEntitlement();
-  } catch(e) { alert('Failed: '+e.message); }
+  } catch(e) { SK.dialog.alert('Failed: '+e.message); }
 }
 
 async function loadRecentEntitlements() {
@@ -793,9 +793,9 @@ async function runSelfHeal() {
   if (btn) btn.disabled = true;
   try {
     await callFn('selfHealSubscriptions', {});  // not directly callable as scheduler; placeholder
-    alert('Self-heal triggered. Check the Self-Heal log in a few minutes.');
+    SK.dialog.alert('Self-heal triggered. Check the Self-Heal log in a few minutes.');
     loadSelfHeal();
-  } catch { alert('Self-heal is a scheduled function. Check Firestore selfHealLog for last run.'); }
+  } catch { SK.dialog.alert('Self-heal is a scheduled function. Check Firestore selfHealLog for last run.'); }
   finally { if (btn) btn.disabled = false; }
 }
 
@@ -810,18 +810,18 @@ async function saveFraudSettings() {
       sessionIdleMinutes:  Number(document.getElementById('st-idle').value),
       updatedAt:           Date.now(),
     }, { merge:true });
-    alert('Fraud settings saved.');
-  } catch(e) { alert('Failed: '+e.message); }
+    SK.dialog.alert('Fraud settings saved.');
+  } catch(e) { SK.dialog.alert('Failed: '+e.message); }
 }
 
 async function suspendGlobal() {
-  if (!confirm('CAUTION: This will suspend ALL active subscriptions globally. Are you absolutely sure?')) return;
-  if (!confirm('Second confirmation required. Suspend all subscriptions NOW?')) return;
+  if (!(await SK.dialog.confirm('CAUTION: This will suspend ALL active subscriptions globally. Are you absolutely sure?', null, null, { title: 'Suspend ALL subscriptions', variant: 'danger', confirmLabel: 'Continue' }))) return;
+  if (!(await SK.dialog.confirm('Second confirmation required. Suspend all subscriptions NOW?', null, null, { title: 'Final confirmation', variant: 'danger', confirmLabel: 'Suspend all' }))) return;
   try {
     const { doc, setDoc } = await fs();
     await setDoc(doc(db(),'aiSettings','globalToggles'), { aiServiceActive:false, suspendedAt:Date.now() }, { merge:true });
-    alert('Global subscription service suspended. Update aiSettings/globalToggles to restore.');
-  } catch(e) { alert('Failed: '+e.message); }
+    SK.dialog.alert('Global subscription service suspended. Update aiSettings/globalToggles to restore.');
+  } catch(e) { SK.dialog.alert('Failed: '+e.message); }
 }
 
 /* ── Bootstrap ────────────────────────────────────────────────── */

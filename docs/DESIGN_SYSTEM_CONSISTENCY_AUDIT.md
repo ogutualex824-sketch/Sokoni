@@ -12,7 +12,7 @@ The canonical library already exists — `window.SK` (sokoni-ds.js) delegating t
 
 | Component | Canonical | Legacy / custom | Adoption | Priority |
 |---|---|---|---|---|
-| **Dialogs** | `SK.dialog` — **0 uses** | `alert()` 237 · `confirm()` 159 (**396** across ~90 files) | **~0%** | 🔴 High |
+| **Dialogs** | `SK.dialog` — **102 uses** (Slice B batch 1) | `alert()`/`confirm()` bare — **331 left** | **~24%** (was ~0) — top-6 modules done | 🔴 High |
 | **Toasts** | `SK.toast`/`SokoniUI.toast` — 17 | `showToast`/`showNotification` **535** (helper family → `window._sokoniToast`) · custom markup 114 files | ✅ **Slice A DONE (27abae9): ONE renderer** — `_sokoniToast` now delegates to `SokoniUI.toast`, so all ~552 helper calls render through one engine (call sites unchanged, per Wrap). 2 renderers → 1. | 🔴 High |
 | **Status chips** | `SK.statusChip`/`.sk-status` — 1 (just added) | `.badge-*` / `status-*` — **127** across 37 files | **~0%** | 🔴 High |
 | **Empty states** | `SK.empty`/`.sk-empty`/`.empty-state` — 33 files | hand-rolled "No X yet" — 78 files | **~30%** | 🔴 High |
@@ -64,6 +64,14 @@ Track these to 100% (measurable via the same greps):
 - **100% loading overlays** via `SK.loading` — **currently ~1%**
 
 Re-run §1 after each slice to watch adoption climb — evidence, not impressions.
+
+### Adoption log (release-notes source)
+| Date | Slice | Component | Before | After |
+|---|---|---|---|---|
+| 08-07 | A | Toasts (renderer) | 2 renderers | **1 renderer** |
+| 08-07 | B1 | Dialogs | ~0% | **~24%** (102 via `SK.dialog`; 331 native left) — creative-studio, subscription-os, admin, wap, staff-management, account-centre |
+
+**Slice B foundation (before any call-site moved):** the canonical modal gained what native `alert`/`confirm` give for free — `role="dialog"`/`aria-modal`, focus-trap, focus-restore, auto-focus, Enter-confirms — plus `SK.dialog.alert()` (new) and dialog telemetry (`window._skDialogMetrics` + `sk:dialog` event: type/module/result/durationMs). Mapping used: `alert(x)`→`SK.dialog.alert(x)`; `if(!confirm(x))return;`→`if(!(await SK.dialog.confirm(x)))return;` (async fns) or `SK.dialog.confirm(x, cb)` (non-async). `prompt()` left unchanged (no canonical equivalent yet).
 
 ---
 

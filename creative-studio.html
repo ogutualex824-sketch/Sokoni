@@ -818,7 +818,7 @@
 
     uploadBtn.addEventListener('click', async () => {
       const media = window.SokoniMedia;
-      if (!media) { alert('Media engine not loaded yet. Please refresh.'); return; }
+      if (!media) { SK.dialog.alert('Media engine not loaded yet. Please refresh.'); return; }
       const dest = document.getElementById('cs-dest').value;
       uploadBtn.disabled = true;
       uploadBtn.textContent = 'Uploading…';
@@ -891,7 +891,7 @@
         });
         _studioCanvas = c;
         _renderStudio(c);
-      } catch (err) { alert('Load failed: ' + err.message); }
+      } catch (err) { SK.dialog.alert('Load failed: ' + err.message); }
       hideProc();
     });
 
@@ -917,7 +917,7 @@
     });
 
     document.getElementById('studio-apply').addEventListener('click', async () => {
-      if (!_studioFile && !_studioCanvas) { alert('Load an image first.'); return; }
+      if (!_studioFile && !_studioCanvas) { SK.dialog.alert('Load an image first.'); return; }
       const src = _studioFile || _studioCanvas;
       showProc('Applying ' + _studioTool + '…');
       try {
@@ -943,7 +943,7 @@
         }
         _studioCanvas = result;
         _renderStudio(result);
-      } catch (e) { alert('Processing failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('Processing failed: ' + e.message); }
       hideProc();
     });
 
@@ -964,17 +964,17 @@
     }
 
     document.getElementById('studio-download').addEventListener('click', () => {
-      if (!_studioCanvas) { alert('Nothing to download.'); return; }
+      if (!_studioCanvas) { SK.dialog.alert('Nothing to download.'); return; }
       SokoniCreative.downloadCanvas(_studioCanvas, 'sokoni-studio');
     });
 
     document.getElementById('studio-save').addEventListener('click', async () => {
-      if (!_studioCanvas) { alert('Nothing to save.'); return; }
+      if (!_studioCanvas) { SK.dialog.alert('Nothing to save.'); return; }
       showProc('Saving to library…');
       try {
         await SokoniCreative.exportAndUpload(_studioCanvas, 'ai', 'sokoni-studio');
-        alert('Saved to media library!');
-      } catch (e) { alert('Save failed: ' + e.message); }
+        SK.dialog.alert('Saved to media library!');
+      } catch (e) { SK.dialog.alert('Save failed: ' + e.message); }
       hideProc();
     });
 
@@ -1045,22 +1045,22 @@
         preview.width  = w;
         preview.height = h;
         preview.getContext('2d').drawImage(canvas, 0, 0, w, h);
-      } catch (e) { alert('Generation failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('Generation failed: ' + e.message); }
       hideProc();
     });
 
     document.getElementById('creator-download').addEventListener('click', () => {
-      if (!_creatorCanvas) { alert('Generate something first.'); return; }
+      if (!_creatorCanvas) { SK.dialog.alert('Generate something first.'); return; }
       SokoniCreative.downloadCanvas(_creatorCanvas, _activeCreator || 'sokoni-creative');
     });
 
     document.getElementById('creator-save').addEventListener('click', async () => {
-      if (!_creatorCanvas) { alert('Generate something first.'); return; }
+      if (!_creatorCanvas) { SK.dialog.alert('Generate something first.'); return; }
       showProc('Saving…');
       try {
         await SokoniCreative.exportAndUpload(_creatorCanvas, 'ai', _activeCreator || 'creative');
-        alert('Saved to your media library!');
-      } catch (e) { alert('Save failed: ' + e.message); }
+        SK.dialog.alert('Saved to your media library!');
+      } catch (e) { SK.dialog.alert('Save failed: ' + e.message); }
       hideProc();
     });
 
@@ -1094,7 +1094,7 @@
         preview.width  = c.width;
         preview.height = c.height;
         preview.getContext('2d').drawImage(c, 0, 0);
-      } catch (e) { alert('Story creation failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('Story creation failed: ' + e.message); }
       hideProc();
     });
 
@@ -1107,8 +1107,8 @@
       showProc('Saving story…');
       try {
         await SokoniCreative.exportAndUpload(_storyCanvas, 'story', 'sokoni-story');
-        alert('Story saved to library!');
-      } catch (e) { alert('Save failed: ' + e.message); }
+        SK.dialog.alert('Story saved to library!');
+      } catch (e) { SK.dialog.alert('Save failed: ' + e.message); }
       hideProc();
     });
 
@@ -1168,8 +1168,8 @@
           accentColor:    document.getElementById('kit-accent').value,
           fontFamily:     document.getElementById('kit-font').value,
         });
-        alert('Brand kit saved!');
-      } catch (e) { alert('Save failed: ' + e.message); }
+        SK.dialog.alert('Brand kit saved!');
+      } catch (e) { SK.dialog.alert('Save failed: ' + e.message); }
       hideProc();
     });
 
@@ -1184,7 +1184,7 @@
         el.innerHTML = colors.map(c =>
           `<div class="cs-kit-swatch" style="background:${esc(c)};cursor:pointer;width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,.1)" title="${esc(c)}" onclick="document.getElementById('kit-primary').value='${esc(c)}';document.getElementById('kit-primary').dispatchEvent(new Event('input'))"></div>`
         ).join('');
-      } catch (e) { alert('Extraction failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('Extraction failed: ' + e.message); }
       hideProc();
     });
 
@@ -1239,7 +1239,7 @@
           `<span class="cs-ai-tag">${esc(t)}</span>`).join('');
 
         document.getElementById('assist-result').classList.add('show');
-      } catch (e) { alert('AI analysis failed: ' + e.message); }
+      } catch (e) { SK.dialog.alert('AI analysis failed: ' + e.message); }
       hideProc();
     });
 
@@ -1253,8 +1253,8 @@
         price:       document.getElementById('assist-r-price').value,
       };
       navigator.clipboard?.writeText(JSON.stringify(data, null, 2))
-        .then(() => alert('Copied to clipboard!'))
-        .catch(() => alert('Copy failed — select text manually.'));
+        .then(() => SK.dialog.alert('Copied to clipboard!'))
+        .catch(() => SK.dialog.alert('Copy failed — select text manually.'));
     });
 
     /* ═══════════════════════════════════════════════════

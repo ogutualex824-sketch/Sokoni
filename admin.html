@@ -3719,7 +3719,7 @@ async function renderDriverApps(filter){
         +'<button class="abtn abtn-red" onclick="rejectDriver(\''+h(a._fsId||'')+'\','+idx+')">❌ Reject</button>'
         /* Index, not the name. The applicant's name is attacker-controlled and an
            inline handler decodes HTML entities before parsing the JS, so h() does
-           not contain it — a name like `');alert(1);//` executed in the admin's
+           not contain it — a name like `');SK.dialog.alert(1);//` executed in the admin's
            session. */
         +'<button class="abtn abtn-blue" onclick="driverWhatsApp('+idx+')">'
           +'📱 WhatsApp</button>'
@@ -7784,9 +7784,9 @@ window.loadSupportQueue = loadSupportQueue;
   window.saveAnnouncement = function() {
     var text   = (document.getElementById('annText')   || {}).value || '';
     var active = (document.getElementById('annActive') || {}).checked !== false;
-    if (!text.trim()) { alert('Please enter announcement text.'); return; }
+    if (!text.trim()) { SK.dialog.alert('Please enter announcement text.'); return; }
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
     var btn = document.querySelector('#annModal .solid-btn.solid-green');
     if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
     db.collection('announcements').add({
@@ -7801,7 +7801,7 @@ window.loadSupportQueue = loadSupportQueue;
       if (typeof window._skToast === 'function') window._skToast('Announcement saved', 'success');
     }).catch(function(err) {
       if (btn) { btn.disabled = false; btn.textContent = 'Save Announcement'; }
-      alert('Error saving announcement: ' + err.message);
+      SK.dialog.alert('Error saving announcement: ' + err.message);
     });
   };
 
@@ -7861,7 +7861,7 @@ window.loadSupportQueue = loadSupportQueue;
 
   window.exportReport = function() {
     var data = window._lastReportData;
-    if (!data || !data.length) { alert('Generate a report first.'); return; }
+    if (!data || !data.length) { SK.dialog.alert('Generate a report first.'); return; }
     var json = JSON.stringify(data, null, 2);
     var blob = new Blob([json], { type: 'application/json' });
     var url  = URL.createObjectURL(blob);
@@ -7876,9 +7876,9 @@ window.loadSupportQueue = loadSupportQueue;
   window.markTaxPaid = function() {
     var type = (document.getElementById('taxPayType') || {}).value || 'vat';
     var amt  = parseFloat((document.getElementById('taxPayAmt') || {}).value || '0');
-    if (!amt || amt <= 0) { alert('Enter a valid amount.'); return; }
+    if (!amt || amt <= 0) { SK.dialog.alert('Enter a valid amount.'); return; }
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
     db.collection('taxPayments').add({
       type: type,
       amount: amt,
@@ -7889,26 +7889,26 @@ window.loadSupportQueue = loadSupportQueue;
       if (input) input.value = '';
       if (typeof window._skToast === 'function') window._skToast('Tax payment recorded — KES ' + amt.toLocaleString(), 'success');
       if (typeof renderFinance === 'function') renderFinance();
-    }).catch(function(err) { alert('Error: ' + err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
   };
 
   /* Service worker cache clear */
   window.clearSWCache = function() {
-    if (!('caches' in window)) { alert('Cache API not available in this browser.'); return; }
+    if (!('caches' in window)) { SK.dialog.alert('Cache API not available in this browser.'); return; }
     caches.keys().then(function(keys) {
       return Promise.all(keys.map(function(k) { return caches.delete(k); }));
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('All caches cleared — reload to refresh assets', 'success');
-      else alert('All caches cleared. Reload the page to see fresh assets.');
-    }).catch(function(err) { alert('Cache clear failed: ' + err.message); });
+      else SK.dialog.alert('All caches cleared. Reload the page to see fresh assets.');
+    }).catch(function(err) { SK.dialog.alert('Cache clear failed: ' + err.message); });
   };
 
   /* ── Verification approve / reject ── */
   window.approveVerification = function(id) {
     if (!id) return;
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
-    if (!confirm('Approve this verification request?')) return;
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
+    SK.dialog.confirm('Approve this verification request?', function() {
     db.collection('verification_requests').doc(id).update({
       status: 'approved',
       reviewedAt: window.firebase?.firestore?.FieldValue?.serverTimestamp?.() || Date.now(),
@@ -7916,13 +7916,14 @@ window.loadSupportQueue = loadSupportQueue;
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('Verification approved ✅', 'success');
       if (typeof window.loadVerifications === 'function') window.loadVerifications();
-    }).catch(function(err) { alert('Error: ' + err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
+    }, null, { title: 'Approve verification', variant: 'success', confirmLabel: 'Approve' });
   };
 
   window.rejectVerification = function(id) {
     if (!id) return;
     var db = window.firebaseDB;
-    if (!db) { alert('Database not available.'); return; }
+    if (!db) { SK.dialog.alert('Database not available.'); return; }
     var reason = prompt('Reason for rejection (shown to applicant):');
     if (!reason || !reason.trim()) return;
     db.collection('verification_requests').doc(id).update({
@@ -7933,7 +7934,7 @@ window.loadSupportQueue = loadSupportQueue;
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('Verification rejected', 'success');
       if (typeof window.loadVerifications === 'function') window.loadVerifications();
-    }).catch(function(err) { alert('Error: ' + err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: ' + err.message); });
   };
 
   /* ── Moderation — flagged content queue ── */
@@ -7985,7 +7986,7 @@ window.loadSupportQueue = loadSupportQueue;
       var row = document.querySelector('tr[data-flag-id="'+id+'"]');
       if (row) row.remove();
       if (typeof window._skToast === 'function') window._skToast('Flag dismissed', 'success');
-    }).catch(function(err) { alert('Error: '+err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: '+err.message); });
   };
 
   window.escalateFlag = function(id) {
@@ -7998,17 +7999,17 @@ window.loadSupportQueue = loadSupportQueue;
     }).then(function() {
       if (typeof window._skToast === 'function') window._skToast('Flag escalated to moderation team', 'success');
       if (typeof window.loadFlags === 'function') window.loadFlags();
-    }).catch(function(err) { alert('Error: '+err.message); });
+    }).catch(function(err) { SK.dialog.alert('Error: '+err.message); });
   };
 
   window.bulkDismissFlags = function() {
     var checked = Array.from(document.querySelectorAll('.flag-chk:checked')).map(function(c) { return c.dataset.id; });
     if (!checked.length) {
       if (typeof window._skToast === 'function') window._skToast('Select flags to dismiss first', 'info');
-      else alert('Select at least one flag.');
+      else SK.dialog.alert('Select at least one flag.');
       return;
     }
-    if (!confirm('Dismiss '+checked.length+' selected flag(s)?')) return;
+    SK.dialog.confirm('Dismiss '+checked.length+' selected flag(s)?', function() {
     var db = window.firebaseDB;
     if (!db) return;
     Promise.all(checked.map(function(id) {
@@ -8020,7 +8021,8 @@ window.loadSupportQueue = loadSupportQueue;
     })).then(function() {
       if (typeof window._skToast === 'function') window._skToast(checked.length+' flag(s) dismissed', 'success');
       if (typeof window.loadFlags === 'function') window.loadFlags();
-    }).catch(function(err) { alert('Partial error: '+err.message); });
+    }).catch(function(err) { SK.dialog.alert('Partial error: '+err.message); });
+    }, null, { title: 'Dismiss flags', confirmLabel: 'Dismiss' });
   };
   </script>
 </body>

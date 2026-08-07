@@ -106,9 +106,32 @@
     return ui.openModal({ rawHtml: html, closeable: cfg.dismissible !== false, onClose: cfg.onClose });
   }
 
+  /* ── DIALOG TELEMETRY ───────────────────────────────────── */
+  /* One shared implementation → free instrumentation. Lightweight
+     counters + a `sk:dialog` CustomEvent; nothing is persisted. */
+  function _dlgModule() {
+    try {
+      var p = (location.pathname || '').split('/').pop() || 'index';
+      return p.replace(/\.html?$/i, '') || 'index';
+    } catch (_) { return 'unknown'; }
+  }
+  function _dlgEvent(type, result, openedAt) {
+    try {
+      var M = (window._skDialogMetrics = window._skDialogMetrics || { total: 0, byType: {}, byResult: {} });
+      M.total++;
+      M.byType[type]     = (M.byType[type]     || 0) + 1;
+      M.byResult[result] = (M.byResult[result] || 0) + 1;
+      window.dispatchEvent(new CustomEvent('sk:dialog', { detail: {
+        type: type, module: _dlgModule(), result: result,
+        durationMs: openedAt ? (Date.now() - openedAt) : null, at: Date.now()
+      } }));
+    } catch (_) {}
+  }
+
   function _dialogConfirm(msg, onConfirm, onCancel, opts) {
     var ui = _ui();
     opts = opts || {};
+    var t0 = Date.now();
     if (ui && ui.confirm) {
       return ui.confirm({
         title:       opts.title || 'Confirm',
@@ -117,13 +140,60 @@
         cancelText:  opts.cancelLabel || 'Cancel',
         variant:     opts.variant || 'neutral',
       }).then(function (ok) {
+        _dlgEvent('confirm', ok ? 'confirmed' : 'cancelled', t0);
         if (ok) { if (onConfirm) onConfirm(); }
         else    { if (onCancel) onCancel(); }
+        return ok;
       });
     }
     /* Fallback */
-    if (window.confirm(msg)) { if (onConfirm) onConfirm(); }
-    else                      { if (onCancel) onCancel(); }
+    var ok = window.confirm(msg);
+    _dlgEvent('confirm', ok ? 'confirmed' : 'cancelled', t0);
+    if (ok) { if (onConfirm) onConfirm(); }
+    else    { if (onCancel) onCancel(); }
+    return Promise.resolve(ok);
+  }
+
+  /* Canonical replacement for native alert() — styled, focus-trapped,
+     Esc/Enter-dismissable, ARIA dialog. Returns a Promise that resolves
+     when dismissed. Signature stays alert-simple: _dialogAlert(msg, opts?). */
+  function _dialogAlert(msg, opts) {
+    opts = opts || {};
+    var ui = _ui();
+    var t0 = Date.now();
+    if (ui && ui.openModal) {
+      return new Promise(function (resolve) {
+        var okLabel = opts.okLabel || opts.confirmLabel || 'OK';
+        var variant = opts.variant || 'neutral';
+        var btnColor = variant === 'danger'  ? 'linear-gradient(135deg,#c01,#900)' :
+                       variant === 'success' ? 'linear-gradient(135deg,#71ff00,#4fc800)' :
+                       'rgba(255,255,255,0.12)';
+        var btnText  = variant === 'success' ? '#050f05' : '#fff';
+        var content =
+          '<p class="sk-modal-body" style="margin:0 0 24px">' + _esc(msg == null ? '' : String(msg)) + '</p>' +
+          '<div class="sk-modal-footer" style="justify-content:flex-end">' +
+            '<button id="sk-alert-ok" style="min-width:120px;padding:13px;background:' + btnColor +
+            ';border:none;border-radius:12px;color:' + btnText + ';font-weight:900;font-size:14px;cursor:pointer;">' +
+            _esc(okLabel) + '</button>' +
+          '</div>';
+        var done = false;
+        var close = ui.openModal({
+          title: opts.title || 'Notice', content: content, closeable: true,
+          onClose: function () {
+            if (done) return; done = true;
+            _dlgEvent('alert', 'dismissed', t0);
+            if (opts.onClose) try { opts.onClose(); } catch (_) {}
+            resolve();
+          }
+        });
+        var ok = document.getElementById('sk-alert-ok');
+        if (ok) ok.addEventListener('click', function () { close(); });
+      });
+    }
+    /* Fallback */
+    window.alert(msg);
+    _dlgEvent('alert', 'dismissed', t0);
+    return Promise.resolve();
   }
 
   function _dialogClose() {
@@ -485,6 +555,7 @@
 
     dialog: {
       open:    _dialogOpen,
+      alert:   _dialogAlert,
       confirm: _dialogConfirm,
       close:   _dialogClose,
     },

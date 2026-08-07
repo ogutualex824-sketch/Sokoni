@@ -285,6 +285,11 @@
 
     var box = document.createElement('div');
     box.className = 'sk-modal' + (opts.bottom ? ' sk-modal--bottom' : '');
+    /* Dialog semantics — native alert/confirm expose these for free; the
+       canonical modal must match before it can replace them (Slice B). */
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    if (opts.title) box.setAttribute('aria-label', opts.title);
 
     if (opts.closeable !== false) {
       var closeBtn = document.createElement('button');
@@ -321,23 +326,61 @@
       });
     }
 
+    /* Remember what had focus so we can restore it on close (native dialogs do). */
+    var _prevFocus = document.activeElement;
+
     document.addEventListener('keydown', _onEsc);
+    box.addEventListener('keydown', _trapFocus);
     document.body.style.overflow = 'hidden';
     document.body.appendChild(backdrop);
     _modalStack.push({ backdrop: backdrop, close: close, onClose: opts.onClose });
 
+    /* Auto-focus the first interactive control (or the box itself), so keyboard
+       and screen-reader users land inside the dialog — matches native confirm(). */
+    _ready(function() {
+      var focusables = _focusable(box);
+      (focusables[0] || box).focus();
+      if (!focusables.length) box.setAttribute('tabindex', '-1');
+    });
+
     function close() {
       backdrop.classList.add('sk-modal--out');
       document.removeEventListener('keydown', _onEsc);
+      box.removeEventListener('keydown', _trapFocus);
       setTimeout(function() {
         if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
         _modalStack = _modalStack.filter(function(m) { return m.backdrop !== backdrop; });
         if (!_modalStack.length) document.body.style.overflow = '';
       }, 210);
+      /* Restore focus to the element that opened the dialog. */
+      try { if (_prevFocus && _prevFocus.focus) _prevFocus.focus(); } catch (_) {}
       if (typeof opts.onClose === 'function') opts.onClose();
     }
 
     return close;
+  }
+
+  /* Focusable elements inside a container, in tab order. */
+  function _focusable(root) {
+    var sel = 'a[href],button:not([disabled]),textarea:not([disabled]),' +
+              'input:not([disabled]):not([type="hidden"]),select:not([disabled]),' +
+              '[tabindex]:not([tabindex="-1"])';
+    return Array.prototype.slice.call(root.querySelectorAll(sel))
+      .filter(function(el) { return el.offsetParent !== null || el === document.activeElement; });
+  }
+
+  /* Trap Tab within the modal so focus can't escape to the page behind it. */
+  function _trapFocus(e) {
+    if (e.key !== 'Tab') return;
+    var box = e.currentTarget;
+    var f = _focusable(box);
+    if (!f.length) { e.preventDefault(); return; }
+    var first = f[0], last = f[f.length - 1], active = document.activeElement;
+    if (e.shiftKey && (active === first || active === box)) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault(); first.focus();
+    }
   }
 
   function _onEsc(e) {
@@ -381,6 +424,9 @@
         var can = document.getElementById('sk-confirm-cancel');
         if (ok)  ok.addEventListener('click',  function() { close(); resolve(true);  });
         if (can) can.addEventListener('click', function() { close(); resolve(false); });
+        /* Enter confirms (native confirm() parity): focus the primary button so
+           it activates on Enter. Esc still cancels via the modal's onClose. */
+        if (ok) ok.focus();
       });
     });
   }

@@ -1,3 +1,31 @@
+## [2026-08-07] — feat(ui): Slice B — dialog convergence (top-6 modules) + canonical modal hardening
+
+Design-system convergence, batch 2 (after Slice A toasts). Native `alert()`/`confirm()` →
+canonical `SK.dialog`, migrated by highest-offender module so each batch stays reviewable.
+
+- **Foundation first (capability parity before retiring native):** strengthened the canonical
+  modal (sokoni-ui.js `openModal`) to match what native dialogs give for free — `role="dialog"` +
+  `aria-modal`, a **focus trap** (Tab cycles inside), **focus save/restore** (returns focus to the
+  opener on close), **auto-focus** the first control, and **Enter-confirms** parity in `confirm()`.
+  Scroll-lock + Esc were already present.
+- **New API:** `SK.dialog.alert(msg, opts?)` — styled, focus-trapped, Esc/Enter-dismissable,
+  returns a Promise. `SK.dialog.confirm` now also returns the boolean (awaitable) and fires telemetry.
+- **Telemetry (like Slice A toasts):** `window._skDialogMetrics {total, byType, byResult}` +
+  a `sk:dialog` CustomEvent (`type`, `module`, `result`, `durationMs`). Nothing persisted.
+- **Migrated (102 call sites, 0 bare left in these files):** creative-studio (22), subscription-os
+  (16+5), admin (19+2), wap (10+2), staff-management (11+1), account-centre (9+3). Mapping:
+  `alert(x)`→`SK.dialog.alert(x)`; `if(!confirm(x))return;`→`if(!(await SK.dialog.confirm(x)))return;`
+  in async fns, or `SK.dialog.confirm(x, cb)` (body-wrapped) in non-async fns (admin). Destructive
+  actions (suspend/revoke/sign-out) get `variant:'danger'`. `prompt()` left unchanged.
+- **Adoption:** dialogs **~0% → ~24%** (102 canonical / 331 native remaining). Verified: all inline
+  scripts parse; every `await` sits in an already-`async` function; no double-prefix. Runtime render
+  is App-Check-gated headless, so on-device confirm pending. No business behavior/button/keyboard
+  changes — renderer convergence only, not UX redesign.
+- **Files:** sokoni-ui.js, sokoni-ds.js, creative-studio.html, subscription-os.html, admin.html,
+  wap.html, staff-management.html, account-centre.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — fix(seller): dashboard reads canonical analytics (was fabricated) + per-shop backfill
 
 Fixed the merchant dashboard headline stats, which were FABRICATED, not aggregated.
