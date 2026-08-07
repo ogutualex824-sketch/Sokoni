@@ -427,8 +427,8 @@ function saveItem(editId) {
   renderMenu();
 }
 
-function delItem(itemId) {
-  if (!confirm('Remove this item from your menu?')) return;
+async function delItem(itemId) {
+  if (!(await SK.dialog.confirm('Remove this item from your menu?', null, null, { title: 'Remove item', variant: 'danger', confirmLabel: 'Remove' }))) return;
   const menuKey = 'fd_menu_' + _restaurant.id;
   const saved = JSON.parse(localStorage.getItem(menuKey) || 'null') || _menu;
   saved.items = (saved.items||[]).filter(i => i.id !== itemId);
@@ -493,8 +493,8 @@ function savePromo() {
   renderPromos();
 }
 
-function delPromo(idx) {
-  if (!confirm('Delete this promo code?')) return;
+async function delPromo(idx) {
+  if (!(await SK.dialog.confirm('Delete this promo code?', null, null, { title: 'Delete promo', variant: 'danger', confirmLabel: 'Delete' }))) return;
   _vendorPromos.splice(idx, 1);
   localStorage.setItem('vendor_promos_' + _restaurant.id, JSON.stringify(_vendorPromos));
   renderPromos();

@@ -1,3 +1,21 @@
+## [2026-08-07] — feat(ui): Slice B8 — dialog convergence (admin/ops/comms pages)
+
+11 pages migrated; 1 deferred (SK-availability gate).
+
+- **Migrated (22 sites, 0 bare left):** uat-center (2), superadmin (2 — async object methods),
+  launch (2), food-dashboard (2), event-manager (2), chat (2 — incl. `action.confirm && !confirm(...)`
+  where only the native call was replaced, the property preserved), automation-center (2 — object
+  methods marked async), async-jobs (2), status (2 alert), seller (2 alert), legal-centre (2 alert).
+  Non-async handlers marked `async` after verifying onclick/callback callers discard the return.
+- **Deferred (exception list):** android-doctor.html — diagnostic page, no shared-header/sokoni-ds,
+  `SK` absent. Same gate as pos-ios-print-test.
+- **Adoption:** dialogs **~73% → ~79%** (304 canonical / 80 native left).
+- **Files:** uat-center.html, superadmin.html, launch.html, food-dashboard.html, event-manager.html,
+  chat.html, automation-center.html, async-jobs.html, status.html, seller.html, legal-centre.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B7 — dialog convergence (POS/admin pages)
 
 9 pages migrated; 1 deferred on the SK-availability gate.

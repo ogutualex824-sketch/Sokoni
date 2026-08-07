@@ -719,8 +719,8 @@ window.AC = {
 
   closeModal: function() { document.getElementById('modalBg').classList.remove('open'); },
 
-  quickResolve: function(itemId, recAction) {
-    if (!confirm('Follow AI recommendation: ' + recAction.replace(/_/g, ' ') + '?')) return;
+  quickResolve: async function(itemId, recAction) {
+    if (!(await SK.dialog.confirm('Follow AI recommendation: ' + recAction.replace(/_/g, ' ') + '?', null, null, { title: 'Follow recommendation', confirmLabel: 'Follow' }))) return;
     _cf('autoResolveException')({ itemId: itemId, action: recAction, note: 'Followed AI recommendation', override: false })
       .then(function() { _toast('Resolved.'); AC.loadQueue(); })
       .catch(function(e) { _toast(e.message, true); });
@@ -884,8 +884,8 @@ window.AC = {
   },
 
   /* ── Maintenance ─────────────────────────── */
-  maintenance: function() {
-    if (!confirm('Run on-demand maintenance? This archives old orders and retries failed jobs.')) return;
+  maintenance: async function() {
+    if (!(await SK.dialog.confirm('Run on-demand maintenance? This archives old orders and retries failed jobs.', null, null, { title: 'Run maintenance', confirmLabel: 'Run' }))) return;
     _cf('autoTriggerMaintenance')({})
       .then(function(r) { _toast('Maintenance done. Archived: ' + r.data.archived + ', Retried: ' + r.data.retried + '.'); })
       .catch(function(e) { _toast(e.message, true); });

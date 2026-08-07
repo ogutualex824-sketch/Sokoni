@@ -4031,12 +4031,12 @@ function submitDisputeResponse(btn) {
       .catch(function(e) {
         btn.disabled = false;
         btn.textContent = 'Send Response';
-        alert(e.message || 'Failed to submit response. Please try again.');
+        SK.dialog.alert(e.message || 'Failed to submit response. Please try again.');
       });
   } catch(e) {
     btn.disabled = false;
     btn.textContent = 'Send Response';
-    alert('Firebase not ready. Please refresh the page.');
+    SK.dialog.alert('Firebase not ready. Please refresh the page.');
   }
 }
 

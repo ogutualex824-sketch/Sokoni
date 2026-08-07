@@ -1314,8 +1314,8 @@ function _copyText(text) {
   }
 }
 
-function _deleteMsg(msgId) {
-  if (!confirm('Delete this message for everyone?')) return;
+async function _deleteMsg(msgId) {
+  if (!(await SK.dialog.confirm('Delete this message for everyone?', null, null, { title: 'Delete message', variant: 'danger', confirmLabel: 'Delete' }))) return;
   SokoniChat.deleteMessage(CONV_ID, msgId)
     .catch(function (e) { _toast('Could not delete: ' + (e.message || 'Error')); });
 }
@@ -1323,9 +1323,9 @@ function _deleteMsg(msgId) {
 /* ═══════════════════════════════════════════════════════════════════
    SMART ACTIONS
 ═══════════════════════════════════════════════════════════════════ */
-function handleAction(action) {
+async function handleAction(action) {
   if (IS_RO || !CONV) return;
-  if (action.confirm && !confirm(action.label + '?')) return;
+  if (action.confirm && !(await SK.dialog.confirm(action.label + '?'))) return;
 
   /* Open URL if defined */
   if (action.url) {
