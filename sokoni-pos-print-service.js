@@ -701,6 +701,33 @@ class PosPrintService {
        once a printer becomes available. (reconnect/focus handlers also cover this — this makes
        recovery explicit for the "already-connected at startup" case that fires no event.) */
     this._recoverOnStartup();
+    /* Zero-config printer auto-connect: reconnect to the previously-paired printer on every
+       POS open — no reconfiguration, like earbuds. */
+    this._autoConnectPrinter();
+  }
+
+  /* Reconnect to the last-paired printer automatically whenever the POS loads, with NO
+     configuration step. Uses PrinterManager.autoReconnect() — Bluetooth reconnect via
+     navigator.bluetooth.getDevices() needs no user gesture on Chrome 85+ (also network/
+     browser). Returns false (no-op) when nothing was ever paired, so it's safe everywhere.
+     Retries quietly in the background without blocking selling, and also fires on the first
+     user interaction for browsers that gate a GATT connect behind a gesture. */
+  _autoConnectPrinter () {
+    const pm = window.PrinterManager;
+    if (!pm || typeof pm.autoReconnect !== 'function') return;
+    let attempts = 0, done = false;
+    const attempt = () => {
+      if (done || pm.connected) { done = pm.connected || done; return; }
+      attempts++;
+      try { Promise.resolve(pm.autoReconnect()).then(() => { if (pm.connected) done = true; }).catch(() => {}); } catch (_) {}
+    };
+    attempt();                                             /* immediately on boot */
+    const iv = setInterval(() => {
+      if (done || pm.connected || attempts > 12) { clearInterval(iv); return; }
+      attempt();
+    }, 8000);                                              /* quiet background retry (~90s) */
+    const onGesture = () => { if (!pm.connected) attempt(); };
+    try { window.addEventListener('pointerdown', onGesture, { passive: true }); } catch (_) {}
   }
 
   /* Poll briefly on boot: if there are pending jobs and a printer is (or becomes) connected,

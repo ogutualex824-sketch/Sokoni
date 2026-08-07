@@ -1433,6 +1433,20 @@ class SPEngine {
       } catch(e) { return false; }
     }
 
+    /* USB (wired): getDevices() returns previously-granted USB devices without a gesture. */
+    if (last.type === 'usb' && navigator.usb?.getDevices) {
+      try {
+        const devices = await navigator.usb.getDevices();
+        const matched = devices.find(d =>
+          (last.serialNumber && d.serialNumber === last.serialNumber) ||
+          (last.productId != null && d.productId === last.productId && d.vendorId === last.vendorId)
+        ) || (devices.length === 1 ? devices[0] : null);   /* single known printer → reuse it */
+        if (!matched) return false;
+        await this.connect({ ...last, _dev: matched });
+        return true;
+      } catch(e) { return false; }
+    }
+
     if (last.type !== 'network' && last.type !== 'browser') return false;
     try { await this.connect(last); return true; } catch(e) { return false; }
   }
