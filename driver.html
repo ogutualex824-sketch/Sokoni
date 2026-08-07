@@ -2968,15 +2968,15 @@ window.toggleOnline = async function() {
       _setRiderOnline(false, true);
     };
 
-    window.shiftEnd = function () {
-      if (!confirm('End your shift? You will go offline.')) return;
+    window.shiftEnd = async function () {
+      if (!(await SK.dialog.confirm('End your shift? You will go offline.', null, null, { title: 'End shift', confirmLabel: 'End shift' }))) return;
       _shiftStatus = 'offline';
       _updateShiftStatus();
       _setRiderOnline(false, false);
       if (_shiftTimer) { clearInterval(_shiftTimer); _shiftTimer = null; }
       var duration = _shiftStart ? Math.round((Date.now() - _shiftStart) / 60000) : 0;
       setTimeout(function () {
-        alert('Shift ended. Duration: ' + duration + ' min. Deliveries: ' + _shiftDeliveries + '. Earnings: KES ' + _shiftEarnings.toLocaleString() + '.');
+        SK.dialog.alert('Shift ended. Duration: ' + duration + ' min. Deliveries: ' + _shiftDeliveries + '. Earnings: KES ' + _shiftEarnings.toLocaleString() + '.');
         _shiftStart = null; _shiftDeliveries = 0; _shiftEarnings = 0;
       }, 300);
     };
@@ -3194,7 +3194,7 @@ window.toggleOnline = async function() {
           _shiftDeliveries++;
           _renderBatchRoute(deliveryRef);
         })
-        .catch(function (e) { alert('Error: ' + e.message); });
+        .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
     };
 
     window._declineDispatch = function (deliveryRef) {
@@ -3202,7 +3202,7 @@ window.toggleOnline = async function() {
       if (banner && banner._timer) clearInterval(banner._timer);
       firebase.functions().httpsCallable('respondToDispatch')({ deliveryRef, accept: false })
         .then(function () { if (banner) banner.remove(); })
-        .catch(function (e) { alert('Error: ' + e.message); });
+        .catch(function (e) { SK.dialog.alert('Error: ' + e.message); });
     };
 
     /* ── Batch route rendering ── */
@@ -3288,12 +3288,12 @@ window.toggleOnline = async function() {
           var id = b.getAttribute('data-claim'); b.disabled=true; b.textContent='Claiming…';
           try {
             var uid = _riderUid();
-            if(!uid){ b.disabled=false; b.textContent='Claim'; alert('Please sign in to claim.'); return; }
+            if(!uid){ b.disabled=false; b.textContent='Claim'; SK.dialog.alert('Please sign in to claim.'); return; }
             if(!window.SokoniOrders || !window.SokoniOrders.riderClaim){ b.disabled=false; b.textContent='Claim'; return; }
             var res = await window.SokoniOrders.riderClaim(id, uid);
             if(res && res.ok){ b.textContent='✓ Claimed'; }   /* order moves to My Active Deliveries */
-            else { b.disabled=false; b.textContent='Claim'; alert((res&&res.error)||'Could not claim this delivery.'); }
-          } catch(e){ b.disabled=false; b.textContent='Claim'; alert('Claim failed. Please try again.'); }
+            else { b.disabled=false; b.textContent='Claim'; SK.dialog.alert((res&&res.error)||'Could not claim this delivery.'); }
+          } catch(e){ b.disabled=false; b.textContent='Claim'; SK.dialog.alert('Claim failed. Please try again.'); }
         };
       });
     }
@@ -3342,11 +3342,11 @@ window.toggleOnline = async function() {
           var id = b.getAttribute('data-del'); var _orig = b.textContent;
           b.disabled = true; b.textContent = 'Accepting…';
           try {
-            if (!_riderUid()) { b.disabled=false; b.textContent=_orig; alert('Please sign in first.'); return; }
+            if (!_riderUid()) { b.disabled=false; b.textContent=_orig; SK.dialog.alert('Please sign in first.'); return; }
             var fn = firebase.functions().httpsCallable('claimAvailableDelivery');
             var res = await fn({ deliveryRef: id });
-            if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; alert('Delivery accepted! Proof PIN: ' + (res.data.proofPin || '—')); }
-            else { b.disabled=false; b.textContent=_orig; alert('Could not accept — please try again.'); }
+            if (res && res.data && res.data.ok) { b.textContent = '✓ Accepted'; _poll(); try{ if(typeof renderDeliveries==='function') renderDeliveries(); }catch(_){}; SK.dialog.alert('Delivery accepted! Proof PIN: ' + (res.data.proofPin || '—')); }
+            else { b.disabled=false; b.textContent=_orig; SK.dialog.alert('Could not accept — please try again.'); }
           } catch(e){
             /* Full diagnostics to console; friendly, code-aware message to the rider. */
             console.error('[Accept delivery] failed:', e);
@@ -3358,7 +3358,7 @@ window.toggleOnline = async function() {
                     : (code === 'unauthenticated') ? 'Please sign in again.'
                     : (code === 'internal') ? 'Server is starting up — please tap Accept again in a moment.'
                     : (e && e.message) || 'Unable to accept delivery. Please try again.';
-            alert(msg);
+            SK.dialog.alert(msg);
           }
         };
       });

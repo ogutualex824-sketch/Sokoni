@@ -578,10 +578,10 @@ document.getElementById('btnCheckGC').addEventListener('click', function () {
   }).catch(function (e) { _toast(e.message, 'error'); });
 });
 
-document.getElementById('btnVoidGC').addEventListener('click', function () {
+document.getElementById('btnVoidGC').addEventListener('click', async function () {
   var code = document.getElementById('gcCheckCode').value.trim().toUpperCase();
   if (!code) { _toast('Enter a card code', 'error'); return; }
-  if (!confirm('Void this gift card? The balance will be permanently forfeited.')) return;
+  if (!(await SK.dialog.confirm('Void this gift card? The balance will be permanently forfeited.', null, null, { title: 'Void gift card', variant: 'danger', confirmLabel: 'Void' }))) return;
   _cf('giftCardVoid')({ shopId: _shopId, code: code, reason: 'Manual void by cashier' })
     .then(function () { _toast('Card voided', 'success'); _loadGiftCards(); })
     .catch(function (e) { _toast(e.message, 'error'); });
@@ -720,8 +720,8 @@ window._fulfillLayaway = function (id, balance) {
     .catch(function (e) { _toast(e.message, 'error'); });
 };
 
-window._cancelLayaway = function (id) {
-  if (!confirm('Cancel this layaway? Refund amount will be recorded.')) return;
+window._cancelLayaway = async function (id) {
+  if (!(await SK.dialog.confirm('Cancel this layaway? Refund amount will be recorded.', null, null, { title: 'Cancel layaway', confirmLabel: 'Cancel layaway' }))) return;
   _cf('layawayCancel')({ layawayId: id, shopId: _shopId })
     .then(function (r) { _toast('Cancelled. Refundable: ' + _fmt(r.data.refundablePaid), 'success'); _loadLayaways(); })
     .catch(function (e) { _toast(e.message, 'error'); });
@@ -768,8 +768,8 @@ window._retrieveSale = function (parkId) {
     }).catch(function (e) { _toast(e.message, 'error'); });
 };
 
-window._discardSale = function (parkId) {
-  if (!confirm('Permanently discard this parked sale?')) return;
+window._discardSale = async function (parkId) {
+  if (!(await SK.dialog.confirm('Permanently discard this parked sale?', null, null, { title: 'Discard parked sale', variant: 'danger', confirmLabel: 'Discard' }))) return;
   _cf('saleDiscardParked')({ parkId: parkId, shopId: _shopId })
     .then(function () { _toast('Discarded', 'success'); _loadParked(); })
     .catch(function (e) { _toast(e.message, 'error'); });
@@ -899,8 +899,8 @@ function _renderCycleSession() {
   });
 }
 
-document.getElementById('btnCompleteCount').addEventListener('click', function () {
-  if (!confirm('Complete count and apply inventory adjustments for all variances?')) return;
+document.getElementById('btnCompleteCount').addEventListener('click', async function () {
+  if (!(await SK.dialog.confirm('Complete count and apply inventory adjustments for all variances?', null, null, { title: 'Complete count', confirmLabel: 'Apply adjustments' }))) return;
   var btn = this; btn.disabled = true;
   _cf('cycleCountComplete')({ cycleCountId: _activeCycleCountId, shopId: _shopId, adjustInventory: true })
     .then(function (r) {
@@ -910,15 +910,15 @@ document.getElementById('btnCompleteCount').addEventListener('click', function (
       .finally(function () { btn.disabled = false; });
 });
 
-document.getElementById('btnCompleteNoAdjust').addEventListener('click', function () {
-  if (!confirm('Complete count without adjusting inventory?')) return;
+document.getElementById('btnCompleteNoAdjust').addEventListener('click', async function () {
+  if (!(await SK.dialog.confirm('Complete count without adjusting inventory?', null, null, { title: 'Complete count', confirmLabel: 'Complete' }))) return;
   _cf('cycleCountComplete')({ cycleCountId: _activeCycleCountId, shopId: _shopId, adjustInventory: false })
     .then(function () { _toast('Count recorded (no adjustments)', 'success'); _endCycleSession(); })
     .catch(function (e) { _toast(e.message, 'error'); });
 });
 
-document.getElementById('btnCancelSession').addEventListener('click', function () {
-  if (!confirm('Cancel this count session?')) return;
+document.getElementById('btnCancelSession').addEventListener('click', async function () {
+  if (!(await SK.dialog.confirm('Cancel this count session?', null, null, { title: 'Cancel count session', confirmLabel: 'Cancel session' }))) return;
   _endCycleSession();
 });
 

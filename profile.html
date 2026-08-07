@@ -4343,7 +4343,7 @@ function saveSettings(){
 
 async function deactivateAccount(_c){
   if(!_c){_skConfirm('Deactivate your account? Your profile, shop and listings will be hidden from SOKONI, and you won\'t be able to post, order or message until you reactivate. You can reactivate anytime by signing back in.',()=>deactivateAccount(true));return;}
-  var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
+  var toast = window._skToast || function(m){ try{ SK.dialog.alert(m); }catch(e){} };
   try{
     toast('Deactivating…','info');
     /* Server-authoritative: the CF sets a custom claim + hides merchant surfaces +
@@ -4382,7 +4382,7 @@ function _maybeReactivateGate(data){
 }
 async function _doReactivate(){
   var btn = document.getElementById('pv-react-yes');
-  var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
+  var toast = window._skToast || function(m){ try{ SK.dialog.alert(m); }catch(e){} };
   if(btn){ btn.disabled=true; btn.textContent='Reactivating…'; }
   try{
     var mod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
@@ -4427,7 +4427,7 @@ function _acctTypedConfirm(word, message){
 }
 
 async function deleteAccountPermanently(){
-  var toast = window._skToast || function(m){ try{ alert(m); }catch(e){} };
+  var toast = window._skToast || function(m){ try{ SK.dialog.alert(m); }catch(e){} };
   /* Reliable in-page confirmation (replaces native prompt(), which is suppressed
      in many mobile/PWA/in-app browsers — the reason Delete appeared to do nothing
      on phones). */
@@ -5131,7 +5131,7 @@ window.logoutUser = logoutUser;
   var _pvVerifier = null;       /* RecaptchaVerifier (invisible, reused)       */
   var _pvPendingPhone = '';     /* E.164 phone awaiting OTP confirmation        */
 
-  function _pvToast(msg, type){ try { (window._skToast ? window._skToast(msg, type) : alert(msg)); } catch(_){ try{ alert(msg); }catch(e){} } }
+  function _pvToast(msg, type){ try { (window._skToast ? window._skToast(msg, type) : SK.dialog.alert(msg)); } catch(_){ try{ SK.dialog.alert(msg); }catch(e){} } }
   function _pvUser(){ try { return window.firebaseAuth && window.firebaseAuth.currentUser; } catch(_){ return null; } }
 
   /* Kenya-first E.164 normaliser: 07.. / 01.. / 2547.. / +2547.. / 7XXXXXXXX */
@@ -5961,9 +5961,9 @@ window.logoutUser = logoutUser;
     );
   };
 
-  window.piVaultDelete = function(docId, storagePath) {
+  window.piVaultDelete = async function(docId, storagePath) {
     if (!docId) return;
-    if (!confirm('Delete this document? This cannot be undone.')) return;
+    if (!(await SK.dialog.confirm('Delete this document? This cannot be undone.', null, null, { title: 'Delete document', variant: 'danger', confirmLabel: 'Delete' }))) return;
 
     var user = firebase.auth && firebase.auth().currentUser;
     if (!user) { _toast('Not authenticated.'); return; }

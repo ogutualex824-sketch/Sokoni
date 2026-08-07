@@ -1,3 +1,20 @@
+## [2026-08-07] — feat(ui): Slice B batch 3 — dialog convergence (driver/rider/profile/POS)
+
+Native `alert`/`confirm` → `SK.dialog`, user-facing group.
+
+- **Migrated (29 sites, 0 bare left):** driver (10+1), rider-nav (5+1 SOS), profile (5+1),
+  pos-completeness (0+6 gift-card/layaway/parked-sale/inventory-count).
+- **Non-async handling:** all 9 confirms were in non-async fire-and-forget handlers (onclick/
+  addEventListener). Converted by marking each enclosing function `async` (body untouched) after
+  verifying every caller discards the return value (Promise return is inert). Destructive actions
+  (void/discard/delete/SOS) get `variant:'danger'`. rider-nav SOS message lost its `\n\n` line
+  break (modal wraps as one paragraph — text preserved).
+- **Adoption:** dialogs **~40% → ~47%** (187 canonical / 212 native left).
+- **Files:** driver.html, rider-nav.html, profile.html, pos-completeness.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B batch 2 — dialog convergence (admin/ops consoles)
 
 Continued native `alert`/`confirm` → `SK.dialog` migration, next logical group (low-traffic

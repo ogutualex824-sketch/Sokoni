@@ -71,12 +71,16 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | 08-07 | A | Toasts (renderer) | 2 renderers | **1 renderer** |
 | 08-07 | B1 | Dialogs | ~0% | **~24%** (102 via `SK.dialog`; 331 native left) — creative-studio, subscription-os, admin, wap, staff-management, account-centre |
 | 08-07 | B2 | Dialogs | ~24% | **~40%** (158 via `SK.dialog`; 239 native left) — admin-subscriptions, ai-subscriptions, webhooks, observability, api-gateway, task-queue, email-center |
+| 08-07 | B3 | Dialogs | ~40% | **~47%** (187 via `SK.dialog`; 212 native left) — driver, rider-nav (SOS), profile, pos-completeness |
 
 **Batch ledger (dialogs):**
 | Batch | Modules | SK.dialog | Native left | Adoption |
 |---|---|---|---|---|
 | 1 | creative-studio · subscription-os · admin · wap · staff-management · account-centre | 102 | 331 | ~24% |
 | 2 | admin-subscriptions · ai-subscriptions · webhooks · observability · api-gateway · task-queue · email-center | 158 | 239 | ~40% |
+| 3 | driver · rider-nav · profile · pos-completeness | 187 | 212 | ~47% |
+
+**Batch-3 note:** all 9 confirms were in **non-async** functions (fire-and-forget onclick/listeners). Converted by marking each enclosing function `async` (body preserved exactly) — verified every caller discards the return value, so the Promise return is inert. rider-nav SOS lost its `\n\n` line break (modal wraps as one paragraph; text content preserved).
 
 **Excluded from migration (scanner false-positives, verified):** `sokoni-alerts.js` (defines its OWN `alert(msg,severity,details)` audit system — not native); `functions/test/*`, `scripts/*` (Node — no `SK`); `dispatch.html`, `provider-dashboard.html`, `ecc.html` (`data-no-header` → shared-header never injects `SK`; need explicit `sokoni-ds.js` or stay native — handle separately).
 

@@ -451,7 +451,7 @@ function _extOpen(app) {
 /* ── Call customer ────────────────────────────────────────────────────────── */
 function _callStop() {
   var stop = nav.getCurrentStop();
-  if (!stop || !stop.phone) { alert('No phone number for this stop.'); return; }
+  if (!stop || !stop.phone) { SK.dialog.alert('No phone number for this stop.'); return; }
   window.location.href = 'tel:' + stop.phone;
 }
 
@@ -480,7 +480,7 @@ function _submitPOD() {
   var curr    = nav.getCurrentStop();
   var stopIdx = curr ? curr._idx : 0;
   var value   = document.getElementById('podValue').value.trim();
-  if (_podType !== 'none' && !value) { alert('Please enter the required proof.'); return; }
+  if (_podType !== 'none' && !value) { SK.dialog.alert('Please enter the required proof.'); return; }
   var pos = nav.getPosition() || {};
   _cf('navSubmitPOD')({ tripId: _trip.id, stopIdx: stopIdx, podType: _podType, value: value, lat: pos.lat, lng: pos.lng })
     .then(function(r) {
@@ -490,7 +490,7 @@ function _submitPOD() {
         _updateTopBar();
         if (r.data.allCompleted) _tripComplete();
       });
-    }).catch(function(e) { alert('Error: ' + e.message); });
+    }).catch(function(e) { SK.dialog.alert('Error: ' + e.message); });
 }
 
 function _tripComplete() {
@@ -503,9 +503,9 @@ function _tripComplete() {
 }
 
 /* ── SOS ─────────────────────────────────────────────────────────────────── */
-function _sos() {
-  if (!confirm('🆘 SEND EMERGENCY SOS?\n\nThis will immediately alert the SOKONI admin team with your location.')) return;
-  nav.triggerSOS().then(function() { alert('SOS sent. Help is on the way.'); }).catch(function(e) { alert('SOS failed: '+e.message); });
+async function _sos() {
+  if (!(await SK.dialog.confirm('🆘 SEND EMERGENCY SOS? This will immediately alert the SOKONI admin team with your location.', null, null, { title: 'Emergency SOS', variant: 'danger', confirmLabel: 'Send SOS' }))) return;
+  nav.triggerSOS().then(function() { SK.dialog.alert('SOS sent. Help is on the way.'); }).catch(function(e) { SK.dialog.alert('SOS failed: '+e.message); });
 }
 </script>
 </body>
