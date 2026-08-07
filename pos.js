@@ -2400,7 +2400,15 @@ const SPos = (function () {
     if (typeof _p7SetReceiptData === 'function') _p7SetReceiptData(receiptData);
 
     el.classList.add('open');
-    setTimeout(() => el.classList.remove('open'), 8000);
+    const autoClose = setTimeout(() => el.classList.remove('open'), 8000);
+
+    /* Robust close: a single canonical closer used by the ✕/"Tap to close" button AND by
+       tapping the backdrop (outside the modal). Guarantees an escape even if the modal is
+       taller than the screen. Idempotent; clears the auto-close timer. */
+    const closeSuccess = () => { clearTimeout(autoClose); el.classList.remove('open'); };
+    el.onclick = (e) => { if (e.target === el) closeSuccess(); };   /* backdrop tap */
+    const closeBtn = el.querySelector('.suc-close-btn');
+    if (closeBtn) closeBtn.onclick = closeSuccess;
   }
 
   /* ═══════════════════════════════════════════════════════════
