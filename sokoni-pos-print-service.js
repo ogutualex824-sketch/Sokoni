@@ -311,9 +311,13 @@ class PrintQueue {
     this._save(q);
   }
 
+  /* Retention: drop only OLD, finished jobs (done/failed). Unfinished work
+     (pending) is NEVER auto-removed — a queued receipt must not silently vanish. */
   purgeOld (daysOld = 7) {
     const cutoff = Date.now() - daysOld * 86400000;
-    const q = this._load().filter(j => new Date(j.queuedAt).getTime() > cutoff);
+    const q = this._load().filter(j =>
+      j.status === 'pending' ||                                 /* keep all unfinished */
+      new Date(j.queuedAt).getTime() > cutoff);                 /* keep recent finished */
     this._save(q);
   }
 }
@@ -693,6 +697,22 @@ class PosPrintService {
     _printerState.subscribe(() => { try { _updateHeaderWidget(); } catch (_) {} });
     /* Health monitor now only RECONCILES the one state + gathers queue metrics (no competing calc). */
     this.health.start(30000);
+    /* Crash recovery: resume any receipts left pending by a previous crash/reload/power loss
+       once a printer becomes available. (reconnect/focus handlers also cover this — this makes
+       recovery explicit for the "already-connected at startup" case that fires no event.) */
+    this._recoverOnStartup();
+  }
+
+  /* Poll briefly on boot: if there are pending jobs and a printer is (or becomes) connected,
+     drain them. Bounded — reconnect/focus handlers cover anything after this window. */
+  _recoverOnStartup () {
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      if (this.queue.getLength() === 0) { clearInterval(iv); return; }
+      if (_pm()?.connected || _eng()?.connected) { clearInterval(iv); this.drainQueue(); }
+      else if (tries > 20) { clearInterval(iv); }      /* ~30s; later reconnect/focus still recovers */
+    }, 1500);
   }
 
   /* ── Event system ───────────────────────────────────────────── */
@@ -809,6 +829,24 @@ class PosPrintService {
       this._draining = false;
     }
     _updateHeaderWidget({ connected: true, queueLength: this.queue.getLength() });
+    /* Bounded retry backoff for jobs that failed transiently but aren't exhausted. */
+    this._scheduleBackoff();
+  }
+
+  /* Reschedule a drain for still-pending, not-yet-exhausted jobs on a bounded ramp
+     (immediate → 2s → 5s → 10s by attempt), then stop and wait for reconnect/focus —
+     never an unbounded retry loop. markFail flips a job to 'failed' at maxAttempts, so
+     it drops out of "retryable" and the backoff naturally ends. */
+  _scheduleBackoff () {
+    if (this._backoffTimer) return;
+    const retryable = this.queue.getPending().filter(j => (j.attempts || 0) < (j.maxAttempts || 3));
+    if (!retryable.length) return;                    /* nothing retryable → wait for reconnect */
+    const minAttempts = Math.min(...retryable.map(j => j.attempts || 0));
+    const delay = [0, 2000, 5000, 10000][Math.min(minAttempts, 3)] || 10000;
+    this._backoffTimer = setTimeout(() => {
+      this._backoffTimer = null;
+      if (_pm()?.connected || _eng()?.connected) this.drainQueue();
+    }, delay);
   }
 
   /* ── Build production receipt bytes ────────────────────────── */
@@ -1318,6 +1356,43 @@ class PosPrintService {
         posPrintService:  true,
       },
     };
+  }
+
+  /* Concise, human health line for a status widget / support view, e.g.
+     "Connected · Queue: 1 pending · Last print: 2m ago · Success 99.6%". */
+  getHealthSummary () {
+    const st = _printerState.meta();
+    const qn = this.queue.getLength();
+    const lp = this.health && this.health._lastPrint;
+    let lastStr = '—';
+    if (lp && lp.at) {
+      const s = Math.max(0, Math.round((Date.now() - new Date(lp.at).getTime()) / 1000));
+      lastStr = s < 60 ? s + 's ago' : s < 3600 ? Math.round(s/60) + 'm ago'
+              : s < 86400 ? Math.round(s/3600) + 'h ago' : Math.round(s/86400) + 'd ago';
+    }
+    const m = (this.metrics && this.metrics.summary) ? this.metrics.summary() : {};
+    let rate = null;
+    const total = Number(m.total || m.count || 0), ok = Number(m.success || m.printed || m.ok || 0);
+    if (total > 0) rate = (Math.round((ok / total) * 1000) / 10) + '%';
+    return {
+      state: st.state, label: st.text, printer: st.name || null,
+      queuePending: qn, lastPrint: lastStr, successRate: rate,
+      text: (st.name || st.text) + ' · Queue: ' + qn + ' pending · Last print: ' + lastStr
+            + (rate ? ' · Success ' + rate : ''),
+    };
+  }
+
+  /* Structured queue snapshot for a diagnostics panel: [{status, receipt, time, attempts, lastError}]. */
+  getQueueDiagnostics () {
+    return this.queue.getAll().slice(-25).reverse().map(j => ({
+      jobId:     j.jobId,
+      receipt:   j.receiptId || j.receiptNumber || '—',
+      status:    j.status,                                  /* pending | done | failed */
+      attempts:  j.attempts || 0,
+      maxAttempts: j.maxAttempts || 3,
+      queuedAt:  j.queuedAt,
+      lastError: j.lastError || null,
+    }));
   }
 }
 
