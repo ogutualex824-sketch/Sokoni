@@ -1518,7 +1518,7 @@ async function approveRelease(approved) {
   const version = currentReport.version || 'this version';
   const action = approved ? 'approving' : 'rejecting';
   const msg = 'You are ' + action + ' ' + version + ' for production. This action is logged to the immutable audit trail. Continue?';
-  if (!confirm(msg)) return;
+  if (!(await SK.dialog.confirm(msg))) return;
 
   try {
     const fn = functions.httpsCallable('approveRelease');

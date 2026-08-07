@@ -5389,7 +5389,7 @@ async function applyShelfCount() {
     showToast('No discrepancies to apply — system stock matches AI count', 'info');
     return;
   }
-  if (!confirm(`Apply AI count as stock adjustment for ${adjustable.length} product(s)?\nThis will update system quantities to match the shelf count.`)) return;
+  if (!(await SK.dialog.confirm(`Apply AI count as stock adjustment for ${adjustable.length} product(s)? This will update system quantities to match the shelf count.`, null, null, { title: 'Apply stock adjustment', confirmLabel: 'Apply' }))) return;
 
   let done = 0;
   const db = firebase.firestore();

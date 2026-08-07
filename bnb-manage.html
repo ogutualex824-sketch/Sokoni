@@ -454,8 +454,8 @@
     loadMyListings();
   }
 
-  function deleteBnBListing(id){
-    if(!confirm('Remove this listing? This cannot be undone.')) return;
+  async function deleteBnBListing(id){
+    if(!(await SK.dialog.confirm('Remove this listing? This cannot be undone.', null, null, { title: 'Remove listing', variant: 'danger', confirmLabel: 'Remove' }))) return;
     const bnbs = getBnBs().filter(b => b.id !== id);
     saveBnBs(bnbs);
     showNotif("Listing removed","info");

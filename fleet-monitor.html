@@ -399,7 +399,7 @@ function _resolveAlert(eventId, btn){
   _cf('navResolveFleetEvent')({ eventId: eventId, note: note }).then(function(){
     _refresh();
     _closeDetail();
-  }).catch(function(e){ alert('Error: '+e.message); if(btn) btn.disabled = false; });
+  }).catch(function(e){ SK.dialog.alert('Error: '+e.message); if(btn) btn.disabled = false; });
 }
 
 /* ── Tab switch ── */

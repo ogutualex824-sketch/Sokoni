@@ -526,9 +526,9 @@ function reportCardHtml(r) {
   '</div>';
 }
 
-function reviewReport(reportId, action) {
+async function reviewReport(reportId, action) {
   var labels = { dismiss: 'Dismiss this report?', warn: 'Send a warning to the conversation?', suspend: 'Suspend this conversation?' };
-  if (!confirm(labels[action] || (action + '?'))) return;
+  if (!(await SK.dialog.confirm(labels[action] || (action + '?')))) return;
 
   var card = document.getElementById('rc-' + reportId);
   if (card) card.style.opacity = '0.5';

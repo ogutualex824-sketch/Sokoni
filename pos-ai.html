@@ -702,8 +702,8 @@
     closeSidebarOnMobile();
   }
 
-  clearHistoryBtn.addEventListener('click', () => {
-    if (!confirm('Clear all conversation history?')) return;
+  clearHistoryBtn.addEventListener('click', async () => {
+    if (!(await SK.dialog.confirm('Clear all conversation history?', null, null, { title: 'Clear history', variant: 'danger', confirmLabel: 'Clear' }))) return;
     history = [];
     activeId = null;
     renderHistoryList();

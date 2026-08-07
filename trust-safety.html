@@ -473,8 +473,8 @@ window._submitBan=function(){
   .catch(function(e){_toast(e.message,'red');})
   .finally(function(){btn.disabled=false;btn.textContent='Confirm';});
 };
-window._restoreUser=function(uid){
-  if(!confirm('Restore user '+uid+'?'))return;
+window._restoreUser=async function(uid){
+  if(!(await SK.dialog.confirm('Restore user '+uid+'?', null, null, { title: 'Restore user', confirmLabel: 'Restore' })))return;
   _cf('tsBanUser')({uid,action:'restore',reason:'Admin manual restore'})
   .then(function(){_toast('User restored','green');_loadBanned();}).catch(function(e){_toast(e.message,'red');});
 };

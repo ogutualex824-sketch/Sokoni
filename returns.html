@@ -611,7 +611,7 @@ async function submitReturn() {
 
 // ── Approve return ─────────────────────────────────────────────
 async function approveReturn(returnId, force = false) {
-  if (!confirm('Approve this return and trigger refund?')) return;
+  if (!(await SK.dialog.confirm('Approve this return and trigger refund?', null, null, { title: 'Approve return', variant: 'danger', confirmLabel: 'Approve & refund' }))) return;
   try {
     const processReturn = fns.httpsCallable('processReturn');
     await processReturn({ returnId, action: 'approve', force });

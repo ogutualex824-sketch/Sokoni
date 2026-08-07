@@ -262,7 +262,7 @@ function _render(d){
 function _share(){
   var url=location.href;
   if(navigator.share) navigator.share({title:'Track my SOKONI delivery',url:url}).catch(function(){});
-  else if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){alert('Link copied!');});
+  else if(navigator.clipboard) navigator.clipboard.writeText(url).then(function(){SK.dialog.alert('Link copied!');});
   else prompt('Copy tracking link:',url);
 }
 

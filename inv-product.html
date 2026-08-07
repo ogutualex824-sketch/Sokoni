@@ -696,7 +696,7 @@
   function quickAdjustStock()  { showToast('Quick adjust modal — connect to stock adjustment engine', 'info'); }
   function printLabel()        { showToast('Generating label…', 'success'); }
   function duplicateProduct()  { showToast('Duplicating product…', 'success'); }
-  function archiveProduct()    { if (confirm('Archive this product?')) showToast('Product archived', 'warn'); }
+  async function archiveProduct()    { if (await SK.dialog.confirm('Archive this product?', null, null, { title: 'Archive product', confirmLabel: 'Archive' })) showToast('Product archived', 'warn'); }
   function openImageModal()    { showToast('Image upload modal', 'info'); }
   function openAddBatchModal() { window.location.href = 'inventory.html#batches'; }
   function openAddVariantModal(){ window.location.href = 'inventory.html#products'; }

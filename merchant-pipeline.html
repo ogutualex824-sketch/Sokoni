@@ -532,7 +532,7 @@ async function _mpApprove(bizId) {
   var count = _productCounts[bizId]||0;
   var score = _calcScore(biz, count);
   if (score < 60) { _mpToast('Store completeness is below 60% — cannot approve yet.','warn'); return; }
-  if (!confirm('Approve "' + (biz.name||'this store') + '"?\n\nScore: ' + score + '% | Listings: ' + count + '\n\nThis will mark the store as verified.')) return;
+  if (!(await SK.dialog.confirm('Approve "' + (biz.name||'this store') + '"? Score: ' + score + '% | Listings: ' + count + '. This will mark the store as verified.', null, null, { title: 'Approve store', variant: 'success', confirmLabel: 'Approve' }))) return;
 
   try {
     var fsModule = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');

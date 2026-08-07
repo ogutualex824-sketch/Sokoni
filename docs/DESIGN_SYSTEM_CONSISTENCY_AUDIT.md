@@ -78,6 +78,7 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | 08-07 | B6 | Dialogs | ~63% | **~68%** (263 via `SK.dialog`; 121 native left) — seller-delivery, org-workflows, org-structure, my-subscriptions, manager-auth, gip, developer-portal, commissioning (2 doc/test-string alerts left as exceptions) |
 | 08-07 | B7 | Dialogs | ~68% | **~73%** (282 via `SK.dialog`; 102 native left) — POS/admin: pos-printer-setup, pos-suppliers, pos-inventory, pos-hq, pos-accounting, workspace-invite, partner-portal, notifications, finos (money, danger). pos-ios-print-test deferred (no SK) |
 | 08-07 | B8 | Dialogs | ~73% | **~79%** (304 via `SK.dialog`; 80 native left) — uat-center, superadmin, launch, food-dashboard, event-manager, chat, automation-center, async-jobs, status, seller, legal-centre. android-doctor deferred (no SK) |
+| 08-07 | B9 | Dialogs | ~79% | **~86%** (330 via `SK.dialog`; 54 native left) — **Track A closure**: 26 single-dialog pages (trust-safety, returns, fos-admin/refund money, crm, pos-*, auction/bnb/dispute/commission/automation, checkout, etc.). Remaining native = exceptions + JS-libs (Track B) + availability-manager (Track C) |
 
 **Batch ledger (dialogs):**
 | Batch | Modules | SK.dialog | Native left | Adoption |
@@ -101,6 +102,12 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | JS libraries (`sokoni-*.js`, `pos-*.js`) | Conditional | Migrate ONLY after verifying every load site guarantees `window.SK` exists before execution. Any lib with a load path that doesn't guarantee SK stays native for now. |
 | `pos-ios-print-test.html` (4 alerts) | Deferred | Standalone POS-print test page — loads NO shared-header and no `sokoni-ds.js`, so `SK` is absent. Would need an explicit `sokoni-ds.js` include first; low value (a test harness). |
 | `android-doctor.html` (3 alerts) | Deferred | Diagnostic page — loads NO shared-header/`sokoni-ds.js`, `SK` absent. Same gate as pos-ios-print-test: needs an explicit include before migrating. |
+| `validation.html`, `route-debug.html` (1 alert each) | Deferred | Standalone diagnostic pages, no shared-header/`sokoni-ds.js` → `SK` absent. Both are clipboard-copy feedback alerts. |
+| `beta-control.html` (1 confirm) | Deferred | No shared-header/`sokoni-ds.js` → `SK` absent. Account-decision confirm; migrate after an explicit include. |
+
+**Non-issues (counted by grep, NOT executable dialogs — no action):** `provider-onboarding.html`, `onboarding.html`, `pos-checkout.html` each contain a **comment** that mentions `confirm()` (no call); `provider-dashboard.html` has an `async confirm(id)` **booking method** (a definition, already handled); `email-preview.html` matched a non-dialog string. None require migration.
+
+**✅ Track A (ordinary HTML pages that load the design system) — COMPLETE.** Every executable `alert()`/`confirm()` on an SK-available HTML page now flows through `SK.dialog`. Remaining native calls are exclusively: the exceptions above, JS libraries pending the load-site gate (Track B), and `availability-manager.html` (Track C).
 | `developer-portal.html` (lines ~180/182) | Yes — permanent | `alert(...)` inside `<span class="str">` — rendered **code-documentation examples**, not executable. |
 | `commissioning.html` (lines ~877/879) | Yes — permanent | `alert(1)` inside an **XSS-escaping test string** (`'<script>alert(1)</script>'`), not executable. |
 

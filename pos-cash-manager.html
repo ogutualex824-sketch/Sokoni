@@ -878,7 +878,7 @@ async function loadCloseApprovals() {
 }
 
 async function approveClose(id) {
-  if (!confirm('Approve this register close?')) return;
+  if (!(await SK.dialog.confirm('Approve this register close?', null, null, { title: 'Approve register close', confirmLabel: 'Approve' }))) return;
   try {
     await _posDispatch('cmApproveRegisterClose', { approvalId: id, merchantId: _merchantId, approved: true });
     _toast('Register close approved', false);

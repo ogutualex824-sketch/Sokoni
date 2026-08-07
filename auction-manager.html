@@ -377,8 +377,8 @@ window._viewBids = function (auctionId) {
 
 window._closeBids = function () { document.getElementById('bidSheet').classList.remove('open'); };
 
-window._cancelAuction = function (auctionId, btn) {
-  if (!confirm('Cancel this auction? All bids will be voided. This cannot be undone.')) return;
+window._cancelAuction = async function (auctionId, btn) {
+  if (!(await SK.dialog.confirm('Cancel this auction? All bids will be voided. This cannot be undone.', null, null, { title: 'Cancel auction', variant: 'danger', confirmLabel: 'Cancel auction' }))) return;
   btn.disabled = true; btn.textContent = 'Cancelling...';
   _cf('auctionCancel')({ auctionId: auctionId })
     .then(function () { _toast('Auction cancelled', 'success'); _loadAuctions(); })

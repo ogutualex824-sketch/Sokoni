@@ -1,3 +1,25 @@
+## [2026-08-07] — feat(ui): Slice B9 — dialog convergence (Track A CLOSURE)
+
+Final ordinary-HTML batch: 26 single-dialog pages. Track A (SK-available HTML pages) now complete.
+
+- **Migrated (26 sites, 0 bare left):** trust-safety, returns (refund, danger), release-readiness,
+  pos-till-manager, pos-crm-pro, pos-cash-manager, pos-ai, messages-admin, merchant-pipeline,
+  inventory, inv-product (positive-form), fos-admin (refund→debit wallet, danger), dispute-portal,
+  digital-esoko-seller, crm, commission-engine, bnb-manage, automation-engine, auction-manager,
+  admin-messages, track, settlement-dashboard, professional-profile, fleet-monitor, checkout,
+  admin-feedback. Non-async handlers marked async after onclick/listener caller verification.
+- **Survey-first exclusions (documented, no action):** comment-only `confirm()` mentions
+  (provider-onboarding, onboarding, pos-checkout); provider-dashboard's `async confirm(id)` booking
+  METHOD; email-preview non-dialog string.
+- **Deferred (exception list, no SK):** validation, route-debug (clipboard alerts), beta-control.
+- **Adoption:** dialogs **~79% → ~86%** (330 canonical / 54 native). **Track A COMPLETE** — every
+  executable dialog on an SK-available HTML page flows through SK.dialog. Remaining natives are
+  exclusively documented exceptions, JS libraries (Track B, load-site gate), and availability-manager
+  (Track C).
+- **Files:** 26 HTML pages + docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B8 — dialog convergence (admin/ops/comms pages)
 
 11 pages migrated; 1 deferred (SK-availability gate).

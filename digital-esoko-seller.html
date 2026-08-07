@@ -363,8 +363,8 @@ function toggleProductActive(id){
   if(window._updateDEProductFS) window._updateDEProductFS(id,{active:p.active});
 }
 
-function deleteProduct(id){
-  if(!confirm('Delete this product? Existing buyers will keep their downloads.')) return;
+async function deleteProduct(id){
+  if(!(await SK.dialog.confirm('Delete this product? Existing buyers will keep their downloads.', null, null, { title: 'Delete product', variant: 'danger', confirmLabel: 'Delete' }))) return;
   _myProducts = _myProducts.filter(p=>p.id!==id);
   _lsSet('desMyProducts_'+_getUid(), _myProducts);
   loadMyProducts();

@@ -2082,7 +2082,7 @@ async function _placeOrderCore(){
         if (window._checkoutSetTrustStatus) _checkoutSetTrustStatus('failed');
         const _msg = (e && e.message) || 'Payment failed';
         if (!/cancel/i.test(_msg) && !/timeout/i.test(_msg)) {
-          alert('Payment could not be completed: ' + _msg);
+          SK.dialog.alert('Payment could not be completed: ' + _msg);
         }
       }
       return;
