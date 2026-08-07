@@ -74,6 +74,7 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | 08-07 | B3 | Dialogs | ~40% | **~47%** (187 via `SK.dialog`; 212 native left) — driver, rider-nav (SOS), profile, pos-completeness |
 | 08-07 | B4A | Dialogs | ~47% | **~53%** (210 via `SK.dialog`; 188 native left) — **data-no-header pages**: dispatch, ecc, provider-dashboard (money-path rigor) |
 | 08-07 | B4B | Dialogs | ~53% | **~56%** (223 via `SK.dialog`; 175 native left) — **sokoni-aos.js money-path review**: escrow-release, payout-approve, void-receipt, session-revoke, mass email/SMS, content deletes (13 confirms, descriptive + danger) |
+| 08-07 | B5 | Dialogs | ~56% | **~63%** (243 via `SK.dialog`; 141 native left) — admin/ops pages: legal-admin, inv-products, sasos-admin, ops-center, financial-os (money, danger), hr-payroll |
 
 **Batch ledger (dialogs):**
 | Batch | Modules | SK.dialog | Native left | Adoption |

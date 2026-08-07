@@ -295,13 +295,13 @@ async function refresh() {
 }
 
 window.selfHeal = async function(action) {
-  if (!confirm(`Run: ${action}?`)) return;
+  if (!(await SK.dialog.confirm(`Run: ${action}?`, null, null, { title: 'Run action', confirmLabel: 'Run' }))) return;
   try {
     const res = await cfSelfHeal({ action });
-    alert(`Done: ${res.data.affected} items affected`);
+    SK.dialog.alert(`Done: ${res.data.affected} items affected`);
     refresh();
   } catch (e) {
-    alert('Error: ' + e.message);
+    SK.dialog.alert('Error: ' + e.message);
   }
 };
 

@@ -1,3 +1,20 @@
+## [2026-08-07] — feat(ui): Slice B5 — dialog convergence (admin/ops pages)
+
+Resumed mechanical batches after the money-path fix. 6 admin/ops pages (all load shared-header → SK).
+
+- **Migrated (20 sites, 0 bare left):** legal-admin (4 confirm; 4 event-listener arrows marked
+  async), inv-products (4), sasos-admin (3), ops-center (2 alert + 1 confirm), financial-os (3 —
+  money page, non-async fns marked async, danger variants on escrow/wallet/ledger), hr-payroll
+  (3 — non-async fns marked async). Non-async handlers marked `async` after verifying onclick/
+  listener callers discard the return. `\n\n` in a few messages collapses to a space in the modal
+  (content preserved).
+- **Adoption:** dialogs **~56% → ~63%** (243 canonical / 141 native left).
+- **Money guard** re-ran clean in predeploy over the newly-migrated financial-os.html.
+- **Files:** legal-admin.html, inv-products.html, sasos-admin.html, ops-center.html,
+  financial-os.html, hr-payroll.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — fix(money): dispute/refund toast correctness + money-path CI guard
 
 Closes out the money-path toast-correctness work (last two of six instances) and adds an
