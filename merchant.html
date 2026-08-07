@@ -103,6 +103,16 @@
   .dsec-t{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin:0 2px 12px}
   .dbtn{display:inline-flex;align-items:center;gap:8px;background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.3);
     color:var(--acc);border-radius:12px;padding:12px 16px;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none}
+  .dbtn.ghost{background:rgba(255,255,255,.05);border-color:var(--line);color:var(--txt2)}
+  /* Devices page */
+  .dev-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;margin-bottom:12px}
+  .dev-row{display:flex;align-items:center;gap:14px}
+  .dev-ico{font-size:30px;flex:0 0 auto}
+  .dev-name{font-weight:800;font-size:15px}
+  .dev-sub{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--txt2);margin-top:3px}
+  .dev-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
+  .dev-note{font-size:11.5px;color:var(--txt3);line-height:1.55;margin-top:12px}
+  .dev-soon{opacity:.6}
 
   @media (max-width:820px){
     :root{--rail:200px}
@@ -200,7 +210,7 @@
     { id:'audit',     label:'Audit Log', icon:'🛡️', kind:'pos',    tab:'audit' },
 
     { head:'System' },
-    { id:'devices',   label:'Devices',   icon:'🖨️', kind:'pos', tab:'settings', action:'devices' },
+    { id:'devices',   label:'Devices',   icon:'🖨️', kind:'native' },
     { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos', tab:'settings' },
     { id:'store',     label:'Store Setup', icon:'🏬', kind:'seller', sec:'store' },
   ];
@@ -317,6 +327,40 @@
   /* ── Native modules ── */
   function renderNative (id) {
     if (id === 'dashboard') renderDashboard();
+    else if (id === 'devices') renderDevices();
+  }
+
+  /* ── Native Devices page (shell-level DeviceManager UI) ── */
+  function renderDevices () {
+    var host = document.getElementById('native-devices');
+    if (!host) return;
+    /* Ensure the printer host exists so status + actions have something to talk to. */
+    try { posPanel('pos'); } catch (_) {}
+    var up = shellPrinterUp;
+    host.innerHTML =
+      '<div class="dwrap">' +
+        '<div class="dsec-t">Devices</div>' +
+        '<div class="dev-card">' +
+          '<div class="dev-row">' +
+            '<div class="dev-ico">🖨️</div>' +
+            '<div class="dev-meta"><div class="dev-name">Receipt Printer</div>' +
+              '<div class="dev-sub"><span class="mdot ' + (up ? 'ok' : '') + '"></span>' + (up ? 'Connected' : 'Not connected') + '</div></div>' +
+          '</div>' +
+          '<div class="dev-actions">' +
+            (up
+              ? '<button class="dbtn" id="dv-test">🧪 Test Print</button><button class="dbtn ghost" id="dv-forget">Forget</button>'
+              : '<button class="dbtn" id="dv-connect">🔗 Connect Printer</button><button class="dbtn ghost" id="dv-reconnect">↻ Reconnect</button>') +
+          '</div>' +
+          '<div class="dev-note">The printer is a shell-level device: connect once and it stays connected as you move between modules. If your browser drops it, it reconnects silently; only if it can\'t will you need to tap Reconnect.</div>' +
+        '</div>' +
+        '<div class="dev-card dev-soon"><div class="dev-row"><div class="dev-ico">📷</div><div class="dev-meta"><div class="dev-name">Barcode Scanner</div><div class="dev-sub">Camera / USB — available in Cashier</div></div></div></div>' +
+        '<div class="dev-card dev-soon"><div class="dev-row"><div class="dev-ico">💵</div><div class="dev-meta"><div class="dev-name">Cash Drawer</div><div class="dev-sub">Opens via the printer after a cash sale</div></div></div></div>' +
+      '</div>';
+    var q = function (i) { return document.getElementById(i); };
+    if (q('dv-connect'))   q('dv-connect').onclick   = function () { window.SokoniShell.Printer.connect(); };
+    if (q('dv-reconnect')) q('dv-reconnect').onclick = function () { window.SokoniShell.Printer.reconnect(); setTimeout(renderDevices, 1500); };
+    if (q('dv-test'))      q('dv-test').onclick      = function () { window.SokoniShell.Printer.test(); };
+    if (q('dv-forget'))    q('dv-forget').onclick    = function () { window.SokoniShell.Printer.forget(); setTimeout(renderDevices, 800); };
   }
   function renderDashboard () {
     var host = document.getElementById('native-dashboard');
@@ -364,6 +408,7 @@
     document.getElementById('st-print-t').textContent = pt;
     document.getElementById('top-print-t').textContent = shellPrinterUp ? 'P58E' : 'Printer';
     if (current === 'dashboard') refreshDashboardLive();
+    else if (current === 'devices') { try { renderDevices(); } catch (_) {} }
   }
   window.addEventListener('online',  paintStatus);
   window.addEventListener('offline', paintStatus);
@@ -434,6 +479,20 @@
   paintStatus();
   var boot = location.hash.replace('#', '');
   go(byId[boot] ? boot : 'dashboard');
+
+  /* DeviceManager warm-up: shortly after boot, create the printer HOST (hidden) if the user
+     didn't land on a POS module. The host's own auto-reconnect heartbeat then re-links a
+     previously-paired printer via navigator.bluetooth.getDevices() — silently, no button — so
+     the printer chip goes green when the merchant OPENS the app, not only when they reach
+     Cashier. Deferred so it never blocks first render. Skipped if a printer was never paired,
+     to avoid loading the heavy host for nothing. */
+  function _rememberedPrinter () {
+    try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) ||
+                 !!localStorage.getItem('p58e_paired_device'); } catch (_) { return false; }
+  }
+  setTimeout(function () {
+    try { if (!panels.pos && _rememberedPrinter()) posPanel('pos'); } catch (_) {}
+  }, 1800);
 })();
 </script>
 <script src="/sw-register.js" defer></script>
