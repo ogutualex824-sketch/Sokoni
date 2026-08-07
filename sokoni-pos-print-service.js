@@ -797,18 +797,22 @@ function _ppsWireMenu (panel) {
   if (q('pps-test'))     q('pps-test').onclick     = () => { try { pm && pm.testPrint && pm.testPrint(); } catch (_) {} };
   if (q('pps-forget'))   q('pps-forget').onclick   = () => {
     _ppsRenderMenu(panel, spin('Forgetting printer…'));
-    /* Complete Forget: revoke the browser grant + clear the engine profile (pm.forget), then
-       wipe every app-side remembered-printer key across engines, and reset the canonical state
-       so the chip goes Not Connected. Next connect will show the browser's Bluetooth chooser. */
-    Promise.resolve((pm && pm.forget) ? pm.forget() : (pm && pm.disconnect && pm.disconnect()))
-      .catch(() => {})
-      .finally(() => {
-        ['spp_profile', 'pps_store_profile', 'sokoni_printer_last_print'].forEach(k => {
-          try { localStorage.removeItem(k); } catch (_) {}
-        });
-        try { _printerState.set('disconnected'); } catch (_) {}
-        _ppsRenderMenu(panel);
-      });
+    /* ATOMIC Forget across ALL three printer engines + every store. Each engine keeps its OWN
+       remembered-device record, so clearing only one left the printer "remembered" by another
+       (e.g. paired on the setup page via P58EPrinter → p58e_paired_device survived a dropdown
+       Forget → it kept trying to auto-reconnect). Revoke the browser grant, disconnect every
+       engine, wipe every key, and reset state to Not Connected. Next connect shows the chooser. */
+    const jobs = [];
+    try { if (window.SokoniPrinter && window.SokoniPrinter.forget) jobs.push(Promise.resolve(window.SokoniPrinter.forget()).catch(() => {})); } catch (_) {}
+    try { if (window.P58EPrinter && window.P58EPrinter.forget)     jobs.push(Promise.resolve(window.P58EPrinter.forget()).catch(() => {})); } catch (_) {}
+    try { if (window.PrinterManager && window.PrinterManager.disconnect) jobs.push(Promise.resolve(window.PrinterManager.disconnect()).catch(() => {})); } catch (_) {}
+    if (!jobs.length && pm && pm.disconnect) jobs.push(Promise.resolve(pm.disconnect()).catch(() => {}));
+    Promise.all(jobs).catch(() => {}).finally(() => {
+      ['spp_profile', 'pps_store_profile', 'sokoni_printer_last_print', 'p58e_paired_device', 'pps_remember']
+        .forEach(k => { try { localStorage.removeItem(k); } catch (_) {} });
+      try { _printerState.set('disconnected'); } catch (_) {}
+      _ppsRenderMenu(panel);
+    });
   };
   if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
     const connectedBody = '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Back online — printing is ready.</div>';
@@ -900,12 +904,18 @@ function _ppsErrClassify (e) {
 function _ppsErrBody (e, remembered) {
   const msg = _ppsErrClassify(e);
   const raw = (e && (e.detail || e.message)) || (e && e.original && e.original.message) || String(e || 'Unknown error');
+  const name = (e && (e.name || (e.original && e.original.name))) || '';
   const retryLabel = remembered ? '↻ Reconnect' : '🔗 Try again';
   const retryId    = remembered ? 'pps-reconnect' : 'pps-connect';
-  return '<div style="font-size:12.5px;color:#ff8c00;margin-bottom:10px;line-height:1.5;">' + _ppsEsc(msg) + '</div>' +
-    '<div style="display:flex;gap:8px;margin-bottom:8px;">' + _ppsBtn(retryId, retryLabel, 'primary') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>' +
-    '<div style="font-size:11px;"><a id="pps-details-toggle" style="color:rgba(255,255,255,.45);cursor:pointer;text-decoration:underline;">Details</a>' +
-    '<pre id="pps-details" style="display:none;white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:10.5px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.04);padding:7px 9px;border-radius:8px;">' + _ppsEsc(raw) + '</pre></div>';
+  /* Show the RAW error INLINE (not hidden behind a Details tap) so a screenshot of a failed
+     reconnect reveals the true cause — the classified sentence alone isn't enough to diagnose. */
+  const rawLine = (raw && raw !== 'no-device')
+    ? '<div style="font-size:10.5px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.04);padding:7px 9px;border-radius:8px;margin-bottom:9px;white-space:pre-wrap;word-break:break-word;">⚠ ' + _ppsEsc((name ? name + ': ' : '') + raw) + '</div>'
+    : '';
+  return '<div style="font-size:12.5px;color:#ff8c00;margin-bottom:9px;line-height:1.5;">' + _ppsEsc(msg) + '</div>' +
+    rawLine +
+    '<div style="display:flex;gap:8px;">' + _ppsBtn(retryId, retryLabel, 'primary') + _ppsBtn('pps-forget', 'Forget', 'ghost') + '</div>' +
+    '<div style="font-size:10.5px;color:rgba(255,255,255,.4);margin-top:9px;">Tap 🩺 above for the full connection trace.</div>';
 }
 
 /* ═══════════════════════════════════════════════════════════════════

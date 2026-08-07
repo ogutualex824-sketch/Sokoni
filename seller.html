@@ -3457,7 +3457,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
 <style>
 /* Live panel — only on wide screens ≥1280px */
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   #sellerLivePanel {
     position: fixed;
     top: 68px; /* below 68px navbar */
@@ -3493,7 +3493,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
   }
 }
 /* On tablets/phones: panel is a right-side drawer (mobile.css handles the full logic) */
-@media (max-width: 1279px) {
+@media (max-width: 1023px) {
   /* mobile.css overrides display:none and makes it a translateX drawer */
 }
 
@@ -3763,7 +3763,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
        Skip the mobile-drawer machinery (backdrop dim + body scroll-lock), which would wrongly
        dim and lock the whole desktop. */
     try {
-      if (window.matchMedia && window.matchMedia('(min-width:1280px)').matches) return;
+      if (window.matchMedia && window.matchMedia('(min-width:1024px)').matches) return;
     } catch (_) {}
     panel.classList.add('slp-active');
     panel.setAttribute('aria-hidden', 'false');
@@ -3802,7 +3802,7 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     /* Desktop: the X hides the always-on sidebar and persists it closed (mobile uses
        the slp-active drawer, so scope this to wide screens only). */
     try {
-      if (window.matchMedia && window.matchMedia('(min-width:1280px)').matches) {
+      if (window.matchMedia && window.matchMedia('(min-width:1024px)').matches) {
         document.body.classList.add('slp-closed');
         localStorage.setItem('sellerLiveClosed', '1');
       }
@@ -4457,7 +4457,7 @@ class="notification-container"
 #sdm-close-btn:active { background: rgba(255,60,60,0.12); border-color: rgba(255,60,60,0.25); color: #ff6464; }
 
 /* Live Panel drawer header — shown only on phones/tablets */
-@media (max-width: 1279px) {
+@media (max-width: 1023px) {
   .slp-drawer-header {
     display: flex;
     align-items: center;
@@ -4521,7 +4521,7 @@ class="notification-container"
     flex: 1;
   }
 }
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   /* P0 FIX: the desktop Live Dashboard previously had NO close button — this block hid the
      panel header (which holds the ✕) to "show an old slp-header" that no longer exists in the
      markup. The panel is a fixed right column on desktop, so render the header + a visible ✕
