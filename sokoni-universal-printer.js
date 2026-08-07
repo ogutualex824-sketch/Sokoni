@@ -1846,6 +1846,15 @@ function getInstance () { if (!_inst) _inst = new SPEngine(); return _inst; }
    this page is only for advanced / first-time / diagnostics. */
 function _openPrinterSetup (opts) {
   opts = opts || {};
+  /* Inside the Merchant Shell, NEVER navigate to the standalone setup page (that would leave
+     the shell and reload). Ask the shell to open its in-place Devices/Printer-Setup module —
+     the shell + printer connection stay alive. Only standalone pages navigate. */
+  try {
+    if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
+      window.parent.postMessage({ __sokoniGoModule: 'devices' }, location.origin);
+      return;
+    }
+  } catch (_) {}
   var ret = opts.returnTo || (location.pathname + location.search) || 'pos.html';
   location.href = 'pos-printer-setup.html?return=' + encodeURIComponent(ret);
 }

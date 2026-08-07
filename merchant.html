@@ -313,8 +313,10 @@
   }
 
   /* ── Router ── */
+  var _lastModule = 'dashboard';
   function go (id) {
     var m = byId[id]; if (!m) { id = 'dashboard'; m = byId.dashboard; }
+    if (current && current !== 'devices' && current !== id) _lastModule = current;  /* for Devices "Done" */
     current = id;
     setActive(id);
     titleEl.textContent = m.label;
@@ -349,7 +351,7 @@
           '</div>' +
           '<div class="dev-actions">' +
             (up
-              ? '<button class="dbtn" id="dv-test">🧪 Test Print</button><button class="dbtn ghost" id="dv-forget">Forget</button>'
+              ? '<button class="dbtn" id="dv-test">🧪 Test Print</button><button class="dbtn ghost" id="dv-forget">Forget</button><button class="dbtn ghost" id="dv-done">Done ↩</button>'
               : '<button class="dbtn" id="dv-connect">🔗 Connect Printer</button><button class="dbtn ghost" id="dv-reconnect">↻ Reconnect</button>') +
           '</div>' +
           '<div class="dev-note">The printer is a shell-level device: connect once and it stays connected as you move between modules. If your browser drops it, it reconnects silently; only if it can\'t will you need to tap Reconnect.</div>' +
@@ -362,6 +364,7 @@
     if (q('dv-reconnect')) q('dv-reconnect').onclick = function () { window.SokoniShell.Printer.reconnect(); setTimeout(renderDevices, 1500); };
     if (q('dv-test'))      q('dv-test').onclick      = function () { window.SokoniShell.Printer.test(); };
     if (q('dv-forget'))    q('dv-forget').onclick    = function () { window.SokoniShell.Printer.forget(); setTimeout(renderDevices, 800); };
+    if (q('dv-done'))      q('dv-done').onclick      = function () { go(_lastModule || 'dashboard'); };  /* return to previous module, no reload */
   }
   function renderDashboard () {
     var host = document.getElementById('native-dashboard');
@@ -491,6 +494,7 @@
     var d = e.data || {};
     if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
     if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → shell printer */
+    if (d.__sokoniGoModule && byId[d.__sokoniGoModule]) { go(d.__sokoniGoModule); return; }  /* a module asked to route in-shell (e.g. Advanced → Devices) */
     if (!d.__sokoniPos) return;
     /* NOTE: the shell now owns the printer + its state, so a hosted app's printerStatus is
        ignored here (it must not clobber the shell's observable state). */
