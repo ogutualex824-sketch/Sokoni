@@ -1178,18 +1178,20 @@
       #sk-nav-search-wrap {
         order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 3px;
       }
-      #sk-nav-search { padding: 7px 14px 7px 34px; font-size: 16px; }
+      /* !important: an inline/JS style (design-system search enhancer) otherwise wins and
+         keeps the input tall. Force the compact height so the header can actually shrink. */
+      #sk-nav-search { padding: 6px 14px 6px 34px !important; font-size: 16px; min-height: 0 !important; }
       /* Mobile: hide Messages + Theme */
       #sk-msg-btn { display: none !important; }
       #sk-theme-btn { display: none !important; }
       /* Activity visible on mobile */
       #sk-activity-btn { display: flex !important; }
       /* Cart pill: compact */
-      #sk-nav-cart { padding: 6px 10px; font-size: 11px; }
+      #sk-nav-cart { padding: 5px 9px; font-size: 11px; }
       /* Avatar */
-      #sk-nav-avatar { width: 28px; height: 28px; font-size: 12px; }
-      /* Icon buttons */
-      .sk-nav-icon-btn { width: 34px; height: 34px; font-size: 16px; }
+      #sk-nav-avatar { width: 30px; height: 30px; font-size: 12px; }
+      /* Icon buttons — 32px keeps a comfortable 44px-ish tap area with padding while trimming the row */
+      .sk-nav-icon-btn { width: 32px !important; height: 32px !important; font-size: 16px; }
       /* Reserve the SMALLER header: row1 ~40 + search ~34 + gaps ~6 = ~80px (+ safe-area). */
       body { padding-top: calc(44px + env(safe-area-inset-top, 0px)) !important; }
       body.sk-has-search { padding-top: calc(82px + env(safe-area-inset-top, 0px)) !important; }
