@@ -1,3 +1,23 @@
+## [2026-08-07] — fix(money): admin financial actions no longer toast success on failure
+
+Isolated money-path correctness fix (no dialog/other refactoring). Four Admin OS financial
+operations toasted "success" UNCONDITIONALLY after a caught failure — an operator could believe
+an irreversible action succeeded when the backend rejected it.
+
+- **Fixed (sokoni-aos.js):** releaseEscrow (finosReleaseEscrow), markCommPaid (markCommissionPaid),
+  approvePayout (adminProcessPayout), rejectPayout (finosRequestBankPayout). Pattern changed from
+  `await _call(...).catch(e=>_toast(err)); _toast("…","success")` to branch-on-outcome:
+  `try { await _call(...) } catch(e){ _toast(err); return } _toast("…","success")`.
+- **Acceptance (per op):** backend success → success toast; backend failure → error toast ONLY;
+  no success toast after any caught exception; single request (no duplicates); same CFs/params/
+  messages/refresh (no business-logic change); no Cloud Function changes; telemetry untouched.
+- **Bulk approveAllPayouts** was already correct (per-item try/catch checking res.failed).
+- **STILL FLAGGED (same defect, out of this scope):** aosResolveDispute + processRefund toast
+  success unconditionally after `.catch` too — fix with the same pattern in a follow-up.
+- **Files:** sokoni-aos.js.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B4B — sokoni-aos.js dialog convergence (money-path review)
 
 Admin OS engine (loaded only by admin-os.html, which carries shared-header → SK present).

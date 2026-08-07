@@ -735,7 +735,12 @@ window.SokoniAOS = (() => {
 
   async function releaseEscrow(id) {
     if (!(await SK.dialog.confirm("Funds will be transferred to the seller immediately. This is irreversible.", null, null, { title: "Release escrow?", variant: "danger", confirmLabel: "Release Funds" }))) return;
-    await _call("finosReleaseEscrow", { escrowId: id }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("finosReleaseEscrow", { escrowId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Escrow released to seller", "success");
     _financialTab("escrow");
   }
@@ -752,7 +757,12 @@ window.SokoniAOS = (() => {
   }
 
   async function markCommPaid(id) {
-    await _call("markCommissionPaid", { entryId: id }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("markCommissionPaid", { entryId: id });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Marked as paid","success"); _financialTab("commissions");
   }
   /* Bulk approval ORCHESTRATES the canonical single-payout engine — one
@@ -780,12 +790,22 @@ window.SokoniAOS = (() => {
     _financialTab("payouts");
   }
   async function approvePayout(id) {
-    await _call("adminProcessPayout", { requestId: id, status: "approved" }).catch(e => _toast(e.message, "error"));
+    try {
+      await _call("adminProcessPayout", { requestId: id, status: "approved" });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Payout approved", "success"); _financialTab("payouts");
   }
   async function rejectPayout(id) {
     const note = prompt("Rejection reason:");
-    await _call("finosRequestBankPayout", { payoutId: id, action:"reject", note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("finosRequestBankPayout", { payoutId: id, action:"reject", note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Payout rejected","success"); _financialTab("payouts");
   }
   async function resolveDispute(id, winnerSide) {
