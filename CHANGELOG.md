@@ -1,3 +1,28 @@
+## [2026-08-07] — feat(ui): Slice B4B — sokoni-aos.js dialog convergence (money-path review)
+
+Admin OS engine (loaded only by admin-os.html, which carries shared-header → SK present).
+Treated as a money-path review, not a mechanical migration.
+
+- **Migrated (13 confirms, 0 bare confirm left):** banUser, releaseEscrow, approveAllPayouts,
+  sendEmailBlast, sendSMSBlast, deleteCampaign/Banner/Faq, removeAnnouncement, reindex,
+  voidReceipt, revokeAllSessions, revokeSession. All in `async` fns → `await SK.dialog.confirm`.
+- **Money-path rigor:** descriptive title + body + `variant:'danger'` + explicit confirm labels
+  (e.g. "Release escrow?" / "Funds will be transferred to the seller immediately. This is
+  irreversible." / [Release Funds]). Per-flow verification of escrow-release + payout-approve:
+  cancel→return (no side effect), success path unchanged (same CFs finosReleaseEscrow /
+  _bulkApprovePayouts), failure `.catch` preserved, no double-exec (modal backdrop blocks
+  re-click), Enter/Esc + focus-restore from the hardened modal.
+- **Deliberately NOT migrated:** line 25 `alert("Access denied…")` — fires at early init before
+  deferred sokoni-ds.js is guaranteed loaded, and is a security bail-out, not a dialog flow.
+  Left native to avoid an SK-undefined throw.
+- **PRE-EXISTING defect flagged (NOT fixed here — out of scope, needs its own review):**
+  releaseEscrow shows `_toast("Escrow released","success")` UNCONDITIONALLY after the `.catch`,
+  so a FAILED release still flashes success (healthy-looking failure on a money path).
+- **Adoption:** dialogs **~53% → ~56%**.
+- **Files:** sokoni-aos.js, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B4A — dialog convergence (data-no-header pages)
 
 Isolated special-case slice: the three `data-no-header` pages (shared-header does NOT render

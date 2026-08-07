@@ -339,7 +339,7 @@ window.SokoniAOS = (() => {
 
   async function banUser(uid, currentStatus) {
     const action = currentStatus === "banned" ? "restore" : "ban";
-    if (!confirm(`${_titleCase(action)} this user?`)) return;
+    if (!(await SK.dialog.confirm(`${_titleCase(action)} this user?`, null, null, { title: `${_titleCase(action)} user`, variant: 'danger', confirmLabel: _titleCase(action) }))) return;
     await _call("tsBanUser", { userId: uid, action }).catch(e => _toast(e.message, "error"));
     _toast("User " + action + "ned successfully", "success");
     _panelCache.users = false; _loadUsers();
@@ -734,7 +734,7 @@ window.SokoniAOS = (() => {
   }
 
   async function releaseEscrow(id) {
-    if (!confirm("Release this escrow to the seller? This is irreversible.")) return;
+    if (!(await SK.dialog.confirm("Funds will be transferred to the seller immediately. This is irreversible.", null, null, { title: "Release escrow?", variant: "danger", confirmLabel: "Release Funds" }))) return;
     await _call("finosReleaseEscrow", { escrowId: id }).catch(e => _toast(e.message, "error"));
     _toast("Escrow released to seller", "success");
     _financialTab("escrow");
@@ -773,7 +773,7 @@ window.SokoniAOS = (() => {
     var data = await _call("aosGetPendingPayouts").catch(function () { return { payouts: [] }; });
     var ids = (data.payouts || []).map(function (p) { return p.id; }).filter(Boolean);
     if (!ids.length) { _toast("No pending payouts", "info"); return; }
-    if (!confirm("Approve all " + ids.length + " pending payouts? Each is processed individually by the wallet engine.")) return;
+    if (!(await SK.dialog.confirm("Each of the " + ids.length + " payouts is processed individually by the wallet engine.", null, null, { title: "Approve all " + ids.length + " payouts?", variant: "danger", confirmLabel: "Approve All" }))) return;
     var res = await _bulkApprovePayouts(ids, _call);
     if (res.failed.length) { console.warn("[payouts] bulk failures", res.failed); _toast(res.ok + " approved · " + res.failed.length + " failed (see console)", "error"); }
     else _toast("All " + res.ok + " payouts approved", "success");
@@ -987,7 +987,7 @@ window.SokoniAOS = (() => {
     const html    = document.getElementById("emailHtml")?.value;
     const target  = document.getElementById("emailTarget")?.value || "all";
     if (!subject || !html) { _toast("Subject and body are required", "error"); return; }
-    if (!confirm(`Send email blast to all ${target}? This will queue emails immediately.`)) return;
+    if (!(await SK.dialog.confirm(`This will queue emails to all ${target} immediately.`, null, null, { title: `Send email blast to all ${target}?`, variant: "danger", confirmLabel: "Send blast" }))) return;
     await _call("adminSendEmailBlast", { subject, html, target }).catch(e => _toast(e.message, "error"));
     _toast("Email blast queued for " + target, "success");
   }
@@ -996,7 +996,7 @@ window.SokoniAOS = (() => {
     const message = document.getElementById("smsBody")?.value;
     const target  = document.getElementById("smsTarget")?.value || "all";
     if (!message) { _toast("Message body is required", "error"); return; }
-    if (!confirm(`Send SMS to all ${target}? Carrier charges apply.`)) return;
+    if (!(await SK.dialog.confirm(`Carrier charges apply for every recipient.`, null, null, { title: `Send SMS to all ${target}?`, variant: "danger", confirmLabel: "Send SMS" }))) return;
     await _call("adminSendSMSBlast", { message, target }).catch(e => _toast(e.message, "error"));
     _toast("SMS queued for " + target, "success");
   }
@@ -1096,7 +1096,7 @@ window.SokoniAOS = (() => {
   }
 
   async function deleteCampaign(id) {
-    if (!confirm("Permanently delete this campaign?")) return;
+    if (!(await SK.dialog.confirm("Permanently delete this campaign?", null, null, { title: "Delete campaign", variant: "danger", confirmLabel: "Delete" }))) return;
     await _call("adminDeleteCampaign", { campaignId: id })
       .catch(e => _toast(e.message, "error"));
     _toast("Campaign deleted", "success");
@@ -1125,7 +1125,7 @@ window.SokoniAOS = (() => {
     _toast("Banner updated", "success"); _panelCache.content = false; _contentTab("banners");
   }
   async function deleteBanner(id) {
-    if (!confirm("Delete banner?")) return;
+    if (!(await SK.dialog.confirm("Delete this banner?", null, null, { title: "Delete banner", variant: "danger", confirmLabel: "Delete" }))) return;
     await _call("adminDeleteBanner", { bannerId: id }).catch(e => _toast(e.message,"error"));
     _toast("Banner deleted","success"); _panelCache.content = false; _contentTab("banners");
   }
@@ -1136,7 +1136,7 @@ window.SokoniAOS = (() => {
     _toast("FAQ added","success"); _panelCache.content = false; _contentTab("faqs");
   }
   async function deleteFaq(id) {
-    if (!confirm("Delete FAQ?")) return;
+    if (!(await SK.dialog.confirm("Delete this FAQ?", null, null, { title: "Delete FAQ", variant: "danger", confirmLabel: "Delete" }))) return;
     await _call("adminDeleteFaq", { faqId: id }).catch(e => _toast(e.message,"error"));
     _toast("FAQ deleted","success"); _panelCache.content = false; _contentTab("faqs");
   }
@@ -1149,7 +1149,7 @@ window.SokoniAOS = (() => {
     _toast("Announcement posted","success"); _panelCache.content = false; _contentTab("announcements");
   }
   async function deleteAnnouncement(id) {
-    if (!confirm("Remove announcement?")) return;
+    if (!(await SK.dialog.confirm("Remove this announcement?", null, null, { title: "Remove announcement", variant: "danger", confirmLabel: "Remove" }))) return;
     await _call("adminSaveAnnouncement", { id, deleted: true }).catch(e => _toast(e.message,"error"));
     _toast("Removed","success"); _panelCache.content = false; _contentTab("announcements");
   }
@@ -1249,7 +1249,7 @@ window.SokoniAOS = (() => {
   }
 
   async function reindex() {
-    if (!confirm("This will reindex all data. Continue?")) return;
+    if (!(await SK.dialog.confirm("This will reindex all data. It may take a while.", null, null, { title: "Reindex all data?", confirmLabel: "Reindex" }))) return;
     await _call("searchFullReindex").catch(e => _toast(e.message,"error"));
     _toast("Reindex started","success");
   }
@@ -1385,7 +1385,7 @@ window.SokoniAOS = (() => {
     if (!receiptId) return;
     const reason = prompt("Void reason (required for audit):");
     if (!reason) return;
-    if (!confirm(`Permanently void receipt ${receiptId}?\nThis action is irreversible and will be logged.`)) return;
+    if (!(await SK.dialog.confirm(`Receipt ${receiptId} will be permanently voided. This action is irreversible and will be logged.`, null, null, { title: "Void receipt?", variant: "danger", confirmLabel: "Void receipt" }))) return;
     await _call("voidTrustReceipt", { receiptId, reason }).catch(e => _toast(e.message, "error"));
     _toast("Receipt voided — audit trail recorded", "success");
   }
@@ -1805,7 +1805,7 @@ window.SokoniAOS = (() => {
   }
 
   async function revokeAllSessions() {
-    if (!confirm("Revoke ALL active sessions? Every signed-in user will be signed out.")) return;
+    if (!(await SK.dialog.confirm("Every signed-in user will be signed out immediately.", null, null, { title: "Revoke ALL active sessions?", variant: "danger", confirmLabel: "Revoke all" }))) return;
     const snap = await _db.collection("activeSessions").get().catch(() => null);
     if (!snap || snap.empty) { _toast("No active sessions to revoke", "info"); return; }
     const batch = _db.batch();
@@ -1817,7 +1817,7 @@ window.SokoniAOS = (() => {
   }
 
   async function revokeSession(sessionId) {
-    if (!confirm("Revoke this session?")) return;
+    if (!(await SK.dialog.confirm("This device will be signed out immediately.", null, null, { title: "Revoke this session?", variant: "danger", confirmLabel: "Revoke" }))) return;
     await _db.collection("activeSessions").doc(sessionId).delete().catch(e => _toast(e.message,"error"));
     _toast("Session revoked","success"); _panelCache.security = false; _loadSecurity();
   }
