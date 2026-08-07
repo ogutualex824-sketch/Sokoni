@@ -2146,9 +2146,13 @@ function _showDrvDelivery(req) {
         ${req.buyerName ?'<br>👤 Buyer: '+req.buyerName:''}
         ${req.proofPin  ?'<br>🔑 Delivery PIN: <strong style="color:#71ff00;font-size:15px;letter-spacing:3px;">'+req.proofPin+'</strong>':''}
       </div>
-      <div style="display:flex;gap:8px;margin-bottom:10px;">
-        <button onclick="window._drvNavigate('${_navDest}')" style="flex:1;padding:11px;background:rgba(0,170,255,0.14);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🧭 Navigate</button>
-        ${_buyerPhone?`<button onclick="location.href='tel:${_buyerPhone}'" style="padding:11px 15px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📞 Call</button>`:''}
+      <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
+        <button onclick="window._drvNavigate('${_navDest}')" style="flex:1 1 110px;padding:11px;background:rgba(0,170,255,0.14);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🧭 Navigate</button>
+        ${_buyerPhone?`<button onclick="location.href='tel:${_buyerPhone}'" title="Call buyer" style="padding:11px 13px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">📞</button>`:''}
+        ${_buyerPhone?`<button onclick="window._drvChat('${_buyerPhone}')" title="Chat buyer (WhatsApp)" style="padding:11px 13px;background:rgba(37,211,102,0.12);border:1px solid rgba(37,211,102,0.3);color:#25d366;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">💬</button>`:''}
+        <button onclick="window._drvReportIssue('${req.deliveryRef||req.ref}')" title="Report a problem" style="padding:11px 13px;background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.25);color:#ff6b6b;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">🚨</button>
+        <button onclick="document.getElementById('drvProofInput_${req.deliveryRef||req.ref}').click()" title="Upload delivery photo" style="padding:11px 13px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:#fff;font-weight:800;border-radius:10px;cursor:pointer;font-size:14px;font-family:inherit;">📷</button>
+        <input id="drvProofInput_${req.deliveryRef||req.ref}" type="file" accept="image/*" capture="environment" style="display:none;" onchange="window._drvUploadProof(this,'${req.deliveryRef||req.ref}')">
       </div>
       ${_deliveryActionBtns(req)}`;
   } else {
@@ -2177,9 +2181,58 @@ function _showDrvDelivery(req) {
    "lat,lng" or a plain address). Google Maps universal directions URL: opens the
    Google Maps app on Android, Google/Apple Maps or web on iOS, and web on desktop. */
 window._drvNavigate = function (encodedDest) {
-  if (!encodedDest) { try { showToast('No destination location yet', 'error'); } catch (_) {} return; }
+  if (!encodedDest) { try { window.toast('No destination location yet', false); } catch (_) {} return; }
   try { window.open('https://www.google.com/maps/dir/?api=1&destination=' + encodedDest + '&travelmode=driving', '_blank'); }
   catch (_) { location.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodedDest; }
+};
+
+/* Chat buyer via WhatsApp (practical for riders; in-app chat can replace this later). */
+window._drvChat = function (phone) {
+  var p = String(phone || '').replace(/\D/g, '');
+  if (!p) { try { window.toast('No buyer phone on file', false); } catch (_) {} return; }
+  if (p.charAt(0) === '0') p = '254' + p.slice(1);
+  else if (p.slice(0, 3) !== '254') p = '254' + p;
+  window.open('https://wa.me/' + p, '_blank');
+};
+
+/* Report a delivery problem — non-destructive: flags the delivery (never changes its
+   status, so the order isn't lost) for support review. */
+window._drvReportIssue = async function (dRef) {
+  var reason = window.prompt('Report a delivery problem — describe the issue\n(e.g. customer unavailable, wrong address, can’t reach buyer):', '');
+  if (reason == null) return;
+  reason = reason.trim();
+  if (!reason) return;
+  try {
+    await SokoniDB.updatePackageRequest(dRef, {
+      deliveryIssue:      reason,
+      deliveryIssueAt:    new Date().toISOString(),
+      deliveryIssueRider: (window.currentDriver && window.currentDriver.id) || null,
+    });
+    window.toast('🚨 Issue reported — support will review.');
+  } catch (e) { window.toast('Could not report: ' + (e && e.message || e), false); }
+};
+
+/* Upload a delivery proof photo to Storage (deliveryProofs/) and attach the URL.
+   driver.html loads the modular SDK and no storage module, so import it on demand.
+   NEVER stores base64 in Firestore (only the download URL). */
+window._drvUploadProof = async function (input, dRef) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  try {
+    window.toast('Uploading photo…');
+    var appMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+    var stMod  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
+    var storage = stMod.getStorage(appMod.getApp());
+    var uid = (window.currentDriver && window.currentDriver.id) ||
+              ((window.firebase && firebase.auth && firebase.auth().currentUser) ? firebase.auth().currentUser.uid : 'rider');
+    var path = 'deliveryProofs/' + dRef + '_' + uid + '_' + Date.now() + '.jpg';
+    var r = stMod.ref(storage, path);
+    await stMod.uploadBytes(r, file, { contentType: file.type || 'image/jpeg' });
+    var url = await stMod.getDownloadURL(r);
+    await SokoniDB.updatePackageRequest(dRef, { proofPhotoUrl: url, proofPhotoAt: new Date().toISOString() });
+    window.toast('📷 Proof photo attached.');
+  } catch (e) { console.warn('[_drvUploadProof]', e); window.toast('Upload failed: ' + (e && e.message || e), false); }
+  finally { try { input.value = ''; } catch (_) {} }
 };
 
 function _deliveryActionBtns(req) {
