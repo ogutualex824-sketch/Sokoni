@@ -384,6 +384,7 @@ const SPos = (function () {
       document.getElementById(`panel-${tab}`)?.classList.add('active');
 
       if (tab === 'orders')    orders.render();
+      if (tab === 'more')      more.render();
       if (tab === 'inventory') inv.showTab(state.invTab);
       if (tab === 'customers') customers.loadTable();
       if (tab === 'settings')  { settings.loadIntoForm(); _bootSettingsPanels(); }
@@ -2399,6 +2400,96 @@ const SPos = (function () {
      SALES HISTORY & REPRINT
   ═══════════════════════════════════════════════════════════ */
   /* ═══════════════════════════════════════════════════════════════════
+     MORE — merchant control center (R1.1). Surfaces every module so the
+     merchant never has to "leave the POS". In-shell modules route through
+     SPos.ui.switchTab (no reload — printer, cart, listeners preserved).
+     Management pages navigate SAME-TAB (never a new window/PWA — single
+     instance), and the printer silently auto-reconnects on return.
+  ═══════════════════════════════════════════════════════════════════ */
+  const more = {
+    _stylesInjected: false,
+    _injectStyles() {
+      if (more._stylesInjected) return;
+      more._stylesInjected = true;
+      const css = `
+        .more-wrap{padding:14px 14px 100px;max-width:860px;margin:0 auto}
+        .more-group{margin-bottom:20px}
+        .more-group-title{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--txt3);margin:0 4px 10px}
+        .more-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:10px}
+        .more-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:15px 10px;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;text-align:center;transition:transform .12s ease,border-color .12s ease,background .12s ease;color:var(--txt);text-decoration:none}
+        .more-card:hover{transform:translateY(-2px);border-color:rgba(113,255,0,.4);background:rgba(113,255,0,.05)}
+        .more-card:active{transform:translateY(0)}
+        .more-ico{font-size:24px;line-height:1}
+        .more-lbl{font-size:11.5px;font-weight:700;line-height:1.25}
+        .more-card .more-ext{position:absolute}
+        .more-card.ext .more-lbl::after{content:' ↗';color:var(--txt3);font-size:10px}`;
+      const s = document.createElement('style'); s.id = 'more-styles'; s.textContent = css;
+      document.head.appendChild(s);
+    },
+
+    /* Each item: [icon, label, kind, target]
+       kind 'tab'    → in-shell SPos.ui.switchTab (no reload)
+       kind 'nav'    → same-tab navigation to a management page (single instance)
+       kind 'action' → an in-POS overlay (printer menu / device hub) */
+    _groups: [
+      ['Operations', [
+        ['🛒', 'Checkout', 'tab', 'pos'],
+        ['🧾', 'Orders', 'tab', 'orders'],
+        ['🚚', 'Dispatch', 'nav', 'dispatch.html'],
+        ['📦', 'Inventory', 'tab', 'inventory'],
+        ['👥', 'Customers', 'tab', 'customers'],
+        ['🔧', 'Repairs', 'tab', 'repair'],
+      ]],
+      ['Business', [
+        ['💰', 'Finance', 'tab', 'finance'],
+        ['📈', 'Analytics', 'nav', 'analytics.html'],
+        ['📊', 'Reports', 'tab', 'reports'],
+        ['🏪', 'Shop Dashboard', 'nav', 'seller.html'],
+        ['⭐', 'Loyalty', 'nav', 'loyalty.html'],
+        ['📣', 'Marketing', 'nav', 'marketing.html'],
+      ]],
+      ['Communications', [
+        ['💬', 'Messages', 'nav', 'messages.html'],
+        ['🔔', 'Notifications', 'nav', 'notifications.html'],
+      ]],
+      ['System', [
+        ['🖨️', 'Printer', 'action', 'printer'],
+        ['🔌', 'Devices', 'action', 'devices'],
+        ['📡', 'BOS Hub', 'tab', 'bos'],
+        ['📋', 'Audit', 'tab', 'audit'],
+        ['⚙️', 'POS Settings', 'tab', 'settings'],
+        ['⛶', 'Full Screen', 'action', 'fullscreen'],
+      ]],
+    ],
+
+    render() {
+      more._injectStyles();
+      const body = document.getElementById('more-body');
+      if (!body) return;
+      body.innerHTML = '<div class="more-wrap">' + more._groups.map(([title, items]) => `
+        <div class="more-group">
+          <div class="more-group-title">${title}</div>
+          <div class="more-grid">${items.map(([ico, lbl, kind, target]) =>
+            `<div class="more-card ${kind === 'nav' ? 'ext' : ''}" role="button" tabindex="0"
+                 onclick="SPos.more.go('${kind}','${target}')"
+                 onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();SPos.more.go('${kind}','${target}')}">
+               <span class="more-ico">${ico}</span><span class="more-lbl">${_esc(lbl)}</span>
+             </div>`).join('')}</div>
+        </div>`).join('') + '</div>';
+    },
+
+    go(kind, target) {
+      if (kind === 'tab') { ui.switchTab(target); return; }
+      if (kind === 'nav') { window.location.href = target; return; }   /* same tab — single instance */
+      if (kind === 'action') {
+        if (target === 'printer') { if (window.openPrinterMenu) window.openPrinterMenu(); return; }
+        if (target === 'devices') { try { SPos.deviceHub && SPos.deviceHub.showPanel && SPos.deviceHub.showPanel(); } catch (_) {} return; }
+        if (target === 'fullscreen') { try { window.posToggleFullscreen && window.posToggleFullscreen(); } catch (_) {} return; }
+      }
+    },
+  };
+
+  /* ═══════════════════════════════════════════════════════════════════
      ORDERS HUB (R1.1 Phase 1) — one place for every completed transaction.
      Phase 1: live In-Store POS sales (canonical PosDB.transactions) with
      reprint / refund / details, plus scaffolded channel tabs. Online /
@@ -3522,7 +3613,7 @@ const SPos = (function () {
      this service — never a new window/tab.
   ═══════════════════════════════════════════════════════════ */
   const nav = {
-    KNOWN: ['pos', 'orders', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'],
+    KNOWN: ['pos', 'orders', 'more', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'],
     _teardowns: {},
     /* A panel that opens a live listener registers its unsub here so leaving the
        panel releases it — the structural guarantee against listener/memory growth. */
@@ -3557,7 +3648,7 @@ const SPos = (function () {
     state, wizard, ui, nav, products, cart, payment, mpesa,
     barcode, inv, reports, customers, cashier, shift,
     settings, profile, sync, data, modal, printerSetup, bos,
-    sales, orders, po, cats, split,
+    sales, orders, more, po, cats, split,
     toast, printer: PosPrinter, openAIPricing,
     boot,
     /* Debounced helpers for HTML oninput handlers */

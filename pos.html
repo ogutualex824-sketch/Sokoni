@@ -343,6 +343,7 @@
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="repair"    onclick="SPos.ui.switchTab('repair')">   <span class="tab-icon" aria-hidden="true">🔧</span><span>Repairs</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="audit"     onclick="SPos.ui.switchTab('audit')">    <span class="tab-icon" aria-hidden="true">📋</span><span>Audit</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="settings"  onclick="SPos.ui.switchTab('settings')" aria-label="POS Settings"><span class="tab-icon" aria-hidden="true">⚙️</span><span>Settings</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="more"      onclick="SPos.ui.switchTab('more')"     aria-label="More modules"><span class="tab-icon" aria-hidden="true">⋯</span><span>More</span></button>
   </nav>
 
   <div class="pos-content">
@@ -460,6 +461,11 @@
         </div>
         <button class="pos-pay-btn" id="pay-btn" onclick="SPos.payment.process()" disabled>Charge KES 0.00</button>
       </aside>
+    </div>
+
+    <!-- More — control center: launches every merchant module without leaving the POS shell -->
+    <div id="panel-more" class="pos-panel">
+      <div id="more-body"></div>
     </div>
 
     <!-- Orders — unified order hub: in-store POS sales (live) + online marketplace orders (Phase 2) -->
