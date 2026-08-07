@@ -2186,6 +2186,18 @@ window._drvNavigate = function (encodedDest) {
   catch (_) { location.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodedDest; }
 };
 
+/* Fire-and-forget shadow-gate call — records the server-verified would-decision for the
+   delivery stage. Never gates the UI; releases no money. */
+function _drvDeliveryShadow(dRef, pin, lat, lng) {
+  try {
+    if (window.firebase && firebase.functions) {
+      firebase.functions().httpsCallable('deliveryVerifyShadow')({
+        deliveryRef: dRef, pin: pin || '', stage: 'delivery', lat: lat, lng: lng, method: 'pin'
+      }).catch(function () {});
+    }
+  } catch (_) {}
+}
+
 /* Chat buyer via WhatsApp (practical for riders; in-app chat can replace this later). */
 window._drvChat = function (phone) {
   var p = String(phone || '').replace(/\D/g, '');
@@ -2304,6 +2316,20 @@ window._drvCompleteDelivery = async function(dRef) {
   const unsub = SokoniDB.listenPackageRequest(dRef, async data => {
     unsub();
     if (!data) return;
+
+    /* SHADOW (two-PIN Phase 2): record what a SERVER-verified delivery gate WOULD decide
+       — PIN via HMAC + buyer geofence — in parallel with the existing client flow. Strictly
+       fire-and-forget: it NEVER blocks completion and releases NO money. */
+    try {
+      var _pinS = (inputEl && inputEl.value || '').trim();
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (p) { _drvDeliveryShadow(dRef, _pinS, p.coords.latitude, p.coords.longitude); },
+          function ()  { _drvDeliveryShadow(dRef, _pinS, null, null); },
+          { timeout: 4000, maximumAge: 30000 }
+        );
+      } else { _drvDeliveryShadow(dRef, _pinS, null, null); }
+    } catch (_) {}
 
     /* PIN verification (if PIN was set at creation) */
     if (data.proofPin) {
