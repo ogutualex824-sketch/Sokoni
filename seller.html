@@ -3478,6 +3478,19 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
 
   /* Push main content left so panel doesn't overlap */
   .main-content { margin-right: 220px !important; }
+
+  /* Closeable on desktop too (like the phone): the X hides it, main content
+     reclaims the space, and a small tab reopens it. State persists. */
+  body.slp-closed #sellerLivePanel { display: none !important; }
+  body.slp-closed .main-content    { margin-right: 0 !important; }
+  #slpTrigger { display: none; }               /* panel is always visible when open */
+  body.slp-closed #slpTrigger {
+    display: flex !important; position: fixed; top: 78px; right: 12px; z-index: 101;
+    align-items: center; gap: 6px; padding: 8px 12px; border-radius: 20px;
+    background: rgba(113,255,0,0.12); border: 1px solid rgba(113,255,0,0.35);
+    color: #71ff00; font-weight: 800; font-size: 12px; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+  }
 }
 /* On tablets/phones: panel is a right-side drawer (mobile.css handles the full logic) */
 @media (max-width: 1279px) {
@@ -3736,10 +3749,16 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     window.scrollTo(0, _slpScrollY);
   }
 
+  /* Restore the desktop live-panel closed state on load (persisted across reloads). */
+  try { if (localStorage.getItem('sellerLiveClosed') === '1') document.body.classList.add('slp-closed'); } catch (_) {}
+
   function openLivePanel() {
     var panel    = document.getElementById('sellerLivePanel');
     var backdrop = document.getElementById('slpBackdrop');
     if (!panel) return;
+    /* Reopen the desktop sidebar (clears the persistent-closed state). */
+    document.body.classList.remove('slp-closed');
+    try { localStorage.removeItem('sellerLiveClosed'); } catch (_) {}
     panel.classList.add('slp-active');
     panel.setAttribute('aria-hidden', 'false');
     if (backdrop) backdrop.classList.add('slp-active');
@@ -3774,6 +3793,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
     if (backdrop) backdrop.classList.remove('slp-active');
     document.body.classList.remove('slp-panel-open');
     _slpUnlock();
+    /* Desktop: the X hides the always-on sidebar and persists it closed (mobile uses
+       the slp-active drawer, so scope this to wide screens only). */
+    try {
+      if (window.matchMedia && window.matchMedia('(min-width:1280px)').matches) {
+        document.body.classList.add('slp-closed');
+        localStorage.setItem('sellerLiveClosed', '1');
+      }
+    } catch (_) {}
   }
 
   /* ESC key to close Live Panel */
