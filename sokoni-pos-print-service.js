@@ -630,9 +630,29 @@ function _updateHeaderWidget (health) {
     chip = document.createElement('button');
     chip.id        = 'pps-printer-chip';
     chip.className = 'pos-header-btn';
-    chip.title     = 'Printer status — click to open setup';
+    chip.title     = 'Printer — tap to connect / view status';
     chip.style.cssText = 'position:relative;font-size:13px;line-height:1;display:flex;align-items:center;gap:3px;';
-    chip.onclick   = () => { try { window.PosPrintService && PosPrintService.showQueueDiagnostics(); } catch (_) { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } };
+    /* One-tap behaviour:
+         • CONNECTED   → open the queue/diagnostics panel.
+         • DISCONNECTED → pair + connect in ONE tap. This click is the user gesture Web
+           Bluetooth requires; discoverBy('bluetooth') opens the chooser, connect() pairs
+           AND persists the profile so it auto-reconnects on every future POS open
+           (earbuds-style). Cancel / no Web Bluetooth (e.g. iOS Safari) → full setup page. */
+    chip.onclick   = () => {
+      var pm = window.PrinterManager;
+      if (pm && pm.connected) {
+        try { window.PosPrintService && PosPrintService.showQueueDiagnostics(); }
+        catch (_) { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); }
+        return;
+      }
+      if (pm && typeof pm.discoverBy === 'function' && navigator.bluetooth) {
+        Promise.resolve(pm.discoverBy('bluetooth'))
+          .then(function (list) { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
+          .catch(function () { try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {} });
+        return;
+      }
+      try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {}
+    };
     /* Insert before the first button (notifications bell) */
     const firstBtn = target.querySelector('button');
     if (firstBtn) target.insertBefore(chip, firstBtn);
