@@ -304,14 +304,14 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
     /* ── Subscribe flow ────────────────────────────────────────── */
     async function handleSubscribe(planId) {
       const subs = window.SokoniAISubs;
-      if (!subs) { alert('Please refresh and try again.'); return; }
+      if (!subs) { SK.dialog.alert('Please refresh and try again.'); return; }
       try {
         const result = await subs.subscribe(planId, _billing);
-        alert(`Successfully activated ${subs.PLANS[result.plan]?.name} plan!`);
+        SK.dialog.alert(`Successfully activated ${subs.PLANS[result.plan]?.name} plan!`);
         await loadCurrentPlan();
         renderPlans();
       } catch (e) {
-        if (e.message !== 'Payment cancelled.') alert('Subscription failed: ' + e.message);
+        if (e.message !== 'Payment cancelled.') SK.dialog.alert('Subscription failed: ' + e.message);
       }
     }
 
@@ -382,10 +382,10 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
         card.addEventListener('click', async () => {
           try {
             const result = await subs.purchaseCredits(card.dataset.packId);
-            alert(`${result.credits} credits added to your balance!`);
+            SK.dialog.alert(`${result.credits} credits added to your balance!`);
             loadCurrentPlan();
           } catch (e) {
-            if (e.message !== 'Payment cancelled.') alert('Failed: ' + e.message);
+            if (e.message !== 'Payment cancelled.') SK.dialog.alert('Failed: ' + e.message);
           }
         });
       });
@@ -415,9 +415,9 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
         btn.addEventListener('click', async () => {
           try {
             const result = await subs.purchaseBoost(btn.dataset.boostId);
-            alert(`Boost activated for ${result.expiresIn}!`);
+            SK.dialog.alert(`Boost activated for ${result.expiresIn}!`);
           } catch (e) {
-            if (e.message !== 'Payment cancelled.') alert('Failed: ' + e.message);
+            if (e.message !== 'Payment cancelled.') SK.dialog.alert('Failed: ' + e.message);
           }
         });
       });
@@ -443,10 +443,10 @@ table{display:block;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:to
         btn.addEventListener('click', async () => {
           try {
             const result = await subs.purchaseStorage(btn.dataset.storageId);
-            alert(`${result.gb} GB storage added!`);
+            SK.dialog.alert(`${result.gb} GB storage added!`);
             loadCurrentPlan();
           } catch (e) {
-            if (e.message !== 'Payment cancelled.') alert('Failed: ' + e.message);
+            if (e.message !== 'Payment cancelled.') SK.dialog.alert('Failed: ' + e.message);
           }
         });
       });

@@ -70,6 +70,15 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 |---|---|---|---|---|
 | 08-07 | A | Toasts (renderer) | 2 renderers | **1 renderer** |
 | 08-07 | B1 | Dialogs | ~0% | **~24%** (102 via `SK.dialog`; 331 native left) — creative-studio, subscription-os, admin, wap, staff-management, account-centre |
+| 08-07 | B2 | Dialogs | ~24% | **~40%** (158 via `SK.dialog`; 239 native left) — admin-subscriptions, ai-subscriptions, webhooks, observability, api-gateway, task-queue, email-center |
+
+**Batch ledger (dialogs):**
+| Batch | Modules | SK.dialog | Native left | Adoption |
+|---|---|---|---|---|
+| 1 | creative-studio · subscription-os · admin · wap · staff-management · account-centre | 102 | 331 | ~24% |
+| 2 | admin-subscriptions · ai-subscriptions · webhooks · observability · api-gateway · task-queue · email-center | 158 | 239 | ~40% |
+
+**Excluded from migration (scanner false-positives, verified):** `sokoni-alerts.js` (defines its OWN `alert(msg,severity,details)` audit system — not native); `functions/test/*`, `scripts/*` (Node — no `SK`); `dispatch.html`, `provider-dashboard.html`, `ecc.html` (`data-no-header` → shared-header never injects `SK`; need explicit `sokoni-ds.js` or stay native — handle separately).
 
 **Slice B foundation (before any call-site moved):** the canonical modal gained what native `alert`/`confirm` give for free — `role="dialog"`/`aria-modal`, focus-trap, focus-restore, auto-focus, Enter-confirms — plus `SK.dialog.alert()` (new) and dialog telemetry (`window._skDialogMetrics` + `sk:dialog` event: type/module/result/durationMs). Mapping used: `alert(x)`→`SK.dialog.alert(x)`; `if(!confirm(x))return;`→`if(!(await SK.dialog.confirm(x)))return;` (async fns) or `SK.dialog.confirm(x, cb)` (non-async). `prompt()` left unchanged (no canonical equivalent yet).
 

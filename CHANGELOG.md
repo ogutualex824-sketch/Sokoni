@@ -1,3 +1,20 @@
+## [2026-08-07] — feat(ui): Slice B batch 2 — dialog convergence (admin/ops consoles)
+
+Continued native `alert`/`confirm` → `SK.dialog` migration, next logical group (low-traffic
+admin/ops tooling). Same discipline: parse-verified, re-measured, deployed per batch.
+
+- **Migrated (56 sites, 0 bare left):** admin-subscriptions (9+2), ai-subscriptions (9), webhooks
+  (8+1), observability (5+1), api-gateway (4+1), task-queue (9+2), email-center (0+5). Deletes/purges/
+  global-disable get `variant:'danger'`. All confirms verified in `async` fns.
+- **Adoption:** dialogs **~24% → ~40%** (158 canonical / 239 native left).
+- **Scanner false-positives excluded (verified, documented in audit):** `sokoni-alerts.js` (its own
+  severity-based `alert()` audit lib — NOT native); Node `functions/test/*` + `scripts/*` (no `SK`);
+  `dispatch/provider-dashboard/ecc.html` (`data-no-header` → `SK` not injected — handled separately).
+- **Files:** admin-subscriptions.html, ai-subscriptions.html, webhooks.html, observability.html,
+  api-gateway.html, task-queue.html, email-center.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B — dialog convergence (top-6 modules) + canonical modal hardening
 
 Design-system convergence, batch 2 (after Slice A toasts). Native `alert()`/`confirm()` →

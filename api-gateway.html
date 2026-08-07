@@ -382,13 +382,13 @@ window.saveRateLimit = async function() {
   const requests = parseInt(document.getElementById('rl-requests').value) || 100;
   const window_  = parseInt(document.getElementById('rl-window').value) || 60;
   const action   = document.getElementById('rl-action').value;
-  if (!route) { alert('Route / key is required.'); return; }
+  if (!route) { SK.dialog.alert('Route / key is required.'); return; }
   const btn = document.getElementById('rl-save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await _call('gwManageRateLimit', { action: 'set', route, requests, windowSeconds: window_, breachAction: action });
     loadRateLimits();
-  } catch(e) { alert('Error: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Error: ' + e.message); }
   finally { btn.disabled = false; btn.textContent = 'Save'; }
 };
 
@@ -416,9 +416,9 @@ window.loadRateLimits = async function() {
 };
 
 window.deleteRateLimit = async function(route) {
-  if (!confirm('Remove rate limit for ' + route + '?')) return;
+  if (!(await SK.dialog.confirm('Remove rate limit for ' + route + '?', null, null, { title: 'Remove rate limit', variant: 'danger', confirmLabel: 'Remove' }))) return;
   try { await _call('gwManageRateLimit', { action: 'delete', route }); loadRateLimits(); }
-  catch(e) { alert('Delete failed: ' + e.message); }
+  catch(e) { SK.dialog.alert('Delete failed: ' + e.message); }
 };
 
 // ── Top Clients ────────────────────────────────────────────────────────────
@@ -449,7 +449,7 @@ window.blockClient = async function(clientId) {
     await _call('gwManageRateLimit', { action: 'set', route: 'uid:'+clientId, requests: parseInt(rpm), windowSeconds: 60, breachAction: 'reject' });
     loadRateLimits();
     loadClients();
-  } catch(e) { alert('Failed: ' + e.message); }
+  } catch(e) { SK.dialog.alert('Failed: ' + e.message); }
 };
 
 // Auto-refresh every 30s
