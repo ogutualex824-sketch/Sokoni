@@ -632,7 +632,7 @@ function _updateHeaderWidget (health) {
     chip.className = 'pos-header-btn';
     chip.title     = 'Printer status — click to open setup';
     chip.style.cssText = 'position:relative;font-size:13px;line-height:1;display:flex;align-items:center;gap:3px;';
-    chip.onclick   = () => window.open('pos-printer-setup.html', '_blank', 'width=560,height=900');
+    chip.onclick   = () => { try { window.PosPrintService && PosPrintService.showQueueDiagnostics(); } catch (_) { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } };
     /* Insert before the first button (notifications bell) */
     const firstBtn = target.querySelector('button');
     if (firstBtn) target.insertBefore(chip, firstBtn);
@@ -1393,6 +1393,51 @@ class PosPrintService {
       queuedAt:  j.queuedAt,
       lastError: j.lastError || null,
     }));
+  }
+
+  /* Lightweight queue diagnostics PANEL — a bottom sheet showing the health summary +
+     a Status/Job/Time table (printed / waiting / retrying / failed). Self-contained
+     (builds its own DOM + inline styles); callable from anywhere, e.g. the printer chip. */
+  showQueueDiagnostics () {
+    const self = this, ID = 'pps-diag-modal';
+    const ex = document.getElementById(ID); if (ex) ex.remove();
+    const ov = document.createElement('div'); ov.id = ID;
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100050;background:rgba(0,0,0,0.72);display:flex;align-items:flex-end;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);';
+    ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'width:100%;max-width:560px;max-height:82vh;overflow:auto;background:#0c0c0c;border:1px solid rgba(255,255,255,0.1);border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom,0px));';
+    const fmtTime = iso => { try { return new Date(iso).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return '—'; } };
+    const pill = j => {
+      if (j.status === 'done')   return '<span style="color:#22c55e;font-weight:800;white-space:nowrap;">&#x2705; Printed</span>';
+      if (j.status === 'failed') return '<span style="color:#ff5050;font-weight:800;white-space:nowrap;">&#x274C; Failed</span>';
+      if ((j.attempts || 0) > 0) return '<span style="color:#ff9800;font-weight:800;white-space:nowrap;">&#x21BB; Retrying</span>';
+      return '<span style="color:#ffb020;font-weight:800;white-space:nowrap;">&#x23F3; Waiting</span>';
+    };
+    function render () {
+      const h = self.getHealthSummary(), jobs = self.getQueueDiagnostics();
+      const rows = jobs.length ? jobs.map(j =>
+        '<tr style="border-top:1px solid rgba(255,255,255,0.06);">' +
+          '<td style="padding:8px 6px;">' + pill(j) + (j.attempts > 0 ? ' <span style="color:rgba(255,255,255,0.3);font-size:10px;">(' + j.attempts + '/' + j.maxAttempts + ')</span>' : '') + '</td>' +
+          '<td style="padding:8px 6px;color:rgba(255,255,255,0.85);">Receipt ' + _esc(String(j.receipt)) + (j.lastError ? '<div style="color:#ff6b6b;font-size:10px;">' + _esc(String(j.lastError).slice(0, 60)) + '</div>' : '') + '</td>' +
+          '<td style="padding:8px 6px;color:rgba(255,255,255,0.4);white-space:nowrap;">' + fmtTime(j.queuedAt) + '</td></tr>'
+      ).join('') : '<tr><td colspan="3" style="padding:26px;text-align:center;color:rgba(255,255,255,0.3);">No print jobs yet</td></tr>';
+      sheet.innerHTML =
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">' +
+          '<div style="font-size:15px;font-weight:900;color:#fff;">&#x1F5A8;&#xFE0F; Printer Queue</div>' +
+          '<button id="pps-diag-x" aria-label="Close" style="background:rgba(255,255,255,0.08);border:none;color:#fff;width:32px;height:32px;border-radius:9px;font-size:15px;cursor:pointer;">&#x2715;</button></div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,0.65);background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:12px;padding:10px 12px;margin-bottom:12px;">' + _esc(h.text) + '</div>' +
+        '<table style="width:100%;border-collapse:collapse;font-size:12px;"><thead><tr style="color:rgba(255,255,255,0.4);font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">' +
+          '<th style="text-align:left;padding:0 6px 6px;">Status</th><th style="text-align:left;padding:0 6px 6px;">Job</th><th style="text-align:left;padding:0 6px 6px;">Time</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+        '<div style="display:flex;gap:8px;margin-top:14px;">' +
+          '<button id="pps-diag-refresh" style="flex:1;padding:11px;border-radius:11px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.3);color:#71ff00;font-weight:800;cursor:pointer;font-family:inherit;">&#x21BB; Refresh</button>' +
+          '<button id="pps-diag-setup" style="flex:1;padding:11px;border-radius:11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);font-weight:800;cursor:pointer;font-family:inherit;">&#x2699;&#xFE0F; Printer Setup</button></div>';
+      sheet.querySelector('#pps-diag-x').onclick = () => ov.remove();
+      sheet.querySelector('#pps-diag-refresh').onclick = render;
+      sheet.querySelector('#pps-diag-setup').onclick = () => { try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {} };
+    }
+    render();
+    ov.appendChild(sheet);
+    document.body.appendChild(ov);
   }
 }
 
