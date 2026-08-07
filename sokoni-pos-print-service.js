@@ -1342,6 +1342,37 @@ class PosPrintService {
     }
   }
 
+  /* ORDER-CENTRIC PRINT — the merchant taps "Print", never "connect a printer".
+     Ensures a live connection, THEN prints the job automatically (no second tap, no reconnect
+     screen). Flow: connected? → print · else silent reconnect (getDevices) → print · else, since
+     this runs inside the Print click (a user gesture), open the Bluetooth chooser → connect →
+     print. Only genuinely-blocked cases (printer off / no Web Bluetooth) fall through to
+     printReceipt's own queue / browser-share fallback, so a receipt is never lost.
+     Call this from EVERY Print action (order card, checkout, refund, dispatch note). */
+  async smartPrint (order = {}, context = {}) {
+    const eng = window.SokoniPrinter || window.PrinterManager;
+    const isUp = () => !!(eng && eng.connected);
+
+    if (!isUp()) {
+      /* 1) Silent reconnect — no chooser, no gesture (getDevices). Fast when there's nothing to
+         re-link, which preserves the click's gesture for step 2. */
+      try { if (eng && eng.autoReconnect) await eng.autoReconnect(); } catch (_) {}
+    }
+    if (!isUp()) {
+      /* 2) Interactive connect — we're inside the Print gesture, so the chooser is allowed.
+         Cancel / no-Web-Bluetooth / connect-failure all fall through to printReceipt below,
+         which queues or browser-prints so nothing is lost. */
+      try {
+        if (eng && eng.discoverBy) {
+          const list = await eng.discoverBy('bluetooth');
+          if (list && list[0]) await eng.connect(list[0]);
+        }
+      } catch (_) { /* fall through — printReceipt handles the offline/legacy path */ }
+    }
+    /* 3) Print the job — resumes automatically whether we just connected or fell back. */
+    return this.printReceipt(order, context);
+  }
+
   /* The pre-consolidation print chain, preserved verbatim (SokoniPrint → PosPrinter.printBrowser
      → PosPrinter.print) so behaviour on fallback is identical to before this migration. */
   async _legacyFallback (order) {

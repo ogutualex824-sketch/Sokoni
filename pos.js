@@ -2358,10 +2358,17 @@ const SPos = (function () {
       _setVal('suc-mpesa-ref', receiptData.mpesaRef || '');
     }
 
-    /* Wire Print button */
+    /* Wire Print button — order-centric: the tap ensures the printer is connected (silent →
+       chooser) THEN prints, so the cashier never sees a reconnect screen after a sale. */
     const printBtn = document.getElementById('suc-print-btn');
     if (printBtn) {
-      printBtn.onclick = () => { PosPrinter.print(receiptData).catch(() => {}); };
+      printBtn.onclick = () => {
+        if (window.PosPrintService && typeof PosPrintService.smartPrint === 'function') {
+          PosPrintService.smartPrint(receiptData, { fromSuccess: true }).catch(() => { try { PosPrinter.print(receiptData); } catch (_) {} });
+        } else {
+          PosPrinter.print(receiptData).catch(() => {});
+        }
+      };
     }
 
     /* Wire WhatsApp button */
@@ -2665,7 +2672,7 @@ const SPos = (function () {
         <div class="ord-card-foot">
           ${status}
           <div class="ord-card-actions">
-            <button class="row-btn" onclick="SPos.sales.reprint('${t.id}')">🖨 Reprint</button>
+            <button class="row-btn" onclick="SPos.sales.reprint('${t.id}')">🖨 Print</button>
             ${!t.refunded && !t.voided ? `<button class="row-btn" onclick="SPos.sales.refundDialog('${t.id}')">Refund</button>` : ''}
             <button class="row-btn" onclick="SPos.orders.details('${t.id}')">Details</button>
           </div>
@@ -2701,7 +2708,7 @@ const SPos = (function () {
           <div class="ord-det-row"><span>Payment</span><span>${_esc((t.paymentMethod || 'cash').toUpperCase())} · ${payState}</span></div>
         </div>
         <div class="ord-det-foot">
-          <button class="modal-btn modal-btn-primary" style="width:100%" onclick="SPos.sales.reprint('${t.id}')">🖨 Reprint receipt</button>
+          <button class="modal-btn modal-btn-primary" style="width:100%" onclick="SPos.sales.reprint('${t.id}')">🖨 Print receipt</button>
         </div>
       </div>`;
       document.body.appendChild(ov);
@@ -2757,7 +2764,14 @@ const SPos = (function () {
         taxRate:         state.settings.taxRate || 16,
         paperWidth:      parseInt(state.settings.paperWidth) || 32,
       };
-      PosPrinter.print(data).catch(() => {});
+      /* Order-centric print: ensure the printer is connected (silent → chooser) THEN print,
+         so the merchant taps once and never sees a reconnect screen. Falls back to the legacy
+         browser print if the smart path is unavailable. */
+      if (window.PosPrintService && typeof PosPrintService.smartPrint === 'function') {
+        PosPrintService.smartPrint(data, { reprint: true }).catch(() => { try { PosPrinter.print(data); } catch (_) {} });
+      } else {
+        PosPrinter.print(data).catch(() => {});
+      }
       if (window.PosAudit) PosAudit.log('receipt_reprint', { receiptNo: t.receiptNo });
     },
 
