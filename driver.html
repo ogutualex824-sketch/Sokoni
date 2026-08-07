@@ -2128,6 +2128,14 @@ function _showDrvDelivery(req) {
 
   const activeStatus = { driver_accepted:'heading to seller', driver_at_seller:'at seller', in_transit:'in transit' };
   if (activeStatus[req.status]) {
+    /* Navigate destination: heading to the SELLER until picked up, then to the BUYER.
+       Prefer live coords; fall back to the saved address (Google geocodes it). */
+    const _dc = req.deliveryCoords || {}, _pc = req.pickupCoords || {};
+    const _navRaw = (req.status === 'in_transit')
+      ? (_dc.lat != null ? _dc.lat + ',' + _dc.lng : (req.deliveryAddress || ''))
+      : (_pc.lat != null ? _pc.lat + ',' + _pc.lng : (req.pickupAddress || ''));
+    const _navDest = encodeURIComponent(_navRaw);
+    const _buyerPhone = req.buyerPhone || req.customerPhone || '';
     el.style.cssText = 'background:rgba(0,170,255,0.07);border:2px solid rgba(0,170,255,0.3);border-radius:16px;padding:16px;margin-bottom:16px;';
     el.innerHTML = `
       <div style="font-size:12px;font-weight:900;color:#00aaff;margin-bottom:8px;">${icon} ACTIVE DELIVERY · ${req.deliveryRef||req.ref}</div>
@@ -2137,6 +2145,10 @@ function _showDrvDelivery(req) {
         ${req.sellerName?'<br>🏪 Seller: '+req.sellerName:''}
         ${req.buyerName ?'<br>👤 Buyer: '+req.buyerName:''}
         ${req.proofPin  ?'<br>🔑 Delivery PIN: <strong style="color:#71ff00;font-size:15px;letter-spacing:3px;">'+req.proofPin+'</strong>':''}
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button onclick="window._drvNavigate('${_navDest}')" style="flex:1;padding:11px;background:rgba(0,170,255,0.14);border:1px solid rgba(0,170,255,0.35);color:#00aaff;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">🧭 Navigate</button>
+        ${_buyerPhone?`<button onclick="location.href='tel:${_buyerPhone}'" style="padding:11px 15px;background:rgba(113,255,0,0.1);border:1px solid rgba(113,255,0,0.25);color:#71ff00;font-weight:800;border-radius:10px;cursor:pointer;font-size:13px;font-family:inherit;">📞 Call</button>`:''}
       </div>
       ${_deliveryActionBtns(req)}`;
   } else {
@@ -2160,6 +2172,15 @@ function _showDrvDelivery(req) {
   el.style.display = 'block';
   if (navigator.vibrate) navigator.vibrate([100,50,100]);
 }
+
+/* Open turn-by-turn navigation to the destination (already URL-encoded — coords
+   "lat,lng" or a plain address). Google Maps universal directions URL: opens the
+   Google Maps app on Android, Google/Apple Maps or web on iOS, and web on desktop. */
+window._drvNavigate = function (encodedDest) {
+  if (!encodedDest) { try { showToast('No destination location yet', 'error'); } catch (_) {} return; }
+  try { window.open('https://www.google.com/maps/dir/?api=1&destination=' + encodedDest + '&travelmode=driving', '_blank'); }
+  catch (_) { location.href = 'https://www.google.com/maps/dir/?api=1&destination=' + encodedDest; }
+};
 
 function _deliveryActionBtns(req) {
   const dRef = req.deliveryRef || req.ref;
