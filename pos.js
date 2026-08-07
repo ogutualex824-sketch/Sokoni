@@ -91,6 +91,12 @@ const SPos = (function () {
     /* Load products */
     await products.reload();
 
+    /* Sync the merchant's CANONICAL products into the POS. The POS store was fed only by the
+       separate `posProducts` collection, so a shop whose products live in the canonical
+       `products` collection (marketplace / seller dashboard) showed a BLANK POS. Non-blocking;
+       re-render once seeded. */
+    _seedCatalogueFromCanonical().then(n => { if (n > 0) products.reload(); }).catch(() => {});
+
     /* Load category chips */
     await ui.loadCategories();
 
@@ -452,6 +458,48 @@ const SPos = (function () {
       document.getElementById('pos-pay-overlay')?.classList.remove('open');
     },
   };
+
+  /* Pull the merchant's CANONICAL products (the `products` collection — same source as the
+     marketplace / seller dashboard) into the POS IndexedDB via the App-Check-free
+     /api/catalogue endpoint (works on any device). Additive + idempotent (upsert by id);
+     canonical stock stays authoritative (posCompleteCheckout writes products.stock). This is
+     the inventory single-source fix: the POS now shows the shop's real catalogue. */
+  async function _seedCatalogueFromCanonical () {
+    try {
+      let u = null; try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+      const uid = (u && (u.uid || u.id)) || window.currentUser?.uid
+               || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
+               || localStorage.getItem('sokoni_merchant_id');
+      if (!uid) return 0;
+      const r = await fetch('/api/catalogue?sellerUid=' + encodeURIComponent(uid) + '&cb=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return 0;
+      const j = await r.json();
+      const list = Array.isArray(j) ? j : (j.products || j.items || j.catalogue || []);
+      if (!Array.isArray(list) || !list.length) return 0;
+      let n = 0;
+      for (const p of list) {
+        const id = String(p.id || p._id || p.productId || '');
+        if (!id) continue;
+        const stock = (p.stock != null) ? Number(p.stock) : null;
+        await PosDB.products.save({
+          id,
+          name:     p.name || p.title || 'Product',
+          price:    Number(p.price || p.sellingPrice || 0),
+          cost:     Number(p.cost || p.costPrice || 0) || 0,
+          stock,
+          track:    stock != null,
+          category: p.category || 'general',
+          barcode:  p.barcode || '',
+          sku:      p.sku || '',
+          image:    p.image || (Array.isArray(p.images) ? p.images[0] : '') || '',
+          unit:     p.unit || 'pc',
+          source:   'canonical',
+        }).catch(() => {});
+        n++;
+      }
+      return n;
+    } catch (_) { return 0; }
+  }
 
   /* ═══════════════════════════════════════════════════════════
      PRODUCTS
