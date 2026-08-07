@@ -6685,6 +6685,20 @@ document.addEventListener('DOMContentLoaded', function() {
 <script src="sokoni-drawer.js"></script>
 <script src="sokoni-merchant-diag.js" defer></script>
 <script>
+/* ── Merchant Shell bridge ── lets merchant.html deep-switch dashboard sections with
+   no reload when the Seller Dashboard runs inside the shell. No-op standalone. */
+(function () {
+  if (window.parent === window) return;
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    var d = e.data || {};
+    if (d.__sokoniShell && d.action === 'showSection' && typeof showDashPage === 'function') {
+      try { showDashPage(d.section || 'home'); } catch (_) {}
+    }
+  });
+})();
+</script>
+<script>
 /* ── Premium skeleton loaders (progressive enhancement) ───────────────────────
    Wraps the existing KPI elements so they SHIMMER while loading and animate the
    value in the moment real data lands — no abrupt flash, no fabricated "0".

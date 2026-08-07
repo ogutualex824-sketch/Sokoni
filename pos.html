@@ -2908,5 +2908,35 @@ window.SPosCustomer = (function () {
 })();
 </script>
 
+<script>
+/* ── Merchant Shell bridge ─────────────────────────────────────────────────
+   When the POS runs inside the Merchant Application Shell (merchant.html), the
+   shell owns navigation. This lets the shell deep-switch POS tabs without any
+   reload, and pushes the POS printer status + cashier name UP to the shell so
+   the global top bar reflects them. No-op when the POS is opened standalone. */
+(function () {
+  if (window.parent === window) return;   /* standalone — no shell */
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin) return;
+    var d = e.data || {};
+    if (!d.__sokoniShell) return;
+    try {
+      if (d.action === 'switchTab' && window.SPos && SPos.ui && SPos.ui.switchTab) SPos.ui.switchTab(d.tab || 'pos');
+    } catch (_) {}
+  });
+  /* Push printer + user status to the shell (poll — cheap, no listener churn). */
+  var lastP = null, lastU = null;
+  function tick () {
+    try {
+      var up = !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected));
+      if (up !== lastP) { lastP = up; window.parent.postMessage({ __sokoniPos: true, type: 'printerStatus', connected: up }, location.origin); }
+      var u = (window.SPos && SPos.state && SPos.state.currentCashier && SPos.state.currentCashier.name) || null;
+      if (u && u !== lastU) { lastU = u; window.parent.postMessage({ __sokoniPos: true, type: 'userInfo', name: u }, location.origin); }
+    } catch (_) {}
+  }
+  setInterval(tick, 3000); tick();
+})();
+</script>
+
 </body>
 </html>
