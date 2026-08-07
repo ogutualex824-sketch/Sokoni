@@ -522,8 +522,8 @@ function generateKey(e) {
 
 function copyKey() { navigator.clipboard.writeText(genKey).then(() => toast('Key copied to clipboard')); }
 
-function revokeKey(kid) {
-  if (!confirm('Revoke this key? It stops working immediately.')) return;
+async function revokeKey(kid) {
+  if (!(await SK.dialog.confirm('Revoke this key? It stops working immediately.', null, null, { title: 'Revoke key', variant: 'danger', confirmLabel: 'Revoke' }))) return;
   fns.httpsCallable('revokeApiKey')({keyId: kid})
     .then(() => { toast('Key revoked'); loadKeys(); })
     .catch(err => toast('Error: ' + err.message));
@@ -569,8 +569,8 @@ function testWH(id) {
     .catch(err => toast('Test failed: ' + err.message));
 }
 
-function deleteWH(id) {
-  if (!confirm('Remove this endpoint?')) return;
+async function deleteWH(id) {
+  if (!(await SK.dialog.confirm('Remove this endpoint?', null, null, { title: 'Remove endpoint', variant: 'danger', confirmLabel: 'Remove' }))) return;
   db.collection('webhooks').doc(id).delete().then(() => { toast('Endpoint removed'); loadWebhooks(); });
 }
 

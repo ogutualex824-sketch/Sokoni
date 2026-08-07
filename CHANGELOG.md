@@ -1,3 +1,24 @@
+## [2026-08-07] — feat(ui): Slice B7 — dialog convergence (POS/admin pages)
+
+9 pages migrated; 1 deferred on the SK-availability gate.
+
+- **Migrated (21 sites, 0 bare left):** pos-printer-setup (3), pos-suppliers (1 alert + 1),
+  pos-inventory (2, incl. assignment-form `const ok = await SK.dialog.confirm`), pos-hq (2),
+  pos-accounting (2), workspace-invite (1 alert + 1), partner-portal (2), notifications (2),
+  finos (2 — money: reverse-ledger + refund-clawback, danger variants). Non-async handlers
+  (pos-printer-setup, partner-portal, notifications listeners, finos money fns) marked `async`
+  after verifying onclick/listener callers discard the return.
+- **finos money check:** its `_reverseEntry`/`_processRefund` already branch correctly
+  (success in `.then`, error in `.catch`) — no swallow-then-succeed; money guard passes.
+- **Deferred (exception list):** pos-ios-print-test.html — standalone test page, loads no
+  shared-header/sokoni-ds, so `SK` is absent. Left native until an explicit include is added.
+- **Adoption:** dialogs **~68% → ~73%** (282 canonical / 102 native left).
+- **Files:** pos-printer-setup.html, pos-suppliers.html, pos-inventory.html, pos-hq.html,
+  pos-accounting.html, workspace-invite.html, partner-portal.html, notifications.html, finos.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B6 — dialog convergence (org/admin/ops pages)
 
 8 pages. Survey-first caught two files where a blind replace would have corrupted non-executable code.

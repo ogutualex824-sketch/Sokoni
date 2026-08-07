@@ -597,7 +597,7 @@ async function sendPO(id) {
 }
 
 async function cancelPO(id) {
-  if (!confirm('Cancel this Purchase Order?')) return;
+  if (!(await SK.dialog.confirm('Cancel this Purchase Order?', null, null, { title: 'Cancel PO', variant: 'danger', confirmLabel: 'Cancel PO' }))) return;
   await PosSuppliers.updatePOStatus(id, 'cancelled');
   toast('PO cancelled'); loadPOs(); loadSummary();
 }
@@ -779,7 +779,7 @@ async function viewSupplierPerformance(id) {
   const perf = await PosSuppliers.getSupplierPerformance(id);
   const s    = _allSuppliers.find(x => x.id === id);
   if (!perf) { toast('No performance data yet'); return; }
-  alert(`📊 ${s?.name||id} Performance\n\nOrders: ${perf.totalOrders}\nOn-Time Rate: ${perf.onTimeRate?.toFixed(1)}%\nAvg Lead Time: ${perf.avgLeadDays?.toFixed(1)} days\nRejection Rate: ${perf.rejectRate?.toFixed(1)}%\nOutstanding: ${KES(perf.outstanding)}`);
+  SK.dialog.alert(`📊 ${s?.name||id} Performance\n\nOrders: ${perf.totalOrders}\nOn-Time Rate: ${perf.onTimeRate?.toFixed(1)}%\nAvg Lead Time: ${perf.avgLeadDays?.toFixed(1)} days\nRejection Rate: ${perf.rejectRate?.toFixed(1)}%\nOutstanding: ${KES(perf.outstanding)}`);
 }
 
 /* ── Init ── */

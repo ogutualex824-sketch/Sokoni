@@ -1860,7 +1860,7 @@ async function reconnectP58E () {
 }
 
 async function forgetP58E () {
-  if (!confirm('Remove saved printer? You will need to pair again next time.')) return;
+  if (!(await SK.dialog.confirm('Remove saved printer? You will need to pair again next time.', null, null, { title: 'Remove printer', variant: 'danger', confirmLabel: 'Remove' }))) return;
   PrinterManager.p58e.forget();
   _connectedDevice = null;
   updateStatusBar();
@@ -2400,17 +2400,17 @@ function _renderDriverStatus () {
   ).join('');
 }
 
-function _resetStats () {
+async function _resetStats () {
   if (!window.PrinterManager) return;
-  if (!confirm('Reset all print statistics? This cannot be undone.')) return;
+  if (!(await SK.dialog.confirm('Reset all print statistics? This cannot be undone.', null, null, { title: 'Reset statistics', variant: 'danger', confirmLabel: 'Reset' }))) return;
   PrinterManager.stats.reset();
   _renderInfoStats();
   toast('Statistics reset');
 }
 
-function _clearDrawerLog () {
+async function _clearDrawerLog () {
   if (!window.PrinterManager) return;
-  if (!confirm('Clear the cash drawer event log?')) return;
+  if (!(await SK.dialog.confirm('Clear the cash drawer event log?', null, null, { title: 'Clear drawer log', confirmLabel: 'Clear' }))) return;
   PrinterManager.drawer.clear();
   _renderDrawerLog();
   toast('Drawer log cleared');

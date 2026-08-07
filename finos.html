@@ -720,12 +720,12 @@
       .catch(function (e) { msg.textContent = e.message; msg.style.color = '#ff6b6b'; });
   };
 
-  window._reverseEntry = function () {
+  window._reverseEntry = async function () {
     var id  = document.getElementById('revId').value.trim();
     var rsn = document.getElementById('revReason').value.trim();
     var msg = document.getElementById('revMsg');
     if (!id || !rsn) { _toast('Ledger ID and reason required', false); return; }
-    if (!confirm('Reverse ledger entry ' + id + '?\n\nReason: ' + rsn + '\n\nThis action is audited and creates an offsetting entry.')) return;
+    if (!(await SK.dialog.confirm('Reverse ledger entry ' + id + '? Reason: ' + rsn + '. This action is audited and creates an offsetting entry.', null, null, { title: 'Reverse ledger entry', variant: 'danger', confirmLabel: 'Reverse' }))) return;
     msg.textContent = 'Reversing…'; msg.style.color = '#ff8c00';
     FS.reverseTransaction(id, rsn).then(function () { msg.textContent = 'Reversed.'; msg.style.color = '#71ff00'; })
       .catch(function (e) { msg.textContent = e.message; msg.style.color = '#ff6b6b'; });
@@ -746,13 +746,13 @@
       }).catch(function (e) { el.innerHTML = '<span style="color:#ff6b6b;">'+_esc(e.message)+'</span>'; });
   };
 
-  window._processRefund = function () {
+  window._processRefund = async function () {
     var ordId = document.getElementById('refOrderId').value.trim();
     var amt   = parseFloat(document.getElementById('refAmount').value) || 0;
     var rsn   = document.getElementById('refReason').value.trim();
     var msg   = document.getElementById('refMsg');
     if (!ordId || !rsn) { _toast('Order ID and reason required', false); return; }
-    if (!confirm('Process refund for order ' + ordId + '?\n\nThis will clawback seller earnings and reverse ledger entries.')) return;
+    if (!(await SK.dialog.confirm('Process refund for order ' + ordId + '? This will clawback seller earnings and reverse ledger entries.', null, null, { title: 'Process refund', variant: 'danger', confirmLabel: 'Process refund' }))) return;
     msg.textContent = 'Processing…'; msg.style.color = '#ff8c00';
     FS.processRefund(ordId, { refundAmountCents: amt ? Math.round(amt * 100) : null, fullRefund: !amt, reason: rsn })
       .then(function (r) { msg.textContent = 'Refunded: ' + FS.formatKES(r.refundAmountCents, {noDecimals:true}); msg.style.color = '#71ff00'; })

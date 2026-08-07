@@ -752,14 +752,14 @@
     if (!eng) return;
     eng.markAllRead(_activeCategory !== 'all' ? _activeCategory : null).then(_render);
   });
-  document.getElementById('nc-archive-all-btn').addEventListener('click', function() {
-    if (!confirm('Archive all visible notifications?')) return;
+  document.getElementById('nc-archive-all-btn').addEventListener('click', async function() {
+    if (!(await SK.dialog.confirm('Archive all visible notifications?', null, null, { title: 'Archive all', confirmLabel: 'Archive all' }))) return;
     var eng = window.SokoniNotifEngine;
     if (!eng) return;
     eng.archiveAll().then(_render);
   });
-  document.getElementById('nc-clear-read-btn').addEventListener('click', function() {
-    if (!confirm('Delete all read notifications? This cannot be undone.')) return;
+  document.getElementById('nc-clear-read-btn').addEventListener('click', async function() {
+    if (!(await SK.dialog.confirm('Delete all read notifications? This cannot be undone.', null, null, { title: 'Delete read notifications', variant: 'danger', confirmLabel: 'Delete all' }))) return;
     var eng = window.SokoniNotifEngine;
     if (!eng) return;
     var items = eng.getAll({ category: _activeCategory, grouped: false });

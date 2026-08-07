@@ -1216,7 +1216,7 @@ window.editExpense = async (id) => {
 };
 
 window.deleteExpense = async (id) => {
-  if (!confirm('Delete this expense?')) return;
+  if (!(await SK.dialog.confirm('Delete this expense?', null, null, { title: 'Delete expense', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try {
     await cf.deleteExpense({ id });
     toast('Expense deleted.', 'success');
@@ -1246,7 +1246,7 @@ function initJournal() {
   });
 
   document.getElementById('jnl-init-coa-btn').addEventListener('click', async () => {
-    if (!confirm('Initialize the Chart of Accounts? This should only be done once.')) return;
+    if (!(await SK.dialog.confirm('Initialize the Chart of Accounts? This should only be done once.', null, null, { title: 'Initialize Chart of Accounts', confirmLabel: 'Initialize' }))) return;
     try {
       await cf.initCOA({});
       toast('Chart of Accounts initialized.', 'success');

@@ -563,7 +563,7 @@ async function saveProduct() {
 }
 
 async function deactivateProduct(id) {
-  if (!confirm('Deactivate this product?')) return;
+  if (!(await SK.dialog.confirm('Deactivate this product?', null, null, { title: 'Deactivate product', variant: 'danger', confirmLabel: 'Deactivate' }))) return;
   await PosInventory.updateProduct(id, { status: 'inactive' });
   toast('Product deactivated'); loadProducts();
 }
@@ -820,7 +820,7 @@ async function posRunImport(headers) {
     const { data } = await prevFn({ tenantId: uid, rows: _posImportRows, mappings: mapResult.mappings||{}, filename: 'pos-import.csv' });
     _posImportJobId = data.jobId;
 
-    const ok = confirm(`Import preview:\n✅ ${data.valid||0} valid rows\n⚠ ${data.duplicates||0} duplicates (will be skipped)\n❌ ${data.invalid||0} invalid\n\nProceed with import?`);
+    const ok = await SK.dialog.confirm(`Import preview: ✅ ${data.valid||0} valid rows · ⚠ ${data.duplicates||0} duplicates (will be skipped) · ❌ ${data.invalid||0} invalid. Proceed with import?`, null, null, { title: 'Import preview', confirmLabel: 'Import' });
     if (!ok) return;
 
     const commitFn = firebase.functions().httpsCallable('inventoryImportCommit');
