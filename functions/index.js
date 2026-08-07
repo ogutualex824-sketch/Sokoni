@@ -11188,6 +11188,10 @@ exports.navAssignTrip             = navigation.navAssignTrip;
 exports.navResolveFleetEvent      = navigation.navResolveFleetEvent;
 exports.navCleanupStaleLocations  = navigation.navCleanupStaleLocations;
 exports.processDriverEarning      = navigation.processDriverEarning;
+/* Secure Delivery Authorization — Phase 0 (shadow / instrumentation only; no payout change) */
+const _deliveryPin = require("./delivery-pin");
+exports.deliveryPinOnAccept       = _deliveryPin.deliveryPinOnAccept;
+exports.deliveryVerifyShadow      = _deliveryPin.deliveryVerifyShadow;
 // v2.0 additions
 exports.navGenerateDeliveryOTP    = navigation.navGenerateDeliveryOTP;
 exports.navGetRiderDashboard      = navigation.navGetRiderDashboard;
