@@ -10,12 +10,13 @@
 (function () {
   'use strict';
 
-  /* Ordered from bottom → up: each entry stacks 12px above the previous */
+  /* Ordered from bottom → up: chat docks just above the nav, scroll-to-top above chat,
+     WhatsApp above that — so none overlaps and each has its own slot. */
   var _FABS = [
     /* [ elementId, extraOffsetFromNav ] */
-    ['sokoniScrollTop',    0  ],  /* sits 12px above nav */
-    ['kassBtn',            0  ],  /* same layer — positioned by its own right offset */
-    ['sokoni-wa-support',  56 ],  /* one slot higher than scroll-top */
+    ['kassBtn',            0   ],  /* chat — lowest, just above the bottom nav */
+    ['sokoniScrollTop',    56  ],  /* scroll-to-top — one slot above chat */
+    ['sokoni-wa-support',  112 ],  /* WhatsApp — above scroll-top */
   ];
 
   var _BNAV_SEL = ['#bottomNav', '.bottom-nav', 'nav[data-workspace]'];
@@ -67,6 +68,35 @@
   window.addEventListener('orientationchange', function () {
     setTimeout(_reposition, 200);
   });
+
+  /* ── Auto-hide on scroll-down, reappear on scroll-up ──────────────
+     Frees the lower-right corner (Buy / Checkout / quantity) while the user reads
+     down the page; the FABs slide back in the moment they scroll up. rAF-throttled,
+     passive — no scroll jank. Uses transform (independent of the `bottom` docking). */
+  var _lastY = 0, _hidden = false, _raf = 0;
+  function _setHidden(h) {
+    if (h === _hidden) return;
+    _hidden = h;
+    var apply = function (el) {
+      if (!el) return;
+      el.style.transition = 'transform .25s ease, opacity .25s ease';
+      el.style.transform  = h ? 'translateY(160%)' : 'translateY(0)';
+      el.style.opacity    = h ? '0' : '1';
+      el.style.pointerEvents = h ? 'none' : 'auto';
+    };
+    _FABS.forEach(function (entry) { apply(document.getElementById(entry[0])); });
+    document.querySelectorAll('.sk-fab[data-skf], .floating-btn[data-skf]').forEach(apply);
+  }
+  function _onScroll() {
+    var y = window.scrollY || document.documentElement.scrollTop || 0;
+    if (y > _lastY + 6 && y > 140)      _setHidden(true);    /* scrolling down, past the fold */
+    else if (y < _lastY - 6)            _setHidden(false);   /* scrolling up */
+    _lastY = y;
+  }
+  window.addEventListener('scroll', function () {
+    if (_raf) return;
+    _raf = requestAnimationFrame(function () { _raf = 0; _onScroll(); });
+  }, { passive: true });
 
   /* After a SokoniDrawer closes (nav reappears from under FAB hide rule) */
   document.addEventListener('click', function (e) {

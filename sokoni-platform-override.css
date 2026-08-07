@@ -563,3 +563,13 @@ pre  { padding: 16px; overflow-x: auto; }
   box-shadow: 0 1px 8px rgba(113,255,0,0.55);
 }
 .bottom-nav .active-bnav .bnav-emoji { filter: drop-shadow(0 0 7px rgba(113,255,0,0.55)); }
+
+/* ── iPhone safe-area: the fixed bottom nav extends into the home-indicator area so its
+   tappable icons sit ABOVE the indicator (never under it). Additive padding — composes
+   with each page's own .bottom-nav height via border-box; env() is 0 on non-notch devices
+   so nothing changes there. Pair: pages should reserve body padding-bottom = nav height +
+   this inset so page content never hides beneath the bar. ── */
+.bottom-nav {
+  box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

@@ -1165,17 +1165,20 @@
     /* ── Mobile: logo+actions row, search second row ── */
     @media (max-width: 600px) {
       #sk-top-nav {
-        height: auto; min-height: 48px; flex-wrap: wrap; padding: 7px 12px 6px; gap: 4px;
+        /* ~21% shorter + iPhone safe-area: content clears the notch (padding-top folds in
+           env(safe-area-inset-top)); header is no longer over-tall on phones. */
+        height: auto; min-height: 40px; flex-wrap: wrap;
+        padding: calc(4px + env(safe-area-inset-top, 0px)) 12px 5px; gap: 3px;
         align-items: center;
       }
       #sk-nav-logo { order: 0; flex-shrink: 0; }
-      #sk-nav-logo img { height: 26px; }
-      #sk-nav-actions { order: 1; margin-left: auto; gap: 0; }
-      /* Search second row — full width */
+      #sk-nav-logo img { height: 24px; }
+      #sk-nav-actions { order: 1; margin-left: auto; gap: 3px; }   /* equal spacing between action icons */
+      /* Search second row — full width, tighter */
       #sk-nav-search-wrap {
-        order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 2px;
+        order: 2; flex: 1 1 100%; max-width: 100%; margin: 0; margin-top: 3px;
       }
-      #sk-nav-search { padding: 8px 14px 8px 36px; font-size: 16px; }
+      #sk-nav-search { padding: 7px 14px 7px 34px; font-size: 16px; }
       /* Mobile: hide Messages + Theme */
       #sk-msg-btn { display: none !important; }
       #sk-theme-btn { display: none !important; }
@@ -1187,9 +1190,9 @@
       #sk-nav-avatar { width: 28px; height: 28px; font-size: 12px; }
       /* Icon buttons */
       .sk-nav-icon-btn { width: 34px; height: 34px; font-size: 16px; }
-      /* Body padding: row1 ~48px + row2 search ~40px + gaps ~6px = ~94px */
-      body { padding-top: max(52px, calc(52px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(106px, calc(106px + env(safe-area-inset-top, 0px))) !important; }
+      /* Reserve the SMALLER header: row1 ~40 + search ~34 + gaps ~6 = ~80px (+ safe-area). */
+      body { padding-top: calc(44px + env(safe-area-inset-top, 0px)) !important; }
+      body.sk-has-search { padding-top: calc(82px + env(safe-area-inset-top, 0px)) !important; }
     }
     /* ── Very small phones (320–380px) ── */
     @media (max-width: 380px) {
@@ -1198,8 +1201,8 @@
       #sk-nav-cart { padding: 5px 8px; font-size: 10px; }
       #sk-nav-logo img { height: 24px; }
       #sk-nav-avatar { width: 26px; height: 26px; font-size: 11px; }
-      body { padding-top: max(48px, calc(48px + env(safe-area-inset-top, 0px))) !important; }
-      body.sk-has-search { padding-top: max(100px, calc(100px + env(safe-area-inset-top, 0px))) !important; }
+      body { padding-top: calc(42px + env(safe-area-inset-top, 0px)) !important; }
+      body.sk-has-search { padding-top: calc(78px + env(safe-area-inset-top, 0px)) !important; }
     }
 
     /* ── Global responsive table overflow (applies to all pages) ── */
