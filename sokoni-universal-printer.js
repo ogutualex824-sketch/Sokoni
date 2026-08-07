@@ -972,45 +972,64 @@ class BtAdapter {
     if (!this._srv)  throw new Error('GATT server is null after connect() — printer may be off or out of range');
     console.log('[BtAdapter] GATT server connected');
 
-    /* ── Stage 3: discover print service ── */
+    /* ── Stage 3+4: find a (service, WRITABLE characteristic) pair ──────────
+       A printer is only usable if we hold a characteristic we can write() to. The
+       previous code picked services[0] and chars.find(writable) INDEPENDENTLY: with a
+       generic first service (0x1800 Generic Access) that has no writable characteristic,
+       it threw AFTER GATT had already paired — the device bonded at the OS level but the
+       app never flipped to Connected ("pairs but doesn't turn connected"). Instead, walk
+       services and, for each, look for a writable characteristic; keep the first pair that
+       actually yields one. Known P58E UUIDs are tried first as a fast path. */
     const serviceUUIDs = [
       '0000ff00-0000-1000-8000-00805f9b34fb', // P58E primary — check first
       '000018f0-0000-1000-8000-00805f9b34fb',
       'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
       '0000ffe0-0000-1000-8000-00805f9b34fb',
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455',
     ];
-    let svc = null;
-    for (const u of serviceUUIDs) {
-      try { svc = await this._srv.getPrimaryService(u); console.log('[BtAdapter] Service found:', u); break; }
-      catch(e) { /* try next */ }
-    }
-    if (!svc) {
-      /* Last resort: enumerate all primary services */
-      console.log('[BtAdapter] Known UUIDs failed — enumerating all services');
-      const all = await this._srv.getPrimaryServices().catch(() => []);
-      console.log('[BtAdapter] All services:', all.map(s => s.uuid));
-      svc = all[0] || null;
-    }
-    if (!svc) throw new Error('No print service found on this Bluetooth device. Check printer is P58E / ESC-POS compatible.');
-
-    /* ── Stage 4: discover write characteristic ── */
     const charUUIDs = [
       '0000ff02-0000-1000-8000-00805f9b34fb', // P58E write characteristic
       '00002af1-0000-1000-8000-00805f9b34fb',
       'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
       '0000ffe1-0000-1000-8000-00805f9b34fb',
+      '49535343-8841-43f4-a8d4-ecbe34729bb3',
     ];
-    for (const u of charUUIDs) {
-      try { this._char = await svc.getCharacteristic(u); console.log('[BtAdapter] Char found:', u); break; }
-      catch(e) { /* try next */ }
+    const isWritable = c => c && c.properties && (c.properties.write || c.properties.writeWithoutResponse);
+
+    let svc = null;
+    this._char = null;
+
+    /* Fast path: known service → known writable char. */
+    for (const su of serviceUUIDs) {
+      let s;
+      try { s = await this._srv.getPrimaryService(su); } catch (e) { continue; }
+      for (const cu of charUUIDs) {
+        try { const c = await s.getCharacteristic(cu); if (isWritable(c)) { svc = s; this._char = c; break; } }
+        catch (e) { /* next char */ }
+      }
+      if (this._char) { console.log('[BtAdapter] Fast-path match — service:', su); break; }
+      /* Known service but unknown char layout — scan its characteristics. */
+      const chars = await s.getCharacteristics().catch(() => []);
+      const w = chars.find(isWritable);
+      if (w) { svc = s; this._char = w; console.log('[BtAdapter] Known service, scanned char on', su); break; }
     }
+
+    /* Robust fallback: enumerate every accessible service, pick the FIRST that exposes a
+       writable characteristic — never a generic service with none. */
     if (!this._char) {
-      console.log('[BtAdapter] Known char UUIDs failed — enumerating all characteristics');
-      const chars = await svc.getCharacteristics().catch(() => []);
-      console.log('[BtAdapter] All chars:', chars.map(c => c.uuid + ' write=' + c.properties.write + ' writeNoResp=' + c.properties.writeWithoutResponse));
-      this._char = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+      console.log('[BtAdapter] Fast path failed — enumerating all services for a writable char');
+      const all = await this._srv.getPrimaryServices().catch(() => []);
+      console.log('[BtAdapter] Accessible services:', all.map(s => s.uuid));
+      for (const s of all) {
+        const chars = await s.getCharacteristics().catch(() => []);
+        const w = chars.find(isWritable);
+        if (w) { svc = s; this._char = w; console.log('[BtAdapter] Writable char on', s.uuid, '→', w.uuid); break; }
+      }
     }
-    if (!this._char) throw new Error('No writable characteristic found — printer may not support BLE ESC/POS');
+
+    if (!svc || !this._char) {
+      throw new Error('No writable print service found on this device — is it a P58E / ESC-POS BLE printer, and powered on?');
+    }
 
     /* ── Stage 5: ready ── */
     this.ok = true;
@@ -1032,30 +1051,18 @@ class BtAdapter {
       await new Promise(r => setTimeout(r, delay));
       delay = Math.min(delay * 2, 30000);
       try {
-        const srv = await device.gatt.connect();
-        this._srv = srv;
-        const serviceUUIDs = [
-          '0000ff00-0000-1000-8000-00805f9b34fb',
-          '000018f0-0000-1000-8000-00805f9b34fb',
-          'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
-          '0000ffe0-0000-1000-8000-00805f9b34fb',
-        ];
-        let svc = null;
-        for (const u of serviceUUIDs) { try { svc = await srv.getPrimaryService(u); break; } catch(e) {} }
-        if (!svc) continue;
-        const charUUIDs = [
-          '0000ff02-0000-1000-8000-00805f9b34fb',
-          '00002af1-0000-1000-8000-00805f9b34fb',
-          'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f',
-          '0000ffe1-0000-1000-8000-00805f9b34fb',
-        ];
+        this._srv = await device.gatt.connect();
+        /* Same robust rule as first-connect: keep the first service that yields a WRITABLE
+           characteristic — never a generic service with none (that left ok=false forever). */
+        const isWritable = c => c && c.properties && (c.properties.write || c.properties.writeWithoutResponse);
+        const all = await this._srv.getPrimaryServices().catch(() => []);
         let ch = null;
-        for (const u of charUUIDs) { try { ch = await svc.getCharacteristic(u); if (ch) break; } catch(e) {} }
-        if (!ch) {
-          const chars = await svc.getCharacteristics().catch(() => []);
-          ch = chars.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+        for (const s of all) {
+          const chars = await s.getCharacteristics().catch(() => []);
+          const w = chars.find(isWritable);
+          if (w) { ch = w; break; }
         }
-        if (ch) { this._char = ch; this.ok = true; return; }
+        if (ch) { this._char = ch; this.ok = true; console.log('[BtAdapter] Reconnected — char', ch.uuid); return; }
       } catch(e) { /* retry */ }
     }
   }

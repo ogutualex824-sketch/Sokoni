@@ -493,11 +493,17 @@ class PrinterStateMachine {
     if (this._state !== 'retrying') this.set('disconnected');
   }
 
-  /* Attach to PrinterManager transport events + browser connectivity. Idempotent. */
+  /* Attach to printer transport events + browser connectivity. Idempotent.
+     Subscribes to BOTH the engine (window.SokoniPrinter — where connect() actually fires
+     'connected') AND the PrinterManager wrapper. Earlier this only wired PrinterManager;
+     since the in-POS dropdown connects via SokoniPrinter, the wrapper never forwarded the
+     event and the header chip stayed grey ("doesn't turn connected") even on success. */
   wire () {
     if (this._wired) return; this._wired = true;
-    const pm = window.PrinterManager;
-    if (pm && typeof pm.on === 'function') {
+    const sources = [window.SokoniPrinter, window.PrinterManager].filter(
+      (p, i, a) => p && typeof p.on === 'function' && a.indexOf(p) === i
+    );
+    for (const pm of sources) {
       pm.on('connected',         d  => this.set('connected', { name: d && (d.name || d.model) }));
       pm.on('disconnected',      () => this.reconcile());
       pm.on('printed',           () => { if (this._state === 'printing') this.set('connected', this._meta); });
@@ -846,19 +852,50 @@ class PosPrintService {
        window.PrinterManager is a thin wrapper without autoReconnect. */
     const pm = window.SokoniPrinter || window.PrinterManager;
     if (!pm || typeof pm.autoReconnect !== 'function') return;
-    let attempts = 0, done = false;
-    const attempt = () => {
-      if (done || pm.connected) { done = pm.connected || done; return; }
-      attempts++;
-      try { Promise.resolve(pm.autoReconnect()).then(() => { if (pm.connected) done = true; }).catch(() => {}); } catch (_) {}
+
+    /* A printer is "remembered" once it has been paired — the engine persists its identity
+       in spp_profile.lastDevice. Chrome retains the Bluetooth permission for that device, so
+       autoReconnect() → navigator.bluetooth.getDevices() re-links WITHOUT a chooser or a user
+       gesture. That is what makes the P58E behave like a paired accessory across navigations:
+       every page load silently re-establishes the GATT link the previous document dropped. */
+    const remembered = () => {
+      try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice); }
+      catch (_) { return false; }
     };
+
+    let inFlight = false;
+    const attempt = () => {
+      if (pm.connected || inFlight || !remembered()) return;
+      inFlight = true;
+      try {
+        Promise.resolve(pm.autoReconnect())
+          .catch(() => {})
+          .finally(() => { inFlight = false; });
+      } catch (_) { inFlight = false; }
+    };
+
     attempt();                                             /* immediately on boot */
-    const iv = setInterval(() => {
-      if (done || pm.connected || attempts > 12) { clearInterval(iv); return; }
-      attempt();
-    }, 8000);                                              /* quiet background retry (~90s) */
-    const onGesture = () => { if (!pm.connected) attempt(); };
-    try { window.addEventListener('pointerdown', onGesture, { passive: true }); } catch (_) {}
+
+    /* PERSISTENT heartbeat — never gives up. While disconnected but remembered, quietly retry;
+       while connected, this is a cheap no-op. This is the "every few seconds: connected? no →
+       silent reconnect" loop, and it also recovers a genuine mid-shift drop with no cashier
+       action. Backs off from 6s to 20s so a powered-off printer doesn't churn Bluetooth. */
+    let tick = 0;
+    const beat = () => {
+      tick++;
+      if (!pm.connected) attempt();
+      const next = tick < 8 ? 6000 : 20000;               /* fast for ~48s, then relaxed */
+      this._hbTimer = setTimeout(beat, next);
+    };
+    this._hbTimer = setTimeout(beat, 6000);
+
+    /* Some browsers gate a GATT connect behind a user gesture / tab focus — piggy-back those. */
+    const onWake = () => { if (!pm.connected) attempt(); };
+    try {
+      window.addEventListener('pointerdown', onWake, { passive: true });
+      window.addEventListener('focus', onWake);
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) onWake(); });
+    } catch (_) {}
   }
 
   /* Poll briefly on boot: if there are pending jobs and a printer is (or becomes) connected,
