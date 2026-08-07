@@ -71,6 +71,14 @@ Accepted ─▶ Picked Up ─▶ At Destination ─▶  VERIFY  ─▶ Verified 
 - **HOLD** = mark `settlementStatus='HELD'` + `payoutHold=true` + open a `deliveryReviews/{ref}` case; a support action or the auto-confirm sweep (`order-settlement.js:245`) releases after review.
 - **Geofence source of truth:** extend `validateProof` (`sokoni-logistics.js:110-139`, currently hard 500 m for all) to take the `verificationMethod` and apply **hard for {PIN, OTP, QR}**, **advisory for buyer-confirm** (out-of-range → write an `oversoldAlerts`-style entry to a review queue, do NOT block). Tighten the hard radius from 500 m → configurable 50–100 m via `_systemConfig/delivery.geofenceMeters`.
 
+### 4.1 Delivery fee & free-delivery funding (INVARIANT)
+
+**Policy (owner):** delivery fees apply by default; a seller/merchant (or a `FREE_DELIVERY` coupon, or a loyalty tier) may offer **free delivery**. "Free" means **free to the BUYER — never unpaid for the rider.**
+
+- **Invariant:** free delivery is a **funded discount**, not a zeroing of `orders.deliveryFee`. The order's `deliveryFee` (the rider-payout basis for Rail 1, `index.js:2927`) MUST stay at the real fee; the buyer's charge is reduced by an equal, **funded** discount (`fundedBy: 'platform'|'seller'`, `finos-utils.js:708` / `finos.js:548` / `settlement-engine.js:104-113`). The funder absorbs the fee; the rider is still paid from `deliveryFee` exactly as a paid delivery.
+- **Must-verify (open):** confirm NO checkout path sets `orders.deliveryFee = 0` when free delivery is applied (that would make Rail 1 pay the rider 0). If any does, split the field: keep `deliveryFee` (rider basis, funded) separate from `deliveryChargedToBuyer` (0 under free delivery). Add a test asserting: *free-delivery order → buyer delivery charge 0, `orders.deliveryFee` intact, rider credited the funded fee.*
+- **Genuinely-zero delivery** (e.g. a KES-0-fee pickup or a test order with no delivery leg) is distinct from *funded* free delivery: `deliveryFee = 0` legitimately means no rider delivery payout. The two must not be conflated — a funded free-delivery order has a non-zero `deliveryFee`.
+
 ---
 
 ## 5. Fraud protection (all required before instant release)
