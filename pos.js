@@ -2569,17 +2569,35 @@ const SPos = (function () {
       document.head.appendChild(s);
     },
 
+    _range: 'today',
+
     async render() {
       orders._injectStyles();
       const body = document.getElementById('orders-body');
       if (!body) return;
       body.innerHTML = '<div class="pos-empty"><div class="empty-icon">⏳</div><p>Loading orders…</p></div>';
-      const from = new Date().setHours(0, 0, 0, 0);
-      const to   = new Date().setHours(23, 59, 59, 999);
+      /* Load by the selected range. Past orders were invisible because this was hardcoded to
+         TODAY only — now Today / Week / Month / All. "All" reads the full store so historical
+         sales always appear. */
       let txns = [];
-      try { txns = await PosDB.transactions.getByDateRange(from, to); } catch (_) { txns = []; }
+      try {
+        if (orders._range === 'all') {
+          txns = await PosDB.transactions.getAll();
+        } else {
+          const now = new Date();
+          const to  = now.getTime();
+          let from;
+          if (orders._range === 'week')       { const d = new Date(now); d.setDate(d.getDate() - 6); from = d.setHours(0,0,0,0); }
+          else if (orders._range === 'month') { const d = new Date(now); d.setDate(d.getDate() - 29); from = d.setHours(0,0,0,0); }
+          else                                { from = new Date(now).setHours(0,0,0,0); }   /* today */
+          txns = await PosDB.transactions.getByDateRange(from, to);
+        }
+      } catch (_) { txns = []; }
+      /* Accept every finalised sale. Status vocabulary varies (completed/complete/paid/done/
+         delivered/finished) — normalise so historical rows aren't dropped by a strict match. */
+      const DONE = /^(completed|complete|paid|done|finished|delivered|closed|success|fulfilled)$/i;
       orders._inStore = (txns || [])
-        .filter(t => t.status === 'completed' || t.status === 'refunded' || t.refunded || t.voided)
+        .filter(t => DONE.test(String(t.status || '')) || t.refunded || t.voided || t.completedAt)
         .sort((a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0));
       /* Low-stock count from canonical inventory (one read, no listener — perf-safe). */
       let lowStock = null;
@@ -2598,9 +2616,17 @@ const SPos = (function () {
     _paint() {
       const body = document.getElementById('orders-body');
       if (!body) return;
-      body.innerHTML = `<div class="ord-wrap">${orders._summary()}${orders._tabsHtml()}<div id="ord-list" class="ord-list"></div></div>`;
+      body.innerHTML = `<div class="ord-wrap">${orders._summary()}${orders._rangeHtml()}${orders._tabsHtml()}<div id="ord-list" class="ord-list"></div></div>`;
       orders._paintList();
     },
+
+    _rangeHtml() {
+      const R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
+      return `<div class="ord-tabs" style="margin-bottom:4px">${R.map(([k, l]) =>
+        `<button class="ord-tab ${orders._range === k ? 'active' : ''}" onclick="SPos.orders.setRange('${k}')">${l}</button>`).join('')}</div>`;
+    },
+
+    setRange(r) { orders._range = r; orders.render(); },
 
     _summary() {
       const sold = orders._inStore.filter(t => !t.voided);
