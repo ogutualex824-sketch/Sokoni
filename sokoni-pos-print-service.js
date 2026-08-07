@@ -979,6 +979,10 @@ class PosPrintService {
      Retries quietly in the background without blocking selling, and also fires on the first
      user interaction for browsers that gate a GATT connect behind a gesture. */
   _autoConnectPrinter () {
+    /* In the Merchant Shell, the SHELL owns the printer connection (one manager). This POS is a
+       hosted module and must NOT open a second connection to the same device — the shell
+       auto-reconnects and this POS routes its prints up to the shell. */
+    if (typeof window !== 'undefined' && window.parent !== window) return;
     /* Use the ENGINE (SokoniPrinter) — it has the flat connect/autoReconnect API.
        window.PrinterManager is a thin wrapper without autoReconnect. */
     const pm = window.SokoniPrinter || window.PrinterManager;
@@ -1292,6 +1296,12 @@ class PosPrintService {
      The Job ID is derived from the receipt number, so a retry can never duplicate a
      sale (printing is already decoupled from settlement, which happened before this). */
   async printReceipt (order = {}, context = {}) {
+    /* Inside the Merchant Shell, route the receipt UP to the shell-owned printer (single host)
+       instead of printing from this hosted module. */
+    if (typeof window !== 'undefined' && window.parent !== window && !context.__fromShell) {
+      try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
+      return { jobId: 'shell:' + (order.receiptNo || order.receiptNumber || Date.now()), status: 'routed_to_shell' };
+    }
     const jobId = 'rcpt_' + String(order.receiptNo || order.receiptNumber || order.id || order.transactionId || Date.now());
     const _now  = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
     const t0    = _now();
@@ -1350,6 +1360,11 @@ class PosPrintService {
      printReceipt's own queue / browser-share fallback, so a receipt is never lost.
      Call this from EVERY Print action (order card, checkout, refund, dispatch note). */
   async smartPrint (order = {}, context = {}) {
+    /* In the shell, hand off to the shell-owned printer immediately — no local connect. */
+    if (typeof window !== 'undefined' && window.parent !== window) {
+      try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: order }, location.origin); } catch (_) {}
+      return { status: 'routed_to_shell' };
+    }
     const eng = window.SokoniPrinter || window.PrinterManager;
     const isUp = () => !!(eng && eng.connected);
 

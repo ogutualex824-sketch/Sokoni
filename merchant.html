@@ -153,6 +153,9 @@
   </div>
 </div>
 
+<!-- Printer engine loaded IN THE SHELL — the connection lives in this never-unloading context,
+     so it is owned by the shell (not a module) and survives all navigation. -->
+<script src="sokoni-universal-printer.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -334,9 +337,7 @@
   function renderDevices () {
     var host = document.getElementById('native-devices');
     if (!host) return;
-    /* Ensure the printer host exists so status + actions have something to talk to. */
-    try { posPanel('pos'); } catch (_) {}
-    var up = shellPrinterUp;
+    var up = PrinterState.connected;
     host.innerHTML =
       '<div class="dwrap">' +
         '<div class="dsec-t">Devices</div>' +
@@ -428,31 +429,72 @@
      prints — no per-module printer, no reconnect-on-navigation. Connecting needs a
      user gesture in the POS context, so connect() takes the user to Cashier and
      opens the printer menu once; after that, print-from-anywhere works. */
-  function _pos () { return document.getElementById('mfx-pos'); }
-  function _toPos (msg) { var f = _pos(); try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, location.origin); } catch (_) {} }
+  /* ── ONE observable PrinterState (shell-owned) ─────────────────────────────
+     The shell's own SokoniPrinter holds the connection; this single state object is the only
+     source of truth. Every UI element (chip, Devices page, and any subscriber) reacts to it —
+     nobody keeps their own "connected" boolean. */
+  var PrinterState = { connected: false, name: null, deviceId: null, transport: null, lastSeen: 0, printing: false };
+  var _psSubs = [];
+  function _psNotify () { paintStatus(); if (current === 'devices') { try { renderDevices(); } catch (_) {} } _psSubs.forEach(function (fn) { try { fn(PrinterState); } catch (_) {} }); }
+  function _psSet (patch) { for (var k in patch) PrinterState[k] = patch[k]; if (patch.connected) PrinterState.lastSeen = Date.now(); shellPrinterUp = PrinterState.connected; _psNotify(); }
+  window.SokoniPrinterState = { get: function () { return PrinterState; }, subscribe: function (fn) { _psSubs.push(fn); try { fn(PrinterState); } catch (_) {} } };
+
+  var _eng = window.SokoniPrinter || null;
+  function _engName (d) { try { var s = _eng && _eng.getStatus && _eng.getStatus(); return (d && d.name) || (s && s.name) || 'Printer'; } catch (_) { return 'Printer'; } }
+  if (_eng && _eng.on) {
+    _eng.on('connected',    function (d) { _psSet({ connected: true,  name: _engName(d) }); });
+    _eng.on('disconnected', function ()  { _psSet({ connected: false }); });
+    _eng.on('forgotten',    function ()  { _psSet({ connected: false, name: null }); });
+  }
+  function _remembered () { try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) || !!localStorage.getItem('p58e_paired_device'); } catch (_) { return false; } }
+
   window.SokoniShell = window.SokoniShell || {};
   window.SokoniShell.Printer = {
-    status:    function () { return { connected: shellPrinterUp }; },
-    isConnected: function () { return !!shellPrinterUp; },
-    print:     function (receipt) { posPanel('pos'); _toPos({ __sokoniShell: true, action: 'print', receipt: receipt }); },
-    connect:   function () { go('cashier'); posAction('printer'); },
-    reconnect: function () { _toPos({ __sokoniShell: true, action: 'reconnectPrinter' }); },
-    forget:    function () { _toPos({ __sokoniShell: true, action: 'forgetPrinter' }); },
-    test:      function () { posPanel('pos'); _toPos({ __sokoniShell: true, action: 'testPrint' }); },
+    status:      function () { return { connected: PrinterState.connected, name: PrinterState.name }; },
+    isConnected: function () { return !!PrinterState.connected; },
+    /* Connect happens IN THE SHELL — the Bluetooth chooser opens here from a real user gesture
+       (Devices button / chip). No separate wizard page, so the connection is never destroyed. */
+    connect: async function () {
+      if (!_eng) return false;
+      try {
+        var list = await _eng.discoverBy('bluetooth');
+        if (list && list[0]) { await _eng.connect(list[0]); _psSet({ connected: true, name: list[0].name || 'Printer' }); return true; }
+      } catch (e) { _psSet({ connected: !!_eng.connected }); }
+      return false;
+    },
+    reconnect: async function () {
+      if (!_eng) return false;
+      try { var ok = await _eng.autoReconnect(); if (ok || _eng.connected) { _psSet({ connected: true }); return true; } } catch (_) {}
+      return this.connect();
+    },
+    forget: async function () {
+      try { if (_eng && _eng.forget) await _eng.forget(); } catch (_) {}
+      ['spp_profile','pps_store_profile','sokoni_printer_last_print','p58e_paired_device','pps_remember'].forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
+      _psSet({ connected: false, name: null });
+    },
+    test:  function () { try { if (_eng && _eng.testPrint) _eng.testPrint(); } catch (_) {} },
+    print: function (receipt) { try { if (_eng && _eng.print) _eng.print('receipt', receipt); } catch (_) {} },
   };
-  /* Clicking the top-bar printer chip connects (or, if connected, opens the printer menu). */
+  /* Top-bar printer chip → connect if disconnected, else open the Devices page. */
   (function () { var c = document.getElementById('top-print'); var w = c && c.closest('.tchip');
     if (w) { w.style.cursor = 'pointer'; w.title = 'Printer — connect / manage';
-      w.onclick = function () { window.SokoniShell.Printer.connect(); }; } })();
+      w.onclick = function () { if (PrinterState.connected) go('devices'); else window.SokoniShell.Printer.connect(); }; } })();
+
+  /* Auto-reconnect on app open + background health monitor — owned by the shell. */
+  if (_eng) {
+    setTimeout(function () { try { if (!_eng.connected && _remembered()) _eng.autoReconnect().then(function (ok) { if (ok || _eng.connected) _psSet({ connected: true }); }); } catch (_) {} }, 1200);
+    setInterval(function () { try { if (!_eng.connected && _remembered()) _eng.autoReconnect().then(function (ok) { if (ok) _psSet({ connected: true }); }); else _psSet({ connected: !!_eng.connected }); } catch (_) {} }, 8000);
+  }
 
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
     if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
-    if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → print via host */
+    if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → shell printer */
     if (!d.__sokoniPos) return;
-    if (d.type === 'printerStatus') { shellPrinterUp = !!d.connected; paintStatus(); }
-    else if (d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;
+    /* NOTE: the shell now owns the printer + its state, so a hosted app's printerStatus is
+       ignored here (it must not clobber the shell's observable state). */
+    if (d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;
     else if (d.type === 'ready') {
       /* POS finished booting — (re)send the tab the user is currently on, so a switch that
          raced the boot still lands on the right tab (fixes "every button shows Checkout"). */
@@ -480,19 +522,8 @@
   var boot = location.hash.replace('#', '');
   go(byId[boot] ? boot : 'dashboard');
 
-  /* DeviceManager warm-up: shortly after boot, create the printer HOST (hidden) if the user
-     didn't land on a POS module. The host's own auto-reconnect heartbeat then re-links a
-     previously-paired printer via navigator.bluetooth.getDevices() — silently, no button — so
-     the printer chip goes green when the merchant OPENS the app, not only when they reach
-     Cashier. Deferred so it never blocks first render. Skipped if a printer was never paired,
-     to avoid loading the heavy host for nothing. */
-  function _rememberedPrinter () {
-    try { return !!(JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) ||
-                 !!localStorage.getItem('p58e_paired_device'); } catch (_) { return false; }
-  }
-  setTimeout(function () {
-    try { if (!panels.pos && _rememberedPrinter()) posPanel('pos'); } catch (_) {}
-  }, 1800);
+  /* (Printer auto-reconnect on app open is now owned by the shell's own engine above — no need
+     to warm the POS host for the printer.) */
 })();
 </script>
 <script src="/sw-register.js" defer></script>
