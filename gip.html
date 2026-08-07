@@ -882,14 +882,14 @@ window.gipSearch = (term) => {
 window.gipManualDispatch = async () => {
   const reg = document.getElementById('gipRegionSel').value;
   const jobs = await dispatch.getActiveJobs(reg);
-  alert(`Dispatch engine is active. ${jobs.length} active jobs in ${reg}. Use the SOKONI seller/driver apps to create real dispatch requests.`);
+  SK.dialog.alert(`Dispatch engine is active. ${jobs.length} active jobs in ${reg}. Use the SOKONI seller/driver apps to create real dispatch requests.`);
 };
 
 window.gipCancelPending = async () => {
   const jobs = await dispatch.getActiveJobs('nairobi');
   const pending = jobs.find(j => j.status === 'pending');
-  if (!pending) { alert('No pending jobs to cancel.'); return; }
-  if (confirm(`Cancel job ${pending.id}?`)) {
+  if (!pending) { SK.dialog.alert('No pending jobs to cancel.'); return; }
+  if (await SK.dialog.confirm(`Cancel job ${pending.id}?`, null, null, { title: 'Cancel job', confirmLabel: 'Cancel job' })) {
     await dispatch.cancelJob(pending.id, 'Admin cancelled from GIP command centre');
   }
 };

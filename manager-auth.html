@@ -427,7 +427,7 @@
           ['add-name','add-pin','add-pin2'].forEach(id => document.getElementById(id).value = '');
 
           /* Offer to print QR badge */
-          if (confirm(`Manager "${name}" created!\n\nOpen QR Badge display for printing?`)) {
+          if (await SK.dialog.confirm(`Manager "${name}" created! Open QR Badge display for printing?`, null, null, { title: 'Manager created', confirmLabel: 'Open QR badge' })) {
             showMgrDetail(result.id);
           } else {
             /* Switch to managers tab */
@@ -472,7 +472,7 @@
 
       /* ── Delete manager ── */
       async function deleteManager(id, name) {
-        if (!confirm(`Remove manager "${name}"?\n\nThey will no longer be able to approve operations.`)) return;
+        if (!(await SK.dialog.confirm(`Remove manager "${name}"? They will no longer be able to approve operations.`, null, null, { title: 'Remove manager', variant: 'danger', confirmLabel: 'Remove' }))) return;
         try {
           await ManagerAuth.removeManager(id);
           _toast('Manager removed', 'success');
@@ -725,7 +725,7 @@
       }
 
       async function denyReq(reqId) {
-        if (!confirm('Deny this authorization request?')) return;
+        if (!(await SK.dialog.confirm('Deny this authorization request?', null, null, { title: 'Deny request', variant: 'danger', confirmLabel: 'Deny' }))) return;
         try {
           const db = _fdb();
           if (!db) throw new Error('No network');

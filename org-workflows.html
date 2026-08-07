@@ -654,7 +654,7 @@ window.owSaveWf = async function() {
   }
 };
 window.owDeleteWf = async function(workflowId, name) {
-  if (!confirm(`Delete workflow "${name}"?`)) return;
+  if (!(await SK.dialog.confirm(`Delete workflow "${name}"?`, null, null, { title: 'Delete workflow', variant: 'danger', confirmLabel: 'Delete' }))) return;
   try { await _deleteWf({ businessId: _bid, workflowId }); await _loadWorkflows(); _toast('Deleted'); }
   catch(e) { _toast(e.message, true); }
 };
@@ -722,7 +722,7 @@ window.owGrantTemp = async function() {
 };
 
 window.owRevokeTemp = async function(accessId) {
-  if (!confirm('Revoke this temporary access?')) return;
+  if (!(await SK.dialog.confirm('Revoke this temporary access?', null, null, { title: 'Revoke access', variant: 'danger', confirmLabel: 'Revoke' }))) return;
   try { await _revokeTemp({ accessId }); await _loadTempGrants(); _toast('Access revoked'); }
   catch(e) { _toast(e.message, true); }
 };
@@ -775,7 +775,7 @@ window.owSaveDel = async function() {
 };
 
 window.owRevokeDel = async function(delegationId) {
-  if (!confirm('Revoke this delegation?')) return;
+  if (!(await SK.dialog.confirm('Revoke this delegation?', null, null, { title: 'Revoke delegation', variant: 'danger', confirmLabel: 'Revoke' }))) return;
   try { await _revokeDel({ delegationId }); await _loadDelegations(); _toast('Delegation revoked'); }
   catch(e) { _toast(e.message, true); }
 };

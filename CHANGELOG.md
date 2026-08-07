@@ -1,3 +1,22 @@
+## [2026-08-07] — feat(ui): Slice B6 — dialog convergence (org/admin/ops pages)
+
+8 pages. Survey-first caught two files where a blind replace would have corrupted non-executable code.
+
+- **Migrated (20 sites, 0 executable native left):** seller-delivery (3 alert), org-workflows (3),
+  org-structure (1 alert + 2), my-subscriptions (2 alert + 1), manager-auth (3, incl. positive-form
+  + data-no-header), gip (2 alert + 1, data-no-header), developer-portal (1 confirm), commissioning
+  (1 alert). Non-async handlers (legal event arrows already done; here manager-auth addManager was
+  async) — all confirms verified in async fns.
+- **Exceptions retained (documented, NOT executable):** developer-portal lines ~180/182 `alert(...)`
+  inside `<span class="str">` code-doc examples; commissioning lines ~877/879 `alert(1)` inside an
+  XSS-escaping TEST string. A blind replace_all would have broken both — survey-first prevented it.
+- **Adoption:** dialogs **~63% → ~68%** (263 canonical / 121 native, ~4 of which are exceptions).
+- **Files:** seller-delivery.html, org-workflows.html, org-structure.html, my-subscriptions.html,
+  manager-auth.html, gip.html, developer-portal.html, commissioning.html,
+  docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B5 — dialog convergence (admin/ops pages)
 
 Resumed mechanical batches after the money-path fix. 6 admin/ops pages (all load shared-header → SK).

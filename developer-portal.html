@@ -541,7 +541,7 @@ app.post(<span class="str">'/hook'</span>, (req, res) => {
   }
 
   async function revokeKey(keyId) {
-    if (!keyId || !confirm('Revoke this API key? This cannot be undone.')) return;
+    if (!keyId || !(await SK.dialog.confirm('Revoke this API key? This cannot be undone.', null, null, { title: 'Revoke API key', variant: 'danger', confirmLabel: 'Revoke' }))) return;
     try { await callCF('revokeAPIKey', { keyId }); toast('Key revoked'); loadKeys(); }
     catch(e) { toast('Error: ' + e.message); }
   }

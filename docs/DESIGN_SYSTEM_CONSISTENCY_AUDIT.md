@@ -75,6 +75,7 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | 08-07 | B4A | Dialogs | ~47% | **~53%** (210 via `SK.dialog`; 188 native left) — **data-no-header pages**: dispatch, ecc, provider-dashboard (money-path rigor) |
 | 08-07 | B4B | Dialogs | ~53% | **~56%** (223 via `SK.dialog`; 175 native left) — **sokoni-aos.js money-path review**: escrow-release, payout-approve, void-receipt, session-revoke, mass email/SMS, content deletes (13 confirms, descriptive + danger) |
 | 08-07 | B5 | Dialogs | ~56% | **~63%** (243 via `SK.dialog`; 141 native left) — admin/ops pages: legal-admin, inv-products, sasos-admin, ops-center, financial-os (money, danger), hr-payroll |
+| 08-07 | B6 | Dialogs | ~63% | **~68%** (263 via `SK.dialog`; 121 native left) — seller-delivery, org-workflows, org-structure, my-subscriptions, manager-auth, gip, developer-portal, commissioning (2 doc/test-string alerts left as exceptions) |
 
 **Batch ledger (dialogs):**
 | Batch | Modules | SK.dialog | Native left | Adoption |
@@ -89,6 +90,15 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 **Batch-3 note:** all 9 confirms were in **non-async** functions (fire-and-forget onclick/listeners). Converted by marking each enclosing function `async` (body preserved exactly) — verified every caller discards the return value, so the Promise return is inert. rider-nav SOS lost its `\n\n` line break (modal wraps as one paragraph; text content preserved).
 
 **Excluded from migration (scanner false-positives, verified):** `sokoni-alerts.js` (defines its OWN `alert(msg,severity,details)` audit system — not native); `functions/test/*`, `scripts/*` (Node — no `SK`); `dispatch.html`, `provider-dashboard.html`, `ecc.html` (`data-no-header` → shared-header never injects `SK`; need explicit `sokoni-ds.js` or stay native — handle separately).
+
+### Dialog exception list (native retained — keeps "100%" unambiguous)
+| File | Native retained | Reason |
+|---|---|---|
+| `sokoni-aos.js` (line ~25) | Yes — permanent | `alert("Access denied…")` fires at early init before deferred `sokoni-ds.js` is guaranteed loaded; security bail-out, not a dialog flow. Converting risks an `SK`-undefined throw. |
+| `availability-manager.html` | Temporary — under review | Defines its OWN `alert`/`confirm` wrappers; needs a separate review (why they exist, whether they add logic, whether to delegate to `SK.dialog`). Not a drop-in swap. |
+| JS libraries (`sokoni-*.js`, `pos-*.js`) | Conditional | Migrate ONLY after verifying every load site guarantees `window.SK` exists before execution. Any lib with a load path that doesn't guarantee SK stays native for now. |
+| `developer-portal.html` (lines ~180/182) | Yes — permanent | `alert(...)` inside `<span class="str">` — rendered **code-documentation examples**, not executable. |
+| `commissioning.html` (lines ~877/879) | Yes — permanent | `alert(1)` inside an **XSS-escaping test string** (`'<script>alert(1)</script>'`), not executable. |
 
 **Slice B foundation (before any call-site moved):** the canonical modal gained what native `alert`/`confirm` give for free — `role="dialog"`/`aria-modal`, focus-trap, focus-restore, auto-focus, Enter-confirms — plus `SK.dialog.alert()` (new) and dialog telemetry (`window._skDialogMetrics` + `sk:dialog` event: type/module/result/durationMs). Mapping used: `alert(x)`→`SK.dialog.alert(x)`; `if(!confirm(x))return;`→`if(!(await SK.dialog.confirm(x)))return;` (async fns) or `SK.dialog.confirm(x, cb)` (non-async). `prompt()` left unchanged (no canonical equivalent yet).
 
