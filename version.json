@@ -1,10 +1,10 @@
 {
-  "commit": "11a9f03a5eb2c9ca898409b482b4b13686367f40",
-  "commitShort": "11a9f03",
+  "commit": "91606f8c175acde2cc027733ba0ae88fb85d28a9",
+  "commitShort": "91606f8",
   "branch": "fix/algolia-batch-poisoning",
-  "buildTime": "2026-08-07T22:21:16.858Z",
+  "buildTime": "2026-08-07T22:25:49.699Z",
   "serviceWorker": "service-worker.js",
-  "cacheVersion": "sokoni-20260807222115-v423",
+  "cacheVersion": "sokoni-20260807222549-v424",
   "environment": "production",
   "dirtyWorkingTree": true
 }
