@@ -1,3 +1,25 @@
+## [2026-08-07] — fix(money): close dormant rider double-pay + client-earnings hole (trips rail)
+
+Found during the "Secure Delivery Authorization" architecture-gate survey (that spec is ~90%
+already built → verdict REVISE/converge). A latent money-path hazard, owner-signed-off to fix.
+
+- **The hazard:** `navCompleteTrip` (functions/navigation.js) both flipped `orders.status='delivered'`
+  (which fires `onOrderStatusChange`'s rider payout, key `walletTransactions/{rider}_{order}_delivery`,
+  server-computed) AND enqueued `driverEarningQueue` with a **client-supplied `request.data.earnings`**
+  (processed by `processDriverEarning`, key `walletTransactions/{queueDocId}`). Two rails, two keys,
+  no cross-guard → double-pay; plus the rider's own device set the payout amount.
+- **Why it wasn't firing:** NO client calls `navCompleteTrip`/`navSubmitPOD` (only `navTriggerSOS` is
+  invoked); the trips/multi-stop payout rail is deployed but unwired. Live payout is the delivered-
+  trigger rail alone (exactly-once). The hazard activates only if the multi-stop route UI is wired.
+- **Fix:** (1) `processDriverEarning` now shares the SAME `{rider}_{order}_delivery` key when an
+  orderId is present → the two rails are mutually exclusive (first pays, other no-ops); order-less
+  trips fall back to the queue-doc id. (2) `navCompleteTrip` no longer trusts `request.data.earnings`
+  — the rider is credited server-authoritatively by the delivered trigger; the client-amount enqueue
+  was removed. Rail 1 (`index.js` onOrderStatusChange) untouched; `node --check` clean.
+- **Files:** functions/navigation.js.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B9 — dialog convergence (Track A CLOSURE)
 
 Final ordinary-HTML batch: 26 single-dialog pages. Track A (SK-available HTML pages) now complete.
