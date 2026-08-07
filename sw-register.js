@@ -364,6 +364,9 @@
 
   /* ── Notification permission prompt ── */
   function _showNotificationPrompt() {
+    /* Never render inside a shell-hosted iframe — the top-level shell owns global prompts,
+       otherwise each module stacks its own (same overlap class as the update banner). */
+    try { if (window.parent && window.parent !== window) return; } catch (_) {}
     if (document.getElementById("sokoniNotifPrompt")) return;
 
     /* NEVER cover the privacy / cookie consent banner.
@@ -577,6 +580,20 @@
      4. UPDATE AVAILABLE TOAST
   ══════════════════════════════════════════════════════ */
   function _showUpdateToast() {
+    /* Inside an iframe (a module hosted by the Merchant Shell) OR on a page whose shell owns
+       the update UI, DO NOT render our own floating toast — otherwise the shell + every hosted
+       iframe each stack their own banner, overlapping the content (the reported bug). Signal
+       upward/sideways instead so the shell shows ONE integrated bar. */
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __sokoniUpdate: true }, location.origin);
+        return;
+      }
+      if (window.__sokoniShellHandlesUpdate) {
+        window.dispatchEvent(new CustomEvent("sokoni:update-available"));
+        return;
+      }
+    } catch (_) {}
     if (document.getElementById("swUpdateToast")) return;
     const toast = document.createElement("div");
     toast.id = "swUpdateToast";

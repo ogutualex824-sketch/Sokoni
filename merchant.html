@@ -60,6 +60,19 @@
     padding:6px 11px;border:1px solid var(--line);border-radius:20px}
   .mtop .tchip .mdot{width:7px;height:7px}
 
+  /* Integrated update bar — full width, below the top bar, pushes content (never overlaps).
+     Singleton by construction (one #mupdate element in the shell). */
+  .mupdate{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:9px 16px;
+    background:linear-gradient(90deg,rgba(113,255,0,.14),rgba(113,255,0,.06));
+    border-bottom:1px solid rgba(113,255,0,.28);color:var(--txt);font-size:13px;font-weight:700}
+  .mupdate[hidden]{display:none}
+  .mu-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mu-actions{display:flex;gap:8px;flex:0 0 auto}
+  .mupdate button{border-radius:9px;padding:7px 14px;font-weight:800;font-size:12.5px;cursor:pointer;border:1px solid}
+  .mu-now{background:var(--acc);color:#000;border-color:var(--acc)}
+  .mu-later{background:transparent;color:var(--txt2);border-color:var(--line)}
+  .mu-later:hover{color:var(--txt)}
+
   .mcontent{flex:1;position:relative;min-height:0;background:var(--bg)}
   .mpanel{position:absolute;inset:0;display:none}
   .mpanel.show{display:block}
@@ -108,6 +121,13 @@
       <div class="spacer"></div>
       <div class="tchip"><span class="mdot" id="top-print"></span><span id="top-print-t">Printer</span></div>
     </header>
+    <div class="mupdate" id="mupdate" hidden>
+      <span class="mu-txt">🔄 A new version of SOKONI is available</span>
+      <span class="mu-actions">
+        <button class="mu-now" onclick="__mUpdateNow()">Update Now</button>
+        <button class="mu-later" onclick="__mUpdateLater()">Later</button>
+      </span>
+    </div>
     <div class="mcontent" id="mcontent"></div>
   </div>
 </div>
@@ -123,6 +143,10 @@
    ══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
+
+  /* Tell sw-register the shell owns the update UI, so it renders our integrated bar (below)
+     instead of its own floating toast. Must be set before sw-register.js runs (it's deferred). */
+  window.__sokoniShellHandlesUpdate = true;
 
   /* Module registry. kind:
        'native' — rendered by a JS function into the panel (instant, no reload)
@@ -299,9 +323,16 @@
   window.addEventListener('offline', paintStatus);
 
   /* The POS app posts its printer status up to the shell so the top bar reflects it globally. */
+  /* ── One integrated, singleton update bar (shell-level) ── */
+  function showUpdateBar () { var b = document.getElementById('mupdate'); if (b) b.hidden = false; }
+  window.addEventListener('sokoni:update-available', showUpdateBar);
+  window.__mUpdateNow   = function () { try { if (window._sokoniApplyUpdate) window._sokoniApplyUpdate(); else location.reload(); } catch (_) { location.reload(); } };
+  window.__mUpdateLater = function () { var b = document.getElementById('mupdate'); if (b) b.hidden = true; };
+
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
+    if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
     if (!d.__sokoniPos) return;
     if (d.type === 'printerStatus') { shellPrinterUp = !!d.connected; paintStatus(); }
     else if (d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;
