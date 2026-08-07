@@ -630,29 +630,12 @@ function _updateHeaderWidget (health) {
     chip = document.createElement('button');
     chip.id        = 'pps-printer-chip';
     chip.className = 'pos-header-btn';
-    chip.title     = 'Printer — tap to connect / view status';
+    chip.title     = 'Printer';
     chip.style.cssText = 'position:relative;font-size:13px;line-height:1;display:flex;align-items:center;gap:3px;';
-    /* One-tap behaviour:
-         • CONNECTED   → open the queue/diagnostics panel.
-         • DISCONNECTED → pair + connect in ONE tap. This click is the user gesture Web
-           Bluetooth requires; discoverBy('bluetooth') opens the chooser, connect() pairs
-           AND persists the profile so it auto-reconnects on every future POS open
-           (earbuds-style). Cancel / no Web Bluetooth (e.g. iOS Safari) → full setup page. */
-    chip.onclick   = () => {
-      var pm = window.PrinterManager;
-      if (pm && pm.connected) {
-        try { window.PosPrintService && PosPrintService.showQueueDiagnostics(); }
-        catch (_) { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); }
-        return;
-      }
-      if (pm && typeof pm.discoverBy === 'function' && navigator.bluetooth) {
-        Promise.resolve(pm.discoverBy('bluetooth'))
-          .then(function (list) { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
-          .catch(function () { try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {} });
-        return;
-      }
-      try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {}
-    };
+    /* Opens the in-POS printer dropdown — connect / status / reconnect / forget / test /
+       advanced — all inside the POS. NEVER navigates to a separate page (that broke the
+       checkout flow); "Advanced options" is the only route to the full setup page. */
+    chip.onclick = (e) => { try { e.stopPropagation(); } catch (_) {} _ppsTogglePrinterMenu(chip); };
     /* Insert before the first button (notifications bell) */
     const firstBtn = target.querySelector('button');
     if (firstBtn) target.insertBefore(chip, firstBtn);
@@ -670,6 +653,113 @@ function _updateHeaderWidget (health) {
   chip.title = (m.name || m.text)
     + (connected && pm && pm._activeTransport ? ' via ' + pm._activeTransport : '')
     + (queue ? ' — ' + qn + ' queued' : '');
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   IN-POS PRINTER DROPDOWN  — connect/status/reconnect/forget/test/advanced,
+   all inside the POS (never a separate page). Earbuds-style: pair once → it
+   auto-reconnects every future POS open. Hides the BLE/COM/Serial/USB
+   complexity — those live under "Advanced options" (pos-printer-setup.html).
+═══════════════════════════════════════════════════════════════════ */
+function _ppsEsc (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c])); }
+
+function _ppsBtn (id, label, kind) {
+  const styles = {
+    primary: 'flex:1;background:linear-gradient(135deg,#71ff00,#4fc800);color:#000;border:none;',
+    ghost:   'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.14);color:#fff;',
+    danger:  'background:rgba(255,61,61,0.08);border:1px solid rgba(255,61,61,0.25);color:#ff6b6b;',
+  };
+  return '<button id="' + id + '" style="' + (styles[kind] || styles.ghost) +
+    'padding:11px 13px;border-radius:10px;font-weight:800;font-size:12.5px;cursor:pointer;font-family:inherit;">' + label + '</button>';
+}
+
+function _ppsLastPrinter () {
+  try { return (JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice) || null; } catch (_) { return null; }
+}
+
+function _ppsCloseMenu () {
+  const p = document.getElementById('pps-printer-menu');
+  if (p) { p.remove(); document.removeEventListener('pointerdown', _ppsMenuOutside, true); }
+}
+function _ppsMenuOutside (e) {
+  const panel = document.getElementById('pps-printer-menu');
+  const chip  = document.getElementById('pps-printer-chip');
+  if (panel && !panel.contains(e.target) && !(chip && chip.contains(e.target))) _ppsCloseMenu();
+}
+
+function _ppsTogglePrinterMenu (anchor) {
+  if (document.getElementById('pps-printer-menu')) { _ppsCloseMenu(); return; }
+  const panel = document.createElement('div');
+  panel.id = 'pps-printer-menu';
+  panel.style.cssText = [
+    'position:fixed', 'z-index:100000', 'width:270px', 'background:#0d0d0d',
+    'border:1px solid rgba(113,255,0,0.18)', 'border-radius:14px',
+    'box-shadow:0 14px 46px rgba(0,0,0,0.65)', 'padding:14px', 'font-family:inherit', 'color:#fff',
+  ].join(';');
+  document.body.appendChild(panel);
+  const r = anchor.getBoundingClientRect();
+  panel.style.top  = (r.bottom + 8) + 'px';
+  panel.style.left = Math.max(8, Math.min(r.left, window.innerWidth - 282)) + 'px';
+  _ppsRenderMenu(panel);
+  setTimeout(() => document.addEventListener('pointerdown', _ppsMenuOutside, true), 0);
+}
+
+function _ppsRenderMenu (panel, override) {
+  const pm        = window.PrinterManager;
+  const connected = !!(pm && pm.connected);
+  const hasBt     = !!navigator.bluetooth;
+  const last      = _ppsLastPrinter();
+  const lastName  = last && (last.name || last.type) || null;
+  const remember  = localStorage.getItem('pps_remember') !== '0';
+
+  const head = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
+    '<div style="font-weight:900;font-size:13px;">🖨️ Printer</div>' +
+    '<button id="pps-menu-x" title="Close" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:16px;cursor:pointer;line-height:1;">✕</button></div>';
+
+  let body;
+  if (override) {
+    body = override;
+  } else if (connected) {
+    const st = (pm.getStatus && pm.getStatus()) || {};
+    const name = st.name || lastName || 'Printer';
+    body = '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">●</span> <strong>Connected</strong></div>' +
+      '<div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:14px;">' + _ppsEsc(name) + '</div>' +
+      '<div style="display:flex;gap:8px;">' + _ppsBtn('pps-test', '🧪 Test print', 'ghost') + _ppsBtn('pps-forget', 'Forget', 'danger') + '</div>';
+  } else if (!hasBt) {
+    body = '<div style="font-size:12.5px;color:rgba(255,255,255,.75);line-height:1.55;margin-bottom:12px;">Bluetooth pairing needs <strong>Chrome on Android or desktop</strong>. Receipts still print as a shareable page in this browser.</div>' +
+      _ppsBtn('pps-advanced', 'Advanced options', 'ghost');
+  } else {
+    body = '<div style="font-size:12.5px;color:rgba(255,255,255,.65);margin-bottom:12px;">No printer connected</div>' +
+      '<div style="display:flex;">' + _ppsBtn('pps-connect', '🔗 Connect Printer', 'primary') + '</div>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.6);margin:13px 0;cursor:pointer;"><input id="pps-remember" type="checkbox" ' + (remember ? 'checked' : '') + '> Remember this printer</label>' +
+      (lastName
+        ? '<div style="font-size:11.5px;color:rgba(255,255,255,.45);margin-bottom:8px;">Last printer: <span style="color:#71ff00;">' + _ppsEsc(lastName) + '</span></div><div style="display:flex;gap:8px;">' + _ppsBtn('pps-reconnect', '↻ Reconnect', 'ghost') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>'
+        : '<div style="display:flex;">' + _ppsBtn('pps-advanced', 'Advanced options', 'ghost') + '</div>');
+  }
+  panel.innerHTML = head + body;
+  _ppsWireMenu(panel);
+}
+
+function _ppsWireMenu (panel) {
+  const pm = window.PrinterManager;
+  const q = id => panel.querySelector('#' + id);
+  const spin = txt => '<div style="font-size:12.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px;">⏳ ' + txt + '</div>';
+  if (q('pps-menu-x'))   q('pps-menu-x').onclick   = _ppsCloseMenu;
+  if (q('pps-remember')) q('pps-remember').onchange = e => localStorage.setItem('pps_remember', e.target.checked ? '1' : '0');
+  if (q('pps-advanced')) q('pps-advanced').onclick = () => { _ppsCloseMenu(); try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {} };
+  if (q('pps-test'))     q('pps-test').onclick     = () => { try { pm && pm.testPrint && pm.testPrint(); } catch (_) {} };
+  if (q('pps-forget'))   q('pps-forget').onclick   = () => { try { localStorage.removeItem('spp_profile'); pm && pm.disconnect && pm.disconnect(); } catch (_) {} _ppsRenderMenu(panel); };
+  if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
+    _ppsRenderMenu(panel, spin('Searching for saved printer…'));
+    Promise.resolve(pm && pm.autoReconnect && pm.autoReconnect()).then(() => _ppsRenderMenu(panel)).catch(() => _ppsRenderMenu(panel));
+  };
+  if (q('pps-connect')) q('pps-connect').onclick = () => {
+    _ppsRenderMenu(panel, spin('Opening Bluetooth chooser…'));
+    Promise.resolve(pm && pm.discoverBy && pm.discoverBy('bluetooth'))
+      .then(list => { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
+      .then(() => { _ppsRenderMenu(panel, '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Saved — reconnects automatically next time.</div>'); setTimeout(_ppsCloseMenu, 1600); })
+      .catch(e => { _ppsRenderMenu(panel, '<div style="font-size:12.5px;color:#ff8c00;margin-bottom:11px;">Couldn’t connect' + (e && e.message && e.message !== 'no-device' ? ': ' + _ppsEsc(e.message) : ' — no printer selected') + '.</div><div style="display:flex;gap:8px;">' + _ppsBtn('pps-connect', '🔗 Try again', 'primary') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>'); });
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════
