@@ -531,6 +531,75 @@ const SPos = (function () {
     } catch (_) { /* best-effort — local IndexedDB stock stays authoritative for the session */ }
   };
 
+  /* Checkout-convergence SHADOW (Phase 1) — dry-run the canonical posCompleteCheckout and store a
+     structured comparison of what it WOULD produce vs this legacy sale. Feature-flagged
+     (window.POS_CHECKOUT_SHADOW), fire-and-forget, side-effect-free (dryRun). Evidence only. */
+  async function _posCheckoutShadow (txn) {
+    try {
+      if (!window.firebaseApp || !window.firebaseDB || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      let u = null; try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
+      const merchantId = (u && (u.uid || u.id)) || window.currentUser?.uid || localStorage.getItem('sokoni_merchant_id');
+      if (!merchantId) return;
+      const items = (txn.items || []).map(i => ({ productId: i.id, qty: i.qty, unitPrice: i.price }));
+      if (!items.length) return;
+      const payload = {
+        dryRun: true,
+        idempotencyKey: txn.idempotencyKey || txn.id,
+        merchantId,
+        branchId: (state.settings && state.settings.branchId) || 'default',
+        shiftId:  txn.shiftId || undefined,
+        items,
+        payments: [{ method: txn.paymentMethod || 'cash', amount: Number(txn.total || 0) }],
+        subtotal: Number(txn.subtotal || 0),
+        discountTotal: Number(txn.discountAmount || 0),
+        taxTotal: Number(txn.taxAmount || 0),
+        grandTotal: Number(txn.total || 0),
+        metadata: { source: 'pos.js', localTxnId: txn.id, shadow: true },
+      };
+      const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const res = (await fnMod.httpsCallable(fnMod.getFunctions(window.firebaseApp), 'posCompleteCheckout')(payload)).data || {};
+
+      const expected = {
+        items: items.map(i => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })),
+        subtotal: Number(txn.subtotal || 0), discount: Number(txn.discountAmount || 0),
+        tax: Number(txn.taxAmount || 0), total: Number(txn.total || 0),
+        stockDelta: items.map(i => ({ productId: i.productId, delta: -Number(i.qty || 0) })),
+      };
+      const canonical = {
+        orderId: res.saleId || null,                 /* dry-run creates no order — expected null */
+        items: res.items || [], subtotal: Number(res.serverSubtotal || 0), total: Number(res.grandTotal || 0),
+        stockDelta: (res.stockDeltas || []).map(s => ({ productId: s.productId, delta: Number(s.delta || 0) })),
+      };
+      const differences = [];
+      if (Math.abs(expected.subtotal - canonical.subtotal) > 1) differences.push({ field: 'subtotal', expected: expected.subtotal, canonical: canonical.subtotal });
+      if (Math.abs(expected.total    - canonical.total)    > 1) differences.push({ field: 'total',    expected: expected.total,    canonical: canonical.total });
+      const cmap = {}; canonical.stockDelta.forEach(s => { cmap[s.productId] = s.delta; });
+      expected.stockDelta.forEach(e => {
+        if (cmap[e.productId] == null)          differences.push({ field: 'stockDelta', productId: e.productId, expected: e.delta, canonical: null });
+        else if (cmap[e.productId] !== e.delta) differences.push({ field: 'stockDelta', productId: e.productId, expected: e.delta, canonical: cmap[e.productId] });
+      });
+      if (Array.isArray(res.differences)) res.differences.forEach(d => differences.push({ field: 'canonical', ...d }));
+
+      const record = {
+        txnId: txn.id,
+        shadowRunId: (window.PosIdempotency && PosIdempotency.generateTxnId) ? PosIdempotency.generateTxnId() : ('shadow_' + txn.id),
+        idempotencyKey: payload.idempotencyKey, at: Date.now(), merchantId,
+        expected, canonical,
+        comparison: differences.length === 0 ? 'PASS' : 'FAIL',
+        differences,
+      };
+      const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      await m.setDoc(m.doc(window.firebaseDB, 'posCheckoutShadow', String(txn.id)), record).catch(() => {});
+    } catch (e) {
+      /* A shadow FAILURE is itself evidence — record it; never surface to the cashier. */
+      try {
+        const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        await m.setDoc(m.doc(window.firebaseDB, 'posCheckoutShadow', String(txn.id)),
+          { txnId: txn.id, at: Date.now(), comparison: 'ERROR', error: String((e && e.message) || e).slice(0, 200) }).catch(() => {});
+      } catch (_) {}
+    }
+  }
+
   /* ═══════════════════════════════════════════════════════════
      PRODUCTS
   ═══════════════════════════════════════════════════════════ */
@@ -976,6 +1045,7 @@ const SPos = (function () {
 
       const txn = {
         id:             txnId,
+        idempotencyKey: txnId,   /* stable per-sale key — reused by the shadow (Phase 1) and, later, canonical settlement */
         items:          state.cartItems.map(i => ({ ...i })),
         subtotal:       sub,
         discountAmount: disc,
@@ -1144,6 +1214,15 @@ const SPos = (function () {
       /* Show success overlay — always wire up buttons */
       _showSuccessOverlay(receiptData);
       if (window.PosBoss) PosBoss.showSuccess(receiptData, state.settings);
+
+      /* Checkout-convergence SHADOW (Phase 1): fire-and-forget, feature-flagged, dry-run only.
+         Runs the CANONICAL posCompleteCheckout in dry-run and records a structured comparison
+         (posCheckoutShadow/{txnId}) of what it WOULD have produced vs this legacy sale. Never
+         affects the sale, inventory, the cashier, or anything customer-visible — evidence only. */
+      if (window.POS_CHECKOUT_SHADOW === true ||
+          (function () { try { return localStorage.getItem('POS_CHECKOUT_SHADOW') === '1'; } catch (_) { return false; } })()) {
+        try { _posCheckoutShadow(txn); } catch (_) {}   /* per-terminal flag; default OFF → zero behaviour change */
+      }
 
       /* Emit plugin hooks */
       if (window.PosPlugins) {

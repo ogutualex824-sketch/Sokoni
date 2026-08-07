@@ -76,6 +76,41 @@ exports.posCompleteCheckout = onCall(cfgHeavy, async ({ data, auth }) => {
   if (!items?.length)  _e('items required');
   if (!grandTotal || grandTotal < 0) _e('grandTotal invalid');
 
+  /* ── DRY-RUN (checkout-convergence shadow instrumentation) ──
+     Side-effect-FREE: validate + price against the CANONICAL products collection and compute
+     what the order + stock deltas WOULD be, then return — NO idempotency claim, NO order, NO
+     stock write, NO payment, NO customer-visible effect. Lets the shadow compare the canonical
+     result against the legacy till with zero risk. Gated by an explicit flag existing callers
+     never pass, so the real settlement path below is completely untouched. */
+  if (data && data.dryRun === true) {
+    const refs  = items.map(it => db.collection('products').doc(it.productId));
+    const snaps = await Promise.all(refs.map(r => r.get()));
+    let serverSubtotal = 0;
+    const enriched = [], stockDeltas = [], differences = [];
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i], s = snaps[i];
+      if (!s.exists) { differences.push({ productId: it.productId, error: 'not-found' }); continue; }
+      const p = s.data();
+      const serverPrice = p.salePrice || p.price || 0;
+      if (Math.abs(serverPrice - (it.unitPrice || 0)) > 1) {
+        differences.push({ productId: it.productId, field: 'unitPrice', expected: it.unitPrice, canonical: serverPrice });
+      }
+      enriched.push({ productId: it.productId, name: p.name, qty: it.qty || 1, unitPrice: serverPrice });
+      serverSubtotal += serverPrice * (it.qty || 1);
+      const from = Number(p.stock || 0), to = Math.max(0, from - (it.qty || 0));
+      stockDeltas.push({ productId: it.productId, from, to, delta: to - from });
+    }
+    return {
+      dryRun: true,
+      ok: differences.length === 0,
+      serverSubtotal,
+      grandTotal: serverSubtotal - (discountTotal || 0) + (taxTotal || 0),
+      items: enriched,
+      stockDeltas,
+      differences,
+    };
+  }
+
   /* ── 1. Idempotency claim — atomic ──
      The previous version read, checked, then set: two concurrent requests (double-tap, HTTP
      retry, two till terminals) could both read "not exists" and both proceed — the race window
