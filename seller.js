@@ -358,7 +358,9 @@ function showNotification(message,type){
         "notificationContainer"
     );
 
-    if(!notificationContainer) return;
+    /* No page container → route to the CANONICAL toast (Slice A) instead of silently dropping
+       the message. Preserves the in-container behaviour where a container exists. */
+    if(!notificationContainer){ if(window._sokoniToast) window._sokoniToast(message, type, 3000); return; }
 
     const notification =
     document.createElement("div");

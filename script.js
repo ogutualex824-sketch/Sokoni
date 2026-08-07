@@ -108,14 +108,43 @@ const _escHtml = s => String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'
     el.style.animation='_skOut .28s ease forwards';
     setTimeout(function(){if(el.parentNode)el.parentNode.removeChild(el);},270);
   }
-  window._sokoniToast = function(msg, type, ms){
-    type = type||'success'; ms = ms||3000;
+  /* Normalise the type — some helpers pass booleans (true = error, e.g. showToast(msg,!ok))
+     or the short 'warn'. Maps onto the 4 canonical types. */
+  function _normType(t){
+    if (t === true) return 'error';
+    if (t === false || t == null) return 'success';
+    t = String(t).toLowerCase();
+    if (t === 'warn') return 'warning';
+    return (t === 'success' || t === 'error' || t === 'warning' || t === 'info') ? t : 'success';
+  }
+  /* Original inline renderer — kept ONLY as the fallback for before SokoniUI has loaded. */
+  function _rawToast(msg, type, ms){
     var el=document.createElement('div');
     el.style.cssText='background:'+(BG[type]||BG.success)+';border:1px solid '+(BD[type]||BD.success)+';border-radius:12px;padding:12px 16px;color:#fff;font-size:13px;font-family:inherit;font-weight:700;line-height:1.4;box-shadow:0 4px 24px rgba(0,0,0,0.55);animation:_skIn .3s ease;pointer-events:all;cursor:pointer;';
     el.innerHTML='<span style="margin-right:6px">'+(IC[type]||'📢')+'</span>'+String(msg).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     el.onclick=function(){_dismiss(el);};
     _getBox().appendChild(el);
     el._tid=setTimeout(function(){_dismiss(el);},ms);
+  }
+  /* CANONICAL toast entry (Slice A) — delegates to the design-system renderer SokoniUI.toast so
+     every showToast / showNotification / _sokoniToast / SK.toast call renders through ONE engine
+     (ARIA, queue, 4-toast cap, tokens). Zero API change; falls back to the inline renderer only
+     before SokoniUI has loaded. */
+  window._sokoniToast = function(msg, type, ms){
+    var nt = _normType(type);
+    /* Lightweight telemetry — free now that one renderer sees every toast. */
+    try {
+      var M = (window._skToastMetrics = window._skToastMetrics || { total: 0, byType: {} });
+      M.total++; M.byType[nt] = (M.byType[nt] || 0) + 1;
+      window.dispatchEvent(new CustomEvent('sk:toast', { detail: { type: nt, duration: (ms || null), at: Date.now() } }));
+    } catch(_) {}
+    try {
+      if (window.SokoniUI && typeof SokoniUI.toast === 'function') {
+        SokoniUI.toast(msg, nt, (ms != null ? { duration: ms } : {}));
+        return;
+      }
+    } catch(_) {}
+    _rawToast(msg, nt, ms || 3000);   /* SokoniUI not ready yet → inline fallback */
   };
 })();
 
