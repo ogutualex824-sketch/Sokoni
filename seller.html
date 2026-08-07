@@ -6689,6 +6689,18 @@ document.addEventListener('DOMContentLoaded', function() {
    no reload when the Seller Dashboard runs inside the shell. No-op standalone. */
 (function () {
   if (window.parent === window) return;
+  /* Embedded in the Merchant Shell: hide the Seller's OWN sidebar + top navbar (the shell
+     provides navigation) so the content fills the panel and there is no redundant double
+     sidebar. Scoped to embedded mode only — standalone seller.html is untouched. */
+  try {
+    var st = document.createElement('style');
+    /* Hide only the Seller's own sidebar and reclaim its left margin — the shell provides
+       navigation. Deliberately conservative: nothing else is touched, so no section breaks. */
+    st.textContent = 'body.sk-embedded .sidebar{display:none !important}' +
+      'body.sk-embedded .main-content{margin-left:0 !important}';
+    document.head.appendChild(st);
+    document.body.classList.add('sk-embedded');
+  } catch (_) {}
   /* Retry until the dashboard router is ready — the shell's message can arrive before
      seller.js finishes booting, which would drop the section switch. */
   var want = null, applying = false;

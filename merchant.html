@@ -152,17 +152,23 @@
        'native' — rendered by a JS function into the panel (instant, no reload)
        'pos'    — the single persistent POS app panel; `tab` deep-switches its tab
        'seller' — the single persistent Seller Dashboard panel; `sec` deep-switches its section */
+  /* TRUE per-module routing. Only genuinely-POS surfaces load the POS (Checkout) app:
+     Cashier, Inventory (live stock), Devices/Settings (hardware + POS config). Everything
+     else opens its own destination — Orders/Customers/Reports/Analytics/etc. load the Seller
+     app's REAL sections, never the Checkout bundle. Dashboard is native (no heavy app). This
+     is why Orders/Reports/Customers used to show "Loading POS" — they were pointed at POS. */
   var MODULES = [
     { id:'dashboard', label:'Dashboard', icon:'🏠', kind:'native' },
-    { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos', tab:'pos' },
-    { id:'orders',    label:'Orders',    icon:'🧾', kind:'pos', tab:'orders' },
-    { id:'inventory', label:'Inventory', icon:'📦', kind:'pos', tab:'inventory' },
-    { id:'customers', label:'Customers', icon:'👥', kind:'pos', tab:'customers' },
-    { id:'reports',   label:'Reports',   icon:'📊', kind:'pos', tab:'reports' },
+    { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos',    tab:'pos' },
+    { id:'orders',    label:'Orders',    icon:'🧾', kind:'seller', sec:'orders' },
+    { id:'inventory', label:'Inventory', icon:'📦', kind:'pos',    tab:'inventory' },
+    { id:'customers', label:'Customers', icon:'👥', kind:'seller', sec:'customers' },
+    { id:'reports',   label:'Reports',   icon:'📊', kind:'seller', sec:'history' },
     { sep:true },
     /* Seller-app sections — keys MUST match DASH_PAGES / showDashPage() exactly, or the
        dashboard silently falls back to Overview (the "opens the wrong module" bug). Verified
-       against seller.js DASH_PAGES: overview, analytics, marketing, tax, team, products, … */
+       against seller.js DASH_PAGES: overview, orders, customers, history, analytics, marketing,
+       tax, team, products. */
     { id:'shop',      label:'Shop Dashboard', icon:'🏪', kind:'seller', sec:'overview' },
     { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
     { id:'finance',   label:'Finance',   icon:'💰', kind:'seller', sec:'tax' },
