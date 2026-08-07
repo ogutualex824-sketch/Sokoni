@@ -46,6 +46,22 @@ function _legalNameLines(width) {
 (function (root) {
 
 /* ─────────────────────────────────────────────────────────────────
+   DIAGNOSTIC TRACE — records every connect/reconnect/forget step to a ring buffer
+   (window.__skPrinterTrace) and the console, so failures can be diagnosed from the
+   actual execution path in production instead of a vague "couldn't connect". Read it
+   via SokoniPrinter.getTrace() or the POS dropdown's 🩺 Diagnostics view.
+───────────────────────────────────────────────────────────────── */
+function _spTrace (step, data) {
+  try {
+    const buf = (root.__skPrinterTrace = root.__skPrinterTrace || []);
+    buf.push({ t: Date.now(), step: step, data: data || null });
+    if (buf.length > 80) buf.shift();
+    /* eslint-disable-next-line no-console */
+    console.log('[Printer]', step, data != null ? JSON.stringify(data) : '');
+  } catch (_) {}
+}
+
+/* ─────────────────────────────────────────────────────────────────
    PRINTER ERROR CODES
 ───────────────────────────────────────────────────────────────── */
 const PRINTER_ERRORS = {
@@ -1434,17 +1450,27 @@ class SPEngine {
 
   async autoReconnect () {
     const last = this._profile.lastDevice;
-    if (!last) return false;
+    _spTrace('reconnect:start', { savedType: last && last.type, savedName: last && last.name, savedId: last && last.id });
+    if (!last) { _spTrace('reconnect:abort', { reason: 'no saved device in profile' }); return false; }
 
     /* Bluetooth: getDevices() returns previously-granted devices without a user gesture (Chrome 85+) */
     if (last.type === 'bluetooth' && navigator.bluetooth?.getDevices) {
       try {
         const devices = await navigator.bluetooth.getDevices();
+        _spTrace('reconnect:getDevices', { count: devices.length, names: devices.map(d => d.name || d.id || '(unnamed)') });
         const matched = devices.find(d => d.name === last.name || d.id === last.id);
-        if (!matched) return false;
+        _spTrace('reconnect:match', { matched: !!matched, matchedName: matched && (matched.name || matched.id) });
+        if (!matched) {
+          _spTrace('reconnect:fail', { reason: devices.length === 0
+            ? 'getDevices() returned 0 — browser did not retain the pairing grant (WebView/PWA or permission-backend), OR nothing paired here'
+            : 'granted device(s) present but none matched the saved printer name/id' });
+          return false;
+        }
+        _spTrace('reconnect:gatt', { step: 'gatt.connect + service discovery' });
         await this.connect({ ...last, _dev: matched });
+        _spTrace('reconnect:success', { name: matched.name || matched.id });
         return true;
-      } catch(e) { return false; }
+      } catch(e) { _spTrace('reconnect:error', { name: e && e.name, message: e && e.message }); return false; }
     }
 
     /* USB (wired): getDevices() returns previously-granted USB devices without a gesture. */
@@ -1476,28 +1502,40 @@ class SPEngine {
      other layers are cleared by the caller. */
   async forget () {
     const last = this._profile.lastDevice;
+    _spTrace('forget:start', { savedName: last && last.name, savedId: last && last.id });
     /* Revoke the OS/browser permission for the device(s) we know about (Chrome 101+ exposes
        BluetoothDevice.forget()). Covers both the actively-connected device and a saved-but-
        disconnected one still present in getDevices(). */
+    let revoked = 0, hasForgetApi = false;
     try {
       const dev = this._active && this._active._dev;
-      if (dev && typeof dev.forget === 'function') await dev.forget();
-    } catch (_) {}
+      if (dev && typeof dev.forget === 'function') { hasForgetApi = true; await dev.forget(); revoked++; }
+    } catch (e) { _spTrace('forget:activeRevokeError', { name: e && e.name, message: e && e.message }); }
     try {
       if (navigator.bluetooth && navigator.bluetooth.getDevices) {
         const grants = await navigator.bluetooth.getDevices();
+        _spTrace('forget:getDevices', { count: grants.length });
         for (const d of grants) {
           const match = last && (d.name === last.name || d.id === last.id);
-          if ((match || !last) && typeof d.forget === 'function') { try { await d.forget(); } catch (_) {} }
+          if ((match || !last) && typeof d.forget === 'function') { hasForgetApi = true; try { await d.forget(); revoked++; } catch (_) {} }
         }
       }
-    } catch (_) {}
+    } catch (e) { _spTrace('forget:getDevicesError', { name: e && e.name, message: e && e.message }); }
+    _spTrace('forget:revoke', { revoked: revoked, forgetApiSupported: hasForgetApi,
+      note: hasForgetApi ? 'browser grant revoked' : 'BluetoothDevice.forget() NOT supported here — the OS-level pairing persists, but the app profile is cleared so it will not auto-reconnect; next connect still shows the chooser' });
     await this.disconnect();
     this._profile.lastDevice     = null;
     this._profile.connectionType = null;
     this._saveProfile();
+    /* Verify the profile really cleared (the acceptance check "no remembered printer"). */
+    let after = null; try { after = JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice || null; } catch (_) {}
+    _spTrace('forget:done', { profileLastDeviceAfter: after });
     this.emit('forgotten', null);
+    return { revoked: revoked, forgetApiSupported: hasForgetApi, cleared: !after };
   }
+
+  getTrace () { try { return (root.__skPrinterTrace || []).slice(); } catch (_) { return []; } }
+  clearTrace () { try { root.__skPrinterTrace = []; } catch (_) {} }
 
   get connected () { return !!(this._active?.ok); }
 
@@ -1824,6 +1862,8 @@ const api = {
   disconnect:         (...a) => getInstance().disconnect(...a),
   forget:             (...a) => getInstance().forget(...a),
   autoReconnect:      (...a) => getInstance().autoReconnect(...a),
+  getTrace:           (...a) => getInstance().getTrace(...a),
+  clearTrace:         (...a) => getInstance().clearTrace(...a),
   openSetup:          (opts) => _openPrinterSetup(opts),
   get connected ()          { return getInstance().connected; },
 

@@ -739,7 +739,10 @@ function _ppsRenderMenu (panel, override) {
 
   const head = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">' +
     '<div style="font-weight:900;font-size:13px;">🖨️ Printer</div>' +
-    '<button id="pps-menu-x" title="Close" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:16px;cursor:pointer;line-height:1;">✕</button></div>';
+    '<div style="display:flex;align-items:center;gap:8px;">' +
+      '<button id="pps-diag" title="Diagnostics" style="background:none;border:none;color:rgba(255,255,255,.4);font-size:14px;cursor:pointer;line-height:1;">🩺</button>' +
+      '<button id="pps-menu-x" title="Close" style="background:none;border:none;color:rgba(255,255,255,.45);font-size:16px;cursor:pointer;line-height:1;">✕</button>' +
+    '</div></div>';
 
   let body;
   if (override) {
@@ -835,6 +838,44 @@ function _ppsWireMenu (panel) {
   };
   const de = q('pps-details-toggle');
   if (de) de.onclick = () => { const d = q('pps-details'); if (d) d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
+  if (q('pps-diag')) q('pps-diag').onclick = () => _ppsRunDiagnostics(panel);
+}
+
+/* 🩺 Live diagnostics — runs a real reconnect attempt and dumps the instrumented step trace
+   plus the running build version, Web-Bluetooth support and the saved printer, so a failure can
+   be diagnosed from the ACTUAL execution path in production (not a vague "couldn't connect").
+   Copyable so the founder can paste it back. */
+async function _ppsRunDiagnostics (panel) {
+  const pm = window.SokoniPrinter || window.PrinterManager;
+  _ppsRenderMenu(panel, '<div style="font-size:12.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px;">⏳ Running diagnostics…</div>');
+  let build = {};
+  try { build = (window.sokoniBuildInfo ? await window.sokoniBuildInfo() : {}) || {}; } catch (_) {}
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem('spp_profile') || '{}').lastDevice || null; } catch (_) {}
+  try { pm && pm.clearTrace && pm.clearTrace(); } catch (_) {}
+  /* Trigger a live silent reconnect so the trace captures getDevices()/match/GATT for THIS device. */
+  try { if (pm && !pm.connected && pm.autoReconnect) await pm.autoReconnect(); } catch (_) {}
+  const trace = (pm && pm.getTrace) ? pm.getTrace() : (window.__skPrinterTrace || []);
+  const steps = trace.map(e => '• ' + e.step + (e.data ? ' — ' + JSON.stringify(e.data) : '')).join('\n');
+  const report =
+    'BUILD: ' + (build.runningCache || build.deployedCache || 'unknown') +
+      (build.stale ? '  ⚠️ STALE — tap Update Now in Settings' : (build.runningCache ? '  ✓ current' : '')) + '\n' +
+    'Web Bluetooth: ' + (navigator.bluetooth ? 'yes' : 'NO (needs Chrome/Edge on Android or desktop)') + '\n' +
+    'getDevices API: ' + (navigator.bluetooth && navigator.bluetooth.getDevices ? 'yes' : 'NO') + '\n' +
+    'Connected now: ' + (pm && pm.connected ? 'yes' : 'no') + '\n' +
+    'Saved printer: ' + (saved ? (saved.name || saved.id || 'unnamed') : 'none') + '\n\n' +
+    'RECONNECT TRACE:\n' + (steps || '(no steps captured)');
+  const body =
+    '<div style="font-weight:800;font-size:12px;margin-bottom:8px;">🩺 Printer Diagnostics</div>' +
+    '<pre style="white-space:pre-wrap;word-break:break-word;font-size:10.5px;line-height:1.5;color:rgba(255,255,255,.75);background:rgba(255,255,255,.04);padding:9px 10px;border-radius:8px;max-height:240px;overflow:auto;margin:0 0 10px;">' + _ppsEsc(report) + '</pre>' +
+    '<div style="display:flex;gap:8px;">' + _ppsBtn('pps-diag-copy', '📋 Copy', 'primary') + _ppsBtn('pps-diag-back', 'Back', 'ghost') + '</div>';
+  _ppsRenderMenu(panel, body);
+  const q = id => panel.querySelector('#' + id);
+  if (q('pps-diag-copy')) q('pps-diag-copy').onclick = () => {
+    const btn = q('pps-diag-copy');
+    try { navigator.clipboard.writeText(report).then(() => { btn.textContent = '✓ Copied'; }, () => {}); } catch (_) {}
+  };
+  if (q('pps-diag-back')) q('pps-diag-back').onclick = () => _ppsRenderMenu(panel);
 }
 
 /* Turn a connect/reconnect exception into an ACTIONABLE message + a collapsible Details view
