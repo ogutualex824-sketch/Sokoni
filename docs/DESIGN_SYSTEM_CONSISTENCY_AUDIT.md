@@ -1,0 +1,71 @@
+# Design-System Consistency Audit (Launch Candidate)
+
+**Status:** Evidence report — **no replacement code written** · **Date:** 2026-08-07
+**Method:** grep counts across all top-level `*.html` + `*.js` (excluding the design-system files themselves + `.min`). Counts are approximate (a proxy for adoption), not exact call graphs.
+**Related:** [[reference_design_system]] · [[project_mobile_ui_hardening]]
+
+The canonical library already exists — `window.SK` (sokoni-ds.js) delegating to `SokoniUI` (sokoni-ui.js) + `sokoni-components.css`. The risk at this stage is **inconsistent use**, not missing components. This ranks where.
+
+---
+
+## 1. Design-system adoption (measured baseline)
+
+| Component | Canonical | Legacy / custom | Adoption | Priority |
+|---|---|---|---|---|
+| **Dialogs** | `SK.dialog` — **0 uses** | `alert()` 237 · `confirm()` 159 (**396** across ~90 files) | **~0%** | 🔴 High |
+| **Toasts** | `SK.toast`/`SokoniUI.toast` — 17 | `showToast`/`showNotification` **535** (helper family → `window._sokoniToast`) · custom markup 114 files | **helper: high, but 2 renderers** | 🔴 High |
+| **Status chips** | `SK.statusChip`/`.sk-status` — 1 (just added) | `.badge-*` / `status-*` — **127** across 37 files | **~0%** | 🔴 High |
+| **Empty states** | `SK.empty`/`.sk-empty`/`.empty-state` — 33 files | hand-rolled "No X yet" — 78 files | **~30%** | 🔴 High |
+| **Loading overlays** | `SK.loading` — 1 file | spinner / "Loading…" — 110 files | **~1%** | 🔴 High |
+| **Skeletons** | `SK.skeleton` — 1 · `.sk-skel`/`.skeleton` class — 60 files | custom | **concept adopted, helper ~0** | 🟡 Med |
+| **Form validation** | `SK.form.validate` — 0 files | page-specific — ~5 files | **~0% (low volume)** | 🟡 Med |
+| **Cards** | `.sk-card` — 5 files | `*-card` classes — 287 uses (**mostly legitimate domain cards**) | n/a — most are KEEP | 🟡 Med |
+
+**Headline:** the three components users see most — **dialogs, status chips, loading** — sit at **~0% adoption** despite the canonical versions existing. That's the highest-leverage, lowest-ambiguity convergence work.
+
+---
+
+## 2. Migration classification (Replace / Wrap / Keep)
+
+| Area | Rule | Rationale |
+|---|---|---|
+| **Dialogs** (`alert`/`confirm`) | **Replace** → `SK.dialog` / `SK.dialog.confirm` | Native `alert`/`confirm` are blocking, unstyled, and break the premium feel. 396 of them. Clear win. |
+| **Toasts** | **Wrap** (unify the 2 renderers) | Most pages already use a consistent `showToast`/`showNotification` helper — but it renders via `window._sokoniToast` while `SK.toast` renders via `SokoniUI.toast`. Point `showToast`/`SK.toast` at ONE renderer; keep the helper name (535 call sites) as the delegating entry. |
+| **Status chips** | **Replace** → `SK.statusChip` | 127 `.badge-*`/inline status spans with drifting colors → one 6-color set. |
+| **Empty states** | **Replace** → `SK.empty` (with `action`) | 78 hand-rolled "No X" blocks, most without a next-action CTA. |
+| **Loading** | **Replace** overlays → `SK.loading`; **Keep** inline "Loading…" that will become skeletons | Full-screen/section spinners → `SK.loading`; short inline loaders are better replaced by `SK.skeleton` (Medium). |
+| **Skeletons** | **Keep** the class + **Wrap** dynamic cases via `SK.skeleton` | The `.skeleton`/`.sk-skel` class is already used in 60 files — fine. Only dynamic list/card placeholders benefit from the helper. |
+| **Cards** | **Keep** (mostly) | The 287 `*-card` classes are largely legitimate DOMAIN cards (product/order/merchant) already styled premium. Only truly generic containers are Replace candidates — not a launch blocker. |
+| **Form validation** | **Replace** (low volume) → `SK.form.validate` | Only ~5 files; small effort, do opportunistically. |
+
+---
+
+## 3. Effort estimate & sequencing (High tier first)
+
+| Slice | Scope | Effort | Notes |
+|---|---|---|---|
+| **A. Toast renderer unify** | Point the `showToast`/`showNotification` family + `SK.toast` at ONE renderer | **S** (1–2 files, central) | Highest ratio: 535 call sites converge by changing the *helper*, not the call sites. Do first. |
+| **B. Dialogs → SK.dialog** | Replace `alert()`/`confirm()` (396) | **L** (~90 files) — but scriptable: `alert('x')`→`SK.toast`/`SK.dialog`; `confirm(x, cb)`→`SK.dialog.confirm`. Start with the top offenders (creative-studio 22, subscription-os 21, admin 21, wap 12, staff-management 12, account-centre 12). | Biggest visible win. Do in file batches, verify each. |
+| **C. Status chips → SK.statusChip** | 127 `.badge-*` (37 files) | **M** | Mechanical; the mapping already covers ~35 status strings. |
+| **D. Empty states → SK.empty** | ~78 hand-rolled, add next-action CTAs | **M** | Also improves conversion (guides the next action). |
+| **E. Loading overlays → SK.loading** | 110 spinner/"Loading…" | **M** | Overlays → SK.loading; inline → skeleton. |
+
+Medium tier (skeletons/forms/cards) follows once High is clean.
+
+---
+
+## 4. Release gate (before broad merchant onboarding)
+
+Track these to 100% (measurable via the same greps):
+- **100% dialogs** via `SK.dialog` — **currently ~0%**
+- **100% toasts** via one renderer — **currently 2 renderers**
+- **100% status indicators** via `SK.statusChip` — **currently ~0%**
+- **100% empty states** via `SK.empty` — **currently ~30%**
+- **100% loading overlays** via `SK.loading` — **currently ~1%**
+
+Re-run §1 after each slice to watch adoption climb — evidence, not impressions.
+
+---
+
+## 5. Recommended first step
+**Slice A (toast renderer unify)** — smallest change, highest leverage (535 call sites converge by fixing the helper), and it removes the one true fragmentation (two toast engines). Then **Slice B (dialogs)** in top-offender batches for the biggest visible lift. Each slice: convert → re-grep adoption → screenshot-verify a couple of pages → deploy. No page's *behavior* changes — only which shared component renders it.
