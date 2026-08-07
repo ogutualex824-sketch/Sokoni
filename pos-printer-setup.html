@@ -1778,8 +1778,10 @@ function renderP58EPanel () {
 }
 
 async function pairP58E () {
+  /* btn may be absent when invoked from reconnectP58E() (saved-printer card) — guard all uses. */
   const btn = document.getElementById('btnPairP58E');
-  btn.disabled = true;
+  const setBtn = (t) => { if (btn) btn.textContent = t; };
+  if (btn) btn.disabled = true;
   try {
     /* Search → detect → connect, and only fall back to the picker if the
        printer is not already known to this browser.
@@ -1793,7 +1795,7 @@ async function pairP58E () {
        The picker cannot be skipped for a printer this browser has never seen:
        Web Bluetooth requires a user gesture and a human choice for first
        permission, by design. That is the one step no code can remove. */
-    btn.textContent = 'Searching for printer…';
+    setBtn('Searching for printer…');
 
     /* BOUNDED. autoConnect() calls navigator.bluetooth.getDevices() and then a
        GATT connect, and either can hang indefinitely on some Android builds —
@@ -1824,7 +1826,7 @@ async function pairP58E () {
       return;
     }
 
-    btn.textContent = 'Opening picker…';
+    setBtn('Opening picker…');
     const info = await PrinterManager.p58e.requestAndPair();
     if (info) {
       toast('Connected to ' + info.name);
@@ -1851,7 +1853,7 @@ async function pairP58E () {
       toast('Pairing failed: ' + msg, 5000);
     }
   } finally {
-    btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer';
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#128268; Pair P58E Printer'; }
   }
 }
 
@@ -1878,21 +1880,16 @@ async function pairAnyP58E () {
 
 async function reconnectP58E () {
   const btn = document.getElementById('btnReconnectP58E');
-  btn.disabled = true; btn.textContent = 'Reconnecting…';
+  if (btn) { btn.disabled = true; btn.textContent = 'Reconnecting…'; }
   try {
-    const ok = await PrinterManager.p58e.autoConnect();
-    if (ok) {
-      toast('Reconnected to ' + PrinterManager.p58e.info?.name);
-      _connectedDevice = { name: PrinterManager.p58e.info?.name, type: 'bluetooth' };
-      updateStatusBar();
-      renderP58EPanel();
-    } else {
-      toast('Could not auto-reconnect. Make sure the printer is on, then try Pair.', 5000);
-    }
-  } catch(e) {
-    toast('Reconnect failed: ' + e.message, 5000);
+    /* Delegate to pairP58E(): it tries a SILENT reconnect (getDevices, bounded 3s) and — the
+       piece this button was missing — falls through to the Bluetooth chooser when the browser
+       can't re-link silently. reconnectP58E() used to call autoConnect() alone, so an empty
+       getDevices() dead-ended at "Could not auto-reconnect" with no way forward. This IS a user
+       gesture, so the chooser is allowed. */
+    await pairP58E();
   } finally {
-    btn.disabled = false; btn.innerHTML = '&#8635; Reconnect';
+    if (btn) { btn.disabled = false; btn.innerHTML = '&#8635; Reconnect'; }
   }
 }
 
