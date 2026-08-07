@@ -179,6 +179,21 @@ input:checked+.slider:before{transform:translateX(18px)}
   <span class="pos-header-icon">&#128424;</span>
   <h1>Advanced Printer Settings</h1>
   <a href="pos.html" class="back-link">&#8592; Back to POS</a>
+  <script>
+    /* Canonical return flow — every printer button routes here via openPrinterSetup()
+       with a ?return= path. Repoint "Back" to the caller; updateStatusBar() auto-returns
+       once a connection succeeds here. */
+    (function () {
+      try {
+        var ret = new URLSearchParams(location.search).get('return');
+        if (ret) {
+          window._ppsReturnUrl = ret;
+          var bl = document.querySelector('.back-link');
+          if (bl) { bl.setAttribute('href', ret); bl.innerHTML = '&#8592; Back'; }
+        }
+      } catch (_) {}
+    })();
+  </script>
 </div>
 
 <div class="status-bar">
@@ -1165,6 +1180,15 @@ function updateStatusBar () {
   const badge  = document.getElementById('transportBadge');
   const discBtn= document.getElementById('btnDisconnect');
   const ok = PrinterManager.connected;
+  /* Auto-return: if we arrived with ?return= and a connection JUST succeeded here,
+     replace back to the caller (POS/seller) — no manual Back needed. Only on the
+     transition to connected, so arriving already-connected (to do advanced work)
+     does not bounce you out. */
+  if (ok && !window._ppsPrevConnected && window._ppsReturnUrl) {
+    if (text) text.textContent = '✓ Connected — returning…';
+    setTimeout(function () { try { window.location.replace(window._ppsReturnUrl); } catch (_) { window.location.href = window._ppsReturnUrl; } }, 1100);
+  }
+  window._ppsPrevConnected = ok;
   dot.className = 'status-dot ' + (ok ? 'connected' : 'disconnected');
   text.textContent = ok
     ? 'Connected: ' + (_connectedDevice?.name || 'Printer')

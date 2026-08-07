@@ -1758,6 +1758,17 @@ class SPEngine {
 let _inst = null;
 function getInstance () { if (!_inst) _inst = new SPEngine(); return _inst; }
 
+/* Canonical printer-setup navigation — ONE code path for EVERY printer button in the
+   app (POS header, Settings, no-printer warnings, diagnostics, first-time setup). Opens
+   the ONE canonical page in the SAME tab (no new window) with a return path, so the page
+   auto-returns after a successful connect. The in-POS dropdown is the primary connect UX;
+   this page is only for advanced / first-time / diagnostics. */
+function _openPrinterSetup (opts) {
+  opts = opts || {};
+  var ret = opts.returnTo || (location.pathname + location.search) || 'pos.html';
+  location.href = 'pos-printer-setup.html?return=' + encodeURIComponent(ret);
+}
+
 const api = {
   getInstance,
 
@@ -1769,6 +1780,7 @@ const api = {
   connect:            (...a) => getInstance().connect(...a),
   disconnect:         (...a) => getInstance().disconnect(...a),
   autoReconnect:      (...a) => getInstance().autoReconnect(...a),
+  openSetup:          (opts) => _openPrinterSetup(opts),
   get connected ()          { return getInstance().connected; },
 
   /* Status & capabilities */
@@ -1825,5 +1837,9 @@ const api = {
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.SokoniPrinter = api;
+
+/* Global canonical printer-setup route — one code path for EVERY printer button,
+   from any page. Same-tab, with a return path so the setup page auto-returns. */
+if (typeof window !== 'undefined') window.openPrinterSetup = _openPrinterSetup;
 
 })(typeof window !== 'undefined' ? window : global);

@@ -705,7 +705,7 @@ function _ppsTogglePrinterMenu (anchor) {
 }
 
 function _ppsRenderMenu (panel, override) {
-  const pm        = window.PrinterManager;
+  const pm        = window.SokoniPrinter || window.PrinterManager;
   const connected = !!(pm && pm.connected);
   const hasBt     = !!navigator.bluetooth;
   const last      = _ppsLastPrinter();
@@ -741,12 +741,12 @@ function _ppsRenderMenu (panel, override) {
 }
 
 function _ppsWireMenu (panel) {
-  const pm = window.PrinterManager;
+  const pm = window.SokoniPrinter || window.PrinterManager;
   const q = id => panel.querySelector('#' + id);
   const spin = txt => '<div style="font-size:12.5px;color:rgba(255,255,255,.75);display:flex;align-items:center;gap:8px;">⏳ ' + txt + '</div>';
   if (q('pps-menu-x'))   q('pps-menu-x').onclick   = _ppsCloseMenu;
   if (q('pps-remember')) q('pps-remember').onchange = e => localStorage.setItem('pps_remember', e.target.checked ? '1' : '0');
-  if (q('pps-advanced')) q('pps-advanced').onclick = () => { _ppsCloseMenu(); try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {} };
+  if (q('pps-advanced')) q('pps-advanced').onclick = () => { _ppsCloseMenu(); try { (window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html'); } catch (_) {} };
   if (q('pps-test'))     q('pps-test').onclick     = () => { try { pm && pm.testPrint && pm.testPrint(); } catch (_) {} };
   if (q('pps-forget'))   q('pps-forget').onclick   = () => { try { localStorage.removeItem('spp_profile'); pm && pm.disconnect && pm.disconnect(); } catch (_) {} _ppsRenderMenu(panel); };
   if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
@@ -823,7 +823,9 @@ class PosPrintService {
      Retries quietly in the background without blocking selling, and also fires on the first
      user interaction for browsers that gate a GATT connect behind a gesture. */
   _autoConnectPrinter () {
-    const pm = window.PrinterManager;
+    /* Use the ENGINE (SokoniPrinter) — it has the flat connect/autoReconnect API.
+       window.PrinterManager is a thin wrapper without autoReconnect. */
+    const pm = window.SokoniPrinter || window.PrinterManager;
     if (!pm || typeof pm.autoReconnect !== 'function') return;
     let attempts = 0, done = false;
     const attempt = () => {
@@ -1570,7 +1572,7 @@ class PosPrintService {
           '<button id="pps-diag-setup" style="flex:1;padding:11px;border-radius:11px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:rgba(255,255,255,0.8);font-weight:800;cursor:pointer;font-family:inherit;">&#x2699;&#xFE0F; Printer Setup</button></div>';
       sheet.querySelector('#pps-diag-x').onclick = () => ov.remove();
       sheet.querySelector('#pps-diag-refresh').onclick = render;
-      sheet.querySelector('#pps-diag-setup').onclick = () => { try { window.open('pos-printer-setup.html', '_blank', 'width=560,height=900'); } catch (_) {} };
+      sheet.querySelector('#pps-diag-setup').onclick = () => { try { (window.openPrinterSetup?window.openPrinterSetup():location.href='pos-printer-setup.html'); } catch (_) {} };
     }
     render();
     ov.appendChild(sheet);
