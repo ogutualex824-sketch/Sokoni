@@ -72,6 +72,7 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | 08-07 | B1 | Dialogs | ~0% | **~24%** (102 via `SK.dialog`; 331 native left) — creative-studio, subscription-os, admin, wap, staff-management, account-centre |
 | 08-07 | B2 | Dialogs | ~24% | **~40%** (158 via `SK.dialog`; 239 native left) — admin-subscriptions, ai-subscriptions, webhooks, observability, api-gateway, task-queue, email-center |
 | 08-07 | B3 | Dialogs | ~40% | **~47%** (187 via `SK.dialog`; 212 native left) — driver, rider-nav (SOS), profile, pos-completeness |
+| 08-07 | B4A | Dialogs | ~47% | **~53%** (210 via `SK.dialog`; 188 native left) — **data-no-header pages**: dispatch, ecc, provider-dashboard (money-path rigor) |
 
 **Batch ledger (dialogs):**
 | Batch | Modules | SK.dialog | Native left | Adoption |
@@ -79,6 +80,9 @@ Re-run §1 after each slice to watch adoption climb — evidence, not impression
 | 1 | creative-studio · subscription-os · admin · wap · staff-management · account-centre | 102 | 331 | ~24% |
 | 2 | admin-subscriptions · ai-subscriptions · webhooks · observability · api-gateway · task-queue · email-center | 158 | 239 | ~40% |
 | 3 | driver · rider-nav · profile · pos-completeness | 187 | 212 | ~47% |
+| 4A | dispatch · ecc · provider-dashboard (`data-no-header`) | 210 | 188 | ~53% |
+
+**B4A finding (corrects an earlier assumption):** `data-no-header` pages are NOT missing `SK` — shared-header.js injects `sokoni-ui.js`+`sokoni-ds.js` at lines 257/261 **unconditionally, before** the `data-no-header` early-return at line 567. Verified the script tags inject (`sk-ds-script`/`sk-ui-script` present on ecc). No bootstrap needed; no CSS/namespace conflicts (no page defines its own `SK`/`.sk-modal`/`openModal`). Headless can't runtime-verify `window.SK` on ANY auth-gated page (even known-good `admin` reads `undefined` — unauthed sessions redirect); runtime = on-device. **Trap avoided:** provider-dashboard has an `async confirm(id)` **method** (booking-confirm) — a definition, left untouched; only the 8 bare native `confirm()` calls migrated. provider-dashboard got money-path rigor (descriptive titles + `variant:'danger'` on no-show/cancel/delete/close).
 
 **Batch-3 note:** all 9 confirms were in **non-async** functions (fire-and-forget onclick/listeners). Converted by marking each enclosing function `async` (body preserved exactly) — verified every caller discards the return value, so the Promise return is inert. rider-nav SOS lost its `\n\n` line break (modal wraps as one paragraph; text content preserved).
 

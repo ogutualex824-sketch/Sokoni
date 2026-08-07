@@ -1,3 +1,25 @@
+## [2026-08-07] — feat(ui): Slice B4A — dialog convergence (data-no-header pages)
+
+Isolated special-case slice: the three `data-no-header` pages (shared-header does NOT render
+their chrome, but — corrected finding — DOES still inject `sokoni-ui.js`+`sokoni-ds.js` before
+its early-return, so `SK` is present). Infrastructure-verified before migrating.
+
+- **Corrected assumption:** `SK` IS injected on `data-no-header` pages (shared-header.js:257/261
+  run before the line-567 `data-no-header` return). Script tags confirmed present; no bootstrap
+  needed; no CSS/namespace conflicts. Headless can't runtime-verify `window.SK` on auth-gated
+  pages (even known-good `admin` reads undefined — unauthed redirect); runtime = on-device.
+- **Migrated (23 sites, 0 bare left):** dispatch (7 alert + 3 confirm), ecc (4+1),
+  provider-dashboard (0+8). Adoption **~47% → ~53%**.
+- **Money-path rigor on provider-dashboard** (booking/subscription surface): descriptive titles +
+  `variant:'danger'` on no-show / cancel / delete-rate-card / close-today / cancel-subscription.
+  **Trap avoided:** its `async confirm(id)` booking-confirm METHOD (not a native call) left
+  untouched; only the 8 bare `confirm()` calls migrated. Non-async handlers (dispatch `window._*`,
+  provider `cancelSub`) marked `async` after verifying onclick callers discard the return.
+  `prompt()` (vacation/block-date) left unchanged.
+- **Files:** dispatch.html, ecc.html, provider-dashboard.html, docs/DESIGN_SYSTEM_CONSISTENCY_AUDIT.md.
+
+---
+
 ## [2026-08-07] — feat(ui): Slice B batch 3 — dialog convergence (driver/rider/profile/POS)
 
 Native `alert`/`confirm` → `SK.dialog`, user-facing group.

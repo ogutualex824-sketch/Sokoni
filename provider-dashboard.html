@@ -921,10 +921,10 @@ const B={
   async decline(id){showLoad('Declining…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerDeclineBooking',bookingId:id});toast('Booking declined.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async complete(id){showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCompleteBooking',bookingId:id});toast('Marked as complete!');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async start(id){showLoad('Starting…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerStartBooking',bookingId:id});toast('Booking started.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async noShow(id){if(!confirm('Mark this booking as a no-show? This cannot be undone.'))return;showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerMarkNoShow',bookingId:id});toast('Marked as no-show.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async cancel(id){if(!confirm('Cancel this booking? The slot will be freed.'))return;showLoad('Cancelling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCancelBooking',bookingId:id});toast('Booking cancelled.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async noShow(id){if(!(await SK.dialog.confirm('Mark this booking as a no-show? This cannot be undone.', null, null, { title:'Mark no-show', variant:'danger', confirmLabel:'Mark no-show' })))return;showLoad('Updating…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerMarkNoShow',bookingId:id});toast('Marked as no-show.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async cancel(id){if(!(await SK.dialog.confirm('Cancel this booking? The slot will be freed.', null, null, { title:'Cancel booking', variant:'danger', confirmLabel:'Cancel booking' })))return;showLoad('Cancelling…');try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerCancelBooking',bookingId:id});toast('Booking cancelled.');await B.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   reschedule(id){const b=(_bkDocs.find(x=>x.id===id))||D._find(id);if(b)RS.open(b);else toast('Booking not found','err');},
-  async contact(id){showLoad('…');try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerContactCustomer',bookingId:id});const c=(r.data||{}).customer||{};if(c.phone){if(confirm(`${c.name||'Customer'}\n${c.phone}\n\nCall now?`))window.location.href='tel:'+c.phone;}else{toast('No phone number on file for this customer.','err')}}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async contact(id){showLoad('…');try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerContactCustomer',bookingId:id});const c=(r.data||{}).customer||{};if(c.phone){if(await SK.dialog.confirm(`${c.name||'Customer'} — ${c.phone}. Call now?`, null, null, { title:'Call customer', confirmLabel:'Call' }))window.location.href='tel:'+c.phone;}else{toast('No phone number on file for this customer.','err')}}catch(e){toast(e.message,'err')}finally{hideLoad()}},
 };
 
 /* ── Booking Detail Drawer — reuses every existing backend op; adds no booking logic. */
@@ -1014,7 +1014,7 @@ const RS={
   },
   async pick(startTime){
     const b=this._b;if(!b)return;const date=(_q('rsDate')||{}).value;
-    if(!confirm(`Move this booking to ${date} at ${_t12(startTime)}?`))return;
+    if(!(await SK.dialog.confirm(`Move this booking to ${date} at ${_t12(startTime)}?`, null, null, { title:'Reschedule booking', confirmLabel:'Move booking' })))return;
     showLoad('Rescheduling…');
     try{const fn=firebase.functions().httpsCallable('providerDispatch');await fn({op:'providerRescheduleBooking',bookingId:b.id,date,startTime});toast('Booking rescheduled!');RS.close();D.close();await B.load();}
     catch(e){toast(e.message||'Reschedule failed','err');}finally{hideLoad();}
@@ -1646,7 +1646,7 @@ const S={
   async loadVerif(){
     try{const fn=firebase.functions().httpsCallable('providerDispatch');const r=await fn({op:'providerGetProfile'});const v=r.data?.verification;_q('verifStatus').innerHTML=v&&v.status==='verified'?`<div style="color:var(--acc);font-weight:700;font-size:.9rem">✓ Verified</div><div style="font-size:.8rem;color:var(--sub);margin-top:4px">Your identity has been verified.</div>`:`<div style="color:var(--warn);font-weight:700;font-size:.9rem">⏳ Pending / Not Submitted</div><div style="font-size:.8rem;color:var(--sub);margin-top:4px">Upload your ID documents to get verified.</div><div style="margin-top:10px"><a href="provider-onboarding.html#step9" class="btn btn-p btn-sm">Upload Documents</a></div>`;}catch(e){_q('verifStatus').innerHTML='<div class="card-empty">Unable to load verification status.</div>'}
   },
-  cancelSub(){if(confirm('Cancel your subscription? You will keep access until the renewal date.'))toast('Cancellation scheduled. Contact support@mysokoni.co.ke for assistance.','ok')}
+  async cancelSub(){if(await SK.dialog.confirm('Cancel your subscription? You will keep access until the renewal date.', null, null, { title:'Cancel subscription', variant:'danger', confirmLabel:'Cancel subscription' }))toast('Cancellation scheduled. Contact support@mysokoni.co.ke for assistance.','ok')}
 };
 
 /* ── Rate cards (services) — owner-scoped CRUD via providerDispatch ─────────── */
@@ -1740,7 +1740,7 @@ const Sv={
     }catch(e){toast(e.message,'err')}finally{hideLoad()}
   },
   async toggle(id,active){showLoad('Updating…');try{await this._fn()({op:'providerToggleService',serviceId:id,active});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
-  async remove(id){if(!confirm('Delete this rate card? Customers will no longer see it.'))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
+  async remove(id){if(!(await SK.dialog.confirm('Delete this rate card? Customers will no longer see it.', null, null, { title:'Delete rate card', variant:'danger', confirmLabel:'Delete' })))return;showLoad('Deleting…');try{await this._fn()({op:'providerRemoveService',serviceId:id});await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   async duplicate(id){showLoad('Duplicating…');try{await this._fn()({op:'providerDuplicateService',serviceId:id});toast('Service duplicated — edit the copy.');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
   pricing(id){const s=this._svc.find(x=>x.id===id);if(!window.SokoniPricingStudio){toast('Pricing Studio loading — try again.','err');return}SokoniPricingStudio.open(id,(s&&s.pricing)||{},()=>Sv.load())},
   async feature(id,val){showLoad('Updating…');try{await this._fn()({op:'providerUpdateService',serviceId:id,featured:val});toast(val?'Service featured ★':'Feature removed');await this.load()}catch(e){toast(e.message,'err')}finally{hideLoad()}},
@@ -1924,10 +1924,10 @@ const AvQ={
   _stamp(){return firebase.firestore.FieldValue.serverTimestamp();},
   async _close(date,label){const r=this._ref();if(!r)throw new Error('Sign in required');await r.collection('overrides').doc(date).set({date,label:String(label).slice(0,80),closed:true,type:'custom',createdAt:this._stamp()});},
   async openToday(){const r=this._ref();if(!r)return;showLoad('Opening today…');try{await r.collection('overrides').doc(this._today()).delete().catch(()=>{});await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("You're open today.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
-  async emergencyClose(){if(!confirm('Close TODAY for new bookings? Existing confirmed bookings are unaffected.'))return;showLoad('Closing…');try{await this._close(this._today(),'Emergency closure');toast('Closed for today.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
+  async emergencyClose(){if(!(await SK.dialog.confirm('Close TODAY for new bookings? Existing confirmed bookings are unaffected.', null, null, { title:'Close today', variant:'danger', confirmLabel:'Close today' })))return;showLoad('Closing…');try{await this._close(this._today(),'Emergency closure');toast('Closed for today.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
   async blockDate(){const d=(prompt('Block which date? (YYYY-MM-DD)')||'').trim();if(!d)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(d)){toast('Use YYYY-MM-DD format.','err');return}showLoad('Blocking…');try{await this._close(d,'Blocked');toast('Date blocked: '+d);this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}},
   async vacation(){const r=this._ref();if(!r)return;let on=false;try{const s=await r.get();on=s.exists&&!!s.data().isOnVacation}catch(_){}
-    if(on){if(!confirm('End vacation mode and go back online?'))return;showLoad('…');try{await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("Vacation ended — you're back online.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}
+    if(on){if(!(await SK.dialog.confirm('End vacation mode and go back online?', null, null, { title:'End vacation', confirmLabel:'Go online' })))return;showLoad('…');try{await r.set({isOnVacation:false,updatedAt:this._stamp()},{merge:true});toast("Vacation ended — you're back online.");this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}
     else{const end=(prompt('Vacation until? (YYYY-MM-DD, optional — leave blank for open-ended)')||'').trim();if(end&&!/^\d{4}-\d{2}-\d{2}$/.test(end)){toast('Use YYYY-MM-DD or leave blank.','err');return}showLoad('…');try{await r.set({isOnVacation:true,vacationStartDate:this._today(),vacationEndDate:end||null,updatedAt:this._stamp()},{merge:true});toast('Vacation mode ON — hidden from search, bookings paused.');this._refresh()}catch(e){toast(e.message||'Failed','err')}finally{hideLoad()}}},
   _refresh(){try{if(typeof Cal!=='undefined'&&Cal.today)Cal.today()}catch(_){}try{if(typeof _data!=='undefined'&&_data)renderSnapshot('snapStripCal',_data.bookings||[])}catch(_){}}
 };window.AvQ=AvQ;
