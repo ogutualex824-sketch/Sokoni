@@ -32,6 +32,31 @@
   /* ────────────────────────────────────────────────────────────────────────── */
 
   /* ══════════════════════════════════════════════════════
+     0. BUILD-VERSION EVIDENCE — proves what the DEVICE is running vs. what's DEPLOYED.
+        runningCache  = the active SW's cache name (what this device is actually serving)
+        deployedCache = version.json fetched fresh from network (what's live right now)
+        stale === true → the device is on an OLD build (SW hasn't swapped yet).
+        Usage: const b = await window.sokoniBuildInfo();
+  ══════════════════════════════════════════════════════ */
+  window.sokoniBuildInfo = async function () {
+    const info = { runningCache: null, deployedCache: null, deployedCommit: null, stale: null };
+    try {
+      const keys = await caches.keys();
+      const k = keys.find(x => /^sokoni-.*-v\d+/.test(x)) || '';
+      info.runningCache = (k.match(/v\d+/) || [null])[0];
+    } catch (_) {}
+    try {
+      const v = await (await fetch('/version.json?cb=' + Date.now(), { cache: 'no-store' })).json();
+      info.deployedCache  = (String(v.cacheVersion || '').match(/v\d+/) || [null])[0];
+      info.deployedCommit = v.commitShort || null;
+    } catch (_) {}
+    if (info.runningCache && info.deployedCache) {
+      info.stale = parseInt(info.runningCache.slice(1), 10) < parseInt(info.deployedCache.slice(1), 10);
+    }
+    return info;
+  };
+
+  /* ══════════════════════════════════════════════════════
      1. REGISTER SERVICE WORKER (HTTPS only)
   ══════════════════════════════════════════════════════ */
   let _swReg = null; /* stored so the Update button can reach the waiting worker */

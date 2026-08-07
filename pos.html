@@ -533,6 +533,31 @@
           <div class="settings-row"><div></div><button class="settings-save-btn" onclick="SPos.settings.save()">Save</button></div>
         </div>
         <div class="settings-section">
+          <div class="settings-section-title">BUILD / VERSION</div>
+          <div class="settings-row"><div class="settings-row-label"><strong>Build</strong><span id="pos-build-info">Checking…</span></div><button class="inv-btn inv-btn-outline" id="pos-build-update" style="display:none" onclick="window.sokoniCheckForUpdates&&window.sokoniCheckForUpdates(this)">⬇️ Update Now</button></div>
+        </div>
+        <script>
+          /* Build-version evidence — shows what this DEVICE is running vs. what's DEPLOYED,
+             so "is it live?" is answered on screen. Refreshes each time Settings opens. */
+          (function () {
+            async function _posShowBuild() {
+              var el = document.getElementById('pos-build-info');
+              if (!el || !window.sokoniBuildInfo) return;
+              try {
+                var b = await window.sokoniBuildInfo();
+                el.innerHTML = 'Running ' + (b.runningCache || '?') + ' · Deployed ' + (b.deployedCache || '?') +
+                  (b.deployedCommit ? ' · ' + b.deployedCommit : '') +
+                  (b.stale ? ' — <span style="color:#ff8c00;font-weight:800;">update available</span>'
+                           : ' — <span style="color:#71ff00;">up to date</span>');
+                var btn = document.getElementById('pos-build-update');
+                if (btn) btn.style.display = b.stale ? '' : 'none';
+              } catch (_) { el.textContent = 'unavailable'; }
+            }
+            window._posShowBuild = _posShowBuild;
+            setTimeout(_posShowBuild, 1500);
+          })();
+        </script>
+        <div class="settings-section">
           <div class="settings-section-title">PRINTER</div>
           <div class="settings-row"><div class="settings-row-label"><strong>Printer</strong><span id="printer-status-txt">Not connected</span></div><div style="display:flex;gap:8px"><button class="settings-save-btn" onclick="window.open('pos-printer-setup.html','_blank')">&#9881;&#65039; Printer Setup</button><button class="inv-btn inv-btn-outline" onclick="SokoniPosprint&&SokoniPosprint.printTest().catch(e=>SPos.toast(e.message,'error'))">Test Print</button></div></div>
           <div class="settings-row"><div class="settings-row-label"><strong>Paper Width</strong></div><select class="settings-input" id="s-paper-width" onchange="SPos.settings.savePaperWidth(this.value)"><option value="58">58mm</option><option value="80">80mm</option></select></div>
