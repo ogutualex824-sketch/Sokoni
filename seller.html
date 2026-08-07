@@ -189,7 +189,8 @@
       <li class="nav-item" onclick="showDashPage('store',this)">🏪 My Store</li>
       <li class="nav-item" onclick="showDashPage('team',this)">👥 Team & Verify</li>
       <li class="nav-item" onclick="showDashPage('disputes',this)">⚖️ Disputes</li>
-      <li class="nav-item" onclick="showDashPage('pos',this)" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.16);border-radius:10px;">🏷️ POS / Cashier</li>
+      <li class="nav-item" onclick="showDashPage('pos',this)" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;background:rgba(113,255,0,0.05);border:1px solid rgba(113,255,0,0.16);border-radius:10px;">💰 Cashier</li>
+      <li class="nav-item" onclick="window.location.href='pos.html'" style="margin-top:6px;background:rgba(113,255,0,0.08);border:1px solid rgba(113,255,0,0.22);border-radius:10px;">🛒 POS — Full Screen</li>
     </ul>
 
 
@@ -3009,14 +3010,14 @@ import { getFirestore, collection, query, where, getDocs, limit, orderBy }
         <a href="inventory.html" style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-decoration:none;display:flex;align-items:center;gap:5px;margin-right:12px;">
           📦 Inventory
         </a>
-        <a href="pos.html" target="_blank" rel="noopener" style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-decoration:none;display:flex;align-items:center;gap:5px;">
-          ⛶ Open full screen
+        <a href="pos.html" style="font-size:11px;font-weight:800;color:rgba(113,255,0,0.7);text-decoration:none;display:flex;align-items:center;gap:5px;">
+          ⛶ Open full POS
         </a>
       </div>
       <iframe id="posIframe"
         title="SOKONI POS"
         style="width:100%;height:calc(100vh - 136px);border:none;display:block;background:#0a0a0a;"
-        allow="clipboard-write; payment">
+        allow="clipboard-write; payment; bluetooth; usb; serial; camera">
       </iframe>
     </section>
 
