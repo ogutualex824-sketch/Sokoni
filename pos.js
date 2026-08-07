@@ -2431,6 +2431,9 @@ const SPos = (function () {
        kind 'tab'    → in-shell SPos.ui.switchTab (no reload)
        kind 'nav'    → same-tab navigation to a management page (single instance)
        kind 'action' → an in-POS overlay (printer menu / device hub) */
+    /* Every entry routes to a VERIFIED destination — in-shell tab, an existing page, or a
+       seller-dashboard section deep-link (seller.html#<data-sdtab>; the dashboard reads
+       location.hash). No dead links. */
     _groups: [
       ['Operations', [
         ['🛒', 'Checkout', 'tab', 'pos'],
@@ -2441,20 +2444,29 @@ const SPos = (function () {
         ['🔧', 'Repairs', 'tab', 'repair'],
       ]],
       ['Business', [
-        ['💰', 'Finance', 'tab', 'finance'],
-        ['📈', 'Analytics', 'nav', 'analytics.html'],
-        ['📊', 'Reports', 'tab', 'reports'],
         ['🏪', 'Shop Dashboard', 'nav', 'seller.html'],
+        ['💰', 'Finance', 'tab', 'finance'],
+        ['📊', 'Reports', 'tab', 'reports'],
+        ['📈', 'Analytics', 'nav', 'analytics.html'],
+        ['👨‍🔧', 'Employees', 'nav', 'seller.html#team'],
+        ['🎁', 'Promotions', 'nav', 'seller.html#flash'],
         ['⭐', 'Loyalty', 'nav', 'loyalty.html'],
-        ['📣', 'Marketing', 'nav', 'marketing.html'],
+        ['📣', 'Marketing', 'nav', 'seller.html#market'],
+        ['🧾', 'Tax / KRA', 'nav', 'seller.html#kra'],
+      ]],
+      ['Orders & Money', [
+        ['🧾', 'Receipts', 'tab', 'orders'],
+        ['🔄', 'Refunds', 'tab', 'orders'],
+        ['⚖️', 'Disputes', 'nav', 'seller.html#disputes'],
       ]],
       ['Communications', [
-        ['💬', 'Messages', 'nav', 'messages.html'],
+        ['💬', 'Messages', 'nav', 'seller.html#inbox'],
         ['🔔', 'Notifications', 'nav', 'notifications.html'],
       ]],
       ['System', [
         ['🖨️', 'Printer', 'action', 'printer'],
         ['🔌', 'Devices', 'action', 'devices'],
+        ['☁️', 'Sync & Data', 'tab', 'settings'],
         ['📡', 'BOS Hub', 'tab', 'bos'],
         ['📋', 'Audit', 'tab', 'audit'],
         ['⚙️', 'POS Settings', 'tab', 'settings'],
