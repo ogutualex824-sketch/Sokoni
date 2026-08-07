@@ -2956,6 +2956,26 @@ window.SPosCustomer = (function () {
     if (!d.__sokoniShell) return;
     if (d.action === 'switchTab') applyTab(d.tab || 'pos');
     else if (d.action === 'devices' || d.action === 'printer') runAction(d.action);
+    /* Shell-owned printer: this POS iframe is the single printer HOST. The shell routes every
+       module's print/reconnect/forget/test here so there is only ONE printer manager. */
+    else if (d.action === 'print') {
+      var r = d.receipt || {};
+      try {
+        if (window.PosPrintService && PosPrintService.smartPrint) PosPrintService.smartPrint(r, { viaShell: true });
+        else if (window.PosPrintService && PosPrintService.printReceipt) PosPrintService.printReceipt(r, {});
+        else if (window.PosPrinter) PosPrinter.print(r);
+      } catch (_) {}
+    }
+    else if (d.action === 'reconnectPrinter') { try { var e2 = window.SokoniPrinter || window.PrinterManager; if (e2 && e2.autoReconnect) e2.autoReconnect(); else if (window.openPrinterMenu) window.openPrinterMenu(); } catch (_) {} }
+    else if (d.action === 'forgetPrinter') {
+      try {
+        if (window.SokoniPrinter && window.SokoniPrinter.forget) window.SokoniPrinter.forget();
+        if (window.P58EPrinter && window.P58EPrinter.forget) window.P58EPrinter.forget();
+        ['spp_profile','pps_store_profile','sokoni_printer_last_print','p58e_paired_device','pps_remember']
+          .forEach(function (k) { try { localStorage.removeItem(k); } catch (_) {} });
+      } catch (_) {}
+    }
+    else if (d.action === 'testPrint') { try { var e3 = window.SokoniPrinter || window.PrinterManager; if (e3 && e3.testPrint) e3.testPrint(); } catch (_) {} }
   });
 
   /* On first load the shell also encodes the target tab in the hash (pos.html#orders), so the

@@ -375,10 +375,36 @@
   window.__mUpdateNow   = function () { try { if (window._sokoniApplyUpdate) window._sokoniApplyUpdate(); else location.reload(); } catch (_) { location.reload(); } };
   window.__mUpdateLater = function () { var b = document.getElementById('mupdate'); if (b) b.hidden = true; };
 
+  /* ── SHELL-OWNED PRINTER (Phase 2) ─────────────────────────────────────────
+     ONE printer for the whole app. The persistent POS panel is the printer HOST —
+     its Bluetooth/GATT connection survives every navigation because that iframe is
+     never destroyed. The shell exposes a single API that routes every module's job
+     to that host, so any screen calls SokoniShell.Printer.print(receipt) and it
+     prints — no per-module printer, no reconnect-on-navigation. Connecting needs a
+     user gesture in the POS context, so connect() takes the user to Cashier and
+     opens the printer menu once; after that, print-from-anywhere works. */
+  function _pos () { return document.getElementById('mfx-pos'); }
+  function _toPos (msg) { var f = _pos(); try { if (f && f.contentWindow) f.contentWindow.postMessage(msg, location.origin); } catch (_) {} }
+  window.SokoniShell = window.SokoniShell || {};
+  window.SokoniShell.Printer = {
+    status:    function () { return { connected: shellPrinterUp }; },
+    isConnected: function () { return !!shellPrinterUp; },
+    print:     function (receipt) { posPanel('pos'); _toPos({ __sokoniShell: true, action: 'print', receipt: receipt }); },
+    connect:   function () { go('cashier'); posAction('printer'); },
+    reconnect: function () { _toPos({ __sokoniShell: true, action: 'reconnectPrinter' }); },
+    forget:    function () { _toPos({ __sokoniShell: true, action: 'forgetPrinter' }); },
+    test:      function () { posPanel('pos'); _toPos({ __sokoniShell: true, action: 'testPrint' }); },
+  };
+  /* Clicking the top-bar printer chip connects (or, if connected, opens the printer menu). */
+  (function () { var c = document.getElementById('top-print'); var w = c && c.closest('.tchip');
+    if (w) { w.style.cursor = 'pointer'; w.title = 'Printer — connect / manage';
+      w.onclick = function () { window.SokoniShell.Printer.connect(); }; } })();
+
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
     if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
+    if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → print via host */
     if (!d.__sokoniPos) return;
     if (d.type === 'printerStatus') { shellPrinterUp = !!d.connected; paintStatus(); }
     else if (d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;

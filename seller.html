@@ -6689,6 +6689,12 @@ document.addEventListener('DOMContentLoaded', function() {
    no reload when the Seller Dashboard runs inside the shell. No-op standalone. */
 (function () {
   if (window.parent === window) return;
+  /* Print via the shell-owned printer (single host). Any Seller print button can call
+     window.SokoniShellPrint(receipt) and it routes up to the shell → POS printer host, so the
+     Seller never needs its own printer connection. */
+  window.SokoniShellPrint = function (receipt) {
+    try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: receipt }, location.origin); } catch (_) {}
+  };
   /* Embedded in the Merchant Shell: hide the Seller's OWN sidebar + top navbar (the shell
      provides navigation) so the content fills the panel and there is no redundant double
      sidebar. Scoped to embedded mode only — standalone seller.html is untouched. */
