@@ -1,3 +1,24 @@
+## [2026-08-07] — verify(money): funded free-delivery invariant traced end-to-end
+
+Evidence trace before further delivery work. Verdict: rider-safety core PASSES; the fuller
+funded-discount accounting is NOT implemented, with one real defect.
+
+- ✅ **deliveryFee (rider basis) is preserved end-to-end** — session (index.js:2439) → order
+  (:2700) → Rail 1 (:2927) / seller settlement (order-settlement.js:40). No promo/discount mutates
+  it; the discount reduces serverTotal only (:2424), capped at goods value (:2356). Free delivery
+  never underpays the rider; seller settled on total−delivery (not over-settled).
+- ❌ **deliveryChargedToBuyer field does not exist** — buyer-vs-rider delivery split is implicit.
+- ❌ **DEFECT: fundedBy ignored at settlement** — order-settlement settles seller on goods−discount
+  and never reads fundedBy → seller silently absorbs every discount incl. platform-funded free
+  delivery. The fundedBy ledger (finos.js applyPromoCode) is a helper the main checkout never calls.
+- No delivery-subsidy ledger line / receipt "Delivery Discount (funder)" line.
+- Recorded: docs/SECURE_DELIVERY_AUTHORIZATION_DESIGN.md §4.1; memory
+  project_discount_funding_seller_absorbs. Fix is its own money-path slice (sign-off) and does NOT
+  block delivery-auth Phase 0.
+- **Files:** docs/SECURE_DELIVERY_AUTHORIZATION_DESIGN.md (no code change — verification only).
+
+---
+
 ## [2026-08-07] — fix(money): close dormant rider double-pay + client-earnings hole (trips rail)
 
 Found during the "Secure Delivery Authorization" architecture-gate survey (that spec is ~90%
