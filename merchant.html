@@ -39,6 +39,9 @@
   .mnav-item.active{background:rgba(113,255,0,.12);color:var(--acc)}
   .mshell.collapsed .mnav-item .lbl{opacity:0;width:0;overflow:hidden}
   .mnav-sep{height:1px;background:var(--line);margin:8px 12px}
+  .mnav-head{padding:14px 14px 6px;font-size:10px;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--txt3);white-space:nowrap}
+  .mshell.collapsed .mnav-head{opacity:0;height:6px;padding:3px 0;overflow:hidden}
 
   .mstatus{border-top:1px solid var(--line);padding:12px;display:flex;flex-direction:column;gap:7px}
   .mchip{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--txt2);white-space:nowrap}
@@ -152,33 +155,46 @@
        'native' — rendered by a JS function into the panel (instant, no reload)
        'pos'    — the single persistent POS app panel; `tab` deep-switches its tab
        'seller' — the single persistent Seller Dashboard panel; `sec` deep-switches its section */
-  /* TRUE per-module routing. Only genuinely-POS surfaces load the POS (Checkout) app:
-     Cashier, Inventory (live stock), Devices/Settings (hardware + POS config). Everything
-     else opens its own destination — Orders/Customers/Reports/Analytics/etc. load the Seller
-     app's REAL sections, never the Checkout bundle. Dashboard is native (no heavy app). This
-     is why Orders/Reports/Customers used to show "Loading POS" — they were pointed at POS. */
+  /* MODULE REGISTRY — the union of the old Seller Dashboard + the Merchant OS. One destination
+     per button. kind: native | pos (Checkout app) | seller (Seller app section) | page (its own
+     page). Only genuinely-POS surfaces load the POS bundle. Seller `sec` keys MUST match
+     seller.js DASH_PAGES exactly; page `src` must be a real file. No dead links. */
   var MODULES = [
     { id:'dashboard', label:'Dashboard', icon:'🏠', kind:'native' },
+
+    { head:'Commerce' },
     { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos',    tab:'pos' },
     { id:'orders',    label:'Orders',    icon:'🧾', kind:'seller', sec:'orders' },
+    { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
     { id:'inventory', label:'Inventory', icon:'📦', kind:'pos',    tab:'inventory' },
     { id:'customers', label:'Customers', icon:'👥', kind:'seller', sec:'customers' },
-    { id:'reports',   label:'Reports',   icon:'📊', kind:'seller', sec:'history' },
-    { sep:true },
-    /* Seller-app sections — keys MUST match DASH_PAGES / showDashPage() exactly, or the
-       dashboard silently falls back to Overview (the "opens the wrong module" bug). Verified
-       against seller.js DASH_PAGES: overview, orders, customers, history, analytics, marketing,
-       tax, team, products. */
     { id:'shop',      label:'Shop Dashboard', icon:'🏪', kind:'seller', sec:'overview' },
-    { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
-    { id:'finance',   label:'Finance',   icon:'💰', kind:'seller', sec:'tax' },
+
+    { head:'Fulfillment' },
+    { id:'dispatch',  label:'Dispatch',  icon:'🚚', kind:'page',   src:'dispatch.html' },
+    { id:'riders',    label:'Riders',    icon:'🏍️', kind:'page',   src:'driver.html' },
+    { id:'receipts',  label:'Receipts',  icon:'🧾', kind:'seller', sec:'receipts' },
+
+    { head:'Business' },
+    { id:'finance',   label:'Wallet & Tax', icon:'💰', kind:'seller', sec:'tax' },
     { id:'analytics', label:'Analytics', icon:'📈', kind:'seller', sec:'analytics' },
+    { id:'reports',   label:'Reports',   icon:'📊', kind:'seller', sec:'history' },
     { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'marketing' },
-    { id:'team',      label:'Staff',     icon:'👨‍🔧', kind:'seller', sec:'team' },
-    { sep:true },
-    /* Devices opens the POS peripherals hub specifically (distinct from Settings). */
+    { id:'promotions',label:'Promotions',icon:'🎁', kind:'seller', sec:'flash' },
+
+    { head:'Engage' },
+    { id:'messages',  label:'Messages',  icon:'💬', kind:'seller', sec:'messages' },
+    { id:'stories',   label:'Stories',   icon:'📸', kind:'seller', sec:'stories' },
+
+    { head:'Team & Ops' },
+    { id:'team',      label:'Staff & Roles', icon:'👨‍🔧', kind:'seller', sec:'team' },
+    { id:'disputes',  label:'Disputes',  icon:'⚖️', kind:'seller', sec:'disputes' },
+    { id:'audit',     label:'Audit Log', icon:'🛡️', kind:'pos',    tab:'audit' },
+
+    { head:'System' },
     { id:'devices',   label:'Devices',   icon:'🖨️', kind:'pos', tab:'settings', action:'devices' },
     { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos', tab:'settings' },
+    { id:'store',     label:'Store Setup', icon:'🏬', kind:'seller', sec:'store' },
   ];
   var byId = {};
   MODULES.forEach(function (m) { if (m.id) byId[m.id] = m; });
@@ -193,10 +209,12 @@
 
   /* ── Sidebar render ── */
   MODULES.forEach(function (m) {
-    if (m.sep) { var s = document.createElement('div'); s.className = 'mnav-sep'; navEl.appendChild(s); return; }
+    if (m.sep)  { var s = document.createElement('div'); s.className = 'mnav-sep'; navEl.appendChild(s); return; }
+    if (m.head) { var hd = document.createElement('div'); hd.className = 'mnav-head'; hd.innerHTML = '<span class="lbl">' + m.head + '</span>'; navEl.appendChild(hd); return; }
     var el = document.createElement('div');
     el.className = 'mnav-item'; el.dataset.id = m.id;
     el.innerHTML = '<span class="ico">' + m.icon + '</span><span class="lbl">' + m.label + '</span>';
+    el.title = m.label;
     el.onclick = function () { go(m.id); };
     navEl.appendChild(el);
   });
@@ -208,29 +226,40 @@
   }
 
   /* ── Persistent panel factory. Each POS/Seller app is created ONCE and kept. ── */
-  function posPanel (tab) {
+  var IFRAME_ALLOW = 'clipboard-write; payment; bluetooth; usb; serial; camera';
+  function posPanel (tab, label) {
     if (!panels.pos) {
       var p = document.createElement('div'); p.className = 'mpanel';
       /* Encode the first tab in the hash so the very first POS load lands correctly even if
          the postMessage races the iframe boot. */
       var src = 'pos.html' + (tab && tab !== 'pos' ? '#' + tab : '');
-      p.innerHTML = '<div class="dloading">Loading POS…</div>' +
-        '<iframe id="mfx-pos" title="SOKONI POS" src="' + src + '" ' +
-        'allow="clipboard-write; payment; bluetooth; usb; serial; camera"></iframe>';
+      p.innerHTML = '<div class="dloading">Loading ' + (label || 'Checkout') + '…</div>' +
+        '<iframe id="mfx-pos" title="SOKONI POS" src="' + src + '" allow="' + IFRAME_ALLOW + '"></iframe>';
       content.appendChild(p); panels.pos = p;
     }
     return panels.pos;
   }
-  function sellerPanel (sec) {
+  function sellerPanel (sec, label) {
     if (!panels.seller) {
       var p = document.createElement('div'); p.className = 'mpanel';
       var src = 'seller.html' + (sec && sec !== 'overview' ? '#' + sec : '');
-      p.innerHTML = '<div class="dloading">Loading Shop…</div>' +
-        '<iframe id="mfx-seller" title="SOKONI Shop" src="' + src + '" ' +
-        'allow="clipboard-write; payment; bluetooth; usb; serial; camera"></iframe>';
+      p.innerHTML = '<div class="dloading">Loading ' + (label || 'Shop') + '…</div>' +
+        '<iframe id="mfx-seller" title="SOKONI Shop" src="' + src + '" allow="' + IFRAME_ALLOW + '"></iframe>';
       content.appendChild(p); panels.seller = p;
     }
     return panels.seller;
+  }
+  /* Standalone-page modules (Dispatch, Riders) — each gets its own persistent panel, kept alive
+     so it never reloads once opened. Per-module loader text. */
+  function pagePanel (id, src, label) {
+    var key = 'page:' + id;
+    if (!panels[key]) {
+      var p = document.createElement('div'); p.className = 'mpanel';
+      p.innerHTML = '<div class="dloading">Loading ' + (label || 'module') + '…</div>' +
+        '<iframe title="' + (label || '') + '" src="' + src + '" allow="' + IFRAME_ALLOW + '"></iframe>';
+      content.appendChild(p); panels[key] = p;
+    }
+    return panels[key];
   }
   function nativePanel (id) {
     if (!panels['native:' + id]) {
@@ -270,8 +299,9 @@
     if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
 
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
-    if (m.kind === 'pos')    { posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null; var p = posPanel(posPendingTab); showOnly(p); posSwitch(posPendingTab); if (posPendingAction) posAction(posPendingAction); return; }
-    if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec); showOnly(s); sellerSwitch(sellerPendingSec); return; }
+    if (m.kind === 'pos')    { posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null; var p = posPanel(posPendingTab, m.label); showOnly(p); posSwitch(posPendingTab); if (posPendingAction) posAction(posPendingAction); return; }
+    if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec, m.label); showOnly(s); sellerSwitch(sellerPendingSec); return; }
+    if (m.kind === 'page')   { showOnly(pagePanel(id, m.src, m.label)); return; }
   }
 
   /* ── Native modules ── */
