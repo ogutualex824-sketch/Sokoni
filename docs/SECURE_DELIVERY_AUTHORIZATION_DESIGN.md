@@ -57,6 +57,50 @@ Accepted ─▶ Picked Up ─▶ At Destination ─▶  VERIFY  ─▶ Verified 
 
 ---
 
+## 3.1 Two-PIN chain of custody (owner refinement, 2026-08-07)
+
+Stronger than a single delivery PIN: **two** verification events, each geofenced, each
+transferring liability and gating a distinct part of the flow.
+
+```
+Buyer pays ─▶ Escrow (held)
+                 │
+   Accepted ─▶ Going to Shop ──(no PIN yet)
+                 │
+        ┌────────▼─────────  PICKUP PIN  (seller → rider, at the shop)
+        │  geofence: rider inside SELLER pickup radius
+        │  verifies: correct rider · correct order · correct PIN
+        │  on pass → status IN_TRANSIT · pickupAt recorded · seller liability ENDS,
+        │            rider liability BEGINS · live tracking starts
+        │            (legal transfer of custody — NO money released yet)
+        ▼
+   🧭 Navigate (primary action) · live ETA · buyer sees rider moving
+                 │
+     I've Arrived ─▶ buyer issued a fresh DELIVERY OTP
+                 │
+        ┌────────▼─────────  DELIVERY OTP  (buyer → rider, at the destination)
+        │  geofence: rider inside BUYER delivery radius
+        │  verifies: correct OTP · correct rider · order still in_transit
+        │  on pass → Delivered · inventory finalised · order locked · receipt
+        ▼            ── RELEASE: seller amount · rider earnings · SOKONI commission · wallets ──
+```
+
+**Why two codes, not one:**
+- **Pickup PIN** — proves the rider collected the *correct* parcel; starts the journey; moves
+  responsibility seller→rider. Does **not** release money.
+- **Delivery OTP** — proves the buyer actually *received* it; the **only** event that releases funds.
+
+**Geofence at BOTH stages (hard):** the Pickup PIN only verifies inside the seller's pickup radius;
+the Delivery OTP only inside the buyer's delivery radius. Neither can be used remotely → a pickup or
+delivery cannot be faked from elsewhere, and rider payment is released only after a genuine,
+geofenced, buyer-confirmed handover.
+
+**Maps to the existing engine:** `proofPin`/`deliveryPin` (pickup) + `deliveryOTP` (delivery,
+`navGenerateDeliveryOTP` on "I've Arrived") already exist; the work is orchestration + the two
+geofence gates + tying the **money release to the Delivery OTP event only**. Money release stays on
+`wallet-backend-v1.0-frozen` → Phase 2+, shadow-first, owner sign-off per the existing plan. The
+Phase 0 PIN + `deliveryAuditLog` already record the pickup side in shadow.
+
 ## 4. Release & geofence policy (owner decisions)
 
 | Method | Releases funds | Geofence (rider within 50–100 m) |
