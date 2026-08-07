@@ -1,0 +1,103 @@
+/* ══════════════════════════════════════════════════════════════════════
+   SOKONI Seller Dashboard — Premium Layer (R1.1)
+   Loaded LAST so it wins the cascade. Additive polish only: it restyles the
+   existing markup into a premium commerce-OS look (rounded, soft shadows,
+   glass, smooth hover, skeleton loaders, no abrupt flashing). No structural or
+   behavioural changes — safe to ship without touching the tangled seller.css.
+   Brand: dark #050505 / accent #71ff00 (see [[reference_design_system]]).
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Premium KPI cards ─────────────────────────────────────────────── */
+.seller-stats .seller-stat-card {
+  position: relative;
+  background:
+    linear-gradient(160deg, rgba(255,255,255,0.055), rgba(255,255,255,0.015)) ,
+    rgba(13,13,13,0.72);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  padding: 18px 16px;
+  box-shadow: 0 6px 22px rgba(0,0,0,0.34), inset 0 1px 0 rgba(255,255,255,0.04);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform .18s cubic-bezier(.2,.7,.3,1), box-shadow .18s ease, border-color .18s ease;
+  overflow: hidden;
+}
+/* Accent glow sweep on the top edge */
+.seller-stats .seller-stat-card::after {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(113,255,0,0.55), transparent);
+  opacity: .55;
+}
+.seller-stats .seller-stat-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(113,255,0,0.35);
+  box-shadow: 0 12px 34px rgba(0,0,0,0.46), 0 0 0 1px rgba(113,255,0,0.10) inset;
+}
+.seller-stats .seller-stat-card h3 {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  transition: color .2s ease;
+}
+.seller-stats .seller-stat-card .stat-icon {
+  border-radius: 13px;
+  transition: transform .2s ease;
+}
+.seller-stats .seller-stat-card:hover .stat-icon { transform: scale(1.06); }
+
+/* ── Skeleton loaders — replace blank/0 flashes while data loads ────── */
+.sk-skeleton {
+  color: transparent !important;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.05) 25%,
+    rgba(255,255,255,0.14) 37%,
+    rgba(255,255,255,0.05) 63%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.25s ease-in-out infinite;
+  border-radius: 7px;
+  user-select: none;
+}
+.sk-skeleton * { visibility: hidden; }
+@keyframes sk-shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* Value count-up: fade+rise the moment a real number lands (no hard flash) */
+@keyframes sk-value-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.sk-value-in { animation: sk-value-in .34s cubic-bezier(.2,.7,.3,1); }
+
+/* ── Live status chips (Printer / Sync / etc.) ─────────────────────── */
+.sk-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 800; letter-spacing: .02em;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+.sk-chip .sk-dot { width: 7px; height: 7px; border-radius: 50%; background: #666; }
+.sk-chip.ok   { border-color: rgba(113,255,0,0.35); color: #71ff00; }
+.sk-chip.ok   .sk-dot { background: #71ff00; box-shadow: 0 0 7px #71ff00; }
+.sk-chip.warn { border-color: rgba(255,180,0,0.35); color: #ffb400; }
+.sk-chip.warn .sk-dot { background: #ffb400; }
+.sk-chip.bad  { border-color: rgba(255,80,80,0.35); color: #ff6464; }
+.sk-chip.bad  .sk-dot { background: #ff6464; }
+
+/* ── Smooth section transitions — kill abrupt tab flashes ──────────── */
+.seller-section[data-sdtab], section[data-sdtab] {
+  animation: sk-section-in .26s ease both;
+}
+@keyframes sk-section-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Live panel: premium glass + smoother motion ───────────────────── */
+#sellerLivePanel {
+  transition: transform .28s cubic-bezier(.2,.7,.3,1), opacity .2s ease;
+}
+.slp-drawer-close, #slpTrigger {
+  transition: background .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;
+}
+.slp-drawer-close:active { transform: scale(.92); }
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .seller-stats .seller-stat-card,
+  .seller-section[data-sdtab], section[data-sdtab],
+  .sk-value-in, #sellerLivePanel { animation: none !important; transition: none !important; }
+}

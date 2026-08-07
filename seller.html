@@ -46,6 +46,8 @@
 <script src="sokoni-branch.js"></script>
   <link rel="stylesheet" href="sokoni-desktop.css">
   <link rel="stylesheet" href="sokoni-drawers.css">
+  <!-- Premium layer — loaded LAST so it wins the cascade (additive polish only) -->
+  <link rel="stylesheet" href="sokoni-seller-premium.css">
 <style>
 /* Variant-chip styles are NOT here — sokoni-product-schema.js injects them, so
    the renderer and its appearance travel together and a second page adopting
@@ -6681,6 +6683,43 @@ document.addEventListener('DOMContentLoaded', function() {
 </script>
 <script src="sokoni-drawer.js"></script>
 <script src="sokoni-merchant-diag.js" defer></script>
+<script>
+/* ── Premium skeleton loaders (progressive enhancement) ───────────────────────
+   Wraps the existing KPI elements so they SHIMMER while loading and animate the
+   value in the moment real data lands — no abrupt flash, no fabricated "0".
+   Purely additive: it never writes business numbers, only reacts to the app's own
+   updates. A placeholder ("0", "KES 0", "—", empty) shows skeleton; the first real
+   value clears it. A 7s safety net clears skeleton even if a value never arrives so
+   nothing shimmers forever. */
+(function () {
+  var IDS = ['totalProducts','totalRevenue','totalOrders','commissionAmount','netEarnings',
+             'skpi_today','skpi_week','skpi_month','skpi_total'];
+  var PLACEHOLDER = /^\s*(|-|—|0|KES\s*0|0\.00|KES\s*0\.00)\s*$/i;
+  function isPlaceholder(el){ return PLACEHOLDER.test(el.textContent || ''); }
+  function start(){
+    IDS.forEach(function(id){
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (isPlaceholder(el)) el.classList.add('sk-skeleton');
+      var settled = false;
+      var settle = function(){
+        if (settled) return; settled = true;
+        el.classList.remove('sk-skeleton');
+        el.classList.add('sk-value-in');
+        try { obs.disconnect(); } catch(_){}
+      };
+      var obs = new MutationObserver(function(){
+        if (!isPlaceholder(el)) settle();
+      });
+      try { obs.observe(el, { childList:true, characterData:true, subtree:true }); } catch(_){}
+      /* Safety net: never shimmer forever. */
+      setTimeout(function(){ el.classList.remove('sk-skeleton'); try{obs.disconnect();}catch(_){}; }, 7000);
+    });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
+</script>
 </body>
 
 </html>
