@@ -2916,27 +2916,67 @@ window.SPosCustomer = (function () {
    the global top bar reflects them. No-op when the POS is opened standalone. */
 (function () {
   if (window.parent === window) return;   /* standalone — no shell */
+
+  function ready () { return !!(window.SPos && SPos.ui && typeof SPos.ui.switchTab === 'function'); }
+
+  /* Robust tab switch: the shell's message often arrives BEFORE the POS finishes booting
+     (all its scripts + SPos), so a naive switchTab() was dropped and the POS stayed on the
+     default Checkout tab — which is exactly why every shell button showed Checkout. Retry
+     until SPos is ready (up to ~12s), then apply. Latest requested tab wins. */
+  var wantTab = null, applying = false;
+  function applyTab (tab) {
+    wantTab = tab || 'pos';
+    if (applying) return;
+    applying = true;
+    var tries = 0;
+    (function attempt () {
+      if (!wantTab) { applying = false; return; }
+      if (ready()) {
+        try { SPos.ui.switchTab(wantTab); } catch (_) {}
+        wantTab = null; applying = false; return;
+      }
+      if (++tries > 120) { applying = false; return; }   /* ~12s */
+      setTimeout(attempt, 100);
+    })();
+  }
+  function runAction (act) {
+    var tries = 0;
+    (function attempt () {
+      if (!window.SPos) { if (++tries > 120) return; return void setTimeout(attempt, 100); }
+      try {
+        if (act === 'devices' && SPos.deviceHub && SPos.deviceHub.showPanel) SPos.deviceHub.showPanel();
+        else if (act === 'printer' && window.openPrinterMenu) window.openPrinterMenu();
+      } catch (_) {}
+    })();
+  }
+
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
     if (!d.__sokoniShell) return;
-    try {
-      if (d.action === 'switchTab' && window.SPos && SPos.ui && SPos.ui.switchTab) SPos.ui.switchTab(d.tab || 'pos');
-      else if (d.action === 'devices') { if (window.SPos && SPos.deviceHub && SPos.deviceHub.showPanel) SPos.deviceHub.showPanel(); }
-      else if (d.action === 'printer')  { if (window.openPrinterMenu) window.openPrinterMenu(); }
-    } catch (_) {}
+    if (d.action === 'switchTab') applyTab(d.tab || 'pos');
+    else if (d.action === 'devices' || d.action === 'printer') runAction(d.action);
   });
-  /* Push printer + user status to the shell (poll — cheap, no listener churn). */
+
+  /* On first load the shell also encodes the target tab in the hash (pos.html#orders), so the
+     very first navigation lands correctly even if the message raced the boot. */
+  try {
+    var h = (location.hash || '').replace('#', '').trim();
+    if (h) applyTab(h);
+  } catch (_) {}
+
+  /* Tell the shell we're alive so it can (re)send the desired tab + we push live status. */
   var lastP = null, lastU = null;
   function tick () {
     try {
+      window.parent.postMessage({ __sokoniPos: true, type: 'ready' }, location.origin);
       var up = !!((window.SokoniPrinter && window.SokoniPrinter.connected) || (window.PrinterManager && window.PrinterManager.connected));
       if (up !== lastP) { lastP = up; window.parent.postMessage({ __sokoniPos: true, type: 'printerStatus', connected: up }, location.origin); }
       var u = (window.SPos && SPos.state && SPos.state.currentCashier && SPos.state.currentCashier.name) || null;
       if (u && u !== lastU) { lastU = u; window.parent.postMessage({ __sokoniPos: true, type: 'userInfo', name: u }, location.origin); }
     } catch (_) {}
   }
-  setInterval(tick, 3000); tick();
+  setInterval(tick, 2000); tick();
 })();
 </script>
 

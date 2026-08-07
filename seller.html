@@ -6689,12 +6689,24 @@ document.addEventListener('DOMContentLoaded', function() {
    no reload when the Seller Dashboard runs inside the shell. No-op standalone. */
 (function () {
   if (window.parent === window) return;
+  /* Retry until the dashboard router is ready — the shell's message can arrive before
+     seller.js finishes booting, which would drop the section switch. */
+  var want = null, applying = false;
+  function apply (sec) {
+    want = sec || 'overview';
+    if (applying) return; applying = true;
+    var tries = 0;
+    (function attempt () {
+      if (!want) { applying = false; return; }
+      if (typeof showDashPage === 'function') { try { showDashPage(want); } catch (_) {} want = null; applying = false; return; }
+      if (++tries > 120) { applying = false; return; }
+      setTimeout(attempt, 100);
+    })();
+  }
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
-    if (d.__sokoniShell && d.action === 'showSection' && typeof showDashPage === 'function') {
-      try { showDashPage(d.section || 'home'); } catch (_) {}
-    }
+    if (d.__sokoniShell && d.action === 'showSection') apply(d.section || 'overview');
   });
 })();
 </script>

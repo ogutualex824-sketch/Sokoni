@@ -159,6 +159,7 @@
   var titleEl = document.getElementById('mtitle');
   var panels  = {};          /* id/kind → panel element (persistent) */
   var current = null;
+  var posPendingTab = null, posPendingAction = null, sellerPendingSec = null;
 
   /* ── Sidebar render ── */
   MODULES.forEach(function (m) {
@@ -177,21 +178,25 @@
   }
 
   /* ── Persistent panel factory. Each POS/Seller app is created ONCE and kept. ── */
-  function posPanel () {
+  function posPanel (tab) {
     if (!panels.pos) {
       var p = document.createElement('div'); p.className = 'mpanel';
+      /* Encode the first tab in the hash so the very first POS load lands correctly even if
+         the postMessage races the iframe boot. */
+      var src = 'pos.html' + (tab && tab !== 'pos' ? '#' + tab : '');
       p.innerHTML = '<div class="dloading">Loading POS…</div>' +
-        '<iframe id="mfx-pos" title="SOKONI POS" src="pos.html" ' +
+        '<iframe id="mfx-pos" title="SOKONI POS" src="' + src + '" ' +
         'allow="clipboard-write; payment; bluetooth; usb; serial; camera"></iframe>';
       content.appendChild(p); panels.pos = p;
     }
     return panels.pos;
   }
-  function sellerPanel () {
+  function sellerPanel (sec) {
     if (!panels.seller) {
       var p = document.createElement('div'); p.className = 'mpanel';
+      var src = 'seller.html' + (sec && sec !== 'overview' ? '#' + sec : '');
       p.innerHTML = '<div class="dloading">Loading Shop…</div>' +
-        '<iframe id="mfx-seller" title="SOKONI Shop" src="seller.html" ' +
+        '<iframe id="mfx-seller" title="SOKONI Shop" src="' + src + '" ' +
         'allow="clipboard-write; payment; bluetooth; usb; serial; camera"></iframe>';
       content.appendChild(p); panels.seller = p;
     }
@@ -235,8 +240,8 @@
     if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
 
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
-    if (m.kind === 'pos')    { var p = posPanel(); showOnly(p); posSwitch(m.tab || 'pos'); if (m.action === 'devices') posAction('devices'); return; }
-    if (m.kind === 'seller') { var s = sellerPanel(); showOnly(s); sellerSwitch(m.sec || 'overview'); return; }
+    if (m.kind === 'pos')    { posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null; var p = posPanel(posPendingTab); showOnly(p); posSwitch(posPendingTab); if (posPendingAction) posAction(posPendingAction); return; }
+    if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec); showOnly(s); sellerSwitch(sellerPendingSec); return; }
   }
 
   /* ── Native modules ── */
@@ -297,8 +302,15 @@
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
-    if (d.__sokoniPos && d.type === 'printerStatus') { shellPrinterUp = !!d.connected; paintStatus(); }
-    if (d.__sokoniPos && d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;
+    if (!d.__sokoniPos) return;
+    if (d.type === 'printerStatus') { shellPrinterUp = !!d.connected; paintStatus(); }
+    else if (d.type === 'userInfo' && d.name) document.getElementById('st-user').textContent = d.name;
+    else if (d.type === 'ready') {
+      /* POS finished booting — (re)send the tab the user is currently on, so a switch that
+         raced the boot still lands on the right tab (fixes "every button shows Checkout"). */
+      var m = byId[current];
+      if (m && m.kind === 'pos') { posSwitch(m.tab || 'pos'); if (m.action) posAction(m.action); }
+    }
   });
 
   /* ── Sidebar collapse ── */
