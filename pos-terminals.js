@@ -27,6 +27,19 @@ window.PosTerminals = (() => {
 
   /* ── Helpers ─────────────────────────────────────────────────── */
   function _uid(p) { return p + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+
+  /* Physical-identity signature for a paired device — collapses records that describe the SAME
+     device so the hub shows ONE chip. Re-pairing (or a re-scan) previously minted a fresh random
+     id each time, so identical "Serial Port (COM)" entries piled up. Key by type + connection
+     method + name + any stable port/address field. */
+  function _devSig(d) {
+    return [
+      d.type || '',
+      d.connectionMethod || d.transport || '',
+      String(d.name || '').trim().toLowerCase(),
+      d.address || d.port || d.endpoint || d.serial || d.usbProductId || '',
+    ].join('|');
+  }
   function _delay(ms) { return new Promise(r => setTimeout(r, ms)); }
   function _el(id) { return document.getElementById(id); }
   function _setText(id, txt) { const e = _el(id); if (e) e.textContent = txt; }
@@ -150,7 +163,12 @@ window.PosTerminals = (() => {
       return _s.devices.find(d => d.id === asgn.deviceId) || null;
     },
     async save(d) {
-      if (!d.id) d.id = _uid('dev');
+      /* Reuse the existing record for the same physical device instead of minting a new random
+         id — otherwise re-pairing the same P58E / COM port creates a duplicate chip. */
+      if (!d.id) {
+        const match = _s.devices.find(x => _devSig(x) === _devSig(d));
+        d.id = match ? match.id : _uid('dev');
+      }
       d.updatedAt = Date.now();
       await _db.saveDevice(d);
       const idx = _s.devices.findIndex(x => x.id === d.id);
@@ -639,13 +657,38 @@ window.PosTerminals = (() => {
         return;
       }
 
+      const unique = ui._dedupeDevices(_s.devices);
       container.innerHTML = `
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
           <button class="modal-btn modal-btn-primary" onclick="PosTerminals.wizard.open()">+ Pair New Device</button>
           <button class="inv-btn inv-btn-outline" onclick="PosTerminals.monitor.tick().then(()=>PosTerminals.ui.renderDeviceHub())">↻ Refresh Status</button>
         </div>
-        <div id="device-list-grid">${_s.devices.map(d => ui._card(d)).join('')}</div>`;
+        <div id="device-list-grid">${unique.map(d => ui._card(d)).join('')}</div>`;
       _refreshStatusBar();
+    },
+
+    /* Collapse duplicate device records to ONE chip per physical device. Winner per signature:
+       connected first, then a till-assigned record, then the most recently updated — so device
+       actions and till links keep working. Duplicate records that carry NO till assignment are
+       pruned from IndexedDB so they don't reappear (assigned ones are left untouched for safety). */
+    _dedupeDevices(list) {
+      const assigned = new Set(Object.values(_s.assignments || {}).map(v => v && v.deviceId).filter(Boolean));
+      const score = d => (d.status === 'connected' ? 1e15 : 0)
+                       + (assigned.has(d.id) ? 1e14 : 0)
+                       + (d.updatedAt || d.lastSeen || 0);
+      const best = new Map();
+      for (const d of (list || [])) {
+        const sig = _devSig(d);
+        const cur = best.get(sig);
+        if (!cur || score(d) > score(cur)) best.set(sig, d);
+      }
+      const winners = new Set([...best.values()].map(d => d.id));
+      const losers  = (list || []).filter(d => !winners.has(d.id) && !assigned.has(d.id));
+      if (losers.length) {
+        _s.devices = (list || []).filter(d => winners.has(d.id) || assigned.has(d.id));
+        losers.forEach(l => { try { _db.deleteDevice(l.id); } catch (_) {} });
+      }
+      return [...best.values()];
     },
 
     _card(d) {
