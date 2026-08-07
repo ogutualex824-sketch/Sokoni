@@ -302,6 +302,7 @@
 
   <nav class="pos-tabs" role="tablist" aria-label="POS sections">
     <button class="pos-tab active" role="tab" aria-selected="true"  data-tab="pos"      onclick="SPos.ui.switchTab('pos')">      <span class="tab-icon" aria-hidden="true">🛒</span><span>Checkout</span></button>
+    <button class="pos-tab"        role="tab" aria-selected="false" data-tab="orders"    onclick="SPos.ui.switchTab('orders')">  <span class="tab-icon" aria-hidden="true">🧾</span><span>Orders</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="inventory" onclick="SPos.ui.switchTab('inventory')"><span class="tab-icon" aria-hidden="true">📦</span><span>Inventory</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="reports"   onclick="SPos.ui.switchTab('reports')">  <span class="tab-icon" aria-hidden="true">📊</span><span>Reports</span></button>
     <button class="pos-tab"        role="tab" aria-selected="false" data-tab="customers" onclick="SPos.ui.switchTab('customers')"><span class="tab-icon" aria-hidden="true">👤</span><span>Customers</span></button>
@@ -427,6 +428,11 @@
         </div>
         <button class="pos-pay-btn" id="pay-btn" onclick="SPos.payment.process()" disabled>Charge KES 0.00</button>
       </aside>
+    </div>
+
+    <!-- Orders — unified order hub: in-store POS sales (live) + online marketplace orders (Phase 2) -->
+    <div id="panel-orders" class="pos-panel">
+      <div id="orders-body"><div class="pos-empty"><div class="empty-icon">⏳</div><p>Loading orders…</p></div></div>
     </div>
 
     <!-- Inventory -->

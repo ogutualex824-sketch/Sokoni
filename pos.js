@@ -383,6 +383,7 @@ const SPos = (function () {
       document.querySelectorAll('.pos-panel').forEach(p => p.classList.remove('active'));
       document.getElementById(`panel-${tab}`)?.classList.add('active');
 
+      if (tab === 'orders')    orders.render();
       if (tab === 'inventory') inv.showTab(state.invTab);
       if (tab === 'customers') customers.loadTable();
       if (tab === 'settings')  { settings.loadIntoForm(); _bootSettingsPanels(); }
@@ -2397,6 +2398,188 @@ const SPos = (function () {
   /* ═══════════════════════════════════════════════════════════
      SALES HISTORY & REPRINT
   ═══════════════════════════════════════════════════════════ */
+  /* ═══════════════════════════════════════════════════════════════════
+     ORDERS HUB (R1.1 Phase 1) — one place for every completed transaction.
+     Phase 1: live In-Store POS sales (canonical PosDB.transactions) with
+     reprint / refund / details, plus scaffolded channel tabs. Online /
+     Delivery / Pickup marketplace orders wire in Phase 2. No fabricated
+     metrics — unknown online figures render as "—", never 0.
+  ═══════════════════════════════════════════════════════════════════ */
+  const orders = {
+    _filter: 'all',
+    _inStore: [],
+    _stylesInjected: false,
+
+    _injectStyles() {
+      if (orders._stylesInjected) return;
+      orders._stylesInjected = true;
+      const css = `
+        .ord-wrap{padding:12px 14px 90px;max-width:820px;margin:0 auto}
+        .ord-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+        .ord-stat{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center}
+        .ord-stat-n{font-size:19px;font-weight:900;color:#71ff00;line-height:1.1}
+        .ord-stat-l{font-size:10.5px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+        .ord-tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;margin-bottom:6px;scrollbar-width:none}
+        .ord-tabs::-webkit-scrollbar{display:none}
+        .ord-tab{flex:0 0 auto;background:var(--card);border:1px solid var(--border);color:var(--txt2);border-radius:20px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+        .ord-tab.active{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.4);color:#71ff00}
+        .ord-list{display:flex;flex-direction:column;gap:10px}
+        .ord-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+        .ord-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px}
+        .ord-card-id{font-weight:800;font-size:14px}
+        .ord-card-sub{font-size:11.5px;color:var(--txt2);margin-top:2px}
+        .ord-card-amt{font-weight:900;font-size:15px}
+        .ord-card-when{font-size:10.5px;color:var(--txt3);margin-top:2px;white-space:nowrap}
+        .ord-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+        .ord-card-actions{display:flex;gap:6px;flex-wrap:wrap}
+        .ord-badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px}
+        .ord-ok{background:rgba(113,255,0,.13);color:#71ff00}
+        .ord-warn{background:rgba(255,180,0,.14);color:#ffb400}
+        .ord-bad{background:rgba(255,80,80,.14);color:#ff6464}
+        .ord-det-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}
+        .ord-det-card{background:var(--bg2,#0d0d0d);border:1px solid var(--border);border-radius:16px;width:100%;max-width:400px;max-height:86vh;overflow:auto}
+        .ord-det-head{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg2,#0d0d0d)}
+        .ord-det-head button{background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer}
+        .ord-det-body{padding:14px 16px}
+        .ord-det-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:4px 0;color:var(--txt)}
+        .ord-det-row span:first-child{color:var(--txt2)}
+        .ord-det-total{font-weight:900;font-size:15px;border-top:1px solid var(--border);margin-top:6px;padding-top:9px}
+        .ord-det-body hr{border:none;border-top:1px solid var(--border);margin:9px 0}
+        .ord-det-foot{padding:12px 16px;border-top:1px solid var(--border)}`;
+      const s = document.createElement('style'); s.id = 'ord-styles'; s.textContent = css;
+      document.head.appendChild(s);
+    },
+
+    async render() {
+      orders._injectStyles();
+      const body = document.getElementById('orders-body');
+      if (!body) return;
+      body.innerHTML = '<div class="pos-empty"><div class="empty-icon">⏳</div><p>Loading orders…</p></div>';
+      const from = new Date().setHours(0, 0, 0, 0);
+      const to   = new Date().setHours(23, 59, 59, 999);
+      let txns = [];
+      try { txns = await PosDB.transactions.getByDateRange(from, to); } catch (_) { txns = []; }
+      orders._inStore = (txns || [])
+        .filter(t => t.status === 'completed' || t.status === 'refunded' || t.refunded || t.voided)
+        .sort((a, b) => (b.completedAt || b.timestamp || 0) - (a.completedAt || a.timestamp || 0));
+      orders._paint();
+    },
+
+    _paint() {
+      const body = document.getElementById('orders-body');
+      if (!body) return;
+      body.innerHTML = `<div class="ord-wrap">${orders._summary()}${orders._tabsHtml()}<div id="ord-list" class="ord-list"></div></div>`;
+      orders._paintList();
+    },
+
+    _summary() {
+      const sold = orders._inStore.filter(t => !t.voided);
+      const revenue = sold.reduce((s, t) => s + Number(t.total || 0), 0);
+      /* Online figures are not loaded in Phase 1 → neutral "—" (never fabricate a metric). */
+      return `<div class="ord-summary">
+        <div class="ord-stat"><div class="ord-stat-n">${sold.length}</div><div class="ord-stat-l">In-Store Sales</div></div>
+        <div class="ord-stat"><div class="ord-stat-n">KES ${_fmt(revenue)}</div><div class="ord-stat-l">Revenue Today</div></div>
+        <div class="ord-stat"><div class="ord-stat-n" style="color:var(--txt3)">—</div><div class="ord-stat-l">Online Orders</div></div>
+      </div>`;
+    },
+
+    _tabsHtml() {
+      const T = [['all', '🟢 All'], ['online', '🛒 Online'], ['instore', '🏪 In-Store'],
+                 ['delivery', '🚚 Delivery'], ['pickup', '📦 Pickup'], ['cancelled', '❌ Cancelled'], ['refunded', '↩ Refunded']];
+      return `<div class="ord-tabs">${T.map(([k, l]) =>
+        `<button class="ord-tab ${orders._filter === k ? 'active' : ''}" onclick="SPos.orders.setFilter('${k}')">${l}</button>`).join('')}</div>`;
+    },
+
+    setFilter(f) { orders._filter = f; orders._paint(); },
+
+    _paintList() {
+      const list = document.getElementById('ord-list');
+      if (!list) return;
+      const f = orders._filter;
+      if (f === 'online' || f === 'delivery' || f === 'pickup') { list.innerHTML = orders._placeholder(f); return; }
+      let rows = orders._inStore;
+      if (f === 'instore')   rows = rows.filter(t => !t.voided && !t.refunded);
+      if (f === 'cancelled') rows = rows.filter(t => t.voided);
+      if (f === 'refunded')  rows = rows.filter(t => t.refunded && !t.voided);
+      if (!rows.length) { list.innerHTML = '<div class="pos-empty" style="padding:34px 20px"><div class="empty-icon">🧾</div><p>No orders in this view yet</p></div>'; return; }
+      list.innerHTML = rows.map(orders._card).join('');
+    },
+
+    _placeholder(kind) {
+      const label = kind === 'online' ? 'Online marketplace orders' : kind === 'delivery' ? 'Delivery orders' : 'Pickup orders';
+      return `<div class="pos-empty" style="padding:38px 20px">
+        <div class="empty-icon">🛰️</div>
+        <p style="margin-bottom:6px"><strong>${label}</strong></p>
+        <p style="font-size:12.5px;color:var(--txt2);max-width:330px;margin:0 auto;line-height:1.55">Live marketplace orders (accept, prepare, ready-for-rider, chat buyer) arrive here in the next update. Your in-store sales are live now under the <strong>In-Store</strong> tab.</p>
+      </div>`;
+    },
+
+    _card(t) {
+      const when = new Date(t.completedAt || t.timestamp || Date.now())
+        .toLocaleString('en-KE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' });
+      const status = t.voided ? '<span class="ord-badge ord-bad">Voided</span>'
+        : t.refunded ? '<span class="ord-badge ord-warn">Refunded</span>'
+        : '<span class="ord-badge ord-ok">Completed</span>';
+      const method = (t.paymentMethod || 'cash').toUpperCase();
+      const n = (t.items || []).length;
+      const idLabel = t.receiptNo || ('POS-' + String(t.id || '').slice(-6));
+      return `<div class="ord-card">
+        <div class="ord-card-top">
+          <div>
+            <div class="ord-card-id">Sale #${_esc(idLabel)}</div>
+            <div class="ord-card-sub">${_esc(t.customerName || 'Walk-in Customer')} · ${_esc(method)} · ${n} item${n === 1 ? '' : 's'}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="ord-card-amt">KES ${_fmt(t.total)}</div>
+            <div class="ord-card-when">${when}</div>
+          </div>
+        </div>
+        <div class="ord-card-foot">
+          ${status}
+          <div class="ord-card-actions">
+            <button class="row-btn" onclick="SPos.sales.reprint('${t.id}')">🖨 Reprint</button>
+            ${!t.refunded && !t.voided ? `<button class="row-btn" onclick="SPos.sales.refundDialog('${t.id}')">Refund</button>` : ''}
+            <button class="row-btn" onclick="SPos.orders.details('${t.id}')">Details</button>
+          </div>
+        </div>
+      </div>`;
+    },
+
+    async details(txnId) {
+      const t = await PosDB.transactions.getById(txnId);
+      if (!t) { toast('Order not found', 'error'); return; }
+      const items = (t.items || []).map(i => {
+        const qty = i.qty || 1;
+        const line = (i.unitPrice != null ? i.unitPrice : (i.price || 0)) * qty;
+        return `<div class="ord-det-row"><span>${_esc(i.name || i.productName || 'Item')} ×${qty}</span><span>KES ${_fmt(line)}</span></div>`;
+      }).join('') || '<div class="ord-det-row"><span>No line items recorded</span><span></span></div>';
+      const payState = t.voided ? 'Voided' : t.refunded ? 'Refunded' : 'Paid';
+      const ov = document.createElement('div');
+      ov.className = 'ord-det-overlay';
+      ov.onclick = e => { if (e.target === ov) ov.remove(); };
+      ov.innerHTML = `<div class="ord-det-card">
+        <div class="ord-det-head"><strong>Sale #${_esc(t.receiptNo || String(t.id || '').slice(-6))}</strong><button aria-label="Close" onclick="this.closest('.ord-det-overlay').remove()">✕</button></div>
+        <div class="ord-det-body">
+          <div class="ord-det-row"><span>Customer</span><span>${_esc(t.customerName || 'Walk-in')}</span></div>
+          <div class="ord-det-row"><span>Cashier</span><span>${_esc(t.cashierName || '-')}</span></div>
+          <div class="ord-det-row"><span>Date</span><span>${new Date(t.completedAt || t.timestamp).toLocaleString('en-KE')}</span></div>
+          <hr>
+          ${items}
+          <hr>
+          <div class="ord-det-row"><span>Subtotal</span><span>KES ${_fmt(t.subtotal != null ? t.subtotal : t.total)}</span></div>
+          ${t.discount ? `<div class="ord-det-row"><span>Discount</span><span>-KES ${_fmt(t.discount)}</span></div>` : ''}
+          ${t.tax ? `<div class="ord-det-row"><span>Tax</span><span>KES ${_fmt(t.tax)}</span></div>` : ''}
+          <div class="ord-det-row ord-det-total"><span>Total</span><span>KES ${_fmt(t.total)}</span></div>
+          <div class="ord-det-row"><span>Payment</span><span>${_esc((t.paymentMethod || 'cash').toUpperCase())} · ${payState}</span></div>
+        </div>
+        <div class="ord-det-foot">
+          <button class="modal-btn modal-btn-primary" style="width:100%" onclick="SPos.sales.reprint('${t.id}')">🖨 Reprint receipt</button>
+        </div>
+      </div>`;
+      document.body.appendChild(ov);
+    },
+  };
+
   const sales = {
     async showHistory() {
       const body = document.getElementById('reports-body');
@@ -3339,7 +3522,7 @@ const SPos = (function () {
      this service — never a new window/tab.
   ═══════════════════════════════════════════════════════════ */
   const nav = {
-    KNOWN: ['pos', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'],
+    KNOWN: ['pos', 'orders', 'inventory', 'reports', 'customers', 'bos', 'finance', 'repair', 'audit', 'settings'],
     _teardowns: {},
     /* A panel that opens a live listener registers its unsub here so leaving the
        panel releases it — the structural guarantee against listener/memory growth. */
@@ -3374,7 +3557,7 @@ const SPos = (function () {
     state, wizard, ui, nav, products, cart, payment, mpesa,
     barcode, inv, reports, customers, cashier, shift,
     settings, profile, sync, data, modal, printerSetup, bos,
-    sales, po, cats, split,
+    sales, orders, po, cats, split,
     toast, printer: PosPrinter, openAIPricing,
     boot,
     /* Debounced helpers for HTML oninput handlers */
