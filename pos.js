@@ -557,7 +557,9 @@ const SPos = (function () {
         metadata: { source: 'pos.js', localTxnId: txn.id, shadow: true },
       };
       const fnMod = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-functions.js');
+      const _shadowT0 = Date.now();
       const res = (await fnMod.httpsCallable(fnMod.getFunctions(window.firebaseApp), 'posCompleteCheckout')(payload)).data || {};
+      const shadowMs = Date.now() - _shadowT0;
 
       const expected = {
         items: items.map(i => ({ productId: i.productId, qty: i.qty, unitPrice: i.unitPrice })),
@@ -587,6 +589,10 @@ const SPos = (function () {
         expected, canonical,
         comparison: differences.length === 0 ? 'PASS' : 'FAIL',
         differences,
+        /* Timing evidence (does NOT gate correctness): canonical dry-run round-trip vs the legacy
+           local commit, to surface any latency surprises before cutover. */
+        timing: { shadowMs, legacyMs: (typeof txn._legacyMs === 'number' ? txn._legacyMs : null),
+                  diffMs: (typeof txn._legacyMs === 'number' ? shadowMs - txn._legacyMs : null) },
       };
       const m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
       await m.setDoc(m.doc(window.firebaseDB, 'posCheckoutShadow', String(txn.id)), record).catch(() => {});
@@ -1090,6 +1096,7 @@ const SPos = (function () {
 
       /* ── Saga: atomic multi-step write with compensating txns ─ */
       const stockSnapshot = [];  // for rollback
+      const _legacyT0 = Date.now();   /* legacy local-commit timing (for the shadow comparison) */
       try {
         /* Step 1: Save transaction record */
         await PosDB.transactions.save(txn);
@@ -1111,6 +1118,8 @@ const SPos = (function () {
         const pts = Math.floor(total / 100) * (state.settings.loyaltyRate || 1);
         await PosDB.customers.recordPurchase(state.currentCustomer.id, total, pts);
       }
+
+      txn._legacyMs = Date.now() - _legacyT0;   /* local commit duration — recorded in the shadow comparison */
 
         /* Step 3: Queue for cloud sync */
         await PosDB.syncQueue.add('transaction', txn);
