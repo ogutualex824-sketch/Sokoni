@@ -753,15 +753,34 @@ function _ppsRenderMenu (panel, override) {
   } else if (!hasBt) {
     body = '<div style="font-size:12.5px;color:rgba(255,255,255,.75);line-height:1.55;margin-bottom:12px;">Bluetooth pairing needs <strong>Chrome on Android or desktop</strong>. Receipts still print as a shareable page in this browser.</div>' +
       _ppsBtn('pps-advanced', 'Advanced options', 'ghost');
+  } else if (lastName) {
+    /* REMEMBERED but disconnected — the day-to-day case. Lead with one prominent Reconnect
+       that tries silently and, only if the browser needs a gesture, opens the chooser. The
+       cashier NEVER has to open Advanced Settings to get printing back. */
+    body = '<div style="font-size:11.5px;color:rgba(255,255,255,.5);margin-bottom:3px;">Saved printer</div>' +
+      '<div style="font-size:13.5px;font-weight:800;color:#71ff00;margin-bottom:13px;">' + _ppsEsc(lastName) + '</div>' +
+      '<div style="display:flex;">' + _ppsBtn('pps-reconnect', '↻ Reconnect ' + _ppsEsc(lastName), 'primary') + '</div>' +
+      '<div style="font-size:11px;color:rgba(255,255,255,.4);margin:11px 0 12px;line-height:1.5;">Reconnects silently when your browser allows it; otherwise a quick chooser opens — pick ' + _ppsEsc(lastName) + ' once and you’re back.</div>' +
+      '<div style="display:flex;gap:8px;">' + _ppsBtn('pps-forget', 'Forget', 'danger') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>';
   } else {
     body = '<div style="font-size:12.5px;color:rgba(255,255,255,.65);margin-bottom:12px;">No printer connected</div>' +
       '<div style="display:flex;">' + _ppsBtn('pps-connect', '🔗 Connect Printer', 'primary') + '</div>' +
       '<label style="display:flex;align-items:center;gap:8px;font-size:12px;color:rgba(255,255,255,.6);margin:13px 0;cursor:pointer;"><input id="pps-remember" type="checkbox" ' + (remember ? 'checked' : '') + '> Remember this printer</label>' +
-      (lastName
-        ? '<div style="font-size:11.5px;color:rgba(255,255,255,.45);margin-bottom:8px;">Last printer: <span style="color:#71ff00;">' + _ppsEsc(lastName) + '</span></div><div style="display:flex;gap:8px;">' + _ppsBtn('pps-reconnect', '↻ Reconnect', 'ghost') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>'
-        : '<div style="display:flex;">' + _ppsBtn('pps-advanced', 'Advanced options', 'ghost') + '</div>');
+      '<div style="display:flex;">' + _ppsBtn('pps-advanced', 'Advanced options', 'ghost') + '</div>';
   }
   panel.innerHTML = head + body;
+
+  /* On open, if a printer is remembered but not yet connected, kick a SILENT reconnect right
+     away and reflect it — so the dropdown usually shows 🟢 without any tap. Only if that
+     silent attempt fails does the cashier ever need the Reconnect button. */
+  if (!override && !connected && lastName && !panel._autoTried) {
+    panel._autoTried = true;
+    if (pm && typeof pm.autoReconnect === 'function') {
+      Promise.resolve(pm.autoReconnect()).then(ok => {
+        if ((pm.connected || ok) && document.body.contains(panel)) _ppsRenderMenu(panel);
+      }).catch(() => {});
+    }
+  }
   _ppsWireMenu(panel);
 }
 
@@ -775,13 +794,21 @@ function _ppsWireMenu (panel) {
   if (q('pps-test'))     q('pps-test').onclick     = () => { try { pm && pm.testPrint && pm.testPrint(); } catch (_) {} };
   if (q('pps-forget'))   q('pps-forget').onclick   = () => { try { localStorage.removeItem('spp_profile'); pm && pm.disconnect && pm.disconnect(); } catch (_) {} _ppsRenderMenu(panel); };
   if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
-    _ppsRenderMenu(panel, spin('Searching for saved printer…'));
+    const connectedBody = '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Back online — printing is ready.</div>';
+    _ppsRenderMenu(panel, spin('Reconnecting to your printer…'));
+    /* Step 1: try SILENT reconnect (getDevices — no chooser, no gesture needed). When the
+       browser retained the grant this just works. It also returns FAST (false) when there is
+       no granted device to re-link, which keeps this click's user-gesture valid for step 2. */
     Promise.resolve(pm && pm.autoReconnect && pm.autoReconnect())
       .then(ok => {
-        if (pm.connected || ok) { _ppsRenderMenu(panel); return; }
-        /* autoReconnect() returned false → getDevices() had nothing to re-link (printer off,
-           out of range, or the browser did not retain the grant). Say so — don't silently fail. */
-        _ppsRenderMenu(panel, _ppsErrBody({ message: 'saved printer unavailable' }, true));
+        if (pm.connected || ok) { _ppsRenderMenu(panel, connectedBody); setTimeout(_ppsCloseMenu, 1600); return; }
+        /* Step 2: silent path could not re-link (browser dropped the grant / needs a gesture).
+           We are still inside the click handler, so open the chooser — one pick and we're back.
+           This is the founder's "one-click reconnect straight from the POS" fallback; the
+           cashier never has to open Advanced Settings. */
+        return Promise.resolve(pm.discoverBy('bluetooth'))
+          .then(list => { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
+          .then(() => { _ppsRenderMenu(panel, connectedBody); setTimeout(_ppsCloseMenu, 1600); });
       })
       .catch(e => _ppsRenderMenu(panel, _ppsErrBody(e, true)));
   };
