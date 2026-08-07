@@ -1192,9 +1192,11 @@
       #sk-nav-avatar { width: 30px; height: 30px; font-size: 12px; }
       /* Icon buttons — 32px keeps a comfortable 44px-ish tap area with padding while trimming the row */
       .sk-nav-icon-btn { width: 32px !important; height: 32px !important; font-size: 16px; }
-      /* Reserve the SMALLER header: row1 ~40 + search ~34 + gaps ~6 = ~80px (+ safe-area). */
-      body { padding-top: calc(44px + env(safe-area-inset-top, 0px)) !important; }
-      body.sk-has-search { padding-top: calc(82px + env(safe-area-inset-top, 0px)) !important; }
+      /* Reserve exactly the MEASURED header height (--sk-header-h, published from the real
+         header bottom incl. safe-area) so content can never hide under it nor leave a gap.
+         The calc() fallback covers only the brief pre-measurement window. */
+      body { padding-top: var(--sk-header-h, calc(44px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: var(--sk-header-h, calc(80px + env(safe-area-inset-top, 0px))) !important; }
     }
     /* ── Very small phones (320–380px) ── */
     @media (max-width: 380px) {
@@ -1203,8 +1205,8 @@
       #sk-nav-cart { padding: 5px 8px; font-size: 10px; }
       #sk-nav-logo img { height: 24px; }
       #sk-nav-avatar { width: 26px; height: 26px; font-size: 11px; }
-      body { padding-top: calc(42px + env(safe-area-inset-top, 0px)) !important; }
-      body.sk-has-search { padding-top: calc(78px + env(safe-area-inset-top, 0px)) !important; }
+      body { padding-top: var(--sk-header-h, calc(42px + env(safe-area-inset-top, 0px))) !important; }
+      body.sk-has-search { padding-top: var(--sk-header-h, calc(76px + env(safe-area-inset-top, 0px))) !important; }
     }
 
     /* ── Global responsive table overflow (applies to all pages) ── */
