@@ -291,6 +291,23 @@ body {
   color: #71ff00;
 }
 
+/* Semantic STATUS chip (distinct from the filter .sk-chip above) — the single set of
+   status colours: green=completed · blue=in-progress · orange=waiting · purple=premium
+   · red=cancelled · grey=inactive. Render via SK.statusChip(status, label). */
+.sk-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 800; letter-spacing: 0.02em; line-height: 1.4;
+  white-space: nowrap; border: 1px solid transparent; flex-shrink: 0;
+}
+.sk-status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.sk-status--completed { color: #71ff00; background: rgba(113,255,0,0.12);  border-color: rgba(113,255,0,0.22); }
+.sk-status--progress  { color: #3b82f6; background: rgba(59,130,246,0.14); border-color: rgba(59,130,246,0.24); }
+.sk-status--waiting   { color: #ffb800; background: rgba(255,184,0,0.13);  border-color: rgba(255,184,0,0.24); }
+.sk-status--premium   { color: #a855f7; background: rgba(168,85,247,0.14); border-color: rgba(168,85,247,0.26); }
+.sk-status--cancelled { color: #ff4444; background: rgba(255,68,68,0.12);  border-color: rgba(255,68,68,0.22); }
+.sk-status--inactive  { color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); }
+
 /* ═══════════════════════════════════════════════════════════════
    STAT CARDS
 ═══════════════════════════════════════════════════════════════ */

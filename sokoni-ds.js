@@ -200,6 +200,22 @@
       '</div>';
   }
 
+  /* ── STATUS CHIP — maps a status string to one of the 6 semantic colours ─ */
+  var _STATUS_MAP = {
+    completed:'completed', done:'completed', paid:'completed', delivered:'completed', settled:'completed', active:'completed', approved:'completed', online:'completed',
+    progress:'progress', in_progress:'progress', preparing:'progress', in_transit:'progress', processing:'progress', shipped:'progress', rider_assigned:'progress', out_for_delivery:'progress',
+    waiting:'waiting', pending:'waiting', awaiting:'waiting', awaiting_confirmation:'waiting', ready:'waiting', reserved:'waiting',
+    premium:'premium', vip:'premium', pro:'premium', boosted:'premium', verified:'premium',
+    cancelled:'cancelled', canceled:'cancelled', failed:'cancelled', refunded:'cancelled', error:'cancelled', rejected:'cancelled', disputed:'cancelled',
+    inactive:'inactive', offline:'inactive', draft:'inactive', suspended:'inactive', archived:'inactive',
+  };
+  function _statusChip(status, label) {
+    var key = String(status == null ? 'inactive' : status).toLowerCase().replace(/\s+/g, '_');
+    var variant = _STATUS_MAP[key] || 'inactive';
+    var text = (label != null) ? label : (key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, ' '));
+    return '<span class="sk-status sk-status--' + variant + '">' + _esc(text) + '</span>';
+  }
+
   /* ── ALERT (inline injection) ───────────────────────────── */
   /* SokoniUI has no inline-alert-into-container feature       */
 
@@ -487,6 +503,7 @@
     },
 
     empty: _empty,
+    statusChip: _statusChip,
     alert: _alert,
 
     form: {
