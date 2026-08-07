@@ -1018,10 +1018,22 @@ const PLATFORM = (function () {
            hasBT, hasSerial, hasUSB, supportsBT, supportsSerial, supportsUSB, os, browser };
 }());
 
-/* ── Friendly error messages ── */
+/* ── Friendly error messages ──
+   Unwrap PrinterManager's friendly wrapper first: it replaces the real exception with a
+   generic "…unexpected error." title and stashes the true cause in .detail / .original.
+   Classifying only .message would surface that dead-end title and mask the root cause twice,
+   so fold the underlying message into what we test and what we ultimately show. */
 function _friendlyError (e) {
-  const raw = (e?.message || String(e) || '').toLowerCase();
-  if (!raw || raw === 'undefined') return 'No printer selected. Click a transport tile and choose your printer.';
+  const under  = e && (e.original || e.cause);
+  const detail = (e && e.detail) || (under && under.message) || '';
+  const raw = ((e?.message || '') + ' ' + detail).toLowerCase();
+  if (!raw.trim() || raw.trim() === 'undefined') return 'No printer selected. Click a transport tile and choose your printer.';
+  if (raw.includes('web bluetooth') || raw.includes('bluetooth is not available') || raw.includes('navigator.bluetooth'))
+    return 'This browser does not support Bluetooth printing. Use Chrome or Edge on Android or desktop (iPhone/Safari cannot pair BLE printers).';
+  if (raw.includes('no writable') || raw.includes('no print service'))
+    return 'Connected, but this device is not an ESC/POS printer (no writable print service). Confirm it is a P58E / 58mm thermal printer and powered on.';
+  if (raw.includes('getdevices') || raw.includes('saved printer') || raw.includes('no remembered'))
+    return 'Saved printer is unavailable — it may be turned off or out of range. Power it on and tap Reconnect.';
   if (raw.includes('user cancel') || raw.includes('no device selected by user') || raw.includes('chosen by user'))
     return 'Selection cancelled. Click the transport tile again to retry.';
   if (raw.includes('permission') || raw.includes('security') || raw.includes('blocked'))
@@ -1044,7 +1056,8 @@ function _friendlyError (e) {
     return 'Printer disconnected unexpectedly. Check battery / USB cable and reconnect.';
   if (raw.includes('not supported') || raw.includes('undefined is not'))
     return 'This browser does not support this transport. Use Chrome or Edge on desktop.';
-  return e?.message || 'Connection failed. Verify the printer is on and in range, then retry.';
+  /* Last resort: show the REAL underlying message (never the generic wrapper title). */
+  return detail || e?.message || 'Connection failed. Verify the printer is on and in range, then retry.';
 }
 
 /* ── Last-transport persistence ── */

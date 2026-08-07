@@ -395,11 +395,15 @@ function _friendlyError (err) {
       return e;
     }
   }
-  /* Unknown error — wrap with generic enterprise message */
-  const e = new Error('Printer Manager encountered an unexpected error.');
-  e.detail = err?.message || String(err || 'Unknown error');
-  e.action = 'Check the Diagnostics tab for details. Reload the page and try again.';
-  e.code   = 'ERR_UNKNOWN';
+  /* Unknown error — DO NOT hide it behind a generic title. Surface the real message so the
+     dialog is actionable and debuggable (the founder specifically flagged the dead-end
+     "unexpected error"). Keep the technical string in .detail/.original for a Details view. */
+  const realMsg = (err?.message || String(err || '') || '').trim() || 'Unknown error';
+  const short   = realMsg.length <= 140 ? realMsg : realMsg.slice(0, 137) + '…';
+  const e = new Error('Printer connection failed: ' + short);
+  e.detail   = realMsg + (err?.name ? '  (' + err.name + ')' : '');
+  e.action   = 'Make sure the printer is powered on and in range, then Reconnect. Tap Details for the technical error.';
+  e.code     = 'ERR_UNKNOWN';
   e.original = err;
   return e;
 }

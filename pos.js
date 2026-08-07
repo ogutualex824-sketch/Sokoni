@@ -131,10 +131,15 @@ const SPos = (function () {
       PosOmni.startSync(state.settings.bizPin);
     }
 
-    /* Open PIN modal to login cashier */
+    /* Cashier login. Restore a still-valid session first so POS does NOT re-prompt for the
+       PIN on every reload/navigation (the session lived only in memory before, so each page
+       load reset it). The PIN still gates the FIRST login and switching cashiers; the
+       separate manager-PIN still gates refunds/voids/discounts. Only prompt if nothing valid
+       was restored. */
     const cashiers = await PosDB.cashiers.getAll();
     if (cashiers.length > 0) {
-      cashier.showSwitchDialog();
+      const restored = await cashier.restoreSession(cashiers);
+      if (!restored) cashier.showSwitchDialog();
     }
 
     /* Load settings into settings panel */
@@ -2098,6 +2103,52 @@ const SPos = (function () {
   const cashier = {
     _pinBuffer: '',
 
+    /* Cashier login session — persisted so POS does not re-prompt for the PIN on every
+       reload/navigation. Stores identity ONLY (never the PIN/hash). Sliding TTL: an active
+       cashier stays logged in; after this idle window POS re-prompts. This is operator
+       identity (SOKONI "Auth" layer) — NOT money authorization; refunds/voids/discounts keep
+       their own independent manager-PIN gate, which is never persisted here. */
+    _SESSION_KEY: 'sokoni_pos_cashier_session',
+    _SESSION_TTL_MS: 14 * 60 * 60 * 1000,   /* 14h — one long workday */
+
+    _persistSession(c) {
+      try {
+        localStorage.setItem(cashier._SESSION_KEY, JSON.stringify({
+          id: c.id, name: c.name, role: c.role || 'cashier', at: Date.now(),
+        }));
+      } catch (_) {}
+    },
+    _clearSession() { try { localStorage.removeItem(cashier._SESSION_KEY); } catch (_) {} },
+
+    /* Restore a still-valid cashier session on boot so we skip the PIN. Returns true only if
+       the session exists, is within the TTL, AND the cashier still exists and is active
+       locally. Slides the TTL on success and silently restores an open shift. */
+    async restoreSession(cashiers) {
+      let s;
+      try { s = JSON.parse(localStorage.getItem(cashier._SESSION_KEY) || 'null'); } catch (_) { s = null; }
+      if (!s || !s.id || !s.at) return false;
+      if (Date.now() - s.at > cashier._SESSION_TTL_MS) { cashier._clearSession(); return false; }
+      const roster = cashiers || await PosDB.cashiers.getAll();
+      const c = roster.find(x => x.id === s.id && x.active !== false);
+      if (!c) { cashier._clearSession(); return false; }
+      state.currentCashier = c;
+      cashier._persistSession(c);                 /* slide the idle window */
+      _setVal('cashier-avatar', c.name ? c.name[0].toUpperCase() : '?');
+      _setVal('cashier-name-hdr', c.name || 'Cashier');
+      try {
+        const existingShift = await PosDB.shifts.getCurrent(c.id);
+        if (existingShift) { state.currentShift = existingShift; shift.updateBadge(); }
+      } catch (_) {}
+      return true;
+    },
+
+    /* Explicit sign-out: clear the persisted session and re-show the PIN. */
+    logout() {
+      cashier._clearSession();
+      state.currentCashier = null;
+      cashier.showSwitchDialog();
+    },
+
     showSwitchDialog() {
       cashier._pinBuffer = '';
       cashier.updatePinDots();
@@ -2138,6 +2189,7 @@ const SPos = (function () {
       if (c) {
         if (window.PosHealth) await PosHealth.recordPinAttempt('all', true);
         state.currentCashier = c;
+        cashier._persistSession(c);
         _setVal('cashier-avatar', c.name ? c.name[0].toUpperCase() : '?');
         _setVal('cashier-name-hdr', c.name || 'Cashier');
         modal.close('pin-modal');

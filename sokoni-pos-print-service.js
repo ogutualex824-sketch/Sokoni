@@ -776,15 +776,54 @@ function _ppsWireMenu (panel) {
   if (q('pps-forget'))   q('pps-forget').onclick   = () => { try { localStorage.removeItem('spp_profile'); pm && pm.disconnect && pm.disconnect(); } catch (_) {} _ppsRenderMenu(panel); };
   if (q('pps-reconnect')) q('pps-reconnect').onclick = () => {
     _ppsRenderMenu(panel, spin('Searching for saved printer…'));
-    Promise.resolve(pm && pm.autoReconnect && pm.autoReconnect()).then(() => _ppsRenderMenu(panel)).catch(() => _ppsRenderMenu(panel));
+    Promise.resolve(pm && pm.autoReconnect && pm.autoReconnect())
+      .then(ok => {
+        if (pm.connected || ok) { _ppsRenderMenu(panel); return; }
+        /* autoReconnect() returned false → getDevices() had nothing to re-link (printer off,
+           out of range, or the browser did not retain the grant). Say so — don't silently fail. */
+        _ppsRenderMenu(panel, _ppsErrBody({ message: 'saved printer unavailable' }, true));
+      })
+      .catch(e => _ppsRenderMenu(panel, _ppsErrBody(e, true)));
   };
   if (q('pps-connect')) q('pps-connect').onclick = () => {
     _ppsRenderMenu(panel, spin('Opening Bluetooth chooser…'));
     Promise.resolve(pm && pm.discoverBy && pm.discoverBy('bluetooth'))
       .then(list => { if (list && list[0]) return pm.connect(list[0]); throw new Error('no-device'); })
       .then(() => { _ppsRenderMenu(panel, '<div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;"><span style="color:#71ff00;">✓</span> <strong>Connected</strong></div><div style="font-size:12px;color:rgba(255,255,255,.6);">Saved — reconnects automatically next time.</div>'); setTimeout(_ppsCloseMenu, 1600); })
-      .catch(e => { _ppsRenderMenu(panel, '<div style="font-size:12.5px;color:#ff8c00;margin-bottom:11px;">Couldn’t connect' + (e && e.message && e.message !== 'no-device' ? ': ' + _ppsEsc(e.message) : ' — no printer selected') + '.</div><div style="display:flex;gap:8px;">' + _ppsBtn('pps-connect', '🔗 Try again', 'primary') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>'); });
+      .catch(e => _ppsRenderMenu(panel, _ppsErrBody(e, false)));
   };
+  const de = q('pps-details-toggle');
+  if (de) de.onclick = () => { const d = q('pps-details'); if (d) d.style.display = d.style.display === 'none' ? 'block' : 'none'; };
+}
+
+/* Turn a connect/reconnect exception into an ACTIONABLE message + a collapsible Details view
+   with the raw error (the founder asked for meaningful errors, never a swallowed generic one).
+   `remembered` picks reconnect-flavoured copy over first-connect copy. */
+function _ppsErrClassify (e) {
+  const raw = ((e && (e.detail || e.message)) || (e && e.original && e.original.message) || String(e || '')).toLowerCase();
+  if (raw.includes('no-device') || raw.includes('no device') || raw.includes('cancel') || raw.includes('notfound'))
+    return 'No printer selected — the Bluetooth chooser was dismissed.';
+  if (raw.includes('web bluetooth') || raw.includes('bluetooth is not available') || raw.includes('not supported'))
+    return 'This browser can’t pair Bluetooth printers. Use Chrome/Edge on Android or desktop (iPhone/Safari can’t).';
+  if (raw.includes('no writable') || raw.includes('no print service'))
+    return 'That device isn’t an ESC/POS printer (no writable print service). Pick your P58E / 58mm printer.';
+  if (raw.includes('saved printer') || raw.includes('getdevices') || raw.includes('unavailable'))
+    return 'Saved printer unavailable — it’s likely turned off or out of range. Power it on, then Reconnect.';
+  if (raw.includes('gatt') || raw.includes('out of range') || raw.includes('powered'))
+    return 'Bluetooth connection failed — make sure the printer is on, charged, and not paired to another device.';
+  if (raw.includes('permission') || raw.includes('security') || raw.includes('notallowed'))
+    return 'Bluetooth permission is required. Tap Allow when the browser asks.';
+  return 'Couldn’t connect. Make sure the printer is on and in range, then try again.';
+}
+function _ppsErrBody (e, remembered) {
+  const msg = _ppsErrClassify(e);
+  const raw = (e && (e.detail || e.message)) || (e && e.original && e.original.message) || String(e || 'Unknown error');
+  const retryLabel = remembered ? '↻ Reconnect' : '🔗 Try again';
+  const retryId    = remembered ? 'pps-reconnect' : 'pps-connect';
+  return '<div style="font-size:12.5px;color:#ff8c00;margin-bottom:10px;line-height:1.5;">' + _ppsEsc(msg) + '</div>' +
+    '<div style="display:flex;gap:8px;margin-bottom:8px;">' + _ppsBtn(retryId, retryLabel, 'primary') + _ppsBtn('pps-advanced', 'Advanced', 'ghost') + '</div>' +
+    '<div style="font-size:11px;"><a id="pps-details-toggle" style="color:rgba(255,255,255,.45);cursor:pointer;text-decoration:underline;">Details</a>' +
+    '<pre id="pps-details" style="display:none;white-space:pre-wrap;word-break:break-word;margin:6px 0 0;font-size:10.5px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.04);padding:7px 9px;border-radius:8px;">' + _ppsEsc(raw) + '</pre></div>';
 }
 
 /* ═══════════════════════════════════════════════════════════════════
