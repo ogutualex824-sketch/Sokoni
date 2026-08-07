@@ -289,9 +289,41 @@
       <button class="pos-header-btn" id="btn-device-hub" onclick="SPos.deviceHub.showPanel()" title="Peripherals" aria-label="Peripheral devices" style="position:relative;">
         🔌<span id="device-hub-badge" style="position:absolute;top:2px;right:2px;background:#ef4444;color:#fff;border-radius:50%;font-size:9px;font-weight:900;width:14px;height:14px;display:none;align-items:center;justify-content:center;line-height:1;border:1.5px solid var(--bg);">0</span>
       </button>
+      <!-- Fullscreen toggle — Fullscreen API on THIS tab. Never opens a second window/PWA
+           instance (that would fork Service Workers, Firestore listeners and printer state). -->
+      <button class="pos-header-btn" id="btn-fullscreen" onclick="posToggleFullscreen()" title="Toggle full screen" aria-label="Toggle full screen">⛶</button>
       <button class="pos-header-btn pos-kb-help-btn" onclick="SPos.modal.open('kb-help-modal')" title="Keyboard shortcuts" aria-label="Show keyboard shortcuts">?</button>
     </div>
   </header>
+  <script>
+  /* Single-instance fullscreen: toggles the CURRENT tab in/out of fullscreen. No window.open,
+     no target=_blank, no new PWA — so the cart, printer connection, session and Firestore
+     listeners are all preserved. If the browser blocks it, we stay put and say so. */
+  function posToggleFullscreen () {
+    try {
+      if (!document.fullscreenElement) {
+        var el = document.documentElement;
+        var req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (!req) { _posFsBlocked('Fullscreen is not supported in this browser.'); return; }
+        Promise.resolve(req.call(el, { navigationUI: 'hide' })).catch(function () {
+          _posFsBlocked('Fullscreen was blocked by the browser.');
+        });
+      } else {
+        (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document);
+      }
+    } catch (e) { _posFsBlocked('Fullscreen was blocked by the browser.'); }
+  }
+  function _posFsBlocked (msg) {
+    try { if (window.SPos && SPos.toast) SPos.toast(msg, 'error'); else console.warn(msg); } catch (_) {}
+  }
+  document.addEventListener('fullscreenchange', function () {
+    var b = document.getElementById('btn-fullscreen');
+    if (!b) return;
+    var on = !!document.fullscreenElement;
+    b.textContent = on ? '🗗' : '⛶';
+    b.title = on ? 'Exit full screen' : 'Toggle full screen';
+  });
+  </script>
 
   <!-- SmartPOS 2.0: Peripheral status bar -->
   <div id="pos-peripheral-bar" style="display:none;background:#0e1117;border-bottom:1px solid rgba(255,255,255,0.06);padding:6px 16px;display:flex;align-items:center;gap:12px;overflow-x:auto;font-size:12px;">
