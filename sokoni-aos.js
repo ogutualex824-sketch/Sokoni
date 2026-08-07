@@ -810,12 +810,22 @@ window.SokoniAOS = (() => {
   }
   async function resolveDispute(id, winnerSide) {
     const note = prompt("Resolution note:");
-    await _call("aosResolveDispute", { disputeId: id, resolution: winnerSide, note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("aosResolveDispute", { disputeId: id, resolution: winnerSide, note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Dispute resolved","success"); _financialTab("disputes");
   }
   async function processRefund(id, action) {
     const note = action === "rejected" ? prompt("Rejection reason:") : "";
-    await _call("processRefund", { refundId: id, action, note }).catch(e => _toast(e.message,"error"));
+    try {
+      await _call("processRefund", { refundId: id, action, note });
+    } catch (e) {
+      _toast(e.message, "error");
+      return;
+    }
     _toast("Refund " + action,"success"); _financialTab("refunds");
   }
 

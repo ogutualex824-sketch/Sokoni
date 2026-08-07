@@ -557,7 +557,8 @@
       "node scripts/verify-commission-single-source.js",
       "node scripts/perf-guard.js",
       "node scripts/audit-base64-writes.js",
-      "node scripts/gate-inventory.js"
+      "node scripts/gate-inventory.js",
+      "node scripts/check-money-toast-safety.mjs"
     ]
   },
   "firestore": [

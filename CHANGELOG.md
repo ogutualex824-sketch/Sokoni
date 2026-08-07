@@ -1,3 +1,25 @@
+## [2026-08-07] — fix(money): dispute/refund toast correctness + money-path CI guard
+
+Closes out the money-path toast-correctness work (last two of six instances) and adds an
+automated guard so the class can't quietly reappear.
+
+- **Fixed (sokoni-aos.js):** aosResolveDispute (resolveDispute) and processRefund — same
+  branch-on-outcome pattern as the prior four: `try { await _call(...) } catch(e){ _toast(err);
+  return } _toast("…","success")`. Same CFs/params/messages/refresh; no business-logic/CF/
+  telemetry change; prompt() preserved. All six money ops now toast success ONLY on real success.
+- **New guard (scripts/check-money-toast-safety.mjs):** fails the build if a FINANCIAL backend
+  call (escrow/payout/refund/dispute/commission/settle/withdraw/disburse) uses an inline
+  `.catch(… _toast …)` that swallows the error and falls through to a success toast. Comment/doc
+  lines skipped. Read-only `.catch(() => default)` fallbacks allowed. Verified: passes on current
+  tree; catches all 6 pre-fix instances. Wired into hosting `predeploy` (firebase.json) and
+  `npm run check:money-toast`.
+- **Noted (NOT fixed — non-money, lower severity):** ~15 non-financial admin ops in sokoni-aos.js
+  share the same swallow-then-succeed shape (banUser, product/order status, review moderation,
+  category upsert, support tickets, push/email/SMS). Out of the money-path scope; tracked for later.
+- **Files:** sokoni-aos.js, scripts/check-money-toast-safety.mjs, firebase.json, package.json.
+
+---
+
 ## [2026-08-07] — fix(money): admin financial actions no longer toast success on failure
 
 Isolated money-path correctness fix (no dialog/other refactoring). Four Admin OS financial
