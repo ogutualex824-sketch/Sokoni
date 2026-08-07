@@ -195,6 +195,9 @@ const PosDB = (function () {
       p.updatedAt = Date.now();
       products._invalidateIndex();
       await _put('products', p);
+      /* Interim inventory convergence: also push this delta to the CANONICAL products.stock
+         (best-effort, online-only) so in-store sales/edits reflect on the marketplace. */
+      try { if (typeof window !== 'undefined' && window._posSyncCanonicalStock) window._posSyncCanonicalStock(id, delta, reason); } catch (_) {}
       await stock_movements.save({
         productId: id,
         productName: p.name,

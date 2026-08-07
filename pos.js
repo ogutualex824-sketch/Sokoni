@@ -480,7 +480,13 @@ const SPos = (function () {
       for (const p of list) {
         const id = String(p.id || p._id || p.productId || '');
         if (!id) continue;
-        const stock = (p.stock != null) ? Number(p.stock) : null;
+        const canonicalStock = (p.stock != null) ? Number(p.stock) : null;
+        /* NEVER overwrite local stock on re-seed: a product already in the POS keeps its
+           local stock (which reflects POS sale deductions), so a reboot can't reset it.
+           Only NEW products take the canonical stock. (POS sales also push to canonical —
+           see _posSyncCanonicalStock — so the two stay converged going forward.) */
+        const existing = await PosDB.products.get(id).catch(() => null);
+        const stock = (existing && existing.stock != null) ? Number(existing.stock) : canonicalStock;
         await PosDB.products.save({
           id,
           name:     p.name || p.title || 'Product',
@@ -500,6 +506,30 @@ const SPos = (function () {
       return n;
     } catch (_) { return 0; }
   }
+
+  /* Push a POS stock change to the CANONICAL products.stock so in-store sales/edits reflect on
+     the marketplace + seller dashboard (interim inventory convergence). Proper transaction —
+     read → floor at 0 → write stock + inventoryVersion + updatedAt together (the inventory
+     guardrail) — best-effort + online-only, never blocks the sale. Full convergence (routing
+     the terminal through posCompleteCheckout) is planned separately. */
+  window._posSyncCanonicalStock = async function (id, delta, reason) {
+    try {
+      if (!id || !delta || !window.firebaseDB || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+      const m   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      const ref = m.doc(window.firebaseDB, 'products', String(id));
+      await m.runTransaction(window.firebaseDB, async (tx) => {
+        const snap = await tx.get(ref);
+        if (!snap.exists()) return;                        /* not a canonical product — skip */
+        const next = Math.max(0, Number(snap.data().stock || 0) + Number(delta));   /* floored at zero */
+        tx.update(ref, {
+          stock: next,
+          inventoryVersion: m.increment(1),
+          lastStockSource: 'pos:' + (reason || 'adjust'),
+          updatedAt: m.serverTimestamp(),
+        });
+      });
+    } catch (_) { /* best-effort — local IndexedDB stock stays authoritative for the session */ }
+  };
 
   /* ═══════════════════════════════════════════════════════════
      PRODUCTS
