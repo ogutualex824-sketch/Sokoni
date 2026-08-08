@@ -44,8 +44,14 @@ const SPos = (function () {
       await PosDB.categories.seedDefaults();
 
       const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
-      if (isSetup) {
+      /* The first-run setup wizard must NOT block the app when the POS is embedded in the
+         merchant shell — otherwise selecting Inventory (or any module) boots into the wizard
+         instead of the requested panel (#9). Embedded → launch straight to the app; setup stays
+         available as the explicit POS Setup module. Standalone first-run still shows the wizard. */
+      const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
+      if (isSetup || embedded) {
         await launchApp();
+        if (!isSetup && embedded) { try { window._posNeedsSetup = true; } catch (_) {} }   /* flag for a non-blocking status chip */
       } else {
         document.getElementById('pos-wizard').style.display = 'flex';
       }
@@ -97,24 +103,36 @@ const SPos = (function () {
        re-render once seeded. */
     _seedCatalogueFromCanonical().then(n => { if (n > 0) products.reload(); }).catch(() => {});
 
-    /* Live path: a product created/edited in the seller dashboard emits productChanged on the
-       shared bus (SokoniSync → SokoniEventBus, same-origin cross-iframe). Reflect it onto the
-       POS screen without a reload. Debounced so a burst of edits triggers one refresh. */
+    /* Live path: a product created / edited / DELETED in the seller dashboard emits on the shared
+       bus (SokoniSync.productChanged → SokoniEventBus 'Product.Changed', same-origin cross-iframe).
+       Reflect it onto the POS screen without a reload. IMPORTANT: SokoniSync.productChanged emits
+       the bus event 'Product.Changed' (via _SYNC_EVENTS), so we must listen on THAT name — the
+       earlier 'productChanged' subscription never connected. A delete carries {deleted:true,
+       productId}: remove that id from PosDB immediately so the refresh can't resurrect it (#10). */
     try {
-      const bus = window.SokoniSync || window.SokoniEventBus;
-      if (bus && typeof bus.on === 'function') {
-        let _invT = null;
-        const onProductChange = () => { clearTimeout(_invT); _invT = setTimeout(() => {
-          refreshInventoryFromCanonical({ force: true }).then(n => {
-            if (n <= 0) return;
-            products.reload();                                   /* refresh the sell-screen grid */
-            const t = state.invTab;                              /* if inventory tab is open, re-render it (no second fetch) */
-            if (t && document.getElementById('inv-body')) {
-              if (t === 'products') inv.renderProducts(); else if (t === 'low-stock') inv.renderLowStock(); else if (t === 'expiry') inv.renderExpiry();
-            }
-          }).catch(() => {});
-        }, 800); };
-        ['productChanged', 'stockChanged', 'product:changed', 'stock:changed'].forEach(ev => { try { bus.on(ev, onProductChange); } catch (_) {} });
+      let _invT = null, _pendingDel = null;
+      const applyChange = (payload, isDelete) => {
+        const del = (isDelete || (payload && payload.deleted)) ? String((payload && (payload.productId || payload.id)) || payload || '') : null;
+        if (del) _pendingDel = del;
+        clearTimeout(_invT);
+        _invT = setTimeout(async () => {
+          const delId = _pendingDel; _pendingDel = null;
+          if (delId) { try { await PosDB.products.delete(delId); } catch (_) {} }   /* targeted, before refresh */
+          const n = await refreshInventoryFromCanonical({ force: true }).catch(() => 0);
+          if (!delId && n <= 0) return;
+          products.reload();
+          const t = state.invTab;
+          if (t && document.getElementById('inv-body')) {
+            if (t === 'products') inv.renderProducts(); else if (t === 'low-stock') inv.renderLowStock(); else if (t === 'expiry') inv.renderExpiry();
+          }
+        }, 400);
+      };
+      const EB = window.SokoniEventBus;
+      if (EB && typeof EB.on === 'function') {
+        ['Product.Changed', 'Stock.Changed', 'product:changed', 'stock:changed'].forEach(ev => { try { EB.on(ev, e => applyChange(e && e.payload ? e.payload : e, false)); } catch (_) {} });
+        ['Product.Deleted', 'product:deleted'].forEach(ev => { try { EB.on(ev, e => applyChange(e && e.payload ? e.payload : e, true)); } catch (_) {} });
+      } else if (window.SokoniSync && typeof SokoniSync.on === 'function') {   /* facade fallback (maps keys → bus names) */
+        ['ProductChanged', 'StockChanged'].forEach(k => { try { SokoniSync.on(k, p => applyChange(p, false)); } catch (_) {} });
       }
     } catch (_) {}
 
@@ -510,7 +528,8 @@ const SPos = (function () {
                || (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid)
                || localStorage.getItem('sokoni_merchant_id');
       if (!uid) return 0;
-      const r = await fetch('/api/catalogue?sellerUid=' + encodeURIComponent(uid) + '&cb=' + Date.now(), { cache: 'no-store' });
+      const CAP = 300;   /* catalogue CF hard cap; a full result set is < CAP */
+      const r = await fetch('/api/catalogue?sellerUid=' + encodeURIComponent(uid) + '&limit=' + CAP + '&cb=' + Date.now(), { cache: 'no-store' });
       if (!r.ok) return 0;
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.products || j.items || j.catalogue || []);
@@ -519,8 +538,17 @@ const SPos = (function () {
       const locals = await PosDB.products.getAll().catch(() => []);   /* read ONCE, before any loop */
       const { writes, stats, orphans } = window.PosInvSync.mergeCatalogue(list, locals);
       for (const rec of writes) { await PosDB.products.upsertCanonical(rec).catch(() => {}); }
-      window._posInvSyncStats = Object.assign({ at: Date.now(), orphans: orphans }, stats);
-      return stats.inserted + stats.updated;
+      /* Remove canonical-sourced rows that vanished from the catalogue (archived/deleted
+         upstream) so a delete on another device disappears here too. CAP-SAFE: only when we
+         retrieved the FULL set (< CAP) — a truncated catalogue must never mass-delete real
+         products; same-device deletes are handled precisely by the productDeleted event. */
+      let removed = 0;
+      if (orphans.length && list.length < CAP) {
+        for (const id of orphans) { try { await PosDB.products.delete(id); removed++; } catch (_) {} }
+      }
+      stats.removed = removed;
+      window._posInvSyncStats = Object.assign({ at: Date.now(), orphans: orphans, truncated: list.length >= CAP }, stats);
+      return stats.inserted + stats.updated + removed;
     } catch (_) { return 0; }
   }
   /* Fallback when PosInvSync isn't loaded: insert NEW canonical products only, never touch
@@ -1656,7 +1684,7 @@ const SPos = (function () {
       const orph = s.orphans && s.orphans.length ? ` · <span style="color:#ffb400">${s.orphans.length} not in catalogue</span>` : '';
       return `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;font-size:12px;color:#9aa">
         <span>📡 Catalogue: <strong style="color:#e8e8e8">${s.canonical}</strong></span>
-        <span>＋${s.inserted} new · ↻${s.updated} updated</span>
+        <span>＋${s.inserted} new · ↻${s.updated} updated${s.removed ? ' · 🗑' + s.removed + ' removed' : ''}</span>
         <span title="local stock kept for unsynced sales">🔒 ${s.stockKeptLocal || 0} kept local</span>${orph}
         <span style="margin-left:auto">${when}</span>
         <button class="row-btn" onclick="SPos.inv.refreshFromCanonical()">↻ Sync now</button>

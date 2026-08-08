@@ -166,6 +166,7 @@
   .ord2-ok{background:rgba(113,255,0,.13);color:var(--acc)} .ord2-warn{background:rgba(255,180,0,.14);color:#ffb400} .ord2-bad{background:rgba(255,80,80,.14);color:#ff6464}
   .ord2-empty{text-align:center;color:var(--txt2);padding:40px 20px}
   .ord2-note{font-size:12px;color:var(--txt3);margin-top:8px}
+  .ord2-diag{font-size:11px;color:var(--txt3);margin-top:10px;font-family:ui-monospace,Menlo,monospace;opacity:.75}
   .ord2-drawer-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;justify-content:flex-end}
   .ord2-drawer{width:100%;max-width:420px;height:100%;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;animation:ord2In .24s cubic-bezier(.2,.7,.3,1)}
   @keyframes ord2In{from{transform:translateX(30px);opacity:.6}to{transform:none;opacity:1}}
@@ -261,6 +262,18 @@
     border:1px solid var(--line);color:var(--txt2);border-radius:10px;height:34px;padding:0 11px;
     font-family:inherit;font-size:13px;cursor:pointer;transition:border-color .15s,color .15s}
   .mcmd-open:hover{color:var(--txt);border-color:rgba(113,255,0,.4)}
+  /* My MiniShop — the merchant's storefront identity in the header. Premium, compact, mobile-first. */
+  .mshop-btn{display:inline-flex;align-items:center;gap:9px;background:linear-gradient(135deg,rgba(113,255,0,.14),rgba(113,255,0,.05));
+    border:1px solid rgba(113,255,0,.32);color:var(--txt);border-radius:11px;height:36px;padding:0 12px;
+    font-family:inherit;cursor:pointer;transition:border-color .15s,background .15s,transform .1s}
+  .mshop-btn:hover{border-color:rgba(113,255,0,.6);background:linear-gradient(135deg,rgba(113,255,0,.2),rgba(113,255,0,.07))}
+  .mshop-btn:active{transform:scale(.97)}
+  .mshop-ico{font-size:16px;line-height:1}
+  .mshop-txt{display:flex;flex-direction:column;align-items:flex-start;line-height:1.05}
+  .mshop-l1{font-size:12.5px;font-weight:800}
+  .mshop-l2{font-size:10px;font-weight:700;color:var(--acc);letter-spacing:.02em}
+  .mshop-btn.notclaimed .mshop-l2{color:#ffd24a}
+  @media (max-width:560px){ .mshop-txt{display:none} .mshop-btn{padding:0 10px;gap:0} }
   .mcmd-open .kbd{font-size:10px;font-weight:800;color:var(--txt3);border:1px solid var(--line);
     border-radius:5px;padding:1px 5px;letter-spacing:.03em}
   /* Command palette */
@@ -328,6 +341,10 @@
       <button class="burger" id="burger" title="Toggle menu" aria-label="Toggle menu">☰</button>
       <div class="mtitle" id="mtitle">Dashboard</div>
       <div class="spacer"></div>
+      <button class="mshop-btn" id="mshop-btn" onclick="__openMiniShop()" title="My MiniShop — your SOKONI storefront" aria-label="My MiniShop">
+        <span class="mshop-ico">🏪</span>
+        <span class="mshop-txt"><span class="mshop-l1">My MiniShop</span><span class="mshop-l2" id="mshop-state">Storefront</span></span>
+      </button>
       <button class="mcmd-open" id="mcmd-open" title="Search & actions (Ctrl/⌘K)" aria-label="Search and actions">🔍<span class="kbd">⌘K</span></button>
       <div class="tchip"><span class="mdot" id="top-print"></span><span id="top-print-t">Printer</span></div>
     </header>
@@ -917,7 +934,10 @@
   };
 
   /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
-  var _ordState = { range: 'today', tab: 'all', search: '', rows: [] };
+  /* Default to All Time: the same window diagnose() reports, so every order the service
+     holds is visible (a 'today' default hid marketplace orders dated before local midnight —
+     the "Orders empty while OrderService has 9" boundary). The merchant can still narrow. */
+  var _ordState = { range: 'all', tab: 'all', search: '', rows: [] };
   var _shellOnlineOrders = [];      /* latest live marketplace orders pushed up by the Seller feed */
   var _shellPosSales = [];          /* authoritative backend POS sales (posRetailSales) from the Seller feed */
   var _ordFeedStarted = false;
@@ -969,17 +989,41 @@
   window.__ordRange = function (r) { _ordState.range = r; _ordPaintChrome(); _ordLoad(); };
   window.__ordTab   = function (t) { _ordState.tab = t; _ordPaintChrome(); _ordLoad(); };
 
+  /* Empty-state forensics (#6): expose the SAME source→unified boundary the diagnostics use, so
+     an empty Orders view tells the truth — service genuinely empty vs a filter hiding rows. */
+  async function _ordRenderEmpty (list) {
+    var branch = (window.SokoniShell && SokoniShell.activeShopId) || null;
+    var d = null;
+    try { d = SokoniOrderService.diagnose ? await SokoniOrderService.diagnose({ range: 'all', tab: 'all', branchId: branch }) : null; } catch (_) {}
+    var unifiedAll = d ? d.boundaries.unified : 0;     /* orders the service holds (this branch, all time) */
+    var rendered = _ordState.rows.length;              /* 0 in this branch of the code */
+    var hint = '';
+    if (unifiedAll > rendered && (_ordState.range !== 'all' || _ordState.tab !== 'all')) {
+      hint = '<div class="ord2-note">' + unifiedAll + ' order' + (unifiedAll === 1 ? '' : 's') +
+        ' in this shop are outside the current filter. <button class="ord2-chip active" onclick="__ordRange(\'all\');__ordTab(\'all\')">Show all</button></div>';
+    } else if (!SokoniOrderService.hasOnlineProvider()) {
+      hint = '<div class="ord2-note">Connecting the marketplace order feed…</div>';
+    }
+    var diag = d ? ('<div class="ord2-diag">Source ' + d.marketplace.fetched + ' · Accepted ' + d.marketplace.accepted +
+      ' · POS ' + (d.posBackend.fetched + d.pos.fetched) + ' · Unified ' + unifiedAll + ' · Rendered ' + rendered + '</div>') : '';
+    list.innerHTML = '<div class="ord2-empty"><div style="font-size:34px">🧾</div><p>No orders in this view</p>' + hint + diag + '</div>';
+  }
+
   async function _ordLoad () {
     var list = document.getElementById('ord2-list'); if (!list) return;
     if (!window.SokoniOrderService) { list.innerHTML = '<div class="ord2-empty">Order service unavailable.</div>'; return; }
     list.innerHTML = '<div class="sk-line" style="width:80%"></div><div class="sk-line" style="width:66%"></div><div class="sk-line" style="width:74%"></div>';
     var rows = [];
-    try { rows = await SokoniOrderService.query({ range: _ordState.range, tab: _ordState.tab, search: _ordState.search }); } catch (_) {}
+    /* Scope to the active branch (#11) — the filter is lenient (null/legacy always shows), so
+       branch isolation never hides untagged history. Same OrderService identity as Analytics. */
+    var _branch = (window.SokoniShell && SokoniShell.activeShopId) || null;
+    try { rows = await SokoniOrderService.query({ range: _ordState.range, tab: _ordState.tab, search: _ordState.search, branchId: _branch }); } catch (_) {}
     _ordState.rows = rows;
     _ordPaintSummary();
     if (!rows.length) {
-      var onlineNote = SokoniOrderService.hasOnlineProvider() ? '' : '<div class="ord2-note">Online marketplace orders connect in the next step — in-store sales show now.</div>';
-      list.innerHTML = '<div class="ord2-empty"><div style="font-size:34px">🧾</div><p>No orders in this view</p>' + onlineNote + '</div>';
+      /* An empty Orders view must never be a mystery: show the same source→unified boundary the
+         diagnostics report, so it's obvious whether the service is empty or a filter dropped rows. */
+      _ordRenderEmpty(list);
       return;
     }
     list.innerHTML = rows.map(_ordCard).join('');
@@ -1437,6 +1481,50 @@
       try { if (current) { var m = byId[current]; if (m && m.kind === 'native') renderNative(current); } } catch (_) {}
     });
     window.SokoniShell.activeShop = function () { return { id: window.SokoniShell.activeShopId || null, name: window.SokoniShell.activeShopName || null }; };
+  })();
+
+  /* ── My MiniShop — the merchant's storefront identity ──
+     Resolves the CANONICAL claimed-shop relationship (shops where ownerId==uid, or the active
+     branch's own shop doc if it has one) — no hardcoding. Claimed (has minishopHandle) → open the
+     public storefront /shop/<handle>; not claimed → open the claim/manage flow. Respects the
+     active branch (prefers a branch-specific shop doc). Resolves eagerly so the click is a
+     synchronous user gesture (no popup block); re-resolves on branch switch. ── */
+  (function () {
+    var _mshop = { resolved: false, claimed: false, url: 'minishop-admin.html', handle: null };
+    function _uid () { try { var u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); return (u && (u.uid || u.id)) || null; } catch (_) { return null; } }
+    async function _resolve () {
+      var uid = _uid();
+      if (!uid || !window.firebaseDB) return _mshop;
+      try {
+        var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        var activeId = (window.SokoniShell && SokoniShell.activeShopId) || null;
+        var data = null;
+        if (activeId) { try { var d = await m.getDoc(m.doc(window.firebaseDB, 'shops', String(activeId))); if (d.exists()) data = d.data(); } catch (_) {} }
+        if (!data) {
+          var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'), m.where('ownerId', '==', uid), m.limit(1)));
+          if (q.docs[0]) data = q.docs[0].data();
+        }
+        var handle = data && (data.minishopHandle || data.handle);
+        _mshop = handle
+          ? { resolved: true, claimed: true, url: '/shop/' + encodeURIComponent(handle), handle: handle }
+          : { resolved: true, claimed: false, url: 'minishop-admin.html', handle: null };
+      } catch (_) {}
+      return _mshop;
+    }
+    function _paint () {
+      var btn = document.getElementById('mshop-btn'), st = document.getElementById('mshop-state');
+      if (!btn || !st) return;
+      if (_mshop.claimed) { btn.classList.remove('notclaimed'); st.textContent = '🟢 Shop Live'; }
+      else { btn.classList.add('notclaimed'); st.textContent = '✨ Create'; }
+    }
+    function _open () { var url = _mshop.url || 'minishop-admin.html'; try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; } }
+    window.__openMiniShop = function () {
+      if (_mshop.resolved) { _open(); return; }
+      _resolve().then(function () { _paint(); var url = _mshop.url || 'minishop-admin.html'; location.href = url; });   /* async fallback: same tab (avoids popup block) */
+    };
+    window.__refreshMiniShop = function () { _resolve().then(_paint); };
+    setTimeout(window.__refreshMiniShop, 900);
+    document.addEventListener('soBranchChanged', function () { _mshop.resolved = false; window.__refreshMiniShop(); });
   })();
 
   window.__mgo = go;

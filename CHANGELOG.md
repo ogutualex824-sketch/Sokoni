@@ -1,3 +1,33 @@
+## [2026-08-09] — feat(merchant): convergence batch 1 — Orders, product delete, My MiniShop, POS splash
+
+Data-paths-first, extending existing infra (SokoniShell/SokoniSync/OrderService/canonical
+products) — no parallel systems, no hardcoding, no second order model.
+
+- **Orders now show (#5/#6)** — the Merchant Orders screen already read the unified
+  `SokoniOrderService`, but defaulted to `range:'today'` while diagnose used `'all'`, so
+  marketplace orders dated before local midnight were date-filtered out ("Orders empty while
+  OrderService has 9"). Default → All Time; query now branch-scoped (`activeShopId`, lenient so
+  legacy still shows). Empty state runs `diagnose()` and prints `Source·Accepted·POS·Unified·
+  Rendered` with a "Show all" action — an empty Orders view can no longer be a mystery.
+- **Product delete propagates (#4/#10)** — one canonical semantics: SOFT-archive
+  (`status:'archived', isVisible:false`). Removed the conflicting hard `deleteDoc` in
+  seller-wiring.js that raced the archive and destroyed history; it now archives idempotently.
+  seller.js emits `productChanged({deleted:true})`. Fixed a live event-name mismatch (POS listened
+  on `productChanged`, the bus emits `Product.Changed`) — POS now removes the id immediately
+  (no rebuild, no resurrection) and `refreshInventoryFromCanonical` removes canonical-sourced
+  orphans CAP-SAFELY (only on a full, untruncated catalogue). Delete → count drops on seller list,
+  POS, inventory, search, analytics.
+- **My MiniShop (#1/#2/#3)** — premium header button resolving the CANONICAL claimed-shop
+  relationship (`shops` where `ownerId==uid`, or the active branch's own shop doc): claimed
+  (`minishopHandle`) → `🟢 Shop Live` → opens `/shop/<handle>`; unclaimed → `✨ Create` → claim
+  flow. No hardcoded KASS. Re-resolves on branch switch; resolves eagerly so the click is a
+  gesture (no popup block).
+- **POS setup splash removed from the nav path (#9)** — the first-run wizard no longer blocks
+  when the POS is embedded in the merchant shell, so Merchant → Inventory renders directly. Setup
+  stays available as the explicit POS Setup module; printer functionality untouched.
+
+Verified: all files parse; test-inventory-sync 18/18. Device acceptance (founder) is the gate.
+
 ## [2026-08-09] — fix(inventory): canonical products reflect on the POS screen (offline-safe)
 
 Same forensic method as the order 9→0 fix: trace source→screen, fix the exact boundary,

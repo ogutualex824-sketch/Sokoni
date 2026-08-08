@@ -93,15 +93,21 @@
     }
   }
 
-  /* ── Delete one product from Firestore ─────────────────────── */
+  /* ── Retire one product (canonical SOFT delete) ─────────────────
+     Was a hard deleteDoc, which raced the soft-archive in seller.js deleteProduct() and
+     DESTROYED the archived record (and its sales/order history) that the lifecycle contract
+     preserves. The canonical semantics are archive (status:'archived', isVisible:false) so
+     history survives and the item can be relisted. seller.js now owns that write + the
+     SokoniSync propagation; this wrapper must NOT hard-delete. Kept as a safety net that
+     archives (idempotent) only if some caller reaches here without seller.js having run. */
   async function _deleteProduct(productId) {
     const db = _getDb();
     if (!db || !productId) return;
     try {
-      const { doc, deleteDoc } = await import(FS_URL);
-      await deleteDoc(doc(db, 'products', String(productId)));
+      const { doc, updateDoc, serverTimestamp } = await import(FS_URL);
+      await updateDoc(doc(db, 'products', String(productId)), { status: 'archived', isVisible: false, archivedAt: serverTimestamp(), updatedAt: serverTimestamp() });
     } catch(e) {
-      console.warn('[SellerWiring] delete failed:', e.message);
+      console.warn('[SellerWiring] retire failed:', e.message);
     }
   }
 

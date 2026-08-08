@@ -1445,6 +1445,15 @@ function deleteProduct(index){
         }
     })();
 
+    /* Propagate the retirement across every surface (POS cache, inventory, search count) via
+       the ONE shared bus — same infrastructure as create/edit. Carries deleted:true so POS
+       removes THIS id immediately (no full rebuild) and cannot resurrect it. Idempotent by id. */
+    try {
+        if (window.SokoniSync && window.SokoniSync.productChanged) {
+            window.SokoniSync.productChanged({ productId: String(target.id || ''), id: String(target.id || ''), deleted: true, action: 'PRODUCT_DELETED', branchId: (target.branchId || null) }, { source: 'seller' });
+        }
+    } catch (_) {}
+
     showNotification("🗑️ Product Archived", "delete");
 }
 
