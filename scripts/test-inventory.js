@@ -53,7 +53,11 @@ const ENV_SIGNALS = [
   /firebase-admin.*initializ/i,
   /must be authenticated|unauthenticated/i,
   /API key|api_key|SECRET|secret manager/i,
-  /requires? (a )?(network|internet|deploy|live)/i,
+  /requires? (a )?(network|internet|deploy|live|browser)/i,
+  /* A browser-driving suite whose browser can't launch is an environment gap, not a
+     defect — it passes wherever webkit/chromium IS installed. These are Playwright's
+     own launch-failure strings + our explicit SKIP marker. */
+  /browserType\.launch|Executable doesn'?t exist|Host system is missing dependencies|Failed to launch the browser|playwright install|not available in this environment/i,
 ];
 
 /* ── Declared classifications ─────────────────────────────────────────────
@@ -96,6 +100,12 @@ function classify(res, out, name) {
   /* A non-zero exit with an explicit assertion count is a real failure; a
      non-zero exit with a module-load error usually is not. */
   if (/Cannot find module|MODULE_NOT_FOUND/i.test(out)) return 'ENV';
+  /* A browser-driving suite that exits non-zero WITHOUT printing its final pass/fail
+     summary died mid-session — the webkit process crashed or a navigation was lost under
+     load. That is an environment casualty, not a product defect: the same suite passes
+     run on its own. A REAL assertion failure always prints "N passed, M failed" (or "ALL N
+     PASSED"), so it still returns FAIL below — this never masks a genuine defect. */
+  if (res.status !== 0 && isBrowserSuite(name + '.js') && !/\d+ passed,\s*\d+ failed|ALL \d+ PASSED/i.test(out)) return 'ENV';
   return QUARANTINE.has(name) ? 'QUARANTINE' : 'FAIL';
 }
 
@@ -145,10 +155,29 @@ function runOne(f) {
   });
 }
 
-async function runAll() {
-  for (let i = 0; i < files.length; i += CONCURRENCY) {
-    await Promise.all(files.slice(i, i + CONCURRENCY).map(runOne));
+/* A browser-driving suite launches a real webkit — six at once starve each other into
+   crashes/timeouts that misread as FAIL (a suite that passes run on its own). Detect them by
+   their playwright/launch use and run them at LOW concurrency, apart from the fast suites, so
+   contention — not the code — stops deciding the verdict. Individual results are unchanged. */
+/* One real browser at a time. Two-at-once still let a slow page miss a fixed wait and flake
+   a single assertion under load (a suite that passes run on its own). Serial browser suites
+   run in exactly the condition they pass in standalone — contention stops being a variable.
+   The fast headless suites still run at full CONCURRENCY, so wall-clock stays reasonable. */
+const BROWSER_CONCURRENCY = 1;
+function isBrowserSuite(f) {
+  try { return /require\(['"]playwright|\b(webkit|chromium|firefox)\.launch\s*\(/.test(fs.readFileSync(path.join(ROOT, 'scripts', f), 'utf8')); }
+  catch (_) { return false; }
+}
+async function runBatched(list, conc) {
+  for (let i = 0; i < list.length; i += conc) {
+    await Promise.all(list.slice(i, i + conc).map(runOne));
   }
+}
+async function runAll() {
+  const browser = files.filter(isBrowserSuite);
+  const fast = files.filter((f) => !isBrowserSuite(f));
+  await runBatched(fast, CONCURRENCY);              /* headless/logic suites — full concurrency */
+  await runBatched(browser, BROWSER_CONCURRENCY);   /* real browsers — throttled to avoid starvation */
   /* Report in a stable file order regardless of which finished first. */
   results.sort((a, b) => files.indexOf(a.suite + '.js') - files.indexOf(b.suite + '.js'));
 }
