@@ -707,10 +707,36 @@
     }).join('');
     return rows + '<div class="av-chiprow" style="margin-top:12px">' + srcRow + '</div>' +
       (trace ? '<div class="an-sec">Recent events</div>' + trace : '') +
+      '<div class="an-sec">KASS Shop Sync trace</div>' +
+      '<div id="an-trace"><div class="an-empty">Trace the source records into the analytics pipeline.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anSyncTrace()">🔎 Run sync trace</button></div></div>' +
       '<div class="an-sec">Data Convergence</div>' +
       '<div id="an-conv"><div class="an-empty">Check whether products/orders are converged across POS, Shop, Inventory & Analytics.</div>' +
         '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anConvCheck()">🔍 Check convergence</button></div></div>';
   }
+  /* KASS Shop Sync trace (source → sync → OrderService → Analytics). Reads the live feed
+     counts + the unified OrderService + the ingestion diagnostics — proof, not assumption. */
+  window.__anSyncTrace = function () {
+    var host = document.getElementById('an-trace'); if (!host) return;
+    host.innerHTML = '<div class="sk-line" style="width:60%"></div>';
+    var posFound = (_shellPosSales || []).length, onlineFound = (_shellOnlineOrders || []).length;
+    Promise.resolve(window.SokoniOrderService ? SokoniOrderService.query({ range: 'all', tab: 'all', branchId: (window.SokoniShell && SokoniShell.activeShopId) || null }) : []).then(function (rows) {
+      var posSynced = rows.filter(function (r) { return r.source === 'pos'; }).length;
+      var onlineSynced = rows.filter(function (r) { return r.source !== 'pos'; }).length;
+      var d = (window.SokoniAnalytics && SokoniAnalytics.diagnostics) ? SokoniAnalytics.diagnostics() : {};
+      function row (l, found, synced) { var okk = found === synced; return '<div class="an-row"><span>' + l + '</span><span>' + found + ' → ' + synced + (okk ? ' <span style="color:var(--acc)">✓</span>' : ' <span style="color:#ffb400">…</span>') + '</span></div>'; }
+      var pipe = ['Source', 'Sync', 'OrderService', 'AnalyticsEngine', 'Dashboard/Reports/Finance'].map(function (s) { return '<span class="av-chip" style="pointer-events:none"><span class="av-dot on"></span>' + s + '</span>'; }).join('');
+      host.innerHTML =
+        row('POS sales (posRetailSales)', posFound, posSynced) +
+        row('Marketplace orders', onlineFound, onlineSynced) +
+        '<div class="an-row"><span>Unified (OrderService)</span><span>' + rows.length + '</span></div>' +
+        '<div class="an-row"><span>Events received / processed</span><span>' + (d.received || 0) + ' / ' + (d.processed || 0) + '</span></div>' +
+        '<div class="an-row"><span>Duplicates / Failed</span><span>' + (d.duplicates || 0) + ' / ' + (d.failed || 0) + '</span></div>' +
+        '<div class="av-chiprow" style="margin-top:12px">' + pipe + '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anSyncTrace()">↻ Re-trace</button></div>' +
+        '<div class="an-note">Found → Synced. POS sales now come from the authoritative posRetailSales backend (cross-device), scoped to the active branch.</div>';
+    }).catch(function () { host.innerHTML = '<div class="an-empty">Could not run the trace on this device.</div>'; });
+  };
   window.__anConvCheck = function () {
     var host = document.getElementById('an-conv'); if (!host || !window.SokoniReconcile) return;
     host.innerHTML = '<div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:45%"></div>';
