@@ -809,15 +809,33 @@
     Promise.resolve(SokoniAnalyticsEngine.compute({ range: 'today' })).then(function (a) {
       _dashBusy = false;
       if (!a || current !== 'dashboard') return;
-      setTxt('d-revenue', 'KES ' + Number(a.revenue || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }));
-      setTxt('d-orders', String(a.orders));
-      setTxt('d-sales', String(a.pos.count));
-      setTxt('d-online', SokoniOrderService && SokoniOrderService.hasOnlineProvider() ? String(a.online.count) : '—');
-      setTxt('d-aov', a.aov ? 'KES ' + Number(a.aov).toLocaleString('en-KE') : '—');
-      setTxt('d-refunds', String(a.refunded));
+      _animKpi('d-revenue', a.revenue, 'kes');
+      _animKpi('d-orders', a.orders, 'int');
+      _animKpi('d-sales', a.pos.count, 'int');
+      _animKpi('d-online', (SokoniOrderService && SokoniOrderService.hasOnlineProvider()) ? a.online.count : null, 'int');
+      _animKpi('d-aov', a.aov ? a.aov : null, 'kes');
+      _animKpi('d-refunds', a.refunded, 'int');
     }).catch(function () { _dashBusy = false; });
   }
   function setTxt (id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
+  /* Animated KPI counter — subtle count-up, but instant when the user prefers reduced motion
+     or the value is unknown (—, never a fake 0). */
+  var _reduceMotion = (typeof window !== 'undefined' && window.matchMedia) ? window.matchMedia('(prefers-reduced-motion:reduce)').matches : false;
+  function _kfmt (kind, n) { return kind === 'kes' ? 'KES ' + Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }) : String(Math.round(n)); }
+  function _animKpi (id, target, kind) {
+    var el = document.getElementById(id); if (!el) return;
+    if (target == null) { el.__v = null; el.textContent = '—'; return; }   /* unknown → neutral, not 0 */
+    var from = (typeof el.__v === 'number') ? el.__v : 0;
+    if (_reduceMotion || from === target) { el.__v = target; el.textContent = _kfmt(kind, target); return; }
+    var start = null, dur = 500;
+    function step (ts) {
+      if (start === null) start = ts;
+      var p = Math.min(1, (ts - start) / dur), e = 1 - Math.pow(1 - p, 3);   /* easeOutCubic */
+      el.textContent = _kfmt(kind, from + (target - from) * e);
+      if (p < 1) requestAnimationFrame(step); else { el.__v = target; el.textContent = _kfmt(kind, target); }
+    }
+    requestAnimationFrame(step);
+  }
 
   /* ── Status chips (shell-level) ── */
   var shellPrinterUp = false;
