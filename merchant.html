@@ -359,6 +359,9 @@
 <!-- SokoniAnalytics — event ingestion + live shared analytics state (subscribes to SokoniSync,
      idempotent, drives Dashboard/Reports/Finance/Analytics without navigation). -->
 <script src="sokoni-analytics.js"></script>
+<!-- SokoniReconcile — commerce data-convergence status + idempotent reconciliation (canonical
+     products vs POS/inventory caches; order sources vs unified view). -->
+<script src="sokoni-reconcile.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -691,8 +694,42 @@
       return '<div class="an-row"><span>' + _ordEsc(e.type || 'EVENT') + '</span><span style="color:var(--txt3)">' + _ordEsc(e.source || '') + '</span></div>';
     }).join('');
     return rows + '<div class="av-chiprow" style="margin-top:12px">' + srcRow + '</div>' +
-      (trace ? '<div class="an-sec">Recent events</div>' + trace : '');
+      (trace ? '<div class="an-sec">Recent events</div>' + trace : '') +
+      '<div class="an-sec">Data Convergence</div>' +
+      '<div id="an-conv"><div class="an-empty">Check whether products/orders are converged across POS, Shop, Inventory & Analytics.</div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anConvCheck()">🔍 Check convergence</button></div></div>';
   }
+  window.__anConvCheck = function () {
+    var host = document.getElementById('an-conv'); if (!host || !window.SokoniReconcile) return;
+    host.innerHTML = '<div class="sk-line" style="width:60%"></div><div class="sk-line" style="width:45%"></div>';
+    Promise.resolve(SokoniReconcile.status()).then(function (s) {
+      if (!s || (!s.products && !s.orders)) { host.innerHTML = '<div class="an-empty">Sign in on this device to check convergence.</div>'; return; }
+      var p = s.products, o = s.orders;
+      var dot = function (ok) { return '<span class="av-dot ' + (ok ? 'on' : 'off') + '" style="display:inline-block;margin-left:6px"></span>'; };
+      var html = '';
+      if (p) html +=
+        '<div class="an-row"><span>Products · canonical</span><span>' + p.canonical + '</span></div>' +
+        '<div class="an-row"><span>POS cache / Inventory</span><span>' + p.posCache + ' / ' + p.inventory + '</span></div>' +
+        '<div class="an-row"><span>Missing / Mismatched / Orphans</span><span>' + p.missing + ' / ' + p.mismatched + ' / ' + p.orphans + dot(p.ok) + '</span></div>';
+      if (o) html +=
+        '<div class="an-row"><span>Orders · marketplace / POS</span><span>' + o.marketplace + ' / ' + o.pos + '</span></div>' +
+        '<div class="an-row"><span>Unified / Duplicates / Orphans</span><span>' + o.unified + ' / ' + o.duplicates + ' / ' + o.orphans + dot(o.ok) + '</span></div>';
+      var needFix = p && (p.missing + p.mismatched) > 0;
+      html += '<div style="display:flex;gap:8px;margin-top:12px">' +
+        '<button class="dbtn" onclick="__anConvCheck()">↻ Re-check</button>' +
+        (needFix ? '<button class="dbtn" style="border-color:rgba(113,255,0,.5);color:var(--acc)" onclick="__anReconcile()">🔧 Reconcile caches</button>' : '') +
+        '</div>';
+      host.innerHTML = html;
+    }).catch(function () { host.innerHTML = '<div class="an-empty">Could not read convergence.</div>'; });
+  };
+  window.__anReconcile = function () {
+    if (!window.SokoniReconcile) return;
+    var host = document.getElementById('an-conv'); if (host) host.innerHTML = '<div class="an-empty">Reconciling caches from canonical…</div>';
+    Promise.resolve(SokoniReconcile.reconcile()).then(function (r) {
+      if (window.SokoniNotify) SokoniNotify.success(r.alreadyOk ? 'Already converged' : ('Reconciled ' + r.written + ' cache record' + (r.written === 1 ? '' : 's')));
+      __anConvCheck();
+    }).catch(function () { if (window.SokoniNotify) SokoniNotify.error("Reconcile couldn't complete. Please try again."); __anConvCheck(); });
+  };
 
   /* ── Native Availability module (Layer 1: read-only) — reads the canonical
      AvailabilityService (shops/{uid} + products). Interactive toggles + canonical
