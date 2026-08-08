@@ -460,7 +460,27 @@ const PosDB = (function () {
     save: m => {
       if (!m.id) m.id = _uid('mov');
       m.timestamp = Date.now();
-      return _put('stock_movements', m);
+      const r = _put('stock_movements', m);
+      /* Canonical STOCK event → SokoniSync → inventory/shop-availability/analytics ingestion.
+         delta<0 → STOCK_DEDUCTED (sale/adjust down); delta>0 → STOCK_RECEIVED. Idempotent
+         on movement id. Fire-and-forget. */
+      try {
+        if (typeof window !== 'undefined' && window.SokoniSync && window.SokoniSync.stockChanged) {
+          const delta = Number(m.delta != null ? m.delta : (m.qty != null ? m.qty : 0));
+          window.SokoniSync.stockChanged({
+            eventId:   m.id,
+            type:      delta < 0 ? 'STOCK_DEDUCTED' : 'STOCK_RECEIVED',
+            source:    'Inventory',
+            entityType: 'product',
+            entityId:  m.productId || null,
+            id:        m.productId || null,
+            sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+            delta:     delta,
+            timestamp: Date.now()
+          });
+        }
+      } catch (_) {}
+      return r;
     },
   };
 
