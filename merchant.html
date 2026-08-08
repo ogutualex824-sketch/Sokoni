@@ -23,14 +23,19 @@
   /* ── Sidebar ── */
   .mrail{background:linear-gradient(180deg,#0b0b0b,#070707);border-right:1px solid var(--line);
     display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  /* Brand button = canonical shop/branch switcher */
   .mbrand{display:flex;align-items:center;gap:10px;padding:16px 16px 14px;min-height:var(--top);
-    border-bottom:1px solid var(--line)}
+    border-bottom:1px solid var(--line);width:100%;background:none;color:inherit;font-family:inherit;
+    cursor:pointer;text-align:left}
+  .mbrand:hover{background:rgba(255,255,255,.03)}
   /* Brand logo — transparent PNG, no background box */
   .mbrand .logo{height:30px;width:auto;max-width:120px;object-fit:contain;background:none;
     border-radius:0;flex:0 0 auto;display:block}
   .mshell.collapsed .mbrand .logo{max-width:40px}
-  .mbrand .name{font-weight:900;letter-spacing:.02em;white-space:nowrap;font-size:15px}
-  .mshell.collapsed .mbrand .name{opacity:0;width:0}
+  .mbrand .name{font-weight:900;letter-spacing:.02em;white-space:nowrap;font-size:15px;
+    overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .mbrand-caret{margin-left:auto;color:var(--txt3);font-size:12px;flex:0 0 auto}
+  .mshell.collapsed .mbrand .name,.mshell.collapsed .mbrand-caret{opacity:0;width:0}
   .mnav{flex:1;overflow-y:auto;padding:10px 8px;scrollbar-width:none}
   .mnav::-webkit-scrollbar{display:none}
   .mnav-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:11px;
@@ -305,7 +310,11 @@
 <body>
 <div class="mshell" id="mshell">
   <aside class="mrail">
-    <div class="mbrand"><img class="logo" src="assets/logosokoni.png" alt="SOKONI"><div class="name">SOKONI</div></div>
+    <button class="mbrand" id="mbrand" title="Switch shop / branch" aria-label="Switch shop or branch">
+      <img class="logo" src="assets/logosokoni.png" alt="SOKONI">
+      <div class="name" id="mbrand-name">SOKONI</div>
+      <span class="mbrand-caret" aria-hidden="true">▾</span>
+    </button>
     <nav class="mnav" id="mnav"></nav>
     <div class="mstatus">
       <div class="mchip"><span class="mdot" id="st-print"></span><span class="ctxt" id="st-print-t">Printer</span></div>
@@ -362,6 +371,9 @@
 <!-- SokoniReconcile — commerce data-convergence status + idempotent reconciliation (canonical
      products vs POS/inventory caches; order sources vs unified view). -->
 <script src="sokoni-reconcile.js"></script>
+<!-- SokoniBranch — the canonical shop/branch switcher (reused, not rebuilt). The header
+     brand button is its entry point; the active shop drives SokoniShell.activeShopId. -->
+<script src="sokoni-branch.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -1286,6 +1298,38 @@
         else if (current === 'availability' && /Product|Stock|Availability|Shop/.test(name)) _avLoad();
       } catch (_) {}
     });
+  })();
+
+  /* ── Shop / branch context switcher — the header brand IS the entry point ──
+     Reuses the canonical SokoniBranch (no new shop system). The active shop becomes
+     SokoniShell.activeShopId; switching refreshes the open module in-place (no reload)
+     and announces via SokoniSync so every module re-queries against the new shop. ── */
+  (function () {
+    window.SokoniShell = window.SokoniShell || {};
+    var brandBtn = document.getElementById('mbrand');
+    var brandName = document.getElementById('mbrand-name');
+    function _cur () { try { return (window.SokoniBranch && SokoniBranch.getCurrent && SokoniBranch.getCurrent()) || null; } catch (_) { return null; } }
+    function _applyShop (b) {
+      b = b || _cur();
+      window.SokoniShell.activeShopId = b ? b.id : null;
+      window.SokoniShell.activeShopName = b ? b.name : null;
+      if (brandName && b && b.name) brandName.textContent = b.name;
+      try { localStorage.setItem('activeShopId', b ? b.id : ''); } catch (_) {}
+    }
+    if (brandBtn) brandBtn.onclick = function () { try { if (window.SokoniBranch) SokoniBranch.openPicker(); } catch (_) {} };
+    /* Initial context (once SokoniBranch has inited). */
+    _applyShop();
+    if (!window.SokoniShell.activeShopId) setTimeout(_applyShop, 400);
+    /* Switch → update context, tell every module, refresh whichever is open. */
+    document.addEventListener('soBranchChanged', function (e) {
+      var b = (e && e.detail && e.detail.branch) || _cur();
+      _applyShop(b);
+      try { if (window.SokoniSync) SokoniSync.shopChanged({ type: 'SHOP_SWITCHED', shopId: window.SokoniShell.activeShopId, source: 'Shop', timestamp: Date.now() }); } catch (_) {}
+      /* Re-render the open module against the new shop (no shell reload). Persistent
+         POS/Seller panels are told to re-read via the shop event they already receive. */
+      try { if (current) { var m = byId[current]; if (m && m.kind === 'native') renderNative(current); } } catch (_) {}
+    });
+    window.SokoniShell.activeShop = function () { return { id: window.SokoniShell.activeShopId || null, name: window.SokoniShell.activeShopName || null }; };
   })();
 
   window.__mgo = go;
