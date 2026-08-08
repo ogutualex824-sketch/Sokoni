@@ -758,9 +758,30 @@
         line('Products', r.products) + line('POS transactions', r.transactions) + line('Marketplace orders', r.orders) +
         (revRows.length ? '<div class="an-sec">Held for review</div>' + revRows.join('') : '') +
         '<div class="an-row" style="margin-top:8px"><span>Preview ID</span><span style="font-family:monospace;font-size:11px;color:var(--txt3)">' + _ordEsc(r.previewId || '—') + '</span></div>' +
+        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anCopyPreview()">📋 Copy preview</button></div>' +
         '<div class="an-note">Nothing was written. A confirmed write applies ONLY the ' + (s.safeToAssign || 0) + ' safe record(s), must quote this exact Preview ID, never overwrites an existing branchId, and never moves the ' + review + ' financial record(s) held for review.</div>';
+      /* Build the exact paste-back text so the reviewer copies, not transcribes. */
+      var revText = [];
+      ['transactions', 'orders'].forEach(function (k) { var pp = r[k]; if (pp && pp.review) pp.review.forEach(function (x) { revText.push('- ' + x.id + ' (' + k + ', ' + x.reason + ', suggested ' + x.suggested + ')'); }); });
+      window.__anPreviewText =
+        'SAFE TO ASSIGN: ' + (s.safeToAssign || 0) + '\n' +
+        'ALREADY CORRECT: ' + (s.alreadyCorrect || 0) + '\n' +
+        'NEEDS REVIEW: ' + (s.needsReview || 0) + '\n' +
+        'SKIPPED: ' + (s.skipped || 0) + '\n' +
+        'FAILED: ' + (s.failed || 0) + '\n' +
+        'PREVIEW ID: ' + (r.previewId || '—') + '\n\n' +
+        'Review records:\n' + (revText.length ? revText.join('\n') : '(none)');
     }).catch(function () { host.innerHTML = '<div class="an-empty">Sign in on this device to preview the backfill.</div>'; });
   };
+  window.__anCopyPreview = function () {
+    var t = window.__anPreviewText || ''; if (!t) return;
+    var done = function () { if (window.SokoniNotify) SokoniNotify.success('Preview copied — paste it back'); };
+    try { navigator.clipboard.writeText(t).then(done).catch(function () { _anFallbackCopy(t, done); }); }
+    catch (_) { _anFallbackCopy(t, done); }
+  };
+  function _anFallbackCopy (t, done) {
+    try { var ta = document.createElement('textarea'); ta.value = t; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); } catch (_) {}
+  }
   window.__anReconcile = function () {
     if (!window.SokoniReconcile) return;
     var host = document.getElementById('an-conv'); if (host) host.innerHTML = '<div class="an-empty">Reconciling caches from canonical…</div>';
