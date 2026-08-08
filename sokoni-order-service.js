@@ -48,8 +48,10 @@
     var ts = t.completedAt || t.timestamp || Date.now();
     var status = t.voided ? 'cancelled' : (t.refunded ? 'refunded' : 'completed');
     return {
-      id:          'POS-' + (t.receiptNo || String(t.id || '').slice(-6)),
-      canonicalId: String(t.id || t.receiptNo || ts),
+      id:          'POS-' + (t.receiptNo || String(t.saleId || t.id || '').slice(-6)),
+      /* Prefer saleId so a local IndexedDB txn dedups against its authoritative
+         posRetailSales twin (same sale, two stores → one row). */
+      canonicalId: String(t.saleId || t.id || t.receiptNo || ts),
       source:      'pos',
       branchId:    t.branchId || null,          /* branch isolation key (null = legacy, pre-migration) */
       channel:     'in_store',
@@ -80,6 +82,39 @@
     if (status === 'refunded')  ev.push({ type: 'REFUNDED',  at: t.refundedAt || ts });
     if (status === 'cancelled') ev.push({ type: 'CANCELLED', at: t.voidedAt || ts });
     return ev;
+  }
+
+  /* Authoritative POS sale from the BACKEND (posRetailSales, written by posCompleteCheckout).
+     This is the cross-device source of truth — the IndexedDB record is only a local cache. */
+  function _fromRetailSale (s) {
+    var ts = s.createdAt;
+    if (ts && ts.toMillis) ts = ts.toMillis();
+    else if (typeof ts === 'string') { var p = Date.parse(ts); ts = isNaN(p) ? Date.now() : p; }
+    else if (typeof ts !== 'number') ts = s.saleDateMs || Date.now();
+    var status = (s.status === 'refunded' || s.refunded) ? 'refunded' : ((s.status === 'voided' || s.status === 'cancelled') ? 'cancelled' : 'completed');
+    return {
+      id:          'POS-' + String(s.id || '').slice(-6),
+      canonicalId: String(s.id || ts),               /* saleId — dedups against the local twin */
+      source:      'pos',
+      branchId:    s.branchId || null,
+      channel:     'in_store',
+      customer:    (s.customer && s.customer.name) || 'Walk-in Customer',
+      phone:       (s.customer && s.customer.phone) || '',
+      cashier:     s.cashierName || s.cashierId || '',
+      items:       (s.items || []).map(function (i) { return { name: i.name || i.productName || 'Item', qty: i.qty || i.quantity || 1, price: (i.unitPrice != null ? i.unitPrice : (i.price || 0)) }; }),
+      itemCount:   (s.items || []).length,
+      subtotal:    _num(s.subtotal),
+      discount:    _num(s.discountTotal),
+      tax:         _num(s.taxTotal),
+      deliveryFee: 0,
+      total:       _num(s.grandTotal != null ? s.grandTotal : s.total),
+      paymentMethod: (s.payments && s.payments[0] && (s.payments[0].method || s.payments[0].type)) || 'cash',
+      paymentStatus: 'paid',
+      status:      status,
+      ts:          ts,
+      events:      _timelinePos(s, status, ts),
+      raw:         s,
+    };
   }
 
   function _mapOnlineStatus (s) {
@@ -150,6 +185,12 @@
      a Promise of raw order objects. Null until wired → POS-only, no fabricated data. */
   var _onlineProvider = null;
   function setOnlineProvider (fn) { _onlineProvider = (typeof fn === 'function') ? fn : null; }
+  /* Authoritative backend POS sales (posRetailSales where merchantId == seller). The shell
+     wires this from the Seller module's authenticated query — the SAME pattern as the online
+     provider, no second model. Makes POS sales visible to analytics on any device. */
+  var _posProvider = null;
+  function setPosProvider (fn) { _posProvider = (typeof fn === 'function') ? fn : null; }
+  function hasPosProvider () { return !!_posProvider; }
 
   /* ── Filters ── */
   function _rangeFrom (range) {
@@ -187,6 +228,14 @@
         if (t.status === 'completed' || t.refunded || t.voided || t.completedAt) out.push(_fromPos(t));
       });
     } catch (e) { /* POS DB unavailable — online-only */ }
+
+    /* Authoritative backend POS sales (posRetailSales) — cross-device source of truth. */
+    if (_posProvider) {
+      try {
+        var sales = await _posProvider();
+        (sales || []).forEach(function (s) { try { out.push(_fromRetailSale(s)); } catch (_) {} });
+      } catch (e) { /* provider failed — local POS + online this pass */ }
+    }
 
     /* Marketplace / delivery / pickup */
     if (_onlineProvider) {
@@ -245,6 +294,8 @@
     summarize: summarize,
     setOnlineProvider: setOnlineProvider,
     hasOnlineProvider: function () { return !!_onlineProvider; },
+    setPosProvider: setPosProvider,
+    hasPosProvider: hasPosProvider,
     EVENT_LABELS: {
       ORDER_CREATED: 'Order placed', PAYMENT_AUTHORIZED: 'Payment received', ORDER_ACCEPTED: 'Accepted',
       ORDER_PREPARING: 'Preparing', ORDER_READY: 'Ready', RIDER_ASSIGNED: 'Rider assigned',

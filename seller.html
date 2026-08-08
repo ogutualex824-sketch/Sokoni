@@ -6730,9 +6730,34 @@ document.addEventListener('DOMContentLoaded', function() {
           return true;
         } catch (_) { _startPoll(); return true; }
       }
-      if (!_start()) {
-        if (window.firebaseAuth && window.firebaseAuth.onAuthStateChanged) window.firebaseAuth.onAuthStateChanged(function () { _start(); });
-        else { var t = setInterval(function () { if (_start()) clearInterval(t); }, 1500); }
+      /* Authoritative POS-sales feed → shell OrderService. posRetailSales (written by
+         posCompleteCheckout, merchantId == seller uid) is the CROSS-DEVICE source of truth for
+         POS sales — the IndexedDB record is only a local cache. Without this, POS sales are
+         invisible to Merchant Analytics on any device that didn't ring them up. */
+      var _posUnsub = null, _posGot = false, _posPollT = null;
+      function _posPush (sales) { try { window.parent.postMessage({ __sokoniPosSales: true, sales: sales }, location.origin); } catch (_) {} }
+      function _posPoll () {
+        var db = window.firebaseDB, uid = _uid(); if (!db || !uid) return;
+        m.getDocs(m.query(m.collection(db, 'posRetailSales'), m.where('merchantId', '==', uid), m.limit(500)))
+          .then(function (snap) { _posPush(_rowsFrom(snap)); }).catch(function () {});
+      }
+      function _posStartPoll () { if (_posPollT) return; _posPoll(); _posPollT = setInterval(_posPoll, 15000); }
+      function _posStart () {
+        var db = window.firebaseDB, uid = _uid();
+        if (!db || !uid || _posUnsub) return !!_posUnsub;
+        try {
+          var pq = m.query(m.collection(db, 'posRetailSales'), m.where('merchantId', '==', uid), m.limit(500));
+          _posUnsub = m.onSnapshot(pq, function (snap) {
+            _posGot = true; if (_posPollT) { clearInterval(_posPollT); _posPollT = null; }
+            _posPush(_rowsFrom(snap));
+          }, function () { _posStartPoll(); });
+          setTimeout(function () { if (!_posGot) _posStartPoll(); }, 8000);
+          return true;
+        } catch (_) { _posStartPoll(); return true; }
+      }
+      if (!_start() || !_posStart()) {
+        if (window.firebaseAuth && window.firebaseAuth.onAuthStateChanged) window.firebaseAuth.onAuthStateChanged(function () { _start(); _posStart(); });
+        else { var t = setInterval(function () { var a = _start(), b = _posStart(); if (a && b) clearInterval(t); }, 1500); }
       }
     } catch (_) {}
   })();

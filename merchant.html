@@ -871,6 +871,7 @@
   /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
   var _ordState = { range: 'today', tab: 'all', search: '', rows: [] };
   var _shellOnlineOrders = [];      /* latest live marketplace orders pushed up by the Seller feed */
+  var _shellPosSales = [];          /* authoritative backend POS sales (posRetailSales) from the Seller feed */
   var _ordFeedStarted = false;
   function _startOnlineFeed () {
     /* Load the Seller module (hidden) once so its authenticated onSnapshot(orders) feed runs and
@@ -1253,6 +1254,16 @@
       _shellOnlineOrders = d.orders || [];
       try { if (window.SokoniOrderService) SokoniOrderService.setOnlineProvider(function () { return _shellOnlineOrders; }); } catch (_) {}
       /* Live re-render whichever data screen is open — all from the same source, no reload. */
+      try {
+        if (current === 'orders') _ordLoad();
+        else if (current === 'dashboard') _dashLoadAnalytics();
+        else if (current === 'reports' || current === 'finance' || current === 'analytics') _anLoad(current);
+      } catch (_) {}
+      return;
+    }
+    if (d.__sokoniPosSales) {                                      /* AUTHORITATIVE backend POS sales (posRetailSales) — cross-device */
+      _shellPosSales = d.sales || [];
+      try { if (window.SokoniOrderService) SokoniOrderService.setPosProvider(function () { return _shellPosSales; }); } catch (_) {}
       try {
         if (current === 'orders') _ordLoad();
         else if (current === 'dashboard') _dashLoadAnalytics();
