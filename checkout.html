@@ -2246,6 +2246,9 @@ async function sendStkPush(){
       const sessionRes = await createSession({
         cartItems:   cartForSession,
         deliveryFee: deliveryFee || 0,
+        /* Chosen fulfillment channel — the server enforces the seller's shop
+           availability (delivery/pickup on/off) against it before authorising. */
+        fulfillmentType: fulfillmentType,
         /* A NAME, not a discount. The server validates it and folds any discount
            into serverTotal — the client cannot assert a price reduction. */
         promoCode:   _appliedPromoCode || undefined,

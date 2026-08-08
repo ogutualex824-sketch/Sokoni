@@ -203,8 +203,18 @@
   .av-shopdot.on{background:var(--acc);box-shadow:0 0 10px var(--acc)} .av-shopdot.off{background:#ff5a5a;box-shadow:0 0 10px rgba(255,90,90,.6)}
   .av-shoptitle{font-size:18px;font-weight:900}
   .av-chiprow{display:flex;flex-wrap:wrap;gap:10px}
-  .av-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:9px 12px;font-size:13px;font-weight:700}
+  .av-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:9px 12px;font-size:13px;font-weight:700;color:var(--txt);font-family:inherit;cursor:pointer;min-height:40px}
+  .av-chip:active{background:rgba(255,255,255,.09)} .av-chip[disabled]{opacity:.5;cursor:default}
   .av-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto} .av-dot.on{background:var(--acc)} .av-dot.off{background:#ff5a5a}
+  .av-openbtn{margin-left:auto;border-radius:10px;padding:8px 14px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;min-height:38px}
+  .av-openbtn.open{background:rgba(255,90,90,.12);border:1px solid rgba(255,90,90,.5);color:#ff6b6b}
+  .av-openbtn.close{background:rgba(113,255,0,.12);border:1px solid rgba(113,255,0,.5);color:var(--acc)}
+  .av-openbtn[disabled]{opacity:.5;cursor:default}
+  .av-rowright{display:flex;align-items:center;gap:10px;flex:0 0 auto}
+  .av-ptoggle{border-radius:20px;padding:5px 12px;font-family:inherit;font-weight:800;font-size:11px;cursor:pointer;min-height:32px;border:1px solid var(--line)}
+  .av-ptoggle.on{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.4);color:var(--acc)}
+  .av-ptoggle.off{background:rgba(255,255,255,.05);color:var(--txt3)}
+  .av-ptoggle[disabled]{opacity:.5;cursor:default}
   .av-state{color:var(--txt3);font-size:11px;font-weight:800;margin-left:2px}
   .av-note{font-size:11px;color:var(--txt3);margin-top:12px;opacity:.8}
   .av-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px}
@@ -667,9 +677,11 @@
     }
     _avLoad();
   }
-  function _avChip (on, label) {
-    return '<div class="av-chip"><span class="av-dot ' + (on ? 'on' : 'off') + '"></span>' + label +
-      '<span class="av-state">' + (on ? 'On' : 'Off') + '</span></div>';
+  var _avState = { shop: null, products: [], busy: false };
+  function _avChip (key, on, label) {
+    return '<button type="button" class="av-chip" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avToggleShop(\'' + key + '\')">' +
+      '<span class="av-dot ' + (on ? 'on' : 'off') + '"></span>' + label +
+      '<span class="av-state">' + (on ? 'On' : 'Off') + '</span></button>';
   }
   function _avStat (n, l, cls) { return '<div class="av-stat ' + (cls || '') + '"><div class="av-n">' + n + '</div><div class="av-l">' + l + '</div></div>'; }
   function _avLoad () {
@@ -677,30 +689,56 @@
     if (!body || !window.AvailabilityService) return;
     Promise.all([AvailabilityService.readShop(), AvailabilityService.readProducts()]).then(function (res) {
       if (current !== 'availability') return;
-      var shop = res[0], products = res[1];
-      var c = AvailabilityService.counts(products);
-      var open = shop.acceptingOrders;
-      var BADGE = { available: ['ok', 'Available'], low: ['warn', 'Low stock'], out: ['bad', 'Out of stock'], unavailable: ['muted', 'Unavailable'] };
-      body.innerHTML =
-        '<div class="av-shopcard ' + (open ? 'open' : 'closed') + '">' +
-          '<div class="av-shophead"><span class="av-shopdot ' + (open ? 'on' : 'off') + '"></span>' +
-            '<span class="av-shoptitle">Shop ' + (open ? 'Open' : 'Closed') + '</span></div>' +
-          '<div class="av-chiprow">' + _avChip(shop.online, 'Online orders') + _avChip(shop.delivery, 'Delivery') + _avChip(shop.pickup, 'Pickup') + '</div>' +
-          '<div class="av-note">Controls activate in the next update (Layer 2). Shop state never changes your products.</div>' +
-        '</div>' +
-        '<div class="av-grid">' +
-          _avStat(String(c.available), 'Available', 'ok') + _avStat(String(c.low), 'Low Stock', 'warn') +
-          _avStat(String(c.out), 'Out of Stock', 'bad') + _avStat(String(c.unavailable), 'Unavailable', 'muted') +
-        '</div>' +
-        '<div class="av-sec">Products <span class="av-count">' + c.total + '</span></div>' +
-        (products.length ? '<div class="av-list">' + products.map(function (p) {
-          var b = BADGE[p._state] || BADGE.unavailable;
-          return '<div class="av-row"><span class="av-pname">' + _ordEsc(p.name || p.title || 'Product') + '</span>' +
-            '<span class="av-badge ' + b[0] + '">' + b[1] + (p._state === 'low' || p._state === 'out' ? ' · ' + Number(p.stock || 0) : '') + '</span></div>';
-        }).join('') + '</div>' : '<div class="av-empty">No products yet</div>') +
-        '<div class="an-trace">ⓘ source: shops/{uid} + products → AvailabilityService → this screen</div>';
+      _avState.shop = res[0]; _avState.products = res[1];
+      _avPaint();
     }).catch(function () {});
   }
+  function _avPaint () {
+    var body = document.getElementById('av-body'); if (!body) return;
+    var shop = _avState.shop || { acceptingOrders: true, online: true, delivery: true, pickup: true };
+    var products = _avState.products || [];
+    var c = AvailabilityService.counts(products);
+    var open = shop.acceptingOrders;
+    var BADGE = { available: ['ok', 'Available'], low: ['warn', 'Low stock'], out: ['bad', 'Out of stock'], unavailable: ['muted', 'Unavailable'] };
+    body.innerHTML =
+      '<div class="av-shopcard ' + (open ? 'open' : 'closed') + '">' +
+        '<div class="av-shophead"><span class="av-shopdot ' + (open ? 'on' : 'off') + '"></span>' +
+          '<span class="av-shoptitle">Shop ' + (open ? 'Open' : 'Closed') + '</span>' +
+          '<button type="button" class="av-openbtn ' + (open ? 'close' : 'open') + '" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avSetOpen(' + (open ? 'false' : 'true') + ')">' + (open ? 'Close Shop' : 'Open Shop') + '</button></div>' +
+        '<div class="av-chiprow">' + _avChip('online', shop.online, 'Online orders') + _avChip('delivery', shop.delivery, 'Delivery') + _avChip('pickup', shop.pickup, 'Pickup') + '</div>' +
+        '<div class="av-note">Live &amp; enforced: a closed shop or disabled channel blocks new checkout server-side. Turning the shop off never changes your products.</div>' +
+      '</div>' +
+      '<div class="av-grid">' +
+        _avStat(String(c.available), 'Available', 'ok') + _avStat(String(c.low), 'Low Stock', 'warn') +
+        _avStat(String(c.out), 'Out of Stock', 'bad') + _avStat(String(c.unavailable), 'Unavailable', 'muted') +
+      '</div>' +
+      '<div class="av-sec">Products <span class="av-count">' + c.total + '</span></div>' +
+      (products.length ? '<div class="av-list">' + products.map(function (p, i) {
+        var b = BADGE[p._state] || BADGE.unavailable;
+        var paused = (p.isVisible === false || p.status === 'archived');
+        return '<div class="av-row"><span class="av-pname">' + _ordEsc(p.name || p.title || 'Product') + '</span>' +
+          '<span class="av-rowright"><span class="av-badge ' + b[0] + '">' + b[1] + (p._state === 'low' || p._state === 'out' ? ' · ' + Number(p.stock || 0) : '') + '</span>' +
+          '<button type="button" class="av-ptoggle ' + (paused ? 'off' : 'on') + '" ' + (_avState.busy ? 'disabled' : '') + ' onclick="__avToggleProduct(' + i + ')" title="' + (paused ? 'Make available' : 'Pause') + '">' + (paused ? 'Paused' : 'Live') + '</button></span></div>';
+      }).join('') + '</div>' : '<div class="av-empty">No products yet</div>') +
+      '<div class="an-trace">ⓘ source: shops/{uid} + products → AvailabilityService → this screen · writes are canonical</div>';
+  }
+  function _avGuard () { if (_avState.busy) return false; _avState.busy = true; _avPaint(); return true; }
+  function _avDone (okMsg) { _avState.busy = false; if (okMsg && window.SokoniNotify) SokoniNotify.success(okMsg); _avLoad(); }
+  function _avFail (e) { _avState.busy = false; if (window.SokoniNotify) SokoniNotify.error("We couldn't save that. Please try again."); _avPaint(); }
+  window.__avSetOpen = function (open) {
+    if (!_avGuard()) return;
+    AvailabilityService.setShop({ acceptingOrders: open }).then(function () { _avDone(open ? 'Shop opened' : 'Shop closed'); }).catch(_avFail);
+  };
+  window.__avToggleShop = function (key) {
+    if (!_avState.shop || !_avGuard()) return;
+    var patch = {}; patch[key] = !_avState.shop[key];
+    AvailabilityService.setShop(patch).then(function () { _avDone('Saved'); }).catch(_avFail);
+  };
+  window.__avToggleProduct = function (i) {
+    var p = _avState.products[i]; if (!p || !_avGuard()) return;
+    var paused = (p.isVisible === false || p.status === 'archived');
+    AvailabilityService.setProductAvailability(p.id, paused /* currently paused → make available */).then(function () { _avDone(paused ? 'Product available' : 'Product paused'); }).catch(_avFail);
+  };
 
   /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
   var _ordState = { range: 'today', tab: 'all', search: '', rows: [] };

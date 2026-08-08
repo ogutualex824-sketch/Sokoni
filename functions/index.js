@@ -2239,13 +2239,14 @@ exports.createCheckoutSession = onCall(
   async (request) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
 
-    const { cartItems, deliveryFee, promoCode, redeemLoyalty } = request.data || {};
+    const { cartItems, deliveryFee, promoCode, redeemLoyalty, fulfillmentType } = request.data || {};
     if (!Array.isArray(cartItems) || cartItems.length === 0) {
       throw new HttpsError("invalid-argument", "cartItems must be a non-empty array.");
     }
     if (cartItems.length > 50) {
       throw new HttpsError("invalid-argument", "Cart too large (max 50 items).");
     }
+    const _fulfil = (String(fulfillmentType || "delivery") === "pickup") ? "pickup" : "delivery";
 
     const productIds = [...new Set(
       cartItems.map(i => String(i.productId || i.id || "")).filter(Boolean)
@@ -2263,17 +2264,64 @@ exports.createCheckoutSession = onCall(
       snap.forEach(doc => { priceMap[doc.id] = doc.data(); });
     }
 
+    /* ── Shop availability (Layer 4 authority) ─────────────────────────────────
+       Read the canonical shop-state for every distinct seller in the cart. ABSENT
+       fields default to open, so un-migrated shops behave exactly as before. This
+       is the SERVER gate: a closed shop / disabled channel cannot get a checkout
+       session, so no new order can be created for it — regardless of stale client
+       state. Existing orders are never touched (this is creation-only). */
+    const cartSellerUids = [...new Set(
+      productIds.map(pid => priceMap[pid] && priceMap[pid].sellerUid).filter(Boolean)
+    )];
+    const shopState = {};
+    try {
+      for (let si = 0; si < cartSellerUids.length; si += 10) {
+        const chunk = cartSellerUids.slice(si, si + 10);
+        const ssnap = await db.collection("shops")
+          .where(admin.firestore.FieldPath.documentId(), "in", chunk).get();
+        ssnap.forEach(doc => { shopState[doc.id] = doc.data() || {}; });
+      }
+    } catch (e) {
+      /* Fail OPEN: availability is a merchant convenience, not a security control. If the
+         shop-state read fails, default every shop to open (shopOf() does this on empty
+         shopState) rather than block legitimate checkouts. */
+      console.warn("[createCheckoutSession] shop-state read failed, defaulting open:", e && e.message);
+    }
+    const shopOf = (uid) => {
+      const s = shopState[uid] || {};
+      return {
+        acceptingOrders: s.acceptingOrders !== false,
+        online:          s.online          !== false,
+        delivery:        s.delivery        !== false,
+        pickup:          s.pickup          !== false,
+      };
+    };
+
     /* Build session items using server prices — any item not in the catalogue is skipped.
        Also validates stock availability: out-of-stock items are rejected so the session
        cannot be used to purchase items that are unavailable. */
     const sessionItems = [];
     let serverSubtotal = 0;
     const outOfStockItems = [];
+    const unavailableItems = [];   /* product hidden/archived, or its shop closed/online-off */
     const adjustedItems   = [];
     for (const item of cartItems) {
       const pid  = String(item.productId || item.id || "");
       const prod = priceMap[pid];
       if (!prod) continue;
+
+      /* Product availability (canonical): hidden or archived → cannot be purchased. */
+      if (prod.isVisible === false || prod.status === "archived") {
+        unavailableItems.push(prod.name || pid);
+        continue;
+      }
+      /* Shop availability (canonical): shop not accepting orders, or online selling
+         disabled → cannot create a new order for this seller. */
+      const _sh = shopOf(prod.sellerUid);
+      if (!_sh.acceptingOrders || !_sh.online) {
+        unavailableItems.push(prod.name || pid);
+        continue;
+      }
 
       /* Out-of-stock check: outOfStock flag OR stock field present and zero */
       const stockQty = prod.stock !== undefined ? Number(prod.stock) : null;
@@ -2309,6 +2357,18 @@ exports.createCheckoutSession = onCall(
       });
     }
 
+    /* Availability rejection — a closed shop / unavailable product cannot be ordered.
+       If every purchasable item was dropped for unavailability, the session is refused
+       outright; a partial cart proceeds with only the available items. */
+    if (unavailableItems.length > 0 && sessionItems.length === 0) {
+      throw new HttpsError("failed-precondition",
+        `Currently unavailable: ${unavailableItems.slice(0, 3).join(", ")}. The shop may be closed or these items paused.`
+      );
+    }
+    if (unavailableItems.length > 0) {
+      console.warn("[createCheckoutSession] Skipped unavailable items:", unavailableItems);
+    }
+
     if (outOfStockItems.length > 0 && sessionItems.length === 0) {
       throw new HttpsError("failed-precondition",
         `All items in your cart are out of stock: ${outOfStockItems.slice(0, 3).join(", ")}`
@@ -2320,6 +2380,20 @@ exports.createCheckoutSession = onCall(
     }
     if (sessionItems.length === 0) {
       throw new HttpsError("not-found", "None of the cart items were found in the product catalogue.");
+    }
+
+    /* Fulfillment-channel enforcement: the chosen method must be enabled by every
+       seller remaining in the cart. Defaults are on, so this only blocks a shop that
+       has explicitly turned the channel off. */
+    const _fulfilSellers = [...new Set(sessionItems.map(i => i.sellerUid).filter(Boolean))];
+    for (const sUid of _fulfilSellers) {
+      const sh = shopOf(sUid);
+      if (_fulfil === "delivery" && !sh.delivery) {
+        throw new HttpsError("failed-precondition", "Delivery is currently unavailable for this shop. Please choose pickup or try again later.");
+      }
+      if (_fulfil === "pickup" && !sh.pickup) {
+        throw new HttpsError("failed-precondition", "Pickup is currently unavailable for this shop. Please choose delivery or try again later.");
+      }
     }
 
     /* Cap delivery fee at KES 5,000 to prevent inflated totals */

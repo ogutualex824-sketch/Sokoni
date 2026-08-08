@@ -88,14 +88,45 @@
     } catch (_) { return []; }
   }
 
+  var SHOP_KEYS = ['acceptingOrders', 'online', 'delivery', 'pickup'];
+
+  /* Write the canonical shop-state (merge, so absent fields are created without
+     touching anything else), then announce it on SokoniSync. Returns the patch. */
+  async function setShop (patch, uid) {
+    uid = uid || _uid();
+    if (!uid || !root.firebaseDB) throw new Error('Not signed in');
+    var clean = {};
+    SHOP_KEYS.forEach(function (k) { if (k in (patch || {})) clean[k] = !!patch[k]; });
+    if (!Object.keys(clean).length) return clean;
+    var m = await _fs();
+    clean.updatedAt = m.serverTimestamp();
+    await m.setDoc(m.doc(root.firebaseDB, 'shops', uid), clean, { merge: true });
+    try { if (root.SokoniSync) root.SokoniSync.shopChanged({ uid: uid, patch: clean }); } catch (_) {}
+    return clean;
+  }
+
+  /* Set a product's availability via the CANONICAL fields only (isVisible / status).
+     Never touches stock. Emits SokoniSync so every module re-derives its state. */
+  async function setProductAvailability (id, available) {
+    if (!id || !root.firebaseDB) throw new Error('Not signed in');
+    var m = await _fs();
+    /* available=true → visible + active; available=false → hidden (isVisible:false).
+       We flip isVisible (reversible) and never archive here — pausing ≠ deleting. */
+    var patch = { isVisible: !!available, updatedAt: m.serverTimestamp() };
+    if (available) patch.status = 'active';
+    await m.updateDoc(m.doc(root.firebaseDB, 'products', String(id)), patch);
+    try { if (root.SokoniSync) root.SokoniSync.productChanged({ id: String(id), patch: patch, available: !!available }); } catch (_) {}
+    return patch;
+  }
+
   root.AvailabilityService = {
     SHOP_DEFAULTS: SHOP_DEFAULTS,
     normalizeShop: normalizeShop,
     deriveProduct: deriveProduct,
     counts: counts,
     readShop: readShop,
-    readProducts: readProducts
-    /* Layer 2 will add: setShop(uid, patch) and setProductAvailability(id, patch),
-       each writing the canonical doc and emitting SokoniSync.{shopChanged,productChanged}. */
+    readProducts: readProducts,
+    setShop: setShop,
+    setProductAvailability: setProductAvailability
   };
 })(typeof window !== 'undefined' ? window : this);
