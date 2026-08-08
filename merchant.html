@@ -163,6 +163,19 @@
   .ord2-drawer-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;justify-content:flex-end}
   .ord2-drawer{width:100%;max-width:420px;height:100%;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;animation:ord2In .24s cubic-bezier(.2,.7,.3,1)}
   @keyframes ord2In{from{transform:translateX(30px);opacity:.6}to{transform:none;opacity:1}}
+  /* Phone: order detail as a bottom-sheet (slides up, rounded top, partial height)
+     instead of a full-screen side drawer — premium mobile pattern. */
+  @media (max-width:560px){
+    .ord2-drawer-ov{justify-content:stretch;align-items:flex-end}
+    .ord2-drawer{max-width:none;height:auto;max-height:88vh;border-left:none;
+      border-top:1px solid var(--line);border-radius:20px 20px 0 0;animation:ord2Up .26s cubic-bezier(.2,.7,.3,1);
+      padding-bottom:env(safe-area-inset-bottom,0px)}
+    .ord2-dhead{position:relative}
+    /* grab handle */
+    .ord2-dhead::before{content:'';position:absolute;top:6px;left:50%;transform:translateX(-50%);
+      width:38px;height:4px;border-radius:3px;background:var(--line)}
+  }
+  @keyframes ord2Up{from{transform:translateY(24px);opacity:.5}to{transform:none;opacity:1}}
   .ord2-dhead{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--line)}
   .ord2-dtitle{font-weight:900;font-size:16px} .ord2-dsub{font-size:12px;color:var(--txt2);margin-top:4px;display:flex;gap:7px;align-items:center}
   .ord2-dclose{background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer}
