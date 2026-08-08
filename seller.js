@@ -1863,10 +1863,20 @@ async function updateSellerStats(){
         set("commissionAmount", "KES " + fee.toLocaleString());
         set("netEarnings",      "KES " + net.toLocaleString());
 
-        /* Product count — canonical server-side count (not the localStorage array). */
+        /* ACTIVE product count — archived/hidden products must NOT inflate it (#2/#8). A server
+           getCountFromServer over `uid==sellerUid` counts EVERYTHING incl. archived, so deleting
+           (=archiving) products left the tile at 103. A `where('status','!=',...)` /
+           `where('isVisible','!=',false)` aggregate would wrongly drop the legacy docs that have
+           no status/isVisible field at all (the 92/103 the catalogue warns about). So read the
+           docs (bounded) and apply the SAME visibility predicate the catalogue + grid use, then
+           count the survivors — active = active only, matching the grid and /api/catalogue. */
         try {
-            const c = await m.getCountFromServer(m.query(m.collection(db, "products"), m.where("uid", "==", sellerUid)));
-            set("totalProducts", Number(c.data().count || 0).toLocaleString());
+            const _snap = await m.getDocs(m.query(m.collection(db, "products"), m.where("uid", "==", sellerUid), m.limit(500)));
+            const _V = window.SokoniProductVisibility;
+            const _HIDDEN = new Set(["deleted", "removed", "hidden", "draft", "archived", "banned", "suspended", "paused", "inactive", "rejected"]);
+            const _isActive = _V ? _V.isActiveProduct : (v => !_HIDDEN.has(String(v.status || "").toLowerCase()) && v.isVisible !== false && v.isDeleted !== true && v.deleted !== true);
+            const _active = _snap.docs.filter(d => _isActive(d.data() || {})).length;
+            set("totalProducts", _active.toLocaleString());
         } catch(_) { /* leave the existing product-count widget rather than fabricate */ }
     } catch (e) {
         console.warn("[sellerStats] canonical analytics read failed:", e && e.message);

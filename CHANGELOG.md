@@ -1,3 +1,26 @@
+## [2026-08-09] — fix(merchant): convergence batch 2 — active count, splash root cause, MiniShop same-tab, analytics reconcile
+
+Device-tested feedback: count stayed 103 after deleting 2, splash still appeared, My MiniShop
+opened a new tab, Analytics disagreed with Orders. Root causes (not screenshot patches):
+
+- **Active count excludes archived (#2/#8)** — `seller.js` set the products tile from a raw
+  server aggregate over `uid==sellerUid` with NO status filter, so archiving 2 left it at 103.
+  New canonical predicate `sokoni-product-visibility.js` (ONE source of truth; absent status =
+  active, so legacy KASS products aren't hidden) — used by the count tile and reconcile;
+  `test-product-visibility` proves 103→101 and drift-matches the /api/catalogue HIDDEN set.
+- **POS splash root cause (#1/#9)** — a SECOND, earlier trigger: `pos.html`'s inline boot guard
+  hard-redirected to `pos-setup.html` at parse time (before pos.js) whenever the standalone setup
+  keys were absent — which they always are in the embedded shell. Now early-returns when embedded;
+  Cashier/Inventory open directly; POS Setup stays an explicit sidebar module.
+- **My MiniShop same-tab (#4/#5)** — replaced `window.open('_blank')` with same-origin, same-tab
+  `location.href`. Canonical resolver (`shops.minishopHandle`) → `🟢 Shop Live` → `/shop/<handle>`;
+  unclaimed → claim flow. `test-minishop-resolution` locks claimed≠claim-flow.
+- **Orders↔Analytics reconcile (#3/#6)** — Analytics view + dashboard KPIs defaulted to today/week
+  while Orders is All Time, so KASS's historical orders showed in Orders but not Analytics. Both
+  now default All Time, same OrderService identity + branch scope → they reconcile; history renders.
+
+13 regression suites green (2 new). No new mirror/collection/order-model/MiniShop-page.
+
 ## [2026-08-09] — feat(merchant): convergence batch 1 — Orders, product delete, My MiniShop, POS splash
 
 Data-paths-first, extending existing infra (SokoniShell/SokoniSync/OrderService/canonical

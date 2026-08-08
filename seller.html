@@ -4117,6 +4117,8 @@ class="notification-container"
        validation. Loaded before seller.js (defer preserves order) so the write path
        uses the same policies as the Algolia pipeline and repair scripts. -->
   <script src="sokoni-product-validator.js" defer></script>
+  <!-- Canonical "active product" predicate — archived excluded from active count/catalogue. -->
+  <script src="sokoni-product-visibility.js" defer></script>
   <script src="seller.js" defer></script>
   <!-- Fills the localStorage cache seller.js renders from with the CANONICAL
        products collection. Must load after seller.js so displaySellerProducts

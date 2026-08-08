@@ -91,7 +91,18 @@
     try {
       var m = await _fs();
       var db = root.firebaseDB;
-      var canon = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      /* ACTIVE canonical products only — archived/hidden are excluded from the catalogue and
+         the POS/inventory mirrors, so counting them here would falsely report "missing" caches
+         and inflate the canonical count. Uses the ONE canonical predicate (SokoniProductVisibility),
+         with an inline mirror as a fallback if the module isn't loaded. */
+      var _V = root.SokoniProductVisibility;
+      var _isActive = _V ? _V.isActiveProduct : function (p) {
+        var _H = { deleted:1, removed:1, hidden:1, draft:1, archived:1, banned:1, suspended:1, paused:1, inactive:1, rejected:1 };
+        return !_H[String(p.status || '').toLowerCase()] && p.isVisible !== false && p.isDeleted !== true && p.deleted !== true;
+      };
+      var canon = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs
+        .map(function (d) { return Object.assign({ id: d.id }, d.data()); })
+        .filter(_isActive);
       var pos = [];
       try { pos = (await m.getDocs(m.query(m.collection(db, 'posProducts'), m.where('sellerUid', '==', uid), m.limit(1000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }); } catch (_) { pos = []; }
       var inv = [];

@@ -371,6 +371,8 @@
 <!-- Printer engine loaded IN THE SHELL — the connection lives in this never-unloading context,
      so it is owned by the shell (not a module) and survives all navigation. -->
 <script src="sokoni-universal-printer.js"></script>
+<!-- Canonical "active product" predicate (archived excluded) — shared by reconcile + count tiles. -->
+<script src="sokoni-product-visibility.js"></script>
 <!-- Unified OrderService — one source of truth for orders (POS + marketplace + delivery). -->
 <script src="sokoni-order-service.js"></script>
 <!-- AnalyticsEngine — one aggregation layer over OrderService (Dashboard=Reports=Finance=Analytics). -->
@@ -619,7 +621,11 @@
 
   /* ── Native Reports / Finance / Analytics — ALL read the ONE AnalyticsEngine.compute(),
      so every screen shows identical figures (no independent revenue calc). ── */
-  var _anRange = { reports: 'week', finance: 'month', analytics: 'today' };
+  /* 'analytics' defaults to ALL TIME so it reconciles with the Orders screen (both derive from
+     the same OrderService) and KASS's historical orders actually show — a 'today' default read
+     as "Analytics is empty" while Orders held 9. Reports/Finance stay periodic (their purpose),
+     each with a range selector. */
+  var _anRange = { reports: 'week', finance: 'month', analytics: 'all' };
   function _anFmt (n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
   function renderAnalytics (view) {
     var host = document.getElementById('native-' + view);
@@ -1167,7 +1173,10 @@
   function _dashLoadAnalytics () {
     if (_dashBusy || !window.SokoniAnalyticsEngine) return;
     _dashBusy = true;
-    Promise.resolve(SokoniAnalyticsEngine.compute({ range: 'today' })).then(function (a) {
+    /* ALL TIME so the dashboard KPIs reconcile with Orders and historical KASS data shows (was
+       'today' → empty for a shop whose orders predate today). AnalyticsEngine scopes by the
+       active branch internally; legacy untagged records still count (lenient branch filter). */
+    Promise.resolve(SokoniAnalyticsEngine.compute({ range: 'all' })).then(function (a) {
       _dashBusy = false;
       if (!a || current !== 'dashboard') return;
       _animKpi('d-revenue', a.revenue, 'kes');
@@ -1517,10 +1526,13 @@
       if (_mshop.claimed) { btn.classList.remove('notclaimed'); st.textContent = '🟢 Shop Live'; }
       else { btn.classList.add('notclaimed'); st.textContent = '✨ Create'; }
     }
-    function _open () { var url = _mshop.url || 'minishop-admin.html'; try { window.open(url, '_blank', 'noopener'); } catch (_) { location.href = url; } }
+    /* SAME-TAB, same-origin navigation — never a new tab/window/session (#4/#5). Claimed →
+       the public storefront /shop/<handle>; unclaimed → the claim flow. In-place like every
+       other merchant control. */
+    function _open () { location.href = _mshop.url || 'minishop-admin.html'; }
     window.__openMiniShop = function () {
       if (_mshop.resolved) { _open(); return; }
-      _resolve().then(function () { _paint(); var url = _mshop.url || 'minishop-admin.html'; location.href = url; });   /* async fallback: same tab (avoids popup block) */
+      _resolve().then(function () { _paint(); _open(); });
     };
     window.__refreshMiniShop = function () { _resolve().then(_paint); };
     setTimeout(window.__refreshMiniShop, 900);

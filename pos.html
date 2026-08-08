@@ -27,8 +27,14 @@
   <script src="sokoni-branch.js" defer></script>
   <!-- Keyboard avoidance for POS wizard — inline for immediate availability -->
   <script>
-  // Plug-and-Play boot guard — redirect first-time users to setup wizard
+  // Plug-and-Play boot guard — redirect first-time STANDALONE users to setup wizard.
+  // MUST NOT fire when embedded in the merchant shell: the shell opens pos.html directly for
+  // Cashier/Inventory, and sokoni_setup_complete / sokoni_merchant_id are only written by the
+  // standalone pos-setup flow — so an embedded merchant who never ran the wizard was hard-
+  // redirected to pos-setup.html on EVERY POS/Inventory entry (the splash). POS Setup stays
+  // reachable as the explicit sidebar module. Standalone first-run still redirects.
   (function() {
+    try { if (window.parent && window.parent !== window) return; } catch (_) { return; }
     var setupDone = localStorage.getItem('sokoni_setup_complete');
     if (!setupDone || setupDone !== '1') {
       // Check if this is a fresh device (no merchantId stored)
