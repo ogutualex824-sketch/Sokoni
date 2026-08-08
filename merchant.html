@@ -170,6 +170,22 @@
   .ord2-tl-t{font-size:13px;font-weight:700} .ord2-tl-at{font-size:11px;color:var(--txt3);margin-top:1px}
   .ord2-dfoot{padding:14px 16px;border-top:1px solid var(--line)}
   .ord2-dfoot .dbtn{width:100%;justify-content:center}
+  /* Native Reports / Finance / Analytics */
+  .an-wrap{max-width:820px;margin:0 auto}
+  .an-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .an-title{font-size:18px;font-weight:900}
+  .an-range{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+  .an-range::-webkit-scrollbar{display:none}
+  .an-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:12px;margin-bottom:8px}
+  .an-stat{background:linear-gradient(158deg,rgba(255,255,255,.05),rgba(255,255,255,.02)),var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 14px;text-align:center}
+  .an-stat-n{font-size:19px;font-weight:900;color:var(--acc);line-height:1.1;font-variant-numeric:tabular-nums}
+  .an-stat-l{font-size:10.5px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:5px}
+  .an-sec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin:20px 2px 10px}
+  .an-row{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:9px 12px;background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:7px}
+  .an-row span:first-child{color:var(--txt2)}
+  .an-empty{color:var(--txt3);font-size:12.5px;padding:10px 2px}
+  .an-note{font-size:11.5px;color:var(--txt3);margin-top:14px;line-height:1.5}
+  .an-trace{font-size:10.5px;color:var(--txt3);margin-top:22px;padding-top:12px;border-top:1px solid var(--line);opacity:.7}
 
   @media (max-width:820px){
     :root{--rail:200px}
@@ -258,9 +274,9 @@
     { id:'receipts',  label:'Receipts',  icon:'🧾', kind:'seller', sec:'receipts' },
 
     { head:'Business' },
-    { id:'finance',   label:'Wallet & Tax', icon:'💰', kind:'seller', sec:'tax' },
-    { id:'analytics', label:'Analytics', icon:'📈', kind:'seller', sec:'analytics' },
-    { id:'reports',   label:'Reports',   icon:'📊', kind:'seller', sec:'history' },
+    { id:'finance',   label:'Finance',   icon:'💰', kind:'native' },
+    { id:'analytics', label:'Analytics', icon:'📈', kind:'native' },
+    { id:'reports',   label:'Reports',   icon:'📊', kind:'native' },
     { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'marketing' },
     { id:'promotions',label:'Promotions',icon:'🎁', kind:'seller', sec:'flash' },
 
@@ -405,6 +421,76 @@
     if (id === 'dashboard') renderDashboard();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
+    else if (id === 'reports' || id === 'finance' || id === 'analytics') renderAnalytics(id);
+  }
+
+  /* ── Native Reports / Finance / Analytics — ALL read the ONE AnalyticsEngine.compute(),
+     so every screen shows identical figures (no independent revenue calc). ── */
+  var _anRange = { reports: 'week', finance: 'month', analytics: 'today' };
+  function _anFmt (n) { return 'KES ' + Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
+  function renderAnalytics (view) {
+    var host = document.getElementById('native-' + view);
+    if (!host) return;
+    _startOnlineFeed();
+    if (!host.dataset.an) {
+      host.dataset.an = '1';
+      host.innerHTML = '<div class="an-wrap">' +
+        '<div class="an-head"><div class="an-title" id="an-title-' + view + '"></div><div class="an-range" id="an-range-' + view + '"></div></div>' +
+        '<div id="an-body-' + view + '"><div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:55%"></div></div>' +
+        '<div class="an-trace" id="an-trace-' + view + '">ⓘ source: OrderService → AnalyticsEngine.compute() → this screen</div>' +
+      '</div>';
+    }
+    document.getElementById('an-title-' + view).textContent = { reports: '📊 Reports', finance: '💰 Finance', analytics: '📈 Analytics' }[view];
+    var R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
+    document.getElementById('an-range-' + view).innerHTML = R.map(function (r) {
+      return '<button class="ord2-chip ' + (_anRange[view] === r[0] ? 'active' : '') + '" onclick="__anRange(\'' + view + '\',\'' + r[0] + '\')">' + r[1] + '</button>';
+    }).join('');
+    _anLoad(view);
+  }
+  window.__anRange = function (view, r) { _anRange[view] = r; renderAnalytics(view); };
+  window.__anRefresh = function () { ['reports', 'finance', 'analytics'].forEach(function (v) { if (current === v) _anLoad(v); }); };
+
+  function _anLoad (view) {
+    var body = document.getElementById('an-body-' + view); if (!body || !window.SokoniAnalyticsEngine) return;
+    Promise.resolve(SokoniAnalyticsEngine.compute({ range: _anRange[view] })).then(function (a) {
+      if (!a || current !== view) return;
+      body.innerHTML = (view === 'finance') ? _anFinance(a) : (view === 'reports') ? _anReports(a) : _anAnalytics(a);
+    }).catch(function () {});
+  }
+  function _anStat (v, l, accent) { return '<div class="an-stat"><div class="an-stat-n"' + (accent ? ' style="color:' + accent + '"' : '') + '>' + v + '</div><div class="an-stat-l">' + l + '</div></div>'; }
+  function _anGrid (cards) { return '<div class="an-grid">' + cards.join('') + '</div>'; }
+  function _anOnline (a) { return (window.SokoniOrderService && SokoniOrderService.hasOnlineProvider()) ? String(a.online.count) : '<span style="color:var(--txt3)">—</span>'; }
+  function _anRows (obj, fmt) {
+    var ks = Object.keys(obj); if (!ks.length) return '<div class="an-empty">No data in this range</div>';
+    return ks.map(function (k) { return '<div class="an-row"><span>' + _ordEsc(k) + '</span><span>' + fmt(obj[k]) + '</span></div>'; }).join('');
+  }
+  function _anReports (a) {
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Revenue'), _anStat(String(a.orders), 'Orders'), _anStat(a.aov ? _anFmt(a.aov) : '—', 'Avg Order'),
+      _anStat(String(a.pos.count), 'POS'), _anStat(_anOnline(a), 'Online'), _anStat(String(a.completed), 'Completed')]) +
+      '<div class="an-sec">Top products</div>' + (a.topProducts.length ? a.topProducts.map(function (p) { return '<div class="an-row"><span>' + _ordEsc(p.name) + ' · ' + p.qty + '</span><span>' + _anFmt(p.revenue) + '</span></div>'; }).join('') : '<div class="an-empty">No sales yet</div>') +
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt) +
+      '<div class="an-sec">Order status</div>' +
+      '<div class="an-row"><span>Pending</span><span>' + a.pending + '</span></div>' +
+      '<div class="an-row"><span>Completed</span><span>' + a.completed + '</span></div>' +
+      '<div class="an-row"><span>Refunded / Returned</span><span>' + (a.refunded + a.returned) + '</span></div>' +
+      '<div class="an-row"><span>Cancelled</span><span>' + a.cancelled + '</span></div>';
+  }
+  function _anFinance (a) {
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Gross Sales'), _anStat(_anFmt(a.tax), 'Tax'), _anStat(_anFmt(a.discount), 'Discounts'),
+      _anStat(_anFmt(a.deliveryFees), 'Delivery Fees'), _anStat(String(a.refunded), 'Refunds'), _anStat(a.grossProfit == null ? '—' : _anFmt(a.grossProfit), 'Gross Profit')]) +
+      '<div class="an-sec">Revenue by channel</div>' +
+      '<div class="an-row"><span>In-Store (POS)</span><span>' + _anFmt(a.pos.revenue) + '</span></div>' +
+      '<div class="an-row"><span>Online</span><span>' + (SokoniOrderService.hasOnlineProvider() ? _anFmt(a.online.revenue) : '—') + '</span></div>' +
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt) +
+      '<div class="an-note">Gross profit shows “—” until product cost data exists — never estimated.</div>';
+  }
+  function _anAnalytics (a) {
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Revenue'), _anStat(String(a.orders), 'Orders'), _anStat(a.aov ? _anFmt(a.aov) : '—', 'Avg Order'),
+      _anStat(String(a.pos.count), 'POS'), _anStat(_anOnline(a), 'Online'), _anStat(String(a.channels.delivery), 'Delivery'),
+      _anStat(String(a.channels.pickup), 'Pickup'), _anStat(String(a.refunded), 'Refunds')]) +
+      '<div class="an-sec">Top products</div>' + (a.topProducts.length ? a.topProducts.map(function (p) { return '<div class="an-row"><span>' + _ordEsc(p.name) + ' · ' + p.qty + ' sold</span><span>' + _anFmt(p.revenue) + '</span></div>'; }).join('') : '<div class="an-empty">No sales yet</div>') +
+      '<div class="an-sec">Top customers</div>' + (a.topCustomers.length ? a.topCustomers.map(function (c) { return '<div class="an-row"><span>' + _ordEsc(c.name) + ' · ' + c.orders + ' orders</span><span>' + _anFmt(c.spend) + '</span></div>'; }).join('') : '<div class="an-empty">No data</div>') +
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt);
   }
 
   /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
@@ -762,7 +848,12 @@
     if (d.__sokoniOrders) {                                        /* LIVE marketplace-order feed from the Seller module */
       _shellOnlineOrders = d.orders || [];
       try { if (window.SokoniOrderService) SokoniOrderService.setOnlineProvider(function () { return _shellOnlineOrders; }); } catch (_) {}
-      if (current === 'orders') { try { _ordLoad(); } catch (_) {} }   /* re-render live, no reload */
+      /* Live re-render whichever data screen is open — all from the same source, no reload. */
+      try {
+        if (current === 'orders') _ordLoad();
+        else if (current === 'dashboard') _dashLoadAnalytics();
+        else if (current === 'reports' || current === 'finance' || current === 'analytics') _anLoad(current);
+      } catch (_) {}
       return;
     }
     if (!d.__sokoniPos) return;
