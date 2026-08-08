@@ -50,6 +50,7 @@
   .mdot{width:8px;height:8px;border-radius:50%;background:#555;flex:0 0 auto}
   .mdot.ok{background:var(--acc);box-shadow:0 0 7px var(--acc)}
   .mdot.bad{background:#ff6464}
+  .mdot.warn{background:#ffb400;box-shadow:0 0 7px rgba(255,180,0,.7)}
   .mshell.collapsed .mchip .ctxt{opacity:0;width:0;overflow:hidden}
 
   /* ── Main ── */
@@ -797,7 +798,7 @@
      AnalyticsEngine (same source as Orders/Reports/Finance) — never independently calculated. */
   function refreshDashboardLive () {
     var online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
-    setTxt('d-sync', online ? '🟢' : '🔴');
+    setTxt('d-sync', !online ? '🔴' : (_syncPending ? '🟡' : '🟢'));
     setTxt('d-print', shellPrinterUp ? '🟢' : '⚪');
     _dashLoadAnalytics();
   }
@@ -820,10 +821,20 @@
 
   /* ── Status chips (shell-level) ── */
   var shellPrinterUp = false;
+  /* Truthful sync state. _syncPending is ONLY ever set from a real reported count
+     (sokoni:sync event / iframe bridge) — we never fabricate a "syncing N". With no
+     signal it stays 0, so online == genuinely synced. */
+  var _syncPending = 0;
+  function _applySync (n) { _syncPending = Math.max(0, n | 0); paintStatus(); }
+  window.addEventListener('sokoni:sync', function (e) { _applySync((e.detail && e.detail.pending) || 0); });
   function paintStatus () {
     var online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
-    document.getElementById('st-sync').className   = 'mdot ' + (online ? 'ok' : 'bad');
-    document.getElementById('st-sync-t').textContent = online ? 'Online' : 'Offline';
+    var syncCls, syncTxt;
+    if (!online)            { syncCls = 'bad';  syncTxt = _syncPending ? 'Offline · ' + _syncPending + ' queued' : 'Offline'; }
+    else if (_syncPending)  { syncCls = 'warn'; syncTxt = 'Syncing ' + _syncPending + (_syncPending === 1 ? ' change' : ' changes'); }
+    else                    { syncCls = 'ok';   syncTxt = 'Synced'; }
+    document.getElementById('st-sync').className   = 'mdot ' + syncCls;
+    document.getElementById('st-sync-t').textContent = syncTxt;
     var pc = shellPrinterUp ? 'mdot ok' : 'mdot';
     document.getElementById('st-print').className = pc;
     document.getElementById('top-print').className = pc;
@@ -949,6 +960,7 @@
     if (e.origin !== location.origin) return;
     var d = e.data || {};
     if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
+    if (d.__sokoniSync) { _applySync((d.__sokoniSync.pending) || 0); return; }  /* a module reports real pending-write count → truthful sync chip */
     if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → shell printer */
     if (d.__sokoniGoModule && byId[d.__sokoniGoModule]) { go(d.__sokoniGoModule); return; }  /* a module asked to route in-shell (e.g. Advanced → Devices) */
     if (d.__sokoniOrders) {                                        /* LIVE marketplace-order feed from the Seller module */
