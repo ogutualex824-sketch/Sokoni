@@ -312,6 +312,11 @@
 <script src="sokoni-order-service.js"></script>
 <!-- AnalyticsEngine — one aggregation layer over OrderService (Dashboard=Reports=Finance=Analytics). -->
 <script src="sokoni-analytics-engine.js"></script>
+<!-- Sync backbone — the existing event bus + the merchant domain facade. One change
+     (product/stock/availability/shop/order/payment/refund/customer) propagates to every
+     module through the bus's same-origin BroadcastChannel; no per-page refresh calls. -->
+<script src="sokoni-event-bus.js"></script>
+<script src="sokoni-sync.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
