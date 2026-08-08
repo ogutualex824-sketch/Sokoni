@@ -118,7 +118,11 @@
     '.sk-toast-icon{font-size:16px;flex-shrink:0;line-height:1.4;}',
     '.sk-toast-body{flex:1;min-width:0;}',
     '.sk-toast-title{display:block;font-weight:900;margin-bottom:2px;}',
-    '.sk-toast-msg{display:block;font-weight:600;opacity:0.85;}',
+    '.sk-toast-msg{display:block;font-weight:600;opacity:0.85;word-break:break-word;}',
+    '.sk-toast-action{flex-shrink:0;align-self:center;min-height:32px;padding:6px 12px;border-radius:8px;',
+      'border:1px solid rgba(113,255,0,0.5);background:rgba(113,255,0,0.12);color:#71ff00;',
+      'font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;white-space:nowrap;}',
+    '.sk-toast-action:active{background:rgba(113,255,0,0.22);}',
     '@media(max-width:480px){',
       '#sk-toast-root{',
         'top:auto;',
@@ -126,6 +130,7 @@
         'right:12px;left:12px;max-width:none;',
       '}',
       '.sk-toast{font-size:12px;}',
+      '.sk-toast-action{min-height:38px;padding:8px 14px;}',   /* touch-sized on phone */
     '}'
   ].join('');
 
@@ -164,7 +169,9 @@
   function toast(message, type, opts) {
     type = type || 'success';
     opts = opts || {};
-    var duration = opts.duration !== undefined ? opts.duration : (type === 'error' ? 5000 : 3500);
+    /* An actionable toast (with a button) is sticky by default — the user must act or dismiss it. */
+    var hasAction = !!(opts.action && opts.action.label);
+    var duration = opts.duration !== undefined ? opts.duration : (hasAction ? 0 : (type === 'error' ? 5000 : 3500));
 
     _ready(function() {
       var root = _ensureToastRoot();
@@ -173,7 +180,7 @@
 
       var el = document.createElement('div');
       el.id = id;
-      el.className = 'sk-toast sk-toast--' + type;
+      el.className = 'sk-toast sk-toast--' + type + (hasAction ? ' sk-toast--action' : '');
       el.setAttribute('role', 'alert');
       el.setAttribute('aria-live', 'assertive');
       el.innerHTML =
@@ -181,8 +188,17 @@
         '<span class="sk-toast-body">' +
           (opts.title ? '<span class="sk-toast-title">' + _esc(opts.title) + '</span>' : '') +
           '<span class="sk-toast-msg">' + _esc(message) + '</span>' +
-        '</span>';
+        '</span>' +
+        (hasAction ? '<button type="button" class="sk-toast-action">' + _esc(opts.action.label) + '</button>' : '');
 
+      if (hasAction) {
+        el.querySelector('.sk-toast-action').addEventListener('click', function(ev) {
+          ev.stopPropagation();
+          try { if (typeof opts.action.onClick === 'function') opts.action.onClick(); } catch (_) {}
+          _dismissToast(el);
+        });
+      }
+      /* Clicking the toast body dismisses; the action button has its own handler above. */
       el.addEventListener('click', function() { _dismissToast(el); });
 
       root.appendChild(el);
@@ -988,6 +1004,42 @@
 
   /* Expose */
   global.SokoniUI = SokoniUI;
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     SokoniNotify — the ONE public notification API for all of SOKONI.
+     Every success/error/warning/info/action message across buyer, seller,
+     merchant and POS goes through here, rendered by the single viewport-anchored
+     SokoniUI.toast engine (bottom-centered + full-width on phone, never clipped).
+     One consistent voice: use the standard strings below wherever they fit.
+  ───────────────────────────────────────────────────────────────────────── */
+  var _STR = {
+    orderPlaced:      'Order placed successfully',
+    paymentReceived:  'Payment received successfully',
+    saved:            'Changes saved successfully',
+    receiptPrinted:   'Receipt printed successfully',
+    printerConnected: 'Printer connected successfully',
+    genericError:     "We couldn't complete that action. Please try again.",
+    networkError:     "We couldn't reach the network. Check your connection and try again.",
+    paymentFailed:    "Payment didn't go through. No money was taken — please try again."
+  };
+  function _notify(type, message, opts) {
+    return SokoniUI.toast(message, type, opts || {});
+  }
+  var SokoniNotify = {
+    STRINGS: _STR,
+    success: function (message, opts) { return _notify('success', message, opts); },
+    error:   function (message, opts) { return _notify('error',   message || _STR.genericError, opts); },
+    warning: function (message, opts) { return _notify('warning', message, opts); },
+    info:    function (message, opts) { return _notify('info',    message, opts); },
+    /* action(message, {label, onClick, type, ...}) — a sticky toast with one button. */
+    action:  function (message, opts) {
+      opts = opts || {};
+      var t = opts.type || 'info';
+      return _notify(t, message, { title: opts.title, icon: opts.icon, duration: opts.duration,
+        action: { label: opts.label || 'View', onClick: opts.onClick } });
+    }
+  };
+  global.SokoniNotify = SokoniNotify;
 
   /* Auto-init if bootstrap not present */
   if (!global.SokoniBootstrap) {
