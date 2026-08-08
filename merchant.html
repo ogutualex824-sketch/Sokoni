@@ -407,6 +407,15 @@
 
   /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
   var _ordState = { range: 'today', tab: 'all', search: '', rows: [] };
+  var _shellOnlineOrders = [];      /* latest live marketplace orders pushed up by the Seller feed */
+  var _ordFeedStarted = false;
+  function _startOnlineFeed () {
+    /* Load the Seller module (hidden) once so its authenticated onSnapshot(orders) feed runs and
+       pushes live marketplace orders up — the ONE authenticated query, reused (not duplicated). */
+    if (_ordFeedStarted) return;
+    _ordFeedStarted = true;
+    try { sellerPanel('overview'); } catch (_) {}
+  }
   var _ordSearchT = null;
   function _ordFmt (n) { return Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
   function _ordWhen (ts) { return new Date(ts).toLocaleString('en-KE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }); }
@@ -430,6 +439,7 @@
         _ordSearchT = setTimeout(function () { _ordState.search = v; _ordLoad(); }, 220);
       });
     }
+    _startOnlineFeed();      /* bring in live marketplace orders */
     _ordPaintChrome();
     _ordLoad();
   }
@@ -729,6 +739,12 @@
     if (d.__sokoniUpdate) { showUpdateBar(); return; }   /* a hosted iframe found an update */
     if (d.__sokoniModulePrint) { window.SokoniShell.Printer.print(d.receipt); return; }  /* any module → shell printer */
     if (d.__sokoniGoModule && byId[d.__sokoniGoModule]) { go(d.__sokoniGoModule); return; }  /* a module asked to route in-shell (e.g. Advanced → Devices) */
+    if (d.__sokoniOrders) {                                        /* LIVE marketplace-order feed from the Seller module */
+      _shellOnlineOrders = d.orders || [];
+      try { if (window.SokoniOrderService) SokoniOrderService.setOnlineProvider(function () { return _shellOnlineOrders; }); } catch (_) {}
+      if (current === 'orders') { try { _ordLoad(); } catch (_) {} }   /* re-render live, no reload */
+      return;
+    }
     if (!d.__sokoniPos) return;
     /* NOTE: the shell now owns the printer + its state, so a hosted app's printerStatus is
        ignored here (it must not clobber the shell's observable state). */

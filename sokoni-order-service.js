@@ -110,13 +110,17 @@
       rider:       o.riderName || o.rider || '',
       items:       (o.items || []).map(function (i) { return { name: i.name || i.productName || 'Item', qty: i.qty || i.quantity || 1, price: (i.price != null ? i.price : (i.unitPrice || 0)) }; }),
       itemCount:   (o.items || []).length,
-      subtotal:    _num(o.subtotal != null ? o.subtotal : (o.total || o.amount)),
+      subtotal:    _num(o.subtotal != null ? o.subtotal : (o.orderTotal != null ? o.orderTotal - _num(o.deliveryFee) : (o.total || o.amount))),
       discount:    _num(o.discount),
       tax:         _num(o.tax),
       deliveryFee: _num(o.deliveryFee),
-      total:       _num(o.total != null ? o.total : o.amount),
+      /* Canonical marketplace total is orderTotal (falls back to total/amount). */
+      total:       _num(o.orderTotal != null ? o.orderTotal : (o.total != null ? o.total : o.amount)),
       paymentMethod: (o.paymentMethod || 'mpesa'),
-      paymentStatus: (o.paid || String(o.paymentStatus || '').toLowerCase() === 'paid' || /paid|complete/.test(String(o.status || '').toLowerCase())) ? 'paid' : (o.paymentStatus || 'pending'),
+      /* Marketplace: a NOT_PAID status means unpaid; _apPaidCounted marks a settled/paid order. */
+      paymentStatus: (o._apPaidCounted === true || o.paid ||
+                      !/^(pending_payment|pending|awaiting_payment|cancelled|refunded|failed|expired)$/i.test(String(o.status || '')))
+                     ? 'paid' : 'pending',
       status:      status,
       ts:          ts,
       events:      (o.events && o.events.length) ? o.events : _timelineOnline(o, status, ts),

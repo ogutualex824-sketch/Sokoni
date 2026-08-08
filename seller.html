@@ -6695,6 +6695,35 @@ document.addEventListener('DOMContentLoaded', function() {
   window.SokoniShellPrint = function (receipt) {
     try { window.parent.postMessage({ __sokoniModulePrint: true, receipt: receipt }, location.origin); } catch (_) {}
   };
+
+  /* LIVE marketplace-order feed → shell OrderService. Reuses the SELLER's own authenticated
+     query (orders where sellerUid == uid) via onSnapshot, and pushes the rows UP to the shell on
+     every change — so the native Orders module shows online orders live (New→Accepted→…→
+     Delivered) with no /merchant reload, and no second order model. */
+  (async function () {
+    try {
+      var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+      var _unsub = null;
+      function _uid () { try { return (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null; } catch (_) { return null; } }
+      function _start () {
+        var db = window.firebaseDB, uid = _uid();
+        if (!db || !uid || _unsub) return !!_unsub;
+        try {
+          var q = m.query(m.collection(db, 'orders'), m.where('sellerUid', '==', uid), m.limit(500));
+          _unsub = m.onSnapshot(q, function (snap) {
+            var rows = [];
+            snap.forEach(function (d) { var o = d.data() || {}; o.id = d.id; rows.push(o); });
+            try { window.parent.postMessage({ __sokoniOrders: true, orders: rows }, location.origin); } catch (_) {}
+          }, function () { /* transient/App-Check — leave last feed */ });
+          return true;
+        } catch (_) { return false; }
+      }
+      if (!_start()) {
+        if (window.firebaseAuth && window.firebaseAuth.onAuthStateChanged) window.firebaseAuth.onAuthStateChanged(function () { _start(); });
+        else { var t = setInterval(function () { if (_start()) clearInterval(t); }, 1500); }
+      }
+    } catch (_) {}
+  })();
   /* Embedded in the Merchant Shell: hide the Seller's OWN sidebar + top navbar (the shell
      provides navigation) so the content fills the panel and there is no redundant double
      sidebar. Scoped to embedded mode only — standalone seller.html is untouched. */
