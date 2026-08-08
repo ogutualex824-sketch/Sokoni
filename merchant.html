@@ -491,26 +491,36 @@
     if (w) { w.style.cursor = 'pointer'; w.title = 'Printer — connect / manage';
       w.onclick = function () { if (PrinterState.connected) go('devices'); else window.SokoniShell.Printer.connect(); }; } })();
 
-  /* Auto-reconnect on app open + background health monitor — owned by the shell.
-     getDevices()-based reconnect needs no chooser, but can be gated behind a user gesture or a
-     brief engine-warm-up window, so try several times on boot AND on the first interaction,
-     then keep a heartbeat. If the browser genuinely discarded the grant, none of these succeed
-     and the merchant taps Reconnect once — the honest platform limit. */
+  /* ── Startup auto-connect — ONE controlled reconnect scheduler ──────────────
+     On app open the shell restores the remembered P58E and tries getDevices()→GATT on a fixed
+     schedule (0/600/1800/3500/6000ms). The FIRST success cancels all remaining startup attempts.
+     After startup, an 8s health monitor acts ONLY on a genuinely-disconnected state, and the
+     first user interaction triggers ONE more silent attempt (never a repeated Bluetooth hammer).
+     If Chrome discarded the grant, it stays 🔴 with a one-tap Reconnect — the honest browser
+     boundary, not a faked green. */
   if (_eng) {
-    var _arBusy = false;
-    function _tryAutoReconnect () {
+    var _arBusy = false, _startupDone = false, _wakeTried = false, _arTimers = [];
+    function _arCancelStartup () { _startupDone = true; _arTimers.forEach(function (t) { clearTimeout(t); }); _arTimers = []; }
+    function _arAttempt () {
       if (_arBusy) return;
-      if (_eng.connected) { _psSet({ connected: true }); return; }
+      if (_eng.connected) { _arCancelStartup(); _psSet({ connected: true }); return; }
       if (!_remembered()) return;
       _arBusy = true;
-      Promise.resolve(_eng.autoReconnect()).then(function (ok) {
-        if (ok || _eng.connected) _psSet({ connected: true });
-      }).catch(function () {}).then(function () { _arBusy = false; });
+      Promise.resolve(_eng.autoReconnect())
+        .then(function (ok) { if (ok || _eng.connected) { _arCancelStartup(); _wakeTried = false; _psSet({ connected: true }); } })
+        .catch(function () {})
+        .then(function () { _arBusy = false; });
     }
-    [600, 1800, 3500, 6000].forEach(function (ms) { setTimeout(_tryAutoReconnect, ms); });
-    setInterval(function () { if (!_eng.connected && _remembered()) _tryAutoReconnect(); else _psSet({ connected: !!_eng.connected }); }, 8000);
-    /* Some browsers only allow the getDevices()→GATT reconnect after a user gesture. */
-    var _onWake = function () { if (!_eng.connected) _tryAutoReconnect(); };
+    [0, 600, 1800, 3500, 6000].forEach(function (ms) { _arTimers.push(setTimeout(function () { if (!_startupDone) _arAttempt(); }, ms)); });
+    /* Health monitor — only for an ACTUAL disconnected state. */
+    setInterval(function () {
+      if (_eng.connected) { _wakeTried = false; _psSet({ connected: true }); }
+      else if (_remembered()) _arAttempt();
+    }, 8000);
+    /* First interaction: exactly ONE silent attempt while disconnected — no hammering. Reset
+       once a connection is (re)established. Reconnect (Devices/chip) remains the gesture fallback
+       that can open the chooser. */
+    var _onWake = function () { if (_eng.connected || _wakeTried || !_remembered()) return; _wakeTried = true; _arAttempt(); };
     window.addEventListener('pointerdown', _onWake, { passive: true });
     window.addEventListener('focus', _onWake);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) _onWake(); });
