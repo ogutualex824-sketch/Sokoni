@@ -215,6 +215,8 @@
 <script src="sokoni-universal-printer.js"></script>
 <!-- Unified OrderService — one source of truth for orders (POS + marketplace + delivery). -->
 <script src="sokoni-order-service.js"></script>
+<!-- AnalyticsEngine — one aggregation layer over OrderService (Dashboard=Reports=Finance=Analytics). -->
+<script src="sokoni-analytics-engine.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -581,8 +583,9 @@
       '<div class="dwrap">' +
         '<div class="dsec-t">Today</div>' +
         '<div class="dgrid" id="d-kpis">' +
-          kpi('d-revenue','—','Revenue') + kpi('d-sales','—','Walk-in Sales') +
-          kpi('d-online','—','Online Orders') + kpi('d-low','—','Low Stock') +
+          kpi('d-revenue','—','Revenue') + kpi('d-orders','—','Orders') +
+          kpi('d-sales','—','Walk-in Sales') + kpi('d-online','—','Online Orders') +
+          kpi('d-aov','—','Avg Order') + kpi('d-refunds','—','Refunds') +
           kpi('d-print','—','Printer') + kpi('d-sync','—','Sync') +
         '</div>' +
         '<div class="dsec-t">Quick actions</div>' +
@@ -593,16 +596,33 @@
           '<a class="dbtn" onclick="__mgo(\'devices\')">🖨️ Devices</a>' +
         '</div>' +
       '</div>';
+    _startOnlineFeed();   /* so Online numbers are real, from the same source as Orders */
     refreshDashboardLive();
   }
   function kpi (id, v, l) { return '<div class="dcard"><div class="n" id="' + id + '">' + v + '</div><div class="l">' + l + '</div></div>'; }
 
-  /* Live status the shell CAN read without the heavy apps: connectivity. Business KPIs stay
-     "—" here (no fabricated numbers) until the Orders engine feeds the shell canonical data. */
+  /* Live connectivity + printer chips are read directly; business KPIs come from the ONE
+     AnalyticsEngine (same source as Orders/Reports/Finance) — never independently calculated. */
   function refreshDashboardLive () {
     var online = (typeof navigator !== 'undefined') ? navigator.onLine !== false : true;
     setTxt('d-sync', online ? '🟢' : '🔴');
     setTxt('d-print', shellPrinterUp ? '🟢' : '⚪');
+    _dashLoadAnalytics();
+  }
+  var _dashBusy = false;
+  function _dashLoadAnalytics () {
+    if (_dashBusy || !window.SokoniAnalyticsEngine) return;
+    _dashBusy = true;
+    Promise.resolve(SokoniAnalyticsEngine.compute({ range: 'today' })).then(function (a) {
+      _dashBusy = false;
+      if (!a || current !== 'dashboard') return;
+      setTxt('d-revenue', 'KES ' + Number(a.revenue || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }));
+      setTxt('d-orders', String(a.orders));
+      setTxt('d-sales', String(a.pos.count));
+      setTxt('d-online', SokoniOrderService && SokoniOrderService.hasOnlineProvider() ? String(a.online.count) : '—');
+      setTxt('d-aov', a.aov ? 'KES ' + Number(a.aov).toLocaleString('en-KE') : '—');
+      setTxt('d-refunds', String(a.refunded));
+    }).catch(function () { _dashBusy = false; });
   }
   function setTxt (id, t) { var e = document.getElementById(id); if (e) e.textContent = t; }
 
