@@ -653,7 +653,16 @@
       _anStat(String(a.channels.pickup), 'Pickup'), _anStat(String(a.refunded), 'Refunds')]) +
       '<div class="an-sec">Top products</div>' + (a.topProducts.length ? a.topProducts.map(function (p) { return '<div class="an-row"><span>' + _ordEsc(p.name) + ' · ' + p.qty + ' sold</span><span>' + _anFmt(p.revenue) + '</span></div>'; }).join('') : '<div class="an-empty">No sales yet</div>') +
       '<div class="an-sec">Top customers</div>' + (a.topCustomers.length ? a.topCustomers.map(function (c) { return '<div class="an-row"><span>' + _ordEsc(c.name) + ' · ' + c.orders + ' orders</span><span>' + _anFmt(c.spend) + '</span></div>'; }).join('') : '<div class="an-empty">No data</div>') +
-      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt);
+      '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt) +
+      /* Operations — from the same compute(): units sold + canonical availability signals. */
+      '<div class="an-sec">Operations</div>' +
+      '<div class="an-row"><span>Units sold</span><span>' + String(a.unitsSold || 0) + '</span></div>' +
+      (a.availability ? (
+        '<div class="an-row"><span>Shop</span><span>' + (a.availability.shop.acceptingOrders ? 'Open' : 'Closed') +
+          ' · ' + (a.availability.shop.online ? 'Online' : 'Offline') + '</span></div>' +
+        '<div class="an-row"><span>Products (avail / low / out)</span><span>' +
+          a.availability.products.available + ' / ' + a.availability.products.low + ' / ' + a.availability.products.out + '</span></div>'
+      ) : '<div class="an-row"><span>Availability</span><span style="color:var(--txt3)">—</span></div>');
   }
 
   /* ── Native Availability module (Layer 1: read-only) — reads the canonical

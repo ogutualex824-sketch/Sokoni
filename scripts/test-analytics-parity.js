@@ -32,6 +32,15 @@ ok(a1.orders === 3 && a1.pos.count === 1 && a1.online.count === 2, 'order + POS/
 ok(a1.aov === Math.round(1500 / 2), 'AOV = revenue / non-cancelled, computed once in the engine');
 ok(a1.grossProfit === null, 'grossProfit stays null (never fabricated) without cost data');
 
+/* Expanded domain coverage (Phase 5) — derived from the same order stream, once. */
+ok(a1.unitsSold === 3, 'unitsSold sums live item qty (2+1; cancelled excluded)');
+ok(a1.channelRevenue.in_store === 1000 && a1.channelRevenue.delivery === 500 && a1.channelRevenue.pickup === 0,
+   'channelRevenue split by channel, cancelled excluded');
+/* compute() attaches canonical availability signals when AvailabilityService is present. */
+const engineSrc = fs.readFileSync(path.join(__dirname, '..', 'sokoni-analytics-engine.js'), 'utf8');
+ok(/AvailabilityService/.test(engineSrc) && /out\.availability/.test(engineSrc),
+   'compute() attaches availability from the canonical AvailabilityService (null when absent)');
+
 /* ── Part B — every surface consumes that one compute(), reading the same fields ── */
 const src = fs.readFileSync(path.join(__dirname, '..', 'merchant.html'), 'utf8');
 const computeSites = (src.match(/SokoniAnalyticsEngine\.compute\(/g) || []).length;

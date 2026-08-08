@@ -25,6 +25,8 @@
       pos:    { count: 0, revenue: 0 },
       online: { count: 0, revenue: 0 },
       channels: { in_store: 0, online: 0, delivery: 0, pickup: 0 },
+      channelRevenue: { in_store: 0, online: 0, delivery: 0, pickup: 0 },
+      unitsSold: 0,
       pending: 0, completed: 0, cancelled: 0, refunded: 0, returned: 0,
       tax: 0, discount: 0, deliveryFees: 0,
       paymentMethods: {}, products: {}, customers: {},
@@ -36,6 +38,7 @@
       if (o.source === 'pos') { a.pos.count++; if (live) a.pos.revenue += o.total; }
       else                    { a.online.count++; if (live) a.online.revenue += o.total; }
       if (a.channels[o.channel] != null) a.channels[o.channel]++;
+      if (live && a.channelRevenue[o.channel] != null) a.channelRevenue[o.channel] += o.total;
       if (o.status === 'pending')   a.pending++;
       if (o.status === 'completed') a.completed++;
       if (o.status === 'cancelled') a.cancelled++;
@@ -46,7 +49,9 @@
       a.paymentMethods[pm] = _num(a.paymentMethods[pm]) + (live ? o.total : 0);
       (o.items || []).forEach(function (i) {
         var k = i.name || 'Item'; var p = a.products[k] || { qty: 0, revenue: 0 };
-        p.qty += _num(i.qty || 1); p.revenue += _num(i.price) * _num(i.qty || 1); a.products[k] = p;
+        var q = _num(i.qty || 1);
+        p.qty += q; p.revenue += _num(i.price) * q; a.products[k] = p;
+        if (live) a.unitsSold += q;
       });
       var c = o.customer || 'Walk-in'; var cc = a.customers[c] || { orders: 0, spend: 0 };
       cc.orders++; cc.spend += (live ? o.total : 0); a.customers[c] = cc;
@@ -71,6 +76,19 @@
     var out = aggregate(orders);
     out.range = opts.range || 'today';
     out._orders = orders;                   /* traceability: which rows produced these numbers */
+
+    /* Availability & product operational signals — derived from the canonical
+       AvailabilityService (shops/{uid} + products), NOT recomputed here. Attached to the
+       ONE compute() output so every surface (Dashboard/Reports/Finance/Shop) sees the same
+       operational picture. Null when the service isn't present (never fabricated). */
+    out.availability = null;
+    try {
+      var AS = root.AvailabilityService;
+      if (AS && AS.readShop && AS.readProducts) {
+        var res = await Promise.all([AS.readShop(), AS.readProducts()]);
+        out.availability = { shop: res[0], products: AS.counts(res[1]) };
+      }
+    } catch (_) { out.availability = null; }
     return out;
   }
 
