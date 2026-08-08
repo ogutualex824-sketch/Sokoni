@@ -53,6 +53,7 @@ const logger              = require("firebase-functions/logger");
    relying on a const declared 4,000 lines below the code that uses it. */
 const _brands             = require("./brands");            /* consumer brands; Bravilex stays the legal entity */
 const _ageVerify          = require("./age-verification");  /* server-side age gate */
+const _avail              = require("./availability-enforce"); /* pure shop/product availability gating (tested) */
 
 /* ── Structured logging utility ─────────────────────────────────────────────
    Creates a scoped logger that prefixes every message with a unique
@@ -2283,19 +2284,10 @@ exports.createCheckoutSession = onCall(
       }
     } catch (e) {
       /* Fail OPEN: availability is a merchant convenience, not a security control. If the
-         shop-state read fails, default every shop to open (shopOf() does this on empty
-         shopState) rather than block legitimate checkouts. */
+         shop-state read fails, default every shop to open (_avail.normalizeShop does this on
+         an empty/undefined entry) rather than block legitimate checkouts. */
       console.warn("[createCheckoutSession] shop-state read failed, defaulting open:", e && e.message);
     }
-    const shopOf = (uid) => {
-      const s = shopState[uid] || {};
-      return {
-        acceptingOrders: s.acceptingOrders !== false,
-        online:          s.online          !== false,
-        delivery:        s.delivery        !== false,
-        pickup:          s.pickup          !== false,
-      };
-    };
 
     /* Build session items using server prices — any item not in the catalogue is skipped.
        Also validates stock availability: out-of-stock items are rejected so the session
@@ -2310,15 +2302,9 @@ exports.createCheckoutSession = onCall(
       const prod = priceMap[pid];
       if (!prod) continue;
 
-      /* Product availability (canonical): hidden or archived → cannot be purchased. */
-      if (prod.isVisible === false || prod.status === "archived") {
-        unavailableItems.push(prod.name || pid);
-        continue;
-      }
-      /* Shop availability (canonical): shop not accepting orders, or online selling
-         disabled → cannot create a new order for this seller. */
-      const _sh = shopOf(prod.sellerUid);
-      if (!_sh.acceptingOrders || !_sh.online) {
+      /* Availability (canonical): product hidden/archived, or its shop closed/online-off
+         → cannot be added to a NEW checkout. Pure, unit-tested decision. */
+      if (!_avail.itemAvailability(prod, shopState[prod.sellerUid]).available) {
         unavailableItems.push(prod.name || pid);
         continue;
       }
@@ -2387,11 +2373,11 @@ exports.createCheckoutSession = onCall(
        has explicitly turned the channel off. */
     const _fulfilSellers = [...new Set(sessionItems.map(i => i.sellerUid).filter(Boolean))];
     for (const sUid of _fulfilSellers) {
-      const sh = shopOf(sUid);
-      if (_fulfil === "delivery" && !sh.delivery) {
+      const _f = _avail.fulfillmentAllowed(_fulfil, shopState[sUid]);
+      if (!_f.ok && _f.reason === "delivery-off") {
         throw new HttpsError("failed-precondition", "Delivery is currently unavailable for this shop. Please choose pickup or try again later.");
       }
-      if (_fulfil === "pickup" && !sh.pickup) {
+      if (!_f.ok && _f.reason === "pickup-off") {
         throw new HttpsError("failed-precondition", "Pickup is currently unavailable for this shop. Please choose delivery or try again later.");
       }
     }
