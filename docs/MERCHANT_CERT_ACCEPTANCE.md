@@ -30,13 +30,31 @@ until every box below is checked on the actual device. Eng-complete ≠ producti
 - [ ] Print from detail works.
 - [ ] Change a live order's status elsewhere → native Orders updates **without a `/merchant` reload**.
 
+## 2b. Live-chain proof (strongest evidence — do this deliberately)
+During the Orders + Analytics checks, **create or change ONE online order** and watch it flow the
+whole chain **without a page reload**:
+
+```
+Marketplace → Seller authenticated feed → OrderService → UnifiedOrderView
+           → AnalyticsEngine → Dashboard / Reports / Finance / Analytics
+```
+- [ ] The new/changed online order appears in native Orders **without reload**.
+- [ ] It is **not** duplicated.
+- [ ] Dashboard / Reports / Finance / Analytics figures move consistently for it (same delta everywhere).
+
 ## 3. Analytics parity (same source, identical numbers)
-Pick ONE date range and read all four:
-- [ ] Dashboard = Reports = Finance = Shop Analytics for **Revenue**.
-- [ ] … for **Orders**.
-- [ ] … for **AOV**.
-- [ ] … for **POS vs Online** split.
-- [ ] … for **Refunds**.
+Pick ONE date range, read all four, and record the numbers:
+
+| Metric | Dashboard | Reports | Finance | Shop Analytics |
+|---|---|---|---|---|
+| Revenue |  |  |  |  |
+| Orders  |  |  |  |  |
+| AOV     |  |  |  |  |
+| POS     |  |  |  |  |
+| Online  |  |  |  |  |
+| Refunds |  |  |  |  |
+
+- [ ] All four columns match per row.
 - [ ] Cross-check those figures against the actual Orders list for the same range.
 
 ## 4. Navigation
