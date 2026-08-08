@@ -1742,6 +1742,16 @@ function saveEditProduct() {
                 if (_cleanImgs.length) fsPatch.images = _cleanImgs; else delete fsPatch.images;
             }
             await m.updateDoc(m.doc(window.firebaseDB, 'products', prod.id), fsPatch);
+            /* Propagate the edit (incl. Color/Material/Size) from the canonical product to
+               Shop/POS/Inventory/Search/Analytics — not a UI-only change. Fire-and-forget. */
+            try {
+              if (window.SokoniSync && window.SokoniSync.productChanged) window.SokoniSync.productChanged({
+                type: 'PRODUCT_UPDATED', source: 'Seller', entityType: 'product',
+                entityId: prod.id, id: prod.id,
+                sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+                timestamp: Date.now()
+              });
+            } catch (_) {}
         } catch (e) {
             console.warn('[seller] edit Firestore sync deferred:', e && e.message);
         }
