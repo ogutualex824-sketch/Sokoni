@@ -190,6 +190,8 @@
   /* Drawer scrim — tap outside the open rail to dismiss it (mobile only). */
   .mscrim{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:49;opacity:0;
     pointer-events:none;transition:opacity .22s}
+  /* Mobile bottom navigation — primary destinations one tap away (desktop: hidden). */
+  .mbnav{display:none}
   @media (max-width:820px){
     :root{--rail:200px}
     .mshell{grid-template-columns:0 1fr}
@@ -198,6 +200,18 @@
       transform:translateX(-100%);transition:transform .22s}
     .mshell.mobile-open .mrail{transform:translateX(0);box-shadow:0 0 40px rgba(0,0,0,.6)}
     .mshell.mobile-open .mscrim{opacity:1;pointer-events:auto}
+    /* leave room so fixed bottom-nav never covers content or the last action */
+    .mcontent{padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+    .mbnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:48;
+      background:linear-gradient(180deg,#0b0b0b,#070707);border-top:1px solid var(--line);
+      padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));}
+    .mbnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;
+      background:none;border:0;color:var(--txt2);font-family:inherit;cursor:pointer;
+      padding:6px 2px;min-height:52px;border-radius:12px;transition:color .15s,background .15s}
+    .mbnav-item .bi{font-size:20px;line-height:1}
+    .mbnav-item .bl{font-size:10px;font-weight:700;letter-spacing:.02em}
+    .mbnav-item.active{color:var(--acc);background:rgba(113,255,0,.10)}
+    .mbnav-item:active{background:rgba(255,255,255,.06)}
   }
 </style>
 </head>
@@ -229,6 +243,7 @@
     </div>
     <div class="mcontent" id="mcontent"></div>
   </div>
+  <nav class="mbnav" id="mbnav" aria-label="Primary"></nav>
 </div>
 
 <!-- Printer engine loaded IN THE SHELL — the connection lives in this never-unloading context,
@@ -322,8 +337,31 @@
     navEl.appendChild(el);
   });
 
+  /* ── Mobile bottom nav — the primary destinations, one tap away (phone only) ── */
+  var BOTTOM_NAV = [
+    { id:'dashboard', icon:'🏠', label:'Home' },
+    { id:'orders',    icon:'🧾', label:'Orders' },
+    { id:'cashier',   icon:'💳', label:'Sell' },
+    { id:'__more',    icon:'☰',  label:'More' }   /* opens the full drawer */
+  ];
+  var bnavEl = document.getElementById('mbnav');
+  BOTTOM_NAV.forEach(function (b) {
+    var el = document.createElement('button');
+    el.type = 'button'; el.className = 'mbnav-item'; el.dataset.id = b.id;
+    el.innerHTML = '<span class="bi">' + b.icon + '</span><span class="bl">' + b.label + '</span>';
+    el.onclick = function () {
+      if (b.id === '__more') { shell.classList.add('mobile-open'); return; }
+      go(b.id);
+    };
+    bnavEl.appendChild(el);
+  });
+
   function setActive (id) {
     Array.prototype.forEach.call(navEl.querySelectorAll('.mnav-item'), function (n) {
+      n.classList.toggle('active', n.dataset.id === id);
+    });
+    /* keep the bottom nav in sync — highlight the matching primary tab (none → nothing lit) */
+    Array.prototype.forEach.call(bnavEl.querySelectorAll('.mbnav-item'), function (n) {
       n.classList.toggle('active', n.dataset.id === id);
     });
   }
