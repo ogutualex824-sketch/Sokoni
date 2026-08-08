@@ -727,12 +727,30 @@
         '<div class="an-row"><span>Orders · marketplace / POS</span><span>' + o.marketplace + ' / ' + o.pos + '</span></div>' +
         '<div class="an-row"><span>Unified / Duplicates / Orphans</span><span>' + o.unified + ' / ' + o.duplicates + ' / ' + o.orphans + dot(o.ok) + '</span></div>';
       var needFix = p && (p.missing + p.mismatched) > 0;
-      html += '<div style="display:flex;gap:8px;margin-top:12px">' +
+      html += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
         '<button class="dbtn" onclick="__anConvCheck()">↻ Re-check</button>' +
         (needFix ? '<button class="dbtn" style="border-color:rgba(113,255,0,.5);color:var(--acc)" onclick="__anReconcile()">🔧 Reconcile caches</button>' : '') +
-        '</div>';
+        '<button class="dbtn" onclick="__anBackfillPreview()">🔎 Preview branch backfill (dry-run)</button>' +
+        '</div><div id="an-backfill"></div>';
       host.innerHTML = html;
     }).catch(function () { host.innerHTML = '<div class="an-empty">Could not read convergence.</div>'; });
+  };
+  /* Branch backfill — DRY-RUN preview only. Writes NOTHING; shows the exact plan so the
+     mapping can be proven before any historical record is touched. Financial records that
+     are ambiguous are surfaced for review, never auto-moved. */
+  window.__anBackfillPreview = function () {
+    var host = document.getElementById('an-backfill'); if (!host || !window.SokoniReconcile || !SokoniReconcile.backfill) return;
+    host.innerHTML = '<div class="sk-line" style="width:55%;margin-top:10px"></div>';
+    Promise.resolve(SokoniReconcile.backfill({ dryRun: true })).then(function (r) {
+      function line (label, k) { return k ? '<div class="an-row"><span>' + label + '</span><span>tagged ' + k.alreadyTagged + ' · assign ' + k.assignable + ' · review ' + (k.ambiguousReview || 0) + ' · skip ' + k.skipped + '</span></div>' : ''; }
+      var review = ((r.transactions && r.transactions.ambiguousReview) || 0) + ((r.orders && r.orders.ambiguousReview) || 0);
+      host.innerHTML =
+        '<div class="an-sec">Branch backfill — DRY RUN (no writes)</div>' +
+        line('Products', r.products) + line('POS transactions', r.transactions) + line('Marketplace orders', r.orders) +
+        '<div class="an-note">Nothing was written. Safe records (existing ref / single-shop) are assignable; ' +
+        (review ? '<b>' + review + ' ambiguous financial record(s)</b> are held for review — never auto-moved.' : 'no ambiguous financial records.') +
+        ' A confirmed run tags only the assignable set and never overwrites an existing branchId.</div>';
+    }).catch(function () { host.innerHTML = '<div class="an-empty">Sign in on this device to preview the backfill.</div>'; });
   };
   window.__anReconcile = function () {
     if (!window.SokoniReconcile) return;

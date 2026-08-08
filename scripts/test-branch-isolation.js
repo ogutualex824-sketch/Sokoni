@@ -57,8 +57,20 @@ ok(R.determineBranch({}, { shops: [{ id: 'only' }] }).reason === 'single-shop', 
 const amb = R.determineBranch({}, shops2);
 ok(amb.branchId === 'b' && amb.reason === 'ambiguous-primary' && amb.audit === true, 'multi-shop ambiguous → primary branch + AUDIT flag');
 ok(R.determineBranch({}, { shops: [] }).branchId === null, 'no shops → skip (never dump into a wrong branch)');
-const plan = R.backfillPlan([{ branchId: 'a' }, {}, { raw: { shopId: 'a' } }, {}], shops2);
-ok(plan.alreadyTagged === 1 && plan.migrated === 3 && plan.ambiguous === 2, 'backfillPlan counts migrated/alreadyTagged/ambiguous');
+/* Non-financial (products): ambiguous may go to primary+audit → assignable. */
+const planP = R.backfillPlan([{ branchId: 'a' }, {}, { raw: { shopId: 'a' } }, {}], shops2, { financial: false });
+ok(planP.alreadyTagged === 1 && planP.assignable === 3 && planP.ambiguousReview === 0, 'products plan: alreadyTagged + assignable (ambiguous→primary+audit)');
+ok(planP.plan.filter(p => p.audit).length === 2, 'products plan records an audit for each ambiguous assignment');
+
+/* Financial (orders/transactions): ambiguous is NEVER auto-assigned → ambiguousReview. */
+const planF = R.backfillPlan([{ branchId: 'a' }, {}, { raw: { shopId: 'a' } }, {}], shops2, { financial: true });
+ok(planF.alreadyTagged === 1 && planF.assignable === 1 && planF.ambiguousReview === 2,
+   'FINANCIAL plan: ambiguous NEVER auto-assigned (2 → review), only safe (ref/single-shop) assignable');
+ok(planF.review.length === 2, 'ambiguous financial records surfaced for human review, not moved');
+
+/* A single-shop seller: financial ambiguity does not arise → everything safe. */
+const planSingle = R.backfillPlan([{}, {}, { branchId: 'x' }], { shops: [{ id: 'only', isMain: true }] }, { financial: true });
+ok(planSingle.assignable === 2 && planSingle.ambiguousReview === 0 && planSingle.alreadyTagged === 1, 'single-shop seller: unambiguous, no review needed');
 
 console.log(fail === 0 ? ('\nALL ' + pass + ' PASSED') : ('\n' + pass + ' passed, ' + fail + ' FAILED'));
 process.exit(fail === 0 ? 0 : 1);

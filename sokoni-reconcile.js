@@ -192,16 +192,82 @@
     return { branchId: null, reason: 'no-shops', audit: false };
   }
 
-  /* Tally a backfill plan (pure) over a record set → migrated/alreadyTagged/ambiguous/skipped. */
-  function backfillPlan (records, ctx) {
-    var t = { migrated: 0, alreadyTagged: 0, ambiguous: 0, skipped: 0, audits: [] };
+  /* Tally a backfill plan (pure). Separates records we can SAFELY assign from AMBIGUOUS
+     ones needing review. opts.financial=true (orders / POS transactions) → an ambiguous
+     record is NEVER auto-assigned to a primary branch (that would silently move money);
+     it goes to ambiguousReview for a human decision. Products (non-financial) may go to
+     the primary branch with an audit record. */
+  function backfillPlan (records, ctx, opts) {
+    opts = opts || {};
+    var t = { alreadyTagged: 0, assignable: 0, ambiguousReview: 0, skipped: 0, failed: 0, plan: [], review: [] };
     (records || []).forEach(function (r) {
-      var d = determineBranch(r, ctx);
-      if (d.reason === 'already-tagged') t.alreadyTagged++;
-      else if (!d.branchId) t.skipped++;
-      else { t.migrated++; if (d.audit) { t.ambiguous++; t.audits.push({ id: r.id, branchId: d.branchId, reason: d.reason }); } }
+      try {
+        var d = determineBranch(r, ctx);
+        if (d.reason === 'already-tagged') { t.alreadyTagged++; return; }
+        if (!d.branchId) { t.skipped++; return; }
+        if (d.audit) {                                   /* ambiguous (multi-shop, no ref) */
+          if (opts.financial) { t.ambiguousReview++; t.review.push({ id: r.id, suggested: d.branchId, reason: d.reason }); return; }
+          t.assignable++; t.plan.push({ id: r.id, branchId: d.branchId, reason: d.reason, audit: true }); return;
+        }
+        t.assignable++; t.plan.push({ id: r.id, branchId: d.branchId, reason: d.reason, audit: false });   /* safe: ref / single-shop */
+      } catch (_) { t.failed++; }
     });
     return t;
+  }
+
+  /* Read the seller's shops (branches) as determineBranch context. */
+  async function _sellerShops (uid) {
+    try {
+      var m = await _fs();
+      var snap = await m.getDoc(m.doc(root.firebaseDB, 'sellers', uid));
+      var branches = (snap.exists() && Array.isArray(snap.data().branches)) ? snap.data().branches : [];
+      var shops = branches.map(function (b) { return { id: b.id, isMain: !!b.isMain }; });
+      if (!shops.length) shops = [{ id: 'main', isMain: true }];   /* default single main */
+      var primary = (shops.filter(function (s) { return s.isMain; })[0] || shops[0]).id;
+      return { shops: shops, primaryBranchId: primary };
+    } catch (_) { return { shops: [{ id: 'main', isMain: true }], primaryBranchId: 'main' }; }
+  }
+
+  /* Idempotent branch backfill. DRY-RUN by default: computes the plan and writes NOTHING.
+     Only an explicit {dryRun:false} writes, and only the SAFELY-assignable records — never
+     an existing branchId (never overwrite), never an ambiguous financial record. Returns
+     per-kind counts + the ambiguous-review list + audit. */
+  async function backfill (opts) {
+    opts = opts || {};
+    var dryRun = opts.dryRun !== false;                 /* default TRUE — never write unless told */
+    var uid = _uid();
+    var result = { dryRun: dryRun, at: null, products: null, transactions: null, orders: null };
+    if (!uid || !root.firebaseDB) return result;
+    var ctx = await _sellerShops(uid);
+    var m = await _fs();
+    var db = root.firebaseDB;
+
+    async function run (kind, coll, financial, records) {
+      var plan = backfillPlan(records, ctx, { financial: financial });
+      var written = 0;
+      if (!dryRun) {
+        for (var i = 0; i < plan.plan.length; i++) {
+          var p = plan.plan[i];
+          try { await m.updateDoc(m.doc(db, coll, String(p.id)), { branchId: p.branchId, branchBackfilledAt: m.serverTimestamp() }); written++; } catch (_) { plan.failed++; }
+        }
+      }
+      plan.written = written;
+      return plan;
+    }
+
+    try {
+      var prods = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(2000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
+      result.products = await run('products', 'products', false, prods);
+    } catch (_) {}
+    /* POS transactions live in IndexedDB (client) — read via OrderService rows (source=pos). */
+    try {
+      if (root.SokoniOrderService && root.SokoniOrderService.query) {
+        var rows = await root.SokoniOrderService.query({ range: 'all', tab: 'all' });
+        result.transactions = backfillPlan(rows.filter(function (r) { return r.source === 'pos'; }).map(function (r) { return { id: r.canonicalId, branchId: r.branchId, raw: r.raw }; }), ctx, { financial: true });
+        result.orders = backfillPlan(rows.filter(function (r) { return r.source !== 'pos'; }).map(function (r) { return { id: r.canonicalId, branchId: r.branchId, raw: r.raw }; }), ctx, { financial: true });
+      }
+    } catch (_) {}
+    return result;
   }
 
   root.SokoniReconcile = {
