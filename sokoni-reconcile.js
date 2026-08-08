@@ -146,9 +146,33 @@
     return { written: written, alreadyOk: (conv.missing + conv.mismatched) === 0 };
   }
 
+  /* ── PURE: branch isolation check ─────────────────────────────────────────
+     Given records (products / transactions / orders — anything with a branchId) and the
+     ACTIVE branch, report how many belong to the active branch, to OTHER branches (=
+     leakage if any surface shows them while scoped), and how many are untagged (legacy,
+     pending backfill). leakage=true means Shop A would see Shop B's data → a failure. */
+  function branchIsolation (records, activeBranch) {
+    records = records || [];
+    var active = 0, other = 0, untagged = 0, byBranch = {};
+    records.forEach(function (r) {
+      var b = r.branchId != null ? r.branchId : null;
+      if (b == null) { untagged++; return; }
+      byBranch[b] = (byBranch[b] || 0) + 1;
+      if (activeBranch && b === activeBranch) active++;
+      else if (activeBranch) other++;
+    });
+    return {
+      total: records.length, active: active, other: other, untagged: untagged,
+      branches: Object.keys(byBranch).length, byBranch: byBranch,
+      leakage: activeBranch ? other > 0 : false,
+      ok: activeBranch ? other === 0 : true
+    };
+  }
+
   root.SokoniReconcile = {
     productConvergence: productConvergence,
     orderConvergence: orderConvergence,
+    branchIsolation: branchIsolation,
     status: status,
     reconcile: reconcile
   };

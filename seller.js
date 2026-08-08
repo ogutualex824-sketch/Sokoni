@@ -1000,6 +1000,11 @@ async function addProduct(){
                     fsProduct.images = fsProduct.images.filter(function(v){ return !_isDataUri(v); });
                 }
 
+                /* Branch isolation (v474): tag the canonical product with the ACTIVE branch so
+                   POS/Inventory/Shop/Search scope it to one shop. sellerUid is already present;
+                   branchId is added alongside it. Never overwrite an existing branchId. */
+                try { if (fsProduct.branchId == null) fsProduct.branchId = window._currentBranchId || (window.SokoniShell && window.SokoniShell.activeShopId) || null; } catch (_) {}
+
                 await m.setDoc(m.doc(db,'products',newProduct.id), fsProduct);
 
                 /* Canonical PRODUCT event → SokoniSync → analytics/shop/inventory ingestion.

@@ -51,6 +51,7 @@
       id:          'POS-' + (t.receiptNo || String(t.id || '').slice(-6)),
       canonicalId: String(t.id || t.receiptNo || ts),
       source:      'pos',
+      branchId:    t.branchId || null,          /* branch isolation key (null = legacy, pre-migration) */
       channel:     'in_store',
       customer:    t.customerName || 'Walk-in Customer',
       phone:       t.customerPhone || '',
@@ -104,6 +105,7 @@
       id:          o.orderNo || o.orderId || o.id || ('SKN-' + String(o.id || '').slice(-6)),
       canonicalId: String(o.id || o.orderId || o.orderNo || ts),
       source:      'marketplace',
+      branchId:    o.branchId || null,          /* branch isolation key (null = legacy, pre-migration) */
       channel:     _onlineChannel(o),
       customer:    o.customerName || o.buyerName || o.customer || 'Customer',
       phone:       o.customerPhone || o.phone || o.buyerPhone || '',
@@ -198,9 +200,15 @@
     var seen = {}, dedup = [];
     out.forEach(function (o) { var k = o.source + ':' + o.canonicalId; if (!seen[k]) { seen[k] = 1; dedup.push(o); } });
 
+    /* Branch isolation (v474): when an active branch is scoped, keep only that branch's
+       records. Untagged legacy records (branchId null) are STILL shown until the backfill
+       tags them, so no historical data is lost mid-migration — never silently dropped. */
+    var rows = dedup;
+    if (opts.branchId) rows = rows.filter(function (o) { return o.branchId == null || o.branchId === opts.branchId; });
+
     /* Range + tab + search */
     var from = _rangeFrom(opts.range || 'today');
-    var rows = dedup.filter(function (o) { return o.ts >= from; });
+    rows = rows.filter(function (o) { return o.ts >= from; });
     if (opts.tab && opts.tab !== 'all') rows = rows.filter(function (o) { return _matchTab(o, opts.tab); });
     if (opts.search) {
       var q = String(opts.search).toLowerCase();

@@ -72,9 +72,13 @@
     opts = opts || {};
     var OS = root.SokoniOrderService;
     if (!OS || !OS.query) return null;
-    var orders = await OS.query({ range: opts.range || 'today', tab: 'all' });
+    /* Branch scope (v474 isolation): pass the active branch through so every analytics
+       surface computes over ONE branch's data. Absent → all branches (backward-compatible). */
+    var branchId = opts.branchId || (root.SokoniShell && root.SokoniShell.activeShopId) || null;
+    var orders = await OS.query({ range: opts.range || 'today', tab: 'all', branchId: branchId });
     var out = aggregate(orders);
     out.range = opts.range || 'today';
+    out.branchId = branchId;
     out._orders = orders;                   /* traceability: which rows produced these numbers */
 
     /* Availability & product operational signals — derived from the canonical

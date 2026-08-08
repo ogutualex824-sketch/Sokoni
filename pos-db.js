@@ -277,6 +277,12 @@ const PosDB = (function () {
       if (!t.timestamp)   t.timestamp = now;
       if (!t.date)        t.date = new Date().toISOString().split('T')[0];
       if (t.status === 'completed' && !t.completedAt) t.completedAt = now;
+      /* Branch isolation (v474): tag the sale with the ACTIVE branch at the moment of sale
+         (SokoniBranch persists window._currentBranchId; shell exposes SokoniShell.activeShopId).
+         Immutable once written — never rewrite an existing branchId on a historical txn. */
+      if (t.branchId == null && typeof window !== 'undefined') {
+        try { t.branchId = window._currentBranchId || (window.SokoniShell && window.SokoniShell.activeShopId) || null; } catch (_) {}
+      }
       return _put('transactions', t).then(() => {
         /* Canonical sale/refund event at THE persist point OrderService reads. Idempotent
            on txn.id (the shift-level emit shares this id → deduped, never double-counted).
@@ -289,6 +295,7 @@ const PosDB = (function () {
               source:    'POS',
               channel:   'in_store',
               entityId:  t.id,
+              branchId:  t.branchId || null,
               sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
               total:     Number(t.total || 0),
               paymentMethod: t.paymentMethod || 'cash',
