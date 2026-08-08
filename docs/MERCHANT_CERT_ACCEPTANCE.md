@@ -57,12 +57,17 @@ Pick ONE date range, read all four, and record the numbers:
 - [ ] All four columns match per row.
 - [ ] Cross-check those figures against the actual Orders list for the same range.
 
-## 4. Navigation
-For **every** sidebar item:
-- [ ] One click → the **correct** module (no "Loading POS", no wrong screen).
-- [ ] No full page reload.
-- [ ] No double sidebar.
-- [ ] Content scrolls; primary action reachable.
+## 4. Navigation (v456 convergence — sidebar is the canonical router)
+For **every** sidebar item, one click → **correct** module in main content, no reload, no double
+sidebar, no "Loading POS" for non-POS modules, scroll works:
+- [ ] Dashboard · [ ] Cashier · [ ] Orders · [ ] Products · [ ] Inventory · [ ] Customers · [ ] Shop
+- [ ] Reports · [ ] Finance · [ ] Analytics · [ ] Marketing · [ ] Promotions
+- [ ] Fulfilment · [ ] Deliveries · [ ] Returns · [ ] Riders · [ ] Receipts
+- [ ] Messages · [ ] Stories
+- [ ] Staff · [ ] Disputes · [ ] Verification · [ ] Audit Log
+- [ ] Devices · [ ] **POS Setup** · [ ] Settings · [ ] Store Setup
+- [ ] `#hash` follows the module; refreshing e.g. `/merchant#pos-setup` restores POS Setup directly.
+- [ ] **POS Setup → Connect P58E → 🟢 → Products → Analytics → Orders → Cashier** — printer stays connected.
 - [ ] (Phone) bottom nav Home/Orders/Sell/More works; "More" opens the drawer; tap-outside closes it.
 - [ ] (Phone) ⌘K/🔍 palette opens, filters, and jumps to the right module.
 
