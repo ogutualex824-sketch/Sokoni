@@ -277,7 +277,28 @@ const PosDB = (function () {
       if (!t.timestamp)   t.timestamp = now;
       if (!t.date)        t.date = new Date().toISOString().split('T')[0];
       if (t.status === 'completed' && !t.completedAt) t.completedAt = now;
-      return _put('transactions', t).then(() => t);
+      return _put('transactions', t).then(() => {
+        /* Canonical sale/refund event at THE persist point OrderService reads. Idempotent
+           on txn.id (the shift-level emit shares this id → deduped, never double-counted).
+           Only completed/refunded transactions are business events. Fire-and-forget. */
+        try {
+          if (typeof window !== 'undefined' && window.SokoniSync && (t.status === 'completed' || t.refunded)) {
+            window.SokoniSync.orderChanged({
+              eventId:   t.id,
+              type:      t.refunded ? 'ORDER_REFUNDED' : 'SALE_COMPLETED',
+              source:    'POS',
+              channel:   'in_store',
+              entityId:  t.id,
+              sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+              total:     Number(t.total || 0),
+              paymentMethod: t.paymentMethod || 'cash',
+              items:     t.items || null,
+              timestamp: now
+            });
+          }
+        } catch (_) {}
+        return t;
+      });
     },
 
     markSynced: async id => {
