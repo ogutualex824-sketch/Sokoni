@@ -125,6 +125,51 @@
   .dev-actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:14px}
   .dev-note{font-size:11.5px;color:var(--txt3);line-height:1.55;margin-top:12px}
   .dev-soon{opacity:.6}
+  /* Native Orders module */
+  .ord2-wrap{max-width:900px;margin:0 auto}
+  .ord2-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px;margin-bottom:14px}
+  .ord2-stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 10px;text-align:center}
+  .ord2-stat-n{font-size:17px;font-weight:900;color:var(--acc);line-height:1.1}
+  .ord2-stat-l{font-size:10px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+  .ord2-rangebar,.ord2-tabs{display:flex;gap:7px;overflow-x:auto;padding-bottom:8px;scrollbar-width:none}
+  .ord2-rangebar::-webkit-scrollbar,.ord2-tabs::-webkit-scrollbar{display:none}
+  .ord2-chip,.ord2-tab{flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--txt2);border-radius:20px;padding:7px 13px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .ord2-chip.active,.ord2-tab.active{background:rgba(113,255,0,.12);border-color:rgba(113,255,0,.4);color:var(--acc)}
+  .ord2-search{width:100%;background:var(--card);border:1px solid var(--line);border-radius:12px;color:var(--txt);padding:11px 14px;font-size:14px;outline:none;margin:4px 0 10px;font-family:inherit}
+  .ord2-list{display:flex;flex-direction:column;gap:10px}
+  .ord2-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:13px 15px;cursor:pointer;transition:border-color .14s,transform .12s}
+  .ord2-card:hover{border-color:rgba(113,255,0,.35);transform:translateY(-1px)}
+  .ord2-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:9px}
+  .ord2-card-id{font-weight:800;font-size:14px}
+  .ord2-card-sub{font-size:11.5px;color:var(--txt2);margin-top:2px}
+  .ord2-card-amt{font-weight:900;font-size:15px}
+  .ord2-card-when{font-size:10.5px;color:var(--txt3);margin-top:2px;white-space:nowrap}
+  .ord2-card-foot{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .ord2-pay{font-size:11px;color:var(--txt2)}
+  .ord2-badge{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:20px}
+  .ord2-ok{background:rgba(113,255,0,.13);color:var(--acc)} .ord2-warn{background:rgba(255,180,0,.14);color:#ffb400} .ord2-bad{background:rgba(255,80,80,.14);color:#ff6464}
+  .ord2-empty{text-align:center;color:var(--txt2);padding:40px 20px}
+  .ord2-note{font-size:12px;color:var(--txt3);margin-top:8px}
+  .ord2-drawer-ov{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100000;display:flex;justify-content:flex-end}
+  .ord2-drawer{width:100%;max-width:420px;height:100%;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;animation:ord2In .24s cubic-bezier(.2,.7,.3,1)}
+  @keyframes ord2In{from{transform:translateX(30px);opacity:.6}to{transform:none;opacity:1}}
+  .ord2-dhead{display:flex;justify-content:space-between;align-items:center;padding:16px;border-bottom:1px solid var(--line)}
+  .ord2-dtitle{font-weight:900;font-size:16px} .ord2-dsub{font-size:12px;color:var(--txt2);margin-top:4px;display:flex;gap:7px;align-items:center}
+  .ord2-dclose{background:none;border:none;color:var(--txt2);font-size:16px;cursor:pointer}
+  .ord2-dbody{padding:16px;overflow-y:auto;flex:1}
+  .ord2-drow{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:4px 0;color:var(--txt)}
+  .ord2-drow span:first-child{color:var(--txt2)}
+  .ord2-dtotal{font-weight:900;font-size:15px;border-top:1px solid var(--line);margin-top:6px;padding-top:9px}
+  .ord2-dbody hr{border:none;border-top:1px solid var(--line);margin:10px 0}
+  .ord2-dsec{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--txt3);margin:16px 0 10px}
+  .ord2-tl{position:relative}
+  .ord2-tl-row{display:flex;gap:12px;padding-bottom:14px;position:relative}
+  .ord2-tl-row:not(:last-child)::before{content:'';position:absolute;left:5px;top:14px;bottom:0;width:2px;background:var(--line)}
+  .ord2-tl-dot{width:12px;height:12px;border-radius:50%;background:rgba(255,255,255,.2);flex:0 0 auto;margin-top:2px}
+  .ord2-tl-dot.now{background:var(--acc);box-shadow:0 0 8px var(--acc)}
+  .ord2-tl-t{font-size:13px;font-weight:700} .ord2-tl-at{font-size:11px;color:var(--txt3);margin-top:1px}
+  .ord2-dfoot{padding:14px 16px;border-top:1px solid var(--line)}
+  .ord2-dfoot .dbtn{width:100%;justify-content:center}
 
   @media (max-width:820px){
     :root{--rail:200px}
@@ -168,6 +213,8 @@
 <!-- Printer engine loaded IN THE SHELL — the connection lives in this never-unloading context,
      so it is owned by the shell (not a module) and survives all navigation. -->
 <script src="sokoni-universal-printer.js"></script>
+<!-- Unified OrderService — one source of truth for orders (POS + marketplace + delivery). -->
+<script src="sokoni-order-service.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -197,7 +244,7 @@
 
     { head:'Commerce' },
     { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos',    tab:'pos' },
-    { id:'orders',    label:'Orders',    icon:'🧾', kind:'seller', sec:'orders' },
+    { id:'orders',    label:'Orders',    icon:'🧾', kind:'native' },
     { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
     { id:'inventory', label:'Inventory', icon:'📦', kind:'pos',    tab:'inventory' },
     { id:'customers', label:'Customers', icon:'👥', kind:'seller', sec:'customers' },
@@ -355,7 +402,135 @@
   function renderNative (id) {
     if (id === 'dashboard') renderDashboard();
     else if (id === 'devices') renderDevices();
+    else if (id === 'orders') renderOrders();
   }
+
+  /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
+  var _ordState = { range: 'today', tab: 'all', search: '', rows: [] };
+  var _ordSearchT = null;
+  function _ordFmt (n) { return Number(n || 0).toLocaleString('en-KE', { maximumFractionDigits: 0 }); }
+  function _ordWhen (ts) { return new Date(ts).toLocaleString('en-KE', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' }); }
+  function _ordEsc (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+  async function renderOrders () {
+    var host = document.getElementById('native-orders');
+    if (!host) return;
+    if (!host.dataset.shell) {
+      host.dataset.shell = '1';
+      host.innerHTML =
+        '<div class="ord2-wrap">' +
+          '<div id="ord2-summary" class="ord2-summary"></div>' +
+          '<div class="ord2-rangebar" id="ord2-range"></div>' +
+          '<input class="ord2-search" id="ord2-search" placeholder="Search order #, customer, phone, product…">' +
+          '<div class="ord2-tabs" id="ord2-tabs"></div>' +
+          '<div id="ord2-list" class="ord2-list"></div>' +
+        '</div>';
+      document.getElementById('ord2-search').addEventListener('input', function (e) {
+        clearTimeout(_ordSearchT); var v = e.target.value;
+        _ordSearchT = setTimeout(function () { _ordState.search = v; _ordLoad(); }, 220);
+      });
+    }
+    _ordPaintChrome();
+    _ordLoad();
+  }
+  function _ordPaintChrome () {
+    var R = [['today', 'Today'], ['week', 'This Week'], ['month', 'This Month'], ['all', 'All Time']];
+    document.getElementById('ord2-range').innerHTML = R.map(function (r) {
+      return '<button class="ord2-chip ' + (_ordState.range === r[0] ? 'active' : '') + '" onclick="__ordRange(\'' + r[0] + '\')">' + r[1] + '</button>';
+    }).join('');
+    var T = [['all', '🟢 All'], ['online', '🛒 Online'], ['instore', '🏪 In-Store'], ['delivery', '🚚 Delivery'],
+             ['pickup', '📦 Pickup'], ['pending', '⏳ Pending'], ['completed', '✅ Completed'], ['refunded', '↩ Refunded'], ['cancelled', '❌ Cancelled']];
+    document.getElementById('ord2-tabs').innerHTML = T.map(function (t) {
+      return '<button class="ord2-tab ' + (_ordState.tab === t[0] ? 'active' : '') + '" onclick="__ordTab(\'' + t[0] + '\')">' + t[1] + '</button>';
+    }).join('');
+  }
+  window.__ordRange = function (r) { _ordState.range = r; _ordPaintChrome(); _ordLoad(); };
+  window.__ordTab   = function (t) { _ordState.tab = t; _ordPaintChrome(); _ordLoad(); };
+
+  async function _ordLoad () {
+    var list = document.getElementById('ord2-list'); if (!list) return;
+    if (!window.SokoniOrderService) { list.innerHTML = '<div class="ord2-empty">Order service unavailable.</div>'; return; }
+    list.innerHTML = '<div class="sk-line" style="width:80%"></div><div class="sk-line" style="width:66%"></div><div class="sk-line" style="width:74%"></div>';
+    var rows = [];
+    try { rows = await SokoniOrderService.getAll({ range: _ordState.range, tab: _ordState.tab, search: _ordState.search }); } catch (_) {}
+    _ordState.rows = rows;
+    _ordPaintSummary();
+    if (!rows.length) {
+      var onlineNote = SokoniOrderService.hasOnlineProvider() ? '' : '<div class="ord2-note">Online marketplace orders connect in the next step — in-store sales show now.</div>';
+      list.innerHTML = '<div class="ord2-empty"><div style="font-size:34px">🧾</div><p>No orders in this view</p>' + onlineNote + '</div>';
+      return;
+    }
+    list.innerHTML = rows.map(_ordCard).join('');
+  }
+  function _ordPaintSummary () {
+    var s = SokoniOrderService.summarize(_ordState.rows);
+    var el = document.getElementById('ord2-summary'); if (!el) return;
+    function card (v, l, accent) { return '<div class="ord2-stat"><div class="ord2-stat-n"' + (accent ? ' style="color:' + accent + '"' : '') + '>' + v + '</div><div class="ord2-stat-l">' + l + '</div></div>'; }
+    el.innerHTML =
+      card('KES ' + _ordFmt(s.revenue), 'Revenue') +
+      card(String(s.count), 'Orders') +
+      card(String(s.instore), 'In-Store') +
+      card(s.online ? String(s.online) : '<span style="color:var(--txt3)">—</span>', 'Online') +
+      card(s.pending ? String(s.pending) : '0', 'Pending', s.pending ? '#ffb400' : null) +
+      card(s.refunded ? String(s.refunded) : '0', 'Refunded', s.refunded ? '#ffb400' : null);
+  }
+  var _ORD_BADGE = { completed: 'ord2-ok', pending: 'ord2-warn', refunded: 'ord2-warn', returned: 'ord2-warn', cancelled: 'ord2-bad' };
+  var _ORD_CH = { in_store: '🏪 In-Store', online: '🛒 Online', delivery: '🚚 Delivery', pickup: '📦 Pickup' };
+  function _ordCard (o) {
+    var badge = '<span class="ord2-badge ' + (_ORD_BADGE[o.status] || 'ord2-ok') + '">' + o.status.charAt(0).toUpperCase() + o.status.slice(1) + '</span>';
+    return '<div class="ord2-card" onclick="__ordOpen(\'' + _ordEsc(o.source + '|' + o.canonicalId) + '\')">' +
+      '<div class="ord2-card-top">' +
+        '<div><div class="ord2-card-id">' + _ordEsc(o.id) + '</div>' +
+          '<div class="ord2-card-sub">' + _ordEsc(o.customer) + ' · ' + (_ORD_CH[o.channel] || o.channel) + ' · ' + o.itemCount + ' item' + (o.itemCount === 1 ? '' : 's') + '</div></div>' +
+        '<div style="text-align:right"><div class="ord2-card-amt">KES ' + _ordFmt(o.total) + '</div>' +
+          '<div class="ord2-card-when">' + _ordWhen(o.ts) + '</div></div>' +
+      '</div>' +
+      '<div class="ord2-card-foot">' + badge + '<span class="ord2-pay">' + _ordEsc((o.paymentMethod || '').toUpperCase()) + ' · ' + _ordEsc(o.paymentStatus) + '</span></div>' +
+    '</div>';
+  }
+
+  window.__ordOpen = function (key) {
+    var parts = key.split('|'); var o = _ordState.rows.filter(function (x) { return x.source === parts[0] && x.canonicalId === parts[1]; })[0];
+    if (!o) return;
+    _ordDrawer(o);
+  };
+  function _ordDrawer (o) {
+    var items = (o.items || []).map(function (i) { return '<div class="ord2-drow"><span>' + _ordEsc(i.name) + ' ×' + (i.qty || 1) + '</span><span>KES ' + _ordFmt((i.price || 0) * (i.qty || 1)) + '</span></div>'; }).join('') || '<div class="ord2-drow"><span>No line items</span><span></span></div>';
+    var LBL = SokoniOrderService.EVENT_LABELS || {};
+    var timeline = (o.events || []).map(function (e, idx, arr) {
+      var last = idx === arr.length - 1;
+      return '<div class="ord2-tl-row"><div class="ord2-tl-dot ' + (last ? 'now' : '') + '"></div><div class="ord2-tl-body"><div class="ord2-tl-t">' + (LBL[e.type] || e.type) + '</div><div class="ord2-tl-at">' + (e.at ? _ordWhen(e.at) : '') + '</div></div></div>';
+    }).join('');
+    var ov = document.createElement('div'); ov.className = 'ord2-drawer-ov';
+    ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+    ov.innerHTML =
+      '<div class="ord2-drawer">' +
+        '<div class="ord2-dhead"><div><div class="ord2-dtitle">' + _ordEsc(o.id) + '</div>' +
+          '<div class="ord2-dsub">' + (_ORD_CH[o.channel] || o.channel) + ' · <span class="ord2-badge ' + (_ORD_BADGE[o.status] || 'ord2-ok') + '">' + o.status + '</span></div></div>' +
+          '<button class="ord2-dclose" onclick="this.closest(\'.ord2-drawer-ov\').remove()">✕</button></div>' +
+        '<div class="ord2-dbody">' +
+          '<div class="ord2-drow"><span>Customer</span><span>' + _ordEsc(o.customer) + '</span></div>' +
+          (o.phone ? '<div class="ord2-drow"><span>Phone</span><span>' + _ordEsc(o.phone) + '</span></div>' : '') +
+          (o.rider ? '<div class="ord2-drow"><span>Rider</span><span>' + _ordEsc(o.rider) + '</span></div>' : '') +
+          '<div class="ord2-drow"><span>Date</span><span>' + new Date(o.ts).toLocaleString('en-KE') + '</span></div>' +
+          '<hr>' + items + '<hr>' +
+          '<div class="ord2-drow"><span>Subtotal</span><span>KES ' + _ordFmt(o.subtotal) + '</span></div>' +
+          (o.discount ? '<div class="ord2-drow"><span>Discount</span><span>-KES ' + _ordFmt(o.discount) + '</span></div>' : '') +
+          (o.deliveryFee ? '<div class="ord2-drow"><span>Delivery</span><span>KES ' + _ordFmt(o.deliveryFee) + '</span></div>' : '') +
+          (o.tax ? '<div class="ord2-drow"><span>Tax</span><span>KES ' + _ordFmt(o.tax) + '</span></div>' : '') +
+          '<div class="ord2-drow ord2-dtotal"><span>Total</span><span>KES ' + _ordFmt(o.total) + '</span></div>' +
+          '<div class="ord2-drow"><span>Payment</span><span>' + _ordEsc((o.paymentMethod || '').toUpperCase()) + ' · ' + _ordEsc(o.paymentStatus) + '</span></div>' +
+          '<div class="ord2-dsec">Timeline</div><div class="ord2-tl">' + timeline + '</div>' +
+        '</div>' +
+        '<div class="ord2-dfoot"><button class="dbtn" onclick="__ordPrint(\'' + _ordEsc(o.source + '|' + o.canonicalId) + '\')">🖨 Print / Reprint</button></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+  }
+  window.__ordPrint = function (key) {
+    var parts = key.split('|'); var o = _ordState.rows.filter(function (x) { return x.source === parts[0] && x.canonicalId === parts[1]; })[0];
+    if (!o) return;
+    try { window.SokoniShell.Printer.print(o.raw || o); } catch (_) {}
+  };
 
   /* ── Native Devices page (shell-level DeviceManager UI) ── */
   function renderDevices () {
