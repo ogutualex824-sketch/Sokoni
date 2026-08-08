@@ -476,8 +476,13 @@
       '<div class="an-row"><span>Cancelled</span><span>' + a.cancelled + '</span></div>';
   }
   function _anFinance (a) {
-    return _anGrid([_anStat(_anFmt(a.revenue), 'Gross Sales'), _anStat(_anFmt(a.tax), 'Tax'), _anStat(_anFmt(a.discount), 'Discounts'),
-      _anStat(_anFmt(a.deliveryFees), 'Delivery Fees'), _anStat(String(a.refunded), 'Refunds'), _anStat(a.grossProfit == null ? '—' : _anFmt(a.grossProfit), 'Gross Profit')]) +
+    /* Parity strip — the SAME compute() fields the other three surfaces show, so Finance is
+       directly comparable at a glance (no second query, no second calculation). */
+    return _anGrid([_anStat(_anFmt(a.revenue), 'Revenue'), _anStat(String(a.orders), 'Orders'), _anStat(a.aov ? _anFmt(a.aov) : '—', 'Avg Order'),
+      _anStat(String(a.pos.count), 'POS'), _anStat(_anOnline(a), 'Online'), _anStat(String(a.refunded), 'Refunds')]) +
+      '<div class="an-sec">Financial breakdown</div>' +
+      _anGrid([_anStat(_anFmt(a.revenue), 'Gross Sales'), _anStat(_anFmt(a.tax), 'Tax'), _anStat(_anFmt(a.discount), 'Discounts'),
+        _anStat(_anFmt(a.deliveryFees), 'Delivery Fees'), _anStat(String(a.refunded), 'Refunds'), _anStat(a.grossProfit == null ? '—' : _anFmt(a.grossProfit), 'Gross Profit')]) +
       '<div class="an-sec">Revenue by channel</div>' +
       '<div class="an-row"><span>In-Store (POS)</span><span>' + _anFmt(a.pos.revenue) + '</span></div>' +
       '<div class="an-row"><span>Online</span><span>' + (SokoniOrderService.hasOnlineProvider() ? _anFmt(a.online.revenue) : '—') + '</span></div>' +
