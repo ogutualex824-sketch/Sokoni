@@ -641,7 +641,7 @@ function _updateHeaderWidget (health) {
     /* Opens the in-POS printer dropdown — connect / status / reconnect / forget / test /
        advanced — all inside the POS. NEVER navigates to a separate page (that broke the
        checkout flow); "Advanced options" is the only route to the full setup page. */
-    chip.onclick = (e) => { try { e.stopPropagation(); } catch (_) {} _ppsTogglePrinterMenu(chip); };
+    chip.onclick = (e) => { try { e.stopPropagation(); } catch (_) {} (window.openPrinterMenu ? window.openPrinterMenu(chip) : _ppsTogglePrinterMenu(chip)); };
     /* Insert before the first button (notifications bell) */
     const firstBtn = target.querySelector('button');
     if (firstBtn) target.insertBefore(chip, firstBtn);
@@ -724,6 +724,15 @@ function _ppsTogglePrinterMenu (anchor) {
    dropdown's own "Advanced options" opens the full setup page (firmware/USB/serial). */
 if (typeof window !== 'undefined') {
   window.openPrinterMenu = function (anchor) {
+    /* In the Merchant Shell, the shell owns the ONE printer engine and the connect gesture must
+       happen in the shell document — so route every POS printer entry to the shell's Devices
+       module instead of opening a local dropdown that would connect a SECOND engine. */
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ __sokoniGoModule: 'devices' }, location.origin);
+        return;
+      }
+    } catch (_) {}
     try { _ppsTogglePrinterMenu(anchor || document.getElementById('pps-printer-chip') || null); }
     catch (_) {}
   };
