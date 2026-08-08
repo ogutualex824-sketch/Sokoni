@@ -187,6 +187,15 @@ const PosDB = (function () {
 
     delete: id => { products._invalidateIndex(); return _delete('products', id); },
 
+    /* Upsert a row reconciled from canonical (PosInvSync). Unlike save(), this does NOT
+       re-stamp updatedAt — the reconcile decision already set updatedAt/canonicalUpdatedAt
+       so the offline-safe last-write-wins comparison stays valid across refreshes. */
+    upsertCanonical: rec => {
+      if (!rec || !rec.id) return Promise.resolve(null);
+      products._invalidateIndex();
+      return _put('products', rec).then(() => rec);
+    },
+
     adjustStock: async (id, delta, reason, cashierId) => {
       const p = await _get('products', id);
       if (!p) return null;

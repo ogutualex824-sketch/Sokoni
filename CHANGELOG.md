@@ -1,3 +1,29 @@
+## [2026-08-09] — fix(inventory): canonical products reflect on the POS screen (offline-safe)
+
+Same forensic method as the order 9→0 fix: trace source→screen, fix the exact boundary,
+prove it, deploy. The POS inventory screen renders from IndexedDB (PosDB `sokoni_smartpos`),
+which was seeded from canonical `products` ONLY ONCE at POS boot — no live path from a
+seller's dashboard edit to the screen, so new/edited products never reflected without a full
+POS reload, and `SokoniReconcile.status()` measured only the Firestore mirrors so it looked
+healthy while the screen was stale.
+
+- **pos-inventory-sync.js (new, pure, unit-tested)** — `reconcileProduct` / `mergeCatalogue`:
+  offline-safe last-write-wins. Canonical carries `updatedAt`; PosDB stamps a local `updatedAt`;
+  we persist the last-seen canonical time as `canonicalUpdatedAt`. A dashboard edit (canonical
+  newer) reflects; an unsynced offline POS sale (local newer) is PRESERVED — never clobbered by
+  stale canonical stock. Canonical stays authoritative for money and self-heals the cache. Also
+  carries `status/isVisible/minStockLevel` the old seed dropped, and surfaces upstream-deleted
+  rows as orphans (never auto-deletes).
+- **pos.js** — `_seedCatalogueFromCanonical` → re-runnable `refreshInventoryFromCanonical` (5s
+  throttle; `{force}` for explicit sync / events). Runs on inventory-tab render, on a debounced
+  `productChanged`/`stockChanged` from the shared bus, and at boot. Compact in-POS sync bar
+  (Catalogue N · ＋new · ↻updated · 🔒 kept-local · Sync now) — real stats, no fabricated data.
+- **pos-db.js** — `products.upsertCanonical` (put preserving the reconciled timestamps).
+- **Tests** — `test-inventory-sync` (18/18): timestamp coercion, dashboard-edit reflects,
+  offline-sale preserved, availability fields carried, merge counts + orphan surfacing. 9 suites green.
+- No Cloud Function change (`/api/catalogue` already returns the full doc). No new model, no
+  second product source, stock authority unchanged.
+
 ## [2026-08-08] — feat(r1.1): Merchant premium mobile + unified notifications + analytics parity (v445–v453)
 
 Product-completion pass on the frozen data architecture (OrderService / AnalyticsEngine

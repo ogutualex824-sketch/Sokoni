@@ -97,6 +97,27 @@ const SPos = (function () {
        re-render once seeded. */
     _seedCatalogueFromCanonical().then(n => { if (n > 0) products.reload(); }).catch(() => {});
 
+    /* Live path: a product created/edited in the seller dashboard emits productChanged on the
+       shared bus (SokoniSync → SokoniEventBus, same-origin cross-iframe). Reflect it onto the
+       POS screen without a reload. Debounced so a burst of edits triggers one refresh. */
+    try {
+      const bus = window.SokoniSync || window.SokoniEventBus;
+      if (bus && typeof bus.on === 'function') {
+        let _invT = null;
+        const onProductChange = () => { clearTimeout(_invT); _invT = setTimeout(() => {
+          refreshInventoryFromCanonical({ force: true }).then(n => {
+            if (n <= 0) return;
+            products.reload();                                   /* refresh the sell-screen grid */
+            const t = state.invTab;                              /* if inventory tab is open, re-render it (no second fetch) */
+            if (t && document.getElementById('inv-body')) {
+              if (t === 'products') inv.renderProducts(); else if (t === 'low-stock') inv.renderLowStock(); else if (t === 'expiry') inv.renderExpiry();
+            }
+          }).catch(() => {});
+        }, 800); };
+        ['productChanged', 'stockChanged', 'product:changed', 'stock:changed'].forEach(ev => { try { bus.on(ev, onProductChange); } catch (_) {} });
+      }
+    } catch (_) {}
+
     /* Load category chips */
     await ui.loadCategories();
 
@@ -471,7 +492,18 @@ const SPos = (function () {
      /api/catalogue endpoint (works on any device). Additive + idempotent (upsert by id);
      canonical stock stays authoritative (posCompleteCheckout writes products.stock). This is
      the inventory single-source fix: the POS now shows the shop's real catalogue. */
-  async function _seedCatalogueFromCanonical () {
+  /* Reflect canonical `products` onto the POS inventory screen (PosDB). Re-runnable:
+     called once at boot AND live on inventory-tab open + productChanged, so a seller's
+     dashboard edit reaches the screen without a POS reload. The offline-safe merge lives
+     in PosInvSync (pure, unit-tested) — a dashboard edit reflects, an unsynced offline
+     POS sale is preserved. Records the last run for the in-POS sync indicator. */
+  window._posInvSyncStats = null;
+  let _lastInvSyncAt = 0;
+  async function refreshInventoryFromCanonical (opts) {
+    /* Throttle passive refreshes (tab re-render) to one network pull per 5s; an explicit
+       "Sync now" or a productChanged event passes {force:true} to bypass it. */
+    if (!(opts && opts.force) && (Date.now() - _lastInvSyncAt) < 5000) return 0;
+    _lastInvSyncAt = Date.now();
     try {
       let u = null; try { u = JSON.parse(localStorage.getItem('sokoniUser') || 'null'); } catch (_) {}
       const uid = (u && (u.uid || u.id)) || window.currentUser?.uid
@@ -482,37 +514,26 @@ const SPos = (function () {
       if (!r.ok) return 0;
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.products || j.items || j.catalogue || []);
-      if (!Array.isArray(list) || !list.length) return 0;
-      let n = 0;
-      for (const p of list) {
-        const id = String(p.id || p._id || p.productId || '');
-        if (!id) continue;
-        const canonicalStock = (p.stock != null) ? Number(p.stock) : null;
-        /* NEVER overwrite local stock on re-seed: a product already in the POS keeps its
-           local stock (which reflects POS sale deductions), so a reboot can't reset it.
-           Only NEW products take the canonical stock. (POS sales also push to canonical —
-           see _posSyncCanonicalStock — so the two stay converged going forward.) */
-        const existing = await PosDB.products.get(id).catch(() => null);
-        const stock = (existing && existing.stock != null) ? Number(existing.stock) : canonicalStock;
-        await PosDB.products.save({
-          id,
-          name:     p.name || p.title || 'Product',
-          price:    Number(p.price || p.sellingPrice || 0),
-          cost:     Number(p.cost || p.costPrice || 0) || 0,
-          stock,
-          track:    stock != null,
-          category: p.category || 'general',
-          barcode:  p.barcode || '',
-          sku:      p.sku || '',
-          image:    p.image || (Array.isArray(p.images) ? p.images[0] : '') || '',
-          unit:     p.unit || 'pc',
-          source:   'canonical',
-        }).catch(() => {});
-        n++;
+      if (!Array.isArray(list)) return 0;
+      const S = window.PosInvSync;
+      if (!S) {   /* module missing — fall back to additive insert of NEW products only (never clobber) */
+        let n = 0;
+        for (const p of list) {
+          const id = String(p.id || p._id || p.productId || ''); if (!id) continue;
+          const existing = await PosDB.products.get(id).catch(() => null);
+          if (!existing) { await PosDB.products.save({ id, name: p.name || 'Product', price: Number(p.price || 0), stock: (p.stock != null ? Number(p.stock) : null), track: p.stock != null, category: p.category || 'general', barcode: p.barcode || '', sku: p.sku || '', image: p.image || (Array.isArray(p.images) ? p.images[0] : '') || '', unit: p.unit || 'pc', source: 'canonical' }).catch(() => {}); n++; }
+        }
+        return n;
       }
-      return n;
+      const locals = await PosDB.products.getAll().catch(() => []);
+      const { writes, stats, orphans } = S.mergeCatalogue(list, locals);
+      for (const rec of writes) { await PosDB.products.upsertCanonical(rec).catch(() => {}); }
+      window._posInvSyncStats = Object.assign({ at: Date.now(), orphans: orphans }, stats);
+      return stats.inserted + stats.updated;
     } catch (_) { return 0; }
   }
+  /* Back-compat alias — existing boot call site (and any others) keep working. */
+  async function _seedCatalogueFromCanonical () { return refreshInventoryFromCanonical(); }
 
   /* Push a POS stock change to the CANONICAL products.stock so in-store sales/edits reflect on
      the marketplace + seller dashboard (interim inventory convergence). Proper transaction —
@@ -1603,15 +1624,45 @@ const SPos = (function () {
       inv.renderProductTable(results);
     },
 
+    /* Pull the latest canonical products onto the screen, then re-render whatever
+       inventory sub-tab is showing. Live path from a dashboard edit → POS screen. */
+    async refreshFromCanonical() {
+      try { await refreshInventoryFromCanonical({ force: true }); } catch (_) {}
+      const t = state.invTab || 'products';
+      if (t === 'products')       await inv.renderProducts();
+      else if (t === 'low-stock') await inv.renderLowStock();
+      else if (t === 'expiry')    await inv.renderExpiry();
+    },
+
     async renderProducts() {
+      /* Reflect canonical BEFORE reading PosDB so a dashboard edit shows without a reload.
+         Non-blocking of correctness: the merge is offline-safe (unsynced local sales kept). */
+      try { await refreshInventoryFromCanonical(); } catch (_) {}
       const all = await PosDB.products.getAll();
       inv.renderProductTable(all);
     },
 
+    /* Compact canonical-sync status — proves the source→screen boundary at a glance
+       (found in catalogue → new/updated on this device → last sync). No fabricated data:
+       reads the real last-run stats from window._posInvSyncStats. */
+    _syncStatusBar() {
+      const s = window._posInvSyncStats;
+      if (!s) return '';
+      const when = s.at ? new Date(s.at).toLocaleTimeString() : '';
+      const orph = s.orphans && s.orphans.length ? ` · <span style="color:#ffb400">${s.orphans.length} not in catalogue</span>` : '';
+      return `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:8px 12px;margin-bottom:10px;border:1px solid rgba(255,255,255,.08);border-radius:10px;font-size:12px;color:#9aa">
+        <span>📡 Catalogue: <strong style="color:#e8e8e8">${s.canonical}</strong></span>
+        <span>＋${s.inserted} new · ↻${s.updated} updated</span>
+        <span title="local stock kept for unsynced sales">🔒 ${s.stockKeptLocal || 0} kept local</span>${orph}
+        <span style="margin-left:auto">${when}</span>
+        <button class="row-btn" onclick="SPos.inv.refreshFromCanonical()">↻ Sync now</button>
+      </div>`;
+    },
+
     renderProductTable(list) {
       const body = document.getElementById('inv-body');
-      if (!list.length) { body.innerHTML = '<div class="pos-empty" style="padding:60px"><div class="empty-icon">📦</div><p>No products yet. Click + Add Product to start.</p></div>'; return; }
-      body.innerHTML = `<table class="data-table">
+      if (!list.length) { body.innerHTML = inv._syncStatusBar() + '<div class="pos-empty" style="padding:60px"><div class="empty-icon">📦</div><p>No products yet. Click + Add Product to start, or tap “↻ Sync now”.</p></div>'; return; }
+      body.innerHTML = inv._syncStatusBar() + `<table class="data-table">
         <thead><tr><th>Name</th><th>Barcode</th><th>Category</th><th class="td-right">Price</th><th class="td-right">Cost</th><th class="td-right">Stock</th><th>Unit</th><th>Expiry</th><th>Actions</th></tr></thead>
         <tbody>${list.map(p => {
           const stk = p.stock || 0;

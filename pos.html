@@ -1517,6 +1517,8 @@
      JS parse + compile blocking during page load). See CHANGELOG 2026-07-22. ══ -->
 <!-- ══ Core database layer ══ -->
 <script src="pos-db.js" defer></script>
+<!-- Canonical products → POS inventory screen (offline-safe merge; pure core, unit-tested) -->
+<script src="pos-inventory-sync.js" defer></script>
 <!-- ══ Enterprise resilience (load before pos.js) ══ -->
 <script src="pos-resilience.js" defer></script>
 <script src="pos-idempotency.js" defer></script>
