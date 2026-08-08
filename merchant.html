@@ -336,6 +336,12 @@
      per button. kind: native | pos (Checkout app) | seller (Seller app section) | page (its own
      page). Only genuinely-POS surfaces load the POS bundle. Seller `sec` keys MUST match
      seller.js DASH_PAGES exactly; page `src` must be a real file. No dead links. */
+  /* v456 Navigation Convergence — the sidebar is the CANONICAL router. Every destination is a
+     direct entry that opens ITS module in the main content (kind: native | pos | seller | page).
+     No entry uses location.href / a new document — page-kind modules load in a persistent in-shell
+     panel (created once, never navigated). The founder's 20 canonical destinations are all here;
+     the remaining entries (Promotions, Messages, Stories, Riders, Receipts, Audit, Store Setup)
+     are preserved so no feature is lost. */
   var MODULES = [
     { id:'dashboard', label:'Dashboard', icon:'🏠', kind:'native' },
 
@@ -345,32 +351,36 @@
     { id:'products',  label:'Products',  icon:'🏷️', kind:'seller', sec:'products' },
     { id:'inventory', label:'Inventory', icon:'📦', kind:'pos',    tab:'inventory' },
     { id:'customers', label:'Customers', icon:'👥', kind:'seller', sec:'customers' },
-    { id:'shop',      label:'Shop Dashboard', icon:'🏪', kind:'seller', sec:'overview' },
-
-    { head:'Fulfillment' },
-    { id:'dispatch',  label:'Dispatch',  icon:'🚚', kind:'page',   src:'dispatch.html' },
-    { id:'riders',    label:'Riders',    icon:'🏍️', kind:'page',   src:'driver.html' },
-    { id:'receipts',  label:'Receipts',  icon:'🧾', kind:'seller', sec:'receipts' },
+    { id:'shop',      label:'Shop',      icon:'🏪', kind:'seller', sec:'overview' },
 
     { head:'Business' },
+    { id:'reports',   label:'Reports',   icon:'📊', kind:'native' },
     { id:'finance',   label:'Finance',   icon:'💰', kind:'native' },
     { id:'analytics', label:'Analytics', icon:'📈', kind:'native' },
-    { id:'reports',   label:'Reports',   icon:'📊', kind:'native' },
     { id:'marketing', label:'Marketing', icon:'📣', kind:'seller', sec:'marketing' },
     { id:'promotions',label:'Promotions',icon:'🎁', kind:'seller', sec:'flash' },
+
+    { head:'Fulfilment' },
+    { id:'fulfilment',label:'Fulfilment',icon:'🚚', kind:'page',   src:'seller-fulfilment.html' },
+    { id:'deliveries',label:'Deliveries',icon:'🛵', kind:'page',   src:'dispatch.html' },
+    { id:'returns',   label:'Returns',   icon:'↩️', kind:'page',   src:'returns.html' },
+    { id:'riders',    label:'Riders',    icon:'🏍️', kind:'page',   src:'driver.html' },
+    { id:'receipts',  label:'Receipts',  icon:'🧾', kind:'seller', sec:'receipts' },
 
     { head:'Engage' },
     { id:'messages',  label:'Messages',  icon:'💬', kind:'seller', sec:'messages' },
     { id:'stories',   label:'Stories',   icon:'📸', kind:'seller', sec:'stories' },
 
     { head:'Team & Ops' },
-    { id:'team',      label:'Staff & Roles', icon:'👨‍🔧', kind:'seller', sec:'team' },
+    { id:'team',      label:'Staff',     icon:'👨‍🔧', kind:'seller', sec:'team' },
     { id:'disputes',  label:'Disputes',  icon:'⚖️', kind:'seller', sec:'disputes' },
+    { id:'verification', label:'Verification', icon:'✅', kind:'page', src:'verification.html' },
     { id:'audit',     label:'Audit Log', icon:'🛡️', kind:'pos',    tab:'audit' },
 
     { head:'System' },
     { id:'devices',   label:'Devices',   icon:'🖨️', kind:'native' },
-    { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos', tab:'settings' },
+    { id:'pos-setup', label:'POS Setup', icon:'🖨️', kind:'page',   src:'pos-hardware-setup.html' },
+    { id:'settings',  label:'Settings',  icon:'⚙️', kind:'pos',    tab:'settings' },
     { id:'store',     label:'Store Setup', icon:'🏬', kind:'seller', sec:'store' },
   ];
   var byId = {};
