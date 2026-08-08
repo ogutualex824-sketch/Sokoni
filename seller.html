@@ -6703,20 +6703,32 @@ document.addEventListener('DOMContentLoaded', function() {
   (async function () {
     try {
       var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
-      var _unsub = null;
+      var _unsub = null, _gotSnap = false, _pollT = null;
       function _uid () { try { return (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null; } catch (_) { return null; } }
+      function _push (rows) { try { window.parent.postMessage({ __sokoniOrders: true, orders: rows }, location.origin); } catch (_) {} }
+      function _rowsFrom (snap) { var rows = []; snap.forEach(function (d) { var o = d.data() || {}; o.id = d.id; rows.push(o); }); return rows; }
+      /* Poll fallback — iOS App Check can silently block onSnapshot, leaving the shell with
+         NO marketplace orders (analytics showing 0 despite real orders). A getDocs poll keeps
+         the feed alive. Same watchdog pattern used elsewhere in the platform. */
+      function _poll () {
+        var db = window.firebaseDB, uid = _uid(); if (!db || !uid) return;
+        m.getDocs(m.query(m.collection(db, 'orders'), m.where('sellerUid', '==', uid), m.limit(500)))
+          .then(function (snap) { _push(_rowsFrom(snap)); }).catch(function () {});
+      }
+      function _startPoll () { if (_pollT) return; _poll(); _pollT = setInterval(_poll, 15000); }
       function _start () {
         var db = window.firebaseDB, uid = _uid();
         if (!db || !uid || _unsub) return !!_unsub;
         try {
           var q = m.query(m.collection(db, 'orders'), m.where('sellerUid', '==', uid), m.limit(500));
           _unsub = m.onSnapshot(q, function (snap) {
-            var rows = [];
-            snap.forEach(function (d) { var o = d.data() || {}; o.id = d.id; rows.push(o); });
-            try { window.parent.postMessage({ __sokoniOrders: true, orders: rows }, location.origin); } catch (_) {}
-          }, function () { /* transient/App-Check — leave last feed */ });
+            _gotSnap = true; if (_pollT) { clearInterval(_pollT); _pollT = null; }   /* real-time won — stop polling */
+            _push(_rowsFrom(snap));
+          }, function () { _startPoll(); });                 /* onSnapshot errored → poll */
+          /* If onSnapshot silently never delivers within 8s, poll anyway. */
+          setTimeout(function () { if (!_gotSnap) _startPoll(); }, 8000);
           return true;
-        } catch (_) { return false; }
+        } catch (_) { _startPoll(); return true; }
       }
       if (!_start()) {
         if (window.firebaseAuth && window.firebaseAuth.onAuthStateChanged) window.firebaseAuth.onAuthStateChanged(function () { _start(); });
