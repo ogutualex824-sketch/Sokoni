@@ -44,8 +44,34 @@
   /* ── Normalisers ── */
   function _num (n) { return Number(n || 0); }
 
+  /* Coerce any timestamp shape to epoch millis. CRITICAL: a Firestore Timestamp read in the
+     Seller iframe (real Timestamp with .toMillis()) is postMessage'd to the shell, where
+     structured-clone strips the prototype — it arrives as a PLAIN {seconds, nanoseconds}
+     object with no .toMillis(). Older code left that as an object, so `ts >= from` was
+     `NaN` and EVERY marketplace order was silently dropped by the range filter (the 9→0 bug).
+     Handles: number | numeric-string | ISO-string | Firestore Timestamp | plain
+     {seconds,nanoseconds} | {_seconds,_nanoseconds} | Date. Returns null when unparseable so
+     callers can apply their own fallback rather than inherit a wrong date. */
+  function _toMs (v) {
+    if (v == null) return null;
+    if (typeof v === 'number') return isFinite(v) ? v : null;
+    if (typeof v === 'object') {
+      if (typeof v.toMillis === 'function') { try { return v.toMillis(); } catch (_) { return null; } }
+      if (typeof v.getTime === 'function') { var g = v.getTime(); return isNaN(g) ? null : g; }
+      var s = (v.seconds != null) ? v.seconds : v._seconds;          /* plain-cloned Timestamp */
+      var n = (v.nanoseconds != null) ? v.nanoseconds : v._nanoseconds;
+      if (s != null) return Number(s) * 1000 + Math.floor(Number(n || 0) / 1e6);
+      return null;
+    }
+    if (typeof v === 'string') {
+      if (/^\d+$/.test(v)) return Number(v);                          /* millis as string */
+      var p = Date.parse(v); return isNaN(p) ? null : p;              /* ISO / date string */
+    }
+    return null;
+  }
+
   function _fromPos (t) {
-    var ts = t.completedAt || t.timestamp || Date.now();
+    var ts = _toMs(t.completedAt) || _toMs(t.timestamp) || _toMs(t.createdAt) || Date.now();
     var status = t.voided ? 'cancelled' : (t.refunded ? 'refunded' : 'completed');
     return {
       id:          'POS-' + (t.receiptNo || String(t.saleId || t.id || '').slice(-6)),
@@ -87,10 +113,8 @@
   /* Authoritative POS sale from the BACKEND (posRetailSales, written by posCompleteCheckout).
      This is the cross-device source of truth — the IndexedDB record is only a local cache. */
   function _fromRetailSale (s) {
-    var ts = s.createdAt;
-    if (ts && ts.toMillis) ts = ts.toMillis();
-    else if (typeof ts === 'string') { var p = Date.parse(ts); ts = isNaN(p) ? Date.now() : p; }
-    else if (typeof ts !== 'number') ts = s.saleDateMs || Date.now();
+    var ts = _toMs(s.createdAt);
+    if (ts == null) ts = _toMs(s.saleDateMs) || _toMs(s.completedAt) || Date.now();
     var status = (s.status === 'refunded' || s.refunded) ? 'refunded' : ((s.status === 'voided' || s.status === 'cancelled') ? 'cancelled' : 'completed');
     return {
       id:          'POS-' + String(s.id || '').slice(-6),
@@ -132,9 +156,10 @@
     return 'online';
   }
   function _fromOnline (o) {
-    var ts = o.ts || o.createdAt || o.timestamp || (o.createdAtMs) || Date.now();
-    if (ts && ts.toMillis) ts = ts.toMillis();               /* Firestore Timestamp */
-    if (typeof ts === 'string') { var p = Date.parse(ts); if (!isNaN(p)) ts = p; }
+    /* _toMs handles the plain {seconds,nanoseconds} shape that a Firestore Timestamp becomes
+       after postMessage (structured-clone drops .toMillis). Left un-coerced, ts stayed an
+       object and `ts >= from` dropped the order — the 9→0 marketplace-sync bug. */
+    var ts = _toMs(o.ts) || _toMs(o.createdAt) || _toMs(o.timestamp) || _toMs(o.createdAtMs) || _toMs(o.paidAt) || Date.now();
     var status = _mapOnlineStatus(o.status);
     return {
       id:          o.orderNo || o.orderId || o.id || ('SKN-' + String(o.id || '').slice(-6)),
@@ -270,6 +295,79 @@
     return rows;
   }
 
+  /* ── Forensic pipeline trace ── Runs the SAME ingestion as getAll but records every
+     boundary count and, for each DROPPED record, why. Never hides a rejection: a source
+     that "found 9" but delivers 0 to Analytics must show the 9 rejection reasons, not a
+     bare 9→0. Used by the merchant Sync Diagnostics panel. Read-only. */
+  async function diagnose (opts) {
+    opts = opts || {};
+    var rep = {
+      range: opts.range || 'all', activeBranch: opts.branchId || null,
+      pos:         { fetched: 0, accepted: 0, rejected: [] },   /* local IndexedDB POS */
+      posBackend:  { fetched: 0, accepted: 0, rejected: [] },   /* posRetailSales */
+      marketplace: { fetched: 0, accepted: 0, rejected: [] },
+      boundaries:  { normalized: 0, deduped: 0, branchKept: 0, rangeKept: 0, tabKept: 0, unified: 0 },
+    };
+    var tagged = [];   /* {u: unifiedRow, bucket: rep-key, raw} */
+    function norm (raw, bucket, mapper) {
+      rep[bucket].fetched++;
+      var u; try { u = mapper(raw); } catch (e) {
+        rep[bucket].rejected.push({ id: raw && (raw.id || raw.orderId) || '?', reason: 'normalization-error: ' + (e && e.message || e) });
+        return;
+      }
+      tagged.push({ u: u, bucket: bucket, raw: raw });
+    }
+    /* Local POS (only the completed/settled ones getAll would take). */
+    try {
+      var db = await _openPos();
+      (await _getAll(db, 'transactions')).forEach(function (t) {
+        if (t.status === 'completed' || t.refunded || t.voided || t.completedAt) norm(t, 'pos', _fromPos);
+        else { rep.pos.fetched++; rep.pos.rejected.push({ id: t.id || t.saleId || '?', status: t.status, reason: 'not-settled (in-progress cart)' }); }
+      });
+    } catch (e) { /* no POS db on this device */ }
+    if (_posProvider) { try { (await _posProvider() || []).forEach(function (s) { norm(s, 'posBackend', _fromRetailSale); }); } catch (e) {} }
+    if (_onlineProvider) { try { (await _onlineProvider() || []).forEach(function (o) { norm(o, 'marketplace', _fromOnline); }); } catch (e) {} }
+    rep.boundaries.normalized = tagged.length;
+
+    /* Dedup (source+canonicalId). */
+    var seen = {}, deduped = [];
+    tagged.forEach(function (row) {
+      var k = row.u.source + ':' + row.u.canonicalId;
+      if (seen[k]) { rep[row.bucket].rejected.push({ id: row.u.id, reason: 'duplicate of ' + k }); return; }
+      seen[k] = 1; deduped.push(row);
+    });
+    rep.boundaries.deduped = deduped.length;
+
+    /* Branch isolation — null (legacy) is ALWAYS kept; only a DIFFERENT branch is dropped. */
+    var afterBranch = deduped.filter(function (row) {
+      if (!opts.branchId) return true;
+      if (row.u.branchId == null || row.u.branchId === opts.branchId) return true;
+      rep[row.bucket].rejected.push({ id: row.u.id, branchId: row.u.branchId, status: row.u.status,
+        reason: 'branch-mismatch (order branch ' + row.u.branchId + ' ≠ active ' + opts.branchId + ') — needsReview, not deleted' });
+      return false;
+    });
+    rep.boundaries.branchKept = afterBranch.length;
+
+    /* Range. */
+    var from = _rangeFrom(opts.range || 'all');
+    var afterRange = afterBranch.filter(function (row) {
+      if (row.u.ts >= from) return true;
+      rep[row.bucket].rejected.push({ id: row.u.id, ts: row.u.ts, reason: (row.u.ts == null || isNaN(row.u.ts)) ? 'unparseable-timestamp (would be dropped by range filter)' : 'outside-range' });
+      return false;
+    });
+    rep.boundaries.rangeKept = afterRange.length;
+
+    /* Tab. */
+    var afterTab = afterRange.filter(function (row) { return !(opts.tab && opts.tab !== 'all') || _matchTab(row.u, opts.tab); });
+    rep.boundaries.tabKept = afterTab.length;
+    rep.boundaries.unified = afterTab.length;
+
+    /* Per-source accepted = survived to unified. */
+    afterTab.forEach(function (row) { rep[row.bucket].accepted++; });
+    rep.summary = summarize(afterTab.map(function (r) { return r.u; }));
+    return rep;
+  }
+
   /* Summary aggregates over a set of unified orders — one place, so Dashboard/Reports/Finance
      all derive the SAME figures from the SAME source (Phase 4 builds on this). */
   function summarize (orders) {
@@ -291,6 +389,7 @@
 
   root.SokoniOrderService = {
     query: getAll,          /* public name is query() — reads all sources into UnifiedOrderView */
+    diagnose: diagnose,     /* forensic boundary trace: per-source found→accepted + reasons */
     summarize: summarize,
     setOnlineProvider: setOnlineProvider,
     hasOnlineProvider: function () { return !!_onlineProvider; },

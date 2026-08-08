@@ -718,24 +718,46 @@
      counts + the unified OrderService + the ingestion diagnostics — proof, not assumption. */
   window.__anSyncTrace = function () {
     var host = document.getElementById('an-trace'); if (!host) return;
+    if (!window.SokoniOrderService || !SokoniOrderService.diagnose) { host.innerHTML = '<div class="an-empty">OrderService not loaded on this device.</div>'; return; }
     host.innerHTML = '<div class="sk-line" style="width:60%"></div>';
-    var posFound = (_shellPosSales || []).length, onlineFound = (_shellOnlineOrders || []).length;
-    Promise.resolve(window.SokoniOrderService ? SokoniOrderService.query({ range: 'all', tab: 'all', branchId: (window.SokoniShell && SokoniShell.activeShopId) || null }) : []).then(function (rows) {
-      var posSynced = rows.filter(function (r) { return r.source === 'pos'; }).length;
-      var onlineSynced = rows.filter(function (r) { return r.source !== 'pos'; }).length;
-      var d = (window.SokoniAnalytics && SokoniAnalytics.diagnostics) ? SokoniAnalytics.diagnostics() : {};
-      function row (l, found, synced) { var okk = found === synced; return '<div class="an-row"><span>' + l + '</span><span>' + found + ' → ' + synced + (okk ? ' <span style="color:var(--acc)">✓</span>' : ' <span style="color:#ffb400">…</span>') + '</span></div>'; }
-      var pipe = ['Source', 'Sync', 'OrderService', 'AnalyticsEngine', 'Dashboard/Reports/Finance'].map(function (s) { return '<span class="av-chip" style="pointer-events:none"><span class="av-dot on"></span>' + s + '</span>'; }).join('');
+    var branch = (window.SokoniShell && SokoniShell.activeShopId) || null;
+    Promise.resolve(SokoniOrderService.diagnose({ range: 'all', tab: 'all', branchId: branch })).then(function (r) {
+      var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); };
+      /* found → accepted, with a ✓ only when NONE were dropped for that source. */
+      function srcRow (label, sec) {
+        var okk = sec.fetched > 0 && sec.accepted === sec.fetched;
+        var mark = sec.fetched === 0 ? '' : (okk ? ' <span style="color:var(--acc)">✓</span>' : ' <span style="color:#ff5c5c">✗ ' + (sec.fetched - sec.accepted) + ' dropped</span>');
+        return '<div class="an-row"><span>' + label + '</span><span>' + sec.fetched + ' → ' + sec.accepted + mark + '</span></div>';
+      }
+      /* Expose EVERY rejection with its reason — never a bare found→0. */
+      var rejects = [].concat(r.marketplace.rejected, r.posBackend.rejected, r.pos.rejected);
+      var rejHtml = '';
+      if (rejects.length) {
+        rejHtml = '<div class="an-sec" style="color:#ff5c5c">Rejected (' + rejects.length + ') — reason exposed, not dropped silently</div>' +
+          rejects.slice(0, 30).map(function (x) {
+            return '<div class="an-row" style="align-items:flex-start"><span style="font-family:monospace;font-size:11px">' + esc(x.id) + '</span>' +
+              '<span style="text-align:right;max-width:62%;font-size:11px;color:#ffb4b4">' + esc(x.reason) + (x.branchId ? '<br>branch=' + esc(x.branchId) : '') + '</span></div>';
+          }).join('') + (rejects.length > 30 ? '<div class="an-note">…' + (rejects.length - 30) + ' more</div>' : '');
+      }
+      var b = r.boundaries;
+      /* Pipeline markers reflect ACTUAL survival at each boundary, not decoration. */
+      function chip (label, ok) { return '<span class="av-chip" style="pointer-events:none"><span class="av-dot ' + (ok ? 'on' : 'off') + '"></span>' + label + '</span>'; }
+      var pipe = chip('Source ' + b.normalized, b.normalized > 0) + chip('Dedup ' + b.deduped, b.deduped > 0) +
+        chip('Branch ' + b.branchKept, b.branchKept > 0 || b.deduped === 0) + chip('Range ' + b.rangeKept, b.rangeKept > 0 || b.branchKept === 0) +
+        chip('Unified ' + b.unified, b.unified > 0 || b.normalized === 0);
+      var sm = r.summary || {};
       host.innerHTML =
-        row('POS sales (posRetailSales)', posFound, posSynced) +
-        row('Marketplace orders', onlineFound, onlineSynced) +
-        '<div class="an-row"><span>Unified (OrderService)</span><span>' + rows.length + '</span></div>' +
-        '<div class="an-row"><span>Events received / processed</span><span>' + (d.received || 0) + ' / ' + (d.processed || 0) + '</span></div>' +
-        '<div class="an-row"><span>Duplicates / Failed</span><span>' + (d.duplicates || 0) + ' / ' + (d.failed || 0) + '</span></div>' +
+        '<div class="an-note">Active branch: ' + (branch ? esc(branch) : 'all (unscoped)') + ' · range: all</div>' +
+        srcRow('Marketplace orders', r.marketplace) +
+        srcRow('POS sales (posRetailSales)', r.posBackend) +
+        srcRow('POS (local cache)', r.pos) +
+        '<div class="an-row"><span>Unified (OrderService)</span><span>' + b.unified + '</span></div>' +
+        '<div class="an-row"><span>Revenue · Orders</span><span>KES ' + Math.round(sm.revenue || 0).toLocaleString() + ' · ' + (sm.count || 0) + '</span></div>' +
         '<div class="av-chiprow" style="margin-top:12px">' + pipe + '</div>' +
-        '<div style="display:flex;gap:8px;margin-top:10px"><button class="dbtn" onclick="__anSyncTrace()">↻ Re-trace</button></div>' +
-        '<div class="an-note">Found → Synced. POS sales now come from the authoritative posRetailSales backend (cross-device), scoped to the active branch.</div>';
-    }).catch(function () { host.innerHTML = '<div class="an-empty">Could not run the trace on this device.</div>'; });
+        rejHtml +
+        '<div style="display:flex;gap:8px;margin-top:12px"><button class="dbtn" onclick="__anSyncTrace()">↻ Re-trace</button></div>' +
+        '<div class="an-note">found → accepted at each source. A ✗ means records were found but rejected — the reason is listed above. Legacy (untagged) records are kept; a branch mismatch is surfaced as needsReview, never deleted.</div>';
+    }).catch(function (e) { host.innerHTML = '<div class="an-empty">Could not run the trace: ' + (e && e.message || e) + '</div>'; });
   };
   window.__anConvCheck = function () {
     var host = document.getElementById('an-conv'); if (!host || !window.SokoniReconcile) return;
