@@ -1002,6 +1002,17 @@ async function addProduct(){
 
                 await m.setDoc(m.doc(db,'products',newProduct.id), fsProduct);
 
+                /* Canonical PRODUCT event → SokoniSync → analytics/shop/inventory ingestion.
+                   Emitted at the write point (not on screen open). Fire-and-forget. */
+                try {
+                  if (window.SokoniSync && window.SokoniSync.productChanged) window.SokoniSync.productChanged({
+                    type: 'PRODUCT_CREATED', source: 'Seller', entityType: 'product',
+                    entityId: newProduct.id, id: newProduct.id,
+                    sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+                    timestamp: Date.now(), metadata: { name: newProduct.name || null }
+                  });
+                } catch (_) {}
+
                 /* ── SYNC TO INVENTORY MANAGER ──────────────────────────────────
                    The storefront product (top-level `products`) and the back-office
                    inventory manager are SEPARATE collections with no bridge, so an
