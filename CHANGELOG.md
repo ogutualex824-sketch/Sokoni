@@ -1,3 +1,36 @@
+## [2026-08-08] — feat(r1.1): Merchant premium mobile + unified notifications + analytics parity (v445–v453)
+
+Product-completion pass on the frozen data architecture (OrderService / AnalyticsEngine
+unchanged). Each item implemented → tested (parse + headless functional/measurement) →
+deployed → verified live. Auth-gated flows (Cart, Wishlist, Checkout, buyer orders, seller
+module internals) deferred pending a signed-in verification path — NOT marked done.
+
+- **Analytics parity (P8, v445)** — Finance leads with the same six metrics as the other
+  surfaces (Revenue/Orders/AOV/POS/Online/Refunds), read straight from
+  `AnalyticsEngine.compute()`. Dashboard = Reports = Finance = Analytics is now eyeball-verifiable.
+- **SokoniNotify (P3, v446)** — ONE notification API (`success/error/warning/info/action`) on the
+  single viewport-anchored `SokoniUI.toast` engine (bottom-centered, full-width, never clipped on
+  phone). Standard strings ("Order placed successfully", …), sticky `action()` toast with a
+  touch-sized button. Every legacy `showToast/showNotification/_sokoniToast` already routes here, so
+  the off-viewport toast bug is fixed platform-wide. **File:** sokoni-ui.js.
+- **Mobile foundation audit + drawer scrim (P2, v447)** — measured: 0 horizontal page-overflow at
+  360px on `/`, `product`, `search`, `category`, `/merchant`. Merchant rail already off-canvas +
+  hamburger; added a tap-outside scrim to dismiss the drawer.
+- **Premium merchant mobile (P9, v448–v450)** — fixed bottom nav (Home/Orders/Sell/More) on the same
+  `go()` router with two-way active sync; swipeable scroll-snap KPI cards on phone; order detail as a
+  bottom-sheet (rounded top, grab handle, 88vh) on phone. Desktop unchanged.
+- **Premium features (P13, v451–v453)** — ⌘K/Ctrl+K command palette (jump to any module + quick
+  actions, generated from the MODULE registry — no dead entries; 🔍 button on mobile); truthful
+  3-state sync indicator (Synced / Syncing N / Offline · N queued — amber only from a REAL reported
+  pending count, never fabricated); animated KPI counters honoring `prefers-reduced-motion`, unknown
+  metrics stay `—` never a fake 0.
+- **File:** merchant.html (P2/P8/P9/P13), sokoni-ui.js (P3). SW auto-bumped each deploy (v445–v453).
+- **Deferred (need signed-in path):** Cart, Wishlist, Checkout certification, buyer order UX, and the
+  seller/merchant module *internals* mobile pass. `/merchant`-as-default gated on the founder-device
+  certification sweep.
+
+---
+
 ## [2026-08-07] — feat(delivery): Secure Delivery Authorization Phase 0 (shadow instrumentation)
 
 Security telemetry with ZERO money-path change (owner: "freeze payments except security
