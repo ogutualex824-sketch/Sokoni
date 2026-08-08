@@ -194,6 +194,33 @@
   .ord2-tl-t{font-size:13px;font-weight:700} .ord2-tl-at{font-size:11px;color:var(--txt3);margin-top:1px}
   .ord2-dfoot{padding:14px 16px;border-top:1px solid var(--line)}
   .ord2-dfoot .dbtn{width:100%;justify-content:center}
+  /* ── Availability module ── */
+  .av-wrap{max-width:820px}
+  .av-shopcard{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:16px;position:relative;overflow:hidden}
+  .av-shopcard.open{border-color:rgba(113,255,0,.35)} .av-shopcard.closed{border-color:rgba(255,90,90,.35)}
+  .av-shophead{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .av-shopdot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+  .av-shopdot.on{background:var(--acc);box-shadow:0 0 10px var(--acc)} .av-shopdot.off{background:#ff5a5a;box-shadow:0 0 10px rgba(255,90,90,.6)}
+  .av-shoptitle{font-size:18px;font-weight:900}
+  .av-chiprow{display:flex;flex-wrap:wrap;gap:10px}
+  .av-chip{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:11px;padding:9px 12px;font-size:13px;font-weight:700}
+  .av-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto} .av-dot.on{background:var(--acc)} .av-dot.off{background:#ff5a5a}
+  .av-state{color:var(--txt3);font-size:11px;font-weight:800;margin-left:2px}
+  .av-note{font-size:11px;color:var(--txt3);margin-top:12px;opacity:.8}
+  .av-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:20px}
+  .av-stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 12px;text-align:center}
+  .av-stat .av-n{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1.1}
+  .av-stat .av-l{font-size:11px;color:var(--txt2);text-transform:uppercase;letter-spacing:.04em;margin-top:5px}
+  .av-stat.ok .av-n{color:var(--acc)} .av-stat.warn .av-n{color:#ffb400} .av-stat.bad .av-n{color:#ff6464} .av-stat.muted .av-n{color:var(--txt3)}
+  .av-sec{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--txt3);margin:0 2px 12px;display:flex;align-items:center;gap:8px}
+  .av-count{background:rgba(255,255,255,.08);border-radius:20px;padding:2px 9px;font-size:11px;color:var(--txt2)}
+  .av-list{display:flex;flex-direction:column;gap:1px;border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .av-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:var(--card)}
+  .av-pname{font-size:14px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .av-badge{flex:0 0 auto;font-size:11px;font-weight:800;padding:4px 10px;border-radius:20px;white-space:nowrap}
+  .av-badge.ok{background:rgba(113,255,0,.13);color:var(--acc)} .av-badge.warn{background:rgba(255,180,0,.14);color:#ffb400}
+  .av-badge.bad{background:rgba(255,80,80,.14);color:#ff6464} .av-badge.muted{background:rgba(255,255,255,.06);color:var(--txt3)}
+  .av-empty{text-align:center;color:var(--txt2);padding:30px 20px}
   /* Native Reports / Finance / Analytics */
   .an-wrap{max-width:820px;margin:0 auto}
   .an-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
@@ -317,6 +344,8 @@
      module through the bus's same-origin BroadcastChannel; no per-page refresh calls. -->
 <script src="sokoni-event-bus.js"></script>
 <script src="sokoni-sync.js"></script>
+<!-- AvailabilityService — canonical shop/product availability (reads shops/{uid} + products). -->
+<script src="sokoni-availability.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -348,7 +377,8 @@
      the remaining entries (Promotions, Messages, Stories, Riders, Receipts, Audit, Store Setup)
      are preserved so no feature is lost. */
   var MODULES = [
-    { id:'dashboard', label:'Dashboard', icon:'🏠', kind:'native' },
+    { id:'dashboard',    label:'Dashboard',    icon:'🏠', kind:'native' },
+    { id:'availability', label:'Availability', icon:'🟢', kind:'native' },
 
     { head:'Commerce' },
     { id:'cashier',   label:'Cashier',   icon:'💳', kind:'pos',    tab:'pos' },
@@ -536,6 +566,7 @@
   /* ── Native modules ── */
   function renderNative (id) {
     if (id === 'dashboard') renderDashboard();
+    else if (id === 'availability') renderAvailability();
     else if (id === 'devices') renderDevices();
     else if (id === 'orders') renderOrders();
     else if (id === 'reports' || id === 'finance' || id === 'analytics') renderAnalytics(id);
@@ -613,6 +644,62 @@
       '<div class="an-sec">Top products</div>' + (a.topProducts.length ? a.topProducts.map(function (p) { return '<div class="an-row"><span>' + _ordEsc(p.name) + ' · ' + p.qty + ' sold</span><span>' + _anFmt(p.revenue) + '</span></div>'; }).join('') : '<div class="an-empty">No sales yet</div>') +
       '<div class="an-sec">Top customers</div>' + (a.topCustomers.length ? a.topCustomers.map(function (c) { return '<div class="an-row"><span>' + _ordEsc(c.name) + ' · ' + c.orders + ' orders</span><span>' + _anFmt(c.spend) + '</span></div>'; }).join('') : '<div class="an-empty">No data</div>') +
       '<div class="an-sec">Payment methods</div>' + _anRows(a.paymentMethods, _anFmt);
+  }
+
+  /* ── Native Availability module (Layer 1: read-only) — reads the canonical
+     AvailabilityService (shops/{uid} + products). Interactive toggles + canonical
+     writes land in Layer 2. Re-renders live on SokoniSync changes. ── */
+  var _avSub = null;
+  function renderAvailability () {
+    var host = document.getElementById('native-availability');
+    if (!host) return;
+    if (!host.dataset.av) {
+      host.dataset.av = '1';
+      host.innerHTML = '<div class="av-wrap" id="av-body">' +
+        '<div class="sk-line" style="width:40%;height:20px;margin-bottom:16px"></div>' +
+        '<div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:55%"></div></div>';
+      /* Live: any product/stock/shop/availability change re-reads the canonical source. */
+      if (!_avSub && window.SokoniSync) {
+        _avSub = SokoniSync.onAny(function (name) {
+          if (current === 'availability' && /Product|Stock|Availability|Shop/.test(name)) _avLoad();
+        });
+      }
+    }
+    _avLoad();
+  }
+  function _avChip (on, label) {
+    return '<div class="av-chip"><span class="av-dot ' + (on ? 'on' : 'off') + '"></span>' + label +
+      '<span class="av-state">' + (on ? 'On' : 'Off') + '</span></div>';
+  }
+  function _avStat (n, l, cls) { return '<div class="av-stat ' + (cls || '') + '"><div class="av-n">' + n + '</div><div class="av-l">' + l + '</div></div>'; }
+  function _avLoad () {
+    var body = document.getElementById('av-body');
+    if (!body || !window.AvailabilityService) return;
+    Promise.all([AvailabilityService.readShop(), AvailabilityService.readProducts()]).then(function (res) {
+      if (current !== 'availability') return;
+      var shop = res[0], products = res[1];
+      var c = AvailabilityService.counts(products);
+      var open = shop.acceptingOrders;
+      var BADGE = { available: ['ok', 'Available'], low: ['warn', 'Low stock'], out: ['bad', 'Out of stock'], unavailable: ['muted', 'Unavailable'] };
+      body.innerHTML =
+        '<div class="av-shopcard ' + (open ? 'open' : 'closed') + '">' +
+          '<div class="av-shophead"><span class="av-shopdot ' + (open ? 'on' : 'off') + '"></span>' +
+            '<span class="av-shoptitle">Shop ' + (open ? 'Open' : 'Closed') + '</span></div>' +
+          '<div class="av-chiprow">' + _avChip(shop.online, 'Online orders') + _avChip(shop.delivery, 'Delivery') + _avChip(shop.pickup, 'Pickup') + '</div>' +
+          '<div class="av-note">Controls activate in the next update (Layer 2). Shop state never changes your products.</div>' +
+        '</div>' +
+        '<div class="av-grid">' +
+          _avStat(String(c.available), 'Available', 'ok') + _avStat(String(c.low), 'Low Stock', 'warn') +
+          _avStat(String(c.out), 'Out of Stock', 'bad') + _avStat(String(c.unavailable), 'Unavailable', 'muted') +
+        '</div>' +
+        '<div class="av-sec">Products <span class="av-count">' + c.total + '</span></div>' +
+        (products.length ? '<div class="av-list">' + products.map(function (p) {
+          var b = BADGE[p._state] || BADGE.unavailable;
+          return '<div class="av-row"><span class="av-pname">' + _ordEsc(p.name || p.title || 'Product') + '</span>' +
+            '<span class="av-badge ' + b[0] + '">' + b[1] + (p._state === 'low' || p._state === 'out' ? ' · ' + Number(p.stock || 0) : '') + '</span></div>';
+        }).join('') + '</div>' : '<div class="av-empty">No products yet</div>') +
+        '<div class="an-trace">ⓘ source: shops/{uid} + products → AvailabilityService → this screen</div>';
+    }).catch(function () {});
   }
 
   /* ── Native Orders module (Phase 3) — reads the unified OrderService ── */
