@@ -428,7 +428,27 @@ const PosDB = (function () {
       if (pm === 'cash')  s.totalCash  += txn.total || 0;
       if (pm === 'mpesa') s.totalMpesa += txn.total || 0;
       if (pm === 'card')  s.totalCard  += txn.total || 0;
-      return _put('shifts', s);
+      const r = await _put('shifts', s);
+      /* Canonical SALE_COMPLETED event → analytics ingestion. Emitted at the point the
+         sale is persisted (not when a screen opens). Idempotent on txn.id, so a retry
+         or reconnect can never double-count. Fire-and-forget; never blocks the sale. */
+      try {
+        if (typeof window !== 'undefined' && window.SokoniSync && window.SokoniSync.orderChanged) {
+          window.SokoniSync.orderChanged({
+            eventId:   txn.id || null,
+            type:      'SALE_COMPLETED',
+            source:    'POS',
+            channel:   'in_store',
+            entityId:  txn.id || null,
+            sellerUid: (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.uid) || null,
+            total:     Number(txn.total || 0),
+            paymentMethod: pm,
+            items:     txn.items || null,
+            timestamp: Date.now()
+          });
+        }
+      } catch (_) {}
+      return r;
     },
   };
 

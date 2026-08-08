@@ -356,6 +356,9 @@
 <script src="sokoni-sync.js"></script>
 <!-- AvailabilityService — canonical shop/product availability (reads shops/{uid} + products). -->
 <script src="sokoni-availability.js"></script>
+<!-- SokoniAnalytics — event ingestion + live shared analytics state (subscribes to SokoniSync,
+     idempotent, drives Dashboard/Reports/Finance/Analytics without navigation). -->
+<script src="sokoni-analytics.js"></script>
 <script>
 /* ══════════════════════════════════════════════════════════════════════
    SOKONI Merchant Application Shell (R1.1)
@@ -662,7 +665,33 @@
           ' · ' + (a.availability.shop.online ? 'Online' : 'Offline') + '</span></div>' +
         '<div class="an-row"><span>Products (avail / low / out)</span><span>' +
           a.availability.products.available + ' / ' + a.availability.products.low + ' / ' + a.availability.products.out + '</span></div>'
-      ) : '<div class="an-row"><span>Availability</span><span style="color:var(--txt3)">—</span></div>');
+      ) : '<div class="an-row"><span>Availability</span><span style="color:var(--txt3)">—</span></div>') +
+      '<div class="an-sec">Sync Diagnostics</div>' + _anDiag();
+  }
+  /* Live proof of synchronization — reads SokoniAnalytics ingestion diagnostics. */
+  function _anDiag () {
+    var SA = window.SokoniAnalytics;
+    if (!SA || !SA.diagnostics) return '<div class="an-empty">Sync layer not loaded</div>';
+    var d = SA.diagnostics();
+    var snap = SA.getSnapshot ? SA.getSnapshot() : { events: [] };
+    var when = d.lastEventTime ? new Date(d.lastEventTime).toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—';
+    var srcNames = ['POS', 'Marketplace', 'Inventory', 'Orders', 'Shop', 'Availability'];
+    var srcRow = srcNames.map(function (s) {
+      var ok = d.sources[s] === 'ok' || d.sources[s.toLowerCase()] === 'ok';
+      return '<span class="av-chip" style="pointer-events:none"><span class="av-dot ' + (ok ? 'on' : 'off') + '"></span>' + s + '</span>';
+    }).join('');
+    var rows =
+      '<div class="an-row"><span>Last event</span><span>' + _ordEsc(d.lastEvent || '—') + '</span></div>' +
+      '<div class="an-row"><span>Last event time</span><span>' + when + '</span></div>' +
+      '<div class="an-row"><span>Events received</span><span>' + d.received + '</span></div>' +
+      '<div class="an-row"><span>Events processed</span><span>' + d.processed + '</span></div>' +
+      '<div class="an-row"><span>Duplicates (blocked)</span><span>' + d.duplicates + '</span></div>' +
+      '<div class="an-row"><span>Failed / Queued</span><span>' + d.failed + ' / ' + d.queued + '</span></div>';
+    var trace = (snap.events || []).slice(0, 5).map(function (e) {
+      return '<div class="an-row"><span>' + _ordEsc(e.type || 'EVENT') + '</span><span style="color:var(--txt3)">' + _ordEsc(e.source || '') + '</span></div>';
+    }).join('');
+    return rows + '<div class="av-chiprow" style="margin-top:12px">' + srcRow + '</div>' +
+      (trace ? '<div class="an-sec">Recent events</div>' + trace : '');
   }
 
   /* ── Native Availability module (Layer 1: read-only) — reads the canonical
