@@ -210,7 +210,7 @@
       <span class="topbar-sub" id="sellerDate">Manage your products, track orders & earnings</span>
     </div>
     <div class="topbar-right">
-      <a href="minishop-admin.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#00bcd4;text-decoration:none;padding:6px 14px;background:rgba(0,188,212,0.08);border:1px solid rgba(0,188,212,0.3);border-radius:999px;letter-spacing:.04em;" title="Manage your MiniShop storefront">🏪 My MiniShop</a>
+      <a href="minishop-admin.html" onclick="return sokoniShellNav(event,'shop')" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#00bcd4;text-decoration:none;padding:6px 14px;background:rgba(0,188,212,0.08);border:1px solid rgba(0,188,212,0.3);border-radius:999px;letter-spacing:.04em;" title="Manage your MiniShop storefront">🏪 My MiniShop</a>
       <a href="merchant-success.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#7c4dff;text-decoration:none;padding:6px 14px;background:rgba(124,77,255,0.08);border:1px solid rgba(124,77,255,0.3);border-radius:999px;letter-spacing:.04em;" title="Grow your business with AI coaching & analytics">📊 Grow</a> <a href="qr-center.html" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#f59e0b;text-decoration:none;padding:6px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.3);border-radius:999px;letter-spacing:.04em;" title="Manage QR codes for your store">&#128241; QR</a>
     </div>
   </div>
@@ -6736,6 +6736,18 @@ document.addEventListener('DOMContentLoaded', function() {
     document.head.appendChild(st);
     document.body.classList.add('sk-embedded');
   } catch (_) {}
+  /* Shell-aware navigation: when embedded in the Merchant Shell, topbar links that would
+     otherwise load a whole new document (e.g. "My MiniShop") instead route to the shell
+     module in-place — no iframe escape, no reload, no new page. Standalone seller.html
+     keeps its normal href. */
+  window.sokoniShellNav = function (ev, moduleId) {
+    if (window.parent !== window) {
+      try { ev.preventDefault(); } catch (_) {}
+      try { window.parent.postMessage({ __sokoniGoModule: moduleId }, location.origin); } catch (_) {}
+      return false;
+    }
+    return true;
+  };
   /* Retry until the dashboard router is ready — the shell's message can arrive before
      seller.js finishes booting, which would drop the section switch. */
   var want = null, applying = false;
