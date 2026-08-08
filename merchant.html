@@ -452,7 +452,7 @@
     if (!window.SokoniOrderService) { list.innerHTML = '<div class="ord2-empty">Order service unavailable.</div>'; return; }
     list.innerHTML = '<div class="sk-line" style="width:80%"></div><div class="sk-line" style="width:66%"></div><div class="sk-line" style="width:74%"></div>';
     var rows = [];
-    try { rows = await SokoniOrderService.getAll({ range: _ordState.range, tab: _ordState.tab, search: _ordState.search }); } catch (_) {}
+    try { rows = await SokoniOrderService.query({ range: _ordState.range, tab: _ordState.tab, search: _ordState.search }); } catch (_) {}
     _ordState.rows = rows;
     _ordPaintSummary();
     if (!rows.length) {

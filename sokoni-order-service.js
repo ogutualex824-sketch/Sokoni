@@ -229,7 +229,7 @@
   }
 
   root.SokoniOrderService = {
-    getAll: getAll,
+    query: getAll,          /* public name is query() — reads all sources into UnifiedOrderView */
     summarize: summarize,
     setOnlineProvider: setOnlineProvider,
     hasOnlineProvider: function () { return !!_onlineProvider; },
