@@ -743,13 +743,22 @@
     host.innerHTML = '<div class="sk-line" style="width:55%;margin-top:10px"></div>';
     Promise.resolve(SokoniReconcile.backfill({ dryRun: true })).then(function (r) {
       function line (label, k) { return k ? '<div class="an-row"><span>' + label + '</span><span>tagged ' + k.alreadyTagged + ' · assign ' + k.assignable + ' · review ' + (k.ambiguousReview || 0) + ' · skip ' + k.skipped + '</span></div>' : ''; }
-      var review = ((r.transactions && r.transactions.ambiguousReview) || 0) + ((r.orders && r.orders.ambiguousReview) || 0);
+      var s = r.summary || {};
+      var review = (s.needsReview || 0);
+      /* Show up to 6 review records (ambiguous financial) with their suggested branch + reason. */
+      var revRows = [];
+      ['transactions', 'orders'].forEach(function (k) { var p = r[k]; if (p && p.review) p.review.forEach(function (x) { if (revRows.length < 6) revRows.push('<div class="an-row"><span>' + _ordEsc(x.id) + '</span><span style="color:#ffb400">review · ' + _ordEsc(x.reason) + '</span></div>'); }); });
       host.innerHTML =
         '<div class="an-sec">Branch backfill — DRY RUN (no writes)</div>' +
+        '<div class="an-row"><span>SAFE TO ASSIGN</span><span style="color:var(--acc)">' + (s.safeToAssign || 0) + '</span></div>' +
+        '<div class="an-row"><span>ALREADY CORRECT</span><span>' + (s.alreadyCorrect || 0) + '</span></div>' +
+        '<div class="an-row"><span>NEEDS REVIEW (financial)</span><span style="color:' + (review ? '#ffb400' : 'var(--txt3)') + '">' + review + '</span></div>' +
+        '<div class="an-row"><span>SKIPPED / FAILED</span><span>' + (s.skipped || 0) + ' / ' + (s.failed || 0) + '</span></div>' +
+        '<div class="an-sec">By record type</div>' +
         line('Products', r.products) + line('POS transactions', r.transactions) + line('Marketplace orders', r.orders) +
-        '<div class="an-note">Nothing was written. Safe records (existing ref / single-shop) are assignable; ' +
-        (review ? '<b>' + review + ' ambiguous financial record(s)</b> are held for review — never auto-moved.' : 'no ambiguous financial records.') +
-        ' A confirmed run tags only the assignable set and never overwrites an existing branchId.</div>';
+        (revRows.length ? '<div class="an-sec">Held for review</div>' + revRows.join('') : '') +
+        '<div class="an-row" style="margin-top:8px"><span>Preview ID</span><span style="font-family:monospace;font-size:11px;color:var(--txt3)">' + _ordEsc(r.previewId || '—') + '</span></div>' +
+        '<div class="an-note">Nothing was written. A confirmed write applies ONLY the ' + (s.safeToAssign || 0) + ' safe record(s), must quote this exact Preview ID, never overwrites an existing branchId, and never moves the ' + review + ' financial record(s) held for review.</div>';
     }).catch(function () { host.innerHTML = '<div class="an-empty">Sign in on this device to preview the backfill.</div>'; });
   };
   window.__anReconcile = function () {

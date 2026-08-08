@@ -228,38 +228,49 @@
     } catch (_) { return { shops: [{ id: 'main', isMain: true }], primaryBranchId: 'main' }; }
   }
 
+  /* Deterministic, dependency-free id of a reviewed plan (djb2). The confirmed write
+     recomputes it and refuses to run unless it matches the approved id — so a write can
+     ONLY apply the exact plan a human reviewed, never a plan the data drifted into. */
+  function _hash (str) { var h = 5381; for (var i = 0; i < str.length; i++) { h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; } return h.toString(36); }
+  function previewId (result) {
+    var parts = [];
+    ['products', 'transactions', 'orders'].forEach(function (k) {
+      var p = result[k]; if (!p || !p.plan) return;
+      p.plan.forEach(function (x) { parts.push(k + ':' + x.id + '>' + x.branchId); });
+    });
+    parts.sort();
+    return 'bp_' + _hash(parts.join('|')) + '_' + parts.length;
+  }
+  function reconcileSummary (result) {
+    var s = { safeToAssign: 0, alreadyCorrect: 0, needsReview: 0, skipped: 0, failed: 0 };
+    ['products', 'transactions', 'orders'].forEach(function (k) {
+      var p = result[k]; if (!p) return;
+      s.safeToAssign += p.assignable || 0; s.alreadyCorrect += p.alreadyTagged || 0;
+      s.needsReview += p.ambiguousReview || 0; s.skipped += p.skipped || 0; s.failed += p.failed || 0;
+    });
+    return s;
+  }
+
   /* Idempotent branch backfill. DRY-RUN by default: computes the plan and writes NOTHING.
-     Only an explicit {dryRun:false} writes, and only the SAFELY-assignable records — never
-     an existing branchId (never overwrite), never an ambiguous financial record. Returns
-     per-kind counts + the ambiguous-review list + audit. */
+     A confirmed write ({dryRun:false, approvePreviewId}) requires the approved preview id to
+     match the freshly-recomputed plan; it writes ONLY safely-assignable records, never an
+     existing branchId (no overwrite), never an ambiguous financial record; writes an audit
+     doc per mutation; returns before/after counts; then auto-runs cache reconciliation. */
   async function backfill (opts) {
     opts = opts || {};
     var dryRun = opts.dryRun !== false;                 /* default TRUE — never write unless told */
     var uid = _uid();
-    var result = { dryRun: dryRun, at: null, products: null, transactions: null, orders: null };
+    var result = { dryRun: dryRun, previewId: null, summary: null, products: null, transactions: null, orders: null };
     if (!uid || !root.firebaseDB) return result;
     var ctx = await _sellerShops(uid);
     var m = await _fs();
     var db = root.firebaseDB;
 
-    async function run (kind, coll, financial, records) {
-      var plan = backfillPlan(records, ctx, { financial: financial });
-      var written = 0;
-      if (!dryRun) {
-        for (var i = 0; i < plan.plan.length; i++) {
-          var p = plan.plan[i];
-          try { await m.updateDoc(m.doc(db, coll, String(p.id)), { branchId: p.branchId, branchBackfilledAt: m.serverTimestamp() }); written++; } catch (_) { plan.failed++; }
-        }
-      }
-      plan.written = written;
-      return plan;
-    }
-
+    /* Compute the plan (reads only). */
     try {
       var prods = (await m.getDocs(m.query(m.collection(db, 'products'), m.where('sellerUid', '==', uid), m.limit(2000)))).docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); });
-      result.products = await run('products', 'products', false, prods);
+      result.products = backfillPlan(prods, ctx, { financial: false });
     } catch (_) {}
-    /* POS transactions live in IndexedDB (client) — read via OrderService rows (source=pos). */
     try {
       if (root.SokoniOrderService && root.SokoniOrderService.query) {
         var rows = await root.SokoniOrderService.query({ range: 'all', tab: 'all' });
@@ -267,6 +278,42 @@
         result.orders = backfillPlan(rows.filter(function (r) { return r.source !== 'pos'; }).map(function (r) { return { id: r.canonicalId, branchId: r.branchId, raw: r.raw }; }), ctx, { financial: true });
       }
     } catch (_) {}
+    result.previewId = previewId(result);
+    result.summary = reconcileSummary(result);
+
+    if (dryRun) return result;                          /* preview only — nothing written */
+
+    /* ── Confirmed write — gated on the reviewed plan ── */
+    if (opts.approvePreviewId !== result.previewId) {
+      result.rejected = 'preview-mismatch';             /* data changed since review → re-review */
+      return result;
+    }
+    var before = { products: (result.products && result.products.assignable) || 0 };
+    var written = 0, failed = 0;
+    /* Only PRODUCTS are auto-written (non-financial). Financial assignable are safe (ref/
+       single-shop) but we still gate financial writes behind ref/single-shop only — the
+       plan already excluded ambiguous financial. Products first; financial only where safe. */
+    async function apply (kind, coll, plan) {
+      for (var i = 0; i < plan.plan.length; i++) {
+        var p = plan.plan[i];
+        try {
+          await m.updateDoc(m.doc(db, coll, String(p.id)), { branchId: p.branchId, branchBackfilledAt: m.serverTimestamp() });
+          await m.addDoc(m.collection(db, 'branchMigrationAudit'), {
+            sellerUid: uid, previewId: result.previewId, kind: kind, recordId: String(p.id),
+            branchId: p.branchId, reason: p.reason, at: m.serverTimestamp()
+          }).catch(function () {});
+          written++;
+        } catch (_) { failed++; }
+      }
+    }
+    if (result.products) await apply('products', 'products', result.products);
+    /* NB: POS transactions live in IndexedDB, not Firestore — they are re-tagged at their
+       own persist point going forward; the historical financial write is intentionally not
+       done blindly here. Marketplace-order financial writes are left for L4-verified server
+       migration. This keeps money records untouched unless provably safe. */
+    result.written = written; result.failedWrites = failed;
+    result.after = { productsAssignableRemaining: before.products - written };
+    try { result.postReconcile = await reconcile(); } catch (_) {}
     return result;
   }
 
@@ -276,7 +323,10 @@
     branchIsolation: branchIsolation,
     determineBranch: determineBranch,
     backfillPlan: backfillPlan,
+    previewId: previewId,
+    reconcileSummary: reconcileSummary,
     status: status,
-    reconcile: reconcile
+    reconcile: reconcile,
+    backfill: backfill
   };
 })(typeof window !== 'undefined' ? window : this);

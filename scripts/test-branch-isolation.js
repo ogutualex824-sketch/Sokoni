@@ -72,5 +72,17 @@ ok(planF.review.length === 2, 'ambiguous financial records surfaced for human re
 const planSingle = R.backfillPlan([{}, {}, { branchId: 'x' }], { shops: [{ id: 'only', isMain: true }] }, { financial: true });
 ok(planSingle.assignable === 2 && planSingle.ambiguousReview === 0 && planSingle.alreadyTagged === 1, 'single-shop seller: unambiguous, no review needed');
 
+/* ── Preview id (immutable, order-independent) + reconciliation summary ── */
+const resA = { products: { plan: [{ id: 'P2', branchId: 'a' }, { id: 'P1', branchId: 'a' }], assignable: 2, alreadyTagged: 1, ambiguousReview: 0, skipped: 0, failed: 0 },
+               transactions: { plan: [], assignable: 0, alreadyTagged: 3, ambiguousReview: 2, skipped: 0, failed: 1 }, orders: null };
+const resB = { products: { plan: [{ id: 'P1', branchId: 'a' }, { id: 'P2', branchId: 'a' }], assignable: 2, alreadyTagged: 1, ambiguousReview: 0, skipped: 0, failed: 0 },
+               transactions: { plan: [], assignable: 0, alreadyTagged: 3, ambiguousReview: 2, skipped: 0, failed: 1 }, orders: null };
+ok(R.previewId(resA) === R.previewId(resB), 'previewId is stable regardless of plan ordering (approval can be matched)');
+const resC = { products: { plan: [{ id: 'P1', branchId: 'b' }], assignable: 1 }, transactions: null, orders: null };
+ok(R.previewId(resA) !== R.previewId(resC), 'previewId changes when the proposed assignments change (data drift → re-review)');
+const sum = R.reconcileSummary(resA);
+ok(sum.safeToAssign === 2 && sum.alreadyCorrect === 4 && sum.needsReview === 2 && sum.failed === 1,
+   'reconcileSummary aggregates SAFE / ALREADY / REVIEW / FAILED across kinds');
+
 console.log(fail === 0 ? ('\nALL ' + pass + ' PASSED') : ('\n' + pass + ' passed, ' + fail + ' FAILED'));
 process.exit(fail === 0 ? 0 : 1);
