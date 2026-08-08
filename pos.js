@@ -515,22 +515,26 @@ const SPos = (function () {
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.products || j.items || j.catalogue || []);
       if (!Array.isArray(list)) return 0;
-      const S = window.PosInvSync;
-      if (!S) {   /* module missing — fall back to additive insert of NEW products only (never clobber) */
-        let n = 0;
-        for (const p of list) {
-          const id = String(p.id || p._id || p.productId || ''); if (!id) continue;
-          const existing = await PosDB.products.get(id).catch(() => null);
-          if (!existing) { await PosDB.products.save({ id, name: p.name || 'Product', price: Number(p.price || 0), stock: (p.stock != null ? Number(p.stock) : null), track: p.stock != null, category: p.category || 'general', barcode: p.barcode || '', sku: p.sku || '', image: p.image || (Array.isArray(p.images) ? p.images[0] : '') || '', unit: p.unit || 'pc', source: 'canonical' }).catch(() => {}); n++; }
-        }
-        return n;
-      }
-      const locals = await PosDB.products.getAll().catch(() => []);
-      const { writes, stats, orphans } = S.mergeCatalogue(list, locals);
+      if (!window.PosInvSync) return _additiveInsertNew(list);   /* module absent — safe additive fallback */
+      const locals = await PosDB.products.getAll().catch(() => []);   /* read ONCE, before any loop */
+      const { writes, stats, orphans } = window.PosInvSync.mergeCatalogue(list, locals);
       for (const rec of writes) { await PosDB.products.upsertCanonical(rec).catch(() => {}); }
       window._posInvSyncStats = Object.assign({ at: Date.now(), orphans: orphans }, stats);
       return stats.inserted + stats.updated;
     } catch (_) { return 0; }
+  }
+  /* Fallback when PosInvSync isn't loaded: insert NEW canonical products only, never touch
+     an existing local row (no clobber). Uses .get() per id — never a full-store getAll in a loop. */
+  async function _additiveInsertNew (list) {
+    let n = 0;
+    for (const p of list) {
+      const id = String(p.id || p._id || p.productId || ''); if (!id) continue;
+      const existing = await PosDB.products.get(id).catch(() => null);
+      if (existing) continue;
+      await PosDB.products.save({ id, name: p.name || 'Product', price: Number(p.price || 0), stock: (p.stock != null ? Number(p.stock) : null), track: p.stock != null, category: p.category || 'general', barcode: p.barcode || '', sku: p.sku || '', image: p.image || (Array.isArray(p.images) ? p.images[0] : '') || '', unit: p.unit || 'pc', source: 'canonical' }).catch(() => {});
+      n++;
+    }
+    return n;
   }
   /* Back-compat alias — existing boot call site (and any others) keep working. */
   async function _seedCatalogueFromCanonical () { return refreshInventoryFromCanonical(); }
