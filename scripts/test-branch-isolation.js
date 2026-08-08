@@ -49,5 +49,16 @@ ok(iso.branches === 2, 'reports distinct branch count');
 iso = R.branchIsolation([{ branchId: 'shopA' }, { branchId: null }], 'shopA');
 ok(iso.leakage === false && iso.ok === true, 'no other-branch records → no leakage');
 
+/* ── Backfill decision (never blind-assign; audit the ambiguous) ── */
+const shops2 = { shops: [{ id: 'a' }, { id: 'b', isMain: true }] };
+ok(R.determineBranch({ branchId: 'shopB' }, { shops: [{ id: 'a' }] }).branchId === 'shopB', 'backfill NEVER overwrites an existing branchId');
+ok(R.determineBranch({ raw: { shopId: 'shopX' } }, shops2).reason === 'existing-ref', 'uses an existing shop ref on the record');
+ok(R.determineBranch({}, { shops: [{ id: 'only' }] }).reason === 'single-shop', 'single-shop seller → unambiguous assign');
+const amb = R.determineBranch({}, shops2);
+ok(amb.branchId === 'b' && amb.reason === 'ambiguous-primary' && amb.audit === true, 'multi-shop ambiguous → primary branch + AUDIT flag');
+ok(R.determineBranch({}, { shops: [] }).branchId === null, 'no shops → skip (never dump into a wrong branch)');
+const plan = R.backfillPlan([{ branchId: 'a' }, {}, { raw: { shopId: 'a' } }, {}], shops2);
+ok(plan.alreadyTagged === 1 && plan.migrated === 3 && plan.ambiguous === 2, 'backfillPlan counts migrated/alreadyTagged/ambiguous');
+
 console.log(fail === 0 ? ('\nALL ' + pass + ' PASSED') : ('\n' + pass + ' passed, ' + fail + ' FAILED'));
 process.exit(fail === 0 ? 0 : 1);

@@ -169,10 +169,47 @@
     };
   }
 
+  /* ── PURE: backfill branch decision ───────────────────────────────────────
+     Decide which branch an UNTAGGED historical record belongs to, WITHOUT ever
+     blind-assigning (which would put Shop B's sales into Shop A). Priority:
+       1. already tagged            → keep, never overwrite
+       2. an existing branch/shop ref on the record (branchId/shopId/branch) → use it
+       3. seller has exactly ONE shop → assign that shop (unambiguous)
+       4. multiple shops, genuinely ambiguous → seller's PRIMARY branch + audit flag
+     ctx = { shops:[{id,isMain}], primaryBranchId }. Returns {branchId, reason, audit}. */
+  function determineBranch (record, ctx) {
+    record = record || {}; ctx = ctx || {};
+    if (record.branchId) return { branchId: record.branchId, reason: 'already-tagged', audit: false };
+    var raw = record.raw || record;
+    var ref = raw.branchId || raw.shopId || raw.branch || null;
+    if (ref) return { branchId: String(ref), reason: 'existing-ref', audit: false };
+    var shops = ctx.shops || [];
+    if (shops.length === 1) return { branchId: shops[0].id, reason: 'single-shop', audit: false };
+    if (shops.length > 1) {
+      var primary = ctx.primaryBranchId || (shops.filter(function (s) { return s.isMain; })[0] || {}).id || shops[0].id;
+      return { branchId: primary, reason: 'ambiguous-primary', audit: true };   /* audited, not silent */
+    }
+    return { branchId: null, reason: 'no-shops', audit: false };
+  }
+
+  /* Tally a backfill plan (pure) over a record set → migrated/alreadyTagged/ambiguous/skipped. */
+  function backfillPlan (records, ctx) {
+    var t = { migrated: 0, alreadyTagged: 0, ambiguous: 0, skipped: 0, audits: [] };
+    (records || []).forEach(function (r) {
+      var d = determineBranch(r, ctx);
+      if (d.reason === 'already-tagged') t.alreadyTagged++;
+      else if (!d.branchId) t.skipped++;
+      else { t.migrated++; if (d.audit) { t.ambiguous++; t.audits.push({ id: r.id, branchId: d.branchId, reason: d.reason }); } }
+    });
+    return t;
+  }
+
   root.SokoniReconcile = {
     productConvergence: productConvergence,
     orderConvergence: orderConvergence,
     branchIsolation: branchIsolation,
+    determineBranch: determineBranch,
+    backfillPlan: backfillPlan,
     status: status,
     reconcile: reconcile
   };
