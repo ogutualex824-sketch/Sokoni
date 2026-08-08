@@ -462,6 +462,16 @@ const PRINTER_STATES = {
   offline:      { icon: '📴',  text: 'Offline — queued' },
 };
 
+/* When embedded in the Merchant Shell, the shell broadcasts its printer state down here so
+   every POS status surface mirrors the ONE shell-owned connection. */
+let _shellPrinterState = null;
+if (typeof window !== 'undefined') {
+  window.__sokoniApplyShellPrinter = function (st) {
+    _shellPrinterState = st || null;
+    try { _printerState.reconcile(); } catch (_) {}
+  };
+}
+
 class PrinterStateMachine {
   constructor () { this._state = 'disconnected'; this._meta = {}; this._subs = []; this._wired = false; }
 
@@ -486,6 +496,13 @@ class PrinterStateMachine {
 
   /* Resting state from the transport truth — used on wire + as a reconciliation nudge. */
   reconcile () {
+    /* In the Merchant Shell the SHELL owns the printer; this POS is a client. Mirror the shell's
+       broadcast state instead of the (intentionally disconnected) local engine, so the POS
+       Settings/header/peripheral status all show the ONE real connection. */
+    if (_shellPrinterState) {
+      if (this._state !== 'printing') this.set(_shellPrinterState.connected ? 'connected' : 'disconnected', { name: _shellPrinterState.name });
+      return;
+    }
     const pm = window.PrinterManager, sp = window.SokoniPrinter;
     const connected = !!(pm && pm.connected) || !!(sp && sp.connected);
     if (connected) { if (this._state !== 'printing') this.set('connected', { name: (pm && pm.profile && pm.profile.model) || undefined }); return; }

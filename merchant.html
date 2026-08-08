@@ -438,7 +438,15 @@
      nobody keeps their own "connected" boolean. */
   var PrinterState = { connected: false, name: null, deviceId: null, transport: null, lastSeen: 0, printing: false };
   var _psSubs = [];
-  function _psNotify () { paintStatus(); if (current === 'devices') { try { renderDevices(); } catch (_) {} } _psSubs.forEach(function (fn) { try { fn(PrinterState); } catch (_) {} }); }
+  function _broadcastPrinter () {
+    /* Push the shell's printer state DOWN into every hosted iframe so their status surfaces
+       (e.g. POS Settings) mirror the ONE shell-owned connection. */
+    var msg = { __sokoniPrinterState: true, state: { connected: PrinterState.connected, name: PrinterState.name } };
+    Object.keys(panels).forEach(function (k) {
+      try { var f = panels[k].querySelector && panels[k].querySelector('iframe'); if (f && f.contentWindow) f.contentWindow.postMessage(msg, location.origin); } catch (_) {}
+    });
+  }
+  function _psNotify () { paintStatus(); if (current === 'devices') { try { renderDevices(); } catch (_) {} } _broadcastPrinter(); _psSubs.forEach(function (fn) { try { fn(PrinterState); } catch (_) {} }); }
   function _psSet (patch) { for (var k in patch) PrinterState[k] = patch[k]; if (patch.connected) PrinterState.lastSeen = Date.now(); shellPrinterUp = PrinterState.connected; _psNotify(); }
   window.SokoniPrinterState = { get: function () { return PrinterState; }, subscribe: function (fn) { _psSubs.push(fn); try { fn(PrinterState); } catch (_) {} } };
 
@@ -483,10 +491,29 @@
     if (w) { w.style.cursor = 'pointer'; w.title = 'Printer — connect / manage';
       w.onclick = function () { if (PrinterState.connected) go('devices'); else window.SokoniShell.Printer.connect(); }; } })();
 
-  /* Auto-reconnect on app open + background health monitor — owned by the shell. */
+  /* Auto-reconnect on app open + background health monitor — owned by the shell.
+     getDevices()-based reconnect needs no chooser, but can be gated behind a user gesture or a
+     brief engine-warm-up window, so try several times on boot AND on the first interaction,
+     then keep a heartbeat. If the browser genuinely discarded the grant, none of these succeed
+     and the merchant taps Reconnect once — the honest platform limit. */
   if (_eng) {
-    setTimeout(function () { try { if (!_eng.connected && _remembered()) _eng.autoReconnect().then(function (ok) { if (ok || _eng.connected) _psSet({ connected: true }); }); } catch (_) {} }, 1200);
-    setInterval(function () { try { if (!_eng.connected && _remembered()) _eng.autoReconnect().then(function (ok) { if (ok) _psSet({ connected: true }); }); else _psSet({ connected: !!_eng.connected }); } catch (_) {} }, 8000);
+    var _arBusy = false;
+    function _tryAutoReconnect () {
+      if (_arBusy) return;
+      if (_eng.connected) { _psSet({ connected: true }); return; }
+      if (!_remembered()) return;
+      _arBusy = true;
+      Promise.resolve(_eng.autoReconnect()).then(function (ok) {
+        if (ok || _eng.connected) _psSet({ connected: true });
+      }).catch(function () {}).then(function () { _arBusy = false; });
+    }
+    [600, 1800, 3500, 6000].forEach(function (ms) { setTimeout(_tryAutoReconnect, ms); });
+    setInterval(function () { if (!_eng.connected && _remembered()) _tryAutoReconnect(); else _psSet({ connected: !!_eng.connected }); }, 8000);
+    /* Some browsers only allow the getDevices()→GATT reconnect after a user gesture. */
+    var _onWake = function () { if (!_eng.connected) _tryAutoReconnect(); };
+    window.addEventListener('pointerdown', _onWake, { passive: true });
+    window.addEventListener('focus', _onWake);
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) _onWake(); });
   }
 
   window.addEventListener('message', function (e) {
@@ -504,6 +531,7 @@
          raced the boot still lands on the right tab (fixes "every button shows Checkout"). */
       var m = byId[current];
       if (m && m.kind === 'pos') { posSwitch(m.tab || 'pos'); if (m.action) posAction(m.action); }
+      _broadcastPrinter();   /* give the freshly-loaded POS the current printer state */
     }
   });
 

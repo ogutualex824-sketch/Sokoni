@@ -2953,6 +2953,8 @@ window.SPosCustomer = (function () {
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin) return;
     var d = e.data || {};
+    /* Shell pushes its printer state down → mirror it in every POS status surface. */
+    if (d.__sokoniPrinterState && window.__sokoniApplyShellPrinter) { window.__sokoniApplyShellPrinter(d.state || { connected: false }); return; }
     if (!d.__sokoniShell) return;
     if (d.action === 'switchTab') applyTab(d.tab || 'pos');
     else if (d.action === 'devices' || d.action === 'printer') runAction(d.action);
