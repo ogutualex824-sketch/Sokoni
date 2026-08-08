@@ -659,7 +659,6 @@
   /* ── Native Availability module (Layer 1: read-only) — reads the canonical
      AvailabilityService (shops/{uid} + products). Interactive toggles + canonical
      writes land in Layer 2. Re-renders live on SokoniSync changes. ── */
-  var _avSub = null;
   function renderAvailability () {
     var host = document.getElementById('native-availability');
     if (!host) return;
@@ -668,12 +667,6 @@
       host.innerHTML = '<div class="av-wrap" id="av-body">' +
         '<div class="sk-line" style="width:40%;height:20px;margin-bottom:16px"></div>' +
         '<div class="sk-line" style="width:70%"></div><div class="sk-line" style="width:55%"></div></div>';
-      /* Live: any product/stock/shop/availability change re-reads the canonical source. */
-      if (!_avSub && window.SokoniSync) {
-        _avSub = SokoniSync.onAny(function (name) {
-          if (current === 'availability' && /Product|Stock|Availability|Shop/.test(name)) _avLoad();
-        });
-      }
     }
     _avLoad();
   }
@@ -1202,6 +1195,22 @@
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); ov.classList.contains('open') ? close() : open(); }
     });
     window.__mCmd = { open: open, close: close };
+  })();
+
+  /* ── Layer 3 — ONE SokoniSync subscription re-renders whichever NATIVE module is
+     open when a canonical change lands, so a change propagates WITHOUT a page reload.
+     Events arrive from anywhere same-origin (this shell OR the POS/Seller iframes) via
+     the bus's BroadcastChannel. No second sync model. ── */
+  (function () {
+    if (!window.SokoniSync || !SokoniSync.onAny) return;
+    SokoniSync.onAny(function (name) {
+      try {
+        if (current === 'dashboard'    && /Order|Payment|Refund|Product|Stock|Availability|Shop|Customer/.test(name)) _dashLoadAnalytics();
+        else if (current === 'orders'  && /Order|Payment|Refund/.test(name)) _ordLoad();
+        else if ((current === 'reports' || current === 'finance' || current === 'analytics') && /Order|Payment|Refund|Product|Stock|Customer/.test(name)) _anLoad(current);
+        else if (current === 'availability' && /Product|Stock|Availability|Shop/.test(name)) _avLoad();
+      } catch (_) {}
+    });
   })();
 
   window.__mgo = go;
