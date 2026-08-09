@@ -250,7 +250,10 @@ const SHELL_PROBE = () => {
 /* ── In-frame probe: did this module actually render, and does it fight the shell? ── */
 const FRAME_PROBE = () => {
   const b = document.body;
-  const text = (b && (b.innerText || '')).trim();
+  /* `(b && (b.innerText || ''))` yields null when b is null, and .trim() then throws — which
+     turned "the module has no body yet" into an opaque probe crash on MiniShop. A module
+     document with no body is a REAL finding and must be reported as such, not as a test error. */
+  const text = ((b && b.innerText) || '').trim();
   const fixed = [];
   try {
     [].forEach.call(document.querySelectorAll('body *'), (el) => {
@@ -339,7 +342,16 @@ server.listen(0, async () => {
             });
           } catch (_) {}
         };
+        /* Capture phase also fires for FAILED RESOURCE LOADS (img/script/link). Those carry no
+           message, so recording them as script errors produced a bare "seller: error:" with
+           nothing after it — an alarm with no content. Classify them separately and keep the
+           failing URL, so a genuinely broken asset stays visible instead of being hidden. */
         window.addEventListener('error', (e) => {
+          const el = e.target;
+          if (el && el !== window && (el.src || el.href)) {
+            push('resource', 'failed to load: ' + (el.src || el.href), { src: el.src || el.href });
+            return;
+          }
           push('error', e.message, { src: e.filename, line: e.lineno, stack: e.error && e.error.stack });
         }, true);
         window.addEventListener('unhandledrejection', (e) => {
@@ -445,7 +457,12 @@ server.listen(0, async () => {
       const ownerDoc = route.kind === 'native' ? 'merchant'
         : (route.src || (route.kind === 'pos' ? 'pos.html' : 'seller.html')).split('?')[0].split('#')[0].replace('.html', '');
       errs = []; foreign = [];
-      bridged.concat(consoleErrs).forEach((e) => {
+      const resourceFails = bridged.filter((e) => e.kind === 'resource' && !ENV_NOISE.test(e.msg));
+      if (resourceFails.length) {
+        console.log('      NOTE  ' + resourceFails.length + ' resource load failure(s) — expected headless ' +
+                    '(App Check / auth-gated assets): ' + resourceFails[0].msg.slice(0, 80));
+      }
+      bridged.filter((e) => e.kind !== 'resource').concat(consoleErrs).forEach((e) => {
         if (ENV_NOISE.test(e.msg) || ENV_NOISE.test(e.src || '')) return;
         const doc = (e.doc || '').split('/').pop().replace('.html', '') || 'merchant';
         const line = doc + ': ' + e.kind + ': ' + e.msg + (e.src ? '  @' + e.src.split('/').pop() + ':' + e.line : '');

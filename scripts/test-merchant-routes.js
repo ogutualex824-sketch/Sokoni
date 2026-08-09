@@ -84,15 +84,15 @@ const shell = R('merchant.html');
 const stripped = shell.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
 check('shell has no window.open',        !/window\.open\s*\(/.test(stripped));
 check('shell has no target="_blank"',    !/target\s*=\s*["']_blank/.test(stripped));
-/* Exactly ONE top-level navigation is legitimate: escalating to the real login flow when the
-   shell itself has no session. That is the authentication boundary — modules are forbidden
-   from redirecting their own panel precisely so this single, deliberate escalation is the only
-   way out of /merchant. Anything else navigating the tab is a shell escape. */
+/* ZERO top-level navigations. The shell's own auth-guard is the single authority on ending a
+   session, and it already waits for the auth bootstrap before redirecting. An escalation driven
+   by a MODULE's message was tried and removed: it threw a merchant out of the app mid-session
+   (opening My MiniShop navigated the whole tab to /login?next=/merchant#minishop and every route
+   after it was gone). A module cannot distinguish "auth not ready" from "signed out", so its
+   word must never end the session. Anything here navigating the tab is a shell escape. */
 const navs = [...stripped.matchAll(/location\.(href|assign|replace)\s*[=(]/g)].map(m => m[0]);
-const loginEscalations = [...stripped.matchAll(/location\.replace\('login\.html\?next='/g)].length;
-check('shell has no top-level navigation except the login escalation',
-      navs.length === loginEscalations && loginEscalations <= 1,
-      navs.length + ' nav(s), ' + loginEscalations + ' sanctioned login escalation(s)');
+check('shell performs NO top-level navigation (auth-guard owns that decision)',
+      navs.length === 0, navs.length ? navs.length + ' navigation(s) found' : 'clean');
 
 /* ── 6. Phase 2C — the shell projects the contract, it does not re-declare it ─ */
 console.log('\n6. Sidebar is a projection of the contract (2C)');

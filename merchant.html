@@ -1474,23 +1474,20 @@
                          bouncing an authenticated merchant to login would be the exact loop
                          that broke profile↔login before. */
     if (d.__sokoniModule && d.action === 'authRequired') {
-      /* A module could not see a user. That is NOT automatically a dead session: a module's
-         Firebase auth can lag the shell's, or App Check can block the read that materialises
-         it, while the shell's session is perfectly valid. Bouncing the tab on the module's
-         word alone would throw an authenticated merchant out mid-shift — and re-create the
-         profile<->login loop from the other direction.
+      /* A MODULE NEVER CAUSES A TOP-LEVEL NAVIGATION.
+         This used to escalate to login when the shell's localStorage flag was absent. In a real
+         run that threw the merchant out of the app: opening My MiniShop navigated the whole tab
+         to /login?next=/merchant#minishop, and every route after it was gone. A module's Firebase
+         auth can lag the shell's, App Check can transiently null it, and a module has no way to
+         distinguish "not ready yet" from "signed out" — so its word must never be enough to end
+         the session.
 
-         So the SHELL's own session is the authority. Only when the shell also has no session
-         do we escalate to the real login flow; otherwise we keep the merchant where they are
-         and let the module show its own honest in-panel state. */
-      var _shellSession = false;
-      try { _shellSession = localStorage.getItem('loggedIn') === 'true'; } catch (_) {}
-      if (_shellSession) {
-        console.warn('[merchant] module "' + (d.page || '?') + '" sees no user, but the shell session is valid — staying put.');
-        return;
-      }
-      console.warn('[merchant] module "' + (d.page || '?') + '" reports no session and the shell has none — escalating to login.');
-      location.replace('login.html?next=' + encodeURIComponent('/merchant' + (location.hash || '')));
+         The shell's own auth-guard is the single authority on that, and it already handles the
+         timing properly (it waits for the auth bootstrap before redirecting, precisely to avoid
+         the profile<->login loop). Here we only surface an honest in-panel state and stay put. */
+      console.warn('[merchant] module "' + (d.page || '?') + '" reports no user — showing an in-panel state. ' +
+                   'Session decisions belong to the shell auth-guard, not to a module.');
+      showModuleBlocked(d.page, 'This section could not confirm your session. Reopen SOKONI Merchant if it persists.');
       return;
     }
     if (d.__sokoniModule && d.action === 'accessBlocked') {

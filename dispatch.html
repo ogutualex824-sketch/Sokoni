@@ -1,6 +1,13 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-require-auth="true" data-require-role="admin" data-no-header="true">
 <head>
+<!-- In-shell boundary. The CLASS must land before first paint, or a module flashes its own
+     chrome inside the merchant panel before it is suppressed. Inline = no network request.
+     The full boundary (requireAuth + generic chrome rules) is deferred; only the flag is
+     time-critical. Detection avoids a regex on purpose: an escaped one silently became a
+     line comment once and disabled this everywhere. -->
+<script>(function(){try{if(!window.parent||window.parent===window)return;var p=window.parent.location.pathname||"";var i=p.lastIndexOf("/");var last=(i<0?p:p.slice(i+1)).toLowerCase();if(last==="merchant"||last==="merchant.html"||window.parent.SokoniShell){document.documentElement.className+=" sk-in-shell";document.documentElement.setAttribute("data-sk-shell","merchant");}}catch(e){}})();</script>
+<script src="sokoni-inshell.js" defer></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
