@@ -36,50 +36,59 @@ const SPos = (function () {
      BOOT
   ═══════════════════════════════════════════════════════════ */
   async function boot() {
+    /* PosDB.init() never throws now (it degrades gracefully). Each boot step is independently
+       guarded so a single failure (e.g. an old/partial POS cache) can NEVER blank the shell or
+       block Inventory/Cashier. In degraded mode the app still launches and renders from canonical
+       Firestore; a small non-blocking status says the local cache is unavailable. */
+    await PosDB.init().catch(() => {});
+    try { if (PosDB.isDegraded && PosDB.isDegraded()) window._posDbDegraded = true; } catch (_) {}
+    try { state.settings = await PosDB.settings.getAll(); } catch (_) { state.settings = state.settings || {}; }
+    try { await PosDB.categories.seedDefaults(); } catch (_) {}
+
+    const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
+    /* The first-run setup wizard must NOT block the app when the POS is embedded in the merchant
+       shell — embedded → launch straight to the requested panel; setup stays an explicit module. */
+    const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
     try {
-      await PosDB.init();
-      state.settings = await PosDB.settings.getAll();
-
-      /* Seed defaults if first run */
-      await PosDB.categories.seedDefaults();
-
-      const isSetup = state.settings.setupComplete === true || state.settings.setupComplete === 'true';
-      /* The first-run setup wizard must NOT block the app when the POS is embedded in the
-         merchant shell — otherwise selecting Inventory (or any module) boots into the wizard
-         instead of the requested panel (#9). Embedded → launch straight to the app; setup stays
-         available as the explicit POS Setup module. Standalone first-run still shows the wizard. */
-      const embedded = (function () { try { return window.parent && window.parent !== window; } catch (_) { return true; } })();
       if (isSetup || embedded) {
         await launchApp();
-        if (!isSetup && embedded) { try { window._posNeedsSetup = true; } catch (_) {} }   /* flag for a non-blocking status chip */
+        if (!isSetup && embedded) { try { window._posNeedsSetup = true; } catch (_) {} }
       } else {
-        document.getElementById('pos-wizard').style.display = 'flex';
+        var _wz = document.getElementById('pos-wizard'); if (_wz) _wz.style.display = 'flex';
       }
+    } catch (e) {
+      /* Even if launchApp partially failed, reveal the app (never a blank/red page) so the
+         requested Cashier/Inventory module still renders from canonical data. */
+      console.warn('[SmartPOS] launch degraded:', e && e.message);
+      try { document.getElementById('pos-app').classList.remove('hidden'); } catch (_) {}
+      try { var _wz2 = document.getElementById('pos-wizard'); if (_wz2) _wz2.style.display = 'none'; } catch (_) {}
+    }
 
-      /* Init barcode scanner (hardware interceptor always on) */
-      await PosBarcode.init();
-      PosBarcode.setCallback(handleBarcodeGlobal);
+    if (window._posDbDegraded) _showPosDbDegradedStatus();
 
-      /* Clock */
-      setInterval(updateClock, 1000);
-      updateClock();
-
-      /* Online/offline watcher */
+    /* Remaining boot steps — each isolated; none may abort the render. */
+    try { await PosBarcode.init(); PosBarcode.setCallback(handleBarcodeGlobal); } catch (_) {}
+    try { setInterval(updateClock, 1000); updateClock(); } catch (_) {}
+    try {
       window.addEventListener('online',  () => updateOnlineStatus(true));
       window.addEventListener('offline', () => updateOnlineStatus(false));
       updateOnlineStatus(navigator.onLine);
+    } catch (_) {}
+    try { setInterval(() => sync.run(true), 120000); } catch (_) {}
+  }
 
-      /* Background sync every 2 min */
-      setInterval(() => sync.run(true), 120000);
-
-    } catch (e) {
-      console.error('[SmartPOS] Boot error:', e);
-      const _errDiv = document.createElement('div');
-      _errDiv.style.cssText = 'color:red;padding:40px;font-family:monospace';
-      _errDiv.textContent = 'SmartPOS boot error: ' + (e.message || 'Unknown error');
-      document.body.innerHTML = '';
-      document.body.appendChild(_errDiv);
-    }
+  /* Small, non-blocking banner — NOT a full-page red error. The app stays usable; Inventory/
+     Cashier render from canonical Firestore. */
+  function _showPosDbDegradedStatus() {
+    try {
+      if (document.getElementById('posdb-degraded')) return;
+      var b = document.createElement('div');
+      b.id = 'posdb-degraded';
+      b.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom,0));z-index:99998;background:rgba(30,20,0,.92);border:1px solid rgba(255,180,0,.45);color:#ffd24a;font:600 12px/1.3 system-ui;padding:8px 14px;border-radius:10px;max-width:92vw;text-align:center';
+      b.textContent = '⚠ POS local storage unavailable — showing live catalogue. Sales still work.';
+      (document.body || document.documentElement).appendChild(b);
+      setTimeout(function () { try { b.style.transition = 'opacity .4s'; b.style.opacity = '0'; setTimeout(function () { b.remove(); }, 450); } catch (_) {} }, 6000);
+    } catch (_) {}
   }
 
   async function launchApp() {
@@ -534,6 +543,17 @@ const SPos = (function () {
       const j = await r.json();
       const list = Array.isArray(j) ? j : (j.products || j.items || j.catalogue || []);
       if (!Array.isArray(list)) return 0;
+      /* Stash the canonical (active) list so Inventory can render it DIRECTLY when the local POS
+         cache is degraded/empty — canonical Firestore is the authority, IndexedDB is only a cache. */
+      try {
+        const V = window.SokoniProductVisibility;
+        window._posCanonicalProducts = (V ? V.activeOnly(list) : list).map(p => ({
+          id: String(p.id || p._id || p.productId || ''), name: p.name || p.title || 'Product',
+          price: Number(p.price || p.sellingPrice || 0), cost: Number(p.cost || p.costPrice || 0) || 0,
+          stock: (p.stock != null ? Number(p.stock) : null), category: p.category || 'general',
+          barcode: p.barcode || '', sku: p.sku || '', unit: p.unit || 'pc',
+        }));
+      } catch (_) {}
       if (!window.PosInvSync) return _additiveInsertNew(list);   /* module absent — safe additive fallback */
       const locals = await PosDB.products.getAll().catch(() => []);   /* read ONCE, before any loop */
       const { writes, stats, orphans } = window.PosInvSync.mergeCatalogue(list, locals);
@@ -1670,8 +1690,13 @@ const SPos = (function () {
       /* Reflect canonical BEFORE reading PosDB so a dashboard edit shows without a reload.
          Non-blocking of correctness: the merge is offline-safe (unsynced local sales kept). */
       try { await refreshInventoryFromCanonical(); } catch (_) {}
-      const all = await PosDB.products.getAll();
-      inv.renderProductTable(all);
+      let all = await PosDB.products.getAll().catch(() => []);
+      /* Degraded/empty local cache → render the canonical active products directly, so Inventory
+         is NEVER blank because of an IndexedDB problem it doesn't actually need. */
+      if ((!all || !all.length) && Array.isArray(window._posCanonicalProducts) && window._posCanonicalProducts.length) {
+        all = window._posCanonicalProducts;
+      }
+      inv.renderProductTable(all || []);
     },
 
     /* Compact canonical-sync status — proves the source→screen boundary at a glance

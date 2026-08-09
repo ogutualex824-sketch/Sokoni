@@ -6,8 +6,12 @@ const PosDB = (function () {
   'use strict';
 
   const DB_NAME    = 'sokoni_smartpos';
-  const DB_VERSION = 4;
+  /* Bumped 4→5 to force onupgradeneeded on devices stuck in a partially-upgraded v4 (a prior
+     upgrade was interrupted, leaving a store missing — the "object store not found" boot crash).
+     onupgradeneeded is idempotent (creates only missing stores), so no data is lost. */
+  const DB_VERSION = 5;
   let _db = null;
+  let _degraded = false;   /* true when the local POS cache is unusable — shell must still run */
 
   /* SHA-256 via Web Crypto — used for PIN storage */
   async function _sha256(str) {
@@ -56,19 +60,15 @@ const PosDB = (function () {
   };
 
   /* ── Init ────────────────────────────────────────────────────── */
-  function init() {
+  /* Open at a given version; onupgradeneeded creates EVERY missing store idempotently (no data
+     loss). Rejects only on a real open error. */
+  function _open(version) {
     return new Promise((resolve, reject) => {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onerror = () => reject(req.error);
-      req.onsuccess = () => {
-        _db = req.result;
-        /* Signal consumers (pos-sync, etc.) that IndexedDB is open and ready. */
-        const _notify = () => {
-          window.dispatchEvent(new CustomEvent('pos:db:ready'));
-          resolve();
-        };
-        _migrateHashPins().then(_notify).catch(_notify);
-      };
+      let req;
+      try { req = indexedDB.open(DB_NAME, version); }
+      catch (e) { return reject(e); }
+      req.onerror   = () => reject(req.error || new Error('idb open error'));
+      req.onblocked = () => { /* another tab holds an older version — resolve on the next success */ };
       req.onupgradeneeded = e => {
         const db = e.target.result;
         for (const [name, cfg] of Object.entries(SCHEMA)) {
@@ -87,51 +87,94 @@ const PosDB = (function () {
           }
         }
       };
+      req.onsuccess = () => resolve(req.result);
     });
   }
 
-  /* ── Low-level helpers ───────────────────────────────────────── */
+  function _requiredMissing (db) { return Object.keys(SCHEMA).filter(s => !db.objectStoreNames.contains(s)); }
+
+  /* Resilient init — the Merchant shell must survive an old/partial/broken POS cache.
+     1) Open at DB_VERSION (idempotent upgrade creates missing stores).
+     2) If a required store is STILL missing (a prior upgrade was interrupted), force ONE more
+        upgrade at version+1 to create it — never deletes existing data.
+     3) On any unrecoverable error, mark degraded and RESOLVE anyway (never throw): reads return
+        empty, writes no-op, and Inventory/Cashier fall back to canonical Firestore. */
+  async function init() {
+    try {
+      let db = await _open(DB_VERSION);
+      let missing = _requiredMissing(db);
+      if (missing.length) {
+        const nextV = db.version + 1;
+        try { db.close(); } catch (_) {}
+        db = await _open(nextV);           /* self-heal: recreate the missing store(s) */
+        missing = _requiredMissing(db);
+      }
+      _db = db;
+      try { _db.onversionchange = () => { try { _db.close(); } catch (_) {} _db = null; }; } catch (_) {}
+      _degraded = missing.length > 0;
+      if (_degraded) { try { console.warn('[PosDB] degraded — missing stores:', missing.join(',')); } catch (_) {} }
+      await _migrateHashPins().catch(() => {});
+      try { window.dispatchEvent(new CustomEvent('pos:db:ready')); } catch (_) {}
+    } catch (e) {
+      _db = null;
+      _degraded = true;
+      try { window.__posDbError = (e && e.message) || String(e); } catch (_) {}
+      try { window.dispatchEvent(new CustomEvent('pos:db:unavailable')); } catch (_) {}
+      /* Deliberately NOT rethrown — a POS-cache failure must never kill the Merchant shell. */
+    }
+  }
+
+  /* ── Low-level helpers ───────────────────────────────────────────
+     Every accessor is GUARDED: if the DB is unavailable or the specific store is missing (an old/
+     partial schema), reads resolve empty and writes no-op — they NEVER throw. This is what keeps
+     one missing store from taking down Inventory/Cashier/the whole shell. IndexedDB is a cache;
+     the canonical Firestore path remains the authority. */
+  function _hasStore(name) { try { return !!_db && _db.objectStoreNames.contains(name); } catch (_) { return false; } }
   function _store(name, mode = 'readonly') {
     return _db.transaction([name], mode).objectStore(name);
   }
 
   function _getAll(store) {
-    return new Promise((res, rej) => {
-      const r = _store(store).getAll();
-      r.onsuccess = () => res(r.result);
-      r.onerror   = () => rej(r.error);
+    return new Promise((res) => {
+      if (!_hasStore(store)) return res([]);
+      try { const r = _store(store).getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => res([]); }
+      catch (_) { res([]); }
     });
   }
 
   function _getByIndex(store, idx, val) {
-    return new Promise((res, rej) => {
-      const r = _store(store).index(idx).getAll(IDBKeyRange.only(val));
-      r.onsuccess = () => res(r.result);
-      r.onerror   = () => rej(r.error);
+    return new Promise((res) => {
+      if (!_hasStore(store)) return res([]);
+      try {
+        const s = _store(store);
+        if (!s.indexNames.contains(idx)) return res([]);
+        const r = s.index(idx).getAll(IDBKeyRange.only(val));
+        r.onsuccess = () => res(r.result || []); r.onerror = () => res([]);
+      } catch (_) { res([]); }
     });
   }
 
   function _get(store, key) {
-    return new Promise((res, rej) => {
-      const r = _store(store).get(key);
-      r.onsuccess = () => res(r.result || null);
-      r.onerror   = () => rej(r.error);
+    return new Promise((res) => {
+      if (!_hasStore(store)) return res(null);
+      try { const r = _store(store).get(key); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); }
+      catch (_) { res(null); }
     });
   }
 
   function _put(store, data) {
-    return new Promise((res, rej) => {
-      const r = _store(store, 'readwrite').put(data);
-      r.onsuccess = () => res(r.result);
-      r.onerror   = () => rej(r.error);
+    return new Promise((res) => {
+      if (!_hasStore(store)) return res(data);   /* degraded: no-op (data survives via canonical/sync) */
+      try { const r = _store(store, 'readwrite').put(data); r.onsuccess = () => res(r.result); r.onerror = () => res(data); }
+      catch (_) { res(data); }
     });
   }
 
   function _delete(store, key) {
-    return new Promise((res, rej) => {
-      const r = _store(store, 'readwrite').delete(key);
-      r.onsuccess = () => res(r.result);
-      r.onerror   = () => rej(r.error);
+    return new Promise((res) => {
+      if (!_hasStore(store)) return res();
+      try { const r = _store(store, 'readwrite').delete(key); r.onsuccess = () => res(r.result); r.onerror = () => res(); }
+      catch (_) { res(); }
     });
   }
 
@@ -733,9 +776,39 @@ const PosDB = (function () {
     },
   };
 
+  /* Which required stores are absent from a set of present store names (pure — unit-tested). */
+  function missingStores (presentNames) {
+    const have = {}; (presentNames || []).forEach(n => { have[n] = 1; });
+    return Object.keys(SCHEMA).filter(s => !have[s]);
+  }
+
+  /* Real POS-DB diagnostic — surfaced in the merchant Diagnostics panel, never on the prod UI. */
+  function diagnostics () {
+    const expected = Object.keys(SCHEMA);
+    let present = [];
+    try { present = _db ? Array.from(_db.objectStoreNames) : []; } catch (_) { present = []; }
+    const missing = missingStores(present);
+    return {
+      database: DB_NAME,
+      version:  _db ? _db.version : null,
+      expected: expected.length,
+      present:  present.length,
+      stores:   present.slice(),
+      missing:  missing,
+      degraded: _degraded || !_db,
+      migration: (_db && missing.length === 0) ? 'OK' : (_db ? 'PARTIAL' : 'FAILED'),
+      ok:       !!_db && missing.length === 0,
+      error:    (typeof window !== 'undefined' && window.__posDbError) || null,
+    };
+  }
+
   return {
     init,
     isReady: () => !!_db,
+    isDegraded: () => _degraded || !_db,
+    diagnostics,
+    missingStores,        /* pure helper (testable) */
+    SCHEMA_STORES: Object.keys(SCHEMA),
     products, transactions, customers, categories,
     cashiers, shifts, suppliers, purchase_orders,
     stock_movements, receipts, syncQueue, settings, reports,

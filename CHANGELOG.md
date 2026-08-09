@@ -1,3 +1,31 @@
+## [2026-08-09] — fix(pos): SmartPOS IndexedDB boot crash — self-healing schema + degrade-not-die (batch 5)
+
+Production crash on KASS (Inventory + Cashier): "Failed to execute 'transaction' on 'IDBDatabase':
+One of the specified object stores was not found." A partially-upgraded local POS DB (a prior
+upgrade was interrupted — version reads current but a store is missing, so onupgradeneeded never
+re-runs) made `_store()` throw synchronously, and the boot catch replaced the whole page with a red
+error. A POS-cache problem was taking down Inventory/Cashier, which don't even need it.
+
+- **Self-healing schema (pos-db.js)** — DB_VERSION 4→5 (forces the idempotent onupgradeneeded to
+  create any missing stores on stuck devices; no data loss). `init()` also VERIFIES all required
+  stores after open and, if any is still missing, forces ONE more upgrade at version+1 to create
+  it — never deletes user data.
+- **Guarded accessors** — `_getAll/_get/_put/_delete/_getByIndex` check the store exists first; a
+  missing store returns empty / no-ops instead of throwing. One missing store can no longer kill
+  Inventory/Cashier/the shell.
+- **Boot never dies** — `PosDB.init()` never throws (degrades); each boot step is isolated; the
+  full-page red error is replaced by a small non-blocking "POS local storage unavailable" banner,
+  and the app still launches. Inventory renders the **canonical active products** directly when the
+  local cache is degraded (Firestore is the authority; IndexedDB is a cache).
+- **Diagnostic** — `PosDB.diagnostics()` (database / version / stores present / missing / migration
+  OK|PARTIAL|FAILED / degraded) for the Diagnostics panel, never the prod UI.
+- **Regression** — `test-pos-db-migration` (8) drives an ACTUAL old v1 IndexedDB fixture in real
+  webkit: init self-heals, all 21 stores present, schema→v5, **legacy data preserved**, missing-
+  store reads don't throw. 15 suites green.
+
+Printer/POS-Setup stays isolated to its own module; unchanged. No IndexedDB clear, no reinstall,
+no hidden error, no parallel DB.
+
 ## [2026-08-09] — fix(pos): canonical cross-device POS sales + splash root cause + MiniShop resolve (batch 4)
 
 Device feedback (v491 not accepted): splash still on Cashier/Inventory; POS sales not canonical.
