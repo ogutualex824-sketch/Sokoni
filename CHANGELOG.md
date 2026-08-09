@@ -1,3 +1,96 @@
+## [2026-08-09] — release: PHASE 2 BATCH 1 DEPLOYED (v496 / 4655f5a) — PASS WITH RETURNS DATA-LAYER BLOCKER
+
+Application code is live. The Returns authorization rule is NOT, and is tracked separately.
+
+**Deployed:** commit `4655f5a`, cacheVersion `sokoni-20260809180042-v496`, verified live on
+mysokoni.co.ke with a cache-buster. Previous: `1d81f11` / v495.
+
+### Two deploys were refused by the gates before this one landed. Neither baseline was raised.
+
+**Attempt 1 — perf-guard: `posBlockingScripts: 5 > baseline 4`.** A real regression: the
+in-shell boundary had been added to pos.html's `<head>` as a render-blocking external script,
+on the POS boot path. Fixed by setting the class from a tiny INLINE snippet (no network request
+at all — strictly faster than the blocking script it replaced) and deferring the shared module.
+pos.html no longer loads that module at all: it calls no `SokoniInShell` API, does not load
+scroll-top.js, its consent modal is guarded at source, and its one competing element
+(`.pos-quick-nav`) is suppressed by rules in pos.html's own stylesheet so suppression happens at
+first paint. **pos.html is back to 65 script tags — its exact count before this work.**
+
+The Windows `ENOENT` was the secondary symptom; the actionable signal was the fifth blocking
+script.
+
+**Attempt 2 — gate-inventory: `test-returns-rules` FAIL, `test-merchant-visual-gate` TIMEOUT.**
+The release runner executes every `scripts/test-*.js` bare, with a 60s budget and no services.
+Both were declared `ENV`, matching the existing convention for `test-workspace-rules`. `ENV`
+means "cannot gate HERE", not "does not need to run": `ci-gates.sh` still runs the returns
+security suite under `firebase emulators:exec` and FAILS when Java is missing or < 21.
+
+### Defects found and fixed while getting there
+
+- **A broken inline script that would have shipped.** Shell escaping mangled a regex into
+  `//merchant(.html)?$/` — a line comment — silently disabling the in-shell flag in all four
+  modules. The check no longer uses a regex; it compares the parent's last path segment.
+- **The syntax gate could not see it.** It parsed `.js` files only. Now covers inline `<script>`
+  blocks: 1339 JS files + 430 inline blocks, with 9 markup-building blocks skipped AND COUNTED.
+  Getting it right took three passes against real false positives — scripts that build or strip
+  script markup, and HTML comments quoting markup (index.html carries a note reading "A
+  `<script>` element with a src still requires a closing tag"; the scanner opened a match inside
+  that prose). Verified it still fails on a deliberately injected syntax error.
+- **The double-nav invariant was asserted only in the live smoke test, not the acceptance
+  gate** — while its suppression mechanism had just changed. Now gated: the visual gate reads
+  `.pos-quick-nav`'s computed display inside the POS frame and requires the `sk-in-shell` flag.
+- **The visual gate wrote screenshots into the repo** (`.tmp-visual-gate/`), so the release
+  runner silently dirtied the working tree mid-deploy. Defaults to the OS temp dir now.
+
+### Live verification (cache-busted, webkit at iPhone 393x852, notch simulated)
+
+**66 passed, 1 failed, 2 notes.** Shell chrome all green: sidebar rendered from the contract
+(32 routes), Plan at position 2, canonical order `dashboard,plan,products`, header absorbs the
+59px inset, burger reachable by hit-test, all 4 bottom-nav buttons reachable, content clears the
+nav (753 vs 753), no horizontal overflow. Every route mounted its correct module document with
+no auth page inside any panel, no legacy dashboard target, and **`pos-quick-nav display=none`**
+on both POS routes. Browser BACK returned to the previous route inside the shell.
+
+**The one failure is pre-existing and not caused by Batch 1**: an opaque cross-origin
+`Script error.` on seller.html. Confirmed by loading **standalone** seller.html on production —
+it reproduces outside the merchant shell. Cross-origin scripts (Chart.js via cdnjs) mask their
+real message by browser design, so it cannot be attributed further without a real session on a
+real device. Reported as FAIL rather than downgraded.
+
+Also observed on that probe and worth a separate ticket: seller.html throws
+`TypeError: undefined is not an object (evaluating 'user.name.split')` when a cached
+`sokoniUser` has no `name` — legitimately absent for a new account or a cleared cache. Same
+class as the profile↔login loop that `u.name` caused before. Pre-existing, out of Batch 1 scope.
+
+### Release status
+
+```
+PHASE 2 — BATCH 1
+APPLICATION: DEPLOYED (4655f5a / v496)
+MERCHANT SHELL: PASS      NAVIGATION: PASS
+PRODUCTS: PASS            INVENTORY: PASS
+CASHIER/POS: PASS         PLAN: PASS
+ORDERS: PASS              RETURNS UI: PASS
+
+RETURNS FIRESTORE AUTHORIZATION: BLOCKED
+REASON: production rules release rejected by Firestore (400 INVALID_ARGUMENT)
+INDEXES: DEPLOYED + VERIFIED
+
+BATCH 1 RELEASE STATUS: PASS WITH RETURNS DATA-LAYER BLOCKER
+```
+
+Returns therefore shows an honest permission/error state with a working Retry — never the old
+generic "Failed to load returns", and never a silent empty screen pretending to be data.
+
+### Correction to an earlier claim
+
+`dirtyWorkingTree: true` in version.json is **structural, not a symptom of an unclean deploy**:
+`bump-sw-version.js` modifies service-worker.js *before* `generate-version.js` stamps the
+version, so the tree is always dirty by then. The live v495 build from `1d81f11` — predating
+this work — carries the same flag. Each deploy here started from a tree verified at 0 changes.
+The flag would only be meaningful if measured before the bump hooks, or if it ignored the two
+files those hooks generate. Worth fixing; not a blocker.
+
 ## [2026-08-09] — test(merchant): Batch-1 gate remediation + Returns authorization proven
 
 Closes the two gate defects and executes the Returns security suite. No application behaviour
