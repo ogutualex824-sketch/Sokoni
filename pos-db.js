@@ -212,6 +212,8 @@ const PosDB = (function () {
         productName: p.name,
         type: delta > 0 ? 'in' : 'out',
         qty: Math.abs(delta),
+        delta,                 /* SIGNED — so the stockChanged emit reports STOCK_DEDUCTED on a sale,
+                                  not STOCK_RECEIVED with a positive delta (payload-sign bug) */
         before,
         after: p.stock,
         reason: reason || 'adjustment',

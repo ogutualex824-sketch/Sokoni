@@ -467,6 +467,10 @@
   ];
   var byId = {};
   MODULES.forEach(function (m) { if (m.id) byId[m.id] = m; });
+  /* My MiniShop is a header destination (not a sidebar row) that opens IN-SHELL as a page panel.
+     Its src is resolved from the canonical claimed-shop record at click time (window.__miniShopUrl):
+     claimed → the public storefront /shop/<handle>; unclaimed → the claim flow. */
+  byId['minishop'] = { id: 'minishop', label: 'My MiniShop', kind: 'page', src: 'minishop-admin.html', dynamic: true };
 
   var shell   = document.getElementById('mshell');
   var navEl   = document.getElementById('mnav');
@@ -537,9 +541,15 @@
   }
   /* Standalone-page modules (Dispatch, Riders) — each gets its own persistent panel, kept alive
      so it never reloads once opened. Per-module loader text. */
-  function pagePanel (id, src, label) {
+  function pagePanel (id, src, label, dynamic) {
     var key = 'page:' + id;
     if (!panels[key]) panels[key] = _mkFramePanel(label || 'module', src, null, label || '');
+    else if (dynamic) {
+      /* A dynamic module (My MiniShop) resolves its src at click time — update the cached
+         iframe if it changed (e.g. after a branch switch) so it never shows a stale shop. */
+      var f = panels[key].querySelector('iframe');
+      if (f && src && f.getAttribute('src') !== src) { panels[key].classList.remove('loaded'); f.setAttribute('src', src); }
+    }
     return panels[key];
   }
   /* Build a persistent iframe panel with a non-blocking loader that hides on iframe load.
@@ -607,8 +617,10 @@
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }
     if (m.kind === 'pos')    { posPendingTab = m.tab || 'pos'; posPendingAction = m.action || null; var p = posPanel(posPendingTab, m.label); showOnly(p); posSwitch(posPendingTab); if (posPendingAction) posAction(posPendingAction); return; }
     if (m.kind === 'seller') { sellerPendingSec = m.sec || 'overview'; var s = sellerPanel(sellerPendingSec, m.label); showOnly(s); sellerSwitch(sellerPendingSec); return; }
-    if (m.kind === 'page')   { showOnly(pagePanel(id, m.src, m.label)); return; }
+    if (m.kind === 'page')   { var _src = (m.dynamic && window.__miniShopUrl) ? window.__miniShopUrl : m.src; showOnly(pagePanel(id, _src, m.label, m.dynamic)); return; }
   }
+  window.SokoniShell = window.SokoniShell || {};
+  window.SokoniShell.go = go;   /* expose the router so the header My MiniShop button navigates in-shell */
 
   /* ── Native modules ── */
   function renderNative (id) {
@@ -1518,24 +1530,30 @@
           ? { resolved: true, claimed: true, url: '/shop/' + encodeURIComponent(handle), handle: handle }
           : { resolved: true, claimed: false, url: 'minishop-admin.html', handle: null };
       } catch (_) {}
+      window.__miniShopUrl = _mshop.url;                 /* the minishop page module reads this */
+      window.__miniShopClaimed = _mshop.claimed;
       return _mshop;
     }
     function _paint () {
       var btn = document.getElementById('mshop-btn'), st = document.getElementById('mshop-state');
       if (!btn || !st) return;
+      /* Honest state: never assert "Shop Live" until the canonical claimed-shop resolution
+         succeeds. Before that, a neutral label; after, the true claimed/unclaimed state. */
+      if (!_mshop.resolved) { btn.classList.remove('notclaimed'); st.textContent = 'My storefront'; return; }
       if (_mshop.claimed) { btn.classList.remove('notclaimed'); st.textContent = '🟢 Shop Live'; }
-      else { btn.classList.add('notclaimed'); st.textContent = '✨ Create'; }
+      else { btn.classList.add('notclaimed'); st.textContent = '✨ Claim Shop'; }
     }
-    /* SAME-TAB, same-origin navigation — never a new tab/window/session (#4/#5). Claimed →
-       the public storefront /shop/<handle>; unclaimed → the claim flow. In-place like every
-       other merchant control. */
-    function _open () { location.href = _mshop.url || 'minishop-admin.html'; }
+    /* IN-SHELL navigation — routes to the 'minishop' page module (same /merchant document,
+       same tab, no window.open, no full-page leave, shell panel transition not a splash).
+       Claimed → storefront /shop/<handle>; unclaimed → claim flow. Resolves first if needed so
+       the panel loads the right src immediately. */
+    function _go () { try { (window.__mgo || (window.SokoniShell && SokoniShell.go))('minishop'); } catch (_) { location.href = _mshop.url || 'minishop-admin.html'; } }
     window.__openMiniShop = function () {
-      if (_mshop.resolved) { _open(); return; }
-      _resolve().then(function () { _paint(); _open(); });
+      if (_mshop.resolved) { _go(); return; }
+      _resolve().then(function () { _paint(); _go(); });
     };
-    window.__refreshMiniShop = function () { _resolve().then(_paint); };
-    setTimeout(window.__refreshMiniShop, 900);
+    window.__refreshMiniShop = function () { _resolve().then(function () { _paint(); if (current === 'minishop') { try { window.__mgo('minishop'); } catch (_) {} } }); };
+    setTimeout(window.__refreshMiniShop, 700);
     document.addEventListener('soBranchChanged', function () { _mshop.resolved = false; window.__refreshMiniShop(); });
   })();
 

@@ -1,3 +1,32 @@
+## [2026-08-09] — fix(pos): ecosystem sync audit + MiniShop in-shell (batch 3)
+
+Audited every POS/commerce mutation point (write → SokoniSync event → subscriber). Most of the
+chain is correct: a completed POS sale emits orderChanged→Order.Changed and the shell recomputes
+Analytics off the FACADE KEY (not the payload), so the earlier productChanged/Product.Changed
+mismatch class does not recur; product create/edit/delete/stock all propagate. Fixes + evidence:
+
+- **My MiniShop opens IN-SHELL (#2/#3)** — was a full-page `location.href` leave. Now a `minishop`
+  page module (dynamic src): same /merchant document/session, same tab, no window.open, shell
+  panel transition (not a splash). Honest state — neutral until the canonical claimed-shop
+  resolution succeeds, then 🟢 Shop Live (→ /shop/<handle>) or ✨ Claim Shop. Re-resolves + reloads
+  on branch switch. `pagePanel` gained dynamic-src support; router exposed as SokoniShell.go.
+- **Stock event sign (Note A)** — `PosDB.products.adjustStock` recorded `qty:Math.abs(delta)` with
+  no signed `delta`, so the stockChanged emit always said STOCK_RECEIVED (positive) even on a sale
+  deduction. Now passes the signed delta → STOCK_DEDUCTED on a sale. (Not a shell break; matters to
+  any consumer applying the payload delta.)
+- **Automated propagation proof (#5)** — `test-pos-ecosystem` (19): POS sale + marketplace order →
+  ONE OrderService identity → Analytics revenue/orders/pos/online == Orders summarize; same saleId
+  dedups (no double-count/drift); branch A≠B and legacy untagged still counts; status + channel
+  (delivery/pickup) lifecycle preserved on the shared order; archive excludes from active; stock
+  sign. Deliveries code untouched — only verified it reads the same order identity.
+
+KNOWN, deferred behind their existing gates (NOT touched this pass): (B) live POS sale does not
+write canonical cross-device `posRetailSales` (only IndexedDB + on-device Analytics) — belongs to
+the checkout-convergence effort; (C) marketplace order status changes emit no live SokoniSync event
+(shell reloads on next query) — the status writes live in the order/delivery flow.
+
+14 regression suites green. No new product/order/analytics model or MiniShop page.
+
 ## [2026-08-09] — fix(merchant): convergence batch 2 — active count, splash root cause, MiniShop same-tab, analytics reconcile
 
 Device-tested feedback: count stayed 103 after deleting 2, splash still appeared, My MiniShop
