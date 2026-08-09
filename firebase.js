@@ -43,7 +43,8 @@ import {
 import {
   getMessaging,
   getToken,
-  onMessage
+  onMessage,
+  isSupported as isMessagingSupported
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 
 const firebaseConfig = {
@@ -242,13 +243,24 @@ const functions = getFunctions(app);
 let messaging = null;
 
 if (typeof window !== "undefined") {
-  try {
-    if ("Notification" in window && "serviceWorker" in navigator) {
-      messaging = getMessaging(app);
-    }
-  } catch (e) {
-    console.warn("[SOKONI] FCM not supported:", e.message);
-  }
+  /* Feature-detect with Firebase's own async isSupported() rather than sniffing for
+     Notification + serviceWorker. Those two exist in desktop Safari while the rest of the
+     push stack does not, so getMessaging() got past the hand-rolled check and then rejected
+     during component init — an UNHANDLED rejection that a synchronous try/catch cannot see.
+     It surfaced on every merchant route as "[PosResilience] Unhandled rejection:
+     FirebaseError: Messaging: This browser doesn't support the API's required...".
+     isSupported() is the documented guard and settles instead of throwing.
+
+     messaging stays null until this resolves; every consumer already returns early on a null
+     messaging (see sokoniRequestPushPermission), so late initialisation is safe — push is
+     requested by user gesture long after boot, never during it. */
+  isMessagingSupported()
+    .then((ok) => {
+      if (!ok) { console.info("[SOKONI] FCM unsupported on this browser — push disabled."); return; }
+      try { messaging = getMessaging(app); }
+      catch (e) { console.warn("[SOKONI] FCM init failed:", e && e.message); }
+    })
+    .catch((e) => { console.warn("[SOKONI] FCM support check failed:", e && e.message); });
 }
 
 /* ── Expose globals for non-module scripts ── */
@@ -354,7 +366,23 @@ if (!window.firebase) {
   }
   function _ws(snap) {
     const docs = snap.docs.map(_wd);
-    return { empty: snap.empty, size: snap.size, docs, forEach: (cb) => docs.forEach(cb) };
+    return {
+      empty: snap.empty, size: snap.size, docs, forEach: (cb) => docs.forEach(cb),
+      /* docChanges() — compat parity, and NOT optional.
+         Consumers use it to react to deltas instead of reprocessing a whole result set
+         on every snapshot. Omitting it here meant every such call site threw
+         "TypeError: snap.docChanges is not a function" the instant this shim became the
+         Firestore provider, inside an async onSnapshot callback — so it surfaced only as
+         an unhandled rejection and the listener silently stopped doing its job. That hit
+         POS inventory sync, POS marketplace-order intake, realtime.js, and the driver /
+         dispatch boards alike.
+         Each change's doc is wrapped with _wd so change.doc.id / .data() behave exactly
+         as they do on the documents in .docs. Computed lazily: snapshots that never ask
+         for changes pay nothing, which matters for the large collections this shim feeds. */
+      docChanges: (opts) => snap.docChanges(opts).map((c) => ({
+        type: c.type, doc: _wd(c.doc), oldIndex: c.oldIndex, newIndex: c.newIndex,
+      })),
+    };
   }
 
   /* ── Firestore collection shim ─────────────────────────────────────── */
@@ -1028,12 +1056,22 @@ async function sokoniUpdateProfile(updates) {
 window.sokoniUpdateProfile = sokoniUpdateProfile;
 
 /* ── Request permission + get FCM token ── */
-async function sokoniRequestPushPermission(vapidKey) {
+async function sokoniRequestPushPermission(vapidKey, opts) {
   if (!messaging || !vapidKey || vapidKey === "YOUR_VAPID_KEY_HERE") return null;
 
   try {
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") return null;
+    /* Browsers only allow a permission prompt from a user gesture. This runs on boot from
+       sw-register's _initPushNotifications, so calling requestPermission() unconditionally
+       threw "Notification prompting can only be done from a user gesture." on every page —
+       a console error on every merchant route, and a prompt the user never asked for.
+
+       On boot we therefore only mint a token when permission was ALREADY granted. The actual
+       ask happens from the in-app "Allow Notifications" button, which passes fromGesture. */
+    if (Notification.permission !== "granted") {
+      if (!(opts && opts.fromGesture)) return null;
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return null;
+    }
 
     const swReg = await navigator.serviceWorker.ready;
     const token = await getToken(messaging, {

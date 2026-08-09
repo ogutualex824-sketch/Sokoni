@@ -74,11 +74,15 @@ const PosNotify = (() => {
     }
   }
 
-  async function requestPermission() {
+  /* Browsers only allow a permission prompt from a user gesture. pos.js calls this during
+     boot, so an unconditional requestPermission() threw "Notification prompting can only be
+     done from a user gesture." on every POS/Inventory/Cashier entry. Boot callers now get the
+     current state without prompting; a real button passes { fromGesture: true }. */
+  async function requestPermission(opts) {
     if (!('Notification' in window)) return 'unsupported';
     if (Notification.permission === 'granted') return 'granted';
-    const result = await Notification.requestPermission();
-    return result;
+    if (!(opts && opts.fromGesture)) return Notification.permission; /* 'default' | 'denied' */
+    return await Notification.requestPermission();
   }
 
   function markRead(id) {

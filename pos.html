@@ -1,6 +1,8 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-splash="1" data-no-header="true">
 <head>
+<!-- In-shell boundary: suppress chrome that competes with the merchant shell. Must be first. -->
+<script src="sokoni-inshell.js"></script>
   <!-- P0 crash instrumentation. Diagnostic only, additive, removable in one line.
        MUST be first: it installs breadcrumbs before anything can crash. -->
   <script src="pos-crash-breadcrumbs.js"></script>

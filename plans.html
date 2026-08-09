@@ -1,6 +1,8 @@
 ﻿<!DOCTYPE html>
 <html lang="en" data-no-header="true">
 <head>
+<!-- In-shell boundary: suppress chrome that competes with the merchant shell. Must be first. -->
+<script src="sokoni-inshell.js"></script>
   <link rel="icon" type="image/png" sizes="32x32" href="/assets/icons/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/assets/icons/favicon-16x16.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/assets/icons/apple-touch-icon.png">
@@ -359,8 +361,20 @@ function renderPlans() {
   document.getElementById('plans-container').innerHTML = `<div class="plans-grid">${cards}</div>`;
 }
 
+/* Auth gate. Standalone: send the visitor to login as before. Inside the merchant shell
+   (plans.html?shell=merchant) the panel is an iframe — navigating it to login.html would
+   render a login screen INSIDE the merchant OS, which is both confusing and a shell-escape
+   in spirit. The shell already guarantees an authenticated merchant, so an unauthenticated
+   state here is anomalous: surface it honestly and let the shell own re-auth. */
+const IN_SHELL = new URLSearchParams(location.search).get('shell') === 'merchant';
+function _requireAuth() {
+  if (currentUser) return true;
+  if (IN_SHELL) { toast('Your session expired — reopen SOKONI Merchant to continue', 'error'); return false; }
+  location.href = 'login.html?redirect=plans';
+  return false;
+}
 function startFree(planId, hubType, planName) {
-  if (!currentUser) { location.href = 'login.html?redirect=plans'; return; }
+  if (!currentUser) { if (!_requireAuth()) return; }
   fns.httpsCallable('subActivate')({ planId, billingCycle: 'monthly', paymentRef: 'free' })
     .then(() => {
       currentSubs[hubType] = { planId, status: 'active' };
@@ -372,7 +386,7 @@ function startFree(planId, hubType, planName) {
 
 let _pendingPlan = null;
 function openModal(plan) {
-  if (!currentUser) { location.href = 'login.html?redirect=plans'; return; }
+  if (!currentUser) { if (!_requireAuth()) return; }
   _pendingPlan = plan;
   /* Cycle-correct numeric price; the card passes priceMonthly/priceAnnual. */
   const price = Number(billingCycle === 'annual' ? plan.priceAnnual : plan.priceMonthly);
