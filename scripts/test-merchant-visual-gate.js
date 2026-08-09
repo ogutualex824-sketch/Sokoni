@@ -32,7 +32,10 @@ const C = require(path.join(ROOT, 'sokoni-merchant-routes.js'));
 
 const argv = process.argv.slice(2);
 const argOf = (n, d) => { const i = argv.indexOf(n); return i > -1 && argv[i + 1] ? argv[i + 1] : d; };
-const SHOTS = argOf('--shots', path.join(ROOT, '.tmp-visual-gate'));
+/* Screenshots default to the OS temp dir, never inside the repo: the release-gate runner
+   executes every scripts/test-*.js, so a repo-relative default silently dirtied the working
+   tree mid-release with a directory of PNGs. Pass --shots to keep them somewhere you choose. */
+const SHOTS = argOf('--shots', path.join(require('os').tmpdir(), 'sokoni-visual-gate'));
 const ROUTES = argOf('--routes', 'dashboard,plan,products,inventory,cashier,orders,returns').split(',');
 
 const MIME = { '.html':'text/html', '.js':'application/javascript', '.css':'text/css',
