@@ -1,3 +1,26 @@
+## [2026-08-09] — fix(merchant): shared-shell routing + terminal states (batch 6)
+
+Device screenshots exposed shared-runtime bugs (not per-screen). Traced to root, fixed at the
+shared layer where possible:
+
+- **Deliveries blank (shared fix)** — dispatch.html put a PAGE-level data-require-role="admin" on
+  <html>, and sokoni-permissions  hid ANY matching element — so it set <html>
+  display:none for a non-admin merchant, blanking the whole document.  now never
+  hides html/body; page-level access stays with GUARDED_ROUTES. Protects every page from a
+  mis-placed role attribute. test-merchant-runtime (5) proves html not blanked + role filter intact.
+- **Seller routes showed overview under the wrong title** — the shared seller iframe is pre-built at
+  overview (Dashboard feed) and seller.js DOMContentLoaded resets to overview AFTER the shell’s
+  one-shot showSection. The shell now re-asserts the requested section on the iframe  event
+  (+ a settle re-post), so Staff/Stories/Messages/Disputes mount the right section.
+- **Returns stuck on “Loading…”** — loadReturns’ catch only toasted and never cleared the loading
+  cells, with no timeout. Added a terminal error row (with Retry) + a 12s bounded timeout, so it
+  always reaches READY/EMPTY/ERROR.
+
+Note (verified): showOnly is reliable (one active panel; Dashboard native panel is hidden on nav) —
+the “Dashboard underneath” was the seller iframe’s own overview. Settings is a POS module, not seller.
+16 suites green. Boot crash + POS isolation already live (v494). Canonical product/stock/order/
+analytics/receipts one-identity convergence (E–L) is a separate multi-pass program, sequenced next.
+
 ## [2026-08-09] — fix(pos): SmartPOS IndexedDB boot crash — self-healing schema + degrade-not-die (batch 5)
 
 Production crash on KASS (Inventory + Cashier): "Failed to execute 'transaction' on 'IDBDatabase':

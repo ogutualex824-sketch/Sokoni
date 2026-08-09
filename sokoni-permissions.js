@@ -385,8 +385,13 @@
   ══════════════════════════════════════════════════════════════ */
 
   function _filterNav() {
-    // [data-require-role="seller,admin"] — hide if user lacks all listed roles
+    // [data-require-role="seller,admin"] — hide if user lacks all listed roles.
+    // NEVER hide the structural roots (html/body): a page that mistakenly puts a PAGE-level
+    // data-require-role on <html> (e.g. dispatch.html) would otherwise blank the whole document
+    // for a non-matching role. Page-level access is enforced by GUARDED_ROUTES/guardCurrentPage,
+    // not by hiding <html>. This keeps one bad attribute from blanking a merchant module.
     document.querySelectorAll("[data-require-role]").forEach(el => {
+      if (el === document.documentElement || el === document.body) return;
       const required = el.getAttribute("data-require-role").split(",").map(s => s.trim());
       el.style.display = hasAnyRole(required) ? "" : "none";
     });

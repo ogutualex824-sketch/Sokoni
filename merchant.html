@@ -536,6 +536,20 @@
     if (!panels.seller) {
       var src = 'seller.html' + (sec && sec !== 'overview' ? '#' + sec : '');
       panels.seller = _mkFramePanel(label || 'Shop', src, 'mfx-seller', 'SOKONI Shop');
+      /* The seller iframe is shared by Staff/Stories/Messages/Disputes and is pre-created at
+         'overview' when Dashboard loads its feed. seller.js's DOMContentLoaded resets to overview
+         AFTER the shell's one-shot showSection — so a seller route could show the overview body
+         under the wrong title. Re-assert the requested section on the iframe's load event (which
+         fires AFTER that reset), so the correct section wins. Belt-and-suspenders settle re-post. */
+      var _sf = document.getElementById('mfx-seller');
+      if (_sf) _sf.addEventListener('load', function () {
+        try {
+          if (current && byId[current] && byId[current].kind === 'seller') {
+            sellerSwitch(sellerPendingSec);
+            setTimeout(function () { if (current && byId[current] && byId[current].kind === 'seller') sellerSwitch(sellerPendingSec); }, 350);
+          }
+        } catch (_) {}
+      });
     }
     return panels.seller;
   }
