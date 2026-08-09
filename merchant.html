@@ -623,6 +623,7 @@
 
   /* ── Router ── */
   var _lastModule = 'dashboard';
+  var _booted = false;   /* first go() replaces the history entry; every later one pushes */
   function go (id) {
     /* Resolve through the contract: canonical id, or a legacy alias (#finance -> revenue).
        An id that resolves to NOTHING is a contract violation, not a navigation event — a
@@ -640,7 +641,19 @@
     current = id;
     setActive(id);
     titleEl.textContent = m.label;
-    if (location.hash.replace('#', '') !== id) history.replaceState(null, '', '#' + id);
+    /* Route history. The shell used replaceState for every navigation, so moving between
+       modules created NO history entries — the browser/phone back gesture skipped the whole
+       session inside /merchant and jumped to whatever preceded it. Each user navigation now
+       PUSHES an entry, so back/forward walk the routes the merchant actually visited; only
+       the initial boot (and hash normalisation of an alias) replaces, so we never leave a
+       dead first entry pointing at a route the merchant never chose.
+       Back/forward fire popstate AND hashchange for same-document hash entries, and the
+       hashchange listener below resolves and mounts the route. */
+    if (location.hash.replace('#', '') !== id) {
+      if (_booted) history.pushState({ sokoniRoute: id }, '', '#' + id);
+      else         history.replaceState({ sokoniRoute: id }, '', '#' + id);
+    }
+    _booted = true;
     if (shell.classList.contains('mobile-open')) shell.classList.remove('mobile-open');
 
     if (m.kind === 'native') { showOnly(nativePanel(id)); renderNative(id); return; }

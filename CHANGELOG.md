@@ -1,3 +1,299 @@
+## [2026-08-09] — test(merchant): Batch-1 gate remediation + Returns authorization proven
+
+Closes the two gate defects and executes the Returns security suite. No application behaviour
+changed in this pass except where a gate defect was masking a real one.
+
+**Gate defect 1 — error attribution was structurally impossible.** `page.on('pageerror')`
+carries no frame reference, so Playwright attributed every uncaught error to the shell; a
+minified `u[v] is not a function` was reported against Dashboard, which never threw it.
+Replaced with an `addInitScript` bridge installed in EVERY frame: each document records its own
+`error` and `unhandledrejection` events against its own `location`, captured at throw time so
+attribution survives later navigation of that frame. `console.error` calls (which the bridge
+cannot see) are collected separately with their source URL and merged into the same buckets.
+Errors are drained before each route so a previous route can never contaminate the next.
+
+**Gate defect 2 — frame synchronisation.** Three causes, all in the measurement:
+- A fixed sleep after clicking. Replaced with a deterministic lifecycle poll: exactly one panel
+  shown → correct panel identity → correct `src` → `contentDocument` readable → `readyState`
+  complete → rendered text present.
+- The frame was resolved by scanning `page.frames()` for a URL substring, which can match a
+  STALE frame — the POS and Seller panels are persistent by design and never destroyed. Now
+  binds to the iframe element inside the shown panel (`evaluateHandle` → `contentFrame()`).
+- Identity was compared against `plans.html` while the real URL is `/plans?shell=merchant`;
+  hosting runs `cleanUrls:true`. Now compares extensionless basenames.
+
+**Found by fixing those — a real measurement bug.** With the deterministic wait in place the
+gate began reporting `panel 574 vs bnav 568`: exactly the 6px of `mPanelIn`'s
+`translateY(6px)` entrance animation. Measuring during the 240ms animation reads as an overlap
+that does not exist once the panel lands; the old 4.5s sleep had been hiding it. The gate now
+awaits `getAnimations()` rather than another sleep.
+
+**History coverage added** (deep link, browser back/forward, legacy alias, unknown route):
+`#inventory` deep link mounts Inventory; back returns to the previous route inside the shell;
+forward returns to Dashboard; `#finance` aliases to Revenue; an unknown id is refused loudly
+with the current route left untouched.
+
+**Returns authorization — EXECUTED, not asserted.** `npm run test:rules:returns` now runs
+against the real Firestore emulator: **20 passed, 0 failed**. Owner reads, cross-seller and
+cross-buyer isolation, anonymous denial, both real LIST queries, refusal of an unfiltered
+merchant list, admin read + unfiltered list, and all four write paths denied (including admin —
+writes belong to the returns-engine Cloud Functions via the Admin SDK).
+
+The suite also verifies the composite indexes **structurally**, because the emulator does not
+enforce them: every query above would pass with no indexes declared while production fails with
+FAILED_PRECONDITION. Asserted `buyerId ASC + submittedAt DESC` and `sellerId ASC + submittedAt
+DESC` against the exact query shapes returns.html runs, plus a drift check that no other
+`returns` index exists.
+
+JDK 21 was provisioned for the emulator (winget reported no user-scope installer; the Microsoft
+OpenJDK 21 zip is extracted under the session scratchpad and used via `JAVA_HOME` — no machine
+modification).
+
+**Result:** static contract gate 64/64. Visual acceptance gate **568/568 across three
+consecutive full runs**, zero failures and zero cross-module notes — 7 routes × 4 viewports
+(375×667, 393×852, 430×932, desktop), notch simulated, authenticated merchant session.
+Returns rules 20/20.
+
+**Route history was never created.** Adding browser back/forward coverage exposed a real
+defect: `go()` used `history.replaceState` for EVERY navigation, so moving between modules
+left no history entries — the phone back gesture skipped the entire session inside /merchant
+and jumped to whatever preceded it. User navigations now `pushState`; only the initial boot
+(and alias normalisation) replaces, so there is no dead first entry pointing at a route the
+merchant never chose. Back/forward fire popstate and hashchange for same-document hash
+entries, which the existing hashchange listener resolves and mounts.
+
+**Files:** `merchant.html`, `scripts/test-merchant-visual-gate.js`, `scripts/test-returns-rules.js`,
+`docs/MERCHANT_ROUTE_MATRIX.md`, `package.json`.
+
+**Returns UI terminal states — VERIFIED** (`npm run test:returns-states`, 13/13). Drives
+returns.html's own render functions in webkit with real inputs, so it needs no Firestore and
+no test hooks in production code: 0 returns renders "No returns yet" with no failure wording
+and no stuck Loading; one authorized return renders as a row and in the pending list; a query
+failure renders the message plus a Retry that actually re-invokes loadReturns. The last case is
+the original defect itself — empty and error must render DIFFERENT text ("No returns yet" vs
+"Unable to load returns Retry"). Note the page's view functions and its `userRole`/`allReturns`
+state are top-level `let` bindings — script-scoped, NOT properties of window — so the suite
+assigns bare identifiers; `window.allReturns = []` silently does nothing.
+
+**Superseded note:** the Returns UI states (0 returns → "No returns yet", 1 return renders,
+permission failure → error + Retry) are proven at the data layer by the rules suite, but driving
+the three states through returns.html needs the page pointed at a seeded emulator, which it has
+no wiring for. That is a UI-level gap, not an authorization one.
+
+**Deployment:** not deployed. Requires SW/cache bump, `firestore:rules` + `firestore:indexes`
+deploy, and live verification.
+
+## [2026-08-09] — fix(merchant): Batch-1 rework — auth ownership inversion, in-shell boundary, returns authorization
+
+Batch 1 was REJECTED: the runtime gate reported 164/164 while a real iPhone was unusable.
+That was a gate defect first and a code defect second. The old gate asserted the iframe
+ELEMENT's `src`/`id` and the panel's bounding box — never whether the module's document
+loaded, never whether a control could be touched, and it ran signed OUT, so no
+authenticated-path regression could ever be caught.
+
+**New gate — `scripts/test-merchant-visual-gate.js`.** Asserts what a thumb can reach:
+`elementFromPoint()` hit-testing at each control's true centre (a covered burger returns the
+coverer, not the burger); inside-iframe document readyState, rendered text and browser error
+pages; console errors attributed to the FRAME that emitted them (the POS/Seller panels are
+persistent and their late async errors were being blamed on whatever route was on screen);
+an authenticated merchant session seeded before load; `cleanUrls:true` emulated to match
+hosting; screenshots per route per viewport. 375×667, 393×852, 430×932 and desktop, with a
+simulated 59/34 notch.
+
+### AUTHENTICATION OWNERSHIP INVERSION (the Products → login.html defect)
+
+`merchant.html` loaded **no** auth guard, while the hosted `seller.html` loaded one. So the
+only component enforcing a session was a module — and `auth-guard.js`'s `location.replace()`
+swapped the **content panel** for a login form instead of navigating the tab. The merchant
+saw a login screen inside their own dashboard, under the previous module's title.
+
+Fixed by putting authentication where it belongs, which strengthens it rather than bypassing it:
+
+- `merchant.html` now loads `auth-guard.js` — the shell guards the session before any module
+  mounts. Previously the merchant OS shell was itself unguarded.
+- `auth-guard.js` detects same-origin hosting in the shell and, instead of replacing its own
+  panel, posts `authRequired` upward. The guard still refuses to render; only the frame that
+  acts on it changed. Firestore rules govern data regardless.
+- The shell treats **its own** session as authoritative on `authRequired`. A module's Firebase
+  auth can lag the shell's, or App Check can block the read that materialises it — bouncing the
+  tab on the module's word alone would throw an authenticated merchant out mid-shift and
+  re-create the profile↔login loop from the other direction. Only when the shell also has no
+  session does it escalate to the real login flow.
+- `sokoni-permissions.js` `guardCurrentPage()` likewise reports `accessBlocked` upward in-shell
+  rather than redirecting the panel to `profile.html`; the shell renders an honest
+  "needs extra access" state with a way back.
+
+Never: authenticated merchant-shell session → login.html. Genuinely unauthenticated → the real
+login flow, at the top level.
+
+### RETURNS AUTHORIZATION (the "Failed to load returns" defect)
+
+The `returns` collection had **no rule block at all**, so Firestore denied every read by
+default — and returns.html surfaced permission-denied to merchants as "Failed to load returns",
+including for shops that simply had none. There were also **no composite indexes** for either
+query it runs.
+
+- `firestore.rules`: added `match /returns/{returnId}`. Read is limited to the two parties on
+  the document written by `functions/returns-engine.js` — `buyerId` and `sellerId` — plus admin.
+  Deliberately NOT `isAuthed()`, which would expose every shop's return history (customer
+  names, order ids, refund amounts) to any signed-in account. Writes are `false`: the
+  returns-engine Cloud Functions own idempotency, ownership and the status state machine.
+- `firestore.indexes.json`: added the two composite indexes the real queries need —
+  `buyerId ASC + submittedAt DESC` and `sellerId ASC + submittedAt DESC`. Additive only;
+  396 → 398, nothing removed.
+- `scripts/test-returns-rules.js` (new, `npm run test:rules:returns`): proves owner reads,
+  cross-seller isolation, both real LIST queries, refusal of an unfiltered merchant list,
+  admin access, write refusal — and explicitly that a shop with zero returns gets an
+  ALLOWED, EMPTY result rather than an exception.
+
+**State boundary** in returns.html: the `try` now wraps only the query. Rendering used to sit
+inside it, so an exception while drawing a row was reported as "failed to load" — a render bug
+wearing a network error's clothes. Auth is a precondition checked separately (`currentUser.uid`
+used to throw a TypeError into the same catch). Errors are now specific: permission-denied,
+index-building, timeout. Empty renders "No returns yet".
+
+### COMPETING CHROME (`sokoni-inshell.js`, new)
+
+One boundary that answers "am I a module inside the shell?" and enforces the consequences:
+
+- SmartPOS's `.pos-quick-nav` (`position:fixed;bottom:0`, ≤900px) pinned to the iframe bottom
+  sat directly above the merchant bottom nav — **two stacked navigation bars** on every phone,
+  burying the charge bar. Hidden in-shell; the shell's nav is the only nav.
+- `security.js` renders the Privacy & Cookies modal per document. pos.html loads it and
+  merchant.html does not, so the modal opened *inside* the panel and covered the entire till.
+  Guarded at source (`_showBanner` returns when embedded) plus a defensive in-shell rule.
+- Page-level floating helpers (`#sokoniScrollTop`) suppressed in-shell. Selectors verified
+  against the files that create them, not guessed.
+
+### ALSO FIXED (found by the new gate)
+
+- `Notification.requestPermission()` was called at boot without a user gesture — a console
+  error on every merchant route and an unrequested prompt. Boot now only mints a token when
+  permission is already granted; the ask happens from the in-app button
+  (`firebase.js`, `pos-modules.js`, both via an explicit `fromGesture` flag).
+- Firebase Messaging was initialised behind a hand-rolled `Notification`+`serviceWorker` check.
+  Desktop Safari has both while lacking the rest of the push stack, so `getMessaging()` got past
+  it and then rejected **asynchronously** — an unhandled rejection a synchronous try/catch
+  cannot see. Now gated on Firebase's own async `isSupported()`.
+- The header title wrapped to two lines at 375px ("POS / Cashier"), growing the header and
+  shoving the shell down. Now `min-width:0` + ellipsis.
+
+### SIDEBAR
+
+Reordered to the canonical 16: Dashboard · Plan · Products · Inventory · Cashier/POS · Orders ·
+Analytics · Revenue · Payments · Deliveries · Returns · Receipts · Staff · Messages · Disputes ·
+Settings. Marketing moved to the More tier, Disputes promoted. Order is declared explicitly in
+`PRIMARY_ORDER` and asserted by the gate in both directions, so a route can never be
+primary-but-invisible or ordered-but-absent.
+
+**Files:** `merchant.html`, `auth-guard.js`, `sokoni-permissions.js`, `sokoni-inshell.js` (new),
+`security.js`, `firebase.js`, `pos-modules.js`, `pos.html`, `seller.html`, `returns.html`,
+`plans.html`, `sokoni-merchant-routes.js`, `firestore.rules`, `firestore.indexes.json`,
+`scripts/test-merchant-visual-gate.js` (new), `scripts/test-returns-rules.js` (new),
+`scripts/test-merchant-routes.js`, `package.json`.
+
+**Breaking changes:** none. **Database:** 2 additive indexes + 1 new rule block (previously
+default-denied, so this only grants correctly-scoped access that was impossible before).
+
+**Not verified here:** `test-returns-rules.js` requires the Firestore emulator, which needs
+JDK 21+; this machine has JDK 17, so the suite is written and wired but has NOT been executed.
+It must run in CI before the rule ships.
+
+**Deployment:** not deployed. Requires SW/cache bump, rules + index deploy, and live verification.
+
+## [2026-08-09] — feat(merchant): route contract + mobile shell geometry (Phase 2, batch 1)
+
+Route-by-route convergence replaces broad shared patches. Every claim below is measured in
+webkit (the same engine as the iPhone/Safari screenshots) at 393×852, 390×844 and 375×667.
+
+**Phase 2A/2C — one canonical route registry.** New `sokoni-merchant-routes.js` is the single
+source of merchant navigation: 32 routes, each declaring id, name, icon, kind, required role,
+required context, mobile-safe, desktop-safe and active-state key. The sidebar, the mobile
+drawer and the bottom nav are now PROJECTIONS of it — merchant.html no longer holds a private
+`MODULES` list, so a button cannot drift from its destination. Adding a destination means
+adding a row; there is nowhere else to add one.
+
+- Founder's 16 primary destinations all present; the previous 28 rows are preserved under a
+  **More** tier so no feature was lost.
+- **KRA Tax** was built (`DASH_PAGES.tax`) but had NO sidebar button — it was unreachable.
+  Now routed.
+- **Revenue** maps to the native Finance surface (AnalyticsEngine). It deliberately does NOT
+  point at `revenue.html` / `revenue-dashboard.html` — both are Super Admin pages
+  (`getAdminRevenueByHub`, `listCommissionRules`); a merchant button there is a privilege defect.
+- **Settings** was the POS *device* settings tab. Now a native hub → Shop · POS & Devices ·
+  Staff · Tax · Plan. Device config kept as "POS Settings" under More.
+- Unknown route ids now **fail loudly** (console error + `sokoni:route-error`) instead of
+  silently becoming Dashboard — the behaviour that let broken buttons look like they worked.
+  Legacy ids (`#finance`, `#team`, `#promotions`, `#store`, `#tax`) resolve via an alias map,
+  on click, on boot AND on `hashchange` (browser back/forward previously ignored aliases).
+- Removed the last shell escape: the MiniShop `location.href` fallback. Leaving /merchant is a
+  contract violation, not a fallback.
+
+**Phase 2B — Plan is first-class.** 💎 Plan added as a primary sidebar destination opening
+`plans.html?shell=merchant` in-shell (canonical `subGetStatus` / `subGetPlans` / `subActivate`,
+all exported). plans.html already sets `data-no-header="true"`, which shared-header.js honours,
+so it creates no competing fixed header. In-shell an expired session now surfaces honestly
+instead of rendering login.html inside the merchant panel. Plan is NOT in the bottom nav.
+
+**Phase 2E — mobile shell geometry (root cause, measured).** `.mcontent` carried
+`padding-bottom:64px`, but every module panel is `.mpanel{position:absolute;inset:0}` and an
+absolutely-positioned box resolves `inset:0` against its containing block's PADDING box — so
+that padding was a **complete no-op**. Measured: panel bottom 852 vs bottom-nav top 787 — a
+full **65px of every module, native and iframe alike, was buried under the fixed bottom nav**
+(POS charge bar, form submits, last list row). Fixed by moving the clearance to `.mmain`
+(a flex container, whose padding genuinely shortens `.mcontent`). Now 787 vs 787 on every
+viewport tested.
+
+- Header absorbed the top safe-area inset. With `viewport-fit=cover` and `padding-top:0`, the
+  burger/title/MiniShop/⌘K sat under the iOS status bar in standalone PWA. Under a simulated
+  notch (59/34) the header now grows 56→115px and the burger clears to y=69.5.
+- `grid-template-rows:100vh` → `100dvh` behind `@supports`. iOS Safari's 100vh is the LARGE
+  viewport, so with `body{overflow:hidden}` the bottom of the shell was pushed off-screen while
+  the toolbar showed. (Not reproducible headlessly — Playwright reports no dynamic toolbar —
+  so this is a correctness fix, not a measured one.)
+- One geometry contract in `:root`: `--safe-top`, `--safe-bot`, `--top-h`, `--bnav-h`.
+
+**P1 found BY the new gate — `firebase.js` dropped `docChanges()`.** `_ws()` wrapped a modular
+QuerySnapshot into `{empty,size,docs,forEach}`, omitting `docChanges()`. Every compat consumer
+calling `snap.docChanges()` threw `TypeError` — inside `async` onSnapshot callbacks, so it
+surfaced only as an unhandled rejection while the listener silently stopped working. Captured
+stacks: `pos-sales.js:380`, `pos-inventory.js:680`, `pos-inventory.js:691`. 20 call sites exist
+across POS inventory sync, POS marketplace-order intake, realtime.js, driver and dispatch
+boards. `_ws()` now exposes `docChanges()` lazily, wrapping each change's doc with `_wd` so
+`change.doc.id` / `.data()` behave exactly as documents in `.docs`.
+
+**Scanner blind spot fixed.** `gate-inventory` skipped itself on this change because
+`INVENTORY_PATHS` matched only paths naming "inventory" — yet `firebase.js` is the Firestore
+provider feeding `pos-inventory.js`'s listeners, which is precisely where the defect lived.
+Added `/^firebase\.js$/` to scope; the gate then ran and returned APPROVED (95 suites).
+
+**Files affected:** `sokoni-merchant-routes.js` (new), `merchant.html`, `firebase.js`,
+`plans.html`, `scripts/test-merchant-routes.js` (new), `scripts/test-merchant-route-gate.js`
+(new), `scripts/gate-inventory.js`, `docs/MERCHANT_ROUTE_MATRIX.md` (new).
+
+**Database changes:** none. **API changes:** none. **Breaking changes:** none — legacy route
+ids alias to canonical ones.
+
+**Security:** Settings hub dispatches by integer index, never by interpolating an id into an
+inline handler (inline-handler XSS). Each route declares required role + context so a route can
+be refused before mount rather than blanking after it. No route targets an admin-only page.
+
+**Testing:** `test-merchant-routes` 62/62 (static contract, verifies every seller `sec`, POS
+`tab` and page `src` really exists). `test-merchant-route-gate` **164/164** across iPhone 14 Pro
+and iPhone SE — per route: correct hash, correct title, single active nav key, correct module
+mounted, exactly one panel visible, no legacy target, no full-page navigation, content clears
+the bottom nav, header reachable, no horizontal overflow, drawer auto-closed, zero console
+errors. Plus deep-link, legacy-alias and unknown-route-refused checks. Regression: merchant-runtime
+5/5, merchant-templates 32/32, apps-render 25/25, users-render 36/36, inventory-sync 18/18,
+pos-ecosystem 19/19, syntax gate 1334 files. `test-overlays` failures are pre-existing and
+unrelated (no merchant.html reference; names sokoni-book-service.js / sokoni-product-schema.js).
+
+**Not yet built:** Payments is a registered primary route flagged `status:'planned'` and renders
+an honest "not built yet" terminal state — no invented figures (UI Data Integrity). It needs the
+canonical `payoutRequests` + wallet balance wiring, scheduled for batch 2.
+
+**Deployment:** not deployed. Requires SW/cache bump via predeploy and live verification.
+
 ## [2026-08-09] — fix(merchant): shared-shell routing + terminal states (batch 6)
 
 Device screenshots exposed shared-runtime bugs (not per-screen). Traced to root, fixed at the
