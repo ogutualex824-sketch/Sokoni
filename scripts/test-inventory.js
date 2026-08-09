@@ -80,6 +80,20 @@ const DECLARED = {
     verdict: 'ENV',
     reason: 'Needs the Firestore emulator (JDK 21). Fails with "fetch failed" without it.',
   },
+  'test-returns-rules': {
+    verdict: 'ENV',
+    reason: 'Needs the Firestore emulator (JDK 21) — same as test-workspace-rules. Run bare it ' +
+            'fails in ~500ms with "fetch failed". NOT a licence to skip it: ci-gates.sh runs it ' +
+            'under `firebase emulators:exec` and FAILS when Java is missing or < 21, because an ' +
+            'unexecuted security suite reads exactly like a passing one. It is the only proof ' +
+            'that the returns rule scopes reads to buyerId/sellerId/admin and nobody else.',
+  },
+  'test-merchant-visual-gate': {
+    verdict: 'ENV',
+    reason: 'Long-running browser acceptance gate — 7 routes x 4 viewports in webkit, ~10 min. ' +
+            'It cannot fit the 60s per-suite budget here and is not a unit suite; this runner ' +
+            'would only ever report it as TIMEOUT. Run it directly: npm run test:merchant-visual-gate.',
+  },
 };
 
 /* Untriaged genuine failures. Visible every run, blocking none, until each is
