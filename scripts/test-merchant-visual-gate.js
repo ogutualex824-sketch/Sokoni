@@ -503,6 +503,27 @@ server.listen(0, async () => {
                 f.docScrollW + ' vs ' + f.innerW);
         }
         check('no failed module document request', failedFrames.length === 0, failedFrames.join(' | ') || 'none');
+
+        /* ONE bottom navigation. SmartPOS ships its own fixed bottom strip for standalone use;
+           inside the shell it pinned directly above the merchant bottom nav, giving two stacked
+           bars and burying the charge bar. Suppression is declared in pos.html's own stylesheet
+           so it applies at FIRST PAINT (the shared boundary module is deferred, and perf-guard
+           rightly refuses a fifth blocking POS script). Asserted here, in the gate, because the
+           mechanism changed — a screenshot proving it once is not a standing guarantee. */
+        if (route.kind === 'pos') {
+          const posNav = await page.evaluate(() => {
+            const f = document.querySelector('.mpanel.show iframe');
+            try {
+              const d = f && f.contentDocument;
+              if (!d) return 'unreadable';
+              const q = d.querySelector('.pos-quick-nav');
+              if (!q) return 'absent';
+              return getComputedStyle(q).display + (d.documentElement.classList.contains('sk-in-shell') ? ' (flag set)' : ' (FLAG MISSING)');
+            } catch (e) { return 'error: ' + e.message; }
+          });
+          check('exactly one bottom navigation (POS quick-nav suppressed in-shell)',
+                /^none/.test(posNav) || /^absent/.test(posNav), 'pos-quick-nav ' + posNav);
+        }
         /* The regression this gate exists for: an authenticated merchant must NEVER be shown
            an auth page inside a module panel. */
         check('module is NOT an auth page',

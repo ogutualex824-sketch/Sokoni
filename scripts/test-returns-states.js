@@ -67,6 +67,15 @@ server.listen(0, async () => {
     } catch (e) {}
   });
   const page = await ctx.newPage();
+  /* This suite exercises the RENDER layer. Standalone (not in-shell), returns.html correctly
+     sends an unauthenticated visitor to login — a seeded localStorage flag is not a real
+     Firebase session — and that navigation destroys the execution context mid-assertion.
+     Blocking only the login navigation keeps the page alive so the terminal states can be
+     driven directly. The redirect itself is correct behaviour and is covered elsewhere:
+     the visual gate asserts no module document is ever an auth page IN-SHELL. */
+  let loginBlocked = 0;
+  await page.route('**/login*', (r) => { loginBlocked++; return r.abort(); });
+
   await page.goto(BASE + '/returns.html', { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(2500);
 
