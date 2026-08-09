@@ -225,8 +225,26 @@
     (function(){
       const h = new Date().getHours();
       const greet = h < 12 ? "Good Morning" : h < 17 ? "Good Afternoon" : "Good Evening";
-      const user = JSON.parse(localStorage.getItem("sokoniUser") || "null");
-      const name = user ? " " + user.name.split(" ")[0] : "";
+      /* sokoniUser is a PROFILE CACHE, not the session. `name` is legitimately absent for a new
+         account, a cleared cache, or when App Check blocks the Firestore read that populates it
+         — and `user.name.split(...)` then threw a TypeError. Because this is one inline IIFE,
+         that throw also killed everything below it: the date line, the branch switcher, and the
+         soBranchChanged listener. A missing display name silently cost the merchant the ability
+         to switch shops. Same class as the u.name requirement that caused the profile<->login
+         loop: never assume profile metadata exists.
+
+         Falls back through the identities we actually store, and ends at NO greeting suffix
+         rather than inventing one. A malformed cache must not take the page with it either. */
+      let user = null;
+      try { user = JSON.parse(localStorage.getItem("sokoniUser") || "null"); } catch (_) { user = null; }
+      const firstName = (function (u) {
+        if (!u || typeof u !== "object") return "";
+        const email = typeof u.email === "string" ? u.email.split("@")[0] : "";
+        const candidate = [u.name, u.displayName, u.fullName, u.shopName, u.businessName, email]
+          .find(function (v) { return typeof v === "string" && v.trim(); });
+        return candidate ? String(candidate).trim().split(/\s+/)[0] : "";
+      })(user);
+      const name = firstName ? " " + firstName : "";
       const el = document.getElementById("sellerGreeting");
       if(el) el.textContent = greet + name + " ⚡";
       const dateEl = document.getElementById("sellerDate");

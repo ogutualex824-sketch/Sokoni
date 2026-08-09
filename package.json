@@ -53,7 +53,8 @@
     "gate:merchant-routes": "node scripts/test-merchant-routes.js && node scripts/test-merchant-visual-gate.js",
     "test:rules:returns": "firebase emulators:exec --only firestore --project sokoni-returns-rules-test \"node scripts/test-returns-rules.js\"",
     "test:merchant-visual-gate": "node scripts/test-merchant-visual-gate.js",
-    "test:returns-states": "node scripts/test-returns-states.js"
+    "test:returns-states": "node scripts/test-returns-states.js",
+    "test:seller-cached-user": "node scripts/test-seller-cached-user.js"
   },
   "devDependencies": {
     "browser-sync": "^3.0.4",
