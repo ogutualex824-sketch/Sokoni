@@ -1,3 +1,29 @@
+## [2026-08-09] — fix(pos): canonical cross-device POS sales + splash root cause + MiniShop resolve (batch 4)
+
+Device feedback (v491 not accepted): splash still on Cashier/Inventory; POS sales not canonical.
+Traced both to root:
+
+- **Splash ROOT — `#pos-wizard` was `display:flex` by default (pos.css)**. The full-screen setup
+  overlay painted on EVERY pos.html load and was only hidden later by JS after async boot — on a
+  slow device that gap IS the splash. The two prior fixes stopped the redirect + JS-show but not
+  the CSS default. Now `display:none` by default; standalone first-run still shows it explicitly
+  (pos.js:56). Embedded Cashier/Inventory never flash it. (SW is network-first for these HTML/JS,
+  so it self-heals once v491 activates — not the primary cause.)
+- **Gap B — canonical cross-device POS sales**. A live checkout wrote only IndexedDB + canonical
+  `posTransactions` + a `products.stock` decrement, never `posRetailSales` (what OrderService's
+  posProvider reads). Promoting the real `posCompleteCheckout` would DOUBLE-DEDUCT stock. Instead:
+  a backend trigger `mirrorPosTransactionToRetail` (onDocumentCreated posTransactions/{id}) writes
+  an idempotent `posRetailSales/{id}` mirror — NO stock, NO payment (local sale stays the single
+  stock authority). Offline-safe: fires when the sync queue flushes on reconnect. Pure mapper
+  `pos-retail-mirror-map.js`; `test-pos-retail-mirror` (16) proves the round-trip txn→mirror→
+  OrderService→unified row + branch scope + no side-effect fields. Plus firestore.rules: seller
+  may read own `posRetailSales` by `merchantId` (the existing query shape).
+- **MiniShop resolution** — broadened to the canonical `shops/{sellerUid}` doc first, then active
+  branch doc, then ownerId/sellerUid/uid queries; handle from minishopHandle/handle/slug/
+  shopHandle/merchantSlug/username — so a claimed shop (KASS) resolves to 🟢 Shop Live, never Claim.
+
+15 regression suites green. Trigger has no client-facing surface; local checkout/stock unchanged.
+
 ## [2026-08-09] — fix(pos): ecosystem sync audit + MiniShop in-shell (batch 3)
 
 Audited every POS/commerce mutation point (write → SokoniSync event → subscriber). Most of the

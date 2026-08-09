@@ -1520,12 +1520,18 @@
         var m = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
         var activeId = (window.SokoniShell && SokoniShell.activeShopId) || null;
         var data = null;
-        if (activeId) { try { var d = await m.getDoc(m.doc(window.firebaseDB, 'shops', String(activeId))); if (d.exists()) data = d.data(); } catch (_) {} }
-        if (!data) {
-          var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'), m.where('ownerId', '==', uid), m.limit(1)));
-          if (q.docs[0]) data = q.docs[0].data();
-        }
-        var handle = data && (data.minishopHandle || data.handle);
+        var _get = async function (col, id) { try { var d = await m.getDoc(m.doc(window.firebaseDB, col, String(id))); return d.exists() ? d.data() : null; } catch (_) { return null; } };
+        var _q1 = async function (field) { try { var q = await m.getDocs(m.query(m.collection(window.firebaseDB, 'shops'), m.where(field, '==', uid), m.limit(1))); return q.docs[0] ? q.docs[0].data() : null; } catch (_) { return null; } };
+        /* Canonical claimed-shop resolution — try the direct docs first (shops/{sellerUid} is the
+           canonical id), then the active branch's own shop doc, then ownership queries. KASS is
+           claimed, so one of these must carry the handle — never send a claimed shop to Claim. */
+        data = await _get('shops', uid);
+        if (!data && activeId) data = await _get('shops', activeId);
+        if (!data) data = await _q1('ownerId');
+        if (!data) data = await _q1('sellerUid');
+        if (!data) data = await _q1('uid');
+        /* Handle may be stored under any of these canonical fields. */
+        var handle = data && (data.minishopHandle || data.handle || data.slug || data.shopHandle || data.merchantSlug || data.username);
         _mshop = handle
           ? { resolved: true, claimed: true, url: '/shop/' + encodeURIComponent(handle), handle: handle }
           : { resolved: true, claimed: false, url: 'minishop-admin.html', handle: null };

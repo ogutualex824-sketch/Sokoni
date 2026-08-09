@@ -2408,6 +2408,7 @@ service cloud.firestore {
     match /posRetailSales/{saleId} {
       allow read:  if isAdmin()
                    || (isAuthed() && resource.data.sellerId == request.auth.uid)
+                   || (isAuthed() && resource.data.merchantId == request.auth.uid)   /* seller reads own sales (mirror + CF write merchantId) */
                    || (isAuthed() && resource.data.cashierUid == request.auth.uid);
       allow write: if false; /* CF Admin SDK only */
     }

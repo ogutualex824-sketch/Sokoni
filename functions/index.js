@@ -9419,6 +9419,11 @@ exports.sendInvoiceEmail = onCall(
 const emailTriggers = require("./email-triggers");
 Object.assign(exports, emailTriggers);
 
+/* POS retail mirror — canonical cross-device posRetailSales from each posTransactions write
+   (idempotent, no stock/payment side effects). Closes the "POS sale invisible cross-device" gap. */
+const posRetailMirror = require("./pos-retail-mirror");
+Object.assign(exports, posRetailMirror);
+
 /* ═══════════════════════════════════════════════════════
    DMARC REPORT PROCESSOR
    processDmarcReport  — admin onCall: upload XML report
